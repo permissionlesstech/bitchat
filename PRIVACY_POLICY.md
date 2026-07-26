@@ -34,7 +34,7 @@ bitchat is designed for private, account-free communication. This policy describ
    - A panic wipe deletes both stores.
 
 5. **Recent public mesh messages and notices**
-   - Signed public mesh messages may be kept in a protected local gossip archive for up to 15 minutes so they can cross mesh partitions and survive a short relaunch.
+   - Signed public mesh messages may be kept in a protected local gossip archive for up to 6 hours so they can cross mesh partitions and survive a relaunch.
    - Public bulletin-board posts and deletion tombstones persist until the post's author-selected expiry, at most seven days. Both stores are bounded and panic-wipeable.
    - These items are public to the mesh or board where they are posted; they are not confidential messages.
 
@@ -114,7 +114,7 @@ No cryptographic system can protect content after a recipient reads, copies, scr
 - **In-memory chat timelines and active connections:** until the app closes or state is cleared.
 - **Queued outgoing private messages:** until acknowledged, dropped by bounded policy, or 24 hours, whichever comes first.
 - **Opaque courier envelopes:** until handed off, evicted by bounded policy, or 24 hours, whichever comes first.
-- **Recent public mesh gossip:** up to 15 minutes.
+- **Recent public mesh gossip:** up to 6 hours.
 - **Public board posts and tombstones:** until expiry, at most seven days.
 - **Media:** seven days, or sooner by quota eviction, panic wipe, or app removal.
 - **Groups, favorites, preferences, identity keys, and bookmarks:** until removed by the feature, panic wipe, or app removal.

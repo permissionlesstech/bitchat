@@ -29,7 +29,9 @@ Signed announces can expose:
 - A bounded set of short direct-neighbor identifiers
 - A coarse rendezvous geohash when the bridge capability is enabled
 
-The app does not advertise the device's user-assigned name. iOS manages BLE address randomization; bitchat does not attempt to create a stable MAC address. RSSI, timing, traffic volume, and radio fingerprints remain observable to nearby receivers.
+The app does not advertise the device's assigned name. iOS manages BLE address randomization; bitchat does not attempt to create a stable MAC address.
+
+That randomization does not deliver the unlinkability it might suggest, because the application layer publishes stable identifiers above it. The 8-byte peer ID in every packet header is the first 8 bytes of the Noise static key fingerprint, so it does not rotate; announces carry the static keys themselves; and the fixed service UUID makes any bitchat device detectable as such by a passive scanner. A receiver in radio range can therefore recognise a specific device across sessions and locations, and detect that the app is in use at all. RSSI, timing, traffic volume, and radio fingerprints remain observable as well.
 
 Ingress validates announce structure, sender binding, signatures, payload sizes, and freshness. Current-link Noise authentication is required before destructive courier handoff or strict directed delivery. Floods, queues, fragments, ingress work, and per-peer state are bounded.
 
@@ -46,7 +48,7 @@ Residual risk: private-message metadata such as timing, radio adjacency, ciphert
 
 ## Public Gossip, Boards, and Media
 
-- Recent signed public mesh messages are archived in Application Support for up to 15 minutes so gossip sync survives a relaunch and can cross mesh partitions.
+- Recent signed public mesh messages are archived in Application Support for up to 6 hours so gossip sync survives a relaunch and can cross mesh partitions.
 - Signed public board posts and tombstones persist until author-selected expiry, at most seven days. Stores are bounded by global and per-author quotas.
 - Group metadata (name, roster, creator, epoch) persists as protected JSON; group keys live in the keychain until leave/removal/wipe.
 - Voice notes and images are stored in Application Support. Incoming media has a 100 MB oldest-first quota, and all managed media — incoming and outgoing — is additionally bounded by age: a launch-time sweep deletes anything older than seven days. In-flight live captures and files reserved by a delivery or deletion in progress are exempt regardless of age. Panic wipe invalidates detached preparation work, cancels active transfers, closes live capture files, and removes the managed media tree before returning.

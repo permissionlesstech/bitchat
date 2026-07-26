@@ -38,11 +38,15 @@
 /// 7. **Decoding**: Binary data parsed back to message objects
 ///
 /// ## Security Considerations
-/// - Message padding (to 256/512/1024/2048-byte blocks) obscures actual content length
+/// - Noise frames are padded (to 256/512/1024/2048-byte blocks) to obscure
+///   content length; other packet types are not padded, so their payload
+///   length is observable
 /// - Randomized relay jitter reduces the traffic-analysis signal; there is no
 ///   cover traffic or per-message timing obfuscation
 /// - Integration with Noise Protocol for E2E encryption
-/// - No persistent identifiers in protocol headers
+/// - The 8-byte sender ID in every header IS a persistent identifier: it is
+///   derived from the long-lived Noise static key and rotates only on a panic
+///   wipe. Treat headers as linkable across sessions.
 ///
 /// ## Message Types
 /// - **Announce/Leave**: Peer presence notifications
