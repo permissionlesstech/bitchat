@@ -295,8 +295,10 @@ final class BLEFileTransferHandler {
                 )
                 return true
             case .unavailable:
-                // Never turn an unreadable ledger into an empty ledger. The
-                // sender can retry after the transient storage failure clears.
+                // Never turn an unreadable ledger into an empty ledger. A
+                // directory-level failure clears on retry; a quarantined
+                // record keeps exactly this ID fail-closed while every other
+                // payload still flows.
                 SecureLogger.warning(
                     "📁 Withholding private media id=\(messageID.prefix(12))… while durable receipt state is unavailable",
                     category: .session
