@@ -1822,6 +1822,58 @@ struct ChatViewModelPrivateMediaDeletionTests {
     }
 
     @Test @MainActor
+    func clearPrivateChatKeepsOutgoingMediaReferencedByAnotherConversation()
+        throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let firstPeerID = PeerID(str: String(repeating: "4", count: 64))
+        let aliasPeerID = PeerID(str: String(repeating: "5", count: 64))
+        let outgoingDirectory = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        .appendingPathComponent("files/images/outgoing", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: outgoingDirectory,
+            withIntermediateDirectories: true
+        )
+        let fileURL = outgoingDirectory.appendingPathComponent(
+            "outgoing-mirrored-\(UUID().uuidString).jpg"
+        )
+        try Data("outgoing-image".utf8).write(to: fileURL, options: .atomic)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let message = privateMediaMessage(
+            id: UUID().uuidString,
+            sender: viewModel.nickname,
+            senderPeerID: transport.myPeerID,
+            recipient: "Peer",
+            filename: fileURL.lastPathComponent
+        )
+        viewModel.seedPrivateChat([message], for: firstPeerID)
+        viewModel.seedPrivateChat([message], for: aliasPeerID)
+
+        viewModel.clearPrivateChat(firstPeerID)
+
+        // The mirrored conversation keeps its bubble and the payload file:
+        // clearing conversation A must not reach across an identity-alias
+        // handoff into conversation B.
+        #expect(transport.deletedPrivateMediaMessageIDBatches.isEmpty)
+        #expect(viewModel.privateChats[firstPeerID]?.isEmpty == true)
+        #expect(
+            viewModel.privateChats[aliasPeerID]?.map(\.id) == [message.id]
+        )
+        #expect(FileManager.default.fileExists(atPath: fileURL.path))
+
+        // Clearing the last conversation that references the outgoing
+        // payload removes both the bubble and the file.
+        viewModel.clearPrivateChat(aliasPeerID)
+
+        #expect((viewModel.privateChats[aliasPeerID] ?? []).isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    @Test @MainActor
     func clearPrivateChatLeavesAmbiguousLegacyFileForQuotaCleanup()
         throws {
         let (viewModel, transport) = makeTestableViewModel()

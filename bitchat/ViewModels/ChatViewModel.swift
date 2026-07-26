@@ -774,7 +774,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         }
 
         let outgoingMedia = request.outgoingMedia
-        let outgoingMediaIDs = Set(outgoingMedia.map(\.id))
 
         let capturedExclusiveIDs =
             capturedMessageIDs.subtracting(survivingMessageIDs)
@@ -877,12 +876,24 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
                 }
             }
 
-            for message in outgoingMedia {
+            // Outgoing media mirrors the incoming alias protection: an ID
+            // whose copy survives in a conversation this clear does not
+            // touch (identity-alias handoff) keeps that bubble and its local
+            // file. Only IDs with no surviving copy are removed from every
+            // direct conversation and have their payload unlinked.
+            let outgoingPlan = currentRemovalPlan()
+            let removableOutgoingMedia = outgoingMedia.filter {
+                !hasRemainingCopy(of: $0.id, after: outgoingPlan)
+            }
+            for message in removableOutgoingMedia {
                 mediaTransferCoordinator.cleanupOutgoingLocalFile(
                     forMessage: message
                 )
             }
-            if !outgoingMediaIDs.isEmpty {
+            let removableOutgoingIDs = Set(
+                removableOutgoingMedia.map(\.id)
+            )
+            if !removableOutgoingIDs.isEmpty {
                 let directConversationIDs = conversations
                     .conversationsByID.keys.filter {
                         if case .direct = $0 { return true }
@@ -890,7 +901,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
                     }
                 for conversationID in directConversationIDs {
                     conversations.removeMessages(from: conversationID) {
-                        outgoingMediaIDs.contains($0.id)
+                        removableOutgoingIDs.contains($0.id)
                     }
                 }
             }
