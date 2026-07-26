@@ -450,3 +450,6 @@ extension BitchatDelegate {
 }
 
 extension BLEService: Transport {}
+extension BLEService: BluetoothStateReporting {}
+extension BLEService: PanicResettingTransport {}
+extension BLEService: MeshBridgingTransport {}
