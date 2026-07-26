@@ -792,6 +792,36 @@ struct CourierStoreTests {
         #expect(overlaps.count == 1)
     }
 
+    /// A nested offer must not end the OUTER offer's span when it returns.
+    ///
+    /// This is why the detector counts rather than sets a flag: with a flag,
+    /// the inner offer's `defer` clears it while the outer one is still between
+    /// its scan and its commit, so every later overlap with that outer offer
+    /// goes unreported. Two overlaps are provoked here; a flag reports one.
+    @Test func nestedOfferDoesNotEndTheOuterSpan() {
+        let store = makeStore()
+        let recipientKey = Data(repeating: 0xB0, count: 32)
+        let envelope = makeEnvelope(recipientKey: recipientKey).withCopies(8)
+        #expect(store.deposit(envelope, from: depositorA))
+        let courierA = Data(repeating: 0xC1, count: 32)
+        let courierB = Data(repeating: 0xC2, count: 32)
+        let courierC = Data(repeating: 0xC3, count: 32)
+
+        let overlaps = OverlapCounter()
+        CourierStore._test_onSprayOfferOverlap = { overlaps.count += 1 }
+        defer { CourierStore._test_onSprayOfferOverlap = nil }
+
+        _ = store.offerSprayCopies(to: courierA) { _ in
+            // B overlaps A and finishes; A is still in flight afterwards.
+            _ = store.offerSprayCopies(to: courierB) { _ in true }
+            // C therefore also overlaps A, and must be reported too.
+            _ = store.offerSprayCopies(to: courierC) { _ in true }
+            return true
+        }
+
+        #expect(overlaps.count == 2)
+    }
+
     /// Box so the detector's escaping closure can tally without capturing a
     /// local `var`.
     private final class OverlapCounter: @unchecked Sendable {

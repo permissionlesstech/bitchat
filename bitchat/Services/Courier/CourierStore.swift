@@ -152,7 +152,7 @@ final class CourierStore {
     private let queue = DispatchQueue(label: "chat.bitchat.courier.store")
 
     #if DEBUG
-    /// True while a spray offer is between its scan and its last commit.
+    /// How many spray offers are between their scan and their last commit.
     ///
     /// Both spray paths spend from one budget and both release the store queue
     /// across `accepting` (they must: it enters BLE/collections queues). The
@@ -161,7 +161,11 @@ final class CourierStore {
     /// isolation, because the violation that would actually ship is a
     /// suspension *inside* an already-MainActor block, which every isolation
     /// check passes.
-    private var sprayOfferInFlight = false
+    ///
+    /// A count rather than a flag: with a flag, a nested offer's `defer` clears
+    /// it while the outer offer is still in flight, so any later overlap with
+    /// that outer offer goes unreported.
+    private var sprayOffersInFlight = 0
     /// Test seam for the overlap detector, mirroring `_test_onOutboundPacket`
     /// in `BLEService`. Unset in normal debug runs, where an overlap trips
     /// `assertionFailure` instead.
@@ -173,10 +177,8 @@ final class CourierStore {
     private func beginSprayOfferSpan(_ function: StaticString = #function) {
         #if DEBUG
         queue.sync {
-            guard sprayOfferInFlight else {
-                sprayOfferInFlight = true
-                return
-            }
+            defer { sprayOffersInFlight += 1 }
+            guard sprayOffersInFlight > 0 else { return }
             if let hook = Self._test_onSprayOfferOverlap {
                 hook()
             } else {
@@ -193,7 +195,7 @@ final class CourierStore {
 
     private func endSprayOfferSpan() {
         #if DEBUG
-        queue.sync { sprayOfferInFlight = false }
+        queue.sync { sprayOffersInFlight = max(0, sprayOffersInFlight - 1) }
         #endif
     }
     private let fileURL: URL?
