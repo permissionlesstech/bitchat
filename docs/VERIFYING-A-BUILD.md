@@ -18,11 +18,11 @@ In order of how much verification is possible:
 
 Every tagged release has a `SOURCE-MANIFEST.txt` produced by `.github/workflows/source-manifest.yml`. It records the tag, the commit, the git tree hash, and a SHA-256 for every tracked file.
 
-Check a copy of the source against it:
+Keep the downloaded manifest *outside* the source tree (say, `/tmp`) — a stray copy inside the checkout would itself trip the completeness checks below. Then check a copy of the source against it:
 
 ```sh
-# From the root of the source you obtained
-grep -v '^#' SOURCE-MANIFEST.txt > /tmp/files.sha256
+# From the root of the source you obtained, with the manifest at /tmp
+grep -v '^#' /tmp/SOURCE-MANIFEST.txt > /tmp/files.sha256
 shasum -a 256 -c /tmp/files.sha256
 ```
 
@@ -32,15 +32,15 @@ That check alone is not enough. `shasum -c` verifies the files the manifest list
 
 ```sh
 # The manifest's path list must match the tree exactly — no missing files, no extras
-grep -v '^#' SOURCE-MANIFEST.txt | sed 's/^[0-9a-f]*  //' | LC_ALL=C sort > /tmp/manifest-paths
-find . -type f ! -path './.git/*' ! -name 'SOURCE-MANIFEST.txt' | sed 's|^\./||' | LC_ALL=C sort > /tmp/actual-paths
+grep -v '^#' /tmp/SOURCE-MANIFEST.txt | sed 's/^[0-9a-f]*  //' | LC_ALL=C sort > /tmp/manifest-paths
+find . -type f ! -path './.git/*' | sed 's|^\./||' | LC_ALL=C sort > /tmp/actual-paths
 diff /tmp/manifest-paths /tmp/actual-paths   # must print nothing
 ```
 
-In a git checkout the same assurance is one command — it also catches extra files, because they show as untracked:
+In a git checkout the same assurance is one command — it also catches extra files, because they show as untracked. `--ignored` matters: `.gitignore` covers paths like `build/`, plain `git status` would not report a planted file there, and Xcode compiles it all the same:
 
 ```sh
-git status --porcelain      # must print nothing before you build
+git status --porcelain --ignored      # must print nothing before you build
 ```
 
 The single value that covers the whole tree is the git tree hash in the manifest header:
@@ -54,7 +54,7 @@ Note the tree hash covers tracked content only; it does not see untracked files 
 The manifest itself carries a provenance attestation tying it to the workflow run that produced it, so a manifest handed to you along with a mirror is checkable too:
 
 ```sh
-gh attestation verify SOURCE-MANIFEST.txt --repo permissionlesstech/bitchat
+gh attestation verify /tmp/SOURCE-MANIFEST.txt --repo permissionlesstech/bitchat
 ```
 
 That last step is what makes this resistant to a hostile mirror. Without it, whoever gives you the source can give you a matching manifest.
