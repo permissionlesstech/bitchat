@@ -762,6 +762,202 @@ struct BLEServiceCoreTests {
         )
     }
 
+    /// The message-loss interleaving behind a legitimate peer restart: the
+    /// remote completes a replacement handshake (discarding the old keys)
+    /// but its completion never arrives, so the local responder timeout
+    /// restores the quarantined OLD generation and requests one convergence
+    /// retry — both dispatched unordered. When the restore handler wins the
+    /// race, it must NOT drain the pending private-message/typed-payload
+    /// queues under the restored keys the remote no longer holds; the drain
+    /// has to wait for the convergence handshake and use its new session.
+    @Test
+    func timeoutRestoredSessionDefersQueueDrainUntilConvergence() async throws {
+        let ble = makeService(noiseResponderHandshakeTimeout: 0.3)
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let mallory = NoiseEncryptionService(keychain: MockKeychain())
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+
+        // Establish BLE as responder so the inbound reconnect below is not
+        // coalesced by the initiator-completion grace path.
+        let message1 = try alice.initiateHandshake(with: ble.myPeerID)
+        let message2 = try #require(
+            try ble._test_noiseProcessHandshakeMessage(
+                from: alicePeerID,
+                message: message1
+            )
+        )
+        let message3 = try #require(
+            try alice.processHandshakeMessage(
+                from: ble.myPeerID,
+                message: message2
+            )
+        )
+        _ = try ble._test_noiseProcessHandshakeMessage(
+            from: alicePeerID,
+            message: message3
+        )
+        await ble._test_drainNoiseMessagePipeline()
+        #expect(ble.canDeliverSecurely(to: alicePeerID))
+
+        // The convergence retry only prepares for reachable peers.
+        ble._test_seedConnectedPeer(alicePeerID, nickname: "Alice")
+
+        let reconciled = SessionReconcileCounter()
+        ble._test_onPrivateMediaSessionReconciled = reconciled.record
+        // Park the convergence-recovery callback on its global-queue thread
+        // before it can enqueue onto messageQueue: the restore handler
+        // deterministically wins the dispatch race this test exercises.
+        let recoveryGate = HandshakeRecoveryEnqueueGate()
+        defer { recoveryGate.release() }
+        ble._test_beforeHandshakeRecoveryEnqueued = { _ in recoveryGate.pause() }
+        let outbound = OutboundPacketTap()
+        ble._test_onOutboundPacket = outbound.record
+
+        // Park the traffic the race would lose directly in the pending
+        // queues — the same place live sends land during quarantine — so no
+        // assertion below depends on outrunning the responder deadline under
+        // parallel test load. Nothing drains these queues while the current
+        // session stays untouched.
+        ble._test_enqueuePendingPrivateMessage(
+            content: "deferred private message",
+            messageID: "deferred-pm-\(UUID().uuidString)",
+            for: alicePeerID
+        )
+        ble._test_enqueuePendingNoisePayload(
+            NoisePayload(
+                type: .groupInvite,
+                data: Data("queued-during-quarantine".utf8)
+            ).encode(),
+            transferId: "deferred-invite-\(UUID().uuidString)",
+            for: alicePeerID
+        )
+
+        // An unauthenticated message 1 quarantines the established transport.
+        // Its message 3 never arrives, modeling the restarted peer whose
+        // completion was lost after it already discarded the old keys.
+        let reconnectMessage1 = try mallory.initiateHandshake(with: ble.myPeerID)
+        let reconnectPacket = BitchatPacket(
+            type: MessageType.noiseHandshake.rawValue,
+            senderID: Data(hexString: alicePeerID.id) ?? Data(),
+            recipientID: Data(hexString: ble.myPeerID.id),
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1_000),
+            payload: reconnectMessage1,
+            signature: nil,
+            ttl: 7
+        )
+        ble._test_handlePacket(reconnectPacket, fromPeerID: alicePeerID)
+        // The responder's message 2 is a monotonic quarantine signal; the
+        // secure-delivery dip itself only lasts until the responder deadline,
+        // which parallel test load can outrun. (The recovery gate keeps the
+        // convergence retry's message 1 out of the tap until released.)
+        let responderReady = await TestHelpers.waitUntil(
+            { outbound.count(ofType: .noiseHandshake) >= 1 },
+            timeout: TestConstants.longTimeout
+        )
+        try #require(responderReady)
+        #expect(outbound.count(ofType: .noiseEncrypted) == 0)
+
+        // The responder timeout restores the quarantined generation; the
+        // gate guarantees its handler runs before the convergence retry.
+        let restoreRan = await TestHelpers.waitUntil(
+            { reconciled.count(for: alicePeerID) == 1 },
+            timeout: TestConstants.longTimeout
+        )
+        try #require(restoreRan)
+        #expect(ble.canDeliverSecurely(to: alicePeerID))
+        await ble._test_drainNoiseMessagePipeline()
+        // The parked queues must not have been encrypted under the restored
+        // old generation the remote may no longer be able to read.
+        #expect(outbound.count(ofType: .noiseEncrypted) == 0)
+
+        // Release the mandatory convergence retry: it retires the restored
+        // session and starts a fresh XX exchange with the live peer.
+        recoveryGate.release()
+        let retryStarted = await TestHelpers.waitUntil(
+            {
+                outbound.snapshot().contains {
+                    $0.type == MessageType.noiseHandshake.rawValue
+                        && PeerID(hexData: $0.senderID) == ble.myPeerID
+                        && $0.payload.count
+                            == NoiseSecurityConstants.xxInitialMessageSize
+                }
+            },
+            timeout: TestConstants.longTimeout
+        )
+        try #require(retryStarted)
+        #expect(outbound.count(ofType: .noiseEncrypted) == 0)
+        let retryMessage1 = try #require(
+            outbound.snapshot().last {
+                $0.type == MessageType.noiseHandshake.rawValue
+                    && PeerID(hexData: $0.senderID) == ble.myPeerID
+                    && $0.payload.count
+                        == NoiseSecurityConstants.xxInitialMessageSize
+            }?.payload
+        )
+
+        // Alice answers the retry as the restarted peer she models: her old
+        // session is gone, so the retry is a fresh responder exchange (and
+        // never the initiator-completion grace deferral, whose lower-peerID
+        // arm would otherwise coalesce the retry for random key orderings).
+        alice.clearSession(for: ble.myPeerID)
+        let retryMessage2 = try #require(
+            try alice.processHandshakeMessage(
+                from: ble.myPeerID,
+                message: retryMessage1
+            )
+        )
+        let retryPacket = BitchatPacket(
+            type: MessageType.noiseHandshake.rawValue,
+            senderID: Data(hexString: alicePeerID.id) ?? Data(),
+            recipientID: Data(hexString: ble.myPeerID.id),
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1_000) + 1,
+            payload: retryMessage2,
+            signature: nil,
+            ttl: 7
+        )
+        ble._test_handlePacket(retryPacket, fromPeerID: alicePeerID)
+        let drained = await TestHelpers.waitUntil(
+            { outbound.count(ofType: .noiseEncrypted) >= 3 },
+            timeout: TestConstants.longTimeout
+        )
+        try #require(drained)
+        await ble._test_drainNoiseMessagePipeline()
+
+        // Alice completes with message 3, then must be able to decrypt every
+        // drained payload — proving nothing left under the old generation.
+        let retryMessage3 = try #require(
+            outbound.snapshot().last {
+                $0.type == MessageType.noiseHandshake.rawValue
+                    && PeerID(hexData: $0.senderID) == ble.myPeerID
+                    && $0.payload.count
+                        != NoiseSecurityConstants.xxInitialMessageSize
+            }?.payload
+        )
+        _ = try alice.processHandshakeMessage(
+            from: ble.myPeerID,
+            message: retryMessage3
+        )
+        let plaintexts = try outbound.snapshot()
+            .filter { $0.type == MessageType.noiseEncrypted.rawValue }
+            .map { try alice.decrypt($0.payload, from: ble.myPeerID) }
+        #expect(plaintexts.count == 3)
+        #expect(
+            plaintexts.filter {
+                $0.first == NoisePayloadType.authenticatedPeerState.rawValue
+            }.count == 1
+        )
+        #expect(
+            plaintexts.filter {
+                $0.first == NoisePayloadType.privateMessage.rawValue
+            }.count == 1
+        )
+        #expect(
+            plaintexts.filter {
+                $0.first == NoisePayloadType.groupInvite.rawValue
+            }.count == 1
+        )
+    }
+
     /// A legitimate rotation announce necessarily arrives on a link still
     /// bound to the OLD ID, so its registry upsert stores the new peer
     /// disconnected. The successful rebind must promote it: a healed
@@ -1095,6 +1291,45 @@ private final class OutboundPacketTap {
     }
 }
 
+/// Blocks the convergence-recovery callback on its global-queue thread so a
+/// test can prove the quarantine-restore handler wins the messageQueue race.
+private final class HandshakeRecoveryEnqueueGate: @unchecked Sendable {
+    private let condition = NSCondition()
+    private var released = false
+
+    func pause() {
+        condition.lock()
+        while !released {
+            condition.wait()
+        }
+        condition.unlock()
+    }
+
+    func release() {
+        condition.lock()
+        released = true
+        condition.broadcast()
+        condition.unlock()
+    }
+}
+
+/// Thread-safe counter for `_test_onPrivateMediaSessionReconciled` firings.
+private final class SessionReconcileCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var reconciles: [PeerID] = []
+
+    func record(_ peerID: PeerID) {
+        lock.lock()
+        reconciles.append(peerID)
+        lock.unlock()
+    }
+
+    func count(for peerID: PeerID) -> Int {
+        lock.lock(); defer { lock.unlock() }
+        return reconciles.filter { $0 == peerID }.count
+    }
+}
+
 private final class VerifiedDirectRebindGate: @unchecked Sendable {
     private let condition = NSCondition()
     private var paused = false
@@ -1186,7 +1421,10 @@ private final class PanicIngressObserver: @unchecked Sendable {
     }
 }
 
-private func makeService() -> BLEService {
+private func makeService(
+    noiseResponderHandshakeTimeout: TimeInterval =
+        NoiseSecurityConstants.ordinaryResponderHandshakeTimeout
+) -> BLEService {
     let keychain = MockKeychain()
     let identityManager = MockIdentityManager(keychain)
     let idBridge = NostrIdentityBridge(keychain: MockKeychainHelper())
@@ -1194,7 +1432,8 @@ private func makeService() -> BLEService {
         keychain: keychain,
         idBridge: idBridge,
         identityManager: identityManager,
-        initializeBluetoothManagers: false
+        initializeBluetoothManagers: false,
+        noiseResponderHandshakeTimeout: noiseResponderHandshakeTimeout
     )
 }
 

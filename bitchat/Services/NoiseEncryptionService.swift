@@ -193,8 +193,11 @@ final class NoiseEncryptionService {
         ((_ request: NoiseHandshakeRecoveryRequest) -> Void)?
     /// An unauthenticated reconnect attempt failed or timed out and the
     /// receive-only rollback session became the active transport again.
-    /// Transport queues must be drained for this exact restored generation.
-    var onSessionRestoredWithGeneration: ((_ peerID: PeerID, _ generation: UUID) -> Void)?
+    /// Transport queues may only be drained for this exact restored
+    /// generation when the reason is terminal; a restore that owns a pending
+    /// convergence retry must keep them parked until the retry concludes.
+    var onSessionRestoredWithGeneration:
+        ((_ peerID: PeerID, _ generation: UUID, _ reason: NoiseSessionRestoreReason) -> Void)?
     
     // Add a handler for peer authentication
     func addOnPeerAuthenticatedHandler(_ handler: @escaping (PeerID, String) -> Void) {
@@ -345,8 +348,8 @@ final class NoiseEncryptionService {
                 sessionGeneration: generation
             )
         }
-        sessionManager.onSessionRestored = { [weak self] peerID, generation in
-            self?.onSessionRestoredWithGeneration?(peerID, generation)
+        sessionManager.onSessionRestored = { [weak self] peerID, generation, reason in
+            self?.onSessionRestoredWithGeneration?(peerID, generation, reason)
         }
         sessionManager.onHandshakeRecoveryRequired = { [weak self] request in
             self?.onHandshakeRecoveryRequired?(request)

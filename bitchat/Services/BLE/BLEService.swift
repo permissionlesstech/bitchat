@@ -315,6 +315,10 @@ final class BLEService: NSObject {
     /// May block announce handling after verified-link rebind work is queued.
     /// Tests use this boundary to prove rebind and reconnect are serialized.
     var _test_afterVerifiedDirectRebindEnqueued: (() -> Void)?
+    /// May block the convergence-recovery callback on its global-queue thread
+    /// before it enqueues onto `messageQueue`. Tests use this boundary to
+    /// force the quarantine-restore handler to win the dispatch race.
+    var _test_beforeHandshakeRecoveryEnqueued: ((PeerID) -> Void)?
     #endif
     private var selfBroadcastTracker = BLESelfBroadcastTracker()
     private let meshTopology = MeshTopologyTracker()
@@ -387,6 +391,9 @@ final class BLEService: NSObject {
     // MARK: - Identity
     
     private var noiseService: NoiseEncryptionService
+    /// Injected so tests can compress the quarantine/rollback window;
+    /// production always passes the security-constant default.
+    private let noiseResponderHandshakeTimeout: TimeInterval
     private let identityManager: SecureIdentityStateManagerProtocol
     private let keychain: KeychainManagerProtocol
     private let idBridge: NostrIdentityBridge
@@ -503,14 +510,20 @@ final class BLEService: NSObject {
         identityManager: SecureIdentityStateManagerProtocol,
         initializeBluetoothManagers: Bool = true,
         incomingFileStore: BLEIncomingFileStore = BLEIncomingFileStore(),
-        startSuspendedForPanicRecovery: Bool = false
+        startSuspendedForPanicRecovery: Bool = false,
+        noiseResponderHandshakeTimeout: TimeInterval =
+            NoiseSecurityConstants.ordinaryResponderHandshakeTimeout
     ) {
         self.keychain = keychain
         self.idBridge = idBridge
         self.incomingFileStore = incomingFileStore
         self.shouldInitializeBluetoothManagers = initializeBluetoothManagers
         self._isPanicSuspended = startSuspendedForPanicRecovery
-        noiseService = NoiseEncryptionService(keychain: keychain)
+        self.noiseResponderHandshakeTimeout = noiseResponderHandshakeTimeout
+        noiseService = NoiseEncryptionService(
+            keychain: keychain,
+            ordinaryResponderHandshakeTimeout: noiseResponderHandshakeTimeout
+        )
         self.identityManager = identityManager
         super.init()
         
@@ -783,7 +796,10 @@ final class BLEService: NSObject {
             noiseService.clearEphemeralStateForPanic()
             noiseService.clearPersistentIdentity()
 
-            let newNoise = NoiseEncryptionService(keychain: keychain)
+            let newNoise = NoiseEncryptionService(
+                keychain: keychain,
+                ordinaryResponderHandshakeTimeout: noiseResponderHandshakeTimeout
+            )
             noiseService = newNoise
             configureNoiseServiceCallbacks(for: newNoise)
             refreshPeerIdentity()
@@ -3452,6 +3468,20 @@ extension BLEService {
         try noiseService.processHandshakeMessage(from: peerID, message: message)
     }
 
+    func _test_enqueuePendingPrivateMessage(
+        content: String,
+        messageID: String,
+        for peerID: PeerID
+    ) {
+        collectionsQueue.sync(flags: .barrier) {
+            pendingNoiseSessionQueues.appendPrivateMessage(
+                content: content,
+                messageID: messageID,
+                for: peerID
+            )
+        }
+    }
+
     func _test_enqueuePendingNoisePayload(
         _ payload: Data,
         transferId: String,
@@ -4697,6 +4727,9 @@ extension BLEService {
         service.onHandshakeRecoveryRequired = {
             [weak self, weak service] request in
             guard let self, let service else { return }
+            #if DEBUG
+            self._test_beforeHandshakeRecoveryEnqueued?(request.peerID)
+            #endif
             self.messageQueue.async(flags: .barrier) {
                 [weak self, weak service] in
                 guard let self,
@@ -4740,7 +4773,7 @@ extension BLEService {
                 }
             }
         }
-        service.onSessionRestoredWithGeneration = { [weak self, weak service] peerID, generation in
+        service.onSessionRestoredWithGeneration = { [weak self, weak service] peerID, generation, reason in
             guard let self, let service else { return }
             self.messageQueue.async { [weak self, weak service] in
                 guard let self,
@@ -4754,12 +4787,19 @@ extension BLEService {
                     category: .session
                 )
                 // Re-enter the same generation-bound transition used after a
-                // successful handshake. This restores authenticated protocol
-                // state and drains both PM and typed-payload queues.
+                // successful handshake to restore authenticated protocol
+                // state. Only a terminal restore may also drain the PM and
+                // typed-payload queues: after a responder timeout the
+                // counterpart may have completed the replacement handshake
+                // and discarded the restored keys, so encrypting the queues
+                // under them would lose every message silently. The mandatory
+                // convergence retry that accompanies the restore drains them
+                // under the new session instead (any establishment does).
                 self.handleNoisePeerAuthenticated(
                     peerID: peerID,
                     fingerprint: fingerprint,
-                    sessionGeneration: generation
+                    sessionGeneration: generation,
+                    deferOutboundUntilConvergence: reason == .pendingConvergence
                 )
             }
         }
@@ -4768,7 +4808,8 @@ extension BLEService {
     private func handleNoisePeerAuthenticated(
         peerID: PeerID,
         fingerprint: String,
-        sessionGeneration generation: UUID
+        sessionGeneration generation: UUID,
+        deferOutboundUntilConvergence: Bool = false
     ) {
         let normalizedPeerID = peerID.toShort()
         guard let transition = noiseService.withCurrentSessionGeneration(
@@ -4819,6 +4860,21 @@ extension BLEService {
             sessionGeneration: generation,
             nonce: watchdog.nonce
         )
+
+        if deferOutboundUntilConvergence {
+            // Timeout-restore: the session is back for receive purposes and
+            // the generation-bound protocol state above is rebuilt, but the
+            // counterpart may already hold replacement keys that discarded
+            // this generation's. Encrypting the pending queues here would
+            // lose them silently, so leave them parked: the restore's
+            // mandatory convergence retry — or any later handshake the
+            // reconnect policy initiates — re-enters this transition with a
+            // fresh generation and drains them under keys both sides hold.
+            #if DEBUG
+            _test_onPrivateMediaSessionReconciled?(normalizedPeerID)
+            #endif
+            return
+        }
 
         // `onPeerAuthenticated` can fire while the initiator is returning XX
         // message 3. This callback is queued behind the handshake handler, so

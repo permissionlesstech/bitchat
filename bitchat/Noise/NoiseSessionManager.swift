@@ -31,6 +31,20 @@ enum NoiseHandshakeRecoveryPreparation {
     case transferred
 }
 
+/// Why a quarantined transport became the active session again.
+enum NoiseSessionRestoreReason: Equatable, Sendable {
+    /// The replacement attempt failed terminally (claimed-identity mismatch,
+    /// or a failure that owns no convergence retry). The counterpart never
+    /// finished replacement keys, so the restored generation is immediately
+    /// valid for outbound traffic.
+    case terminal
+    /// The responder window expired — or a recoverable failure occurred —
+    /// and this manager owns one mandatory convergence retry. The counterpart
+    /// may already hold replacement keys that discarded the restored ones, so
+    /// outbound queue drains must wait for the retry to conclude.
+    case pendingConvergence
+}
+
 final class NoiseSessionManager {
     private var sessions: [PeerID: NoiseSession] = [:]
     /// Opaque identity for each exact entry in `sessions`. The generation is
@@ -75,7 +89,7 @@ final class NoiseSessionManager {
     
     // Callbacks
     var onSessionEstablished: ((PeerID, Curve25519.KeyAgreement.PublicKey, UUID) -> Void)?
-    var onSessionRestored: ((PeerID, UUID) -> Void)?
+    var onSessionRestored: ((PeerID, UUID, NoiseSessionRestoreReason) -> Void)?
     var onSessionFailed: ((PeerID, Error) -> Void)?
     var onHandshakeRecoveryRequired: ((NoiseHandshakeRecoveryRequest) -> Void)?
     
@@ -743,6 +757,9 @@ final class NoiseSessionManager {
                 recentOrdinaryInitiatorCompletions.removeValue(forKey: peerID)
                 session.reset()
 
+                let isIdentityMismatch =
+                    (error as? NoiseSessionError) == .peerIdentityMismatch
+
                 let restoredGeneration: UUID?
                 if let quarantined = quarantinedTransports.removeValue(forKey: peerID) {
                     sessions[peerID] = quarantined.session
@@ -752,17 +769,27 @@ final class NoiseSessionManager {
                 } else {
                     restoredGeneration = nil
                 }
-                
+
+                // An identity mismatch is terminal: the counterpart failed to
+                // prove the claimed static key, so it never finished keys that
+                // could have replaced the restored ones. Every other restore
+                // that owns (or joins) a convergence retry must keep transport
+                // queues parked until that retry concludes — the counterpart
+                // may already have discarded the restored sending keys.
+                let restoreReason: NoiseSessionRestoreReason =
+                    !isIdentityMismatch
+                        && (shouldRequestRecovery
+                            || pendingHandshakeRecoveryIDs[peerID] != nil)
+                    ? .pendingConvergence
+                    : .terminal
+
                 // Schedule callback outside the synchronized block to prevent deadlock
                 DispatchQueue.global().async { [weak self] in
                     if let restoredGeneration {
-                        self?.onSessionRestored?(peerID, restoredGeneration)
+                        self?.onSessionRestored?(peerID, restoredGeneration, restoreReason)
                     }
                     self?.onSessionFailed?(peerID, error)
                 }
-
-                let isIdentityMismatch =
-                    (error as? NoiseSessionError) == .peerIdentityMismatch
                 if pendingHandshakeRecoveryIDs[peerID] != nil {
                     shouldSuppressImmediateHandlerRestart = true
                 }
@@ -912,8 +939,16 @@ final class NoiseSessionManager {
                 category: .session
             )
             if let restored {
+                // The mandatory convergence retry below owns the outbound
+                // resume: the timed-out counterpart may hold replacement keys
+                // that already discarded the restored generation's, so queue
+                // drains under it would be silently undecryptable.
                 DispatchQueue.global().async { [weak self] in
-                    self?.onSessionRestored?(peerID, restored.generation)
+                    self?.onSessionRestored?(
+                        peerID,
+                        restored.generation,
+                        .pendingConvergence
+                    )
                 }
             }
 
