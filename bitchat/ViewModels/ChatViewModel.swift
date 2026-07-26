@@ -1502,10 +1502,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     }
 
     /// #1064 launch-restore variant of `startPrivateChat`. When
-    /// `suppressSystemMessages` is `true`, a gate rejection (blocked /
-    /// non-mutual favorite) no-ops silently instead of emitting a system message
-    /// into the current (public mesh) timeline, so a rejected DM restore falls
-    /// back to the conversation list cleanly. Kept as a distinct non-defaulted
+    /// `suppressSystemMessages` is `true`, a gate rejection no-ops silently
+    /// instead of emitting a system message into the current (public mesh)
+    /// timeline, so a rejected DM restore falls back to the conversation list
+    /// cleanly. Since #1415 removed the mutual-favorite gate that is exactly
+    /// one message — the blocked one. Kept as a distinct non-defaulted
     /// overload — a defaulted extra parameter would not satisfy the context
     /// protocols above and a default would make the plain call ambiguous.
     @MainActor

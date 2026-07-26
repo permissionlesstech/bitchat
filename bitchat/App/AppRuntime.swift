@@ -171,6 +171,11 @@ final class AppRuntime: ObservableObject {
                 Self.isDirectChatRestorable(
                     $0,
                     favorites: .shared,
+                    hasStoredCryptographicIdentity: {
+                        !chatViewModel.identityManager
+                            .getCryptoIdentitiesByPeerIDPrefix($0.toShort())
+                            .isEmpty
+                    },
                     isPeerBlocked: { chatViewModel.isPeerBlocked($0) }
                 )
             }
@@ -178,13 +183,18 @@ final class AppRuntime: ObservableObject {
         var didOpenDirectChat = false
         if case .restoredDirectChat(let peerID) = presentation {
             // `startPrivateChat`'s gate (ChatPeerIdentityCoordinator) rejects a
-            // now-blocked or non-mutual-favorite peer by emitting a system
-            // message and returning WITHOUT opening the chat. At launch that
-            // message would land in the current (public mesh) timeline, so pass
+            // now-blocked peer by emitting a system message and returning
+            // WITHOUT opening the chat. At launch that message would land in
+            // the current (public mesh) timeline, so pass
             // `suppressSystemMessages: true` — the reject stays silent and we
             // detect it via `selectedPrivateChatPeer`, which is only set on the
-            // success path. `isDirectChatRestorable` already screens for the
-            // same conditions; this is the belt-and-suspenders second line.
+            // success path.
+            //
+            // Not a second line of defence any more. Post-#1415 that gate
+            // screens only self, group and blocked, so it catches nothing
+            // `isDirectChatRestorable` has not already caught. It is kept for
+            // the narrow race where the peer is blocked between the predicate
+            // and this call, and for the silent-failure detection above.
             chatViewModel.startPrivateChat(with: peerID, suppressSystemMessages: true)
             didOpenDirectChat = chatViewModel.selectedPrivateChatPeer == peerID
         }
@@ -201,24 +211,54 @@ final class AppRuntime: ObservableObject {
     /// presence (mesh discovery is async, so no peer is connected yet). A
     /// syntactically valid `PeerID` is NOT sufficient: an unknown peer would
     /// otherwise fall straight through `startPrivateChat` into an empty phantom
-    /// DM. Mirrors the open-path gate
-    /// (`ChatPeerIdentityCoordinator.startPrivateChat`): restorable iff the peer
-    /// is a MUTUAL favorite (we favorite them AND they favorite us) and NOT
-    /// blocked. The gate's third relaxation term, `isConnected`, is always false
-    /// at launch, so it drops out of the launch-effective predicate. A geohash/
-    /// Nostr DM is *not* special-cased: its full Nostr key is rebuilt only from
-    /// inbound ephemeral events, so at launch a restored `nostr_` id cannot
-    /// resolve and would open an unsendable phantom unless it is also a mutual
-    /// favorite. Favorites are keychain-backed and keyed by stable Noise public
-    /// key, so this is presence-independent and pure, hence unit-testable.
+    /// DM.
+    ///
+    /// Restorable iff the peer is NOT blocked and we hold durable evidence the
+    /// conversation is real: either side has favorited the other, or we have a
+    /// stored cryptographic identity for them.
+    ///
+    /// This tracks `ChatPeerIdentityCoordinator.startPrivateChat`, which #1415
+    /// relaxed — it no longer requires a mutual favorite, on the grounds that
+    /// store-and-forward (couriers, bridge drops, retained outbox) needs only
+    /// the recipient's noise key, so "the router decides what delivery looks
+    /// like, not chat entry". Keeping the old mutual-favorite rule here would
+    /// have made launch-restore stricter than chat entry: a one-way-favorite or
+    /// merely-known peer whose DM is perfectly sendable would fail to restore
+    /// and drop the user on the conversation list instead.
+    ///
+    /// It cannot simply defer to that gate, though. Post-#1415 the open path
+    /// screens only self, group and blocked, so this predicate is the sole
+    /// defence against restoring into a phantom DM, and it has to hold the line
+    /// on its own.
+    ///
+    /// The terms are chosen for durability at launch. Favorites are
+    /// keychain-backed; stored cryptographic identities are on disk. The outbox
+    /// and live Noise session state are deliberately NOT consulted — the outbox
+    /// defers loading until protected data is available and session state is
+    /// in-memory, so both read empty at launch regardless of the truth.
+    ///
+    /// Geohash/Nostr DMs stay excluded: a `nostr_` id's full Nostr key is
+    /// rebuilt only from inbound ephemeral events, so at launch it cannot
+    /// resolve, and `startPrivateChat` skips the handshake for geoDMs — a
+    /// phantom would open with no error at all. Their one durable anchor is a
+    /// favorite record, so for them the favorite terms decide and the identity
+    /// term is refused outright.
     static func isDirectChatRestorable(
         _ peerID: PeerID,
         isPeerFavorited: (PeerID) -> Bool,
         theyFavoritedUs: (PeerID) -> Bool,
+        hasStoredCryptographicIdentity: (PeerID) -> Bool,
         isPeerBlocked: (PeerID) -> Bool
     ) -> Bool {
+        // Blocked stays a veto, never one term among several.
         guard !isPeerBlocked(peerID) else { return false }
-        return isPeerFavorited(peerID) && theyFavoritedUs(peerID)
+        if isPeerFavorited(peerID) || theyFavoritedUs(peerID) { return true }
+        // Explicit rather than incidental: a `nostr_` id does satisfy
+        // `isShort` (the prefix is not part of the length check), and today it
+        // misses only because the identity lookup re-attaches that prefix and
+        // no hex fingerprint starts with it. That is luck, not a rule.
+        guard !peerID.isGeoDM, !peerID.isGeoChat else { return false }
+        return hasStoredCryptographicIdentity(peerID)
     }
 
     /// Production wiring of `isDirectChatRestorable`, extracted so the real
@@ -231,9 +271,19 @@ final class AppRuntime: ObservableObject {
     /// silently fail to restore. The block lookup mirrors the open-path gate's
     /// `unifiedIsBlocked` (fingerprint-resolved, so it works for offline
     /// favorites).
+    ///
+    /// The identity lookup is passed in rather than reached for: it lives on
+    /// the injected `SecureIdentityStateManagerProtocol`, so tests stub it the
+    /// same way they stub the favorites service instead of sharing
+    /// process-wide state. It needs the same `toShort()` normalization —
+    /// `getCryptoIdentitiesByPeerIDPrefix` guards on `isShort` and returns an
+    /// empty result otherwise, so a 64-hex id would read as "no identity"
+    /// rather than as an error. Synchronous and disk-backed, so it is safe on
+    /// the launch path.
     static func isDirectChatRestorable(
         _ peerID: PeerID,
         favorites: FavoritesPersistenceService,
+        hasStoredCryptographicIdentity: (PeerID) -> Bool,
         isPeerBlocked: (PeerID) -> Bool
     ) -> Bool {
         isDirectChatRestorable(
@@ -244,6 +294,7 @@ final class AppRuntime: ObservableObject {
             theyFavoritedUs: {
                 favorites.getFavoriteStatus(forPeerID: $0.toShort())?.theyFavoritedUs ?? false
             },
+            hasStoredCryptographicIdentity: hasStoredCryptographicIdentity,
             isPeerBlocked: isPeerBlocked
         )
     }

@@ -37946,6 +37946,12 @@
             "value" : "público · cerca"
           }
         },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عمومی · اطراف شما"
+          }
+        },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38124,6 +38130,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "público, cerca"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عمومی، اطراف شما"
           }
         },
         "fil" : {
