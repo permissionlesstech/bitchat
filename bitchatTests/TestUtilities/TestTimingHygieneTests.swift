@@ -96,6 +96,8 @@ struct TestTimingHygieneTests {
         // Named constants hide the same mistake behind a symbol, and did: the
         // fifth flake of the session was `timeout: TestConstants.shortTimeout`
         // (1 s) on a positive wait, which a literals-only scan cannot see.
+        // `shortTimeout` itself is deleted (Periphery flagged it dead once its
+        // last wait site converted); the ban stays so it cannot come back.
         // `negativeWaitWindow` is deliberately absent — short is correct there.
         let bannedConstants = ["shortTimeout", "defaultTimeout"]
 
