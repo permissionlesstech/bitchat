@@ -228,6 +228,14 @@ struct CourierVectorTests {
     }
 
     /// The 16-byte envelope identity a spray receipt carries.
+    ///
+    /// Weaker than the other vectors, and deliberately so: this derivation has
+    /// no consumer on main yet — the function that reads it arrives with the
+    /// courier-spray work. What production surface exists is asserted (the
+    /// `sha256Hash()` implementation and the `tagLength` constant), but the
+    /// truncation is spelled out here rather than called, so a future
+    /// `ciphertextHash` helper that truncates differently would not fail this.
+    /// When that helper lands it should assert against this same vector.
     @Test func ciphertextHashIsSHA256TruncatedTo16() throws {
         let v = try Self.loadVectors()
         let hash = Data(try Self.hex(v.inputs.ciphertext)
@@ -261,11 +269,14 @@ struct CourierVectorTests {
         let packet = try Self.envelopePacket(from: v)
 
         let unpadded = try #require(BinaryProtocol.encode(packet, padding: false))
-        #expect(unpadded.count == signing.unsignedUnpaddedLength)
+        // #require, not #expect: every assertion below subscripts these bytes,
+        // and `Data` subscripting past the end traps. A short frame has to fail
+        // the test, not crash the process and take the rest of the run with it.
+        try #require(unpadded.count == signing.unsignedUnpaddedLength)
         #expect(unpadded.hexEncodedString() == signing.unsignedUnpadded)
 
         let preimage = try #require(packet.toBinaryDataForSigning())
-        #expect(preimage.count == signing.signingPreimageLength)
+        try #require(preimage.count == signing.signingPreimageLength)
         #expect(preimage.hexEncodedString() == signing.signingPreimage)
 
         // The pad byte equals the shortfall to the block boundary, and every
@@ -323,7 +334,7 @@ struct CourierVectorTests {
         var signed = packet
         signed.signature = Data(a)
         let wire = try #require(BinaryProtocol.encode(signed, padding: false))
-        #expect(wire.count == v.packetSigning.signedWireLength)
+        try #require(wire.count == v.packetSigning.signedWireLength)
         #expect(wire.count == v.packetSigning.unsignedUnpaddedLength + v.signature.signatureLength)
         #expect(wire[BinaryProtocol.Offsets.flags]
                 == (try Self.flagByte(v.packetSigning.flags.signedWirePacket)))
