@@ -86,7 +86,13 @@ protocol ChatPrivateConversationContext: AnyObject {
     @discardableResult
     func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool
     func sendMeshReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID)
-    func sendGeohashPrivateMessage(_ content: String, toRecipientHex recipientHex: String, from identity: NostrIdentity, messageID: String)
+    @discardableResult
+    func sendGeohashPrivateMessage(
+        _ content: String,
+        toRecipientHex recipientHex: String,
+        from identity: NostrIdentity,
+        messageID: String
+    ) -> Bool
     func sendGeohashDeliveryAck(for messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity)
     func sendGeohashReadReceipt(_ messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity)
 
@@ -174,7 +180,13 @@ extension ChatViewModel: ChatPrivateConversationContext {
         meshService.sendReadReceipt(receipt, to: peerID)
     }
 
-    func sendGeohashPrivateMessage(_ content: String, toRecipientHex recipientHex: String, from identity: NostrIdentity, messageID: String) {
+    @discardableResult
+    func sendGeohashPrivateMessage(
+        _ content: String,
+        toRecipientHex recipientHex: String,
+        from identity: NostrIdentity,
+        messageID: String
+    ) -> Bool {
         makeGeohashNostrTransport().sendPrivateMessageGeohash(
             content: content,
             toRecipientHex: recipientHex,
@@ -216,9 +228,16 @@ extension ChatViewModel: ChatPrivateConversationContext {
         NotificationService.shared.sendPrivateMessageNotification(from: senderName, message: message, peerID: peerID)
     }
 
-    private func makeGeohashNostrTransport() -> NostrTransport {
-        let transport = NostrTransport(keychain: keychain, idBridge: idBridge)
+    func makeGeohashNostrTransport(
+        dependencies: NostrTransport.Dependencies? = nil
+    ) -> NostrTransport {
+        let transport = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            dependencies: dependencies
+        )
         transport.senderPeerID = meshService.myPeerID
+        transport.eventDelegate = self
         return transport
     }
 }
@@ -227,7 +246,7 @@ extension ChatViewModel: ChatPrivateConversationContext {
 final class ChatPrivateConversationCoordinator {
     private unowned let context: any ChatPrivateConversationContext
 
-    // Outbox retries re-wrap the same message in fresh gift-wrap events, so
+    // Outbox retries re-envelope the same message in fresh private events, so
     // relay-level event-ID dedup can't catch them; track inbound GeoDM
     // message IDs so each copy past the first costs one (already-deduped)
     // ack check and nothing else.
@@ -399,13 +418,21 @@ final class ChatPrivateConversationCoordinator {
                 "GeoDM: local send mid=\(messageID.prefix(8))… to=\(recipientHex.prefix(8))… conv=\(peerID)",
                 category: .session
             )
-            context.sendGeohashPrivateMessage(
+            let accepted = context.sendGeohashPrivateMessage(
                 content,
                 toRecipientHex: recipientHex,
                 from: identity,
                 messageID: messageID
             )
-            context.setPrivateDeliveryStatus(.sent, forMessageID: messageID, peerID: peerID)
+            let status: DeliveryStatus = accepted
+                ? .sent
+                : .failed(
+                    reason: String(
+                        localized: "content.delivery.reason.not_delivered",
+                        comment: "Failure reason shown when a private message could not enter the relay delivery queue"
+                    )
+                )
+            context.setPrivateDeliveryStatus(status, forMessageID: messageID, peerID: peerID)
         } catch {
             context.setPrivateDeliveryStatus(
                 .failed(

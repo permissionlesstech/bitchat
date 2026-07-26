@@ -373,20 +373,25 @@ struct ChatViewModelNostrExtensionTests {
     // `test_receiveGiftWrap_tamperedSignatureIsDroppedAndDoesNotPoisonDedup`.
 
     @Test @MainActor
-    func subscribeGiftWrap_rejectsOversizedEmbeddedPacket() async throws {
+    func privateEnvelope_rejectsOversizedEmbeddedPacketBeforePublication() async throws {
         let (viewModel, _) = makeTestableViewModel()
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
 
         let oversized = Data(repeating: 0x41, count: FileTransferLimits.maxFramedFileBytes + 1)
         let content = "bitchat1:" + base64URLEncode(oversized)
-        let giftWrap = try NostrProtocol.createPrivateMessage(
-            content: content,
-            recipientPubkey: recipient.publicKeyHex,
-            senderIdentity: sender
-        )
-
-        viewModel.subscribeGiftWrap(giftWrap, id: recipient)
+        do {
+            _ = try NostrProtocol.createPrivateEnvelope(
+                content: content,
+                recipientPubkey: recipient.publicKeyHex,
+                senderIdentity: sender
+            )
+            Issue.record("Expected oversized private-envelope plaintext to be rejected")
+        } catch NostrError.invalidCiphertext {
+            // Rejected before encryption/publication, as intended.
+        } catch {
+            Issue.record("Expected NostrError.invalidCiphertext, got \(error)")
+        }
 
         try? await Task.sleep(nanoseconds: 100_000_000)
         #expect(viewModel.privateChats.isEmpty)
@@ -431,7 +436,7 @@ struct ChatViewModelNostrExtensionTests {
     }
 
     @Test @MainActor
-    func subscribeGiftWrap_deliveredAckUpdatesExistingMessage() async throws {
+    func subscribePrivateEnvelope_deliveredAckUpdatesExistingMessage() async throws {
         let (viewModel, _) = makeTestableViewModel()
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
@@ -453,13 +458,13 @@ struct ChatViewModelNostrExtensionTests {
         ], for: convKey)
 
         let content = try ackContent(type: .delivered, messageID: messageID, senderPeerID: PeerID(str: "0123456789abcdef"))
-        let giftWrap = try NostrProtocol.createPrivateMessage(
+        let envelope = try NostrProtocol.createPrivateEnvelope(
             content: content,
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
 
-        viewModel.subscribeGiftWrap(giftWrap, id: recipient)
+        viewModel.subscribePrivateEnvelope(envelope, id: recipient)
 
         let didUpdate = await TestHelpers.waitUntil(
             { isDelivered(status: deliveryStatus(in: viewModel, peerID: convKey, messageID: messageID)) },
@@ -469,7 +474,7 @@ struct ChatViewModelNostrExtensionTests {
     }
 
     @Test @MainActor
-    func subscribeGiftWrap_readAckUpdatesExistingMessage() async throws {
+    func subscribePrivateEnvelope_readAckUpdatesExistingMessage() async throws {
         let (viewModel, _) = makeTestableViewModel()
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
@@ -491,13 +496,13 @@ struct ChatViewModelNostrExtensionTests {
         ], for: convKey)
 
         let content = try ackContent(type: .readReceipt, messageID: messageID, senderPeerID: PeerID(str: "0123456789abcdef"))
-        let giftWrap = try NostrProtocol.createPrivateMessage(
+        let envelope = try NostrProtocol.createPrivateEnvelope(
             content: content,
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
 
-        viewModel.subscribeGiftWrap(giftWrap, id: recipient)
+        viewModel.subscribePrivateEnvelope(envelope, id: recipient)
 
         let didUpdate = await TestHelpers.waitUntil(
             { isRead(status: deliveryStatus(in: viewModel, peerID: convKey, messageID: messageID)) },
@@ -507,28 +512,28 @@ struct ChatViewModelNostrExtensionTests {
     }
 
     @Test @MainActor
-    func handleGiftWrap_privateMessageStoresConversationAndMapping() async throws {
+    func handlePrivateEnvelope_privateMessageStoresConversationAndMapping() async throws {
         let (viewModel, _) = makeTestableViewModel()
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
-        let messageID = "gift-private"
+        let messageID = "envelope-private"
         let convKey = PeerID(nostr_: sender.publicKeyHex)
 
         let content = try privateMessageContent(
-            text: "Hello from gift wrap",
+            text: "Hello from private envelope",
             messageID: messageID,
             senderPeerID: PeerID(str: "0123456789abcdef")
         )
-        let giftWrap = try NostrProtocol.createPrivateMessage(
+        let envelope = try NostrProtocol.createPrivateEnvelope(
             content: content,
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
 
-        viewModel.handleGiftWrap(giftWrap, id: recipient)
+        viewModel.handlePrivateEnvelope(envelope, id: recipient)
 
         let didStore = await TestHelpers.waitUntil(
-            { viewModel.privateChats[convKey]?.first?.content == "Hello from gift wrap" },
+            { viewModel.privateChats[convKey]?.first?.content == "Hello from private envelope" },
             timeout: 5.0
         )
         #expect(didStore)
@@ -537,11 +542,11 @@ struct ChatViewModelNostrExtensionTests {
     }
 
     @Test @MainActor
-    func handleGiftWrap_blockedSenderSkipsMessageStorage() async throws {
+    func handlePrivateEnvelope_blockedSenderSkipsMessageStorage() async throws {
         let (viewModel, _) = makeTestableViewModel()
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
-        let messageID = "gift-blocked"
+        let messageID = "envelope-blocked"
         let convKey = PeerID(nostr_: sender.publicKeyHex)
 
         viewModel.identityManager.setNostrBlocked(sender.publicKeyHex, isBlocked: true)
@@ -551,13 +556,13 @@ struct ChatViewModelNostrExtensionTests {
             messageID: messageID,
             senderPeerID: PeerID(str: "0123456789abcdef")
         )
-        let giftWrap = try NostrProtocol.createPrivateMessage(
+        let envelope = try NostrProtocol.createPrivateEnvelope(
             content: content,
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
 
-        viewModel.handleGiftWrap(giftWrap, id: recipient)
+        viewModel.handlePrivateEnvelope(envelope, id: recipient)
 
         // Gift-wrap decryption runs off the main actor; wait for the ack
         // (sent even for blocked senders) to know processing finished.
@@ -570,12 +575,12 @@ struct ChatViewModelNostrExtensionTests {
     }
 
     @Test @MainActor
-    func handleGiftWrap_deliveredAckUpdatesExistingMessage() async throws {
+    func handlePrivateEnvelope_deliveredAckUpdatesExistingMessage() async throws {
         let (viewModel, _) = makeTestableViewModel()
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
         let convKey = PeerID(nostr_: sender.publicKeyHex)
-        let messageID = "gift-delivered"
+        let messageID = "envelope-delivered"
 
         viewModel.seedPrivateChat([
             BitchatMessage(
@@ -592,13 +597,13 @@ struct ChatViewModelNostrExtensionTests {
         ], for: convKey)
 
         let content = try ackContent(type: .delivered, messageID: messageID, senderPeerID: PeerID(str: "0123456789abcdef"))
-        let giftWrap = try NostrProtocol.createPrivateMessage(
+        let envelope = try NostrProtocol.createPrivateEnvelope(
             content: content,
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
 
-        viewModel.handleGiftWrap(giftWrap, id: recipient)
+        viewModel.handlePrivateEnvelope(envelope, id: recipient)
 
         let didUpdate = await TestHelpers.waitUntil(
             { isDelivered(status: deliveryStatus(in: viewModel, peerID: convKey, messageID: messageID)) },
@@ -764,6 +769,63 @@ struct ChatViewModelGeoDMTests {
 
         #expect(viewModel.privateChats[convKey]?.count == 1)
         #expect(isFailed(status: viewModel.privateChats[convKey]?.last?.deliveryStatus))
+    }
+
+    @Test @MainActor
+    func geohashTerminalRelayFailure_transitionsSentMessageToFailed() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let messageID = "geo-terminal-failure"
+        let convKey = PeerID(nostr_: recipient.publicKeyHex)
+        let message = BitchatMessage(
+            id: messageID,
+            sender: viewModel.nickname,
+            content: "queued geohash message",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: "recipient",
+            senderPeerID: viewModel.myPeerID,
+            deliveryStatus: .sent
+        )
+        viewModel.seedPrivateChat([message], for: convKey)
+
+        var terminalFailure: (@MainActor () -> Void)?
+        let dependencies = NostrTransport.Dependencies(
+            notificationCenter: NotificationCenter(),
+            loadFavorites: { [:] },
+            favoriteStatusForNoiseKey: { _ in nil },
+            favoriteStatusForPeerID: { _ in nil },
+            currentIdentity: { sender },
+            registerPendingPrivateEnvelope: { _ in },
+            sendPrivateEnvelopeBatch: { _, failure in
+                terminalFailure = failure
+                return true
+            },
+            scheduleAfter: { _, _ in },
+            relayConnectivity: {
+                Just(false).eraseToAnyPublisher()
+            }
+        )
+        let transport = viewModel.makeGeohashNostrTransport(
+            dependencies: dependencies
+        )
+
+        let accepted = transport.sendPrivateMessageGeohash(
+            content: message.content,
+            toRecipientHex: recipient.publicKeyHex,
+            from: sender,
+            messageID: messageID
+        )
+
+        #expect(accepted)
+        #expect(viewModel.privateChats[convKey]?.first?.deliveryStatus == .sent)
+        let fail = try #require(terminalFailure)
+        fail()
+        #expect(isFailed(
+            status: viewModel.privateChats[convKey]?.first?.deliveryStatus
+        ))
     }
 
     /// The blocked notice belongs in the DM thread the person is typing in,

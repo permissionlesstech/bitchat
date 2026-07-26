@@ -243,7 +243,7 @@ private func drainMainQueue() async {
 
 /// Exercises `ChatNostrCoordinator` against `MockChatNostrContext` with no
 /// `ChatViewModel`. Scoped to the inbound event pipeline (dedup, presence,
-/// public-message ingest), gift-wrap DM ingest, key mapping, channel-switch
+/// public-message ingest), private-envelope ingest, key mapping, channel-switch
 /// teardown, embedded ack flows, and — now that favorites and notifications
 /// are injected through the context — the favorite-notification ingest and
 /// the sampled-geohash notification cooldown. Flows that hit live singletons
@@ -335,7 +335,7 @@ struct ChatNostrCoordinatorContextTests {
     }
 
     @Test @MainActor
-    func handleGiftWrap_routesEmbeddedPrivateMessageAndDeduplicates() async throws {
+    func handlePrivateEnvelope_routesEmbeddedPrivateMessageAndDeduplicates() async throws {
         let context = MockChatNostrContext()
         let coordinator = ChatNostrCoordinator(context: context)
 
@@ -346,20 +346,30 @@ struct ChatNostrCoordinatorContextTests {
             messageID: "gm-1",
             senderPeerID: PeerID(str: "aabbccddeeff0011")
         ))
-        let giftWrap = try NostrProtocol.createPrivateMessage(
+        let envelopes = try NostrProtocol.createPrivateEnvelopePublicationBatch(
             content: embedded,
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
 
-        coordinator.inbound.handleGiftWrap(giftWrap, id: recipient)
+        for envelope in envelopes {
+            coordinator.inbound.handlePrivateEnvelope(envelope, id: recipient)
+        }
 
-        // The NIP-17 unwrap runs off the main actor; wait for the hop back.
+        // The envelope unwrap runs off the main actor; wait for the hop back.
         let convKey = PeerID(nostr_: sender.publicKeyHex)
-        let routed = await TestHelpers.waitUntil({ context.handledPrivateMessages.count == 1 })
+        let routed = await TestHelpers.waitUntil({
+            context.handledPrivateMessages.count >= 1
+                && context.recordedNostrEventIDs.count == envelopes.count
+        })
         #expect(routed)
-        #expect(context.recordedNostrEventIDs == [giftWrap.id])
+        #expect(Set(context.recordedNostrEventIDs) == Set(envelopes.map(\.id)))
         #expect(context.nostrKeyMapping[convKey] == sender.publicKeyHex)
+        // The primary and compatibility envelopes carry the same authenticated
+        // embedded payload and must invoke message side effects only once.
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        await drainMainQueue()
+        #expect(context.handledPrivateMessages.count == 1)
         #expect(context.handledPrivateMessages.first?.senderPubkey == sender.publicKeyHex)
         #expect(context.handledPrivateMessages.first?.convKey == convKey)
 
@@ -370,15 +380,78 @@ struct ChatNostrCoordinatorContextTests {
         #expect(pm.messageID == "gm-1")
         #expect(pm.content == "psst")
 
-        // The same gift wrap is dropped on replay.
-        coordinator.inbound.handleGiftWrap(giftWrap, id: recipient)
+        // The same private envelope is dropped on replay.
+        coordinator.inbound.handlePrivateEnvelope(envelopes[0], id: recipient)
         await drainMainQueue()
-        #expect(context.recordedNostrEventIDs == [giftWrap.id])
+        #expect(Set(context.recordedNostrEventIDs) == Set(envelopes.map(\.id)))
         #expect(context.handledPrivateMessages.count == 1)
     }
 
     @Test @MainActor
-    func handleGiftWrap_panicWipeAfterSpawnDropsDecryptedResult() async throws {
+    func migrationEnvelopePairs_processEachMessageAndAckOnlyOnce() async throws {
+        let context = MockChatNostrContext()
+        let coordinator = ChatNostrCoordinator(context: context)
+        let recipient = try NostrIdentity.generate()
+        let sender = try NostrIdentity.generate()
+        let messageContent = try #require(NostrEmbeddedBitChat.encodePMForNostrNoRecipient(
+            content: "migration message",
+            messageID: "migration-message-id",
+            senderPeerID: PeerID(str: "aabbccddeeff0011")
+        ))
+        let deliveredContent = try #require(NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(
+            type: .delivered,
+            messageID: "migration-ack-id",
+            senderPeerID: PeerID(str: "aabbccddeeff0011")
+        ))
+        let readContent = try #require(NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(
+            type: .readReceipt,
+            messageID: "migration-ack-id",
+            senderPeerID: PeerID(str: "aabbccddeeff0011")
+        ))
+
+        var publishedIDs: [String] = []
+        for content in [messageContent, deliveredContent, readContent] {
+            let envelopes = try NostrProtocol.createPrivateEnvelopePublicationBatch(
+                content: content,
+                recipientPubkey: recipient.publicKeyHex,
+                senderIdentity: sender
+            )
+            #expect(envelopes.count == 2)
+            publishedIDs.append(contentsOf: envelopes.map(\.id))
+            for envelope in envelopes {
+                coordinator.inbound.handlePrivateEnvelope(envelope, id: recipient)
+            }
+        }
+
+        // Envelope unwrap runs off the main actor; wait until every published
+        // event has been recorded, then let any (incorrect) twin deliveries
+        // land before asserting exact side-effect counts.
+        let processed = await TestHelpers.waitUntil({
+            context.recordedNostrEventIDs.count == publishedIDs.count
+        })
+        #expect(processed)
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        await drainMainQueue()
+
+        #expect(context.handledPrivateMessages.count == 1)
+        #expect(context.handledDelivered.count == 1)
+        #expect(context.handledReadReceipts.count == 1)
+
+        // A later same-format re-envelope is a delivery retry, not the
+        // migration twin, so it must still reach downstream message-ID dedup
+        // and acknowledgement resend logic.
+        let primaryRetry = try NostrProtocol.createPrivateEnvelope(
+            content: messageContent,
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+        coordinator.inbound.handlePrivateEnvelope(primaryRetry, id: recipient)
+        let retried = await TestHelpers.waitUntil({ context.handledPrivateMessages.count == 2 })
+        #expect(retried)
+    }
+
+    @Test @MainActor
+    func handlePrivateEnvelope_panicWipeAfterSpawnDropsDecryptedResult() async throws {
         let context = MockChatNostrContext()
         let coordinator = ChatNostrCoordinator(context: context)
 
@@ -389,7 +462,7 @@ struct ChatNostrCoordinatorContextTests {
             messageID: "gm-wipe-1",
             senderPeerID: PeerID(str: "aabbccddeeff0011")
         ))
-        let giftWrap = try NostrProtocol.createPrivateMessage(
+        let envelope = try NostrProtocol.createPrivateEnvelope(
             content: embedded,
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
@@ -398,7 +471,7 @@ struct ChatNostrCoordinatorContextTests {
         // Spawn the detached decrypt (it strongly captures the pre-wipe
         // identity), then panic-wipe in the SAME main-actor turn — guaranteed
         // to land before the task's first main-actor hop.
-        coordinator.inbound.handleGiftWrap(giftWrap, id: recipient)
+        coordinator.inbound.handlePrivateEnvelope(envelope, id: recipient)
         coordinator.inbound.invalidateInFlightDecrypts()
 
         // Give the detached task ample time to have delivered if the wipe
@@ -409,9 +482,9 @@ struct ChatNostrCoordinatorContextTests {
         #expect(context.handledPrivateMessages.isEmpty)
         #expect(context.recordedNostrEventIDs.isEmpty)
 
-        // The pipeline itself stays usable: a gift wrap spawned AFTER the
+        // The pipeline itself stays usable: an envelope spawned AFTER the
         // wipe (new generation) still decrypts and delivers.
-        coordinator.inbound.handleGiftWrap(giftWrap, id: recipient)
+        coordinator.inbound.handlePrivateEnvelope(envelope, id: recipient)
         let delivered = await TestHelpers.waitUntil({ context.handledPrivateMessages.count == 1 })
         #expect(delivered)
     }
@@ -424,26 +497,26 @@ struct ChatNostrCoordinatorContextTests {
     // The inbound pipeline only ever sees verified events.
 
     @Test @MainActor
-    func processNostrMessage_duplicateDeliveryProcessesOnce() async throws {
+    func processAccountPrivateEnvelope_duplicateDeliveryProcessesOnce() async throws {
         let context = MockChatNostrContext()
         let coordinator = ChatNostrCoordinator(context: context)
 
         let recipient = try NostrIdentity.generate()
         let sender = try NostrIdentity.generate()
         context.nostrIdentity = recipient
-        let giftWrap = try NostrProtocol.createPrivateMessage(
+        let envelope = try NostrProtocol.createPrivateEnvelope(
             content: "verify:noop",
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
 
-        // Fan-in of the same (already verified) gift wrap from several relays
+        // Fan-in of the same (already verified) envelope from several relays
         // records and processes exactly once.
-        await coordinator.inbound.processNostrMessage(giftWrap)
-        #expect(context.recordedNostrEventIDs == [giftWrap.id])
+        await coordinator.inbound.processAccountPrivateEnvelope(envelope)
+        #expect(context.recordedNostrEventIDs == [envelope.id])
 
-        await coordinator.inbound.processNostrMessage(giftWrap)
-        #expect(context.recordedNostrEventIDs == [giftWrap.id])
+        await coordinator.inbound.processAccountPrivateEnvelope(envelope)
+        #expect(context.recordedNostrEventIDs == [envelope.id])
     }
 
     @Test @MainActor

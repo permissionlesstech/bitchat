@@ -9,24 +9,29 @@ import Security
 
 /// BitChat's private-envelope protocol transported over Nostr relays.
 ///
-/// This construction is deliberately BitChat-specific and is **not** NIP-17,
-/// NIP-44, or NIP-59 compatible, even though it historically reuses those
-/// NIPs' kind numbers (1059/13/14) and a `v2:` content prefix. It uses Nostr
-/// events and secp256k1 identities, but the XChaCha20-Poly1305 payload layout
-/// and key derivation are proprietary and interoperate only with BitChat
-/// clients.
+/// This is deliberately BitChat-specific and is not NIP-17, NIP-44, or NIP-59.
+/// It uses Nostr events and secp256k1 identities, but its XChaCha20-Poly1305
+/// payload layout is proprietary and interoperates only with BitChat clients.
 struct NostrProtocol {
-
+    
     /// Nostr event kinds
     enum EventKind: Int {
         case metadata = 0
         case textNote = 1
-        // BitChat's proprietary private-envelope layers. These reuse the
-        // NIP-17/NIP-59 kind numbers (14/13/1059) for historical reasons, but
-        // the encrypted payloads are BitChat-specific and not NIP-compatible.
-        case dm = 14 // unsigned inner message (inside ciphertext)
-        case seal = 13 // sender-signed seal (inside ciphertext)
-        case giftWrap = 1059 // public outer envelope (one-time key)
+        // Compatibility for BitChat releases that incorrectly emitted the
+        // proprietary payload under standard NIP kinds. Kind 1059 continues
+        // to be published and read until a coordinated cross-platform release
+        // explicitly removes it; all three legacy layers remain readable.
+        case legacyNIP59Seal = 13
+        case legacyNIP17DirectMessage = 14
+        case legacyNIP59GiftWrap = 1059
+        // Provisional BitChat-specific regular event kinds. These are not
+        // formally reserved by the Nostr kind registry. Only
+        // `privateEnvelope` is published; message and seal exist solely
+        // inside ciphertext.
+        case privateEnvelope = 1402
+        case privateSeal = 1403
+        case privateMessage = 1404
         case ephemeralEvent = 20000
         case geohashPresence = 20001
         case deletion = 5 // NIP-09 event deletion request
@@ -36,208 +41,289 @@ struct NostrProtocol {
         case courierDrop = 1401
     }
 
-    /// Bound work before Base64-decoding either encrypted layer of an inbound
-    /// private envelope, and before parsing each decrypted nested JSON layer.
-    /// Real envelopes are normally a few KiB; 64 KiB leaves ample headroom
-    /// without letting an addressed relay event drive unbounded allocation.
+    /// Prefix for BitChat private-envelope ciphertext. The suffix is
+    /// base64url(nonce24 || ciphertext || poly1305Tag).
+    static let privateEnvelopeContentPrefix = "bitchat-pm-v1:"
+
+    /// Bound work before Base64 decoding either encrypted layer. Current
+    /// private messages are normally only a few KiB; 64 KiB leaves ample
+    /// migration headroom without allowing an addressed relay event to drive
+    /// unbounded allocation.
     static let maximumPrivateEnvelopeCiphertextBytes = 64 * 1024
 
-    /// Create a BitChat private envelope for relay transport (outer kind 1059).
-    static func createPrivateMessage(
+    /// Bound the inner authenticated message JSON before allocation/parsing.
+    /// This is intentionally an envelope limit, not the generic composer
+    /// limit. Raising it alone would not make larger private-message packets
+    /// compatible with released readers; callers must surface a rejected
+    /// packet or envelope as a failed send.
+    static let maximumPrivateEnvelopePlaintextBytes = 32 * 1024
+
+    /// The outer authenticated seal JSON contains a Base64-encoded encrypted
+    /// copy of the inner JSON, so it needs expansion headroom of its own. Keep
+    /// the layer-specific cap below the public ciphertext ceiling.
+    private static let maximumPrivateEnvelopeSealPlaintextBytes = 48 * 1024
+
+    /// New clients subscribe to the provisional BitChat-specific kind and the
+    /// compatibility legacy kind so both sides of a rolling rollout can
+    /// recover stored messages. Do not remove kind 1059 here until all
+    /// supported iOS and Android releases have migrated.
+    static let acceptedPrivateEnvelopeKinds = [
+        EventKind.privateEnvelope.rawValue,
+        EventKind.legacyNIP59GiftWrap.rawValue
+    ]
+
+    private enum PrivateEnvelopeWireFormat {
+        case bitchatV1
+        case legacyMislabelledV2
+
+        init?(outerKind: Int) {
+            switch outerKind {
+            case EventKind.privateEnvelope.rawValue:
+                self = .bitchatV1
+            case EventKind.legacyNIP59GiftWrap.rawValue:
+                self = .legacyMislabelledV2
+            default:
+                return nil
+            }
+        }
+
+        var messageKind: EventKind {
+            switch self {
+            case .bitchatV1: .privateMessage
+            case .legacyMislabelledV2: .legacyNIP17DirectMessage
+            }
+        }
+
+        var sealKind: EventKind {
+            switch self {
+            case .bitchatV1: .privateSeal
+            case .legacyMislabelledV2: .legacyNIP59Seal
+            }
+        }
+
+        var envelopeKind: EventKind {
+            switch self {
+            case .bitchatV1: .privateEnvelope
+            case .legacyMislabelledV2: .legacyNIP59GiftWrap
+            }
+        }
+
+        var contentPrefix: String {
+            switch self {
+            case .bitchatV1: NostrProtocol.privateEnvelopeContentPrefix
+            case .legacyMislabelledV2: "v2:"
+            }
+        }
+
+        var hkdfSalt: Data {
+            switch self {
+            case .bitchatV1: Data("bitchat-private-envelope-v1".utf8)
+            case .legacyMislabelledV2: Data()
+            }
+        }
+
+        var hkdfInfo: Data {
+            switch self {
+            case .bitchatV1: Data()
+            case .legacyMislabelledV2: Data("nip44-v2".utf8)
+            }
+        }
+    }
+    
+    /// Create a BitChat private envelope for relay transport.
+    static func createPrivateEnvelope(
         content: String,
         recipientPubkey: String,
         senderIdentity: NostrIdentity
     ) throws -> NostrEvent {
-        try createPrivateMessage(
+        try createPrivateEnvelope(
             content: content,
             recipientPubkey: recipientPubkey,
             senderIdentity: senderIdentity,
-            messageTags: []
+            format: .bitchatV1
         )
     }
 
-    private static func createPrivateMessage(
+    /// Events to publish for one logical private payload. The primary
+    /// BitChat-specific format is always first and a legacy copy follows for
+    /// clients that still subscribe only to kind 1059. There is deliberately
+    /// no date-based cutoff: removal requires a coordinated iOS/Android
+    /// release after supported old clients have migrated. Both encrypt the
+    /// exact same embedded BitChat payload, so receive-side logical-payload
+    /// dedup collapses the pair.
+    static func createPrivateEnvelopePublicationBatch(
+        content: String,
+        recipientPubkey: String,
+        senderIdentity: NostrIdentity
+    ) throws -> [NostrEvent] {
+        let primary = try createPrivateEnvelope(
+            content: content,
+            recipientPubkey: recipientPubkey,
+            senderIdentity: senderIdentity
+        )
+        let compatibilityCopy = try createPrivateEnvelope(
+            content: content,
+            recipientPubkey: recipientPubkey,
+            senderIdentity: senderIdentity,
+            format: .legacyMislabelledV2
+        )
+        return [primary, compatibilityCopy]
+    }
+
+    private static func createPrivateEnvelope(
         content: String,
         recipientPubkey: String,
         senderIdentity: NostrIdentity,
-        messageTags: [[String]]
+        format: PrivateEnvelopeWireFormat,
+        messageTags: [[String]] = []
     ) throws -> NostrEvent {
-        // 1. Create the rumor (unsigned inner event)
-        let rumor = NostrEvent(
+        // 1. Create the unsigned inner BitChat message.
+        let message = NostrEvent(
             pubkey: senderIdentity.publicKeyHex,
             createdAt: Date(),
-            kind: .dm,
+            kind: format.messageKind,
             tags: messageTags,
             content: content
         )
-
-        // 2. Seal the rumor (encrypt to recipient) and sign it with the SENDER'S
-        //    real identity key so the recipient can authenticate who sent the
-        //    message; signing with a throwaway key leaves DMs
-        //    forgeable/impersonatable.
+        
+        // 2. Encrypt the message to the recipient and sign the private seal
+        // with the sender's stable Nostr identity for sender authentication.
         let senderKey = try senderIdentity.schnorrSigningKey()
-        let sealedEvent = try createSeal(
-            rumor: rumor,
+        let sealedEvent = try createPrivateSeal(
+            message: message,
             recipientPubkey: recipientPubkey,
-            senderKey: senderKey
+            senderKey: senderKey,
+            format: format
         )
 
-        // 3. Wrap the sealed event with a throwaway ephemeral key (the wrap
-        //    layer hides the sender's identity from relays; createGiftWrap mints
-        //    its own ephemeral key internally).
-        let giftWrap = try createGiftWrap(
+        // 3. Encrypt the seal under a one-time key so the public envelope does
+        // not reveal the stable sender identity.
+        return try createPrivateEnvelopeEvent(
             seal: sealedEvent,
-            recipientPubkey: recipientPubkey
+            recipientPubkey: recipientPubkey,
+            format: format
         )
-
-        return giftWrap
     }
-
-    /// Decrypt a received BitChat private envelope.
-    /// Returns the content, sender pubkey, and the actual message timestamp (not the randomized outer timestamp)
-    static func decryptPrivateMessage(
-        giftWrap: NostrEvent,
+    
+    /// Decrypt a BitChat private envelope. Legacy proprietary envelopes that
+    /// older BitChat releases placed under kinds 1059/13/14 are accepted only
+    /// through the format-isolated receive path.
+    static func decryptPrivateEnvelope(
+        envelope: NostrEvent,
         recipientIdentity: NostrIdentity
     ) throws -> (content: String, senderPubkey: String, timestamp: Int) {
-
-        // 0. Validate the untrusted outer envelope before any decryption work.
-        //    Every BitChat client (released iOS and current Android) publishes
-        //    exactly one outer recipient `p` tag on a validly signed kind-1059
-        //    wrap; anything else is malformed or misbound.
-        guard giftWrap.content.utf8.count <= maximumPrivateEnvelopeCiphertextBytes else {
-            SecureLogger.error("❌ Rejecting DM: oversized outer envelope ciphertext", category: .session)
-            throw NostrError.invalidCiphertext
-        }
-        guard giftWrap.kind == EventKind.giftWrap.rawValue,
-              giftWrap.tags == [["p", recipientIdentity.publicKeyHex]],
-              giftWrap.isValidSignature() else {
-            SecureLogger.error("❌ Rejecting DM: malformed or misbound outer envelope", category: .session)
-            throw NostrError.invalidEvent
-        }
-
-        // 1. Unwrap the gift wrap
-        let seal: NostrEvent
-        do {
-            seal = try unwrapGiftWrap(
-                giftWrap: giftWrap,
-                recipientKey: recipientIdentity.schnorrSigningKey()
-            )
-            // Successfully unwrapped gift wrap
-        } catch {
-            SecureLogger.error("❌ Failed to unwrap gift wrap: \(error)", category: .session)
-            throw error
-        }
-        
-        // 2. Authenticate the seal. The seal MUST be signed by the sender's real
-        //    identity key; without this check a DM is forgeable by anyone who
-        //    knows the recipient's npub. Every BitChat sender emits a tagless
-        //    kind-13 seal, so bind the decrypted layer to that exact shape.
-        guard seal.kind == EventKind.seal.rawValue,
-              seal.tags.isEmpty,
-              seal.isValidSignature() else {
-            SecureLogger.error("❌ Rejecting DM: seal is malformed or its signature is missing/invalid", category: .session)
-            throw NostrError.invalidEvent
-        }
-
-        // 3. Open the seal
-        let rumor: NostrEvent
-        do {
-            rumor = try openSeal(
-                seal: seal,
-                recipientKey: recipientIdentity.schnorrSigningKey()
-            )
-            // Successfully opened seal
-        } catch {
-            SecureLogger.error("❌ Failed to open seal: \(error)", category: .session)
-            throw error
-        }
-
-        // 4. The rumor is intentionally unsigned; sender authentication comes
-        //    from the seal. The sender claimed inside the rumor must match the
-        //    key that actually signed the seal, otherwise the sender field is
-        //    unauthenticated and spoofable. Also bind the inner kind and tag
-        //    shape to what BitChat clients actually emit.
-        guard rumor.kind == EventKind.dm.rawValue,
-              validInnerMessageTags(rumor.tags, recipientPubkey: recipientIdentity.publicKeyHex),
-              rumor.sig == nil,
-              seal.pubkey == rumor.pubkey else {
-            SecureLogger.error("❌ Rejecting DM: rumor is malformed or does not match seal signer", category: .session)
-            throw NostrError.invalidEvent
-        }
-
-        // Return the seal signer's pubkey as the authenticated sender.
-        return (content: rumor.content, senderPubkey: seal.pubkey, timestamp: rumor.created_at)
-    }
-
-    /// Released iOS envelopes use no inner tags, while current Android
-    /// envelopes place exactly the authenticated recipient's `p` tag on the
-    /// unsigned inner event. Accept only those two historical shapes;
-    /// alternate recipients, duplicate tags, and extra tags are rejected.
-    private static func validInnerMessageTags(
-        _ tags: [[String]],
-        recipientPubkey: String
-    ) -> Bool {
-        tags.isEmpty || tags == [["p", recipientPubkey]]
+        let layers = try decodePrivateEnvelopeLayers(
+            envelope: envelope,
+            recipientIdentity: recipientIdentity
+        )
+        return (
+            content: layers.message.content,
+            senderPubkey: layers.seal.pubkey,
+            timestamp: layers.message.created_at
+        )
     }
 
     #if DEBUG
-    static func createPrivateMessageWithInvalidSealSignatureForTesting(
+    static func createPrivateEnvelopeWithInvalidSealSignatureForTesting(
         content: String,
         recipientPubkey: String,
         senderIdentity: NostrIdentity
     ) throws -> NostrEvent {
-        let rumor = NostrEvent(
+        let format = PrivateEnvelopeWireFormat.bitchatV1
+        let message = NostrEvent(
             pubkey: senderIdentity.publicKeyHex,
             createdAt: Date(),
-            kind: .dm,
+            kind: format.messageKind,
             tags: [],
             content: content
         )
-        var seal = try createSeal(
-            rumor: rumor,
+        var seal = try createPrivateSeal(
+            message: message,
             recipientPubkey: recipientPubkey,
-            senderKey: senderIdentity.schnorrSigningKey()
+            senderKey: senderIdentity.schnorrSigningKey(),
+            format: format
         )
         seal.sig = String(repeating: "0", count: 128)
-        return try createGiftWrap(seal: seal, recipientPubkey: recipientPubkey)
+        return try createPrivateEnvelopeEvent(
+            seal: seal,
+            recipientPubkey: recipientPubkey,
+            format: format
+        )
     }
 
-    static func createPrivateMessageWithMismatchedSealRumorPubkeyForTesting(
+    static func createPrivateEnvelopeWithMismatchedSealMessagePubkeyForTesting(
         content: String,
         recipientPubkey: String,
-        rumorIdentity: NostrIdentity,
+        messageIdentity: NostrIdentity,
         sealSignerIdentity: NostrIdentity
     ) throws -> NostrEvent {
-        let rumor = NostrEvent(
-            pubkey: rumorIdentity.publicKeyHex,
+        let format = PrivateEnvelopeWireFormat.bitchatV1
+        let message = NostrEvent(
+            pubkey: messageIdentity.publicKeyHex,
             createdAt: Date(),
-            kind: .dm,
+            kind: format.messageKind,
             tags: [],
             content: content
         )
-        let seal = try createSeal(
-            rumor: rumor,
+        let seal = try createPrivateSeal(
+            message: message,
             recipientPubkey: recipientPubkey,
-            senderKey: sealSignerIdentity.schnorrSigningKey()
+            senderKey: sealSignerIdentity.schnorrSigningKey(),
+            format: format
         )
-        return try createGiftWrap(seal: seal, recipientPubkey: recipientPubkey)
+        return try createPrivateEnvelopeEvent(
+            seal: seal,
+            recipientPubkey: recipientPubkey,
+            format: format
+        )
     }
 
-    /// Reproduces historical wire shapes (current Android places exactly one
-    /// recipient `p` tag on the unsigned inner event) without making the
-    /// production encoder depend on that quirk.
-    static func createPrivateMessageWithInnerTagsForTesting(
+    static func createPrivateEnvelopeWithInnerTagsForTesting(
         content: String,
         recipientPubkey: String,
         senderIdentity: NostrIdentity,
         innerMessageTags: [[String]]
     ) throws -> NostrEvent {
-        try createPrivateMessage(
+        try createPrivateEnvelope(
             content: content,
             recipientPubkey: recipientPubkey,
             senderIdentity: senderIdentity,
+            format: .bitchatV1,
             messageTags: innerMessageTags
         )
+    }
+
+    static func createLegacyPrivateEnvelopeForTesting(
+        content: String,
+        recipientPubkey: String,
+        senderIdentity: NostrIdentity,
+        innerMessageTags: [[String]] = []
+    ) throws -> NostrEvent {
+        // Current Android legacy envelopes use exactly one recipient `p` tag
+        // on the unsigned inner kind-14 event; released iOS envelopes use no
+        // inner tags. Tests pass the Android shape explicitly so this helper
+        // cannot silently make the production encoder depend on that quirk.
+        try createPrivateEnvelope(
+            content: content,
+            recipientPubkey: recipientPubkey,
+            senderIdentity: senderIdentity,
+            format: .legacyMislabelledV2,
+            messageTags: innerMessageTags
+        )
+    }
+
+    static func decodePrivateEnvelopeLayersForTesting(
+        envelope: NostrEvent,
+        recipientIdentity: NostrIdentity
+    ) throws -> (seal: NostrEvent, message: NostrEvent) {
+        try decodePrivateEnvelopeLayers(
+            envelope: envelope,
+            recipientIdentity: recipientIdentity
+        )
+    }
+
+    static func decodePrivateEnvelopeEventJSONForTesting(_ json: String) throws -> NostrEvent {
+        try decodePrivateEnvelopeEventJSON(json)
     }
     #endif
 
@@ -474,170 +560,211 @@ struct NostrProtocol {
 
     // MARK: - Private Methods
     
-    private static func createSeal(
-        rumor: NostrEvent,
+    private static func createPrivateSeal(
+        message: NostrEvent,
         recipientPubkey: String,
-        senderKey: P256K.Schnorr.PrivateKey
+        senderKey: P256K.Schnorr.PrivateKey,
+        format: PrivateEnvelopeWireFormat
     ) throws -> NostrEvent {
-        
-        let rumorJSON = try rumor.jsonString()
         let encrypted = try encrypt(
-            plaintext: rumorJSON,
+            plaintext: message.jsonString(),
             recipientPubkey: recipientPubkey,
-            senderKey: senderKey
+            senderKey: senderKey,
+            format: format,
+            maximumPlaintextBytes: maximumPrivateEnvelopePlaintextBytes
         )
-        
+
         let seal = NostrEvent(
             pubkey: Data(senderKey.xonly.bytes).hexEncodedString(),
-            createdAt: randomizedTimestamp(),
-            kind: .seal,
+            createdAt: randomizedPastTimestamp(),
+            kind: format.sealKind,
             tags: [],
             content: encrypted
         )
-        
-        // Sign the seal with the sender's Schnorr private key
         return try seal.sign(with: senderKey)
     }
-    
-    private static func createGiftWrap(
-        seal: NostrEvent,
-        recipientPubkey: String
-    ) throws -> NostrEvent {
 
-        let sealJSON = try seal.jsonString()
-        
-        // Create new ephemeral key for gift wrap
-        let wrapKey = try P256K.Schnorr.PrivateKey()
-        // Creating gift wrap with ephemeral key
-        
-        // Encrypt the seal with the new ephemeral key (not the seal's key)
+    private static func createPrivateEnvelopeEvent(
+        seal: NostrEvent,
+        recipientPubkey: String,
+        format: PrivateEnvelopeWireFormat
+    ) throws -> NostrEvent {
+        // A fresh signing/encryption key for every public envelope keeps the
+        // stable sender identity inside ciphertext.
+        let envelopeKey = try P256K.Schnorr.PrivateKey()
         let encrypted = try encrypt(
-            plaintext: sealJSON,
+            plaintext: seal.jsonString(),
             recipientPubkey: recipientPubkey,
-            senderKey: wrapKey  // Use the gift wrap ephemeral key
+            senderKey: envelopeKey,
+            format: format,
+            maximumPlaintextBytes: maximumPrivateEnvelopeSealPlaintextBytes
         )
-        
-        let giftWrap = NostrEvent(
-            pubkey: Data(wrapKey.xonly.bytes).hexEncodedString(),
-            createdAt: randomizedTimestamp(),
-            kind: .giftWrap,
-            tags: [["p", recipientPubkey]], // Tag recipient
+
+        let envelope = NostrEvent(
+            pubkey: Data(envelopeKey.xonly.bytes).hexEncodedString(),
+            createdAt: randomizedPastTimestamp(),
+            kind: format.envelopeKind,
+            tags: [["p", recipientPubkey]],
             content: encrypted
         )
-        
-        // Sign the gift wrap with the wrap Schnorr private key
-        return try giftWrap.sign(with: wrapKey)
+        return try envelope.sign(with: envelopeKey)
     }
-    
-    private static func unwrapGiftWrap(
-        giftWrap: NostrEvent,
-        recipientKey: P256K.Schnorr.PrivateKey
-    ) throws -> NostrEvent {
-        
-        // Unwrapping gift wrap
-        
-        let decrypted = try decrypt(
-            ciphertext: giftWrap.content,
-            senderPubkey: giftWrap.pubkey,
-            recipientKey: recipientKey
-        )
-        
-        // Check UTF-8 size before allocating Data or invoking the general
-        // JSON parser on attacker-influenced plaintext.
-        guard decrypted.utf8.count <= maximumPrivateEnvelopeCiphertextBytes else {
+
+    private static func decodePrivateEnvelopeLayers(
+        envelope: NostrEvent,
+        recipientIdentity: NostrIdentity
+    ) throws -> (seal: NostrEvent, message: NostrEvent) {
+        guard envelope.content.utf8.count <= maximumPrivateEnvelopeCiphertextBytes else {
+            SecureLogger.error("❌ Rejecting DM: oversized outer envelope ciphertext", category: .session)
             throw NostrError.invalidCiphertext
         }
-        guard let data = decrypted.data(using: .utf8),
-              let sealDict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        guard let format = PrivateEnvelopeWireFormat(outerKind: envelope.kind),
+              envelope.tags == [["p", recipientIdentity.publicKeyHex]],
+              envelope.isValidSignature() else {
+            SecureLogger.error("❌ Rejecting DM: malformed or misbound outer envelope", category: .session)
             throw NostrError.invalidEvent
         }
 
-        let seal = try NostrEvent(from: sealDict)
-        // Unwrapped seal
+        let recipientKey = try recipientIdentity.schnorrSigningKey()
+        let sealJSON = try decrypt(
+            ciphertext: envelope.content,
+            senderPubkey: envelope.pubkey,
+            recipientKey: recipientKey,
+            format: format,
+            maximumPlaintextBytes: maximumPrivateEnvelopeSealPlaintextBytes
+        )
+        let seal = try decodePrivateEnvelopeEventJSON(
+            sealJSON,
+            maximumBytes: maximumPrivateEnvelopeSealPlaintextBytes
+        )
+        guard seal.kind == format.sealKind.rawValue,
+              seal.tags.isEmpty,
+              seal.isValidSignature() else {
+            SecureLogger.error("❌ Rejecting DM: seal is malformed or its signature is missing/invalid", category: .session)
+            throw NostrError.invalidEvent
+        }
 
-        return seal
-    }
-    
-    private static func openSeal(
-        seal: NostrEvent,
-        recipientKey: P256K.Schnorr.PrivateKey
-    ) throws -> NostrEvent {
-        
-        let decrypted = try decrypt(
+        let messageJSON = try decrypt(
             ciphertext: seal.content,
             senderPubkey: seal.pubkey,
-            recipientKey: recipientKey
+            recipientKey: recipientKey,
+            format: format,
+            maximumPlaintextBytes: maximumPrivateEnvelopePlaintextBytes
         )
-        
-        guard decrypted.utf8.count <= maximumPrivateEnvelopeCiphertextBytes else {
-            throw NostrError.invalidCiphertext
-        }
-        guard let data = decrypted.data(using: .utf8),
-              let rumorDict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        let message = try decodePrivateEnvelopeEventJSON(
+            messageJSON,
+            maximumBytes: maximumPrivateEnvelopePlaintextBytes
+        )
+
+        // The inner message is intentionally unsigned; sender authentication
+        // comes from the seal. Bind its claimed sender and custom kind to that
+        // authenticated layer before exposing content.
+        guard message.kind == format.messageKind.rawValue,
+              validInnerMessageTags(
+                message.tags,
+                format: format,
+                recipientPubkey: recipientIdentity.publicKeyHex
+              ),
+              message.sig == nil,
+              seal.pubkey == message.pubkey else {
+            SecureLogger.error("❌ Rejecting DM: inner message is malformed or does not match seal signer", category: .session)
             throw NostrError.invalidEvent
         }
 
-        return try NostrEvent(from: rumorDict)
+        return (seal, message)
+    }
+
+    /// Released iOS legacy envelopes used no inner tags, while current
+    /// Android legacy envelopes use exactly the authenticated recipient tag.
+    /// Accept only those two historical shapes for kind 1059. The new kind
+    /// 1402 format remains strict and rejects every inner tag.
+    private static func validInnerMessageTags(
+        _ tags: [[String]],
+        format: PrivateEnvelopeWireFormat,
+        recipientPubkey: String
+    ) -> Bool {
+        switch format {
+        case .bitchatV1:
+            return tags.isEmpty
+        case .legacyMislabelledV2:
+            return tags.isEmpty || tags == [["p", recipientPubkey]]
+        }
+    }
+
+    private static func decodePrivateEnvelopeEventJSON(
+        _ json: String,
+        maximumBytes: Int = maximumPrivateEnvelopePlaintextBytes
+    ) throws -> NostrEvent {
+        // Check UTF-8 size before allocating Data or invoking the general JSON
+        // parser. `decrypt` enforces the same cap on authenticated bytes; this
+        // local guard keeps the parser boundary explicit and independently
+        // testable.
+        guard json.utf8.count <= maximumBytes else {
+            throw NostrError.invalidCiphertext
+        }
+        guard let data = json.data(using: .utf8),
+              let dictionary = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw NostrError.invalidEvent
+        }
+        return try NostrEvent(from: dictionary)
     }
 
     // MARK: - BitChat private-envelope encryption
-    //
-    // Not NIP-44: the `v2:` prefix, base64url(nonce24 || ciphertext || tag)
-    // layout, XChaCha20-Poly1305 cipher, and HKDF parameters are all
-    // BitChat-specific.
 
     private static func encrypt(
         plaintext: String,
         recipientPubkey: String,
-        senderKey: P256K.Schnorr.PrivateKey
+        senderKey: P256K.Schnorr.PrivateKey,
+        format: PrivateEnvelopeWireFormat,
+        maximumPlaintextBytes: Int
     ) throws -> String {
-        
         guard let recipientPubkeyData = Data(hexString: recipientPubkey) else {
             throw NostrError.invalidPublicKey
         }
-        
-        // Derive shared secret
+
         let sharedSecret = try deriveSharedSecret(
             privateKey: senderKey,
             publicKey: recipientPubkeyData
         )
-        // Derive the BitChat private-envelope symmetric key (HKDF-SHA256)
-        let key = try derivePrivateEnvelopeKey(from: sharedSecret)
+        let key = derivePrivateEnvelopeKey(from: sharedSecret, format: format)
 
-        // 24-byte random nonce for XChaCha20-Poly1305
         var nonce24 = Data(count: 24)
         let randomStatus = nonce24.withUnsafeMutableBytes { ptr in
             SecRandomCopyBytes(kSecRandomDefault, 24, ptr.baseAddress!)
         }
-        // Never encrypt with an unrandomized nonce: nonce reuse under the same
-        // key breaks XChaCha20-Poly1305 confidentiality and authenticity.
         guard randomStatus == errSecSuccess else {
             throw NostrError.cryptographicFailure
         }
 
-        let pt = Data(plaintext.utf8)
-        let sealed = try XChaCha20Poly1305Compat.seal(plaintext: pt, key: key, nonce24: nonce24)
-        
-        // v2: base64url(nonce24 || ciphertext || tag)
+        let plaintextData = Data(plaintext.utf8)
+        guard plaintextData.count <= maximumPlaintextBytes else {
+            throw NostrError.invalidCiphertext
+        }
+        let sealed = try XChaCha20Poly1305Compat.seal(
+            plaintext: plaintextData,
+            key: key,
+            nonce24: nonce24
+        )
+
         var combined = Data()
         combined.append(nonce24)
         combined.append(sealed.ciphertext)
         combined.append(sealed.tag)
-        return "v2:" + Base64URLCoding.encode(combined)
+        return format.contentPrefix + Base64URLCoding.encode(combined)
     }
-    
+
     private static func decrypt(
         ciphertext: String,
         senderPubkey: String,
-        recipientKey: P256K.Schnorr.PrivateKey
+        recipientKey: P256K.Schnorr.PrivateKey,
+        format: PrivateEnvelopeWireFormat,
+        maximumPlaintextBytes: Int
     ) throws -> String {
-        // Expect BitChat's historical `v2:` private-envelope framing, and
-        // bound work before Base64 decoding attacker-sized input.
         guard ciphertext.utf8.count <= maximumPrivateEnvelopeCiphertextBytes,
-              ciphertext.hasPrefix("v2:") else {
+              ciphertext.hasPrefix(format.contentPrefix) else {
             throw NostrError.invalidCiphertext
         }
-        let encoded = String(ciphertext.dropFirst(3))
+        let encoded = String(ciphertext.dropFirst(format.contentPrefix.count))
         guard let data = Base64URLCoding.decode(encoded),
               data.count > (24 + 16),
               let senderPubkeyData = Data(hexString: senderPubkey) else {
@@ -647,37 +774,37 @@ struct NostrProtocol {
         let nonce24 = data.prefix(24)
         let rest = data.dropFirst(24)
         let tag = rest.suffix(16)
-        let ct = rest.dropLast(16)
+        let ciphertextBytes = rest.dropLast(16)
 
-        // Try decryption with even-Y then odd-Y when sender pubkey is x-only
-        func attemptDecrypt(using pubKeyData: Data) throws -> Data {
-            let ss = try deriveSharedSecret(privateKey: recipientKey, publicKey: pubKeyData)
-            let key = try derivePrivateEnvelopeKey(from: ss)
+        func attemptDecrypt(using publicKeyData: Data) throws -> Data {
+            let sharedSecret = try deriveSharedSecret(
+                privateKey: recipientKey,
+                publicKey: publicKeyData
+            )
+            let key = derivePrivateEnvelopeKey(from: sharedSecret, format: format)
             return try XChaCha20Poly1305Compat.open(
-                ciphertext: Data(ct),
+                ciphertext: Data(ciphertextBytes),
                 tag: Data(tag),
                 key: key,
                 nonce24: Data(nonce24)
             )
         }
 
-        // If 32 bytes (x-only) try both parities, otherwise single try
         let plaintext: Data
         if senderPubkeyData.count == 32 {
-            let even = Data([0x02]) + senderPubkeyData
-            if let pt = try? attemptDecrypt(using: even) {
-                plaintext = pt
+            let evenKey = Data([0x02]) + senderPubkeyData
+            if let opened = try? attemptDecrypt(using: evenKey) {
+                plaintext = opened
             } else {
-                let odd = Data([0x03]) + senderPubkeyData
-                plaintext = try attemptDecrypt(using: odd)
+                let oddKey = Data([0x03]) + senderPubkeyData
+                plaintext = try attemptDecrypt(using: oddKey)
             }
         } else {
             plaintext = try attemptDecrypt(using: senderPubkeyData)
         }
 
-        // Authenticated plaintext that is not valid UTF-8 is a malformed
-        // envelope, not an empty message.
-        guard let decoded = String(data: plaintext, encoding: .utf8) else {
+        guard plaintext.count <= maximumPlaintextBytes,
+              let decoded = String(data: plaintext, encoding: .utf8) else {
             throw NostrError.invalidCiphertext
         }
         return decoded
@@ -740,30 +867,17 @@ struct NostrProtocol {
         let sharedSecretData = sharedSecret.withUnsafeBytes { Data($0) }
         // ECDH shared secret derived
         
-        // Return raw ECDH shared secret; HKDF is applied by
-        // derivePrivateEnvelopeKey
+        // Return raw ECDH shared secret; the wire-format-specific HKDF is
+        // applied by derivePrivateEnvelopeKey.
         return sharedSecretData
     }
     
-    private static func randomizedTimestamp() -> Date {
-        // Add random offset to current time for privacy
-        // This prevents timing correlation attacks while the actual message timestamp
-        // is preserved in the encrypted rumor
-        let offset = TimeInterval.random(in: -900...900) // +/- 15 minutes
-        let now = Date()
-        let randomized = now.addingTimeInterval(offset)
-        
-        // Log with explicit UTC and local time for debugging
-        let formatter = DateFormatter()
-        //
-        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        formatter.timeZone = TimeZone(abbreviation: "UTC")
-        
-        formatter.timeZone = TimeZone.current
-        
-        // Timestamp randomized for privacy
-        
-        return randomized
+    private static func randomizedPastTimestamp() -> Date {
+        // Keep public timestamps in the past: future-dated events are rejected
+        // by some relays. The actual message timestamp remains encrypted.
+        Date().addingTimeInterval(
+            -TimeInterval.random(in: 0...TransportConfig.nostrPrivateEnvelopeTimestampFuzzSeconds)
+        )
     }
 }
 
@@ -901,15 +1015,14 @@ enum NostrError: Error {
 // MARK: - BitChat private-envelope key derivation
 
 private extension NostrProtocol {
-    /// The HKDF info string retains the historical "nip44-v2" label for wire
-    /// compatibility with deployed clients, but this is not the NIP-44 key
-    /// schedule: NIP-44 derives a conversation key via HKDF-extract with that
-    /// label as the *salt* and uses ChaCha20 with per-message expanded keys.
-    static func derivePrivateEnvelopeKey(from sharedSecretData: Data) throws -> Data {
+    private static func derivePrivateEnvelopeKey(
+        from sharedSecretData: Data,
+        format: PrivateEnvelopeWireFormat
+    ) -> Data {
         let derivedKey = HKDF<CryptoKit.SHA256>.deriveKey(
             inputKeyMaterial: SymmetricKey(data: sharedSecretData),
-            salt: Data(),
-            info: Data("nip44-v2".utf8),
+            salt: format.hkdfSalt,
+            info: format.hkdfInfo,
             outputByteCount: 32
         )
         return derivedKey.withUnsafeBytes { Data($0) }

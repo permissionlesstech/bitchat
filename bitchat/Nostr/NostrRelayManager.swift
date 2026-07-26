@@ -113,13 +113,14 @@ private extension NostrRelayManagerDependencies {
 @MainActor
 final class NostrRelayManager: ObservableObject {
     static let shared = NostrRelayManager()
-    // Track gift-wraps (kind 1059) we initiated so we can log OK acks at info.
+    // Track BitChat private envelopes we initiated so relay rejections can be
+    // reported without misclassifying ordinary public-event failures.
     // Entries are removed only on OK acks (or panic wipe); relays that never
     // ack leave entries behind for the process lifetime. Observability-only
     // state, bounded in practice by outbound DM volume.
-    private(set) static var pendingGiftWrapIDs = Set<String>()
-    static func registerPendingGiftWrap(id: String) {
-        pendingGiftWrapIDs.insert(id)
+    private(set) static var pendingPrivateEnvelopeIDs = Set<String>()
+    static func registerPendingPrivateEnvelope(id: String) {
+        pendingPrivateEnvelopeIDs.insert(id)
     }
     
     struct Relay: Identifiable {
@@ -134,7 +135,7 @@ final class NostrRelayManager: ObservableObject {
         var nextReconnectTime: Date?
     }
     
-    // Default relays carry NIP-17 gift wraps, so avoid relays known to reject kind 1059.
+    // Default relays carry persisted BitChat private-envelope events.
     private static let defaultRelays = [
         "wss://relay.damus.io",
         "wss://nos.lol",
@@ -147,7 +148,7 @@ final class NostrRelayManager: ObservableObject {
     @Published private(set) var relays: [Relay] = []
     @Published private(set) var isConnected = false
     /// Whether a relay that carries private messages is connected. DMs
-    /// target the default (gift-wrap-capable) relay set, so a connected
+    /// target the default private-envelope relay set, so a connected
     /// geohash/custom relay alone must not count — sends would still queue.
     @Published private(set) var isDMRelayConnected = false
     
@@ -184,6 +185,7 @@ final class NostrRelayManager: ObservableObject {
     private var subscribeCoalesce: [String: Date] = [:]
     private var pendingTorConnectionURLs = Set<String>()
     private var awaitingTorForConnections = false
+    private var awaitingTorForQueueFlush = false
     private var torReadyWaitAttempts = 0
     private var cancellables = Set<AnyCancellable>()
 
@@ -218,11 +220,44 @@ final class NostrRelayManager: ObservableObject {
     private var eoseTrackerEpoch = 0
     private var pendingEOSECallbacks: [String: () -> Void] = [:]
     
-    // Message queue for reliability
-    // Pending sends held only for relays that are not yet connected.
+    // Message queue for reliability. Pending sends are grouped so a private
+    // envelope's primary and legacy migration copies can never be split by
+    // queue eviction. Private batches are protected; lower-priority traffic
+    // is evicted first and a full protected queue rejects the entire new pair.
+    private enum PendingSendPriority: Int {
+        case ephemeral
+        case regular
+        case privateEnvelope
+    }
+
     private struct PendingSend {
-        var event: NostrEvent
+        let id: UUID
+        let events: [NostrEvent]
         var pendingRelays: Set<String>
+        var inFlightConnections: [String: ObjectIdentifier]
+        /// Event IDs still awaiting relay durability for each target. A
+        /// private migration batch completes on a relay only after that same
+        /// relay accepts both the primary and compatibility envelopes.
+        var unconfirmedEventIDsByRelay: [String: Set<String>]
+        /// Invalidates delayed acknowledgement timeouts after a relay settles
+        /// or its connection is replaced.
+        var acknowledgementTokensByRelay: [String: UUID]
+        /// Relay rejections received before every frame in a compatibility
+        /// batch finishes writing. Settlement is deferred until the complete
+        /// pair reaches the socket so a fast rejection of the primary cannot
+        /// suppress the legacy migration copy.
+        var rejectedWhileWritingRelays: Set<String>
+        var hasSuccessfulDelivery: Bool
+        let priority: PendingSendPriority
+        let terminalFailure: (() -> Void)?
+    }
+
+    private struct PendingDelivery {
+        let itemID: UUID
+        let events: [NostrEvent]
+        let priority: PendingSendPriority
+        let relayUrl: String
+        let connection: NostrRelayConnectionProtocol
     }
     private var messageQueue: [PendingSend] = []
     private let messageQueueLock = NSLock()
@@ -403,7 +438,8 @@ final class NostrRelayManager: ObservableObject {
     /// Disconnect from all relays
     func disconnect() {
         connectionGeneration &+= 1
-        for (_, task) in connections {
+        for (relayURL, task) in connections {
+            clearPendingSendInFlight(relayUrl: relayURL, connection: task)
             task.cancel(with: .goingAway, reason: nil)
         }
         connections.removeAll()
@@ -427,6 +463,7 @@ final class NostrRelayManager: ObservableObject {
         confirmed.forEach { $0(false) }
         pendingTorConnectionURLs.removeAll()
         awaitingTorForConnections = false
+        awaitingTorForQueueFlush = false
         torReadyWaitAttempts = 0
         updateConnectionStatus()
     }
@@ -452,13 +489,14 @@ final class NostrRelayManager: ObservableObject {
         pendingEOSECallbacks.removeAll()
         pendingTorConnectionURLs.removeAll()
         awaitingTorForConnections = false
+        awaitingTorForQueueFlush = false
         torReadyWaitAttempts = 0
         recentInboundEventKeys.removeAll()
         recentInboundEventKeyOrder.removeAll()
         duplicateInboundEventDropCount = 0
         duplicateInboundEventDropCountBySubscription.removeAll()
         inboundEventLogCount = 0
-        Self.pendingGiftWrapIDs.removeAll()
+        Self.pendingPrivateEnvelopeIDs.removeAll()
         confirmedSends.removeAll()
 
         messageQueueLock.lock()
@@ -500,38 +538,128 @@ final class NostrRelayManager: ObservableObject {
         connectToRelays(targets)
     }
 
-    /// Send an event to specified relays (or all if none specified)
+    /// Send an event to specified relays (or all if none specified).
     func sendEvent(_ event: NostrEvent, to relayUrls: [String]? = nil) {
-        // Global network policy gate
-        guard dependencies.activationAllowed() else { return }
+        _ = sendEvents(
+            [event],
+            to: relayUrls,
+            priority: Self.pendingSendPriority(for: event),
+            terminalFailure: nil
+        )
+    }
+
+    /// Atomically admits a complete private-envelope migration pair. The
+    /// queue stores the pair as one protected item, so capacity pressure can
+    /// neither retain only kind 1402 nor only kind 1059. A `false` result means
+    /// the entire pair was rejected before any connected-relay sends began.
+    @discardableResult
+    func sendPrivateEnvelopeBatch(
+        _ events: [NostrEvent],
+        to relayUrls: [String]? = nil,
+        terminalFailure: (() -> Void)? = nil
+    ) -> Bool {
+        guard events.map(\.kind) == [
+            NostrProtocol.EventKind.privateEnvelope.rawValue,
+            NostrProtocol.EventKind.legacyNIP59GiftWrap.rawValue
+        ] else {
+            SecureLogger.error(
+                "Refusing malformed private-envelope migration batch kinds=\(events.map(\.kind))",
+                category: .session
+            )
+            return false
+        }
+        return sendEvents(
+            events,
+            to: relayUrls,
+            priority: .privateEnvelope,
+            terminalFailure: terminalFailure
+        )
+    }
+
+    @discardableResult
+    private func sendEvents(
+        _ events: [NostrEvent],
+        to relayUrls: [String]?,
+        priority: PendingSendPriority,
+        terminalFailure: (() -> Void)?
+    ) -> Bool {
+        guard dependencies.activationAllowed(), !events.isEmpty else { return false }
+        let requestedRelays = relayUrls ?? Self.defaultRelays
+        var targetRelays = allowedRelayList(from: requestedRelays)
+        if priority == .privateEnvelope {
+            // Do not admit a protected batch against a relay already in its
+            // terminal cooldown. Such a target has no connection attempt that
+            // could ever retire the queue record; retry callers can try it
+            // again after the cooldown decays.
+            targetRelays.removeAll(where: isPermanentlyFailed)
+        }
+        guard !targetRelays.isEmpty else { return false }
+
+        if priority == .privateEnvelope {
+            // Protected pairs are admitted for every target before any socket
+            // write, including targets already connected. The queue entry
+            // remains authoritative until each relay explicitly accepts both
+            // events (or that relay reaches a terminal outcome).
+            guard enqueuePendingSendBatch(
+                events,
+                pendingRelays: Set(targetRelays),
+                priority: priority,
+                terminalFailure: terminalFailure
+            ) != nil else { return false }
+            ensureConnections(to: targetRelays)
+            // Preserve the same fail-closed Tor gate as ordinary sends. The
+            // queue is already durable; a stale socket that still appears
+            // connected must not be written while enforced Tor is unready.
+            if shouldUseTor && dependencies.torEnforced() && !dependencies.torIsReady() {
+                flushMessageQueueWhenTorIsReady()
+            } else {
+                for relayUrl in targetRelays where connectedConnection(for: relayUrl) != nil {
+                    flushMessageQueue(for: relayUrl)
+                }
+            }
+            return true
+        }
+
         if shouldUseTor && dependencies.torEnforced() && !dependencies.torIsReady() {
             // Fail-closed: nothing touches the network until Tor is up. Queue the
-            // event locally so it survives a slow bootstrap (queued sends flush
-            // when relays connect), then kick off connection setup, which itself
-            // waits for Tor readiness.
-            let targetRelays = allowedRelayList(from: relayUrls ?? Self.defaultRelays)
-            guard !targetRelays.isEmpty else { return }
-            enqueuePendingSend(event, pendingRelays: Set(targetRelays))
+            // complete item locally so it survives a slow bootstrap, then kick
+            // off connection setup, which itself waits for Tor readiness.
+            guard enqueuePendingSendBatch(
+                events,
+                pendingRelays: Set(targetRelays),
+                priority: priority,
+                terminalFailure: nil
+            ) != nil else { return false }
             ensureConnections(to: targetRelays)
-            return
+            return true
         }
-        let requestedRelays = relayUrls ?? Self.defaultRelays
-        let targetRelays = allowedRelayList(from: requestedRelays)
-        guard !targetRelays.isEmpty else { return }
-        ensureConnections(to: targetRelays)
 
-        // Attempt immediate send to relays with active connections; queue the rest
+        // Ordinary single events retain their existing immediate-send path.
+        var connectedTargets: [(String, NostrRelayConnectionProtocol)] = []
         var stillPending = Set<String>()
         for relayUrl in targetRelays {
             if let connection = connectedConnection(for: relayUrl) {
-                sendToRelay(event: event, connection: connection, relayUrl: relayUrl)
+                connectedTargets.append((relayUrl, connection))
             } else {
                 stillPending.insert(relayUrl)
             }
         }
         if !stillPending.isEmpty {
-            enqueuePendingSend(event, pendingRelays: stillPending)
+            guard enqueuePendingSendBatch(
+                events,
+                pendingRelays: stillPending,
+                priority: priority,
+                terminalFailure: nil
+            ) != nil else { return false }
         }
+
+        ensureConnections(to: targetRelays)
+        for (relayUrl, connection) in connectedTargets {
+            for event in events {
+                sendToRelay(event: event, connection: connection, relayUrl: relayUrl)
+            }
+        }
+        return true
     }
 
     /// Attempts an event only on currently connected target relays and
@@ -625,64 +753,450 @@ final class NostrRelayManager: ObservableObject {
         state.completion(false)
     }
 
-    private func enqueuePendingSend(_ event: NostrEvent, pendingRelays: Set<String>) {
-        messageQueueLock.lock()
-        messageQueue.append(PendingSend(event: event, pendingRelays: pendingRelays))
-        let overflow = messageQueue.count - TransportConfig.nostrPendingSendQueueCap
-        if overflow > 0 {
-            messageQueue.removeFirst(overflow)
+    private static func pendingSendPriority(for event: NostrEvent) -> PendingSendPriority {
+        switch event.kind {
+        case NostrProtocol.EventKind.ephemeralEvent.rawValue,
+             NostrProtocol.EventKind.geohashPresence.rawValue:
+            return .ephemeral
+        default:
+            return .regular
         }
+    }
+
+    /// Atomically append a whole send item while preserving protected private
+    /// batches. Capacity is measured in events, not queue records.
+    private func enqueuePendingSendBatch(
+        _ events: [NostrEvent],
+        pendingRelays: Set<String>,
+        priority: PendingSendPriority,
+        terminalFailure: (() -> Void)?
+    ) -> UUID? {
+        guard !events.isEmpty, !pendingRelays.isEmpty,
+              events.count <= TransportConfig.nostrPendingSendQueueCap else {
+            SecureLogger.error("Refusing invalid or oversized relay send batch", category: .session)
+            return nil
+        }
+
+        messageQueueLock.lock()
+        let queuedEventCount = messageQueue.reduce(0) { $0 + $1.events.count }
+        let overflow = queuedEventCount + events.count - TransportConfig.nostrPendingSendQueueCap
+        var removalIndexes: [Int] = []
+        var evictedEventCount = 0
+        if overflow > 0 {
+            var eventsToFree = overflow
+            let candidates = messageQueue.indices
+                .filter {
+                    messageQueue[$0].priority != .privateEnvelope &&
+                    messageQueue[$0].priority.rawValue <= priority.rawValue
+                }
+                .sorted {
+                    let left = messageQueue[$0].priority.rawValue
+                    let right = messageQueue[$1].priority.rawValue
+                    return left == right ? $0 < $1 : left < right
+                }
+            for index in candidates where eventsToFree > 0 {
+                removalIndexes.append(index)
+                let count = messageQueue[index].events.count
+                evictedEventCount += count
+                eventsToFree -= count
+            }
+            if eventsToFree > 0 {
+                messageQueueLock.unlock()
+                SecureLogger.error(
+                    "Relay send queue protected-capacity exhausted; rejected entire \(events.count)-event batch",
+                    category: .session
+                )
+                return nil
+            }
+            for index in removalIndexes.sorted(by: >) {
+                messageQueue.remove(at: index)
+            }
+        }
+        let itemID = UUID()
+        messageQueue.append(PendingSend(
+            id: itemID,
+            events: events,
+            pendingRelays: pendingRelays,
+            inFlightConnections: [:],
+            unconfirmedEventIDsByRelay: [:],
+            acknowledgementTokensByRelay: [:],
+            rejectedWhileWritingRelays: [],
+            hasSuccessfulDelivery: false,
+            priority: priority,
+            terminalFailure: terminalFailure
+        ))
         messageQueueLock.unlock()
-        guard overflow > 0 else { return }
-        // Dropped events are ephemeral (presence/geo), so no status surfacing
-        // is needed — but the drops should be visible. Sampled so a sustained
-        // relay stall can't flood the log.
-        pendingSendDropCount += overflow
-        if pendingSendDropCount == 1 ||
+        guard evictedEventCount > 0 else { return itemID }
+        let isFirstEviction = pendingSendDropCount == 0
+        pendingSendDropCount += evictedEventCount
+        if isFirstEviction ||
             pendingSendDropCount.isMultiple(of: TransportConfig.nostrPendingSendDropLogInterval) {
             SecureLogger.warning(
-                "📤 Relay send queue full — dropped \(pendingSendDropCount) oldest event(s)",
+                "📤 Relay send queue full — evicted \(pendingSendDropCount) lower-priority event(s)",
                 category: .session
             )
         }
+        return itemID
     }
 
     /// Try to flush any queued messages for relays that are now connected.
     private func flushMessageQueue(for relayUrl: String? = nil) {
+        guard !(shouldUseTor && dependencies.torEnforced() && !dependencies.torIsReady()) else {
+            flushMessageQueueWhenTorIsReady()
+            return
+        }
+        var deliveries: [PendingDelivery] = []
         messageQueueLock.lock()
-        defer { messageQueueLock.unlock() }
-        guard !messageQueue.isEmpty else { return }
-        if let target = relayUrl {
-            // Flush only for a specific relay
-            for i in (0..<messageQueue.count).reversed() {
-                var item = messageQueue[i]
-                if item.pendingRelays.contains(target), let conn = connectedConnection(for: target) {
-                    sendToRelay(event: item.event, connection: conn, relayUrl: target)
-                    item.pendingRelays.remove(target)
-                    if item.pendingRelays.isEmpty {
-                        messageQueue.remove(at: i)
-                    } else {
-                        messageQueue[i] = item
+        for index in (0..<messageQueue.count).reversed() {
+            var item = messageQueue[index]
+            let targets = relayUrl.map { [$0] } ?? Array(item.pendingRelays)
+            for target in targets {
+                guard item.pendingRelays.contains(target),
+                      item.inFlightConnections[target] == nil,
+                      let connection = connectedConnection(for: target) else { continue }
+                deliveries.append(PendingDelivery(
+                    itemID: item.id,
+                    events: item.events,
+                    priority: item.priority,
+                    relayUrl: target,
+                    connection: connection
+                ))
+                if item.priority == .privateEnvelope {
+                    // Keep the relay pending until it explicitly accepts both
+                    // events. Socket writes only prove that bytes left this
+                    // process. `inFlightConnections` prevents duplicate
+                    // flushes while writes or relay acknowledgements are
+                    // outstanding.
+                    item.inFlightConnections[target] = ObjectIdentifier(connection)
+                    if item.unconfirmedEventIDsByRelay[target] == nil {
+                        item.unconfirmedEventIDsByRelay[target] = Set(item.events.map(\.id))
                     }
+                    item.acknowledgementTokensByRelay.removeValue(forKey: target)
+                } else {
+                    item.pendingRelays.remove(target)
                 }
             }
-        } else {
-            // Flush for any relays that now have connections
-            for i in (0..<messageQueue.count).reversed() {
-                var item = messageQueue[i]
-                for url in item.pendingRelays {
-                    if let conn = connectedConnection(for: url) {
-                        sendToRelay(event: item.event, connection: conn, relayUrl: url)
-                        item.pendingRelays.remove(url)
-                    }
+            if item.pendingRelays.isEmpty {
+                messageQueue.remove(at: index)
+            } else {
+                messageQueue[index] = item
+            }
+        }
+        messageQueueLock.unlock()
+
+        // Never invoke WebSocket callbacks while holding messageQueueLock.
+        for delivery in deliveries {
+            if delivery.priority == .privateEnvelope {
+                sendPrivateEnvelopeBatchToRelay(
+                    delivery.events,
+                    itemID: delivery.itemID,
+                    connection: delivery.connection,
+                    relayUrl: delivery.relayUrl
+                ) { [weak self] succeeded in
+                    self?.completePrivateEnvelopeBatchDelivery(
+                        itemID: delivery.itemID,
+                        relayUrl: delivery.relayUrl,
+                        connection: delivery.connection,
+                        succeeded: succeeded
+                    )
                 }
-                if item.pendingRelays.isEmpty {
-                    messageQueue.remove(at: i)
-                } else {
-                    messageQueue[i] = item
+            } else {
+                for event in delivery.events {
+                    sendToRelay(
+                        event: event,
+                        connection: delivery.connection,
+                        relayUrl: delivery.relayUrl
+                    )
                 }
             }
         }
+    }
+
+    private func flushMessageQueueWhenTorIsReady() {
+        guard !awaitingTorForQueueFlush else { return }
+        awaitingTorForQueueFlush = true
+        let generation = connectionGeneration
+        dependencies.awaitTorReady { [weak self] ready in
+            guard let self else { return }
+            guard generation == self.connectionGeneration else { return }
+            self.awaitingTorForQueueFlush = false
+            guard ready else { return }
+            self.flushMessageQueue(for: nil)
+        }
+    }
+
+    /// Send both copies in order and report one result for the complete pair.
+    /// Stop on the first failure; the still-pending queue item retries both
+    /// after reconnection, which is safe because receivers deduplicate twins.
+    private func sendPrivateEnvelopeBatchToRelay(
+        _ events: [NostrEvent],
+        itemID: UUID,
+        connection: NostrRelayConnectionProtocol,
+        relayUrl: String,
+        index: Int = 0,
+        completion: @escaping (Bool) -> Void
+    ) {
+        guard isCurrentPrivateEnvelopeDelivery(
+            itemID: itemID,
+            relayUrl: relayUrl,
+            connection: connection
+        ) else {
+            completion(false)
+            return
+        }
+        guard index < events.count else {
+            completion(true)
+            return
+        }
+        sendToRelay(
+            event: events[index],
+            connection: connection,
+            relayUrl: relayUrl
+        ) { [weak self] succeeded in
+            guard succeeded,
+                  let self,
+                  self.connections[relayUrl] === connection else {
+                completion(false)
+                return
+            }
+            self.sendPrivateEnvelopeBatchToRelay(
+                events,
+                itemID: itemID,
+                connection: connection,
+                relayUrl: relayUrl,
+                index: index + 1,
+                completion: completion
+            )
+        }
+    }
+
+    private func completePrivateEnvelopeBatchDelivery(
+        itemID: UUID,
+        relayUrl: String,
+        connection: NostrRelayConnectionProtocol,
+        succeeded: Bool
+    ) {
+        var acknowledgementToken: UUID?
+        var wasCurrentDelivery = false
+        var settledEarlyRejection = false
+        var terminalFailure: (() -> Void)?
+        var settledPrivateEnvelopeIDs: [String] = []
+        messageQueueLock.lock()
+        if let index = messageQueue.firstIndex(where: { $0.id == itemID }) {
+            var item = messageQueue[index]
+            guard item.inFlightConnections[relayUrl] == ObjectIdentifier(connection) else {
+                messageQueueLock.unlock()
+                return
+            }
+            wasCurrentDelivery = true
+            if succeeded {
+                if item.rejectedWhileWritingRelays.remove(relayUrl) != nil {
+                    // A rejection raced the socket-write callbacks. Both
+                    // compatibility frames have now been attempted, so the
+                    // relay can settle without suppressing the legacy copy.
+                    settledEarlyRejection = true
+                    item.pendingRelays.remove(relayUrl)
+                    item.inFlightConnections.removeValue(forKey: relayUrl)
+                    item.unconfirmedEventIDsByRelay.removeValue(forKey: relayUrl)
+                    item.acknowledgementTokensByRelay.removeValue(forKey: relayUrl)
+                    if item.pendingRelays.isEmpty {
+                        settledPrivateEnvelopeIDs = item.events.map(\.id)
+                        if !item.hasSuccessfulDelivery {
+                            terminalFailure = item.terminalFailure
+                        }
+                        messageQueue.remove(at: index)
+                    } else {
+                        messageQueue[index] = item
+                    }
+                } else {
+                    // Both frames reached the socket. Retain the queue item and
+                    // in-flight ownership until matching NIP-01 OKs arrive.
+                    let token = UUID()
+                    item.acknowledgementTokensByRelay[relayUrl] = token
+                    acknowledgementToken = token
+                    messageQueue[index] = item
+                }
+            } else {
+                item.inFlightConnections.removeValue(forKey: relayUrl)
+                item.acknowledgementTokensByRelay.removeValue(forKey: relayUrl)
+                // A partial write must replay the complete pair on the
+                // replacement connection. Do not let a rejection from this
+                // incomplete attempt retire the durable queue item.
+                item.rejectedWhileWritingRelays.remove(relayUrl)
+                messageQueue[index] = item
+            }
+        }
+        messageQueueLock.unlock()
+
+        settledPrivateEnvelopeIDs.forEach {
+            _ = Self.pendingPrivateEnvelopeIDs.remove($0)
+        }
+        terminalFailure?()
+
+        // A relay rejection or timeout may have already settled and removed
+        // this attempt while a stale socket-write callback was outstanding.
+        // It must not tear down an otherwise healthy current connection.
+        guard wasCurrentDelivery else { return }
+        guard !settledEarlyRejection else { return }
+        if let acknowledgementToken {
+            dependencies.scheduleAfter(
+                TransportConfig.nostrConfirmedSendAckTimeoutSeconds
+            ) { [weak self] in
+                Task { @MainActor [weak self] in
+                    self?.timeoutPrivateEnvelopeBatchDelivery(
+                        itemID: itemID,
+                        relayUrl: relayUrl,
+                        token: acknowledgementToken
+                    )
+                }
+            }
+            return
+        }
+        guard !succeeded else { return }
+        // A failed WebSocket write means this connection cannot advance the
+        // durable queue. Keep the original pair pending and reconnect with the
+        // manager's bounded backoff; the next successful ping flushes it.
+        handleDisconnection(
+            relayUrl: relayUrl,
+            error: NSError(
+                domain: "NostrRelayPrivateEnvelopeBatch",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "private-envelope batch write failed"]
+            ),
+            connection: connection
+        )
+    }
+
+    private func isCurrentPrivateEnvelopeDelivery(
+        itemID: UUID,
+        relayUrl: String,
+        connection: NostrRelayConnectionProtocol
+    ) -> Bool {
+        messageQueueLock.lock()
+        defer { messageQueueLock.unlock() }
+        guard let item = messageQueue.first(where: { $0.id == itemID }) else {
+            return false
+        }
+        return item.inFlightConnections[relayUrl] == ObjectIdentifier(connection)
+    }
+
+    /// Applies one NIP-01 OK to every matching in-flight private batch. Event
+    /// IDs are immutable, so a standards-compliant `duplicate:` rejection is
+    /// equivalent to acceptance during replay: the relay already has it.
+    @discardableResult
+    private func resolvePrivateEnvelopeAcknowledgement(
+        eventID: String,
+        relayUrl: String,
+        accepted: Bool
+    ) -> Bool {
+        guard let connection = connections[relayUrl] else { return false }
+        let connectionID = ObjectIdentifier(connection)
+        var matched = false
+        var terminalFailures: [() -> Void] = []
+        var settledPrivateEnvelopeIDs: [String] = []
+
+        messageQueueLock.lock()
+        for index in (0..<messageQueue.count).reversed() {
+            var item = messageQueue[index]
+            guard item.priority == .privateEnvelope,
+                  item.pendingRelays.contains(relayUrl),
+                  item.inFlightConnections[relayUrl] == connectionID,
+                  item.events.contains(where: { $0.id == eventID }),
+                  var unconfirmed = item.unconfirmedEventIDsByRelay[relayUrl],
+                  unconfirmed.contains(eventID) else {
+                continue
+            }
+            matched = true
+
+            if accepted {
+                unconfirmed.remove(eventID)
+                if unconfirmed.isEmpty &&
+                    !item.rejectedWhileWritingRelays.contains(relayUrl) {
+                    item.hasSuccessfulDelivery = true
+                    item.pendingRelays.remove(relayUrl)
+                    item.inFlightConnections.removeValue(forKey: relayUrl)
+                    item.unconfirmedEventIDsByRelay.removeValue(forKey: relayUrl)
+                    item.acknowledgementTokensByRelay.removeValue(forKey: relayUrl)
+                } else {
+                    item.unconfirmedEventIDsByRelay[relayUrl] = unconfirmed
+                }
+            } else if item.acknowledgementTokensByRelay[relayUrl] == nil {
+                // The primary can be rejected before its send completion
+                // starts the legacy write. Record that outcome, but keep this
+                // delivery authoritative until both compatibility frames
+                // finish writing (or a write failure makes the pair replay).
+                item.rejectedWhileWritingRelays.insert(relayUrl)
+            } else {
+                // One rejected half means this relay never durably received the
+                // complete migration pair. Other target relays may still
+                // succeed; only the final all-relay failure is surfaced.
+                item.pendingRelays.remove(relayUrl)
+                item.inFlightConnections.removeValue(forKey: relayUrl)
+                item.unconfirmedEventIDsByRelay.removeValue(forKey: relayUrl)
+                item.acknowledgementTokensByRelay.removeValue(forKey: relayUrl)
+                item.rejectedWhileWritingRelays.remove(relayUrl)
+            }
+
+            if item.pendingRelays.isEmpty {
+                settledPrivateEnvelopeIDs.append(contentsOf: item.events.map(\.id))
+                if !item.hasSuccessfulDelivery, let terminalFailure = item.terminalFailure {
+                    terminalFailures.append(terminalFailure)
+                }
+                messageQueue.remove(at: index)
+            } else {
+                messageQueue[index] = item
+            }
+        }
+        messageQueueLock.unlock()
+
+        settledPrivateEnvelopeIDs.forEach {
+            _ = Self.pendingPrivateEnvelopeIDs.remove($0)
+        }
+        terminalFailures.forEach { $0() }
+        return matched
+    }
+
+    private func timeoutPrivateEnvelopeBatchDelivery(
+        itemID: UUID,
+        relayUrl: String,
+        token: UUID
+    ) {
+        var terminalFailure: (() -> Void)?
+        var timedOut = false
+        var settledPrivateEnvelopeIDs: [String] = []
+
+        messageQueueLock.lock()
+        if let index = messageQueue.firstIndex(where: { $0.id == itemID }) {
+            var item = messageQueue[index]
+            if item.acknowledgementTokensByRelay[relayUrl] == token {
+                timedOut = true
+                item.pendingRelays.remove(relayUrl)
+                item.inFlightConnections.removeValue(forKey: relayUrl)
+                item.unconfirmedEventIDsByRelay.removeValue(forKey: relayUrl)
+                item.acknowledgementTokensByRelay.removeValue(forKey: relayUrl)
+                item.rejectedWhileWritingRelays.remove(relayUrl)
+                if item.pendingRelays.isEmpty {
+                    settledPrivateEnvelopeIDs = item.events.map(\.id)
+                    if !item.hasSuccessfulDelivery {
+                        terminalFailure = item.terminalFailure
+                    }
+                    messageQueue.remove(at: index)
+                } else {
+                    messageQueue[index] = item
+                }
+            }
+        }
+        messageQueueLock.unlock()
+
+        guard timedOut else { return }
+        settledPrivateEnvelopeIDs.forEach {
+            _ = Self.pendingPrivateEnvelopeIDs.remove($0)
+        }
+        SecureLogger.warning(
+            "📮 Relay did not acknowledge complete private-envelope pair relay=\(relayUrl)",
+            category: .session
+        )
+        terminalFailure?()
     }
 
     private func connectedConnection(for relayUrl: String) -> NostrRelayConnectionProtocol? {
@@ -701,8 +1215,27 @@ final class NostrRelayManager: ObservableObject {
         handler: @escaping (NostrEvent) -> Void,
         onEOSE: (() -> Void)? = nil
     ) {
+        subscribe(
+            filters: [filter],
+            id: id,
+            relayUrls: relayUrls,
+            handler: handler,
+            onEOSE: onEOSE
+        )
+    }
+
+    /// Subscribe with independent Nostr filters in one REQ. Each filter keeps
+    /// its own relay-side limit; this is required for mixed-version mailbox
+    /// recovery so kind 1402 cannot starve kind 1059 (or the reverse).
+    func subscribe(
+        filters: [NostrFilter],
+        id: String = UUID().uuidString,
+        relayUrls: [String]? = nil,
+        handler: @escaping (NostrEvent) -> Void,
+        onEOSE: (() -> Void)? = nil
+    ) {
         // Global network policy gate
-        guard dependencies.activationAllowed() else { return }
+        guard dependencies.activationAllowed(), !filters.isEmpty else { return }
         // Coalesce rapid duplicate subscribe requests even while Tor readiness is pending.
         let now = dependencies.now()
         if let last = subscribeCoalesce[id], now.timeIntervalSince(last) < subscribeCoalesceInterval {
@@ -711,7 +1244,7 @@ final class NostrRelayManager: ObservableObject {
         subscribeCoalesce[id] = now
         messageHandlers[id] = handler
         
-        let req = NostrRequest.subscribe(id: id, filters: [filter])
+        let req = NostrRequest.subscribe(id: id, filters: filters)
         
         do {
             let message = try encoder.encode(req)
@@ -778,6 +1311,7 @@ final class NostrRelayManager: ObservableObject {
                 ensureConnections(to: Self.defaultRelays)
             }
         } else {
+            var terminalFailures: [() -> Void] = []
             for url in Self.defaultRelays {
                 if let connection = connections[url] {
                     connection.cancel(with: .goingAway, reason: nil)
@@ -786,18 +1320,9 @@ final class NostrRelayManager: ObservableObject {
                 teardownRelayInboundPipeline(for: url)
                 subscriptions.removeValue(forKey: url)
                 pendingSubscriptions.removeValue(forKey: url)
+                terminalFailures.append(contentsOf: retirePendingSendRelay(url))
             }
-            messageQueueLock.lock()
-            for index in (0..<messageQueue.count).reversed() {
-                var item = messageQueue[index]
-                item.pendingRelays.subtract(Self.defaultRelaySet)
-                if item.pendingRelays.isEmpty {
-                    messageQueue.remove(at: index)
-                } else {
-                    messageQueue[index] = item
-                }
-            }
-            messageQueueLock.unlock()
+            terminalFailures.forEach { $0() }
             relays.removeAll { Self.defaultRelaySet.contains($0.url) }
             updateConnectionStatus()
         }
@@ -1255,7 +1780,7 @@ final class NostrRelayManager: ObservableObject {
         guard shouldDeliverInboundEvent(subscriptionID: subId, eventID: event.id) else {
             return
         }
-        if event.kind != 1059 {
+        if !NostrProtocol.acceptedPrivateEnvelopeKinds.contains(event.kind) {
             // Per-event logging floods dev builds in busy geohashes; sample it.
             inboundEventLogCount += 1
             if inboundEventLogCount == 1 || inboundEventLogCount.isMultiple(of: TransportConfig.nostrInboundEventLogInterval) {
@@ -1293,12 +1818,29 @@ final class NostrRelayManager: ObservableObject {
             }
         case .ok(let eventId, let success, let reason):
             resolveConfirmedSend(eventID: eventId, relayURL: relayUrl, accepted: success)
-            if success {
-                _ = Self.pendingGiftWrapIDs.remove(eventId)
-                SecureLogger.debug("✅ Accepted id=\(eventId.prefix(16))… relay=\(relayUrl)", category: .session)
+            let normalizedReason = reason
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+            let isDurableDuplicate = !success && normalizedReason.hasPrefix("duplicate:")
+            let matchedPrivateEnvelope = resolvePrivateEnvelopeAcknowledgement(
+                eventID: eventId,
+                relayUrl: relayUrl,
+                accepted: success || isDurableDuplicate
+            )
+            if success || isDurableDuplicate {
+                _ = Self.pendingPrivateEnvelopeIDs.remove(eventId)
+                SecureLogger.debug(
+                    "✅ Accepted id=\(eventId.prefix(16))… relay=\(relayUrl)\(isDurableDuplicate ? " (already stored)" : "")",
+                    category: .session
+                )
             } else {
-                let isGiftWrap = Self.pendingGiftWrapIDs.remove(eventId) != nil
-                if isGiftWrap {
+                // Evaluate the removal independently: `||` short-circuiting
+                // must not leak a registered ID when the queue match is true.
+                let wasRegisteredPrivateEnvelope =
+                    Self.pendingPrivateEnvelopeIDs.remove(eventId) != nil
+                let isPrivateEnvelope =
+                    matchedPrivateEnvelope || wasRegisteredPrivateEnvelope
+                if isPrivateEnvelope {
                     SecureLogger.warning("📮 Rejected id=\(eventId.prefix(16))… relay=\(relayUrl) reason=\(reason)", category: .session)
                 } else {
                     SecureLogger.error("📮 Rejected id=\(eventId.prefix(16))… relay=\(relayUrl) reason=\(reason)", category: .session)
@@ -1410,6 +1952,7 @@ final class NostrRelayManager: ObservableObject {
         connection: NostrRelayConnectionProtocol? = nil
     ) {
         if let connection, connections[relayUrl] !== connection { return }
+        clearPendingSendInFlight(relayUrl: relayUrl, connection: connection)
         connections.removeValue(forKey: relayUrl)
         teardownRelayInboundPipeline(for: relayUrl)
         subscriptions.removeValue(forKey: relayUrl)
@@ -1431,7 +1974,10 @@ final class NostrRelayManager: ObservableObject {
         let ns = error as NSError
         if errorDescription.contains("hostname could not be found") || 
            errorDescription.contains("dns") ||
-           (ns.domain == NSURLErrorDomain && ns.code == NSURLErrorBadServerResponse) {
+           (ns.domain == NSURLErrorDomain && (
+               ns.code == NSURLErrorBadServerResponse ||
+               ns.code == NSURLErrorCannotFindHost
+           )) {
             if relays.first(where: { $0.url == relayUrl })?.lastError == nil {
                 SecureLogger.warning("Nostr relay permanent failure for \(relayUrl) - not retrying (code=\(ns.code))", category: .session)
             }
@@ -1441,6 +1987,8 @@ final class NostrRelayManager: ObservableObject {
                 relays[index].nextReconnectTime = nil
             }
             pendingSubscriptions[relayUrl] = nil
+            let terminalFailures = retirePendingSendRelay(relayUrl)
+            terminalFailures.forEach { $0() }
             return
         }
         
@@ -1452,6 +2000,8 @@ final class NostrRelayManager: ObservableObject {
         // Stop attempting after max attempts
         if relays[index].reconnectAttempts >= maxReconnectAttempts {
             SecureLogger.warning("Max reconnection attempts (\(maxReconnectAttempts)) reached for \(relayUrl)", category: .session)
+            let terminalFailures = retirePendingSendRelay(relayUrl)
+            terminalFailures.forEach { $0() }
             return
         }
         
@@ -1489,6 +2039,66 @@ final class NostrRelayManager: ObservableObject {
             }
         }
     }
+
+    /// A relay in terminal cooldown cannot make progress on queued sends. Drop
+    /// it from every target set so one unavailable default relay cannot pin
+    /// otherwise-delivered protected batches forever. If this was the last
+    /// target and no relay completed the pair, report whole-batch failure to
+    /// the originating transport for visible failure or retry.
+    private func retirePendingSendRelay(_ relayUrl: String) -> [() -> Void] {
+        var terminalFailures: [() -> Void] = []
+        var settledPrivateEnvelopeIDs: [String] = []
+        messageQueueLock.lock()
+        for index in (0..<messageQueue.count).reversed() {
+            var item = messageQueue[index]
+            guard item.pendingRelays.remove(relayUrl) != nil else { continue }
+            item.inFlightConnections.removeValue(forKey: relayUrl)
+            item.unconfirmedEventIDsByRelay.removeValue(forKey: relayUrl)
+            item.acknowledgementTokensByRelay.removeValue(forKey: relayUrl)
+            item.rejectedWhileWritingRelays.remove(relayUrl)
+            if item.pendingRelays.isEmpty {
+                if item.priority == .privateEnvelope {
+                    settledPrivateEnvelopeIDs.append(contentsOf: item.events.map(\.id))
+                }
+                if item.priority == .privateEnvelope,
+                   !item.hasSuccessfulDelivery,
+                   let terminalFailure = item.terminalFailure {
+                    terminalFailures.append(terminalFailure)
+                }
+                messageQueue.remove(at: index)
+            } else {
+                messageQueue[index] = item
+            }
+        }
+        messageQueueLock.unlock()
+        settledPrivateEnvelopeIDs.forEach {
+            _ = Self.pendingPrivateEnvelopeIDs.remove($0)
+        }
+        return terminalFailures
+    }
+
+    /// Release the in-flight marker owned by a dead socket without removing
+    /// the relay from the durable pending set. A stale completion from that
+    /// socket is ignored by its ObjectIdentifier check.
+    private func clearPendingSendInFlight(
+        relayUrl: String,
+        connection: NostrRelayConnectionProtocol?
+    ) {
+        let expectedIdentifier = connection.map(ObjectIdentifier.init)
+        messageQueueLock.lock()
+        for index in messageQueue.indices {
+            var item = messageQueue[index]
+            guard let inFlightIdentifier = item.inFlightConnections[relayUrl],
+                  expectedIdentifier == nil || expectedIdentifier == inFlightIdentifier else {
+                continue
+            }
+            item.inFlightConnections.removeValue(forKey: relayUrl)
+            item.acknowledgementTokensByRelay.removeValue(forKey: relayUrl)
+            item.rejectedWhileWritingRelays.remove(relayUrl)
+            messageQueue[index] = item
+        }
+        messageQueueLock.unlock()
+    }
     
     // MARK: - Public Utility Methods
     
@@ -1504,6 +2114,10 @@ final class NostrRelayManager: ObservableObject {
         
         // Disconnect if connected
         if let connection = connections[normalizedRelayUrl] {
+            clearPendingSendInFlight(
+                relayUrl: normalizedRelayUrl,
+                connection: connection
+            )
             connection.cancel(with: .goingAway, reason: nil)
             connections.removeValue(forKey: normalizedRelayUrl)
             teardownRelayInboundPipeline(for: normalizedRelayUrl)
@@ -1526,7 +2140,13 @@ final class NostrRelayManager: ObservableObject {
     var debugPendingMessageQueueCount: Int {
         messageQueueLock.lock()
         defer { messageQueueLock.unlock() }
-        return messageQueue.count
+        return messageQueue.reduce(0) { $0 + $1.events.count }
+    }
+
+    var debugPendingMessageQueueEventIDsByBatch: [[String]] {
+        messageQueueLock.lock()
+        defer { messageQueueLock.unlock() }
+        return messageQueue.map { $0.events.map(\.id) }
     }
 
     func debugPendingSubscriptionCount(for relayUrl: String) -> Int {
@@ -1809,14 +2429,18 @@ struct NostrFilter: Encodable {
         }
     }
     
-    // For NIP-17 gift wraps
-    static func giftWrapsFor(pubkey: String, since: Date? = nil) -> NostrFilter {
-        var filter = NostrFilter()
-        filter.kinds = [1059] // Gift wrap kind
-        filter.since = since?.timeIntervalSince1970.toInt()
-        filter.tagFilters = ["p": [pubkey]]
-        filter.limit = TransportConfig.nostrRelayDefaultFetchLimit // reasonable limit
-        return filter
+    // BitChat private envelopes, plus compatibility legacy envelopes emitted
+    // throughout the coordinated migration and stored by older releases as
+    // kind 1059.
+    static func privateEnvelopeFiltersFor(pubkey: String, since: Date? = nil) -> [NostrFilter] {
+        NostrProtocol.acceptedPrivateEnvelopeKinds.map { kind in
+            var filter = NostrFilter()
+            filter.kinds = [kind]
+            filter.since = since?.timeIntervalSince1970.toInt()
+            filter.tagFilters = ["p": [pubkey]]
+            filter.limit = TransportConfig.nostrPrivateEnvelopeFetchLimitPerKind
+            return filter
+        }
     }
 
     // For location channels: geohash-scoped ephemeral events (kind 20000) and presence (kind 20001)

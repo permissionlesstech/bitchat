@@ -49,9 +49,44 @@ BitChat uses a **hybrid messaging architecture** with two complementary transpor
 
 BitChat's private-envelope format is proprietary and is **not** NIP-17,
 NIP-44, or NIP-59 compatible. It uses Nostr as a relay transport but only
-interoperates with BitChat clients: private payloads travel inside kind-1059
-events whose `v2:`-prefixed content is a BitChat-specific XChaCha20-Poly1305
-construction, not NIP-44 encryption.
+interoperates with BitChat clients. New envelopes use provisional,
+BitChat-specific public kind 1402 (not a formally reserved Nostr kind),
+encrypted inner kinds 1403/1404, and the `bitchat-pm-v1:` content prefix.
+For mixed-version delivery, clients publish both the primary kind-1402
+envelope and a compatibility kind-1059 copy. There is no date-based cutoff:
+kind 1059 must remain enabled until a coordinated iOS/Android release confirms
+that supported older clients have migrated. Receivers subscribe to both kinds
+and deduplicate the authenticated embedded BitChat payload.
+
+Private-envelope migration compatibility:
+
+| Sender | Receiver | Delivery path |
+| --- | --- | --- |
+| New iOS | New iOS | Kind 1402 is primary; the kind-1059 twin is deduplicated |
+| New iOS | Released iOS | Compatibility kind 1059 |
+| New iOS | Current Android | Compatibility kind 1059 |
+| Released iOS | New iOS | Kind 1059 with the released empty inner-tag shape |
+| Current Android | New iOS | Kind 1059 with exactly the authenticated recipient `p` tag |
+
+New kind-1402 envelopes require an empty inner tag list. The Android recipient
+tag exception is intentionally confined to legacy kind 1059 and accepts only
+the exact addressed recipient. Mailbox subscriptions cover the 24-hour
+delivery window plus Android's full 48-hour timestamp randomization and 15
+minutes of clock skew. Recovery uses
+one independent 500-event relay filter per wire kind so either format cannot
+consume the other's result budget.
+
+The two outbound migration copies are admitted to the relay queue as one
+protected batch. Queue pressure evicts ephemeral traffic first, never one copy
+of a private pair; if protected capacity is exhausted, the entire new pair is
+rejected as a whole. User-message rejection becomes a visible failed delivery;
+acknowledgements and favorite notifications retain the exact pair in a
+process-wide 256-entry bounded retry queue. A sustained outage beyond that
+bound evicts the oldest whole control pair with an explicit warning, never half
+a pair.
+If either socket write fails, the same queued pair remains pending and both
+copies are replayed on the replacement connection. A terminal relay target is
+pruned after bounded retries so one dead relay cannot wedge healthy delivery.
 
 ### Channel Types
 
