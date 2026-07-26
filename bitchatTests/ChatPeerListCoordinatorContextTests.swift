@@ -105,6 +105,20 @@ private func makeMessage(id: String, senderPeerID: PeerID? = nil) -> BitchatMess
 struct ChatPeerListCoordinatorContextTests {
 
     @Test @MainActor
+    func synchronousPeerListUpdate_appliesBeforeReturning() {
+        let context = MockChatPeerListContext()
+        let coordinator = ChatPeerListCoordinator(context: context)
+        let peerID = PeerID(str: "0011223344556677")
+
+        coordinator.didUpdatePeerListSynchronously([peerID])
+
+        #expect(context.isConnected)
+        #expect(context.registeredEphemeralSessions == [peerID])
+        #expect(context.updateEncryptionStatusForPeersCount == 1)
+        #expect(context.cleanupOldReadReceiptsCount == 1)
+    }
+
+    @Test @MainActor
     func didUpdatePeerList_updatesConnectionSessionsAndEncryptionStatus() async {
         let context = MockChatPeerListContext()
         let coordinator = ChatPeerListCoordinator(context: context)

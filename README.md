@@ -8,6 +8,12 @@ A decentralized peer-to-peer messaging app with dual transport architecture: loc
 
 📲 [App Store](https://apps.apple.com/us/app/bitchat-mesh/id6748219622)
 
+### Getting a copy you can trust
+
+Install from the App Store, or build from source you have verified. A compiled build from anywhere else cannot be verified — see [Verifying bitchat](docs/VERIFYING-A-BUILD.md) for how to check source against the per-release hash manifest, and for what to do if that is the only build you can get.
+
+This matters more than it usually would: this repository has been the target of takedown demands, and when a repository or releases page disappears, mirrors appear that nobody can check.
+
 ## License
 
 This project is released into the public domain. See the [LICENSE](LICENSE) file for details.
@@ -18,8 +24,8 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 - **Location-Based Channels**: Geographic chat rooms using geohash coordinates over global Nostr relays
 - **Intelligent Message Routing**: Automatically chooses best transport (Bluetooth → Nostr fallback)
 - **Decentralized Mesh Network**: Automatic peer discovery and multi-hop message relay over Bluetooth LE
-- **Privacy First**: No accounts, no phone numbers, no persistent identifiers
-- **Private Message End-to-End Encryption**: [Noise Protocol](https://noiseprotocol.org) for mesh, NIP-17 for Nostr
+- **Privacy First**: No accounts, no phone numbers, no servers. Note that the mesh does use a persistent per-device identifier derived from your identity key — see [the whitepaper](WHITEPAPER.md) on identity and metadata for what a nearby radio can observe
+- **Private Message End-to-End Encryption**: [Noise Protocol](https://noiseprotocol.org) for mesh, BitChat private envelopes for Nostr fallback
 - **IRC-Style Commands**: Familiar `/slap`, `/msg`, `/who` style interface
 - **Universal App**: Native support for iOS and macOS
 - **Emergency Wipe**: Triple-tap to instantly clear all data
@@ -34,7 +40,7 @@ BitChat uses a **hybrid messaging architecture** with two complementary transpor
 - **Local Communication**: Direct peer-to-peer within Bluetooth range
 - **Multi-hop Relay**: Messages route through nearby devices (max 7 hops)
 - **No Internet Required**: Works completely offline in disaster scenarios
-- **Noise Protocol Encryption**: End-to-end encryption with forward secrecy
+- **Noise Protocol Encryption**: End-to-end encryption, with forward secrecy for live sessions (store-and-forward mail is sealed without it — see the whitepaper)
 - **Binary Protocol**: Compact packet format optimized for Bluetooth LE constraints
 - **Automatic Discovery**: Peer discovery and connection management
 - **Adaptive Power**: Battery-optimized duty cycling
@@ -44,8 +50,14 @@ BitChat uses a **hybrid messaging architecture** with two complementary transpor
 - **Global Reach**: Connect with users worldwide via internet relays
 - **Location Channels**: Geographic chat rooms using geohash coordinates
 - **290+ Relay Network**: Distributed across the globe for reliability
-- **NIP-17 Encryption**: Gift-wrapped private messages for internet privacy
+- **BitChat Private Envelopes**: App-specific encrypted private messages over Nostr relays
 - **Ephemeral Keys**: Fresh cryptographic identity per geohash area
+
+BitChat's private-envelope format is proprietary and is **not** NIP-17,
+NIP-44, or NIP-59 compatible. It uses Nostr as a relay transport but only
+interoperates with BitChat clients: private payloads travel inside kind-1059
+events whose `v2:`-prefixed content is a BitChat-specific XChaCha20-Poly1305
+construction, not NIP-44 encryption.
 
 ### Channel Types
 
@@ -80,7 +92,7 @@ Private messages use **intelligent transport selection**:
 2. **Nostr Fallback** (when Bluetooth unavailable)
 
    - Uses recipient's Nostr public key
-   - NIP-17 gift-wrapping for privacy
+   - BitChat's app-specific private-envelope encryption
    - Routes through global relay network
 
 3. **Smart Queuing** (when neither available)

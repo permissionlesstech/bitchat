@@ -18,14 +18,14 @@ bitchat is a decentralized, peer-to-peer messaging application for secure, priva
 * **Authentication:** peers are identified by cryptographic keys; announcements are signed and verified.
 * **Resilience:** the network functions in lossy, low-bandwidth, partitioned environments with churning membership.
 * **Eventual delivery:** a message to an out-of-range peer should still arrive — relayed by the mesh, carried by a moving person, or resting on an internet relay — within a bounded retention window.
-* **Ephemerality by default:** no plaintext message content is ever written to disk. Everything the store-and-forward stack persists is either sealed ciphertext or already-public broadcast traffic, and all of it dies with the panic wipe.
+* **Ephemerality by default:** conversation timelines live in memory only. Everything the store-and-forward stack persists is either sealed ciphertext or already-public broadcast traffic, and all of it dies with the panic wipe. Media is the exception: accepted images and voice notes are written to disk unsealed, protected by the platform's data-protection class rather than by app-layer encryption, and bounded by a storage quota.
 
 ## 2. Architecture Overview
 
 Two transports implement a common `Transport` interface and are coordinated by a `MessageRouter`:
 
 * **BLE mesh** — every device is simultaneously a GATT central and peripheral, relaying packets in a controlled flood. No infrastructure, pairing, or accounts.
-* **Nostr** — private messages to mutual favorites travel as NIP-17 gift-wrapped events over public relays (over Tor where enabled), bridging separate meshes through the internet.
+* **Nostr** — private messages to mutual favorites travel in BitChat's app-specific encrypted envelopes over public relays (over Tor where enabled), bridging separate meshes through the internet.
 
 The router prefers a live mesh link, falls back to Nostr, and engages the courier system when neither can deliver promptly.
 
@@ -36,13 +36,17 @@ Each device holds two long-term key pairs in the Keychain:
 * a **Curve25519 static key** for Noise key agreement — its SHA-256 fingerprint is the peer's stable identity, and
 * an **Ed25519 signing key** for packet signatures.
 
-On the mesh, peers appear under short ephemeral IDs derived per session; favoriting pins the full Noise public key so identity survives across sessions. Mutual favorites also exchange Nostr public keys for the internet path. Optional QR verification binds a nickname to a fingerprint in person.
+On the mesh, peers appear under a short 8-byte peer ID. That ID is **not ephemeral**: it is the first 8 bytes of the SHA-256 fingerprint of the device's Noise static key, so it is stable across sessions, reboots, and reinstalls that preserve the keychain, and it changes only when the identity itself is replaced by a panic wipe. Favoriting pins the full Noise public key so identity survives across sessions. Mutual favorites also exchange Nostr public keys for the internet path. Optional QR verification binds a nickname to a fingerprint in person.
+
+Signed announcements additionally carry the nickname, the Noise static public key, and the Ed25519 signing public key in cleartext (§4.5), so a passive receiver in radio range can link a device across time and place regardless of the peer ID. Unlinkable presence is not a property this protocol currently provides; see §9.
 
 ## 4. BLE Mesh Layer
 
 ### 4.1 Packet Format
 
-A compact binary header (version, type, TTL, timestamp, flags) is followed by an 8-byte sender ID, an optional 8-byte recipient ID, the payload, and an optional Ed25519 signature. Version 2 packets may carry an explicit source route. Signatures exclude the TTL byte so relays can decrement it without invalidating them. Packets other than fragments are padded toward uniform sizes.
+A compact binary header (version, type, TTL, timestamp, flags) is followed by an 8-byte sender ID, an optional 8-byte recipient ID, the payload, and an optional Ed25519 signature. Version 2 packets may carry an explicit source route. Signatures exclude the TTL byte so relays can decrement it without invalidating them.
+
+Only `noiseEncrypted` and `noiseHandshake` packets are padded, toward 256/512/1024/2048-byte buckets; every other type — public messages, announcements, board posts, group messages, fragments, files, and voice frames — goes out at its natural length. Padding is PKCS#7-style with pad bytes equal to the pad length, and because that length must fit one byte, a frame needing more than 255 bytes to reach its bucket is emitted unpadded. Payload length is therefore observable for most traffic.
 
 ### 4.2 Flood Control
 
@@ -78,7 +82,9 @@ Courier envelopes are sealed to the recipient's *static* key with the one-way No
 
 ### 5.3 Nostr Path
 
-Private messages to mutual favorites are wrapped per NIP-17/NIP-59: a rumor (kind 14) sealed (kind 13) and gift-wrapped (kind 1059) under a throwaway ephemeral key, so relays learn neither sender nor content.
+Private messages to mutual favorites use BitChat's proprietary private-envelope protocol. An unsigned inner message (kind 14) is encrypted and placed in a sender-signed seal (kind 13); that seal is encrypted again inside a public envelope (kind 1059) signed by a one-time key, so relays learn neither the stable sender identity nor the content. Each encrypted content field is `v2:` followed by base64url of a 24-byte nonce, XChaCha20-Poly1305 ciphertext, and its 16-byte tag. Keys come from secp256k1 ECDH and HKDF-SHA256 (the derivation reuses a "nip44-v2" info label but is not the NIP-44 key schedule).
+
+This format reuses NIP-17/NIP-59 kind numbers but is **not NIP-17, NIP-44, or NIP-59 compatible** and interoperates only with BitChat clients. The outer `p` tag exposes the recipient's Nostr public key to relays; the plaintext and stable sender identity remain inside authenticated ciphertext. Public seal and envelope timestamps are randomized by up to ±15 minutes, while the actual message timestamp is encrypted. The protocol does not provide forward secrecy: compromise of the recipient's static Nostr private key can expose stored envelopes addressed to that key.
 
 ## 6. Store and Forward
 
@@ -105,7 +111,7 @@ Public broadcast messages are cached (1000 packets) and reconciled between peers
 
 ### 6.4 Nostr Mailboxes
 
-Gift-wrapped messages rest on Nostr relays; clients re-subscribe with a 24-hour lookback on reconnect, covering the both-devices-offline case for mutual favorites whenever either side touches the internet.
+BitChat private envelopes rest on Nostr relays; clients re-subscribe with a 24-hour lookback on reconnect, covering the both-devices-offline case for mutual favorites whenever either side touches the internet.
 
 ### 6.5 Delivery Metrics
 
@@ -122,12 +128,12 @@ Bare local counters (deposits, handovers, sprays, opens, outbox flushes and drop
 
 ## 8. Security Considerations
 
-* **Relay nodes** cannot read private traffic; they forward padded, opaque ciphertext.
+* **Relay nodes** cannot read private traffic; they forward opaque ciphertext. Padding applies to Noise frames only (§4.1), so other packet types relay at their natural length.
 * **Couriers** are quota-bounded mailbags. A malicious courier can drop mail (redundant copies and deposit retry mitigate this) but cannot read it, link it across days, or amplify it — copy budgets are capped and every envelope is validated against size and lifetime policy on deposit.
 * **Flooding abuse** is bounded by TTL clamps, deduplication, per-depositor quotas, connect-rate limits, and announce-rate limiting.
 * **Replay** of public broadcasts is bounded by the 6-hour acceptance window plus deduplication; private payloads are protected by Noise nonces.
-* **Metadata.** BLE proximity is inherently observable; ephemeral IDs and daily-rotating courier tags limit long-term correlation. Nostr traffic can ride Tor.
-* **No forward secrecy for sealed mail** (§5.2) is the main cryptographic trade-off of the offline path.
+* **Metadata is the weakest part of this design, and the peer ID does not help.** The 8-byte sender ID in every packet header is derived from a never-rotating key (§3), and announcements publish the static keys and nickname in cleartext, so a passive listener can enumerate participants and follow a device between places. Announcements also carry up to ten direct-neighbor IDs (§4.3), which hands a single sniffer the local adjacency graph. Origin packets leave at the default TTL, so hop distance identifies the originator. Daily-rotating courier tags do limit correlation of carried mail, and Nostr traffic can ride Tor. Addressing the radio-layer exposure is future work (§9).
+* **No forward secrecy for sealed mail or Nostr private envelopes** (§5.2–5.3) means compromise of a recipient's static key can expose retained ciphertext addressed to that key.
 
 ## 9. Future Work
 
@@ -135,6 +141,9 @@ Bare local counters (deposits, handovers, sprays, opens, outbox flushes and drop
 * Couriered media beyond the 16 KiB text cap.
 * Probabilistic relay and edge-of-network TTL boosting for very dense and very sparse graphs.
 * Multi-hop courier routing informed by encounter history.
+* **Rotating on-air identity.** Epoch-rotating peer IDs, with static-key disclosure moved inside the encrypted handshake and mutual favorites recognising each other through a tag derived from their shared secret, so presence stops being linkable across sessions (§3, §8).
+* **Padding for non-Noise packet types**, and closing the gap where a frame needing more than 255 bytes of padding is emitted unpadded (§4.1).
+* Making the neighbor list in announcements optional, or restricted to authenticated links (§4.3).
 
 ---
 

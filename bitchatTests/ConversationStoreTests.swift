@@ -1179,6 +1179,71 @@ struct ConversationStoreTests {
         #expect(statusChangedIDs.isEmpty)
     }
 
+    @Test("peer-scoped receipt updates only authenticated direct aliases")
+    @MainActor
+    func peerScopedReceiptUpdatesOnlyAuthenticatedDirectAliases() {
+        let store = ConversationStore()
+        let ephemeralPeer = PeerID(str: "0102030405060708")
+        let stablePeer = PeerID(hexData: Data(repeating: 0x08, count: 32))
+        let otherPeer = PeerID(str: "1112131415161718")
+        let ephemeral = ConversationID.directPeer(ephemeralPeer)
+        let stable = ConversationID.directPeer(stablePeer)
+        let other = ConversationID.directPeer(otherPeer)
+        let messageID = "scoped-receipt"
+        let mirrored = makeMessage(
+            id: messageID,
+            timestamp: 1,
+            isPrivate: true,
+            deliveryStatus: .sent
+        )
+        store.upsertByID(mirrored, in: ephemeral)
+        store.upsertByID(mirrored, in: stable)
+        store.upsertByID(
+            makeMessage(
+                id: messageID,
+                timestamp: 1,
+                isPrivate: true,
+                deliveryStatus: .sent
+            ),
+            in: other
+        )
+        store.upsertByID(
+            makeMessage(id: messageID, timestamp: 1, deliveryStatus: .sent),
+            in: .mesh
+        )
+
+        var cancellables = Set<AnyCancellable>()
+        var publishedIDs: [ConversationID] = []
+        for id in [ephemeral, stable, other, .mesh] {
+            store.conversation(for: id).objectWillChange
+                .sink { publishedIDs.append(id) }
+                .store(in: &cancellables)
+        }
+        var statusChangedIDs: [ConversationID] = []
+        store.changes
+            .sink { change in
+                if case .statusChanged(let id, messageID, _) = change,
+                   messageID == "scoped-receipt" {
+                    statusChangedIDs.append(id)
+                }
+            }
+            .store(in: &cancellables)
+
+        let delivered = DeliveryStatus.delivered(to: "bob", at: Date())
+        #expect(store.setDeliveryStatus(
+            delivered,
+            forMessageID: messageID,
+            inDirectPeerAliases: [ephemeralPeer, stablePeer]
+        ))
+
+        #expect(Set(publishedIDs) == Set([ephemeral, stable]))
+        #expect(Set(statusChangedIDs) == Set([ephemeral, stable]))
+        #expect(store.conversation(for: ephemeral).message(withID: messageID)?.deliveryStatus == delivered)
+        #expect(store.conversation(for: stable).message(withID: messageID)?.deliveryStatus == delivered)
+        #expect(store.conversation(for: other).message(withID: messageID)?.deliveryStatus == .sent)
+        #expect(store.conversation(for: .mesh).message(withID: messageID)?.deliveryStatus == .sent)
+    }
+
     // MARK: - Invariant audit (field observability)
 
     /// A store exercised through every intent family: public + geohash +

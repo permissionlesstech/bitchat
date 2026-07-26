@@ -733,6 +733,26 @@ final class GossipSyncManager {
         }
     }
 
+    /// Drop every carried public message and clear the archive on disk.
+    ///
+    /// Used when someone clears the mesh timeline: the watermark already stops
+    /// cleared messages from being shown again, so anything left in the
+    /// archive is retained purely to serve other peers — and a person who
+    /// clears a timeline reasonably reads that as "this is gone from my
+    /// phone". The cost is that this device stops offering the recent public
+    /// backlog to peers until it hears fresh traffic.
+    func removeAllPublicMessages() {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.messages.remove { _ in true }
+            self.archiveDirty = true
+            // Persist now rather than waiting for maintenance: a relaunch in
+            // the gap would restore the purged messages from disk.
+            self.persistArchiveIfDirty()
+            self.archive?.wipe()
+        }
+    }
+
     private func removeState(for peerID: PeerID) {
         // Deliberately keeps the peer's prekey bundle: bundles exist to reach
         // owners who left the mesh, and they age out on their own schedule.

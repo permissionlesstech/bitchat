@@ -38,11 +38,15 @@
 /// 7. **Decoding**: Binary data parsed back to message objects
 ///
 /// ## Security Considerations
-/// - Message padding (to 256/512/1024/2048-byte blocks) obscures actual content length
+/// - Noise frames are padded (to 256/512/1024/2048-byte blocks) to obscure
+///   content length; other packet types are not padded, so their payload
+///   length is observable
 /// - Randomized relay jitter reduces the traffic-analysis signal; there is no
 ///   cover traffic or per-message timing obfuscation
 /// - Integration with Noise Protocol for E2E encryption
-/// - No persistent identifiers in protocol headers
+/// - The 8-byte sender ID in every header IS a persistent identifier: it is
+///   derived from the long-lived Noise static key and rotates only on a panic
+///   wipe. Treat headers as linkable across sessions.
 ///
 /// ## Message Types
 /// - **Announce/Leave**: Peer presence notifications
@@ -79,11 +83,34 @@ enum NoisePayloadType: UInt8 {
     case groupKeyUpdate = 0x07      // Creator-signed group state (key rotation / roster update)
     // Live voice (push-to-talk)
     case voiceFrame = 0x08          // One live voice-burst packet (see VoiceBurstPacket)
+    // Finalized private media. `0x20` is the value already deployed by the
+    // Android client. The complete BitchatFilePacket is encrypted inside
+    // Noise before the outer noiseEncrypted packet is fragmented.
+    case privateFile = 0x20
+    // Versioned peer state authenticated by the surrounding Noise session.
+    // This is intentionally distinct from the public announce: announce
+    // capabilities are discovery hints, while this payload proves possession
+    // of the advertised Noise static key before downgrade state is pinned.
+    case authenticatedPeerState = 0x21
     // Verification (QR-based OOB binding)
     case verifyChallenge = 0x10     // Verification challenge
     case verifyResponse  = 0x11     // Verification response
     // Transitive verification (web of trust)
     case vouch = 0x12               // Batch of vouch attestations
+
+    /// #1434 briefly used 0x09 before release. Accept it while prerelease
+    /// builds age out, but never emit it. Decoders canonicalize both values to
+    /// `.privateFile` so the compatibility alias cannot leak into app logic.
+    static let prereleasePrivateFileRawValue: UInt8 = 0x09
+
+    static func decoded(rawValue: UInt8) -> NoisePayloadType? {
+        rawValue == prereleasePrivateFileRawValue ? .privateFile : Self(rawValue: rawValue)
+    }
+
+    static func isPrivateFile(rawValue: UInt8?) -> Bool {
+        guard let rawValue else { return false }
+        return rawValue == privateFile.rawValue || rawValue == prereleasePrivateFileRawValue
+    }
 
     var description: String {
         switch self {
@@ -93,6 +120,8 @@ enum NoisePayloadType: UInt8 {
         case .groupInvite: return "groupInvite"
         case .groupKeyUpdate: return "groupKeyUpdate"
         case .voiceFrame: return "voiceFrame"
+        case .privateFile: return "privateFile"
+        case .authenticatedPeerState: return "authenticatedPeerState"
         case .verifyChallenge: return "verifyChallenge"
         case .verifyResponse: return "verifyResponse"
         case .vouch: return "vouch"

@@ -56,6 +56,8 @@ enum BLEAnnounceTrustRejection: Equatable {
     case missingSignature
     case invalidSignature
     case keyMismatch
+    case signingKeyMismatch
+    case authenticatedSigningKeyMismatch
 }
 
 enum BLEAnnounceTrustDecision: Equatable {
@@ -72,10 +74,32 @@ enum BLEAnnounceTrustPolicy {
         hasSignature: Bool,
         signatureValid: Bool,
         existingNoisePublicKey: Data?,
-        announcedNoisePublicKey: Data
+        announcedNoisePublicKey: Data,
+        existingSigningPublicKey: Data? = nil,
+        authenticatedSigningPublicKey: Data? = nil,
+        announcedSigningPublicKey: Data
     ) -> BLEAnnounceTrustDecision {
         if let existingNoisePublicKey, existingNoisePublicKey != announcedNoisePublicKey {
             return .reject(.keyMismatch)
+        }
+
+        // Strongest binding first: an Ed25519 key bound to this Noise identity
+        // inside an authenticated Noise session can never be replaced by a
+        // merely self-signed announce.
+        if let authenticatedSigningPublicKey,
+           announcedSigningPublicKey != authenticatedSigningPublicKey {
+            return .reject(.authenticatedSigningKeyMismatch)
+        }
+
+        // TOFU signing-key pinning. The packet signature only proves the
+        // announce is self-consistent — it is verified against the Ed25519 key
+        // carried *inside the same announce*. Since peerIDs derive from the
+        // broadcast (public) noise key, an attacker can replay a victim's
+        // peerID+noiseKey with their own signing key and a valid
+        // self-signature. Once we have bound a signing key to this peer,
+        // refuse to silently replace it.
+        if let existingSigningPublicKey, existingSigningPublicKey != announcedSigningPublicKey {
+            return .reject(.signingKeyMismatch)
         }
 
         guard hasSignature else {

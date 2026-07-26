@@ -290,11 +290,15 @@ final class GeoRelayDirectoryTests: XCTestCase {
         harness.userDefaults.set(harness.clock.now, forKey: "georelay.lastFetchAt")
         let directory = GeoRelayDirectory(dependencies: harness.dependencies)
 
+        let baselineRequestCount = await harness.fetcher.recordedRequestCount()
         directory.prefetchIfNeeded()
+        // Negative check: nothing should have been scheduled, so there is no
+        // condition to wait on. A modest delay gives a wrongly spawned fetch
+        // task a chance to run before we compare against the baseline.
         try? await Task.sleep(nanoseconds: 20_000_000)
 
         let requestCount = await harness.fetcher.recordedRequestCount()
-        XCTAssertEqual(requestCount, 0)
+        XCTAssertEqual(requestCount, baselineRequestCount)
         XCTAssertFalse(directory.debugHasRetryTask)
     }
 
@@ -319,9 +323,11 @@ final class GeoRelayDirectoryTests: XCTestCase {
         XCTAssertFalse(directory.debugHasRetryTask)
 
         directory.prefetchIfNeeded(force: true)
+        // Negative check against the captured baseline: the forced refetch
+        // must be skipped, so there is no condition to wait on.
         try? await Task.sleep(nanoseconds: 20_000_000)
         let forcedRequestCount = await harness.fetcher.recordedRequestCount()
-        XCTAssertEqual(forcedRequestCount, 1)
+        XCTAssertEqual(forcedRequestCount, requestCount)
     }
 
     func test_prefetchIfNeeded_runsRemoteFetchOffMainThread() async {
@@ -436,26 +442,43 @@ final class GeoRelayDirectoryTests: XCTestCase {
             autoStart: true,
             activeNotificationName: activeNotification
         )
-        var directory: GeoRelayDirectory? = GeoRelayDirectory(dependencies: harness.dependencies)
-        let initialFetch = await waitUntil {
-            await harness.fetcher.recordedRequestCount() == 1
+        // Wait on the refresh notification rather than the raw request count:
+        // the request count increments before the directory finishes handling
+        // the response on the main actor (resetting `isFetching`, recording
+        // `lastFetchAt`). Posting the next trigger inside that gap would get
+        // swallowed by the in-flight guard. The notification is posted at the
+        // end of the synchronous success handler, so once it fires the next
+        // trigger is guaranteed to be accepted.
+        var refreshCount = 0
+        let refreshObserver = harness.notificationCenter.addObserver(
+            forName: .geoRelayDirectoryDidRefresh,
+            object: nil,
+            queue: .main
+        ) { _ in
+            refreshCount += 1
         }
+        defer { harness.notificationCenter.removeObserver(refreshObserver) }
+
+        var directory: GeoRelayDirectory? = GeoRelayDirectory(dependencies: harness.dependencies)
+        let initialFetch = await waitUntil { refreshCount == 1 }
         XCTAssertTrue(initialFetch)
+        var requestCount = await harness.fetcher.recordedRequestCount()
+        XCTAssertEqual(requestCount, 1)
         XCTAssertEqual(directory?.debugObserverCount, 2)
 
         harness.clock.now = harness.clock.now.addingTimeInterval(6)
         harness.notificationCenter.post(name: .TorDidBecomeReady, object: nil)
-        let torTriggered = await waitUntil {
-            await harness.fetcher.recordedRequestCount() == 2
-        }
+        let torTriggered = await waitUntil { refreshCount == 2 }
         XCTAssertTrue(torTriggered)
+        requestCount = await harness.fetcher.recordedRequestCount()
+        XCTAssertEqual(requestCount, 2)
 
         harness.clock.now = harness.clock.now.addingTimeInterval(61)
         harness.notificationCenter.post(name: activeNotification, object: nil)
-        let activeTriggered = await waitUntil {
-            await harness.fetcher.recordedRequestCount() == 3
-        }
+        let activeTriggered = await waitUntil { refreshCount == 3 }
         XCTAssertTrue(activeTriggered)
+        requestCount = await harness.fetcher.recordedRequestCount()
+        XCTAssertEqual(requestCount, 3)
 
         weak var weakDirectory: GeoRelayDirectory?
         weakDirectory = directory
@@ -553,8 +576,20 @@ final class GeoRelayDirectoryTests: XCTestCase {
         )
     }
 
+    /// Polls until `condition` holds. The timeout is deliberately generous:
+    /// constrained CI runners (2-core, serialized testing) can starve the
+    /// detached utility-priority fetch task for seconds before it runs, and
+    /// a successful wait returns as soon as the condition becomes true.
+    /// Default deliberately far larger than the work being awaited.
+    ///
+    /// The directory performs its fetch in a `Task.detached(priority: .utility)`,
+    /// and utility priority competes with every other suite on a CI runner. At
+    /// ten seconds the retry-scheduling test timed out at exactly 10.06s with
+    /// the retry never scheduled — which reads like a missing retry rather than
+    /// a starved background task. Returning as soon as the condition holds means
+    /// a longer deadline only extends the genuine-failure case.
     private func waitUntil(
-        timeout: TimeInterval = 1.0,
+        timeout: TimeInterval = TestConstants.settleTimeout,
         condition: @escaping @MainActor () async -> Bool
     ) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)

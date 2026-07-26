@@ -44,6 +44,46 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertTrue(context.sessionFactory.allConnections.allSatisfy { $0.cancelCallCount >= 1 })
     }
 
+    /// A relay removed while its connection is queued behind Tor bootstrap
+    /// must stay removed: draining the pending set used to resurrect it,
+    /// because `dropRelays` never touched `pendingTorConnectionURLs` and a
+    /// custom relay is in neither the default set nor the allow-list filter.
+    func test_relayRemovedWhileWaitingForTor_staysRemovedWhenTorBecomesReady() async {
+        let customURL = "wss://custom-removed.example"
+        let center = NotificationCenter()
+        let customRelays = MutableRelayList(urls: [customURL])
+        let context = makeContext(
+            permission: .authorized,
+            userTorEnabled: true,
+            torEnforced: true,
+            torIsReady: false,
+            notificationCenter: center,
+            customRelays: customRelays
+        )
+
+        // Defaults plus the custom relay all queue while Tor bootstraps.
+        context.manager.connect()
+        XCTAssertTrue(context.sessionFactory.requestedURLs.isEmpty)
+        XCTAssertEqual(context.torWaiter.awaitCallCount, 1)
+
+        // The relay is removed by hand before Tor is ready.
+        customRelays.urls = []
+        center.post(name: NostrRelaySettings.didChangeNotification, object: nil)
+        // The settings sink hops through the main queue; let it land.
+        try? await Task.sleep(nanoseconds: 20_000_000)
+
+        context.torWaiter.resolve(true)
+
+        let defaultsConnected = await waitUntil {
+            context.sessionFactory.requestedURLs.count == self.expectedDefaultRelayCount
+        }
+        XCTAssertTrue(defaultsConnected)
+        XCTAssertFalse(
+            context.sessionFactory.requestedURLs.contains(customURL),
+            "a relay removed while Tor was bootstrapping must not reconnect when the pending queue drains"
+        )
+    }
+
     func test_connect_waitsForTorReadinessBeforeCreatingSessions() async {
         let context = makeContext(permission: .authorized, userTorEnabled: true, torEnforced: true, torIsReady: false)
 
@@ -754,11 +794,15 @@ final class NostrRelayManagerTests: XCTestCase {
         try context.sessionFactory.latestConnection(for: firstRelayURL)?.emitEventMessage(subscriptionID: "events", event: event)
         try context.sessionFactory.latestConnection(for: secondRelayURL)?.emitEventMessage(subscriptionID: "events", event: event)
 
-        let countedOnBothRelays = await waitUntil {
+        // Wait on the DELIVERY-side state: handler dispatch and the duplicate
+        // drop both land on the second main hop, after off-main verification.
+        let settled = await waitUntil {
             context.manager.relays.first(where: { $0.url == firstRelayURL })?.messagesReceived == 1 &&
-            context.manager.relays.first(where: { $0.url == secondRelayURL })?.messagesReceived == 1
+            context.manager.relays.first(where: { $0.url == secondRelayURL })?.messagesReceived == 1 &&
+            receivedIDs == [event.id] &&
+            context.manager.debugDuplicateInboundEventDropCount == 1
         }
-        XCTAssertTrue(countedOnBothRelays)
+        XCTAssertTrue(settled)
         XCTAssertEqual(receivedIDs, [event.id])
         XCTAssertEqual(context.manager.debugDuplicateInboundEventDropCount, 1)
         XCTAssertEqual(context.manager.debugDuplicateInboundEventDropCount(forSubscriptionID: "events"), 1)
@@ -791,12 +835,17 @@ final class NostrRelayManagerTests: XCTestCase {
             )
         }
 
-        let countedOnEveryRelay = await waitUntil {
+        // Wait on the DELIVERY-side state: the winner's handler dispatch and
+        // the losers' duplicate drops both land on the second main hop, after
+        // off-main verification — messagesReceived (first hop) settles sooner.
+        let settled = await waitUntil {
             relayURLs.allSatisfy { relayURL in
                 context.manager.relays.first(where: { $0.url == relayURL })?.messagesReceived == 1
-            }
+            } &&
+            receivedIDs == [event.id] &&
+            context.manager.debugDuplicateInboundEventDropCount == relayURLs.count - 1
         }
-        XCTAssertTrue(countedOnEveryRelay)
+        XCTAssertTrue(settled)
         XCTAssertEqual(receivedIDs, [event.id])
         XCTAssertEqual(context.manager.debugDuplicateInboundEventDropCount, relayURLs.count - 1)
         XCTAssertEqual(
@@ -829,14 +878,151 @@ final class NostrRelayManagerTests: XCTestCase {
         try context.sessionFactory.latestConnection(for: firstRelayURL)?.emitEventMessage(subscriptionID: "events", event: invalidEvent)
         try context.sessionFactory.latestConnection(for: secondRelayURL)?.emitEventMessage(subscriptionID: "events", event: event)
 
-        let countedOnBothRelays = await waitUntil {
+        // Wait on the DELIVERY-side state (second main hop, after off-main
+        // verification), not just messagesReceived (first main hop) — the
+        // handler only fires after verify + a second hop.
+        let genuineDelivered = await waitUntil {
             context.manager.relays.first(where: { $0.url == firstRelayURL })?.messagesReceived == 1 &&
-            context.manager.relays.first(where: { $0.url == secondRelayURL })?.messagesReceived == 1
+            context.manager.relays.first(where: { $0.url == secondRelayURL })?.messagesReceived == 1 &&
+            receivedIDs == [event.id]
         }
-        XCTAssertTrue(countedOnBothRelays)
+        XCTAssertTrue(genuineDelivered)
         XCTAssertEqual(receivedIDs, [event.id])
         XCTAssertEqual(context.manager.debugDuplicateInboundEventDropCount, 0)
         XCTAssertEqual(context.manager.debugDuplicateInboundEventDropCount(forSubscriptionID: "events"), 0)
+    }
+
+    /// The relay boundary is the single signature-verification point for the
+    /// whole inbound path (downstream pipelines no longer re-verify), so a
+    /// tampered gift wrap (kind 1059, the DM/mailbox path) must be dropped
+    /// here — and must not poison the dedup cache against the genuine copy.
+    func test_receiveGiftWrap_tamperedSignatureIsDroppedAndDoesNotPoisonDedup() async throws {
+        let firstRelayURL = "wss://giftwrap-one.example"
+        let secondRelayURL = "wss://giftwrap-two.example"
+        let context = makeContext(permission: .denied)
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let giftWrap = try NostrProtocol.createPrivateMessage(
+            content: "psst",
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+        let tampered = invalidSignatureCopy(of: giftWrap)
+        var receivedIDs: [String] = []
+
+        context.manager.subscribe(
+            filter: makeFilter(),
+            id: "gift-wraps",
+            relayUrls: [firstRelayURL, secondRelayURL]
+        ) { event in
+            receivedIDs.append(event.id)
+        }
+        let subscriptionsSent = await waitUntil {
+            context.sessionFactory.latestConnection(for: firstRelayURL)?.sentStrings.count == 1 &&
+            context.sessionFactory.latestConnection(for: secondRelayURL)?.sentStrings.count == 1
+        }
+        XCTAssertTrue(subscriptionsSent)
+
+        try context.sessionFactory.latestConnection(for: firstRelayURL)?.emitEventMessage(subscriptionID: "gift-wraps", event: tampered)
+        try context.sessionFactory.latestConnection(for: secondRelayURL)?.emitEventMessage(subscriptionID: "gift-wraps", event: giftWrap)
+
+        // Wait on the DELIVERY-side state (second main hop, after off-main
+        // verification), not just messagesReceived (first main hop) — the
+        // handler only fires after verify + a second hop.
+        let genuineDelivered = await waitUntil {
+            context.manager.relays.first(where: { $0.url == firstRelayURL })?.messagesReceived == 1 &&
+            context.manager.relays.first(where: { $0.url == secondRelayURL })?.messagesReceived == 1 &&
+            receivedIDs == [giftWrap.id]
+        }
+        XCTAssertTrue(genuineDelivered)
+        XCTAssertEqual(receivedIDs, [giftWrap.id])
+        XCTAssertEqual(context.manager.debugDuplicateInboundEventDropCount, 0)
+    }
+
+    /// Signature verification runs off-main in a per-relay serial consumer;
+    /// several frames buffered on one socket must still be delivered to the
+    /// handler in that relay's arrival order.
+    func test_receiveEvent_deliversBackToBackEventsInArrivalOrder() async throws {
+        let relayURL = "wss://ordered.example"
+        let context = makeContext(permission: .denied)
+        let events = try (0..<12).map { try makeSignedEvent(content: "ordered-\($0)") }
+        var receivedIDs: [String] = []
+
+        context.manager.subscribe(filter: makeFilter(), id: "ordered", relayUrls: [relayURL]) { event in
+            receivedIDs.append(event.id)
+        }
+        let subscriptionSent = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?.sentStrings.count == 1
+        }
+        XCTAssertTrue(subscriptionSent)
+
+        for event in events {
+            try context.sessionFactory.latestConnection(for: relayURL)?.emitEventMessage(subscriptionID: "ordered", event: event)
+        }
+
+        let allDelivered = await waitUntil(timeout: TestConstants.settleTimeout) {
+            receivedIDs.count == events.count
+        }
+        XCTAssertTrue(allDelivered)
+        XCTAssertEqual(receivedIDs, events.map(\.id))
+    }
+
+    /// Each relay owns its own off-main verify pipeline, so a large backlog of
+    /// EVENT frames on one relay must NOT head-of-line-block a frame that
+    /// arrives on a different relay. Under the previous single global consumer,
+    /// relay B's single event (emitted after relay A's whole burst) could only
+    /// be delivered once every frame in A's backlog had been Schnorr-verified;
+    /// with per-relay pipelines B verifies concurrently and lands before A's
+    /// backlog drains.
+    func test_receiveEvent_busyRelayDoesNotBlockOtherRelayDelivery() async throws {
+        let busyRelayURL = "wss://busy-relay.example"
+        let quietRelayURL = "wss://quiet-relay.example"
+        let context = makeContext(permission: .denied)
+
+        // Distinct subscriptions per relay so dedup never coalesces A vs. B.
+        let busyEvents = try (0..<200).map { try makeSignedEvent(content: "busy-\($0)") }
+        let quietEvent = try makeSignedEvent(content: "quiet")
+
+        var busyDeliveredCount = 0
+        var quietDeliveredAfterBusyCount = -1 // busy-count observed when B lands
+
+        context.manager.subscribe(filter: makeFilter(), id: "busy", relayUrls: [busyRelayURL]) { _ in
+            busyDeliveredCount += 1
+        }
+        context.manager.subscribe(filter: makeFilter(), id: "quiet", relayUrls: [quietRelayURL]) { _ in
+            if quietDeliveredAfterBusyCount < 0 {
+                quietDeliveredAfterBusyCount = busyDeliveredCount
+            }
+        }
+        let subscribed = await waitUntil {
+            context.sessionFactory.latestConnection(for: busyRelayURL)?.sentStrings.count == 1 &&
+            context.sessionFactory.latestConnection(for: quietRelayURL)?.sentStrings.count == 1
+        }
+        XCTAssertTrue(subscribed)
+
+        // Flood relay A first, then emit a single frame on relay B.
+        for event in busyEvents {
+            try context.sessionFactory.latestConnection(for: busyRelayURL)?.emitEventMessage(subscriptionID: "busy", event: event)
+        }
+        try context.sessionFactory.latestConnection(for: quietRelayURL)?.emitEventMessage(subscriptionID: "quiet", event: quietEvent)
+
+        let quietDelivered = await waitUntil(timeout: TestConstants.settleTimeout) { quietDeliveredAfterBusyCount >= 0 }
+        XCTAssertTrue(quietDelivered, "relay B's event was never delivered")
+
+        // The signal: B did not have to wait for A's entire backlog. If the two
+        // pipelines were globally serialized, B could only land after all 200 of
+        // A's frames, so busyDeliveredCount would be 200 when B arrived.
+        XCTAssertLessThan(
+            quietDeliveredAfterBusyCount,
+            busyEvents.count,
+            "relay B was head-of-line blocked behind relay A's backlog"
+        )
+
+        // Both relays still drain fully and in order.
+        let allDelivered = await waitUntil(timeout: TestConstants.settleTimeout) {
+            busyDeliveredCount == busyEvents.count
+        }
+        XCTAssertTrue(allDelivered)
     }
 
     func test_receiveEvent_withoutHandlerStillTracksReceivedCount() async throws {
@@ -1589,6 +1775,58 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertGreaterThan(Set(factors).count, 1)
     }
 
+    // MARK: - Hand-added relays
+
+    /// Adding a relay has to take effect without a restart: the whole point is
+    /// recovering reachability when the built-in hostnames are blocked.
+    @MainActor
+    func testAddedRelayJoinsTheTargetSetOnSettingsChange() async {
+        let center = NotificationCenter()
+        let custom = MutableRelayList(urls: [])
+        let context = makeContext(
+            permission: .authorized,
+            notificationCenter: center,
+            customRelays: custom
+        )
+
+        XCTAssertFalse(context.manager.relays.contains { $0.url == "wss://added.example.com" })
+
+        custom.urls = ["wss://added.example.com"]
+        center.post(name: NostrRelaySettings.didChangeNotification, object: nil)
+
+        let joined = await waitUntil {
+            context.manager.relays.contains { $0.url == "wss://added.example.com" }
+        }
+        XCTAssertTrue(joined)
+    }
+
+    /// Removing a relay must actually close it. The teardown path iterates the
+    /// current target list, and a removed relay is no longer in it, so without
+    /// an explicit reconcile against the previous set its socket and queued
+    /// sends would linger.
+    @MainActor
+    func testRemovedRelayLeavesTheTargetSet() async {
+        let center = NotificationCenter()
+        let custom = MutableRelayList(urls: ["wss://added.example.com"])
+        let context = makeContext(
+            permission: .authorized,
+            notificationCenter: center,
+            customRelays: custom
+        )
+
+        XCTAssertTrue(context.manager.relays.contains { $0.url == "wss://added.example.com" })
+
+        custom.urls = []
+        center.post(name: NostrRelaySettings.didChangeNotification, object: nil)
+
+        let dropped = await waitUntil {
+            !context.manager.relays.contains { $0.url == "wss://added.example.com" }
+        }
+        XCTAssertTrue(dropped)
+        // The built-in relays are untouched by a custom-relay removal.
+        XCTAssertTrue(context.manager.relays.contains { $0.url == "wss://nos.lol" })
+    }
+
     private func makeContext(
         permission: LocationChannelManager.PermissionState,
         favorites: Set<Data> = [],
@@ -1597,6 +1835,8 @@ final class NostrRelayManagerTests: XCTestCase {
         torEnforced: Bool = false,
         torIsReady: Bool = true,
         torIsForeground: Bool = true,
+        notificationCenter: NotificationCenter = NotificationCenter(),
+        customRelays: MutableRelayList = MutableRelayList(urls: []),
         jitterUnit: @escaping () -> Double = { 0.5 } // 0.5 -> jitter factor 1.0 (no jitter)
     ) -> RelayManagerTestContext {
         let permissionSubject = CurrentValueSubject<LocationChannelManager.PermissionState, Never>(permission)
@@ -1624,7 +1864,9 @@ final class NostrRelayManagerTests: XCTestCase {
                     scheduler.schedule(delay: delay, action: action)
                 },
                 now: { clock.now },
-                jitterUnit: jitterUnit
+                jitterUnit: jitterUnit,
+                notificationCenter: notificationCenter,
+                customRelays: { customRelays.urls }
             )
         )
         return RelayManagerTestContext(
@@ -1665,7 +1907,7 @@ final class NostrRelayManagerTests: XCTestCase {
     }
 
     private func waitUntil(
-        timeout: TimeInterval = 1.0,
+        timeout: TimeInterval = TestConstants.settleTimeout,
         condition: @escaping @MainActor () -> Bool
     ) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
@@ -1696,6 +1938,16 @@ private final class MutableClock {
 
     init(now: Date) {
         self.now = now
+    }
+}
+
+/// Stand-in for the persisted hand-added relay list, so tests can change it
+/// without writing to shared preferences.
+private final class MutableRelayList {
+    var urls: [String]
+
+    init(urls: [String]) {
+        self.urls = urls
     }
 }
 
@@ -1840,7 +2092,11 @@ private final class MockRelayConnection: NostrRelayConnectionProtocol {
     }
 
     func receive(completionHandler: @escaping (Result<URLSessionWebSocketTask.Message, Error>) -> Void) {
-        receiveHandler = completionHandler
+        if !pendingResults.isEmpty {
+            completionHandler(pendingResults.removeFirst())
+        } else {
+            receiveHandler = completionHandler
+        }
     }
 
     func sendPing(pongReceiveHandler: @escaping (Error?) -> Void) {
@@ -1873,15 +2129,24 @@ private final class MockRelayConnection: NostrRelayConnectionProtocol {
     }
 
     func emitRawString(_ string: String) throws {
-        let handler = receiveHandler
-        receiveHandler = nil
-        handler?(.success(.string(string)))
+        deliver(.success(.string(string)))
     }
 
     private func emit(jsonObject: Any) throws {
         let data = try JSONSerialization.data(withJSONObject: jsonObject)
-        let handler = receiveHandler
-        receiveHandler = nil
-        handler?(.success(.data(data)))
+        deliver(.success(.data(data)))
+    }
+
+    // Frames emitted before the manager re-arms `receive` are queued so
+    // back-to-back emissions model a socket with several buffered frames.
+    private var pendingResults: [Result<URLSessionWebSocketTask.Message, Error>] = []
+
+    private func deliver(_ result: Result<URLSessionWebSocketTask.Message, Error>) {
+        if let handler = receiveHandler {
+            receiveHandler = nil
+            handler(result)
+        } else {
+            pendingResults.append(result)
+        }
     }
 }

@@ -77,8 +77,10 @@ final class PerformanceBaselineTests: XCTestCase {
     // MARK: - 1a. Nostr inbound event handling (fresh events)
 
     /// `NostrInboundPipeline.handleNostrEvent` for never-seen geo events
-    /// (kind 20000): signature verification, dedup record, presence/nickname
-    /// bookkeeping, and public-message ingest scheduling.
+    /// (kind 20000): dedup record, presence/nickname bookkeeping, and
+    /// public-message ingest scheduling. Schnorr signature verification is
+    /// NOT part of this path anymore — it runs exactly once, off the main
+    /// actor, in `NostrRelayManager` before delivery.
     func testNostrInboundEventHandling_freshEvents() throws {
         let events = try Self.makeSignedGeohashEvents(count: 500)
         // A fresh context per measure pass so every event takes the
@@ -106,8 +108,9 @@ final class PerformanceBaselineTests: XCTestCase {
 
     /// The dedup-hit path: identical events replayed. Duplicates dominate
     /// real relay traffic (the same event arrives from several relays), so
-    /// this path runs hundreds of times a minute in busy geohashes. Note it
-    /// still pays full Schnorr signature verification before the dedup check.
+    /// this path runs hundreds of times a minute in busy geohashes. It is a
+    /// pure dedup lookup: no crypto (verification happens upstream in
+    /// `NostrRelayManager`, and only for the first-seen copy).
     func testNostrInboundEventHandling_duplicateEvents() throws {
         let events = try Self.makeSignedGeohashEvents(count: 500)
         let context = PerfNostrContext()
@@ -746,10 +749,28 @@ private final class PerfDeliveryContext: ChatDeliveryContext {
 
     func notifyUIChanged() {}
     func markMessageDelivered(_ messageID: String) {}
+    func markMessageDelivered(_ messageID: String, from peerIDs: Set<PeerID>) {}
+    func confirmPrivateMediaDelivery(_ messageID: String) {}
+    func isOutgoingPrivateMessage(_ messageID: String, toAny peerIDs: Set<PeerID>) -> Bool {
+        true
+    }
 
     @discardableResult
     func setDeliveryStatus(_ status: DeliveryStatus, forMessageID messageID: String) -> Bool {
         store.setDeliveryStatus(status, forMessageID: messageID)
+    }
+
+    @discardableResult
+    func setDeliveryStatus(
+        _ status: DeliveryStatus,
+        forMessageID messageID: String,
+        inDirectPeerAliases peerIDs: Set<PeerID>
+    ) -> Bool {
+        store.setDeliveryStatus(
+            status,
+            forMessageID: messageID,
+            inDirectPeerAliases: peerIDs
+        )
     }
 
     func deliveryStatus(forMessageID messageID: String) -> DeliveryStatus? {

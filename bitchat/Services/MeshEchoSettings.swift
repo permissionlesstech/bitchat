@@ -10,9 +10,12 @@ import Foundation
 
 /// Watermark for "heard here earlier" echoes: clearing the mesh timeline
 /// (triple-tap or /clear) records the moment, and the next launch only
-/// re-seeds archived messages heard after it. The archive itself is left
-/// alone — the device keeps carrying those messages for peers; the user
-/// just doesn't want to see them again.
+/// re-seeds archived messages heard after it.
+///
+/// Clearing also erases the archive itself, so cleared history is gone from
+/// disk rather than merely hidden from the timeline. The watermark still
+/// matters afterwards: it keeps messages this device hears again from peers,
+/// which predate the clear, from reappearing as echoes.
 enum MeshEchoSettings {
     private static let clearedThroughKey = "meshEchoes.clearedThrough"
 

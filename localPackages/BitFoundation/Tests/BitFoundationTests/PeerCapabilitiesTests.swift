@@ -16,11 +16,32 @@ struct PeerCapabilitiesTests {
         #expect(PeerCapabilities([]).encoded() == Data([0x00]))
         #expect(PeerCapabilities.prekeys.encoded() == Data([0x01]))
         #expect(PeerCapabilities.meshDiagnostics.encoded() == Data([0x40]))
+        #expect(PeerCapabilities.privateMedia.encoded() == Data([0x00, 0x01]))
 
-        let high = PeerCapabilities(rawValue: 1 << 9)
-        #expect(high.encoded() == Data([0x00, 0x02]))
+        #expect(
+            PeerCapabilities.privateMediaReceipts.encoded()
+                == Data([0x00, 0x02])
+        )
+        #expect(
+            PeerCapabilities.nonDestructiveNoiseReplacement.encoded()
+                == Data([0x00, 0x04])
+        )
 
-        let all: PeerCapabilities = [.prekeys, .wifiBulk, .gateway, .groups, .board, .vouch, .meshDiagnostics]
+        let high = PeerCapabilities(rawValue: 1 << 11)
+        #expect(high.encoded() == Data([0x00, 0x08]))
+
+        let all: PeerCapabilities = [
+            .prekeys,
+            .wifiBulk,
+            .gateway,
+            .groups,
+            .board,
+            .vouch,
+            .meshDiagnostics,
+            .privateMedia,
+            .privateMediaReceipts,
+            .nonDestructiveNoiseReplacement
+        ]
         #expect(PeerCapabilities(encoded: all.encoded()) == all)
         #expect(PeerCapabilities(encoded: high.encoded()) == high)
         #expect(PeerCapabilities(encoded: PeerCapabilities([]).encoded()) == [])
