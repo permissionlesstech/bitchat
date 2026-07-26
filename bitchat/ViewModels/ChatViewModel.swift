@@ -89,10 +89,40 @@ import UIKit
 #endif
 import UniformTypeIdentifiers
 
+struct PanicNetworkLifecycle {
+    let stop: @MainActor () -> Void
+    let restart: @MainActor () -> Void
+
+    static let noop = PanicNetworkLifecycle(stop: {}, restart: {})
+
+    static var live: PanicNetworkLifecycle {
+        PanicNetworkLifecycle(
+            stop: {
+                GeohashPresenceService.shared.stopForPanic()
+                NetworkActivationService.shared.stopForPanic()
+            },
+            restart: {
+                NetworkActivationService.shared.start()
+                GeohashPresenceService.shared.start()
+            }
+        )
+    }
+}
+
+private struct PendingPrivateChatClear {
+    let peerID: PeerID
+    let sourceConversationID: ConversationID
+    let messages: [BitchatMessage]
+    let otherMessageIDs: Set<String>
+    let localPeerID: PeerID
+    let nickname: String
+    let outgoingMedia: [BitchatMessage]
+}
+
 /// Manages the application state and business logic for BitChat.
 /// Acts as the primary coordinator between UI components and backend services,
 /// implementing the BitchatDelegate protocol to handle network events.
-final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDelegate, CommandContextProvider, GeohashParticipantContext, MessageFormattingContext {
+final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessageTransportEventDelegate, CommandContextProvider, GeohashParticipantContext, MessageFormattingContext {
     // Use MessageFormattingEngine.Patterns for regex matching (shared, precompiled)
     typealias Patterns = MessageFormattingEngine.Patterns
 
@@ -142,6 +172,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     @Published var currentColorScheme: ColorScheme = .light
     @Published var currentTheme: AppTheme = .matrix
     @Published var isConnected = false
+    @Published private(set) var panicRecoveryBlocked = false
+    var networkActivationAllowed: Bool { !panicRecoveryBlocked }
     @Published var nickname: String = "" {
         didSet {
             // Trim whitespace whenever nickname is set; whitespace-only becomes ""
@@ -151,7 +183,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
                 return
             }
             // Update mesh service nickname if it's initialized
-            if !meshService.myPeerID.isEmpty {
+            if !isPanicResetting, !meshService.myPeerID.isEmpty {
                 meshService.setNickname(nickname)
             }
         }
@@ -177,7 +209,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     lazy var privateConversationCoordinator = ChatPrivateConversationCoordinator(context: self)
     lazy var nostrCoordinator = ChatNostrCoordinator(context: self)
     lazy var mediaTransferCoordinator = ChatMediaTransferCoordinator(context: self)
-    lazy var liveVoiceCoordinator = ChatLiveVoiceCoordinator(context: self)
+    lazy var liveVoiceCoordinator = ChatLiveVoiceCoordinator(
+        context: self,
+        sweepsOnInit: !TestEnvironment.isRunningTests
+    )
     lazy var verificationCoordinator = ChatVerificationCoordinator(context: self)
     lazy var groupCoordinator = ChatGroupCoordinator(context: self)
     lazy var vouchCoordinator = ChatVouchCoordinator(context: self)
@@ -292,6 +327,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     var nostrRelayManager: NostrRelayManager?
     private let userDefaults = UserDefaults.standard
     let keychain: KeychainManagerProtocol
+    private let panicRecoveryOperations: PanicRecoveryOperations
+    private let panicNetworkLifecycle: PanicNetworkLifecycle
+    private var isPanicResetting = false
     /// Private group membership: keys in the keychain, metadata on disk.
     let groupStore: GroupStore
     private let nicknameKey = "bitchat.nickname"
@@ -325,6 +363,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     // Track whether a Tor restart is pending so we only announce
     // "tor restarted" after an actual restart, not the first launch.
     var torRestartPending: Bool = false
+    // Announce a stalled bootstrap once per attempt, not once per poll.
+    var torStallAnnounced: Bool = false
     // Ensure we set up DM subscription only once per app session
     var nostrHandlersSetup: Bool = false
     var geoChannelCoordinator: GeoChannelCoordinator?
@@ -347,6 +387,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     @Published var showBluetoothAlert = false
     @Published var bluetoothAlertMessage = ""
     @Published var bluetoothState: CBManagerState = .unknown
+    @Published private(set) var legacyPrivateMediaConsentRequest: LegacyPrivateMediaConsentRequest?
+    @MainActor private var queuedPrivateChatClears: [
+        PendingPrivateChatClear
+    ] = []
+    @MainActor private var privateChatClearInFlight = false
+    @MainActor private var privateChatClearGeneration: UInt64 = 0
+    private var pendingLegacyPrivateMediaConsents: [PendingLegacyPrivateMediaConsent] = []
 
     private func performDeliveryUpdate(_ update: @escaping @MainActor (ChatDeliveryCoordinator) -> Void) {
         if Thread.isMainThread {
@@ -463,6 +510,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         for (key, value) in nostrKeyMapping where value.lowercased() == hex {
             nostrKeyMapping.removeValue(forKey: key)
         }
+    }
+
+    /// Whether a read receipt has already been recorded for `messageID`.
+    @MainActor
+    func hasSentReadReceipt(_ messageID: String) -> Bool {
+        sentReadReceipts.contains(messageID)
     }
 
     /// Records that a read receipt is being sent for `messageID`.
@@ -607,7 +660,285 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     /// Empties the peer's chat but keeps the conversation alive (`/clear`).
     @MainActor
     func clearPrivateChat(_ peerID: PeerID) {
-        conversations.clear(.directPeer(peerID))
+        let sourceConversationID = ConversationID.directPeer(peerID)
+        // An active live-voice row owns an open FileHandle and may be
+        // republished as frames/final media arrive. Treat it like an in-flight
+        // arrival rather than unlinking its capture or removing its bubble.
+        let messages = privateMessages(for: peerID).filter {
+            !liveVoiceCoordinator.isLiveVoiceMessage($0)
+        }
+        let localPeerID = meshService.myPeerID.toShort()
+        let currentNickname = nickname
+        let mediaPrefixes = [
+            MimeType.Category.audio.messagePrefix,
+            MimeType.Category.image.messagePrefix,
+            MimeType.Category.file.messagePrefix
+        ]
+        let outgoingMedia = messages.filter { message in
+            guard mediaPrefixes.contains(where: {
+                message.content.hasPrefix($0)
+            }) else {
+                return false
+            }
+            if let senderPeerID = message.senderPeerID {
+                return senderPeerID.toShort() == localPeerID
+            }
+            return message.sender == currentNickname
+                || message.sender.hasPrefix(currentNickname + "#")
+        }
+
+        // Send ownership is canceled at command time even when another clear
+        // transaction is ahead in the queue. UI and files remain untouched
+        // until this request's receiver journal commit succeeds.
+        for message in outgoingMedia {
+            mediaTransferCoordinator
+                .cancelMediaTransferForConversationClear(
+                    messageID: message.id
+                )
+        }
+
+        queuedPrivateChatClears.append(PendingPrivateChatClear(
+            peerID: peerID,
+            sourceConversationID: sourceConversationID,
+            messages: messages,
+            otherMessageIDs: Set(
+                privateChats
+                    .filter { $0.key != peerID }
+                    .flatMap { $0.value.map(\.id) }
+            ),
+            localPeerID: localPeerID,
+            nickname: currentNickname,
+            outgoingMedia: outgoingMedia
+        ))
+        startNextPrivateChatClearIfNeeded()
+    }
+
+    @MainActor
+    private func startNextPrivateChatClearIfNeeded() {
+        guard !privateChatClearInFlight,
+              !queuedPrivateChatClears.isEmpty else {
+            return
+        }
+        privateChatClearInFlight = true
+        let request = queuedPrivateChatClears.removeFirst()
+        let generation = privateChatClearGeneration
+        performPrivateChatClear(
+            request,
+            generation: generation
+        ) { [weak self] in
+            guard let self,
+                  self.privateChatClearGeneration == generation else {
+                return
+            }
+            self.privateChatClearInFlight = false
+            self.startNextPrivateChatClearIfNeeded()
+        }
+    }
+
+    @MainActor
+    private func performPrivateChatClear(
+        _ request: PendingPrivateChatClear,
+        generation: UInt64,
+        completion: @escaping @MainActor () -> Void
+    ) {
+        guard privateChatClearGeneration == generation else {
+            completion()
+            return
+        }
+        let peerID = request.peerID
+        let selectedConversationID = request.sourceConversationID
+        let messagesToClear = request.messages
+        guard !messagesToClear.isEmpty else {
+            completion()
+            return
+        }
+
+        // Capture the transaction's exact UI set before any off-main receipt
+        // I/O. Messages arriving while the journal is written are not part of
+        // this command and must remain visible.
+        let capturedMessageIDs = Set(messagesToClear.map(\.id))
+        let survivingMessageIDs = request.otherMessageIDs
+        let mediaPrefixes = [
+            MimeType.Category.audio.messagePrefix,
+            MimeType.Category.image.messagePrefix,
+            MimeType.Category.file.messagePrefix
+        ]
+        let localPeerID = request.localPeerID
+        let isMedia: (BitchatMessage) -> Bool = { message in
+            mediaPrefixes.contains(where: message.content.hasPrefix)
+        }
+        let isFromMe: (BitchatMessage) -> Bool = { [nickname = request.nickname] message in
+            if let senderPeerID = message.senderPeerID {
+                return senderPeerID.toShort() == localPeerID
+            }
+            return message.sender == nickname
+                || message.sender.hasPrefix(nickname + "#")
+        }
+
+        let outgoingMedia = request.outgoingMedia
+
+        let capturedExclusiveIDs =
+            capturedMessageIDs.subtracting(survivingMessageIDs)
+        let capturedIncomingMedia = messagesToClear.filter {
+            isMedia($0) && !isFromMe($0)
+        }
+        let capturedStableMediaIDs = Set(
+            capturedIncomingMedia.compactMap { message in
+                PrivateMediaMessageIdentity.isStableID(message.id)
+                    ? message.id
+                    : nil
+            }
+        )
+
+        func currentRemovalPlan() -> [ConversationID: Set<String>] {
+            // Identity handoff removes the source conversation and inserts its
+            // rows elsewhere. The old source may then be recreated by a new
+            // arrival before journal I/O finishes, so always scan all direct
+            // conversations. Only IDs exclusive at command time may follow a
+            // migration; shared aliases remain outside the source.
+            var plan: [ConversationID: Set<String>] = [:]
+            for (conversationID, conversation) in
+                conversations.conversationsByID {
+                guard case .direct = conversationID else { continue }
+                let eligibleIDs = conversationID == selectedConversationID
+                    ? capturedMessageIDs
+                    : capturedExclusiveIDs
+                let matchingIDs = Set(conversation.messages.map(\.id))
+                    .intersection(eligibleIDs)
+                if !matchingIDs.isEmpty {
+                    plan[conversationID] = matchingIDs
+                }
+            }
+            return plan
+        }
+
+        func hasRemainingCopy(
+            of messageID: String,
+            after plan: [ConversationID: Set<String>]
+        ) -> Bool {
+            conversations.conversationsByID.contains { conversationID, conversation in
+                guard case .direct = conversationID else { return false }
+                return conversation.messages.contains { message in
+                    message.id == messageID
+                        && plan[conversationID]?.contains(messageID) != true
+                }
+            }
+        }
+
+        @MainActor
+        func continueClear(
+            persisted: Bool,
+            durableStableIDs: Set<String>
+        ) {
+            guard privateChatClearGeneration == generation else {
+                completion()
+                return
+            }
+            guard persisted else {
+                SecureLogger.error(
+                    "Refusing to clear private chat without durable media tombstones peer=\(peerID.id.prefix(8))…",
+                    category: .session
+                )
+                notifyPrivateMediaDeletionRefused(peerID: peerID)
+                completion()
+                return
+            }
+
+            let plan = currentRemovalPlan()
+            let newlyLastStableIDs = Set(
+                capturedStableMediaIDs.filter {
+                    !durableStableIDs.contains($0)
+                        && !hasRemainingCopy(of: $0, after: plan)
+                }
+            )
+            if !newlyLastStableIDs.isEmpty {
+                persistDeletedPrivateMedia(
+                    messageIDs: Array(newlyLastStableIDs).sorted()
+                ) { persisted in
+                    continueClear(
+                        persisted: persisted,
+                        durableStableIDs:
+                            durableStableIDs.union(newlyLastStableIDs)
+                    )
+                }
+                return
+            }
+
+            // A stable receiver tombstone is global for that message ID.
+            // Remove any alias that arrived while journal I/O was in flight.
+            if !durableStableIDs.isEmpty {
+                let directConversationIDs = conversations
+                    .conversationsByID.keys.filter {
+                        if case .direct = $0 { return true }
+                        return false
+                    }
+                for conversationID in directConversationIDs {
+                    conversations.removeMessages(from: conversationID) {
+                        durableStableIDs.contains($0.id)
+                    }
+                }
+            }
+
+            // Outgoing media mirrors the incoming alias protection: an ID
+            // whose copy survives in a conversation this clear does not
+            // touch (identity-alias handoff) keeps that bubble and its local
+            // file. Only IDs with no surviving copy are removed from every
+            // direct conversation and have their payload unlinked.
+            let outgoingPlan = currentRemovalPlan()
+            let removableOutgoingMedia = outgoingMedia.filter {
+                !hasRemainingCopy(of: $0.id, after: outgoingPlan)
+            }
+            for message in removableOutgoingMedia {
+                mediaTransferCoordinator.cleanupOutgoingLocalFile(
+                    forMessage: message
+                )
+            }
+            let removableOutgoingIDs = Set(
+                removableOutgoingMedia.map(\.id)
+            )
+            if !removableOutgoingIDs.isEmpty {
+                let directConversationIDs = conversations
+                    .conversationsByID.keys.filter {
+                        if case .direct = $0 { return true }
+                        return false
+                    }
+                for conversationID in directConversationIDs {
+                    conversations.removeMessages(from: conversationID) {
+                        removableOutgoingIDs.contains($0.id)
+                    }
+                }
+            }
+
+            // Stable payload cleanup belongs entirely to the durable receiver
+            // journal. Legacy/raw incoming payloads have no durable identity,
+            // so once their bubbles are gone the transport's gated cleanup
+            // decides per basename: unlink when unreferenced, or leave any
+            // pending/reserved path for bounded quota cleanup.
+            let finalPlan = currentRemovalPlan()
+
+            for (conversationID, messageIDs) in finalPlan {
+                conversations.removeMessages(from: conversationID) {
+                    messageIDs.contains($0.id)
+                }
+            }
+            cleanupLegacyIncomingMediaPayloads(for: capturedIncomingMedia)
+            completion()
+        }
+
+        let initialPlan = currentRemovalPlan()
+        let initialStableIDs = Set(
+            capturedStableMediaIDs.filter {
+                !hasRemainingCopy(of: $0, after: initialPlan)
+            }
+        )
+        persistDeletedPrivateMedia(
+            messageIDs: Array(initialStableIDs).sorted()
+        ) { persisted in
+            continueClear(
+                persisted: persisted,
+                durableStableIDs: initialStableIDs
+            )
+        }
     }
 
     /// Removes the peer's chat entirely, including unread state.
@@ -737,6 +1068,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         conversations.clear(conversationID)
     }
 
+    func purgeArchivedPublicMessages() {
+        meshService.purgeAllArchivedPublicMessages()
+    }
+
     /// Queues a system message for the next geohash channel visit. (Tiny
     /// UI-flow queue formerly on `PublicTimelineStore`; it is notice text,
     /// not conversation state, so it stays on the owner.)
@@ -769,7 +1104,34 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         locationPresenceStore: LocationPresenceStore? = nil,
         locationManager: LocationChannelManager = .shared
     ) {
-        let meshService = BLEService(keychain: keychain, idBridge: idBridge, identityManager: identityManager)
+        let livePanicRecoveryOperations = PanicRecoveryOperations.live()
+        let startSuspendedForRecovery: Bool
+        do {
+            startSuspendedForRecovery =
+                try livePanicRecoveryOperations.isPending()
+        } catch {
+            startSuspendedForRecovery = true
+        }
+        // Preserve the preflight decision used to defer CoreBluetooth. A
+        // transiently successful second read must not skip recovery and leave
+        // the service permanently suspended without running the wipe.
+        let panicRecoveryOperations = PanicRecoveryOperations(
+            isPending: {
+                if startSuspendedForRecovery {
+                    return true
+                }
+                return try livePanicRecoveryOperations.isPending()
+            },
+            begin: livePanicRecoveryOperations.begin,
+            wipeMedia: livePanicRecoveryOperations.wipeMedia,
+            complete: livePanicRecoveryOperations.complete
+        )
+        let meshService = BLEService(
+            keychain: keychain,
+            idBridge: idBridge,
+            identityManager: identityManager,
+            startSuspendedForPanicRecovery: startSuspendedForRecovery
+        )
         meshService.sfMetrics = .shared
         self.init(
             keychain: keychain,
@@ -781,7 +1143,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
             locationPresenceStore: locationPresenceStore ?? LocationPresenceStore(),
             locationManager: locationManager,
             outboxStore: MessageOutboxStore(keychain: keychain),
-            sfMetrics: .shared
+            sfMetrics: .shared,
+            panicRecoveryOperations: panicRecoveryOperations,
+            panicNetworkLifecycle: .live
         )
     }
 
@@ -799,7 +1163,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         locationManager: LocationChannelManager = .shared,
         readReceiptsDefaults: UserDefaults? = nil,
         outboxStore: MessageOutboxStore? = nil,
-        sfMetrics: StoreAndForwardMetrics? = nil
+        sfMetrics: StoreAndForwardMetrics? = nil,
+        panicMediaWipe: (() throws -> Void)? = nil,
+        panicRecoveryOperations: PanicRecoveryOperations? = nil,
+        panicNetworkLifecycle: PanicNetworkLifecycle = .noop
     ) {
         let conversations = conversations ?? ConversationStore()
         let peerIdentityStore = peerIdentityStore ?? PeerIdentityStore()
@@ -814,6 +1181,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         )
 
         self.keychain = keychain
+        self.panicRecoveryOperations = panicRecoveryOperations
+            ?? .ephemeral(wipeMedia: panicMediaWipe ?? {})
+        self.panicNetworkLifecycle = panicNetworkLifecycle
         self.groupStore = GroupStore(keychain: keychain)
         self.idBridge = idBridge
         self.identityManager = identityManager
@@ -849,7 +1219,31 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
             }
             .store(in: &cancellables)
 
-        ChatViewModelBootstrapper(viewModel: self).configure()
+        let recoveryRequired: Bool
+        do {
+            recoveryRequired = try self.panicRecoveryOperations.isPending()
+        } catch {
+            // Failure to read the latch cannot fail open. Re-run the complete
+            // transaction; a persistent storage failure leaves services
+            // blocked below.
+            recoveryRequired = true
+            SecureLogger.error(
+                "Could not read panic-recovery state; retrying the full wipe before startup: \(error)",
+                category: .security
+            )
+        }
+
+        if recoveryRequired {
+            SecureLogger.warning(
+                "Pending panic recovery detected; wiping before runtime services start",
+                category: .security
+            )
+            _ = panicClearAllData(restartServices: false)
+        }
+
+        if networkActivationAllowed {
+            ChatViewModelBootstrapper(viewModel: self).configure()
+        }
     }
 
     // MARK: - Deinitialization
@@ -1168,8 +1562,40 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
 
     // PANIC: Emergency data clearing for activist safety
     @MainActor
-    func panicClearAllData() {
-        // Messages are processed immediately - nothing to flush
+    @discardableResult
+    func panicClearAllData(restartServices: Bool = true) -> Bool {
+        panicRecoveryBlocked = true
+        isPanicResetting = true
+        defer { isPanicResetting = false }
+
+        // Stop internet and location-presence work before clearing identity or
+        // state. These services cancel their subscriptions and delayed tasks,
+        // so old callbacks cannot reconnect during the transaction.
+        panicNetworkLifecycle.stop()
+
+        // Establish both independent durable intents before erasing anything.
+        // `wipeMedia` will still attempt deletion if neither write succeeds.
+        let recoveryIntent = panicRecoveryOperations.begin()
+
+        // Quiesce the mesh before clearing stores. Identity replacement below
+        // deliberately stays stopped until media deletion and marker commit.
+        if let bleService = meshService as? BLEService {
+            bleService.suspendForPanicReset()
+        } else {
+            meshService.emergencyDisconnectAll()
+        }
+
+        // Invalidate detached media preparation and close live capture file
+        // handles before clearing state or removing the media directory.
+        mediaTransferCoordinator.resetForPanic()
+        liveVoiceCoordinator.resetForPanic()
+        privateChatClearGeneration &+= 1
+        queuedPrivateChatClears.removeAll(keepingCapacity: false)
+        privateChatClearInFlight = false
+
+        // Deny and release any clear-media confirmations before identities,
+        // message state, and local files are wiped.
+        cancelAllLegacyPrivateMediaConsents()
 
         // Clear all messages (public timelines and private chats live in the
         // single-writer ConversationStore; the derived `messages` view and
@@ -1177,13 +1603,28 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         conversations.clearAll()
         // Begin suppressing last-active persistence (#1064). The selection and
         // channel resets below route through the store's setters, which would
-        // otherwise re-persist a `.mesh` pointer; the wipe is finished (and the
-        // pointer removed once) at the very end of this method.
+        // otherwise re-persist a `.mesh` pointer.
+        //
+        // Finished via `defer` rather than a call at the end: this method now
+        // has an early `return false` when the keychain wipe is incomplete, and
+        // suppression that outlives the wipe would silently stop persisting the
+        // last-active conversation for the rest of the process. `defer` also
+        // keeps the ordering the store requires — it runs after every selection
+        // and channel reset below, so no setter can re-persist the pointer
+        // afterwards, and the pointer is removed exactly once, leaving the key
+        // absent so the next launch hits the conversation-list fallback.
         conversations.beginPanicWipe()
+        defer { conversations.finishPanicWipe() }
         pendingGeohashSystemMessages.removeAll()
 
         // Delete all keychain data (including Noise and Nostr keys)
-        _ = keychain.deleteAllKeychainData()
+        let keychainWipeCompleted = keychain.deleteAllKeychainData()
+        if !keychainWipeCompleted {
+            SecureLogger.error(
+                "Panic keychain cleanup incomplete; recovery remains pending",
+                category: .security
+            )
+        }
 
         // Clear UserDefaults identity data
         userDefaults.removeObject(forKey: "bitchat.noiseIdentityKey")
@@ -1196,13 +1637,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
 
         // Reset nickname to anonymous
         nickname = "anon\(Int.random(in: 1000...9999))"
-        saveNickname()
+        userDefaults.set(nickname, forKey: nicknameKey)
 
         // Clear favorites and peer mappings
         // Clear through SecureIdentityStateManager instead of directly
         identityManager.clearAllIdentityData()
         peerIdentityStore.clearAll()
         locationPresenceStore.reset()
+        publicRateLimiter.reset()
 
         // Clear persistent favorites from keychain
         FavoritesPersistenceService.shared.clearAllFavorites()
@@ -1221,6 +1663,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         GeohashChatActivityTracker.shared.clear()
         MeshSightingsTracker.shared.clear()
         MeshEchoSettings.reset()
+        NotificationPrivacySettings.reset()
+        // A hand-added relay names an operator someone chose to route through,
+        // which is the kind of trace a wipe should not leave behind.
+        NostrRelaySettings.reset()
 
         // Drop private group keys and rosters (keychain + disk)
         groupStore.wipe()
@@ -1231,6 +1677,15 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         // Drop bulletin-board posts and tombstones (memory and disk); board
         // posts are signed with our identity key and persist for days.
         BoardStore.shared.wipe()
+
+        // Drop any share-extension handoff staged in the app group. The normal
+        // panic path clears this through AppChromeModel.onPanicWipe, but the
+        // crash-recovery replay calls this method directly and would otherwise
+        // let a staged envelope survive the wipe. Clearing here is idempotent
+        // (it only removes the app-group key), so the double-clear is harmless.
+        if let sharedDefaults = UserDefaults(suiteName: BitchatApp.groupID) {
+            SharedContentStore(defaults: sharedDefaults).discardAll()
+        }
 
         // Identity manager has cleared persisted identity data above
 
@@ -1262,90 +1717,87 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         // Geohash DM handlers can capture pre-wipe Nostr identities, so a plain
         // disconnect is not enough here.
         NostrRelayManager.shared.resetForPanicWipe()
+        // Clearing relay handlers stops NEW events, but a detached gift-wrap
+        // decrypt spawned just before the wipe still holds a pre-wipe key and
+        // ciphertext; bump the pipeline's wipe generation so its result is
+        // dropped at the main-actor delivery hop instead of landing here.
+        nostrCoordinator.inbound.invalidateInFlightDecrypts()
         nostrRelayManager = nil
 
         // Clear Nostr identity associations
         idBridge.clearAllAssociations()
 
-        // Disconnect from all peers and clear persistent identity
-        // This will force creation of a new identity (new fingerprint) on next launch
-        meshService.emergencyDisconnectAll()
+        // Replace the BLE identity while keeping the radio stopped. It may
+        // reopen only after the durable panic transaction commits.
         if let bleService = meshService as? BLEService {
-            bleService.resetIdentityForPanic(currentNickname: nickname)
+            bleService.resetIdentityForPanic(
+                currentNickname: nickname,
+                restartServices: false
+            )
+        } else {
+            meshService.setNickname(nickname)
         }
 
-        // No need to force UserDefaults synchronization
+        // The wipe must finish before this security action returns. A detached
+        // task could otherwise lose a race with a new capture or app exit and
+        // leave pre-panic media behind.
+        let panicCompleted: Bool
+        do {
+            try panicRecoveryOperations.wipeMedia(recoveryIntent)
+            if keychainWipeCompleted {
+                try panicRecoveryOperations.complete()
+                panicCompleted = true
+                SecureLogger.info(
+                    "🗑️ Deleted all media files during panic clear",
+                    category: .session
+                )
+            } else {
+                // Do not clear either durable recovery marker. Startup must
+                // retry the entire transaction before any transport restarts.
+                panicCompleted = false
+            }
+        } catch {
+            panicCompleted = false
+            SecureLogger.error(
+                "Panic transaction did not commit; services remain stopped: \(error)",
+                category: .security
+            )
+        }
+        panicRecoveryBlocked = !panicCompleted
 
-        // Reinitialize Nostr with new identity
-        // This will generate new Nostr keys derived from new Noise keys.
-        // Skipped under tests: connecting the shared relay singleton starts
-        // real network/reconnect work that never completes and would keep the
-        // test process alive (the singleton, unlike a discardable instance, is
-        // never deallocated to cancel it).
+        // BCH-01-013: Clear iOS app switcher snapshots. Keep tests away from
+        // the host user's real cache tree just as the default media wipe does.
+        #if os(iOS)
         if !TestEnvironment.isRunningTests {
-            Task { @MainActor in
-                // Small delay to ensure cleanup completes
-                try? await Task.sleep(nanoseconds: TransportConfig.uiAsyncShortSleepNs) // 0.1 seconds
+            Self.clearAppSwitcherSnapshots()
+        }
+        #endif
 
-                // Reinitialize Nostr relay manager with new identity. Reuse the
-                // shared singleton — every other component (NostrTransport, geohash
-                // subscriptions, AppRuntime observers) is bound to `.shared`, so
-                // creating a fresh instance here would split relay state and leave
-                // sends running against a disconnected manager.
+        guard panicCompleted else { return false }
+
+        if let bleService = meshService as? BLEService {
+            // Startup recovery reopens admission but leaves actual service
+            // start to the bootstrapper immediately after this method.
+            bleService.completePanicReset(
+                restartServices: restartServices
+            )
+        }
+
+        if restartServices {
+            // All persistent state and media are gone. Bring each service back
+            // only now, under the new identity.
+            if !(meshService is BLEService) {
+                meshService.startServices()
+            }
+
+            if !TestEnvironment.isRunningTests {
                 nostrRelayManager = NostrRelayManager.shared
                 setupNostrMessageHandling()
-                nostrRelayManager?.connect()
             }
+            panicNetworkLifecycle.restart()
         }
 
-        // Delete ALL media files (incoming and outgoing) in background
-        Task.detached(priority: .utility) {
-            // Skipped under tests: the test process shares the user's real
-            // ~/Library/Application Support/files tree, and this detached
-            // utility-priority wipe fires at a nondeterministic time —
-            // deleting media that concurrently running tests (e.g. the
-            // sendImage flow) just wrote there, and the developer's real
-            // app data with it.
-            guard !TestEnvironment.isRunningTests else { return }
-            do {
-                let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-                let filesDir = base.appendingPathComponent("files", isDirectory: true)
-
-                // Delete the entire files directory and recreate it
-                if FileManager.default.fileExists(atPath: filesDir.path) {
-                    try FileManager.default.removeItem(at: filesDir)
-                    SecureLogger.info("🗑️ Deleted all media files during panic clear", category: .session)
-                }
-
-                // Recreate empty directory structure
-                try FileManager.default.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: nil)
-                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("voicenotes/incoming", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
-                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("voicenotes/outgoing", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
-                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("images/incoming", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
-                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("images/outgoing", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
-                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("files/incoming", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
-                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("files/outgoing", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
-            } catch {
-                SecureLogger.error("Failed to clear media files during panic: \(error)", category: .session)
-            }
-
-            // BCH-01-013: Clear iOS app switcher snapshots
-            // These are stored in Library/Caches/Snapshots/<bundle_id>/
-            #if os(iOS)
-            Self.clearAppSwitcherSnapshots()
-            #endif
-        }
-
-        // Finish the panic wipe (#1064): must run AFTER `selectedPrivateChatPeer
-        // = nil` / `activeChannel = .mesh` above so no setter re-persists the
-        // pointer. Removes the last-active key once and re-enables persistence,
-        // leaving the key ABSENT so next launch hits the conversation-list
-        // first-launch fallback.
-        conversations.finishPanicWipe()
-
-        // Force immediate UI update for panic mode
-        // UI updates immediately - no flushing needed
-
+        return true
     }
 
     /// BCH-01-013: Clear iOS app switcher snapshots during panic mode
@@ -1604,7 +2056,83 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
 
     @MainActor
     func didReceiveTransportEvent(_ event: TransportEvent) {
-        receiveTransportEvent(event)
+        switch event {
+        case .messageReceived(let message):
+            _ = didReceiveTransportMessageSynchronously(message)
+
+        case let .publicMessageReceived(
+            peerID,
+            nickname,
+            content,
+            timestamp,
+            messageID
+        ):
+            transportEventCoordinator.didReceivePublicMessageSynchronously(
+                from: peerID,
+                nickname: nickname,
+                content: content,
+                timestamp: timestamp,
+                messageID: messageID
+            )
+
+        case let .noisePayloadReceived(peerID, type, payload, timestamp):
+            transportEventCoordinator.didReceiveNoisePayloadSynchronously(
+                from: peerID,
+                type: type,
+                payload: payload,
+                timestamp: timestamp
+            )
+
+        case let .groupMessageReceived(payload, timestamp):
+            groupCoordinator.handleGroupMessagePayload(
+                payload,
+                timestamp: timestamp
+            )
+
+        case let .publicVoiceFrameReceived(
+            peerID,
+            nickname,
+            payload,
+            timestamp
+        ):
+            liveVoiceCoordinator.handlePublicVoiceFramePayload(
+                from: peerID,
+                nickname: nickname,
+                payload: payload,
+                timestamp: timestamp
+            )
+
+        case .peerConnected(let peerID):
+            transportEventCoordinator.didConnectToPeerSynchronously(peerID)
+            mediaTransferCoordinator.peerDidReconnect(peerID)
+
+        case .peerDisconnected(let peerID):
+            transportEventCoordinator.didDisconnectFromPeerSynchronously(peerID)
+            mediaTransferCoordinator.peerDidDisconnect(peerID)
+
+        case .peerListUpdated(let peers):
+            peerListCoordinator.didUpdatePeerListSynchronously(peers)
+            // A peer-list update follows every verified announce, which is
+            // where a peer's `.vouch` capability actually arrives.
+            vouchCoordinator.peersUpdated(peers)
+
+        case .peerSnapshotsUpdated:
+            break
+
+        case let .messageDeliveryStatusUpdated(messageID, status):
+            deliveryCoordinator.didUpdateMessageDeliveryStatus(
+                messageID,
+                status: status
+            )
+
+        case .bluetoothStateUpdated(let state):
+            updateBluetoothState(state)
+        }
+    }
+
+    @MainActor
+    func didReceiveTransportMessageSynchronously(_ message: BitchatMessage) -> Bool {
+        transportEventCoordinator.didReceiveMessageSynchronously(message)
     }
 
     func didReceiveMessage(_ message: BitchatMessage) {
@@ -1667,10 +2195,16 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
 
     func didConnectToPeer(_ peerID: PeerID) {
         transportEventCoordinator.didConnectToPeer(peerID)
+        Task { @MainActor [weak self] in
+            self?.mediaTransferCoordinator.peerDidReconnect(peerID)
+        }
     }
 
     func didDisconnectFromPeer(_ peerID: PeerID) {
         transportEventCoordinator.didDisconnectFromPeer(peerID)
+        Task { @MainActor [weak self] in
+            self?.mediaTransferCoordinator.peerDidDisconnect(peerID)
+        }
     }
 
     func didUpdatePeerList(_ peers: [PeerID]) {
@@ -1829,6 +2363,93 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     /// Send haptic feedback for special messages (iOS only)
     func sendHapticFeedback(for message: BitchatMessage) {
         publicConversationCoordinator.sendHapticFeedback(for: message)
+    }
+}
+
+@MainActor
+extension ChatViewModel {
+    func enqueueLegacyPrivateMediaConsent(
+        for peerID: PeerID,
+        transferId: String,
+        messageID: String,
+        completion: @escaping @MainActor (Bool) -> Void
+    ) {
+        let request = LegacyPrivateMediaConsentRequest(
+            id: UUID(),
+            peerID: peerID,
+            peerName: nicknameForPeer(peerID),
+            transferId: transferId,
+            messageID: messageID
+        )
+        pendingLegacyPrivateMediaConsents.append(PendingLegacyPrivateMediaConsent(
+            request: request,
+            completion: completion
+        ))
+        if legacyPrivateMediaConsentRequest == nil {
+            legacyPrivateMediaConsentRequest = request
+        }
+    }
+
+    func resolveLegacyPrivateMediaConsent(requestID: UUID, approved: Bool) {
+        // SwiftUI may report both the selected button and the presentation
+        // binding's dismissal. Resolve only the exact request that was shown;
+        // a duplicate callback for it must not consume the next queued send.
+        guard legacyPrivateMediaConsentRequest?.id == requestID,
+              pendingLegacyPrivateMediaConsents.first?.request.id == requestID else {
+            return
+        }
+        let resolved = pendingLegacyPrivateMediaConsents.removeFirst()
+        // Drive the boolean presentation state through false before showing
+        // the next queued per-send warning. Otherwise SwiftUI sees true→true,
+        // closes the first dialog, and never presents the second.
+        legacyPrivateMediaConsentRequest = nil
+        resolved.completion(approved)
+        presentNextLegacyPrivateMediaConsentDeferred()
+    }
+
+    func invalidateLegacyPrivateMediaConsent(transferId: String, messageID: String) {
+        let invalidatedIDs = Set(
+            pendingLegacyPrivateMediaConsents.compactMap { pending -> UUID? in
+                let request = pending.request
+                return request.transferId == transferId && request.messageID == messageID
+                    ? request.id
+                    : nil
+            }
+        )
+        guard !invalidatedIDs.isEmpty else { return }
+
+        pendingLegacyPrivateMediaConsents.removeAll {
+            invalidatedIDs.contains($0.request.id)
+        }
+        if let currentID = legacyPrivateMediaConsentRequest?.id,
+           invalidatedIDs.contains(currentID) {
+            legacyPrivateMediaConsentRequest = nil
+            presentNextLegacyPrivateMediaConsentDeferred()
+        }
+    }
+
+    func cancelAllLegacyPrivateMediaConsents() {
+        let pending = pendingLegacyPrivateMediaConsents
+        pendingLegacyPrivateMediaConsents.removeAll()
+        legacyPrivateMediaConsentRequest = nil
+        for item in pending {
+            item.completion(false)
+        }
+    }
+
+    private func presentNextLegacyPrivateMediaConsentDeferred() {
+        guard legacyPrivateMediaConsentRequest == nil,
+              let nextRequestID = pendingLegacyPrivateMediaConsents.first?.request.id else {
+            return
+        }
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  self.legacyPrivateMediaConsentRequest == nil,
+                  self.pendingLegacyPrivateMediaConsents.first?.request.id == nextRequestID else {
+                return
+            }
+            self.legacyPrivateMediaConsentRequest = self.pendingLegacyPrivateMediaConsents[0].request
+        }
     }
 }
 // End of ChatViewModel class

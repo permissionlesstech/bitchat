@@ -147,6 +147,44 @@ struct AppArchitectureTests {
         #expect(store.teleportedGeo.isEmpty)
     }
 
+    @Test("LocationPresenceStore bounds and prunes teleported geohash participants")
+    @MainActor
+    func locationPresenceStoreBoundsTeleportedParticipants() {
+        let store = LocationPresenceStore(teleportedGeoCapacity: 2)
+
+        store.setCurrentGeohash("u4pruy")
+        store.markTeleported("AAAAAA")
+        store.markTeleported("BBBBBB")
+        store.markTeleported("CCCCCC")
+
+        #expect(store.teleportedGeo == Set(["bbbbbb", "cccccc"]))
+
+        store.retainTeleportedGeo(keeping: Set(["CCCCCC"]))
+        #expect(store.teleportedGeo == Set(["cccccc"]))
+
+        store.setCurrentGeohash("u4pruz")
+        #expect(store.teleportedGeo.isEmpty)
+    }
+
+    @Test("LocationPresenceStore bounds geohash nicknames and clears on channel switch")
+    @MainActor
+    func locationPresenceStoreBoundsGeoNicknames() {
+        let store = LocationPresenceStore(geoNicknameCapacity: 2)
+
+        store.setCurrentGeohash("u4pruy")
+        store.setNickname("alice", for: "AAAAAA")
+        store.setNickname("bob", for: "BBBBBB")
+        store.setNickname("carol", for: "CCCCCC")
+
+        #expect(store.geoNicknames == ["bbbbbb": "bob", "cccccc": "carol"])
+
+        store.retainGeoNicknames(keeping: Set(["CCCCCC"]))
+        #expect(store.geoNicknames == ["cccccc": "carol"])
+
+        store.setCurrentGeohash("u4pruz")
+        #expect(store.geoNicknames.isEmpty)
+    }
+
     @Test("PeerHandle equality and hashing use the canonical identity only")
     func peerHandleEqualityUsesCanonicalIdentity() {
         let first = PeerHandle(id: "noise:abc123", routingPeerID: PeerID(str: "peer-a"))

@@ -18,6 +18,8 @@ final class MockKeychain: KeychainManagerProtocol {
     var simulatedReadError: KeychainReadResult?
     var simulatedSaveError: KeychainSaveResult?
     var simulatedGenericReadError: KeychainReadResult?
+    var simulatedDeleteAllResult = true
+    private(set) var deleteAllCallCount = 0
 
     func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool {
         storage[key] = keyData
@@ -34,6 +36,8 @@ final class MockKeychain: KeychainManagerProtocol {
     }
 
     func deleteAllKeychainData() -> Bool {
+        deleteAllCallCount += 1
+        guard simulatedDeleteAllResult else { return false }
         storage.removeAll()
         serviceStorage.removeAll()
         return true

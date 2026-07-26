@@ -41,7 +41,7 @@ struct TextMessageView: View {
             // first text line; a fixed top padding left the lock's solid body
             // hanging below the line's visual center.
             HStack(alignment: .firstTextBaseline, spacing: 0) {
-                let isLong = (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuLinks.isEmpty
+                let isLong = message.content.isLongForDisplay()
                 let isExpanded = expandedMessageIDs.contains(message.id)
                 if message.isPrivate {
                     Image(systemName: "lock.fill")
@@ -103,7 +103,7 @@ struct TextMessageView: View {
             }
             
             // Expand/Collapse for very long messages
-            if (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuLinks.isEmpty {
+            if message.content.isLongForDisplay() {
                 let isExpanded = expandedMessageIDs.contains(message.id)
                 let labelKey = isExpanded ? LocalizedStringKey("content.message.show_less") : LocalizedStringKey("content.message.show_more")
                 Button(labelKey) {

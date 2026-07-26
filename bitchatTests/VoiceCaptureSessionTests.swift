@@ -61,6 +61,7 @@ private final class GatedVoiceCaptureSession: VoiceCaptureSession {
     private let startError: Error?
     private(set) var finishStarted = false
     private(set) var cancelCount = 0
+    private(set) var panicCancelCount = 0
     private var finishContinuation: CheckedContinuation<URL?, Never>?
 
     init(startError: Error? = nil) {
@@ -81,6 +82,10 @@ private final class GatedVoiceCaptureSession: VoiceCaptureSession {
 
     func cancel() async {
         cancelCount += 1
+    }
+
+    func panicCancelSynchronously() {
+        panicCancelCount += 1
     }
 
     func resolveFinish(with url: URL?) {
@@ -203,5 +208,58 @@ struct VoiceCaptureSessionTests {
             await Task.yield()
         }
         #expect(viewModel.state == .idle)
+    }
+
+    @Test func panicSynchronouslyCancelsActiveCaptureAndResetsUI() async {
+        let session = GatedVoiceCaptureSession()
+        let viewModel = VoiceRecordingViewModel()
+        viewModel.sessionProvider = { session }
+
+        viewModel.start(shouldShow: true)
+        await waitUntil { self.isRecording(viewModel.state) }
+
+        viewModel.panicWipe()
+
+        #expect(session.panicCancelCount == 1)
+        #expect(viewModel.state == .idle)
+        #expect(!viewModel.isLiveStreaming)
+    }
+
+    @Test func panicInvalidatesARecordingAlreadyFinalizing() async throws {
+        let session = GatedVoiceCaptureSession()
+        let viewModel = VoiceRecordingViewModel()
+        viewModel.sessionProvider = { session }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("voice-panic-\(UUID().uuidString).m4a")
+        try Data([0x01]).write(to: url)
+        var delivered = false
+
+        viewModel.start(shouldShow: true)
+        await waitUntil { self.isRecording(viewModel.state) }
+        viewModel.finish { _ in delivered = true }
+        await waitUntil { session.finishStarted }
+
+        viewModel.panicWipe()
+        session.resolveFinish(with: url)
+        await waitUntil {
+            !FileManager.default.fileExists(atPath: url.path)
+        }
+
+        #expect(!delivered)
+        #expect(viewModel.state == .idle)
+    }
+
+    @Test func liveSessionPanicStopsCaptureWithoutSendingControl() {
+        let capture = StubPTTCapture(stopResult: (nil, 0))
+        var sentPackets: [Data] = []
+        let session = PTTLiveVoiceSession(
+            sendPacket: { sentPackets.append($0) },
+            capture: capture
+        )
+
+        session.panicCancelSynchronously()
+
+        #expect(capture.cancelCount == 1)
+        #expect(sentPackets.isEmpty)
     }
 }

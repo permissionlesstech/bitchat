@@ -17,6 +17,9 @@ struct BLEOutboundFragmentPlan {
 }
 
 enum BLEOutboundFragmentPlanner {
+    /// Current Android receivers reject fragment sets above 256. Private
+    /// media v1 treats that deployed ceiling as a cross-platform contract.
+    static let privateMediaV1MaxFragments = 256
     private static let minimumChunkSize = 64
     private static let fragmentIDLength = 8
 
@@ -69,6 +72,10 @@ enum BLEOutboundFragmentPlanner {
             chunkSize: sizing.chunkSize,
             spacingMs: spacingMs(for: request)
         )
+    }
+
+    static func isPrivateMediaV1Compatible(_ plan: BLEOutboundFragmentPlan) -> Bool {
+        plan.totalFragments <= privateMediaV1MaxFragments
     }
 
     private static func sizingPolicy(

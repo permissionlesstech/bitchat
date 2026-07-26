@@ -203,6 +203,134 @@ struct BridgeCourierServiceTests {
         #expect(confirmed.sealRequests.isEmpty)
     }
 
+    @Test func sameMessageIDIsScopedByRecipientAcrossRejectedActiveAndPersistedState() {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("bridge-dedup-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let rejectedKey = Fixture.randomKey()
+        let firstKey = Fixture.randomKey()
+        let secondKey = Fixture.randomKey()
+        let thirdKey = Fixture.randomKey()
+        let messageID = "recipient-scoped-collision"
+
+        let fixture = Fixture(dedupStore: BridgeDropDedupStore(fileURL: fileURL))
+        fixture.sealResult = makeEnvelope(
+            recipientKey: rejectedKey,
+            ciphertext: Data(
+                repeating: 7,
+                count: BridgeCourierService.Limits.maxDropEnvelopeBytes + 1
+            )
+        )
+        var rejectedResults: [Bool] = []
+        fixture.service.depositDrop(
+            content: "rejected",
+            messageID: messageID,
+            recipientNoiseKey: rejectedKey
+        ) { rejectedResults.append($0) }
+        #expect(rejectedResults == [false])
+
+        fixture.sealResult = makeEnvelope(recipientKey: firstKey)
+        fixture.automaticPublishResult = nil
+        var firstResults: [Bool] = []
+        var secondResults: [Bool] = []
+        var duplicateFirstResults: [Bool] = []
+        fixture.service.depositDrop(
+            content: "first",
+            messageID: messageID,
+            recipientNoiseKey: firstKey
+        ) { firstResults.append($0) }
+        fixture.service.depositDrop(
+            content: "second",
+            messageID: messageID,
+            recipientNoiseKey: secondKey
+        ) { secondResults.append($0) }
+        fixture.service.depositDrop(
+            content: "first duplicate",
+            messageID: messageID,
+            recipientNoiseKey: firstKey
+        ) { duplicateFirstResults.append($0) }
+
+        #expect(fixture.publishedEvents.count == 2)
+        #expect(fixture.pendingPublishCompletions.count == 2)
+        #expect(duplicateFirstResults == [false])
+        #expect(firstResults.isEmpty)
+        #expect(secondResults.isEmpty)
+
+        fixture.resolveNextPublish(true)
+        fixture.resolveNextPublish(true)
+        #expect(firstResults == [true])
+        #expect(secondResults == [true])
+        fixture.service.flushDedupSnapshot()
+
+        let relaunched = Fixture(
+            dedupStore: BridgeDropDedupStore(fileURL: fileURL)
+        )
+        relaunched.sealResult = makeEnvelope(recipientKey: thirdKey)
+        var relaunchResults: [Bool] = []
+        relaunched.service.depositDrop(
+            content: "first",
+            messageID: messageID,
+            recipientNoiseKey: firstKey
+        ) { relaunchResults.append($0) }
+        relaunched.service.depositDrop(
+            content: "second",
+            messageID: messageID,
+            recipientNoiseKey: secondKey
+        ) { relaunchResults.append($0) }
+        relaunched.service.depositDrop(
+            content: "third",
+            messageID: messageID,
+            recipientNoiseKey: thirdKey
+        ) { relaunchResults.append($0) }
+
+        #expect(relaunchResults == [false, false, true])
+        #expect(relaunched.sealRequests.count == 1)
+        #expect(relaunched.sealRequests.first?.key == thirdKey)
+        #expect(relaunched.publishedEvents.count == 1)
+    }
+
+    @Test func legacyPublishedMessageIDIsWildcardUntilItsOriginalExpiry() {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("bridge-dedup-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        var date = Date()
+        let messageID = "legacy-wildcard"
+        let recipientKey = Fixture.randomKey()
+        let store = BridgeDropDedupStore(fileURL: fileURL)
+        store.save(BridgeDropDedupStore.Snapshot(
+            publishedDropKeys: [messageID: date],
+            seenDropEventIDs: [:]
+        ))
+
+        let fixture = Fixture(
+            now: { date },
+            dedupStore: BridgeDropDedupStore(fileURL: fileURL)
+        )
+        fixture.sealResult = makeEnvelope(recipientKey: recipientKey)
+        var results: [Bool] = []
+        fixture.service.depositDrop(
+            content: "legacy",
+            messageID: messageID,
+            recipientNoiseKey: recipientKey
+        ) { results.append($0) }
+        #expect(results == [false])
+        #expect(fixture.sealRequests.isEmpty)
+
+        date = date.addingTimeInterval(CourierEnvelope.maxLifetimeSeconds + 1)
+        fixture.service.depositDrop(
+            content: "after expiry",
+            messageID: messageID,
+            recipientNoiseKey: recipientKey
+        ) { results.append($0) }
+        #expect(results == [false, true])
+        #expect(fixture.publishedEvents.count == 1)
+        fixture.service.flushDedupSnapshot()
+
+        let snapshot = BridgeDropDedupStore(fileURL: fileURL).load()
+        #expect(snapshot.publishedDropKeys[messageID] == nil)
+        #expect(snapshot.publishedDropKeys.count == 1)
+    }
+
     @Test func panicWipeInvalidatesInFlightPublishCompletion() throws {
         let fileURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("bridge-dedup-\(UUID().uuidString).json")
@@ -297,8 +425,10 @@ struct BridgeCourierServiceTests {
         #expect(firstResults == [false])
 
         // The evicted first drop is deposit-able again (slot released).
+        let sealCountBeforeRetry = fixture.sealRequests.count
         fixture.service.depositDrop(content: "0-retry", messageID: firstID, recipientNoiseKey: key)
-        #expect(fixture.service.pendingDrops.last?.dedupKey == firstID)
+        #expect(fixture.sealRequests.count == sealCountBeforeRetry + 1)
+        #expect(fixture.service.pendingDrops.count == BridgeCourierService.Limits.maxPendingDrops)
     }
 
     @Test func oversizeDropConsumesSlotInsteadOfChurning() {

@@ -10,6 +10,9 @@ struct BLEPeerInfo: Equatable {
     var isVerifiedNickname: Bool
     var lastSeen: Date
     var capabilities: PeerCapabilities = []
+    /// Distinguishes an old client that omitted the capabilities TLV from a
+    /// modern client that explicitly advertised a set without a given bit.
+    var capabilitiesWereExplicitlyAdvertised: Bool = false
     /// Rendezvous cell from the peer's announce when it advertises `.bridge`.
     var bridgeGeohash: String?
 }
@@ -114,6 +117,10 @@ struct BLEPeerRegistry {
         peers[peerID.toShort()]?.capabilities ?? []
     }
 
+    func capabilitiesWereExplicitlyAdvertised(for peerID: PeerID) -> Bool {
+        peers[peerID.toShort()]?.capabilitiesWereExplicitlyAdvertised == true
+    }
+
     /// Peers whose last verified announce advertised the given capability.
     func peers(advertising capability: PeerCapabilities) -> [PeerID] {
         peers.values.filter { $0.capabilities.contains(capability) }.map(\.peerID)
@@ -174,6 +181,22 @@ struct BLEPeerRegistry {
         peers[peerID] = peer
     }
 
+    /// Replaces the announcement signing key only after the surrounding Noise
+    /// session proved possession of this peer's static key.
+    mutating func bindAuthenticatedSigningPublicKey(_ key: Data, for peerID: PeerID) {
+        guard var peer = peers[peerID.toShort()] else { return }
+        peer.signingPublicKey = key
+        peers[peer.peerID] = peer
+    }
+
+    /// Applies a verified announce to the registry.
+    ///
+    /// TOFU signing-key pinning: once a signing key has been bound to this
+    /// peer entry, an announce carrying a *different* signing key is refused
+    /// (returns `nil`) and the existing record is left untouched. PeerIDs are
+    /// derived from the (public) noise key, so without pinning an attacker
+    /// could replay a victim's noiseKey/peerID with their own signing key and
+    /// silently take over the victim's mesh identity and nickname.
     mutating func upsertVerifiedAnnounce(
         peerID: PeerID,
         nickname: String,
@@ -181,10 +204,17 @@ struct BLEPeerRegistry {
         signingPublicKey: Data?,
         isConnected: Bool,
         now: Date,
-        capabilities: PeerCapabilities = [],
+        capabilities: PeerCapabilities? = nil,
         bridgeGeohash: String? = nil
-    ) -> BLEPeerAnnounceUpdate {
+    ) -> BLEPeerAnnounceUpdate? {
         let existing = peers[peerID]
+
+        if let pinnedSigningKey = existing?.signingPublicKey,
+           let announcedSigningKey = signingPublicKey,
+           pinnedSigningKey != announcedSigningKey {
+            return nil
+        }
+
         let update = BLEPeerAnnounceUpdate(
             isNewPeer: existing == nil,
             wasDisconnected: existing?.isConnected == false,
@@ -196,10 +226,12 @@ struct BLEPeerRegistry {
             nickname: nickname,
             isConnected: isConnected,
             noisePublicKey: noisePublicKey,
-            signingPublicKey: signingPublicKey,
+            // Never drop an already-pinned signing key.
+            signingPublicKey: signingPublicKey ?? existing?.signingPublicKey,
             isVerifiedNickname: true,
             lastSeen: now,
-            capabilities: capabilities,
+            capabilities: capabilities ?? [],
+            capabilitiesWereExplicitlyAdvertised: capabilities != nil,
             bridgeGeohash: bridgeGeohash
         )
 

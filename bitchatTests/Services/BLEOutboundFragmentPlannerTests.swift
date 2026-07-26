@@ -108,6 +108,58 @@ struct BLEOutboundFragmentPlannerTests {
         ) == nil)
     }
 
+    @Test("private media v1 accepts exactly 256 fragments and rejects 257")
+    func privateMediaCrossPlatformFragmentBoundary() throws {
+        let maxPayload = makePayload(count: 160 * 1024, seed: 0xFACE_CAFE)
+
+        func plan(payloadCount: Int) throws -> BLEOutboundFragmentPlan {
+            let packet = BitchatPacket(
+                type: MessageType.noiseEncrypted.rawValue,
+                senderID: Data(hexString: "0011223344556677") ?? Data(),
+                recipientID: Data(hexString: "8877665544332211"),
+                timestamp: 0x0102030405,
+                payload: Data(maxPayload.prefix(payloadCount)),
+                signature: nil,
+                ttl: 3,
+                version: 2
+            )
+            return try #require(BLEOutboundFragmentPlanner.makePlan(
+                for: BLEOutboundFragmentTransferRequest(
+                    packet: packet,
+                    pad: false,
+                    maxChunk: nil,
+                    directedPeer: PeerID(str: "8877665544332211"),
+                    transferId: "boundary"
+                ),
+                defaultChunkSize: TransportConfig.bleDefaultFragmentSize,
+                bleMaxMTU: 512,
+                fragmentID: Data(repeating: 0xD4, count: 8)
+            ))
+        }
+
+        func firstPlan(withAtLeast target: Int) throws -> BLEOutboundFragmentPlan {
+            var low = 1
+            var high = maxPayload.count
+            while low < high {
+                let mid = low + (high - low) / 2
+                if try plan(payloadCount: mid).totalFragments >= target {
+                    high = mid
+                } else {
+                    low = mid + 1
+                }
+            }
+            return try plan(payloadCount: low)
+        }
+
+        let at256 = try firstPlan(withAtLeast: 256)
+        let at257 = try firstPlan(withAtLeast: 257)
+
+        #expect(at256.totalFragments == 256)
+        #expect(BLEOutboundFragmentPlanner.isPrivateMediaV1Compatible(at256))
+        #expect(at257.totalFragments == 257)
+        #expect(!BLEOutboundFragmentPlanner.isPrivateMediaV1Compatible(at257))
+    }
+
     private func makePacket(
         payload: Data,
         route: [Data]? = nil,

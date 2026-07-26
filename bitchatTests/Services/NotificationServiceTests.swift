@@ -56,12 +56,15 @@ final class NotificationServiceTests: XCTestCase {
         XCTAssertNil(request?.trigger)
     }
 
+    /// Previews shown: the opt-in behavior. Stated explicitly rather than
+    /// inherited from the shared preference, which now defaults to hidden.
     func test_sendPrivateMessageNotification_populatesPeerMetadata() {
         let deliverer = RecordingNotificationRequestDeliverer()
         let service = NotificationService(
             isRunningTestsProvider: { false },
             authorizer: RecordingNotificationAuthorizer(),
-            requestDeliverer: deliverer
+            requestDeliverer: deliverer,
+            hidePreviewsProvider: { false }
         )
         let peerID = PeerID(str: "deadbeefdeadbeef")
 
@@ -72,6 +75,27 @@ final class NotificationServiceTests: XCTestCase {
         XCTAssertEqual(request?.content.body, "hi")
         XCTAssertEqual(request?.content.userInfo["peerID"] as? String, peerID.id)
         XCTAssertEqual(request?.content.userInfo["senderName"] as? String, "Alice")
+    }
+
+    /// Previews hidden: the default. The routing payload has to survive
+    /// redaction, or tapping the alert would not open the conversation.
+    func test_sendPrivateMessageNotification_withPreviewsHidden_keepsRoutingButDropsContent() {
+        let deliverer = RecordingNotificationRequestDeliverer()
+        let service = NotificationService(
+            isRunningTestsProvider: { false },
+            authorizer: RecordingNotificationAuthorizer(),
+            requestDeliverer: deliverer,
+            hidePreviewsProvider: { true }
+        )
+        let peerID = PeerID(str: "deadbeefdeadbeef")
+
+        service.sendPrivateMessageNotification(from: "Alice", message: "hi", peerID: peerID)
+
+        let request = deliverer.requests.singleValue
+        XCTAssertFalse(request?.content.title.contains("Alice") ?? true)
+        XCTAssertFalse(request?.content.body.contains("hi") ?? true)
+        XCTAssertFalse(request?.content.title.isEmpty ?? true)
+        XCTAssertEqual(request?.content.userInfo["peerID"] as? String, peerID.id)
     }
 
     func test_wrapperNotifications_setExpectedIdentifiersAndDeepLinks() {

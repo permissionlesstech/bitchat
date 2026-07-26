@@ -64,11 +64,11 @@ struct ExpiringIDSet {
 /// fresh drop (fresh throwaway seal, undeduplicatable downstream) and every
 /// gateway relaunch re-delivered the whole backlog. Field-verified: ~20
 /// copies of one DM delivered in 40ms fed the storm behind a permanent
-/// device freeze. Persisting both sides caps this at one drop per message
-/// ID per 24h regardless of relaunch count.
+/// device freeze. Persisting both sides caps this at one drop per
+/// recipient/message pair per 24h regardless of relaunch count.
 ///
-/// Contents are opaque IDs (message UUIDs, relay event IDs) — no plaintext,
-/// no peer identities — so until-first-unlock protection matches
+/// Contents are opaque hashes and relay event IDs — no plaintext or peer
+/// identities — so until-first-unlock protection matches
 /// `NostrProcessedEventStore`, and the file must load during a
 /// locked-background restoration relaunch. Wiped on panic with the rest of
 /// the courier state.

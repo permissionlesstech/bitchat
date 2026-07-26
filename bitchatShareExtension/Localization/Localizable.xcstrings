@@ -38,6 +38,12 @@
             "comment" : "Fallback title when saving a shared link"
           }
         },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پیوند اشتراک‌گذاری‌شده"
+          }
+        },
         "fil" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -196,201 +202,6 @@
         }
       }
     },
-    "share.status.failed_to_encode" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "تعذر ترميز الرابط",
-            "comment" : "Shown when the share payload cannot be encoded"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "লিঙ্ক এনকোড করা যায়নি"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "link konnte nicht codiert werden",
-            "comment" : "Shown when the share payload cannot be encoded"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "failed to encode link",
-            "comment" : "Shown when the share payload cannot be encoded"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "no se pudo codificar el enlace",
-            "comment" : "Shown when the share payload cannot be encoded"
-          }
-        },
-        "fil" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "hindi ma-encode ang link"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "échec de l'encodage du lien",
-            "comment" : "Shown when the share payload cannot be encoded"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "לא ניתן לקודד את הקישור",
-            "comment" : "Shown when the share payload cannot be encoded"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "लिंक एन्कोड नहीं हो सका"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "gagal mengodekan tautan",
-            "comment" : "Shown when the share payload cannot be encoded"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "impossibile codificare il link",
-            "comment" : "Shown when the share payload cannot be encoded"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "リンクのエンコードに失敗しました",
-            "comment" : "Shown when the share payload cannot be encoded"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "링크를 인코딩하는 데 실패했습니다",
-            "comment" : "Shown when the share payload cannot be encoded"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "gagal mengekod pautan"
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "लिङ्क सङ्केत गर्न सकेन",
-            "comment" : "Shown when the share payload cannot be encoded"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "link coderen mislukt"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "nie udało się zakodować linku"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "falha ao codificar a ligação"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "falha ao codificar link",
-            "comment" : "Shown when the share payload cannot be encoded"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "не удалось закодировать ссылку",
-            "comment" : "Shown when the share payload cannot be encoded"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "kunde inte koda länken"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "இணைப்பை என்கோட் செய்ய முடியவில்லை"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "เข้ารหัสลิงก์ไม่สำเร็จ"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "bağlantı kodlanamadı",
-            "comment" : "Shown when the share payload cannot be encoded"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "не вдалося закодувати посилання",
-            "comment" : "Shown when the share payload cannot be encoded"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "لنک انکوڈ نہیں ہو سکا"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "không thể mã hóa liên kết"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法编码链接",
-            "comment" : "Shown when the share payload cannot be encoded"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "無法編碼連結"
-          }
-        }
-      }
-    },
     "share.status.no_shareable_content" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -426,6 +237,12 @@
             "state" : "translated",
             "value" : "sin contenido que se pueda compartir",
             "comment" : "Shown when provided content cannot be shared"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "محتوای قابل اشتراک‌گذاری وجود ندارد"
           }
         },
         "fil" : {
@@ -623,6 +440,12 @@
             "comment" : "Shown when the share extension receives no content"
           }
         },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "چیزی برای اشتراک‌گذاری نیست"
+          }
+        },
         "fil" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -781,394 +604,76 @@
         }
       }
     },
-    "share.status.shared_link" : {
+    "share.status.failed_to_save" : {
+      "comment" : "Shown when content cannot be staged for the main app",
       "extractionState" : "manual",
       "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ تم إرسال الرابط إلى bitchat",
-            "comment" : "Confirmation after successfully sharing a link"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ bitchat-এ লিঙ্ক শেয়ার করা হয়েছে"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ link zu bitchat geteilt",
-            "comment" : "Confirmation after successfully sharing a link"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ shared link to bitchat",
-            "comment" : "Confirmation after successfully sharing a link"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ enlace compartido con bitchat",
-            "comment" : "Confirmation after successfully sharing a link"
-          }
-        },
-        "fil" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ naibahagi ang link sa bitchat"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ lien partagé vers bitchat",
-            "comment" : "Confirmation after successfully sharing a link"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ הקישור נשלח אל bitchat",
-            "comment" : "Confirmation after successfully sharing a link"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ bitchat पर लिंक शेयर किया गया"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ tautan dikirim ke bitchat",
-            "comment" : "Confirmation after successfully sharing a link"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ link inviato a bitchat",
-            "comment" : "Confirmation after successfully sharing a link"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ bitchatにリンクを共有",
-            "comment" : "Confirmation after successfully sharing a link"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ bitchat으로 링크를 공유했습니다",
-            "comment" : "Confirmation after successfully sharing a link"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ pautan dikongsi ke bitchat"
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ bitchat मा लिङ्क पठाइयो",
-            "comment" : "Confirmation after successfully sharing a link"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ link gedeeld met bitchat"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ udostępniono link w bitchat"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ ligação enviada para o bitchat"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ link enviado para bitchat",
-            "comment" : "Confirmation after successfully sharing a link"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ ссылка отправлена в bitchat",
-            "comment" : "Confirmation after successfully sharing a link"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ länk delad till bitchat"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ bitchat-க்கு இணைப்பு பகிரப்பட்டது"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ แชร์ลิงก์ไปยัง bitchat แล้ว"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ bitchat'e bağlantı paylaşıldı",
-            "comment" : "Confirmation after successfully sharing a link"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ посилання надіслано в bitchat",
-            "comment" : "Confirmation after successfully sharing a link"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ bitchat پر لنک شیئر کر دیا گیا"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ đã chia sẻ liên kết tới bitchat"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ 已将链接分享至 bitchat",
-            "comment" : "Confirmation after successfully sharing a link"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ 已將連結分享至 bitchat"
-          }
-        }
+        "ar" : { "stringUnit" : { "state" : "needs_review", "value" : "تعذر الحفظ في bitchat" } },
+        "bn" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat-এ সংরক্ষণ করা যায়নি" } },
+        "de" : { "stringUnit" : { "state" : "needs_review", "value" : "Konnte nicht in bitchat gespeichert werden" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Could not save to bitchat" } },
+        "es" : { "stringUnit" : { "state" : "needs_review", "value" : "No se pudo guardar en bitchat" } },
+        "fa" : { "stringUnit" : { "state" : "needs_review", "value" : "ذخیره در bitchat ممکن نشد" } },
+        "fil" : { "stringUnit" : { "state" : "needs_review", "value" : "Hindi ma-save sa bitchat" } },
+        "fr" : { "stringUnit" : { "state" : "needs_review", "value" : "Impossible d’enregistrer dans bitchat" } },
+        "he" : { "stringUnit" : { "state" : "needs_review", "value" : "לא ניתן לשמור ב-bitchat" } },
+        "hi" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat में सेव नहीं किया जा सका" } },
+        "id" : { "stringUnit" : { "state" : "needs_review", "value" : "Tidak dapat menyimpan ke bitchat" } },
+        "it" : { "stringUnit" : { "state" : "needs_review", "value" : "Impossibile salvare in bitchat" } },
+        "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat に保存できませんでした" } },
+        "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat에 저장할 수 없습니다" } },
+        "ms" : { "stringUnit" : { "state" : "needs_review", "value" : "Tidak dapat menyimpan ke bitchat" } },
+        "ne" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat मा सुरक्षित गर्न सकिएन" } },
+        "nl" : { "stringUnit" : { "state" : "needs_review", "value" : "Kon niet opslaan in bitchat" } },
+        "pl" : { "stringUnit" : { "state" : "needs_review", "value" : "Nie udało się zapisać w bitchat" } },
+        "pt" : { "stringUnit" : { "state" : "needs_review", "value" : "Não foi possível guardar no bitchat" } },
+        "pt-BR" : { "stringUnit" : { "state" : "needs_review", "value" : "Não foi possível salvar no bitchat" } },
+        "ru" : { "stringUnit" : { "state" : "needs_review", "value" : "Не удалось сохранить в bitchat" } },
+        "sv" : { "stringUnit" : { "state" : "needs_review", "value" : "Kunde inte spara i bitchat" } },
+        "ta" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat-இல் சேமிக்க முடியவில்லை" } },
+        "th" : { "stringUnit" : { "state" : "needs_review", "value" : "บันทึกไปยัง bitchat ไม่ได้" } },
+        "tr" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat’e kaydedilemedi" } },
+        "uk" : { "stringUnit" : { "state" : "needs_review", "value" : "Не вдалося зберегти в bitchat" } },
+        "ur" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat میں محفوظ نہیں ہو سکا" } },
+        "vi" : { "stringUnit" : { "state" : "needs_review", "value" : "Không thể lưu vào bitchat" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "needs_review", "value" : "无法保存到 bitchat" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "needs_review", "value" : "無法儲存到 bitchat" } }
       }
     },
-    "share.status.shared_text" : {
+    "share.status.saved_for_review" : {
+      "comment" : "Shown after content is staged for review in the main app",
       "extractionState" : "manual",
       "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ تم إرسال النص إلى bitchat",
-            "comment" : "Confirmation after successfully sharing text"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ bitchat-এ টেক্সট শেয়ার করা হয়েছে"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ text zu bitchat geteilt",
-            "comment" : "Confirmation after successfully sharing text"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ shared text to bitchat",
-            "comment" : "Confirmation after successfully sharing text"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ texto compartido con bitchat",
-            "comment" : "Confirmation after successfully sharing text"
-          }
-        },
-        "fil" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ naibahagi ang teksto sa bitchat"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ texte partagé vers bitchat",
-            "comment" : "Confirmation after successfully sharing text"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ הטקסט נשלח אל bitchat",
-            "comment" : "Confirmation after successfully sharing text"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ bitchat पर टेक्स्ट शेयर किया गया"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ teks dikirim ke bitchat",
-            "comment" : "Confirmation after successfully sharing text"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ testo inviato a bitchat",
-            "comment" : "Confirmation after successfully sharing text"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ bitchatにテキストを共有",
-            "comment" : "Confirmation after successfully sharing text"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ bitchat으로 텍스트를 공유했습니다",
-            "comment" : "Confirmation after successfully sharing text"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ teks dikongsi ke bitchat"
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ bitchat मा पाठ पठाइयो",
-            "comment" : "Confirmation after successfully sharing text"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ tekst gedeeld met bitchat"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ udostępniono tekst w bitchat"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ texto enviado para o bitchat"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ texto enviado para bitchat",
-            "comment" : "Confirmation after successfully sharing text"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ текст отправлен в bitchat",
-            "comment" : "Confirmation after successfully sharing text"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ text delad till bitchat"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ bitchat-க்கு உரை பகிரப்பட்டது"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ แชร์ข้อความไปยัง bitchat แล้ว"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ bitchat'e metin paylaşıldı",
-            "comment" : "Confirmation after successfully sharing text"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ текст надіслано в bitchat",
-            "comment" : "Confirmation after successfully sharing text"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ bitchat پر متن شیئر کر دیا گیا"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ đã chia sẻ văn bản tới bitchat"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ 已将文本分享至 bitchat",
-            "comment" : "Confirmation after successfully sharing text"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "✓ 已將文字分享至 bitchat"
-          }
-        }
+        "ar" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ حُفظ في bitchat — افتح التطبيق للمراجعة" } },
+        "bn" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat-এ সংরক্ষিত — পর্যালোচনার জন্য অ্যাপটি খুলুন" } },
+        "de" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ In bitchat gespeichert — App zum Prüfen öffnen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "✓ Saved in bitchat — open the app to review" } },
+        "es" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Guardado en bitchat — abre la app para revisarlo" } },
+        "fa" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ در bitchat ذخیره شد — برای بازبینی، برنامه را باز کنید" } },
+        "fil" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Na-save sa bitchat — buksan ang app para suriin" } },
+        "fr" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Enregistré dans bitchat — ouvrez l’app pour vérifier" } },
+        "he" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ נשמר ב-bitchat — יש לפתוח את האפליקציה לבדיקה" } },
+        "hi" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat में सेव किया गया — समीक्षा के लिए ऐप खोलें" } },
+        "id" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Disimpan di bitchat — buka aplikasi untuk meninjau" } },
+        "it" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Salvato in bitchat — apri l’app per controllare" } },
+        "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat に保存しました — アプリを開いて確認してください" } },
+        "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat에 저장됨 — 앱을 열어 검토하세요" } },
+        "ms" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Disimpan dalam bitchat — buka aplikasi untuk menyemak" } },
+        "ne" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat मा सुरक्षित गरियो — समीक्षा गर्न एप खोल्नुहोस्" } },
+        "nl" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Opgeslagen in bitchat — open de app om te bekijken" } },
+        "pl" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Zapisano w bitchat — otwórz aplikację, aby sprawdzić" } },
+        "pt" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Guardado no bitchat — abra a app para rever" } },
+        "pt-BR" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Salvo no bitchat — abra o app para revisar" } },
+        "ru" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Сохранено в bitchat — откройте приложение для проверки" } },
+        "sv" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Sparat i bitchat — öppna appen för att granska" } },
+        "ta" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat-இல் சேமிக்கப்பட்டது — மதிப்பாய்வு செய்ய செயலியைத் திறக்கவும்" } },
+        "th" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ บันทึกใน bitchat แล้ว — เปิดแอปเพื่อตรวจสอบ" } },
+        "tr" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat’e kaydedildi — incelemek için uygulamayı açın" } },
+        "uk" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Збережено в bitchat — відкрийте застосунок для перегляду" } },
+        "ur" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat میں محفوظ ہو گیا — جائزے کے لیے ایپ کھولیں" } },
+        "vi" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Đã lưu trong bitchat — mở ứng dụng để xem lại" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ 已保存在 bitchat 中 — 打开应用查看" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ 已儲存在 bitchat 中 — 開啟 App 查看" } }
       }
     }
   },
