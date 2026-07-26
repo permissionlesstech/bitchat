@@ -9,8 +9,9 @@
 import BitLogger
 import Foundation
 
-/// Disk persistence for processed gift-wrap event IDs. NIP-59 randomizes
-/// gift-wrap timestamps, so DM subscriptions must look back generously (24h)
+/// Disk persistence for processed private-envelope event IDs. BitChat
+/// randomizes envelope timestamps, so DM subscriptions must look back
+/// generously (24h)
 /// and relays redeliver the same events on every launch — without a
 /// cross-launch record, each relaunch reprocesses old PMs and acks
 /// (re-sent DELIVERED bursts, "delivered ack for unknown mid" noise).

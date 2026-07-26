@@ -19,7 +19,7 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 - **Intelligent Message Routing**: Automatically chooses best transport (Bluetooth → Nostr fallback)
 - **Decentralized Mesh Network**: Automatic peer discovery and multi-hop message relay over Bluetooth LE
 - **Privacy First**: No accounts, no phone numbers, no persistent identifiers
-- **Private Message End-to-End Encryption**: [Noise Protocol](https://noiseprotocol.org) for mesh, NIP-17 for Nostr
+- **Private Message End-to-End Encryption**: [Noise Protocol](https://noiseprotocol.org) for mesh, BitChat private envelopes for Nostr fallback
 - **IRC-Style Commands**: Familiar `/slap`, `/msg`, `/who` style interface
 - **Universal App**: Native support for iOS and macOS
 - **Emergency Wipe**: Triple-tap to instantly clear all data
@@ -44,8 +44,14 @@ BitChat uses a **hybrid messaging architecture** with two complementary transpor
 - **Global Reach**: Connect with users worldwide via internet relays
 - **Location Channels**: Geographic chat rooms using geohash coordinates
 - **290+ Relay Network**: Distributed across the globe for reliability
-- **NIP-17 Encryption**: Gift-wrapped private messages for internet privacy
+- **BitChat Private Envelopes**: App-specific encrypted private messages over Nostr relays
 - **Ephemeral Keys**: Fresh cryptographic identity per geohash area
+
+BitChat's private-envelope format is proprietary and is **not** NIP-17,
+NIP-44, or NIP-59 compatible. It uses Nostr as a relay transport but only
+interoperates with BitChat clients: private payloads travel inside kind-1059
+events whose `v2:`-prefixed content is a BitChat-specific XChaCha20-Poly1305
+construction, not NIP-44 encryption.
 
 ### Channel Types
 
@@ -80,7 +86,7 @@ Private messages use **intelligent transport selection**:
 2. **Nostr Fallback** (when Bluetooth unavailable)
 
    - Uses recipient's Nostr public key
-   - NIP-17 gift-wrapping for privacy
+   - BitChat's app-specific private-envelope encryption
    - Routes through global relay network
 
 3. **Smart Queuing** (when neither available)

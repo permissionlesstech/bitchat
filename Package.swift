@@ -63,7 +63,11 @@ let package = Package(
                 // Only the vector fixture: declaring the whole "Noise"
                 // directory would claim its .swift test files as resources
                 // and silently drop them from compilation.
-                .process("Noise/NoiseTestVectors.json")
+                .process("Noise/NoiseTestVectors.json"),
+                // Frozen envelopes produced by the released iOS (733098bb)
+                // and Android (b7f0b33d) private-DM implementations; prove
+                // receive compatibility independently of the local generator.
+                .process("Nostr/Fixtures")
             ]
         )
     ]

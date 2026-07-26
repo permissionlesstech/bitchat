@@ -227,7 +227,7 @@ final class NostrRelayManager: ObservableObject {
     private var messageQueue: [PendingSend] = []
     private let messageQueueLock = NSLock()
     /// Non-queued sends whose callers require relay durability. A WebSocket
-    /// write only proves bytes left this process; NIP-20 OK is the relay's
+    /// write only proves bytes left this process; NIP-01 `OK` is the relay's
     /// accept/reject acknowledgment.
     private struct ConfirmedSendState {
         let token: UUID
@@ -535,8 +535,8 @@ final class NostrRelayManager: ObservableObject {
     }
 
     /// Attempts an event only on currently connected target relays and
-    /// reports whether at least one relay explicitly accepted it via NIP-20
-    /// OK. A successful WebSocket write alone is not durable acceptance.
+    /// reports whether at least one relay explicitly accepted it via NIP-01
+    /// `OK`. A successful WebSocket write alone is not durable acceptance.
     /// Unlike `sendEvent`, this never enters the process-local pending queue;
     /// callers use it when success unlocks durable state or user-visible
     /// delivery progress.
