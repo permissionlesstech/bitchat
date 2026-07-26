@@ -18,7 +18,7 @@ bitchat is a decentralized, peer-to-peer messaging application for secure, priva
 * **Authentication:** peers are identified by cryptographic keys; announcements are signed and verified.
 * **Resilience:** the network functions in lossy, low-bandwidth, partitioned environments with churning membership.
 * **Eventual delivery:** a message to an out-of-range peer should still arrive — relayed by the mesh, carried by a moving person, or resting on an internet relay — within a bounded retention window.
-* **Ephemerality by default:** no plaintext message content is ever written to disk. Everything the store-and-forward stack persists is either sealed ciphertext or already-public broadcast traffic, and all of it dies with the panic wipe.
+* **Ephemerality by default:** conversation timelines live in memory only. Everything the store-and-forward stack persists is either sealed ciphertext or already-public broadcast traffic, and all of it dies with the panic wipe. Media is the exception: accepted images and voice notes are written to disk unsealed, protected by the platform's data-protection class rather than by app-layer encryption, and bounded by a storage quota.
 
 ## 2. Architecture Overview
 
@@ -36,13 +36,17 @@ Each device holds two long-term key pairs in the Keychain:
 * a **Curve25519 static key** for Noise key agreement — its SHA-256 fingerprint is the peer's stable identity, and
 * an **Ed25519 signing key** for packet signatures.
 
-On the mesh, peers appear under short ephemeral IDs derived per session; favoriting pins the full Noise public key so identity survives across sessions. Mutual favorites also exchange Nostr public keys for the internet path. Optional QR verification binds a nickname to a fingerprint in person.
+On the mesh, peers appear under a short 8-byte peer ID. That ID is **not ephemeral**: it is the first 8 bytes of the SHA-256 fingerprint of the device's Noise static key, so it is stable across sessions, reboots, and reinstalls that preserve the keychain, and it changes only when the identity itself is replaced by a panic wipe. Favoriting pins the full Noise public key so identity survives across sessions. Mutual favorites also exchange Nostr public keys for the internet path. Optional QR verification binds a nickname to a fingerprint in person.
+
+Signed announcements additionally carry the nickname, the Noise static public key, and the Ed25519 signing public key in cleartext (§4.5), so a passive receiver in radio range can link a device across time and place regardless of the peer ID. Unlinkable presence is not a property this protocol currently provides; see §9.
 
 ## 4. BLE Mesh Layer
 
 ### 4.1 Packet Format
 
-A compact binary header (version, type, TTL, timestamp, flags) is followed by an 8-byte sender ID, an optional 8-byte recipient ID, the payload, and an optional Ed25519 signature. Version 2 packets may carry an explicit source route. Signatures exclude the TTL byte so relays can decrement it without invalidating them. Packets other than fragments are padded toward uniform sizes.
+A compact binary header (version, type, TTL, timestamp, flags) is followed by an 8-byte sender ID, an optional 8-byte recipient ID, the payload, and an optional Ed25519 signature. Version 2 packets may carry an explicit source route. Signatures exclude the TTL byte so relays can decrement it without invalidating them.
+
+Only `noiseEncrypted` and `noiseHandshake` packets are padded, toward 256/512/1024/2048-byte buckets; every other type — public messages, announcements, board posts, group messages, fragments, files, and voice frames — goes out at its natural length. Padding is PKCS#7-style with pad bytes equal to the pad length, and because that length must fit one byte, a frame needing more than 255 bytes to reach its bucket is emitted unpadded. Payload length is therefore observable for most traffic.
 
 ### 4.2 Flood Control
 
@@ -124,11 +128,11 @@ Bare local counters (deposits, handovers, sprays, opens, outbox flushes and drop
 
 ## 8. Security Considerations
 
-* **Relay nodes** cannot read private traffic; they forward padded, opaque ciphertext.
+* **Relay nodes** cannot read private traffic; they forward opaque ciphertext. Padding applies to Noise frames only (§4.1), so other packet types relay at their natural length.
 * **Couriers** are quota-bounded mailbags. A malicious courier can drop mail (redundant copies and deposit retry mitigate this) but cannot read it, link it across days, or amplify it — copy budgets are capped and every envelope is validated against size and lifetime policy on deposit.
 * **Flooding abuse** is bounded by TTL clamps, deduplication, per-depositor quotas, connect-rate limits, and announce-rate limiting.
 * **Replay** of public broadcasts is bounded by the 6-hour acceptance window plus deduplication; private payloads are protected by Noise nonces.
-* **Metadata.** BLE proximity is inherently observable; ephemeral IDs and daily-rotating courier tags limit long-term correlation. Nostr traffic can ride Tor.
+* **Metadata is the weakest part of this design, and the peer ID does not help.** The 8-byte sender ID in every packet header is derived from a never-rotating key (§3), and announcements publish the static keys and nickname in cleartext, so a passive listener can enumerate participants and follow a device between places. Announcements also carry up to ten direct-neighbor IDs (§4.3), which hands a single sniffer the local adjacency graph. Origin packets leave at the default TTL, so hop distance identifies the originator. Daily-rotating courier tags do limit correlation of carried mail, and Nostr traffic can ride Tor. Addressing the radio-layer exposure is future work (§9).
 * **No forward secrecy for sealed mail or Nostr private envelopes** (§5.2–5.3) means compromise of a recipient's static key can expose retained ciphertext addressed to that key.
 
 ## 9. Future Work
@@ -137,6 +141,9 @@ Bare local counters (deposits, handovers, sprays, opens, outbox flushes and drop
 * Couriered media beyond the 16 KiB text cap.
 * Probabilistic relay and edge-of-network TTL boosting for very dense and very sparse graphs.
 * Multi-hop courier routing informed by encounter history.
+* **Rotating on-air identity.** Epoch-rotating peer IDs, with static-key disclosure moved inside the encrypted handshake and mutual favorites recognising each other through a tag derived from their shared secret, so presence stops being linkable across sessions (§3, §8).
+* **Padding for non-Noise packet types**, and closing the gap where a frame needing more than 255 bytes of padding is emitted unpadded (§4.1).
+* Making the neighbor list in announcements optional, or restricted to authenticated links (§4.3).
 
 ---
 
