@@ -17,13 +17,18 @@ enum BLEPrivateMediaReceiptState: Equatable {
 ///
 /// Each ID has its own atomic record so one hot lookup never rewrites or
 /// decodes the entire ledger. The process-lifetime index is installed only
-/// after a complete, successful directory scan. An enumeration, read, decode,
-/// or structural-validation failure therefore remains retryable and cannot be
-/// mistaken for an empty ledger.
+/// after a complete directory scan. A structural failure of the directory
+/// itself (create/enumerate) remains globally fail-closed and retryable.
+/// An individual record that cannot be read, decoded, or validated is
+/// quarantined instead: the file is moved aside with a `.corrupt` suffix,
+/// excluded from future scans, and only that ID stays fail-closed — the rest
+/// of the ledger keeps working, so one damaged record can never make every
+/// inbound private media payload vanish.
 final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
     typealias DirectoryReader = (_ directory: URL) throws -> [URL]
     typealias DataReader = (_ url: URL) throws -> Data
     private static let receiptDirectoryName = ".private-media-receipts"
+    private static let quarantinePathExtension = "corrupt"
 
     private struct ReceiptRecord: Codable, Equatable {
         enum Kind: String, Codable {
@@ -41,6 +46,10 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
     private final class Runtime: @unchecked Sendable {
         let lock = NSLock()
         var records: [String: ReceiptRecord]?
+        /// IDs whose durable record was quarantined as unreadable. Installed
+        /// together with `records`; these IDs stay fail-closed while every
+        /// other record keeps serving.
+        var quarantined: Set<String> = []
         var volatileTombstones: [String: Date] = [:]
     }
 
@@ -78,6 +87,7 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
     func resetForPanic() {
         runtime.lock.lock()
         runtime.records = nil
+        runtime.quarantined.removeAll(keepingCapacity: false)
         runtime.volatileTombstones.removeAll(keepingCapacity: false)
         runtime.lock.unlock()
     }
@@ -100,6 +110,12 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
 
         guard let directory = resolvedReceiptDirectory(),
               var records = loadIndexIfNeeded(from: directory, at: date) else {
+            return .unavailable
+        }
+        // A quarantined record could have been an acceptance or a tombstone;
+        // only this ID fails closed, so a retry can neither resurrect deleted
+        // media nor double-deliver, while every other payload keeps working.
+        if runtime.quarantined.contains(messageID) {
             return .unavailable
         }
         guard let record = records[messageID] else { return .absent }
@@ -150,7 +166,8 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
         }
 
         guard let directory = resolvedReceiptDirectory(),
-              var records = loadIndexIfNeeded(from: directory, at: date) else {
+              var records = loadIndexIfNeeded(from: directory, at: date),
+              !runtime.quarantined.contains(messageID) else {
             return false
         }
         if let existing = records[messageID],
@@ -202,7 +219,8 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
         addVolatileTombstone(messageID, at: date)
 
         guard let directory = resolvedReceiptDirectory(),
-              var records = loadIndexIfNeeded(from: directory, at: date) else {
+              var records = loadIndexIfNeeded(from: directory, at: date),
+              !runtime.quarantined.contains(messageID) else {
             runtime.volatileTombstones.removeValue(forKey: messageID)
             return false
         }
@@ -291,9 +309,22 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
         }
 
         var records: [String: ReceiptRecord] = [:]
+        var quarantined: Set<String> = []
         var expired: [String] = []
         var tombstones: [ReceiptRecord] = []
         for url in urls {
+            // Records quarantined by an earlier scan stay fail-closed on
+            // every launch without being re-read: only their ID matters.
+            if url.pathExtension == Self.quarantinePathExtension {
+                let messageID = url
+                    .deletingPathExtension()
+                    .deletingPathExtension()
+                    .lastPathComponent
+                if PrivateMediaMessageIdentity.isStableID(messageID) {
+                    quarantined.insert(messageID)
+                }
+                continue
+            }
             guard url.pathExtension == "json" else { continue }
             let messageID = url.deletingPathExtension().lastPathComponent
             guard PrivateMediaMessageIdentity.isStableID(messageID) else {
@@ -305,21 +336,23 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
                 let data = try dataReader?(url) ?? Data(contentsOf: url)
                 record = try JSONDecoder().decode(ReceiptRecord.self, from: data)
             } catch {
-                // Never delete or skip an unreadable stable-ID record. Treating
-                // it as absent could resurrect accepted or deleted media.
-                SecureLogger.error(
-                    "❌ Failed to read private-media receipt \(messageID.prefix(12))…: \(error)",
-                    category: .session
-                )
-                return nil
+                // Never delete or silently skip an unreadable stable-ID
+                // record: treating it as absent could resurrect accepted or
+                // deleted media. But never let it poison the whole ledger
+                // either — quarantine the file and fail only this ID closed.
+                quarantine(url, messageID: messageID, reason: "\(error)")
+                quarantined.insert(messageID)
+                continue
             }
 
             guard isStructurallyValid(record) else {
-                SecureLogger.error(
-                    "❌ Invalid private-media receipt \(messageID.prefix(12))…",
-                    category: .session
+                quarantine(
+                    url,
+                    messageID: messageID,
+                    reason: "structurally invalid"
                 )
-                return nil
+                quarantined.insert(messageID)
+                continue
             }
             if isExpired(record.recordedAt, at: date) {
                 expired.append(messageID)
@@ -331,14 +364,21 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
             }
         }
 
+        // A readable duplicate of a quarantined ID must not override the
+        // fail-closed decision.
+        for messageID in quarantined {
+            records.removeValue(forKey: messageID)
+        }
+
         let overflow = overflowVictims(in: records)
         for messageID in overflow {
             records.removeValue(forKey: messageID)
         }
 
-        // Install the index only after every stable-ID record was read and
-        // validated successfully. Cleanup cannot influence a failed scan.
+        // Install the index only after the whole directory was scanned.
+        // Cleanup cannot influence a failed scan.
         runtime.records = records
+        runtime.quarantined = quarantined
 
         for messageID in expired + overflow {
             removeRecord(messageID: messageID, from: directory)
@@ -347,6 +387,34 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
             removePayloadRecordedByTombstone(tombstone)
         }
         return records
+    }
+
+    /// Moves an unreadable record aside so future scans skip it while its ID
+    /// stays fail-closed. The bytes are preserved for offline inspection —
+    /// quarantine never deletes receiver decisions.
+    private func quarantine(_ url: URL, messageID: String, reason: String) {
+        SecureLogger.error(
+            "❌ Quarantining unreadable private-media receipt \(messageID.prefix(12))…: \(reason)",
+            category: .session
+        )
+        let destination = url.appendingPathExtension(
+            Self.quarantinePathExtension
+        )
+        do {
+            if fileManager.fileExists(atPath: destination.path) {
+                // Same ID, already fail-closed; keep the earlier evidence.
+                try fileManager.removeItem(at: url)
+            } else {
+                try fileManager.moveItem(at: url, to: destination)
+            }
+        } catch {
+            // The record stays where it is and will be re-quarantined (in
+            // memory at minimum) by the next scan. Still fail-closed.
+            SecureLogger.warning(
+                "⚠️ Failed to move corrupt private-media receipt aside: \(error)",
+                category: .session
+            )
+        }
     }
 
     private func isStructurallyValid(_ record: ReceiptRecord) -> Bool {

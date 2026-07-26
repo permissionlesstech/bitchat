@@ -54,7 +54,7 @@ struct BLEPrivateMediaReceiptStoreTests {
     }
 
     @Test
-    func recordReadFailureIsUnavailableAndPreservesReceiptForRetry() throws {
+    func recordReadFailureQuarantinesOnlyThatRecord() throws {
         let root = makeRoot("read-failure")
         defer { try? FileManager.default.removeItem(at: root) }
         let payload = try makePayload(in: root)
@@ -63,13 +63,12 @@ struct BLEPrivateMediaReceiptStoreTests {
             storedURL: payload
         ))
         let record = receiptRecord(in: root)
+        let durableBytes = try Data(contentsOf: record)
 
-        var shouldFail = true
         let store = BLEPrivateMediaReceiptStore(
             baseDirectory: root,
             dataReader: { url in
-                if shouldFail {
-                    shouldFail = false
+                if url.lastPathComponent.hasPrefix(self.messageID) {
                     throw TestError()
                 }
                 return try Data(contentsOf: url)
@@ -77,12 +76,17 @@ struct BLEPrivateMediaReceiptStoreTests {
         )
 
         #expect(store.state(for: messageID) == .unavailable)
-        #expect(FileManager.default.fileExists(atPath: record.path))
-        #expect(store.state(for: messageID) == .accepted(payload))
+        // The record was moved aside, bytes intact, not deleted.
+        #expect(!FileManager.default.fileExists(atPath: record.path))
+        let quarantined = quarantinedRecord(in: root)
+        #expect(FileManager.default.fileExists(atPath: quarantined.path))
+        #expect(try Data(contentsOf: quarantined) == durableBytes)
+        // The quarantine is sticky for this ID; no absent/accepted flapping.
+        #expect(store.state(for: messageID) == .unavailable)
     }
 
     @Test
-    func decodeFailureIsUnavailableAndDoesNotDeleteOrCachePastRepair() throws {
+    func decodeFailureQuarantinesRecordWithoutRetryOrDeletion() throws {
         let root = makeRoot("decode-failure")
         defer { try? FileManager.default.removeItem(at: root) }
         let payload = try makePayload(in: root)
@@ -91,18 +95,74 @@ struct BLEPrivateMediaReceiptStoreTests {
             storedURL: payload
         ))
         let record = receiptRecord(in: root)
-        let durableBytes = try Data(contentsOf: record)
         let corruptBytes = Data("{not-json".utf8)
         try corruptBytes.write(to: record, options: .atomic)
 
         let store = BLEPrivateMediaReceiptStore(baseDirectory: root)
+        // Only this ID fails closed; it cannot be re-recorded past the
+        // quarantine either.
         #expect(store.state(for: messageID) == .unavailable)
         #expect(!store.commitAccepted(messageID: messageID, storedURL: payload))
-        #expect(FileManager.default.fileExists(atPath: record.path))
-        #expect(try Data(contentsOf: record) == corruptBytes)
+        #expect(!store.recordDeleted(messageID: messageID))
+        #expect(store.state(for: messageID) == .unavailable)
 
-        try durableBytes.write(to: record, options: .atomic)
-        #expect(store.state(for: messageID) == .accepted(payload))
+        // The unreadable bytes were preserved at the quarantine name.
+        let quarantined = quarantinedRecord(in: root)
+        #expect(!FileManager.default.fileExists(atPath: record.path))
+        #expect(FileManager.default.fileExists(atPath: quarantined.path))
+        #expect(try Data(contentsOf: quarantined) == corruptBytes)
+
+        // A relaunch stays fail-closed for this ID without ever re-reading
+        // the quarantined file.
+        let readURLs = ReadTracker()
+        let relaunched = BLEPrivateMediaReceiptStore(
+            baseDirectory: root,
+            dataReader: { url in
+                readURLs.append(url)
+                return try Data(contentsOf: url)
+            }
+        )
+        #expect(relaunched.state(for: messageID) == .unavailable)
+        #expect(!readURLs.urls.contains {
+            $0.lastPathComponent == quarantined.lastPathComponent
+        })
+    }
+
+    @Test
+    func corruptRecordDoesNotBlockAnotherSendersMedia() throws {
+        let root = makeRoot("quarantine-isolation")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let otherMessageID = "media-ffeeddccbbaa99887766554433221100"
+        let corruptPayload = try makePayload(in: root, name: "corrupt.jpg")
+        let healthyPayload = try makePayload(in: root, name: "healthy.jpg")
+
+        let seed = BLEPrivateMediaReceiptStore(baseDirectory: root)
+        #expect(seed.commitAccepted(
+            messageID: messageID,
+            storedURL: corruptPayload
+        ))
+        #expect(seed.commitAccepted(
+            messageID: otherMessageID,
+            storedURL: healthyPayload
+        ))
+        try Data("{not-json".utf8).write(
+            to: receiptRecord(in: root),
+            options: .atomic
+        )
+
+        let store = BLEPrivateMediaReceiptStore(baseDirectory: root)
+        // Only the damaged record fails closed; the other sender's ledger
+        // entry keeps serving and new decisions still commit durably.
+        #expect(store.state(for: messageID) == .unavailable)
+        #expect(store.state(for: otherMessageID) == .accepted(healthyPayload))
+
+        let freshMessageID = "media-0102030405060708090a0b0c0d0e0f10"
+        let freshPayload = try makePayload(in: root, name: "fresh.jpg")
+        #expect(store.commitAccepted(
+            messageID: freshMessageID,
+            storedURL: freshPayload
+        ))
+        #expect(store.state(for: freshMessageID) == .accepted(freshPayload))
     }
 
     @Test
@@ -116,15 +176,26 @@ struct BLEPrivateMediaReceiptStoreTests {
         #expect(!FileManager.default.fileExists(atPath: payload.path))
 
         let record = receiptRecord(in: root)
-        let durableBytes = try Data(contentsOf: record)
-        try Data([0xFF, 0x00, 0x7B]).write(to: record, options: .atomic)
+        let corruptBytes = Data([0xFF, 0x00, 0x7B])
+        try corruptBytes.write(to: record, options: .atomic)
 
         let relaunched = BLEPrivateMediaReceiptStore(baseDirectory: root)
         #expect(relaunched.state(for: messageID) == .unavailable)
-        #expect(FileManager.default.fileExists(atPath: record.path))
-
-        try durableBytes.write(to: record, options: .atomic)
-        #expect(relaunched.state(for: messageID) == .tombstoned)
+        // The quarantined tombstone can never flip to absent — a sender retry
+        // must not resurrect explicitly deleted media even when the payload
+        // bytes arrive again.
+        try Data([0xFF, 0xD8, 0xFF, 0xD9]).write(to: payload)
+        #expect(!relaunched.commitAccepted(
+            messageID: messageID,
+            storedURL: payload
+        ))
+        let quarantined = quarantinedRecord(in: root)
+        #expect(FileManager.default.fileExists(atPath: quarantined.path))
+        #expect(try Data(contentsOf: quarantined) == corruptBytes)
+        #expect(
+            BLEPrivateMediaReceiptStore(baseDirectory: root)
+                .state(for: messageID) == .unavailable
+        )
     }
 
     @Test
@@ -180,7 +251,10 @@ struct BLEPrivateMediaReceiptStoreTests {
         )
     }
 
-    private func makePayload(in root: URL) throws -> URL {
+    private func makePayload(
+        in root: URL,
+        name: String = "image.jpg"
+    ) throws -> URL {
         let directory = root.appendingPathComponent(
             "files/images/incoming",
             isDirectory: true
@@ -189,7 +263,7 @@ struct BLEPrivateMediaReceiptStoreTests {
             at: directory,
             withIntermediateDirectories: true
         )
-        let payload = directory.appendingPathComponent("image.jpg")
+        let payload = directory.appendingPathComponent(name)
         try Data([0xFF, 0xD8, 0xFF, 0xD9]).write(to: payload)
         return payload
     }
@@ -203,4 +277,15 @@ struct BLEPrivateMediaReceiptStoreTests {
             .appendingPathComponent(messageID)
             .appendingPathExtension("json")
     }
+
+    private func quarantinedRecord(in root: URL) -> URL {
+        receiptRecord(in: root).appendingPathExtension("corrupt")
+    }
+}
+
+/// Collects the URLs a store's data reader touched. A reference type so the
+/// `@Sendable`-shaped reader closure can record without mutating captures.
+private final class ReadTracker: @unchecked Sendable {
+    private(set) var urls: [URL] = []
+    func append(_ url: URL) { urls.append(url) }
 }
