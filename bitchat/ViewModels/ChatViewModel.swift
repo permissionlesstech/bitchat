@@ -1066,6 +1066,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         conversations.clear(conversationID)
     }
 
+    func purgeArchivedPublicMessages() {
+        meshService.purgeAllArchivedPublicMessages()
+    }
+
     /// Queues a system message for the next geohash channel visit. (Tiny
     /// UI-flow queue formerly on `PublicTimelineStore`; it is notice text,
     /// not conversation state, so it stays on the owner.)
@@ -1628,6 +1632,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         GeohashChatActivityTracker.shared.clear()
         MeshSightingsTracker.shared.clear()
         MeshEchoSettings.reset()
+        NotificationPrivacySettings.reset()
 
         // Drop private group keys and rosters (keychain + disk)
         groupStore.wipe()

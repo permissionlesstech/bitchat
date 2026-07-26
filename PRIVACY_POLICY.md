@@ -40,7 +40,7 @@ bitchat is designed for private, account-free communication. This policy describ
 
 6. **Media attachments**
    - Voice notes and images you send or receive can be stored under Application Support so they remain playable while referenced by the app.
-   - Incoming media is subject to a 100 MB quota with oldest-file eviction. Media is deleted by panic wipe or app removal; some outgoing media can otherwise remain on disk.
+   - Incoming media is subject to a 100 MB quota with oldest-file eviction. All stored media, sent and received, is also deleted once it is more than seven days old, and immediately by panic wipe or app removal.
 
 7. **Optional location-channel state**
    - Your selected geohash channel, bookmarks, teleport flags, and bookmark display names are stored locally so the UI can restore them.
@@ -116,12 +116,15 @@ No cryptographic system can protect content after a recipient reads, copies, scr
 - **Opaque courier envelopes:** until handed off, evicted by bounded policy, or 24 hours, whichever comes first.
 - **Recent public mesh gossip:** up to 15 minutes.
 - **Public board posts and tombstones:** until expiry, at most seven days.
-- **Groups, favorites, preferences, identity keys, bookmarks, and media:** until removed by the feature, panic wipe, quota eviction where applicable, or app removal.
+- **Media:** seven days, or sooner by quota eviction, panic wipe, or app removal.
+- **Groups, favorites, preferences, identity keys, and bookmarks:** until removed by the feature, panic wipe, or app removal.
 - **Nostr data:** according to the policies of the relays that receive it.
 
 ## Your Controls
 
 - **Panic wipe:** Triple-tap the logo to synchronously cancel in-flight media work and clear local keys, sessions, preferences, groups, queues, carried mail, public archives, board data, and media managed by the app.
+- **Notification previews:** Hidden by default, so lock-screen alerts do not show message text, sender names, or geohashes. Full previews can be turned on in settings.
+- **Clearing a conversation:** Clearing the mesh timeline also deletes the recent public gossip this device had stored on disk.
 - **Feature controls:** Location channels, mesh bridge, internet gateway, and related internet behaviors can be disabled in the app. Some already-published relay data cannot be recalled.
 - **System permissions:** Bluetooth, location, microphone, camera, and photo-library access can be revoked in system settings.
 - **No account:** The project operates no account record for you to request or export.

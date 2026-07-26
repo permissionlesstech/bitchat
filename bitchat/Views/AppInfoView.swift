@@ -21,6 +21,7 @@ struct AppInfoView: View {
     @State private var showTopology = false
     @State private var liveVoiceEnabled = PTTSettings.liveVoiceEnabled
     @State private var locationNotesEnabled = LocationNotesSettings.enabled
+    @State private var hideMessagePreviews = NotificationPrivacySettings.hideMessagePreviews
     @ObservedObject private var locationManager = LocationChannelManager.shared
     /// Sticky across opens: first-ever open lands on Info (the gentler
     /// introduction), and afterwards the sheet reopens wherever it was left.
@@ -82,6 +83,10 @@ struct AppInfoView: View {
             static let torSubtitle: LocalizedStringKey = "location_channels.tor.subtitle"
             static let toggleOn: LocalizedStringKey = "common.toggle.on"
             static let toggleOff: LocalizedStringKey = "common.toggle.off"
+
+            static let privacyTitle = String(localized: "app_info.settings.privacy.title", defaultValue: "PRIVACY", comment: "Section header (uppercase) for privacy settings such as hiding notification previews")
+            static let hidePreviewsTitle = String(localized: "app_info.settings.hide_previews.title", defaultValue: "hide message previews", comment: "Title of the setting that keeps message text, sender names, and geohashes out of lock-screen notifications")
+            static let hidePreviewsSubtitle = String(localized: "app_info.settings.hide_previews.subtitle", defaultValue: "notifications say that something arrived without showing the message, who sent it, or which location channel it came from. anyone holding your locked phone learns nothing from the lock screen. on by default.", comment: "Subtitle explaining what hiding notification message previews does")
 
             static let dangerTitle = String(localized: "app_info.settings.danger.title", defaultValue: "DANGER ZONE", comment: "Section header (uppercase) for destructive actions in settings")
             static let panicButton = String(localized: "app_info.settings.danger.panic_button", defaultValue: "panic wipe", comment: "Button in the settings danger zone that erases all local data after confirmation")
@@ -474,6 +479,26 @@ struct AppInfoView: View {
                             .bitchatFont(size: 12)
                             .foregroundColor(palette.accent)
                     }
+                }
+            }
+
+            // Privacy: what a locked, seized, or borrowed phone gives away
+            // without being unlocked.
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader(verbatim: Strings.Settings.privacyTitle)
+
+                settingsCard {
+                    settingToggle(
+                        title: Text(verbatim: Strings.Settings.hidePreviewsTitle),
+                        subtitle: Text(verbatim: Strings.Settings.hidePreviewsSubtitle),
+                        isOn: Binding(
+                            get: { hideMessagePreviews },
+                            set: { newValue in
+                                hideMessagePreviews = newValue
+                                NotificationPrivacySettings.hideMessagePreviews = newValue
+                            }
+                        )
+                    )
                 }
             }
 

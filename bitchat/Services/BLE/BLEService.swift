@@ -2574,6 +2574,12 @@ final class BLEService: NSObject {
         gossipSyncManager?.removePublicMessages(from: peerID)
     }
 
+    /// Clearing the mesh timeline erases the archive behind it, so the cleared
+    /// history is gone from disk rather than merely hidden from the timeline.
+    func purgeAllArchivedPublicMessages() {
+        gossipSyncManager?.removeAllPublicMessages()
+    }
+
     func collectArchivedPublicMessages(completion: @escaping @MainActor ([ArchivedPublicMessage]) -> Void) {
         guard let generation = capturePanicLifecycleGeneration() else {
             return

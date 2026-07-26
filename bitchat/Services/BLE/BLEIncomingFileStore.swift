@@ -114,6 +114,9 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     }
 
     private static let defaultQuotaBytes: Int64 = 100 * 1024 * 1024
+    /// How long managed media may stay on disk. Bounds by age what the quota
+    /// only bounds by size; see `expireAgedMedia(retention:)`.
+    static let defaultMediaRetention: TimeInterval = 7 * 24 * 60 * 60
     /// Kept outside `files/` so deleting the media tree cannot erase the
     /// fail-closed startup decision before the full panic has committed.
     private static let panicRecoveryPendingMarkerFileName =
@@ -567,6 +570,84 @@ struct BLEIncomingFileStore: @unchecked Sendable {
         } catch {
             SecureLogger.warning("⚠️ Could not enforce storage quota: \(error)", category: .security)
         }
+    }
+
+    /// Deletes managed media older than `retention`, across both incoming and
+    /// outgoing directories, and reports how many files went away.
+    ///
+    /// The quota sweep above only bounds *size*, and only for incoming files,
+    /// so a received photo or a sent voice note could sit on disk unbounded in
+    /// time — long outliving the conversation it belonged to, which is what a
+    /// seized device gives up. This bounds media by age instead, on the same
+    /// principle as the courier envelope and gossip archive lifetimes.
+    ///
+    /// Honors the same exclusions as quota eviction: in-flight live captures
+    /// and files reserved by an in-progress delivery or deletion are left
+    /// alone regardless of age.
+    @discardableResult
+    func expireAgedMedia(retention: TimeInterval = Self.defaultMediaRetention) -> Int {
+        guard retention > 0 else { return 0 }
+
+        payloadCoordination.lock.lock()
+        defer { payloadCoordination.lock.unlock() }
+
+        let cutoff = dateProvider().addingTimeInterval(-retention)
+        let activeDeletionPaths = payloadCoordination
+            .deletionReservations.values.reduce(into: Set<String>()) {
+                $0.formUnion($1)
+            }
+        let protectedPaths = activeDeletionPaths.union(
+            payloadCoordination.pendingDeliveryPaths
+        )
+
+        var removed = 0
+        do {
+            let base = try filesDirectory()
+            for subdirectory in Self.mediaSubdirectories {
+                let dir = base.appendingPathComponent(subdirectory, isDirectory: true)
+                guard fileManager.fileExists(atPath: dir.path) else { continue }
+                guard let contents = try? fileManager.contentsOfDirectory(
+                    at: dir,
+                    includingPropertiesForKeys: [.contentModificationDateKey],
+                    options: [.skipsHiddenFiles]
+                ) else { continue }
+
+                for fileURL in contents {
+                    guard let modified = try? fileURL.resourceValues(
+                        forKeys: [.contentModificationDateKey]
+                    ).contentModificationDate else { continue }
+                    guard modified < cutoff else { continue }
+                    guard !fileURL.lastPathComponent.hasPrefix(Self.liveCapturePrefix) else { continue }
+                    guard !protectedPaths.contains(
+                        fileURL.standardizedFileURL.path
+                    ) else { continue }
+
+                    do {
+                        try fileManager.removeItem(at: fileURL)
+                        removed += 1
+                    } catch {
+                        SecureLogger.warning(
+                            "⚠️ Failed to expire aged media file: \(error)",
+                            category: .security
+                        )
+                    }
+                }
+            }
+        } catch {
+            SecureLogger.warning(
+                "⚠️ Could not expire aged media: \(error)",
+                category: .security
+            )
+            return removed
+        }
+
+        if removed > 0 {
+            SecureLogger.info(
+                "🗑️ Expired \(removed) media file(s) older than the retention window",
+                category: .security
+            )
+        }
+        return removed
     }
 
     private func filesDirectory() throws -> URL {

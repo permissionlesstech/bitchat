@@ -12468,6 +12468,564 @@
         }
       }
     },
+    "app_info.settings.hide_previews.subtitle" : {
+      "comment" : "Subtitle explaining what hiding notification message previews does",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تقول الإشعارات إن شيئًا ما وصل دون إظهار الرسالة ولا من أرسلها ولا قناة الموقع التي جاءت منها. من يحمل هاتفك المقفل لا يعرف شيئًا من شاشة القفل. مفعّل افتراضيًا."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "নোটিফিকেশন শুধু জানায় যে কিছু এসেছে — বার্তা, কে পাঠিয়েছে বা কোন লোকেশন চ্যানেল থেকে এসেছে তা দেখায় না। আপনার লক করা ফোন যার হাতেই থাকুক, লক স্ক্রিন থেকে কিছুই জানতে পারবে না। ডিফল্টভাবে চালু।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "benachrichtigungen sagen nur, dass etwas angekommen ist — ohne die nachricht, ohne wer sie geschickt hat und ohne den standortkanal, aus dem sie kam. wer dein gesperrtes handy in der hand hält, erfährt vom sperrbildschirm nichts. standardmäßig an."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "notifications say that something arrived without showing the message, who sent it, or which location channel it came from. anyone holding your locked phone learns nothing from the lock screen. on by default."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "las notificaciones dicen que ha llegado algo sin mostrar el mensaje, quién lo envió ni de qué canal de ubicación viene. quien tenga tu teléfono bloqueado en la mano no aprende nada de la pantalla de bloqueo. activado por defecto."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اعلان‌ها فقط می‌گویند چیزی رسیده است، بدون نشان دادن متن پیام، فرستنده یا کانال موقعیتی که از آن آمده. هر کسی گوشی قفل‌شده‌ات را در دست بگیرد، از صفحهٔ قفل چیزی نمی‌فهمد. به‌طور پیش‌فرض روشن."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sinasabi lang ng mga notification na may dumating, hindi ang mensahe, hindi kung sino ang nagpadala, at hindi kung saang channel ng lokasyon ito nanggaling. kahit sino ang may hawak ng naka-lock na telepono mo, wala siyang malalaman sa lock screen. naka-on bilang default."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "les notifications disent que quelque chose est arrivé sans montrer le message, qui l'a envoyé, ni de quel canal de localisation il vient. quiconque tient ton téléphone verrouillé n'apprend rien depuis l'écran de verrouillage. activé par défaut."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ההתראות מודיעות שמשהו הגיע בלי להציג את ההודעה, מי שלח אותה או מאיזה ערוץ מיקום היא באה. מי שמחזיק את הטלפון הנעול שלך לא לומד דבר ממסך הנעילה. פעיל כברירת מחדל."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "नोटिफिकेशन सिर्फ बताते हैं कि कुछ आया है — न संदेश, न भेजने वाला, न वह लोकेशन चैनल जहाँ से वह आया। आपका लॉक किया हुआ फोन किसी के हाथ में हो, लॉक स्क्रीन से उसे कुछ पता नहीं चलेगा। डिफ़ॉल्ट रूप से चालू।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "notifikasi hanya bilang ada sesuatu yang masuk, tanpa menampilkan pesannya, siapa pengirimnya, atau dari kanal lokasi mana. siapa pun yang memegang ponselmu yang terkunci tidak mendapat apa pun dari layar kunci. aktif secara bawaan."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "le notifiche dicono che è arrivato qualcosa senza mostrare il messaggio, chi l'ha inviato o da quale canale posizione arriva. chi tiene in mano il tuo telefono bloccato non scopre nulla dalla schermata di blocco. attivo per impostazione predefinita."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通知は何か届いたことだけを伝え、メッセージの内容も、送り主も、どのロケーションチャンネルから来たかも表示しません。ロックしたスマホを誰が手にしても、ロック画面からは何もわかりません。初期設定はオンです。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "알림은 무언가 도착했다는 사실만 알리고 메시지 내용, 보낸 사람, 어느 위치 채널에서 왔는지는 보여주지 않습니다. 잠긴 휴대폰을 누가 들고 있어도 잠금 화면에서 알 수 있는 것은 없습니다. 기본값은 켜짐입니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "notifikasi hanya memberitahu ada sesuatu masuk, tanpa menunjukkan mesejnya, siapa yang menghantar, atau dari kanal lokasi mana. sesiapa yang memegang telefonmu yang berkunci tidak tahu apa-apa daripada skrin kunci. hidup secara lalai."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सूचनाहरूले केवल कुनै कुरा आयो भन्छन्, सन्देश, पठाउने व्यक्ति वा कुन स्थान च्यानलबाट आयो भन्ने देखाउँदैनन्। तिम्रो लक भएको फोन जोसुकैको हातमा परे पनि लक स्क्रिनबाट केही थाहा पाउँदैन। पूर्वनिर्धारित रूपमा अन।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "meldingen zeggen alleen dat er iets is binnengekomen, zonder het bericht, de afzender of het locatiekanaal waaruit het komt. wie je vergrendelde telefoon vasthoudt, komt niets te weten via het vergrendelscherm. standaard aan."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "powiadomienia mówią tylko, że coś przyszło — bez treści, bez nadawcy i bez kanału lokalizacji, z którego przyszło. ktokolwiek trzyma twój zablokowany telefon, nie dowie się niczego z ekranu blokady. domyślnie włączone."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "as notificações dizem que chegou algo sem mostrar a mensagem, quem a enviou nem de que canal de localização vem. quem tem o teu telemóvel bloqueado na mão não fica a saber nada pelo ecrã de bloqueio. ligado por predefinição."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "as notificações dizem que algo chegou sem mostrar a mensagem, quem enviou nem de qual canal de localização veio. quem estiver com seu celular bloqueado na mão não descobre nada pela tela de bloqueio. ligado por padrão."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "уведомления сообщают только, что что-то пришло — без текста, без отправителя и без канала локации, откуда оно. кто бы ни держал твой заблокированный телефон, с экрана блокировки он не узнает ничего. по умолчанию включено."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aviseringar säger bara att något kommit in, utan meddelandet, vem som skickade det eller vilken platskanal det kom från. den som håller i din låsta telefon får inget veta från låsskärmen. på som standard."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "அறிவிப்புகள் ஏதோ வந்ததை மட்டும் சொல்லும் — செய்தியையும், அனுப்பியவரையும், எந்த இட சேனலிலிருந்து வந்ததையும் காட்டாது. உங்கள் பூட்டிய தொலைபேசியை யார் கையில் வைத்திருந்தாலும், பூட்டுத் திரையிலிருந்து எதுவும் தெரியாது. இயல்பாக இயக்கத்தில் உள்ளது."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "การแจ้งเตือนจะบอกแค่ว่ามีอะไรเข้ามา โดยไม่แสดงข้อความ ไม่บอกว่าใครส่ง และไม่บอกว่ามาจากช่องตามตำแหน่งใด ใครถือโทรศัพท์ที่ล็อกอยู่ของคุณก็ไม่รู้อะไรจากหน้าจอล็อก เปิดไว้เป็นค่าเริ่มต้น"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bildirimler yalnızca bir şeyin geldiğini söyler; mesajı, kimin gönderdiğini ya da hangi konum kanalından geldiğini göstermez. kilitli telefonunu elinde tutan kişi kilit ekranından hiçbir şey öğrenemez. varsayılan olarak açık."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "повідомлення лише кажуть, що щось надійшло — без тексту, без відправника й без каналу локації, звідки воно. хто б не тримав твій заблокований телефон, з екрана блокування він не дізнається нічого. типово ввімкнено."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اطلاعات صرف یہ بتاتی ہیں کہ کچھ آیا ہے، نہ پیغام دکھاتی ہیں، نہ بھیجنے والا، نہ یہ کہ کس لوکیشن چینل سے آیا۔ آپ کا مقفل فون جس کے ہاتھ میں بھی ہو، لاک اسکرین سے اسے کچھ معلوم نہیں ہوتا۔ بطور طے شدہ آن ہے۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "thông báo chỉ cho biết có gì vừa đến, không hiện nội dung tin nhắn, ai gửi, hay đến từ kênh vị trí nào. ai đang giữ chiếc điện thoại đã khoá của bạn cũng không biết được gì từ màn hình khoá. bật theo mặc định."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通知只告诉你有新消息抵达，不显示内容、发送者，也不显示来自哪个位置频道。谁拿着你锁定的手机，都无法从锁屏上得知任何信息。默认开启。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通知只告訴你有新訊息抵達，不顯示內容、發送者，也不顯示來自哪個位置頻道。誰拿著你鎖定的手機，都無法從鎖定畫面得知任何資訊。預設開啟。"
+          }
+        }
+      }
+    },
+    "app_info.settings.hide_previews.title" : {
+      "comment" : "Title of the setting that keeps message text, sender names, and geohashes out of lock-screen notifications",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إخفاء معاينات الرسائل"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "বার্তার প্রিভিউ লুকান"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nachrichtenvorschau ausblenden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hide message previews"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ocultar vistas previas de mensajes"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پنهان کردن پیش‌نمایش پیام‌ها"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "itago ang preview ng mensahe"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "masquer les aperçus de messages"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הסתרת תצוגה מקדימה של הודעות"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "संदेश प्रीव्यू छुपाएँ"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sembunyikan pratinjau pesan"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nascondi le anteprime dei messaggi"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "メッセージのプレビューを隠す"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "메시지 미리보기 숨기기"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sembunyikan pratonton mesej"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सन्देशको प्रिभ्यु लुकाउ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "berichtvoorbeelden verbergen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ukryj podglądy wiadomości"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ocultar pré-visualizações de mensagens"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ocultar prévias de mensagens"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "скрывать превью сообщений"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dölj förhandsvisning av meddelanden"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "செய்தி முன்தோற்றத்தை மறை"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ซ่อนตัวอย่างข้อความ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesaj önizlemelerini gizle"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "приховувати попередній перегляд повідомлень"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پیغام کی جھلک چھپائیں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ẩn nội dung xem trước tin nhắn"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏消息预览"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隱藏訊息預覽"
+          }
+        }
+      }
+    },
+    "app_info.settings.privacy.title" : {
+      "comment" : "Section header (uppercase) for privacy settings such as hiding notification previews",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خصوصية"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "গোপনীয়তা"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PRIVATSPHÄRE"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PRIVACY"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PRIVACIDAD"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حریم خصوصی"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PRIBASYA"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CONFIDENTIALITÉ"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פרטיות"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "गोपनीयता"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PRIVASI"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PRIVACY"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プライバシー"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "개인정보 보호"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PRIVASI"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "गोपनीयता"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PRIVACY"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PRYWATNOŚĆ"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PRIVACIDADE"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PRIVACIDADE"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "КОНФИДЕНЦИАЛЬНОСТЬ"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PRIVAT"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "தனியுரிமை"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ความเป็นส่วนตัว"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GİZLİLİK"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "КОНФІДЕНЦІЙНІСТЬ"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رازداری"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "QUYỀN RIÊNG TƯ"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐私"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隱私"
+          }
+        }
+      }
+    },
     "app_info.tab.info" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -60843,6 +61401,750 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "公告"
+          }
+        }
+      }
+    },
+    "notification.redacted.body" : {
+      "comment" : "Lock-screen notification body shown in place of the message text when message previews are hidden",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "افتح bitchat للقراءة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "পড়তে bitchat খুলুন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "öffne bitchat zum lesen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "open bitchat to read"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abre bitchat para leer"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "برای خواندن bitchat را باز کن"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "buksan ang bitchat para makita"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ouvre bitchat pour lire"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פתח את bitchat כדי לקרוא"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पढ़ने के लिए bitchat खोलें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "buka bitchat untuk membaca"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apri bitchat per leggere"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "読むには bitchat を開いてください"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "읽으려면 bitchat을 열어보세요"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "buka bitchat untuk membaca"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पढ्न bitchat खोल"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "open bitchat om te lezen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "otwórz bitchat, aby przeczytać"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abre o bitchat para ler"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abra o bitchat para ler"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "открой bitchat, чтобы прочитать"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "öppna bitchat för att läsa"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "படிக்க bitchat ஐத் திறக்கவும்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เปิด bitchat เพื่ออ่าน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "okumak için bitchat'i aç"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "відкрий bitchat, щоб прочитати"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پڑھنے کے لیے bitchat کھولیں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mở bitchat để đọc"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 bitchat 查看"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "開啟 bitchat 查看"
+          }
+        }
+      }
+    },
+    "notification.redacted.dm.title" : {
+      "comment" : "Lock-screen notification title for a received direct message when message previews are hidden; deliberately names neither the sender nor the content",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 رسالة خاصة جديدة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 নতুন ডিএম"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 neue pn"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 new dm"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 nuevo md"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 پیام خصوصی جدید"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 bagong dm"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 nouveau mp"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 הודעה פרטית חדשה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 नया dm"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 dm baru"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 nuovo dm"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 新しいdm"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 새 dm"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 dm baru"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 नयाँ dm"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 nieuwe dm"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 nowy dm"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 nova mensagem privada"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 novo dm"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 новое личное сообщение"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 nytt dm"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 புதிய dm"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 dm ใหม่"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 yeni dm"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 нове приватне повідомлення"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 نیا نجی پیغام"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 dm mới"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 新的 dm"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 新的 dm"
+          }
+        }
+      }
+    },
+    "notification.redacted.geohash.title" : {
+      "comment" : "Lock-screen notification title for activity in a location channel when message previews are hidden; deliberately omits the geohash",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 نشاط جديد قريب منك"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 আশেপাশে নতুন কার্যকলাপ"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 neue aktivität in der nähe"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 new activity nearby"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 nueva actividad cerca"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 فعالیت جدید در نزدیکی"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 may bagong aktibidad sa paligid"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 nouvelle activité à proximité"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 פעילות חדשה בסביבה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 आसपास नई गतिविधि"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 aktivitas baru di sekitar"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 nuova attività nelle vicinanze"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 近くで新しい動き"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 근처에 새 활동"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 aktiviti baru berdekatan"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 नजिकै नयाँ गतिविधि"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 nieuwe activiteit in de buurt"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 nowa aktywność w okolicy"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 nova atividade por perto"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 nova atividade por perto"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 новая активность рядом"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 ny aktivitet i närheten"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 அருகில் புதிய செயல்பாடு"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 มีความเคลื่อนไหวใหม่ใกล้คุณ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 yakınında yeni hareket"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 нова активність поблизу"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 قریب نئی سرگرمی"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 hoạt động mới gần bạn"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 附近有新动态"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 附近有新動態"
+          }
+        }
+      }
+    },
+    "notification.redacted.mention.title" : {
+      "comment" : "Lock-screen notification title telling someone they were mentioned when message previews are hidden; deliberately omits who mentioned them",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 تمّت الإشارة إليك"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 আপনাকে মেনশন করা হয়েছে"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 du wurdest erwähnt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 you were mentioned"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 te han mencionado"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 منشن شدی"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 nabanggit ka"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 on t'a mentionné"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 הוזכרת"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 आपको मेंशन किया गया"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 kamu disebut"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 ti hanno menzionato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 メンションされました"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 멘션되었습니다"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 kamu disebut"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 तिमीलाई उल्लेख गरियो"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 je bent vermeld"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 wspomniano o tobie"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 mencionaram-te"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 mencionaram você"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 тебя упомянули"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 du har omnämnts"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 உங்களைக் குறிப்பிட்டுள்ளனர்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 คุณถูกกล่าวถึง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 senden bahsedildi"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 тебе згадали"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 آپ کا ذکر ہوا"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 bạn được nhắc tới"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 你被提及"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 你被提及"
           }
         }
       }

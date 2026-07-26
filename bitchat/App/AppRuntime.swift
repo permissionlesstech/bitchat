@@ -152,9 +152,19 @@ final class AppRuntime: ObservableObject {
         NetworkActivationService.shared.start()
         GeohashPresenceService.shared.start()
         checkForSharedContent()
+        expireAgedMedia()
 
         record(.launched)
         record(.startupCompleted)
+    }
+
+    /// Drops media that has outlived the retention window. Off the main thread
+    /// and best-effort: the sweep walks the media tree, and nothing at launch
+    /// depends on its result.
+    private func expireAgedMedia() {
+        Task(priority: .utility) {
+            BLEIncomingFileStore().expireAgedMedia()
+        }
     }
 
     func handleOpenURL(_ url: URL) {
