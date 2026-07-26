@@ -579,6 +579,20 @@ struct ViewSmokeTests {
         )
     }
 
+    @Test("Bluetooth alerts wait for the voice recording error alert")
+    func bluetoothAlertGuards_includeVoiceAlert() {
+        #expect(
+            ContentRootModalPresentationState(
+                isVoiceAlertPresented: true
+            ).hasPresentation
+        )
+        #expect(
+            ContentPeopleSheetModalPresentationState(
+                isVoiceAlertPresented: true
+            ).hasPresentation
+        )
+    }
+
     @Test("Root Bluetooth alert waits for screenshot privacy alert")
     @MainActor
     func rootBluetoothAlertGuard_tracksScreenshotPrivacyState() {

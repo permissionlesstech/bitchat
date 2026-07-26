@@ -140,7 +140,9 @@ struct ContentView: View {
         showSidebar || selectedPrivatePeerID != nil
     }
 
-    private var hasRootModalPresentation: Bool {
+    private func rootModalPresentationState(
+        includingVoiceAlert: Bool
+    ) -> ContentRootModalPresentationState {
         #if os(iOS)
         let isMediaPickerPresented = showImagePicker
         #else
@@ -152,9 +154,19 @@ struct ContentView: View {
             isPeopleSheetPresented: isPeopleSheetPresented,
             isImagePreviewPresented: imagePreviewURL != nil,
             isVerificationSheetPresented: showVerifySheet,
-            isVoiceAlertPresented: voiceRecordingVM.showAlert,
+            isVoiceAlertPresented: includingVoiceAlert && voiceRecordingVM.showAlert,
             isMediaPickerPresented: isMediaPickerPresented
-        ).hasPresentation
+        )
+    }
+
+    private var hasRootModalPresentation: Bool {
+        rootModalPresentationState(includingVoiceAlert: true).hasPresentation
+    }
+
+    /// The voice alert cannot defer to itself: its own binding must keep
+    /// reporting `true` while it is the presented modal.
+    private var hasRootModalPresentationBesidesVoiceAlert: Bool {
+        rootModalPresentationState(includingVoiceAlert: false).hasPresentation
     }
 
     private var rootBluetoothAlertBinding: Binding<Bool> {
@@ -171,6 +183,29 @@ struct ContentView: View {
                     return
                 }
                 appChromeModel.showBluetoothAlert = false
+            }
+        )
+    }
+
+    /// Voice recording errors can surface while the people/DM sheet is up
+    /// (recording happens inside the sheet). Presenting the root alert then
+    /// would force-dismiss the sheet, so the root copy defers to any other
+    /// root modal; the sheet presents its own copy. Mirrors the Bluetooth
+    /// alert treatment above.
+    private var rootVoiceAlertBinding: Binding<Bool> {
+        Binding(
+            get: {
+                scenePhase == .active
+                    && voiceRecordingVM.showAlert
+                    && !hasRootModalPresentationBesidesVoiceAlert
+            },
+            set: { isPresented in
+                guard !isPresented,
+                      scenePhase == .active,
+                      !hasRootModalPresentationBesidesVoiceAlert else {
+                    return
+                }
+                voiceRecordingVM.showAlert = false
             }
         )
     }
@@ -220,12 +255,14 @@ struct ContentView: View {
                 set: { isPresented in
                     if !isPresented {
                         showSidebar = false
-                        // Scene/background and Bluetooth-alert presentation
-                        // reconciliation are not user requests to leave the
-                        // conversation. Keep the selected DM so the sheet
-                        // remains live when the app returns from Settings.
+                        // Scene/background and alert-presentation
+                        // reconciliation (Bluetooth-off, recording errors)
+                        // are not user requests to leave the conversation.
+                        // Keep the selected DM so the sheet remains live
+                        // when the app returns from Settings.
                         if scenePhase == .active,
-                           !appChromeModel.showBluetoothAlert {
+                           !appChromeModel.showBluetoothAlert,
+                           !voiceRecordingVM.showAlert {
                             privateConversationModel.endConversation()
                         }
                     }
@@ -328,7 +365,7 @@ struct ContentView: View {
                 ImagePreviewView(url: url)
             }
         }
-        .alert("Recording Error", isPresented: $voiceRecordingVM.showAlert, actions: {
+        .alert("Recording Error", isPresented: rootVoiceAlertBinding, actions: {
             Button("common.ok", role: .cancel) {}
             if voiceRecordingVM.state == .permissionDenied {
                 Button("location_channels.action.open_settings") {

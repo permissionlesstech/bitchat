@@ -10,12 +10,14 @@ struct ContentPeopleSheetModalPresentationState {
     var isImagePreviewPresented = false
     var isVerificationSheetPresented = false
     var legacyPrivateMediaConsentRequest: LegacyPrivateMediaConsentRequest? = nil
+    var isVoiceAlertPresented = false
     var isMediaPickerPresented = false
 
     var hasPresentation: Bool {
         isImagePreviewPresented
             || isVerificationSheetPresented
             || legacyPrivateMediaConsentRequest != nil
+            || isVoiceAlertPresented
             || isMediaPickerPresented
     }
 }
@@ -51,7 +53,9 @@ struct ContentPeopleSheetView: View {
     @Binding var showMacImagePicker: Bool
     #endif
 
-    private var hasModalPresentation: Bool {
+    private func modalPresentationState(
+        includingVoiceAlert: Bool
+    ) -> ContentPeopleSheetModalPresentationState {
         #if os(iOS)
         let isMediaPickerPresented = showImagePicker
         #else
@@ -63,8 +67,19 @@ struct ContentPeopleSheetView: View {
             isVerificationSheetPresented: showVerifySheet,
             legacyPrivateMediaConsentRequest:
                 conversationUIModel.legacyPrivateMediaConsentRequest,
+            isVoiceAlertPresented: includingVoiceAlert && voiceRecordingVM.showAlert,
             isMediaPickerPresented: isMediaPickerPresented
-        ).hasPresentation
+        )
+    }
+
+    private var hasModalPresentation: Bool {
+        modalPresentationState(includingVoiceAlert: true).hasPresentation
+    }
+
+    /// The voice alert cannot defer to itself: its own binding must keep
+    /// reporting `true` while it is the presented modal.
+    private var hasModalPresentationBesidesVoiceAlert: Bool {
+        modalPresentationState(includingVoiceAlert: false).hasPresentation
     }
 
     private var bluetoothAlertBinding: Binding<Bool> {
@@ -81,6 +96,28 @@ struct ContentPeopleSheetView: View {
                     return
                 }
                 appChromeModel.showBluetoothAlert = false
+            }
+        )
+    }
+
+    /// Voice recording happens inside this sheet, so its error alert must
+    /// present from here as well: the root copy defers whenever this sheet
+    /// is up, exactly like the Bluetooth alert above. Presenting from the
+    /// root instead would force-dismiss the sheet and end the conversation.
+    private var voiceAlertBinding: Binding<Bool> {
+        Binding(
+            get: {
+                scenePhase == .active
+                    && voiceRecordingVM.showAlert
+                    && !hasModalPresentationBesidesVoiceAlert
+            },
+            set: { isPresented in
+                guard !isPresented,
+                      scenePhase == .active,
+                      !hasModalPresentationBesidesVoiceAlert else {
+                    return
+                }
+                voiceRecordingVM.showAlert = false
             }
         )
     }
@@ -233,6 +270,16 @@ struct ContentPeopleSheetView: View {
             }
         }
         #endif
+        .alert("Recording Error", isPresented: voiceAlertBinding, actions: {
+            Button("common.ok", role: .cancel) {}
+            if voiceRecordingVM.state == .permissionDenied {
+                Button("location_channels.action.open_settings") {
+                    SystemSettings.microphone.open()
+                }
+            }
+        }, message: {
+            Text(voiceRecordingVM.state.alertMessage)
+        })
         .alert(
             "content.alert.bluetooth_required.title",
             isPresented: bluetoothAlertBinding
