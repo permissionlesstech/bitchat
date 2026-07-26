@@ -589,7 +589,7 @@ final class GeoRelayDirectoryTests: XCTestCase {
     /// a starved background task. Returning as soon as the condition holds means
     /// a longer deadline only extends the genuine-failure case.
     private func waitUntil(
-        timeout: TimeInterval = 30.0,
+        timeout: TimeInterval = TestConstants.settleTimeout,
         condition: @escaping @MainActor () async -> Bool
     ) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
