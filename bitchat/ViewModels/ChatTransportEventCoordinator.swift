@@ -56,7 +56,10 @@ protocol ChatTransportEventContext: AnyObject {
     func cachedStablePeerID(for shortPeerID: PeerID) -> PeerID?
 
     // MARK: Routing & acknowledgements
-    func flushRouterOutbox(for peerID: PeerID)
+    /// Drains the message router's disk outbox for every alias of one peer
+    /// as a single chronological stream, so mail split across the ephemeral
+    /// and stable keys cannot be delivered out of order.
+    func flushRouterOutbox(forAliases peerIDAliases: [PeerID], skippingSecurelyTransmitted: Bool)
     /// Offer queued mail for *other* peers to this newly connected courier.
     func retryCourierDeposits(via peerID: PeerID)
     func sendMeshDeliveryAck(for messageID: String, to peerID: PeerID)
@@ -114,8 +117,11 @@ extension ChatViewModel: ChatTransportEventContext {
         meshService.noiseSessionPublicKeyData(for: peerID)
     }
 
-    func flushRouterOutbox(for peerID: PeerID) {
-        messageRouter.flushOutbox(for: peerID)
+    func flushRouterOutbox(forAliases peerIDAliases: [PeerID], skippingSecurelyTransmitted: Bool) {
+        messageRouter.flushOutbox(
+            forAliases: peerIDAliases,
+            skippingSecurelyTransmitted: skippingSecurelyTransmitted
+        )
     }
 
     func retryCourierDeposits(via peerID: PeerID) {
@@ -275,32 +281,38 @@ final class ChatTransportEventCoordinator {
         context.notifyUIChanged()
 
         // Resolve the stable key robustly: unified-peer state may not be
-        // populated yet at connect time, so fall back to the cache and then to
-        // the noise session key (mirroring the disconnect path).
+        // populated yet at connect time, so fall back to the live noise
+        // session key and only then to the cache. Order matters — short BLE
+        // IDs are ephemeral and get recycled, so a cache entry left by a
+        // previous owner of this ID would name the wrong peer, while the
+        // session key is the identity of the link we just brought up.
         var stablePeerID: PeerID?
         if let peer = context.unifiedPeer(for: peerID) {
             let resolved = PeerID(hexData: peer.noisePublicKey)
             context.cacheStablePeerID(resolved, for: peerID)
             stablePeerID = resolved
-        } else if let cached = context.cachedStablePeerID(for: peerID) {
-            stablePeerID = cached
         } else if let key = context.noiseSessionPublicKeyData(for: peerID) {
             let derived = PeerID(hexData: key)
             context.cacheStablePeerID(derived, for: peerID)
             stablePeerID = derived
+        } else if let cached = context.cachedStablePeerID(for: peerID) {
+            stablePeerID = cached
         }
 
-        context.flushRouterOutbox(for: peerID)
-        context.retryCourierDeposits(via: peerID)
-
-        // Also flush under the stable 64-hex key. `flushOutbox` is keyed by
-        // exactly the id it is handed, and a DM composed while the recipient
-        // was an offline favorite is queued under their stable key — so the
-        // short-id flush above never reaches it, and absent a courier it waits
-        // for a relaunch, a favorite-status change, or the 24h TTL.
+        // Flush the short ID and the stable 64-hex key together. `flushOutbox`
+        // is keyed by exactly the ID it is handed, and a DM composed while the
+        // recipient was an offline favorite is queued under their stable key —
+        // so a short-ID flush alone never reaches it, and absent a courier it
+        // waits for a relaunch, a favorite-status change, or the 24h TTL.
+        // Passing both as aliases lets the router merge the two queues
+        // chronologically, so recent mail on the short ID cannot overtake the
+        // older mail that has been waiting under the stable key.
+        var aliases = [peerID]
         if let stablePeerID, stablePeerID != peerID {
-            context.flushRouterOutbox(for: stablePeerID)
+            aliases.append(stablePeerID)
         }
+        context.flushRouterOutbox(forAliases: aliases, skippingSecurelyTransmitted: false)
+        context.retryCourierDeposits(via: peerID)
     }
 
     func didDisconnectFromPeer(_ peerID: PeerID) {

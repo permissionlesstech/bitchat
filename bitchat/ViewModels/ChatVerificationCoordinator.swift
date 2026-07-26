@@ -45,9 +45,9 @@ protocol ChatVerificationContext: AnyObject {
     func resolveNickname(for peerID: PeerID) -> String
     func cachedStablePeerID(for shortPeerID: PeerID) -> PeerID?
     func cacheStablePeerID(_ stablePeerID: PeerID, for shortPeerID: PeerID)
-    /// Flushes the message router's disk outbox for the given (stable) key so
-    /// mail queued while the peer was offline delivers once it authenticates.
-    func flushRouterOutbox(for peerID: PeerID)
+    /// Drains the message router's disk outbox for every alias of one peer so
+    /// mail queued while they were offline delivers once they authenticate.
+    func flushRouterOutbox(forAliases peerIDAliases: [PeerID], skippingSecurelyTransmitted: Bool)
 
     // MARK: Noise sessions & verification transport
     /// Installs the Noise service's session callbacks (single registration point).
@@ -81,8 +81,9 @@ extension ChatViewModel: ChatVerificationContext {
     // `isVerifiedFingerprint(_:)`, `setEncryptionStatus(_:for:)`,
     // `resolveNickname(for:)`, `cachedStablePeerID(for:)`,
     // `cacheStablePeerID(_:for:)`, `noiseSessionPublicKeyData(for:)`,
-    // `hasEstablishedNoiseSession(with:)`, `triggerHandshake(with:)`, and
-    // `flushRouterOutbox(for:)` (shared with `ChatTransportEventContext`) are
+    // `hasEstablishedNoiseSession(with:)`, `triggerHandshake(with:)`,
+    // and `flushRouterOutbox(forAliases:skippingSecurelyTransmitted:)`
+    // (shared with `ChatTransportEventContext`) are
     // shared requirements with the other contexts or satisfied by existing
     // `ChatViewModel` members. The members below flatten nested service
     // accesses into intent-named calls.
@@ -260,16 +261,20 @@ final class ChatVerificationCoordinator {
                     self.context.retrySecurePrivateMessagesAfterAuthentication(for: peerIDAliases)
 
                     // The retry above only reaches messages already transmitted
-                    // through a secure session (it filters on `sendAttempts > 0`).
-                    // A DM composed while this peer was offline was never
-                    // transmitted at all — it sits in the outbox under the
-                    // stable 64-hex key — so it is in neither that set nor the
-                    // short-id flush on connect. Flush it here, now that the
-                    // link is authenticated and the stable identity is known,
-                    // rather than leaving it for the TTL.
-                    if let stablePeerID, stablePeerID != peerID {
-                        self.context.flushRouterOutbox(for: stablePeerID)
-                    }
+                    // through a secure session. A DM composed while this peer
+                    // was offline was never transmitted at all — it sits in
+                    // the outbox under the stable 64-hex key — so it is in
+                    // neither that set nor, when the stable key was still
+                    // unresolvable at connect time, the flush on connect.
+                    // Flush it here, now that the link is authenticated and
+                    // the stable identity is known, rather than leaving it for
+                    // the TTL. `skippingSecurelyTransmitted` keeps this
+                    // disjoint from the retry above instead of re-sending
+                    // everything the retry just put on the air.
+                    self.context.flushRouterOutbox(
+                        forAliases: peerIDAliases,
+                        skippingSecurelyTransmitted: true
+                    )
 
                     if var pending = self.pendingQRVerifications[peerID], pending.sent == false {
                         self.context.sendVerifyChallenge(

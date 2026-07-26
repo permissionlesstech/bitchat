@@ -124,7 +124,11 @@ private final class MockChatTransportEventContext: ChatTransportEventContext {
     private(set) var courierRetryPeerIDs: [PeerID] = []
     private(set) var meshDeliveryAcks: [(messageID: String, peerID: PeerID)] = []
 
-    func flushRouterOutbox(for peerID: PeerID) { flushedOutboxPeerIDs.append(peerID) }
+    private(set) var flushedSkippingSecurelyTransmitted: [Bool] = []
+    func flushRouterOutbox(forAliases peerIDAliases: [PeerID], skippingSecurelyTransmitted: Bool) {
+        flushedOutboxPeerIDs.append(contentsOf: peerIDAliases)
+        flushedSkippingSecurelyTransmitted.append(skippingSecurelyTransmitted)
+    }
     func retryCourierDeposits(via peerID: PeerID) { courierRetryPeerIDs.append(peerID) }
     func sendMeshDeliveryAck(for messageID: String, to peerID: PeerID) {
         meshDeliveryAcks.append((messageID, peerID))
@@ -549,5 +553,59 @@ struct ChatTransportEventCoordinatorContextTests {
         ChatTransportEventCoordinator(context: unresolvable)
             .didConnectToPeerSynchronously(shortPeerID)
         #expect(unresolvable.flushedOutboxPeerIDs == [shortPeerID])
+    }
+
+    /// Both keys must be handed to the router in a *single* call. Two
+    /// sequential single-key flushes would drain the short-ID queue first, so
+    /// mail composed moments ago could be delivered ahead of the older mail
+    /// that has been waiting under the stable key. Only the merged call lets
+    /// the router order the two queues by timestamp.
+    @Test @MainActor
+    func didConnectToPeer_flushesBothKeysInOneMergedCall() {
+        let context = MockChatTransportEventContext()
+        let shortPeerID = PeerID(str: "1122334455667788")
+        let noiseKey = Data((0..<32).map { UInt8(0xD0 &+ $0) })
+        let stablePeerID = PeerID(hexData: noiseKey)
+
+        context.peersByID[shortPeerID] = BitchatPeer(
+            peerID: shortPeerID,
+            noisePublicKey: noiseKey,
+            nickname: "alice"
+        )
+
+        ChatTransportEventCoordinator(context: context)
+            .didConnectToPeerSynchronously(shortPeerID)
+
+        #expect(
+            context.flushedSkippingSecurelyTransmitted.count == 1,
+            "the two keys must be merged into one flush, not drained in sequence"
+        )
+        #expect(context.flushedOutboxPeerIDs == [shortPeerID, stablePeerID])
+        // Connect has no preceding retry pass, so nothing may be skipped.
+        #expect(context.flushedSkippingSecurelyTransmitted == [false])
+    }
+
+    /// Short BLE IDs are ephemeral and get recycled. A cache entry left by a
+    /// previous owner of the same short ID must lose to the identity of the
+    /// link we just brought up, or the flush drains — and transmits under —
+    /// the wrong peer's queue.
+    @Test @MainActor
+    func didConnectToPeer_prefersTheLiveSessionKeyOverAStaleCacheEntry() {
+        let context = MockChatTransportEventContext()
+        let shortPeerID = PeerID(str: "1122334455667788")
+
+        let staleKey = Data(repeating: 0xAA, count: 32)
+        let liveKey = Data(repeating: 0xBB, count: 32)
+        context.cacheStablePeerID(PeerID(hexData: staleKey), for: shortPeerID)
+        context.noiseSessionKeysByPeerID[shortPeerID] = liveKey
+
+        ChatTransportEventCoordinator(context: context)
+            .didConnectToPeerSynchronously(shortPeerID)
+
+        #expect(context.flushedOutboxPeerIDs == [shortPeerID, PeerID(hexData: liveKey)])
+        #expect(
+            !context.flushedOutboxPeerIDs.contains(PeerID(hexData: staleKey)),
+            "a recycled short ID flushed the previous owner's outbox"
+        )
     }
 }

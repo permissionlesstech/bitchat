@@ -167,6 +167,90 @@ struct MessageRouterTests {
         #expect(transport.sentPrivateMessages.map(\.peerID) == [stablePeerID, shortPeerID])
     }
 
+    /// Reconnect drains both the ephemeral and the stable outbox key. Draining
+    /// them as two sequential `flushOutbox(for:)` calls would put the newer
+    /// short-ID mail on the air first; the merged flush must order by
+    /// timestamp, exactly as the authentication retry above does.
+    @Test @MainActor
+    func mergedFlush_preservesFIFOAcrossSplitAliases() async {
+        let shortPeerID = PeerID(str: "0000000000000023")
+        let stablePeerID = PeerID(hexData: Data(repeating: 0x23, count: 32))
+        let transport = MockTransport()
+        let clock = MutableTestClock()
+        let router = MessageRouter(transports: [transport], now: { clock.now })
+
+        // Both queue while the peer is unreachable: the older one under the
+        // stable key (composed while they were an offline favorite), the newer
+        // under the ephemeral ID.
+        router.sendPrivate("Older", to: stablePeerID, recipientNickname: "Peer", messageID: "flush-old")
+        clock.now = clock.now.addingTimeInterval(1)
+        router.sendPrivate("Newer", to: shortPeerID, recipientNickname: "Peer", messageID: "flush-new")
+        #expect(transport.sentPrivateMessages.isEmpty)
+
+        transport.connectedPeers = [shortPeerID, stablePeerID]
+        transport.securePeers = [shortPeerID, stablePeerID]
+        router.flushOutbox(forAliases: [shortPeerID, stablePeerID])
+
+        #expect(transport.sentPrivateMessages.map(\.messageID) == ["flush-old", "flush-new"])
+        #expect(transport.sentPrivateMessages.map(\.peerID) == [stablePeerID, shortPeerID])
+    }
+
+    /// The same message ID can sit under both keys after a conversation
+    /// migrates from the ephemeral ID to the stable one. The merged flush must
+    /// put it on the air once, not once per key.
+    @Test @MainActor
+    func mergedFlush_sendsAMessageHeldUnderTwoKeysOnlyOnce() async {
+        let shortPeerID = PeerID(str: "0000000000000024")
+        let stablePeerID = PeerID(hexData: Data(repeating: 0x24, count: 32))
+        let transport = MockTransport()
+        let router = MessageRouter(transports: [transport])
+
+        router.sendPrivate("Migrated", to: shortPeerID, recipientNickname: "Peer", messageID: "dup-1")
+        router.sendPrivate("Migrated", to: stablePeerID, recipientNickname: "Peer", messageID: "dup-1")
+        #expect(transport.sentPrivateMessages.isEmpty)
+
+        transport.connectedPeers = [shortPeerID, stablePeerID]
+        transport.securePeers = [shortPeerID, stablePeerID]
+        router.flushOutbox(forAliases: [shortPeerID, stablePeerID])
+
+        #expect(transport.sentPrivateMessages.map(\.messageID) == ["dup-1"])
+    }
+
+    /// On the authentication path the flush runs straight after
+    /// `retrySecurePrivateMessagesAfterAuthentication`. Without the skip, the
+    /// flush is a strict superset of that retry on an authenticated link, so
+    /// every retried message goes out twice and burns two attempts against the
+    /// cap. Never-transmitted mail must still go out.
+    @Test @MainActor
+    func mergedFlush_skippingSecurelyTransmitted_doesNotResendTheRetriedSet() async {
+        let peerID = PeerID(str: "0000000000000025")
+        let transport = MockTransport()
+        transport.connectedPeers = [peerID]
+        transport.securePeers = [peerID]
+        let router = MessageRouter(transports: [transport])
+
+        // Transmitted through a secure session: this is the retry's territory.
+        // The flush is what marks it as securely transmitted.
+        router.sendPrivate("Transmitted", to: peerID, recipientNickname: "Peer", messageID: "sec-1")
+        router.flushOutbox(for: peerID)
+        #expect(transport.sentPrivateMessages.allSatisfy { $0.messageID == "sec-1" })
+
+        // Never transmitted: queued while the peer was unreachable.
+        transport.connectedPeers = []
+        transport.securePeers = []
+        router.sendPrivate("Offline", to: peerID, recipientNickname: "Peer", messageID: "off-1")
+        transport.connectedPeers = [peerID]
+        transport.securePeers = [peerID]
+        transport.resetRecordings()
+
+        router.flushOutbox(forAliases: [peerID], skippingSecurelyTransmitted: true)
+
+        #expect(
+            transport.sentPrivateMessages.map(\.messageID) == ["off-1"],
+            "the flush re-sent mail the authentication retry already put on the air"
+        )
+    }
+
     @Test @MainActor
     func authenticationRetry_doesNotDuplicateNormalPendingHandshakeSend() async {
         let peerID = PeerID(str: "0000000000000020")

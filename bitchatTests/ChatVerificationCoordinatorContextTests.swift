@@ -92,7 +92,11 @@ private final class MockChatVerificationContext: ChatVerificationContext {
     }
 
     private(set) var flushedOutboxPeerIDs: [PeerID] = []
-    func flushRouterOutbox(for peerID: PeerID) { flushedOutboxPeerIDs.append(peerID) }
+    private(set) var flushedSkippingSecurelyTransmitted: [Bool] = []
+    func flushRouterOutbox(forAliases peerIDAliases: [PeerID], skippingSecurelyTransmitted: Bool) {
+        flushedOutboxPeerIDs.append(contentsOf: peerIDAliases)
+        flushedSkippingSecurelyTransmitted.append(skippingSecurelyTransmitted)
+    }
 
     // Noise sessions & verification transport
     var myNoiseStaticKey = Data(repeating: 0x42, count: 32)
@@ -301,6 +305,35 @@ struct ChatVerificationCoordinatorContextTests {
         callbacks?.onHandshakeRequired(peerID)
         await waitForMainQueue()
         #expect(context.encryptionStatuses[peerID] == .noiseHandshaking)
+    }
+
+    /// A DM composed while the peer was offline sits in the outbox under their
+    /// stable 64-hex key and was never transmitted, so
+    /// `retrySecurePrivateMessagesAfterAuthentication` — which only covers
+    /// messages already sent through a secure session — cannot reach it. When
+    /// the stable key was still unresolvable at connect time, authentication is
+    /// the first moment it can be flushed at all.
+    @Test @MainActor
+    func peerAuthentication_flushesTheOutboxForBothAliases() async {
+        let context = MockChatVerificationContext()
+        let coordinator = ChatVerificationCoordinator(context: context)
+        let peerID = PeerID(str: "1122334455667788")
+        let noiseKey = Data(repeating: 0x55, count: 32)
+        let stablePeerID = PeerID(hexData: noiseKey)
+        context.noiseSessionKeysByPeerID[peerID] = noiseKey
+
+        coordinator.setupNoiseCallbacks()
+        context.installedCallbacks?.onPeerAuthenticated(peerID, "fp-unverified")
+        await waitForMainQueue()
+
+        #expect(
+            context.flushedOutboxPeerIDs == [peerID, stablePeerID],
+            "offline-queued mail under the stable key was never flushed on authentication"
+        )
+        // The retry pass just transmitted everything in `secureTransmissions`;
+        // flushing that set again would double-send it and burn a second
+        // attempt against the cap.
+        #expect(context.flushedSkippingSecurelyTransmitted == [true])
     }
 
     @Test @MainActor
