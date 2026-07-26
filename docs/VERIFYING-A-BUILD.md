@@ -28,11 +28,28 @@ shasum -a 256 -c /tmp/files.sha256
 
 Any `FAILED` line means that file differs from the released source. Investigate before building.
 
+That check alone is not enough. `shasum -c` verifies the files the manifest lists and says nothing about files it does not list — and the Xcode project compiles every source file present in the tree automatically, so a hostile mirror can pass the hash check by leaving every listed file intact and *adding* one. Confirm nothing extra is present:
+
+```sh
+# The manifest's path list must match the tree exactly — no missing files, no extras
+grep -v '^#' SOURCE-MANIFEST.txt | sed 's/^[0-9a-f]*  //' | LC_ALL=C sort > /tmp/manifest-paths
+find . -type f ! -path './.git/*' ! -name 'SOURCE-MANIFEST.txt' | sed 's|^\./||' | LC_ALL=C sort > /tmp/actual-paths
+diff /tmp/manifest-paths /tmp/actual-paths   # must print nothing
+```
+
+In a git checkout the same assurance is one command — it also catches extra files, because they show as untracked:
+
+```sh
+git status --porcelain      # must print nothing before you build
+```
+
 The single value that covers the whole tree is the git tree hash in the manifest header:
 
 ```sh
 git rev-parse HEAD^{tree}   # must equal the "tree:" line in the manifest
 ```
+
+Note the tree hash covers tracked content only; it does not see untracked files sitting in the working directory, which is why the emptiness checks above come first.
 
 The manifest itself carries a provenance attestation tying it to the workflow run that produced it, so a manifest handed to you along with a mirror is checkable too:
 
