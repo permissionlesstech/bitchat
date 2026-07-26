@@ -702,22 +702,25 @@ struct ViewSmokeTests {
 
     @Test
     func cameraScannerView_previewAndCoordinatorSmoke() {
+        #if os(iOS) || os(macOS)
+        // Avoid constructing AVCaptureDeviceInput (and the TCC prompt it can
+        // trigger) unless the host process already has camera authorization —
+        // same class of isolation as keeping tests off the login keychain.
+        let status = AVCaptureDevice.authorizationStatus(for: .video)
+        let preview = CameraScannerView.PreviewView(frame: .zero)
+        let coordinator = CameraScannerCoordinator()
+
         #if os(iOS)
-        let preview = CameraScannerView.PreviewView(frame: .zero)
-        let coordinator = CameraScannerCoordinator()
-
         _ = CameraScannerView.PreviewView.layerClass
-        _ = preview.videoPreviewLayer
-        coordinator.setup(previewLayer: preview.videoPreviewLayer) { _ in }
-        coordinator.setActive(false)
-
-        #expect(preview.videoPreviewLayer.videoGravity == .resizeAspectFill)
         #elseif os(macOS)
-        let preview = CameraScannerView.PreviewView(frame: .zero)
-        let coordinator = CameraScannerCoordinator()
         preview.layout()
-        coordinator.setup(previewLayer: preview.videoPreviewLayer) { _ in }
-        coordinator.setActive(false)
+        #endif
+        _ = preview.videoPreviewLayer
+
+        if status == .authorized {
+            coordinator.setup(previewLayer: preview.videoPreviewLayer) { _ in }
+            coordinator.setActive(false)
+        }
 
         #expect(preview.videoPreviewLayer.videoGravity == .resizeAspectFill)
         #endif

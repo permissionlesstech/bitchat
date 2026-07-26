@@ -121,9 +121,16 @@ struct QRScanView: View {
     @State private var result: String = ""
     @State private var lastValid: String = ""
 
+    @State private var cameraUnavailable = false
+
     private enum Strings {
         static let pastePrompt: LocalizedStringKey = "verification.scan.paste_prompt"
         static let validate: LocalizedStringKey = "verification.scan.validate"
+        static let cameraUnavailable = String(
+            localized: "verification.scan.camera_unavailable",
+            defaultValue: "Camera unavailable — paste a QR below.",
+            comment: "Shown over the scanner preview when no camera is available or permission was denied"
+        )
         static func requested(_ nickname: String) -> String {
             String(
                 format: String(localized: "verification.scan.status.requested", comment: "Status text when verification is requested for a nickname"),
@@ -137,8 +144,17 @@ struct QRScanView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            CameraScannerView(isActive: isActive) { code in
-                handleScannedCode(code, announceResult: false)
+            ZStack {
+                CameraScannerView(isActive: isActive, onUnavailable: { cameraUnavailable = true }) { code in
+                    handleScannedCode(code, announceResult: false)
+                }
+                if cameraUnavailable {
+                    Text(Strings.cameraUnavailable)
+                        .bitchatFont(size: 13, weight: .medium)
+                        .foregroundColor(palette.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(16)
+                }
             }
             .frame(height: 260)
             .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -195,11 +211,16 @@ struct QRScanView: View {
 struct CameraScannerView: UIViewRepresentable {
     typealias UIViewType = PreviewView
     var isActive: Bool
+    var onUnavailable: (() -> Void)? = nil
     var onCode: (String) -> Void
 
     func makeUIView(context: Context) -> PreviewView {
         let view = PreviewView()
-        context.coordinator.setup(previewLayer: view.videoPreviewLayer, onCode: onCode)
+        context.coordinator.setup(
+            previewLayer: view.videoPreviewLayer,
+            onCode: onCode,
+            onUnavailable: onUnavailable
+        )
         context.coordinator.setActive(isActive)
         return view
     }
@@ -224,11 +245,16 @@ struct CameraScannerView: UIViewRepresentable {
 struct CameraScannerView: NSViewRepresentable {
     typealias NSViewType = PreviewView
     var isActive: Bool
+    var onUnavailable: (() -> Void)? = nil
     var onCode: (String) -> Void
 
     func makeNSView(context: Context) -> PreviewView {
         let view = PreviewView()
-        context.coordinator.setup(previewLayer: view.videoPreviewLayer, onCode: onCode)
+        context.coordinator.setup(
+            previewLayer: view.videoPreviewLayer,
+            onCode: onCode,
+            onUnavailable: onUnavailable
+        )
         context.coordinator.setActive(isActive)
         return view
     }
@@ -262,26 +288,71 @@ struct CameraScannerView: NSViewRepresentable {
 
 final class CameraScannerCoordinator: NSObject, AVCaptureMetadataOutputObjectsDelegate {
     private var onCode: ((String) -> Void)?
+    private var onUnavailable: (() -> Void)?
     private let session = AVCaptureSession()
     private var isRunning = false
     private var permissionGranted = false
     private var desiredActive = false
+    private var didConfigureSession = false
+    private weak var previewLayer: AVCaptureVideoPreviewLayer?
 
-    func setup(previewLayer: AVCaptureVideoPreviewLayer, onCode: @escaping (String) -> Void) {
+    func setup(
+        previewLayer: AVCaptureVideoPreviewLayer,
+        onCode: @escaping (String) -> Void,
+        onUnavailable: (() -> Void)? = nil
+    ) {
         self.onCode = onCode
+        self.onUnavailable = onUnavailable
+        self.previewLayer = previewLayer
+        previewLayer.session = session
+
+        // Check authorization before creating AVCaptureDeviceInput so tests and
+        // cold launches do not trigger a TCC prompt just by constructing input.
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            permissionGranted = true
+            if !configureSessionIfNeeded() {
+                reportUnavailable()
+            }
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    self.permissionGranted = granted
+                    if granted {
+                        if !self.configureSessionIfNeeded() {
+                            self.reportUnavailable()
+                            return
+                        }
+                        if self.desiredActive && !self.isRunning {
+                            self.setActive(true)
+                        }
+                    } else {
+                        self.reportUnavailable()
+                    }
+                }
+            }
+        default:
+            permissionGranted = false
+            reportUnavailable()
+        }
+    }
+
+    @discardableResult
+    private func configureSessionIfNeeded() -> Bool {
+        guard !didConfigureSession else { return true }
         session.beginConfiguration()
         session.sessionPreset = .high
         guard let device = AVCaptureDevice.default(for: .video),
               let input = try? AVCaptureDeviceInput(device: device),
               session.canAddInput(input) else {
             session.commitConfiguration()
-            return
+            return false
         }
         session.addInput(input)
         let output = AVCaptureMetadataOutput()
         guard session.canAddOutput(output) else {
             session.commitConfiguration()
-            return
+            return false
         }
         session.addOutput(output)
         output.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
@@ -289,19 +360,20 @@ final class CameraScannerCoordinator: NSObject, AVCaptureMetadataOutputObjectsDe
             output.metadataObjectTypes = [.qr]
         }
         session.commitConfiguration()
-        previewLayer.session = session
+        previewLayer?.session = session
+        didConfigureSession = true
+        return true
+    }
 
-        AVCaptureDevice.requestAccess(for: .video) { granted in
-            self.permissionGranted = granted
-            if granted && self.desiredActive && !self.isRunning {
-                self.setActive(true)
-            }
+    private func reportUnavailable() {
+        DispatchQueue.main.async {
+            self.onUnavailable?()
         }
     }
 
     func setActive(_ active: Bool) {
         desiredActive = active
-        guard permissionGranted else { return }
+        guard permissionGranted, didConfigureSession else { return }
         if active && !isRunning {
             isRunning = true
             DispatchQueue.global(qos: .userInitiated).async {
