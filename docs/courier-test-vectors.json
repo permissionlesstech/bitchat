@@ -86,10 +86,10 @@
       "",
       "Padding target is the smallest of [256, 512, 1024, 2048] that fits",
       "size + 16, applied only when the shortfall is 1...255, every pad byte",
-      "equal to the shortfall. Here: 46 + 16 = 62 <= 256, so target 256,",
-      "shortfall 210 = 0xd2.",
+      "equal to the shortfall. Here: 104 + 16 = 120 <= 256, so target 256,",
+      "shortfall 152 = 0x98.",
       "",
-      "Signing the 46 unpadded bytes produces a signature that never verifies,",
+      "Signing the 104 unpadded bytes produces a signature that never verifies,",
       "and nothing in any log points at the cause."
     ],
     "packet": {
@@ -111,7 +111,7 @@
         "Flag bits: hasRecipient 0x01, hasSignature 0x02, isCompressed 0x04,",
         "hasRoute 0x08, isRSR 0x10. Byte lives at offset 11.",
         "The unsignedUnpadded and signingPreimage vectors above both carry 0x01",
-        "because the signature is absent from each. Only the finished 110-byte",
+        "because the signature is absent from each. Only the finished 168-byte",
         "wire packet sets 0x02 as well — which is exactly why re-signing a",
         "received packet requires clearing that bit before re-encoding."
       ],
