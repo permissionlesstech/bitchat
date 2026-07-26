@@ -1272,9 +1272,13 @@ struct ChatViewModelPrivateMediaDeletionTests {
                 "images/incoming/\(filename)"
             ]]
         )
+        let messages = viewModel.privateChats[peerID] ?? []
+        #expect(messages.prefix(2).map(\.id) == [stableID, legacyID])
+        // The refusal is surfaced in the affected chat, not just logged.
+        #expect(messages.last?.sender == "system")
         #expect(
-            viewModel.privateChats[peerID]?.map(\.id)
-                == [stableID, legacyID]
+            messages.last?.content
+                == String(localized: "content.system.media_delete_refused")
         )
     }
 
@@ -1374,9 +1378,16 @@ struct ChatViewModelPrivateMediaDeletionTests {
         #expect(
             transport.deletedPrivateMediaMessageIDBatches == [[incomingID]]
         )
+        let messages = viewModel.privateChats[peerID] ?? []
         #expect(
-            viewModel.privateChats[peerID]?.map(\.id)
+            messages.prefix(3).map(\.id)
                 == [incomingID, outgoingID, "ordinary-message"]
+        )
+        // The refused /clear is surfaced in the affected chat.
+        #expect(messages.last?.sender == "system")
+        #expect(
+            messages.last?.content
+                == String(localized: "content.system.media_delete_refused")
         )
         #expect(transport.cancelledTransfers == ["failed-clear-outgoing"])
         #expect(viewModel.messageIDToTransferId[outgoingID] == nil)
@@ -1446,9 +1457,12 @@ struct ChatViewModelPrivateMediaDeletionTests {
             transport.deletedPrivateMediaRelativePaths
                 == [[incomingID: "images/incoming/\(filename)"]]
         )
+        let messages = viewModel.privateChats[peerID] ?? []
+        #expect(messages.prefix(2).map(\.id) == [incomingID, outgoingID])
+        #expect(messages.last?.sender == "system")
         #expect(
-            viewModel.privateChats[peerID]?.map(\.id)
-                == [incomingID, outgoingID]
+            messages.last?.content
+                == String(localized: "content.system.media_delete_refused")
         )
     }
 

@@ -1,6 +1,42 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "content.system.media_delete_refused" : {
+      "comment" : "System message shown in the affected chat when an explicit media delete or /clear was refused and bubbles/files were kept",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "needs_review", "value" : "تعذّر حذف بعض الوسائط. جرّب حذف الوسائط الأقدم أولاً." } },
+        "bn" : { "stringUnit" : { "state" : "needs_review", "value" : "কিছু মিডিয়া মুছে ফেলা যায়নি। আগে পুরোনো মিডিয়া মুছে ফেলার চেষ্টা করুন।" } },
+        "de" : { "stringUnit" : { "state" : "needs_review", "value" : "einige medien konnten nicht gelöscht werden. versuche zuerst, ältere medien zu löschen." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "some media could not be deleted. try deleting older media first." } },
+        "es" : { "stringUnit" : { "state" : "needs_review", "value" : "no se pudieron eliminar algunos archivos multimedia. prueba a eliminar primero los más antiguos." } },
+        "fa" : { "stringUnit" : { "state" : "needs_review", "value" : "برخی رسانه‌ها حذف نشدند. ابتدا رسانه‌های قدیمی‌تر را حذف کنید." } },
+        "fil" : { "stringUnit" : { "state" : "needs_review", "value" : "hindi ma-delete ang ilang media. subukang i-delete muna ang mas lumang media." } },
+        "fr" : { "stringUnit" : { "state" : "needs_review", "value" : "impossible de supprimer certains médias. essaie d'abord de supprimer les médias plus anciens." } },
+        "he" : { "stringUnit" : { "state" : "needs_review", "value" : "לא ניתן למחוק חלק מהמדיה. נסה קודם למחוק מדיה ישנה יותר." } },
+        "hi" : { "stringUnit" : { "state" : "needs_review", "value" : "कुछ मीडिया हटाई नहीं जा सकी। पहले पुरानी मीडिया हटाने का प्रयास करें।" } },
+        "id" : { "stringUnit" : { "state" : "needs_review", "value" : "sebagian media tidak dapat dihapus. coba hapus media yang lebih lama dulu." } },
+        "it" : { "stringUnit" : { "state" : "needs_review", "value" : "impossibile eliminare alcuni contenuti multimediali. prova prima a eliminare quelli più vecchi." } },
+        "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "一部のメディアを削除できませんでした。先に古いメディアを削除してみてください。" } },
+        "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "일부 미디어를 삭제하지 못했습니다. 먼저 오래된 미디어를 삭제해 보세요." } },
+        "ms" : { "stringUnit" : { "state" : "needs_review", "value" : "sesetengah media tidak dapat dipadamkan. cuba padamkan media yang lebih lama dahulu." } },
+        "ne" : { "stringUnit" : { "state" : "needs_review", "value" : "केही मिडिया मेटाउन सकिएन। पहिले पुराना मिडिया मेटाउने प्रयास गर।" } },
+        "nl" : { "stringUnit" : { "state" : "needs_review", "value" : "sommige media konden niet worden verwijderd. probeer eerst oudere media te verwijderen." } },
+        "pl" : { "stringUnit" : { "state" : "needs_review", "value" : "nie udało się usunąć części multimediów. spróbuj najpierw usunąć starsze multimedia." } },
+        "pt" : { "stringUnit" : { "state" : "needs_review", "value" : "não foi possível eliminar alguns ficheiros multimédia. tenta eliminar primeiro os mais antigos." } },
+        "pt-BR" : { "stringUnit" : { "state" : "needs_review", "value" : "não foi possível excluir algumas mídias. tente excluir primeiro as mídias mais antigas." } },
+        "ru" : { "stringUnit" : { "state" : "needs_review", "value" : "не удалось удалить часть медиафайлов. попробуй сначала удалить более старые." } },
+        "sv" : { "stringUnit" : { "state" : "needs_review", "value" : "vissa medier kunde inte raderas. prova att radera äldre medier först." } },
+        "ta" : { "stringUnit" : { "state" : "needs_review", "value" : "சில ஊடகங்களை நீக்க முடியவில்லை. முதலில் பழைய ஊடகங்களை நீக்க முயற்சிக்கவும்." } },
+        "th" : { "stringUnit" : { "state" : "needs_review", "value" : "ไม่สามารถลบสื่อบางรายการได้ ลองลบสื่อที่เก่ากว่าก่อน" } },
+        "tr" : { "stringUnit" : { "state" : "needs_review", "value" : "bazı medya silinemedi. önce daha eski medyayı silmeyi dene." } },
+        "uk" : { "stringUnit" : { "state" : "needs_review", "value" : "не вдалося видалити частину медіафайлів. спробуй спочатку видалити старіші." } },
+        "ur" : { "stringUnit" : { "state" : "needs_review", "value" : "کچھ میڈیا حذف نہیں ہو سکا۔ پہلے پرانا میڈیا حذف کرنے کی کوشش کریں۔" } },
+        "vi" : { "stringUnit" : { "state" : "needs_review", "value" : "không thể xóa một số phương tiện. hãy thử xóa phương tiện cũ hơn trước." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "needs_review", "value" : "部分媒体无法删除。请先尝试删除较早的媒体。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "needs_review", "value" : "部分媒體無法刪除。請先嘗試刪除較舊的媒體。" } }
+      }
+    },
     "notification.action.wave" : {
       "comment" : "Title of the notification action button that sends a friendly wave back to a nearby person",
       "extractionState" : "manual",

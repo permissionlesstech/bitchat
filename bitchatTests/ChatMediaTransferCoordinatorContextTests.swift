@@ -84,6 +84,10 @@ private final class MockChatMediaTransferContext: ChatMediaTransferContext {
     }
 
     func addSystemMessage(_ content: String) { systemMessages.append(content) }
+    private(set) var mediaDeletionRefusals: [String] = []
+    func notifyMediaDeletionRefused(messageID: String) {
+        mediaDeletionRefusals.append(messageID)
+    }
     func notifyUIChanged() { notifyUIChangedCount += 1 }
 
     // Delivery status & dedup
@@ -643,6 +647,8 @@ struct ChatMediaTransferCoordinatorContextTests {
         #expect(context.removedMessages.isEmpty)
         #expect(context.cancelledTransfers == ["failed-delete"])
         #expect(coordinator.messageIDToTransferId[messageID] == nil)
+        // The refusal must be visible in the affected chat, not just logged.
+        #expect(context.mediaDeletionRefusals == [messageID])
     }
 
     @Test @MainActor

@@ -837,6 +837,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
                     "Refusing to clear private chat without durable media tombstones peer=\(peerID.id.prefix(8))…",
                     category: .session
                 )
+                notifyPrivateMediaDeletionRefused(peerID: peerID)
                 completion()
                 return
             }

@@ -91,6 +91,9 @@ protocol ChatMediaTransferContext: AnyObject {
     func removeUntombstonedMediaMessage(withID messageID: String)
     func removeOutgoingMediaMessage(withID messageID: String)
     func addSystemMessage(_ content: String)
+    /// Surfaces a refused explicit media deletion in the affected chat so a
+    /// wedged delete never looks like success.
+    func notifyMediaDeletionRefused(messageID: String)
     /// Signals that message state changed so observers refresh (e.g. `objectWillChange.send()`).
     func notifyUIChanged()
 
@@ -347,6 +350,28 @@ extension ChatViewModel: ChatMediaTransferContext {
         }
         return privateChats.values.lazy.flatMap { $0 }.contains { message in
             message.id == messageID && isIncomingPrivateMessage(message)
+        }
+    }
+
+    func notifyMediaDeletionRefused(messageID: String) {
+        let owningPeerID = privateChats.first { _, messages in
+            messages.contains { $0.id == messageID }
+        }?.key
+        notifyPrivateMediaDeletionRefused(peerID: owningPeerID)
+    }
+
+    /// A refused deletion/clear previously surfaced only in SecureLogger, so
+    /// a wedged /clear looked like success. Tell the affected chat that its
+    /// bubbles and payloads were intentionally kept.
+    func notifyPrivateMediaDeletionRefused(peerID: PeerID?) {
+        let copy = String(
+            localized: "content.system.media_delete_refused",
+            comment: "System message when an explicit media delete or /clear was refused and bubbles/files were kept"
+        )
+        if let peerID = peerID ?? selectedPrivateChatPeer {
+            addLocalPrivateSystemMessage(copy, to: peerID)
+        } else {
+            addSystemMessage(copy)
         }
     }
 
@@ -1175,6 +1200,9 @@ final class ChatMediaTransferCoordinator {
                 SecureLogger.error(
                     "Refusing to delete private media without a durable tombstone id=\(messageID.prefix(12))…",
                     category: .session
+                )
+                self.context.notifyMediaDeletionRefused(
+                    messageID: messageID
                 )
                 return
             }
