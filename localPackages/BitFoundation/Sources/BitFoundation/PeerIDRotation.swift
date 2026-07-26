@@ -32,6 +32,10 @@ private import CryptoKit
 /// Recognition tags come from the X25519 shared secret between two static
 /// keys, so exactly two parties can compute a given tag and an observer can
 /// compute none of them.
+// periphery:ignore - intentionally unreferenced by production code. These are
+// the reviewable primitives for a protocol change that cannot ship until both
+// platforms agree on it; wiring them into the transport is the next step, not
+// this one. Delete this annotation when the mesh starts using them.
 public enum PeerIDRotation {
     // MARK: - Parameters
 

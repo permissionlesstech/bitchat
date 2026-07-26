@@ -37,6 +37,9 @@ import Foundation
 /// `docs/PEER-ID-ROTATION.md`.
 ///
 /// Not emitted or consumed by the shipping mesh yet.
+// periphery:ignore - intentionally unreferenced by production code; nothing
+// emits or consumes this type yet, and BLEService parses it only to ignore it.
+// Delete this annotation when the mesh starts using it.
 public struct AnnounceV2Packet: Equatable, Sendable {
     /// Rotation epoch this announce was built for. Carried explicitly so a
     /// receiver matches against a stated epoch instead of guessing.
