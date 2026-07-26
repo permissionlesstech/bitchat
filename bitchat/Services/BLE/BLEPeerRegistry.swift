@@ -174,6 +174,14 @@ struct BLEPeerRegistry {
         peers[peerID] = peer
     }
 
+    /// Applies a verified announce to the registry.
+    ///
+    /// TOFU signing-key pinning: once a signing key has been bound to this
+    /// peer entry, an announce carrying a *different* signing key is refused
+    /// (returns `nil`) and the existing record is left untouched. PeerIDs are
+    /// derived from the (public) noise key, so without pinning an attacker
+    /// could replay a victim's noiseKey/peerID with their own signing key and
+    /// silently take over the victim's mesh identity and nickname.
     mutating func upsertVerifiedAnnounce(
         peerID: PeerID,
         nickname: String,
@@ -183,8 +191,15 @@ struct BLEPeerRegistry {
         now: Date,
         capabilities: PeerCapabilities = [],
         bridgeGeohash: String? = nil
-    ) -> BLEPeerAnnounceUpdate {
+    ) -> BLEPeerAnnounceUpdate? {
         let existing = peers[peerID]
+
+        if let pinnedSigningKey = existing?.signingPublicKey,
+           let announcedSigningKey = signingPublicKey,
+           pinnedSigningKey != announcedSigningKey {
+            return nil
+        }
+
         let update = BLEPeerAnnounceUpdate(
             isNewPeer: existing == nil,
             wasDisconnected: existing?.isConnected == false,
@@ -196,7 +211,8 @@ struct BLEPeerRegistry {
             nickname: nickname,
             isConnected: isConnected,
             noisePublicKey: noisePublicKey,
-            signingPublicKey: signingPublicKey,
+            // Never drop an already-pinned signing key.
+            signingPublicKey: signingPublicKey ?? existing?.signingPublicKey,
             isVerifiedNickname: true,
             lastSeen: now,
             capabilities: capabilities,
