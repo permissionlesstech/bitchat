@@ -652,12 +652,12 @@ struct NoiseEncryptionServiceTests {
         )
         let retried = await TestHelpers.waitUntil(
             { recorder.messages.count == 1 },
-            timeout: 1
+            timeout: TestConstants.longTimeout
         )
         #expect(retried)
         let retryExpired = await TestHelpers.waitUntil(
             { !service.hasSession(with: peerID) },
-            timeout: 1
+            timeout: TestConstants.longTimeout
         )
         #expect(retryExpired)
         #expect(recorder.timeoutCount == 1)
@@ -710,7 +710,12 @@ struct NoiseEncryptionServiceTests {
         let alice = NoiseEncryptionService(keychain: MockKeychain())
         let bob = NoiseEncryptionService(
             keychain: MockKeychain(),
-            ordinaryResponderHandshakeTimeout: 0.06,
+            // Generous for the same reason as the quarantine-restore test
+            // (#1483): this timeout also arms during the `establishSessions`
+            // setup handshake below, where bob is the responder. At 0.06 a
+            // preempted runner could fire it mid-setup, tear down the half-open
+            // responder, and make message 3 be answered as a fresh initiation.
+            ordinaryResponderHandshakeTimeout: 1.0,
             ordinaryReconnectRollbackCooldown: 0.3
         )
         let mallory = NoiseEncryptionService(keychain: MockKeychain())
@@ -741,12 +746,12 @@ struct NoiseEncryptionServiceTests {
 
         let restored = await TestHelpers.waitUntil(
             { bob.hasEstablishedSession(with: alicePeerID) },
-            timeout: 1
+            timeout: TestConstants.longTimeout
         )
         #expect(restored)
         let callbackArrived = await TestHelpers.waitUntil(
             { recovery.timeoutCount == 1 },
-            timeout: 1
+            timeout: TestConstants.longTimeout
         )
         #expect(callbackArrived)
 
@@ -780,7 +785,13 @@ struct NoiseEncryptionServiceTests {
         let bob = NoiseEncryptionService(
             keychain: MockKeychain(),
             ordinaryHandshakeTimeout: 0.04,
-            ordinaryResponderHandshakeTimeout: 0.04
+            // Also arms during the `establishSessions` setup handshake below,
+            // where bob is the responder. Observed failing on a loaded CI
+            // runner with exactly the signature #1483 documented: the setup's
+            // `#expect(finalMessage == nil)` saw a 96-byte message 2, because
+            // the half-open responder had already been torn down and message 3
+            // was answered as a fresh initiation.
+            ordinaryResponderHandshakeTimeout: 1.0
         )
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
         let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
@@ -814,12 +825,12 @@ struct NoiseEncryptionServiceTests {
         // initiates one bounded convergence retry; drop that message 1 too.
         let retryPrepared = await TestHelpers.waitUntil(
             { recovery.messages.count == 1 },
-            timeout: 1
+            timeout: TestConstants.longTimeout
         )
         #expect(retryPrepared)
         let retryExpired = await TestHelpers.waitUntil(
             { !bob.hasSession(with: alicePeerID) },
-            timeout: 1
+            timeout: TestConstants.longTimeout
         )
         #expect(retryExpired)
         #expect(recovery.timeoutCount == 1)
@@ -1026,7 +1037,7 @@ struct NoiseEncryptionServiceTests {
 
         let requested = await TestHelpers.waitUntil(
             { recovery.messages.count == 1 },
-            timeout: 1
+            timeout: TestConstants.longTimeout
         )
         #expect(requested)
         let retryMessage1 = try #require(recovery.messages.first)
