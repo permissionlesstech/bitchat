@@ -14,11 +14,17 @@ final class FakeRelayManager: NostrRelayManaging {
     struct Subscription {
         let id: String
         let filter: NostrFilter
+        let handler: (NostrEvent) -> Void
     }
 
     private(set) var subscriptions: [Subscription] = []
     private(set) var unsubscribedIDs: [String] = []
     private(set) var sentEvents: [NostrEvent] = []
+    private var activeSubscriptionIDs = Set<String>()
+
+    var activeSubscriptions: [Subscription] {
+        subscriptions.filter { activeSubscriptionIDs.contains($0.id) }
+    }
 
     func resetSentEvents() {
         sentEvents.removeAll()
@@ -31,15 +37,30 @@ final class FakeRelayManager: NostrRelayManaging {
         handler: @escaping (NostrEvent) -> Void,
         onEOSE: (() -> Void)?
     ) {
-        subscriptions.append(Subscription(id: id, filter: filter))
+        subscriptions.append(
+            Subscription(id: id, filter: filter, handler: handler)
+        )
+        activeSubscriptionIDs.insert(id)
     }
 
     func unsubscribe(id: String) {
         unsubscribedIDs.append(id)
+        activeSubscriptionIDs.remove(id)
     }
 
     func sendEvent(_ event: NostrEvent, to relayUrls: [String]?) {
         sentEvents.append(event)
+    }
+
+    func deliver(_ event: NostrEvent, to subscriptionID: String) {
+        guard activeSubscriptionIDs.contains(subscriptionID),
+              let subscription = subscriptions.last(where: {
+                $0.id == subscriptionID
+              })
+        else {
+            return
+        }
+        subscription.handler(event)
     }
 }
 
@@ -290,7 +311,12 @@ struct NdrOutOfBandTransportTests {
                 (try? extractNostrKind(json: $0)) == 1059
             }
         )
-        #expect(!recipientRelay.unsubscribedIDs.isEmpty)
+        #expect(
+            recipientRelay.activeSubscriptions.contains {
+                $0.filter.kinds == [37368]
+                    && $0.filter.authors == [owner.publicKeyHex]
+            }
+        )
     }
 
     @Test("Delayed owner roster preserves invites from two devices on the same account")
@@ -351,10 +377,161 @@ struct NdrOutOfBandTransportTests {
 
         #expect(firstResponses.contains { (try? extractNostrKind(json: $0)) == 1059 })
         #expect(secondResponses.contains { (try? extractNostrKind(json: $0)) == 1059 })
-        #expect(!relay.unsubscribedIDs.isEmpty)
         #expect(
-            Set(relay.unsubscribedIDs)
-                .isSubset(of: Set(relay.subscriptions.map(\.id)))
+            relay.activeSubscriptions.contains {
+                $0.filter.kinds == [37368]
+                    && $0.filter.authors == [owner.publicKeyHex]
+            }
+        )
+    }
+
+    @Test("Owner roster updates stop outbound fanout to a removed device")
+    @MainActor
+    func durableOwnerRoster_removesRevokedDeviceFromOutboundFanout() throws {
+        let owner = try NostrIdentity.generate()
+        let firstDevice = try NostrIdentity.generate()
+        let removedDevice = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let firstManager = try makeChildManager(
+            identity: firstDevice,
+            owner: owner,
+            deviceID: "durable-roster-first"
+        )
+        let removedManager = try makeChildManager(
+            identity: removedDevice,
+            owner: owner,
+            deviceID: "durable-roster-removed"
+        )
+        let firstInvite = try inviteEventJson(from: firstManager)
+        let removedInvite = try inviteEventJson(from: removedManager)
+        let relay = FakeRelayManager()
+        let service = NdrNostrService(
+            relayManager: relay,
+            deviceId: "durable-roster-recipient",
+            rolloutEnabled: true,
+            storageDirectoryProvider: {
+                try makeTempDir(label: "ndr-durable-roster-recipient")
+            }
+        )
+        service.configureIfNeeded(identity: recipient)
+        var firstResponses: [String] = []
+        var removedResponses: [String] = []
+
+        #expect(
+            service.processOutOfBandEventJson(
+                firstInvite,
+                expectedPeerPubkeyHex: owner.publicKeyHex,
+                deferredResponseHandler: { firstResponses.append($0) }
+            ).isEmpty
+        )
+        #expect(
+            service.processOutOfBandEventJson(
+                removedInvite,
+                expectedPeerPubkeyHex: owner.publicKeyHex,
+                deferredResponseHandler: { removedResponses.append($0) }
+            ).isEmpty
+        )
+
+        let initialTimestamp = Int(Date().timeIntervalSince1970)
+        service.processInboundRelayEvent(
+            try makeAppKeysEvent(
+                owner: owner,
+                devices: [firstDevice, removedDevice],
+                timestamp: initialTimestamp
+            )
+        )
+        #expect(service.hasActiveSession(with: owner.publicKeyHex))
+        #expect(firstResponses.contains { (try? extractNostrKind(json: $0)) == 1059 })
+        #expect(removedResponses.contains { (try? extractNostrKind(json: $0)) == 1059 })
+
+        relay.resetSentEvents()
+        #expect(
+            service.sendIfPossible(
+                "bitchat1:before-device-removal",
+                to: owner.publicKeyHex
+            )
+        )
+        #expect(relay.sentEvents.filter { $0.kind == 1060 }.count == 2)
+
+        let rosterSubscription = try #require(
+            relay.activeSubscriptions.first {
+                $0.filter.kinds == [37368]
+                    && $0.filter.authors == [owner.publicKeyHex]
+            }
+        )
+        #expect(
+            !relay.subscriptions.contains {
+                $0.filter.kinds?.contains(30078) == true
+            }
+        )
+        relay.deliver(
+            try makeAppKeysEvent(
+                owner: owner,
+                devices: [firstDevice],
+                timestamp: initialTimestamp + 1
+            ),
+            to: rosterSubscription.id
+        )
+
+        relay.resetSentEvents()
+        #expect(
+            service.sendIfPossible(
+                "bitchat1:after-device-removal",
+                to: owner.publicKeyHex
+            )
+        )
+        #expect(relay.sentEvents.filter { $0.kind == 1060 }.count == 1)
+    }
+
+    @Test("Persisted peer owners restore durable roster subscriptions")
+    @MainActor
+    func durableOwnerRoster_restoresAfterRestart() throws {
+        let peer = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let peerManager = try makeChildManager(
+            identity: peer,
+            owner: peer,
+            deviceID: "durable-restart-peer"
+        )
+        let invite = try inviteEventJson(from: peerManager)
+        let storage = try makeTempDir(label: "ndr-durable-restart")
+
+        do {
+            let initialRelay = FakeRelayManager()
+            let initialService = NdrNostrService(
+                relayManager: initialRelay,
+                deviceId: "durable-restart-recipient",
+                rolloutEnabled: true,
+                storageDirectoryProvider: { storage }
+            )
+            initialService.configureIfNeeded(identity: recipient)
+            _ = initialService.processOutOfBandEventJson(
+                invite,
+                expectedPeerPubkeyHex: peer.publicKeyHex
+            )
+            #expect(initialService.hasActiveSession(with: peer.publicKeyHex))
+        }
+
+        let restoredRelay = FakeRelayManager()
+        let restoredService = NdrNostrService(
+            relayManager: restoredRelay,
+            deviceId: "durable-restart-recipient",
+            rolloutEnabled: true,
+            storageDirectoryProvider: { storage }
+        )
+        restoredService.configureIfNeeded(identity: recipient)
+
+        #expect(restoredService.hasActiveSession(with: peer.publicKeyHex))
+        #expect(
+            restoredRelay.activeSubscriptions.contains {
+                $0.filter.kinds == [37368]
+                    && $0.filter.authors == [peer.publicKeyHex]
+            }
+        )
+        #expect(
+            !restoredRelay.subscriptions.contains {
+                $0.filter.kinds?.contains(30078) == true
+            }
         )
     }
 
@@ -733,10 +910,11 @@ struct NdrOutOfBandTransportTests {
 
     private func makeAppKeysEvent(
         owner: NostrIdentity,
-        devices: [NostrIdentity]
+        devices: [NostrIdentity],
+        timestamp: Int? = nil
     ) throws -> NostrEvent {
         let profileID = UUID().uuidString.lowercased()
-        let timestamp = Int(Date().timeIntervalSince1970)
+        let timestamp = timestamp ?? Int(Date().timeIntervalSince1970)
         var tags: [[String]] = [
             ["d", profileID],
             ["i", profileID, "subject"],

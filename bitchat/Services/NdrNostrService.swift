@@ -66,6 +66,11 @@ final class NdrNostrService {
     private var activeSubIDs = Set<String>()
     private var appKeysSubscriptionIDByOwner: [String: String] = [:]
     private var appKeysOwnerBySubscriptionID: [String: String] = [:]
+    /// Owners whose live AppKeys feed must outlive any one bootstrap attempt.
+    /// Device authorization and revocation are replaceable kind-37368 state;
+    /// retaining only the snapshot that admitted an invite would keep removed
+    /// devices eligible for future outbound fanout.
+    private var durableAppKeysOwners = Set<String>()
     private var cachedInviteEventJson: String?
     private var bufferedDecryptedMessages: [NdrDecryptedMessage] = []
 
@@ -139,6 +144,7 @@ final class NdrNostrService {
         activeSubIDs.removeAll()
         appKeysSubscriptionIDByOwner.removeAll()
         appKeysOwnerBySubscriptionID.removeAll()
+        durableAppKeysOwners.removeAll()
         pendingOutOfBandInvites.removeAll()
         bufferedDecryptedMessages.removeAll()
         sessionManager = nil
@@ -163,6 +169,7 @@ final class NdrNostrService {
             )
             try mgr.`init`()
             sessionManager = mgr
+            restoreDurableAppKeysSubscriptions(using: mgr)
             _ = drainAndApplyPubSubEvents()
             SecureLogger.info("NdrNostrService configured pub=\(pubkey.prefix(8))… device=\(deviceId)", category: .session)
         } catch {
@@ -299,6 +306,14 @@ final class NdrNostrService {
             )
         }
 
+        if !blockedOnOwnerRoster,
+           !processingFailed,
+           hasActiveSession(with: expectedPeer) {
+            ensureDurableAppKeysSubscription(
+                ownerPubkeyHex: expectedPeer,
+                using: mgr
+            )
+        }
         let outOfBandPublishes = drainAndApplyPubSubEvents(collectOutOfBandPublishes: true)
         if blockedOnOwnerRoster, let inboundInvite {
             if let deferredResponseHandler {
@@ -363,6 +378,7 @@ final class NdrNostrService {
         activeSubIDs.removeAll()
         appKeysSubscriptionIDByOwner.removeAll()
         appKeysOwnerBySubscriptionID.removeAll()
+        durableAppKeysOwners.removeAll()
         pendingOutOfBandInvites.removeAll()
         nextPendingOutOfBandInviteSequence = 0
         bufferedDecryptedMessages.removeAll()
@@ -464,6 +480,7 @@ final class NdrNostrService {
             guard let subid = e.subid else { return }
             if let owner = appKeysOwnerBySubscriptionID.removeValue(forKey: subid) {
                 appKeysSubscriptionIDByOwner.removeValue(forKey: owner)
+                durableAppKeysOwners.remove(owner)
             }
             guard activeSubIDs.remove(subid) != nil else { return }
             relayManager.unsubscribe(id: subid)
@@ -575,11 +592,47 @@ final class NdrNostrService {
         if filter.kinds?.contains(1059) == true {
             return true
         }
-        if filter.kinds?.contains(30078) == true,
-           filter.tagFilters?["l"]?.contains("double-ratchet/invites") == true {
+        // `setupUser` emits an author-scoped invite-discovery filter without
+        // the label selector. AppKeys setup is needed for live device
+        // revocation, but every kind-30078 discovery shape remains BLE-only.
+        if filter.kinds?.contains(30078) == true {
             return true
         }
         return false
+    }
+
+    private func restoreDurableAppKeysSubscriptions(
+        using mgr: SessionManagerHandle
+    ) {
+        for owner in mgr.knownPeerOwnerPubkeys() {
+            ensureDurableAppKeysSubscription(
+                ownerPubkeyHex: owner,
+                using: mgr
+            )
+        }
+    }
+
+    private func ensureDurableAppKeysSubscription(
+        ownerPubkeyHex: String,
+        using mgr: SessionManagerHandle
+    ) {
+        guard let owner = Self.normalizedPubkeyHex(ownerPubkeyHex),
+              !durableAppKeysOwners.contains(owner)
+        else {
+            return
+        }
+        do {
+            // The FFI emits both AppKeys and invite-discovery filters. `apply`
+            // keeps the former and drops the latter under BitChat's BLE-only
+            // bootstrap policy.
+            try mgr.setupUser(userPubkeyHex: owner)
+            durableAppKeysOwners.insert(owner)
+        } catch {
+            SecureLogger.error(
+                "NdrNostrService: failed to retain AppKeys updates for \(owner.prefix(8))…: \(error)",
+                category: .session
+            )
+        }
     }
 
     private func appKeysSubscriptionOwner(_ filter: NostrFilter) -> String? {
@@ -658,6 +711,9 @@ final class NdrNostrService {
         guard !pendingOutOfBandInvites.keys.contains(where: {
             $0.ownerPubkeyHex == ownerPubkeyHex
         }) else {
+            return
+        }
+        guard !durableAppKeysOwners.contains(ownerPubkeyHex) else {
             return
         }
         guard let subid = appKeysSubscriptionIDByOwner.removeValue(forKey: ownerPubkeyHex) else {
