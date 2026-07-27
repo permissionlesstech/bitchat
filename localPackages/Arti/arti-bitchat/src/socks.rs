@@ -6,7 +6,7 @@ use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use arti_client::{TorClient, IntoTorAddr};
+use arti_client::{IntoTorAddr, TorClient};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tor_rtcompat::PreferredRuntime;
@@ -34,10 +34,7 @@ pub async fn handle_socks_connection(
     stream.read_exact(&mut greeting).await?;
 
     if greeting[0] != SOCKS5_VERSION {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "Not SOCKS5",
-        ));
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "Not SOCKS5"));
     }
 
     let nmethods = greeting[1] as usize;
@@ -55,7 +52,9 @@ pub async fn handle_socks_connection(
     }
 
     // Accept no-auth
-    stream.write_all(&[SOCKS5_VERSION, SOCKS5_AUTH_NONE]).await?;
+    stream
+        .write_all(&[SOCKS5_VERSION, SOCKS5_AUTH_NONE])
+        .await?;
 
     // --- Request ---
     // Client sends: VER | CMD | RSV | ATYP | DST.ADDR | DST.PORT
@@ -127,7 +126,12 @@ pub async fn handle_socks_connection(
         }
     };
 
-    tracing::debug!("SOCKS5 CONNECT from {} to {}:{}", peer_addr, dest_host, dest_port);
+    tracing::debug!(
+        "SOCKS5 CONNECT from {} to {}:{}",
+        peer_addr,
+        dest_host,
+        dest_port
+    );
 
     // Connect through Tor
     let tor_addr = format!("{}:{}", dest_host, dest_port);
@@ -163,8 +167,12 @@ pub async fn handle_socks_connection(
         SOCKS5_REP_SUCCESS,
         0x00, // RSV
         SOCKS5_ATYP_IPV4,
-        0, 0, 0, 0, // BND.ADDR
-        0, 0, // BND.PORT
+        0,
+        0,
+        0,
+        0, // BND.ADDR
+        0,
+        0, // BND.PORT
     ];
     stream.write_all(&reply).await?;
 
@@ -172,12 +180,8 @@ pub async fn handle_socks_connection(
     let (mut client_read, mut client_write) = stream.into_split();
     let (mut tor_read, mut tor_write) = tor_stream.split();
 
-    let client_to_tor = async {
-        tokio::io::copy(&mut client_read, &mut tor_write).await
-    };
-    let tor_to_client = async {
-        tokio::io::copy(&mut tor_read, &mut client_write).await
-    };
+    let client_to_tor = async { tokio::io::copy(&mut client_read, &mut tor_write).await };
+    let tor_to_client = async { tokio::io::copy(&mut tor_read, &mut client_write).await };
 
     tokio::select! {
         result = client_to_tor => {
@@ -201,8 +205,12 @@ async fn send_reply(stream: &mut TcpStream, rep: u8) -> io::Result<()> {
         rep,
         0x00, // RSV
         SOCKS5_ATYP_IPV4,
-        0, 0, 0, 0, // BND.ADDR
-        0, 0, // BND.PORT
+        0,
+        0,
+        0,
+        0, // BND.ADDR
+        0,
+        0, // BND.PORT
     ];
     stream.write_all(&reply).await
 }
