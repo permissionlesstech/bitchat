@@ -309,7 +309,24 @@ struct ContentView: View {
         .sheet(isPresented: $appChromeModel.isAppInfoPresented) {
             AppInfoView(
                 topologyProvider: { appChromeModel.meshTopologyDisplayModel() },
-                onPanicWipe: { appChromeModel.panicClearAllData() }
+                onPanicWipe: { appChromeModel.panicClearAllData() },
+                identityBackupActions: IdentityBackupActions(
+                    currentFingerprint: {
+                        appChromeModel.identityFingerprint()
+                    },
+                    exportBackup: { passphrase, confirm in
+                        try appChromeModel.exportEncryptedIdentityBackup(
+                            passphrase: passphrase,
+                            confirm: confirm
+                        )
+                    },
+                    restoreBackup: { backup, passphrase in
+                        try appChromeModel.restoreIdentityFromBackup(
+                            backup,
+                            passphrase: passphrase
+                        )
+                    }
+                )
             )
             .environmentObject(locationChannelsModel)
         }

@@ -3,6 +3,7 @@ import BitFoundation
 import Foundation
 import CoreBluetooth
 import Combine
+import CryptoKit
 #if os(iOS)
 import UIKit
 #endif
@@ -824,6 +825,131 @@ final class BLEService: NSObject {
         // has also removed its media and committed both recovery markers.
         // Set through the identity store directly (not setNickname(_:), which
         // would force-send an announce and break that silence).
+        localIdentityState.setNickname(currentNickname)
+        messageDeduplicator.reset()
+        messageQueue.async(flags: .barrier) { [weak self] in
+            self?.selfBroadcastTracker.removeAll()
+        }
+        requestPeerDataPublish()
+        if restartServices {
+            restartGossipManager()
+            startServices()
+            sendAnnounce(forceSend: true)
+        }
+    }
+
+    /// Export Noise static + Ed25519 signing private keys for an encrypted
+    /// identity backup. Secrets — clear when finished.
+    func exportNoisePrivateKeysForBackup() -> (noiseStatic: Data, ed25519Signing: Data) {
+        noiseService.exportPersistentPrivateKeys()
+    }
+
+    /// Install restored Noise keys from an identity backup, then rebuild the
+    /// encryption service the same way panic reset does — without regenerating
+    /// fresh keys. Caller must have already written Nostr material.
+    func installRestoredNoiseIdentity(
+        noiseStaticPrivateKey: Data,
+        ed25519SigningPrivateKey: Data,
+        currentNickname: String,
+        restartServices: Bool = true
+    ) throws {
+        guard noiseStaticPrivateKey.count == 32,
+              ed25519SigningPrivateKey.count == 32 else {
+            throw IdentityBackupError.invalidKeyMaterial
+        }
+        // Validate before touching the live identity.
+        _ = try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: noiseStaticPrivateKey)
+        _ = try Curve25519.Signing.PrivateKey(rawRepresentation: ed25519SigningPrivateKey)
+
+        gossipSyncManager?.stop()
+        gossipSyncManager = nil
+        messageQueue.sync(flags: .barrier) {
+            noisePacketHandler.resetForPanic()
+        }
+        collectionsQueue.sync(flags: .barrier) {
+            pendingNoiseSessionQueues.removeAll()
+        }
+
+        let panicReset = collectionsQueue.sync(flags: .barrier) {
+            pendingPeripheralWrites.removeAll()
+            pendingNotifications.removeAll()
+            let transfers = outboundFragmentTransfers.removeAll()
+            fragmentAssemblyBuffer.removeAll()
+            pendingDirectedRelays.removeAll()
+            ingressLinks.removeAll()
+            recentTrafficTracker.removeAll()
+            scheduledRelays.cancelAll()
+            pendingPrivateMediaPolicyResolutions.removeAll()
+            privateMediaSessionGenerations.removeAll()
+            authenticatedPeerStates.removeAll()
+            privateMediaProofTimeoutMarkers.removeAll()
+            privateMediaProofWatchdogs.removeAll()
+            authenticatedPeerStateSendProgress.removeAll()
+            lastPrekeyBundleSentAt = nil
+            return transfers
+        }
+
+        for entry in panicReset {
+            entry.workItems.forEach { $0.cancel() }
+            TransferProgressManager.shared.cancel(id: entry.id)
+        }
+
+        bleQueue.sync {
+            pendingWriteBuffers.removeAll()
+            noiseAuthenticatedLinkOwners.removeAll()
+            noiseReconnectPolicy.removeAll()
+            connectionScheduler.reset()
+        }
+        disconnectNotifyDebouncer.removeAll()
+
+        messageQueue.sync(flags: .barrier) {
+            noiseService.clearEphemeralStateForPanic()
+            // Drop the previous identity (and its prekeys), then install the
+            // restored material before constructing the replacement service so
+            // init loads the imported keys instead of minting new ones.
+            noiseService.clearPersistentIdentity()
+
+            let noiseSave = keychain.saveIdentityKeyWithResult(
+                noiseStaticPrivateKey,
+                forKey: "noiseStaticKey"
+            )
+            let signingSave = keychain.saveIdentityKeyWithResult(
+                ed25519SigningPrivateKey,
+                forKey: "ed25519SigningKey"
+            )
+            if case .success = noiseSave, case .success = signingSave {
+                // Persisted.
+            } else {
+                SecureLogger.error(
+                    "Failed to persist restored identity keys (noise=\(String(describing: noiseSave)), signing=\(String(describing: signingSave)))",
+                    category: .security
+                )
+                // Fall through: NoiseEncryptionService will mint ephemeral keys
+                // if persistence failed — surface as error to the caller below.
+            }
+
+            let newNoise = NoiseEncryptionService(
+                keychain: keychain,
+                ordinaryResponderHandshakeTimeout: noiseResponderHandshakeTimeout
+            )
+            noiseService = newNoise
+            configureNoiseServiceCallbacks(for: newNoise)
+            refreshPeerIdentity()
+        }
+
+        // Confirm the live fingerprint matches what we intended to install.
+        let expected = try Curve25519.KeyAgreement.PrivateKey(
+            rawRepresentation: noiseStaticPrivateKey
+        ).publicKey.rawRepresentation.sha256Fingerprint()
+        let actual = noiseService.getIdentityFingerprint()
+        guard expected == actual else {
+            throw IdentityBackupError.invalidKeyMaterial
+        }
+        guard keychain.getIdentityKey(forKey: "noiseStaticKey") == noiseStaticPrivateKey,
+              keychain.getIdentityKey(forKey: "ed25519SigningKey") == ed25519SigningPrivateKey else {
+            throw IdentityBackupError.encodingFailed
+        }
+
         localIdentityState.setNickname(currentNickname)
         messageDeduplicator.reset()
         messageQueue.async(flags: .barrier) { [weak self] in

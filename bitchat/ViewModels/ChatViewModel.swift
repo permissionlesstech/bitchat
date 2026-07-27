@@ -1771,6 +1771,92 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         return true
     }
 
+    // MARK: - Identity Backup (export / restore)
+
+    /// Assemble the passphrase-encryptable identity material from the live
+    /// Noise service + Nostr bridge.
+    @MainActor
+    func exportIdentityKeyMaterial() throws -> IdentityKeyMaterial {
+        guard let bleService = meshService as? BLEService else {
+            throw IdentityBackupError.encodingFailed
+        }
+        let noiseKeys = bleService.exportNoisePrivateKeysForBackup()
+        guard let nostr = try idBridge.getCurrentNostrIdentity() else {
+            throw IdentityBackupError.invalidKeyMaterial
+        }
+        let seed = idBridge.exportDeviceSeed()
+        return try IdentityKeyMaterial(
+            noiseStaticPrivateKey: noiseKeys.noiseStatic,
+            ed25519SigningPrivateKey: noiseKeys.ed25519Signing,
+            nostrPrivateKey: nostr.privateKey,
+            nostrDeviceSeed: seed
+        ).validated()
+    }
+
+    /// Encrypt the live identity into a `bitchat://identity-backup/v1/…` URI.
+    @MainActor
+    func exportEncryptedIdentityBackup(passphrase: String, confirm: String) throws -> String {
+        try IdentityBackupService.validatePassphrase(passphrase, confirm: confirm)
+        let material = try exportIdentityKeyMaterial()
+        return try IdentityBackupService.encrypt(material, passphrase: passphrase)
+    }
+
+    /// Decrypt a backup and replace the on-device cryptographic identity.
+    /// Does not wipe messages or favorites — only keys and Noise sessions.
+    @MainActor
+    @discardableResult
+    func restoreIdentityFromBackup(
+        _ backup: String,
+        passphrase: String,
+        restartServices: Bool = true
+    ) throws -> String {
+        let material = try IdentityBackupService.decrypt(backup, passphrase: passphrase)
+        let fingerprint = try IdentityBackupService.fingerprint(of: material)
+
+        guard let bleService = meshService as? BLEService else {
+            throw IdentityBackupError.encodingFailed
+        }
+
+        // Pause internet work so in-flight Nostr decrypts cannot land under the
+        // old identity while we swap keys.
+        panicNetworkLifecycle.stop()
+        nostrCoordinator.inbound.invalidateInFlightDecrypts()
+
+        bleService.suspendForPanicReset()
+
+        try idBridge.installRestoredIdentity(
+            privateKey: material.nostrPrivateKey,
+            deviceSeed: material.nostrDeviceSeed
+        )
+
+        try bleService.installRestoredNoiseIdentity(
+            noiseStaticPrivateKey: material.noiseStaticPrivateKey,
+            ed25519SigningPrivateKey: material.ed25519SigningPrivateKey,
+            currentNickname: nickname,
+            restartServices: false
+        )
+
+        // Nostr transport caches the previous sender peer ID; point it at the
+        // restored mesh identity.
+        messageRouter.updateNostrSenderPeerID(meshService.myPeerID)
+
+        bleService.completePanicReset(restartServices: restartServices)
+
+        if restartServices {
+            if !TestEnvironment.isRunningTests {
+                nostrRelayManager = NostrRelayManager.shared
+                setupNostrMessageHandling()
+            }
+            panicNetworkLifecycle.restart()
+        }
+
+        SecureLogger.info(
+            "Identity restored from backup; fingerprint=\(fingerprint.prefix(16))…",
+            category: .security
+        )
+        return fingerprint
+    }
+
     /// BCH-01-013: Clear iOS app switcher snapshots during panic mode
     /// iOS stores preview screenshots in Library/Caches/Snapshots/<bundle_id>/
     /// These could reveal sensitive information visible in the app at the time

@@ -64,6 +64,47 @@ final class NostrIdentityBridge {
         cacheLock.unlock()
     }
 
+    // MARK: - Identity Backup (export / restore)
+
+    /// Current device seed used for per-geohash derivation (creates one if missing).
+    func exportDeviceSeed() -> Data {
+        getOrCreateDeviceSeed()
+    }
+
+    /// Replace the primary Nostr identity and device seed with restored material.
+    /// Clears derived-identity caches so geohash keys recompute from the new seed.
+    @discardableResult
+    func installRestoredIdentity(privateKey: Data, deviceSeed: Data) throws -> NostrIdentity {
+        guard deviceSeed.count == 32 else {
+            throw NSError(
+                domain: "NostrIdentityBridge",
+                code: -2,
+                userInfo: [NSLocalizedDescriptionKey: "Device seed must be 32 bytes"]
+            )
+        }
+        let identity = try NostrIdentity(privateKeyData: privateKey)
+        let encoded = try JSONEncoder().encode(identity)
+
+        // Drop prior associations/caches first so a partial failure cannot leave
+        // a mix of old seed + new primary (or vice versa).
+        clearAllAssociations()
+
+        keychain.save(
+            key: currentIdentityKey,
+            data: encoded,
+            service: keychainService,
+            accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        )
+        keychain.save(
+            key: deviceSeedKey,
+            data: deviceSeed,
+            service: keychainService,
+            accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        )
+        deviceSeedCache = deviceSeed
+        return identity
+    }
+
     // MARK: - Per-Geohash Identities (Location Channels)
 
     /// Returns a stable device seed used to derive unlinkable per-geohash identities.
