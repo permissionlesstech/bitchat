@@ -5,9 +5,11 @@ import Tor
 
 @MainActor
 protocol NetworkActivationTorControlling: AnyObject {
+    func configureTransport(_ configuration: TorRouteConfiguration)
     func setAutoStartAllowed(_ allowed: Bool)
     func startIfNeeded()
     func shutdownCompletely()
+    func resetTransportForPanic()
 }
 
 @MainActor
@@ -56,6 +58,8 @@ final class NetworkActivationService: ObservableObject {
     private let locationChannelSelectedProvider: () -> Bool
     private let reachabilityMonitor: NetworkReachabilityMonitoring
     private let torController: NetworkActivationTorControlling
+    private let transportConfigurationProvider: () -> TorRouteConfiguration
+    private let transportSettingsReset: () -> Void
     // Resolved lazily: NostrRelayManager.init() reads NetworkActivationService.shared
     // (via its live dependencies), so capturing NostrRelayManager.shared here would
     // re-enter whichever singleton's dispatch_once started first and trap at launch.
@@ -77,6 +81,12 @@ final class NetworkActivationService: ObservableObject {
         }
         reachabilityMonitor = NWPathReachabilityMonitor()
         torController = TorManager.shared
+        transportConfigurationProvider = {
+            TorTransportSettings.shared.routeConfiguration
+        }
+        transportSettingsReset = {
+            TorTransportSettings.shared.resetForPanic()
+        }
         relayControllerProvider = { NostrRelayManager.shared }
         proxyController = TorURLSession.shared
         notificationCenter = .default
@@ -94,6 +104,10 @@ final class NetworkActivationService: ObservableObject {
         torController: NetworkActivationTorControlling,
         relayController: NetworkActivationRelayControlling,
         proxyController: NetworkActivationProxyControlling,
+        transportConfigurationProvider: @escaping () -> TorRouteConfiguration = {
+            TorRouteConfiguration()
+        },
+        transportSettingsReset: @escaping () -> Void = {},
         notificationCenter: NotificationCenter = .default
     ) {
         self.storage = storage
@@ -105,6 +119,8 @@ final class NetworkActivationService: ObservableObject {
         self.locationChannelSelectedProvider = locationChannelSelectedProvider
         self.reachabilityMonitor = reachabilityMonitor
         self.torController = torController
+        self.transportConfigurationProvider = transportConfigurationProvider
+        self.transportSettingsReset = transportSettingsReset
         self.relayControllerProvider = { relayController }
         self.proxyController = proxyController
         self.notificationCenter = notificationCenter
@@ -142,6 +158,7 @@ final class NetworkActivationService: ObservableObject {
         let allowed = effectiveAllowed()
         activationAllowed = allowed
         torAutoStartDesired = allowed && userTorEnabled
+        torController.configureTransport(transportConfigurationProvider())
         torController.setAutoStartAllowed(torAutoStartDesired)
         applyTorState(torDesired: torAutoStartDesired)
         if allowed {
@@ -190,6 +207,13 @@ final class NetworkActivationService: ObservableObject {
                 self.reevaluate()
             }
             .store(in: &cancellables)
+
+        notificationCenter.publisher(for: TorTransportSettings.didChangeNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.transportConfigurationDidChange()
+            }
+            .store(in: &cancellables)
     }
 
     /// Stops all internet-facing work at the synchronous panic boundary.
@@ -203,6 +227,8 @@ final class NetworkActivationService: ObservableObject {
         relayController.disconnect()
         torController.setAutoStartAllowed(false)
         applyTorState(torDesired: false)
+        torController.resetTransportForPanic()
+        transportSettingsReset()
     }
 
     func setUserTorEnabled(_ enabled: Bool) {
@@ -242,6 +268,15 @@ final class NetworkActivationService: ObservableObject {
         } else if statusChanged {
             relayController.disconnect()
         }
+    }
+
+    private func transportConfigurationDidChange() {
+        guard started else { return }
+        torController.configureTransport(transportConfigurationProvider())
+        guard activationAllowed, userTorEnabled else { return }
+        torController.startIfNeeded()
+        relayController.disconnect()
+        relayController.connect()
     }
 
     /// Base policy: who is allowed to use the network at all (permission or a
