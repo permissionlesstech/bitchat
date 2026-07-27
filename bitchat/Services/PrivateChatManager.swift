@@ -141,12 +141,12 @@ final class PrivateChatManager: ObservableObject {
         }
 
         // 2. Consolidate from temporary Nostr peer IDs (nostr_* prefixed)
-        let normalizedNickname = peerNickname.lowercased()
+        let normalizedNickname = peerNickname.bitchatNicknameKey
         var tempPeerIDsToConsolidate: [PeerID] = []
 
         for (storedPeerID, messages) in privateChats {
             if storedPeerID.isGeoDM && storedPeerID != peerID {
-                let nicknamesMatch = messages.allSatisfy { $0.sender.lowercased() == normalizedNickname }
+                let nicknamesMatch = messages.allSatisfy { $0.sender.bitchatNicknameKey == normalizedNickname }
                 if nicknamesMatch && !messages.isEmpty {
                     tempPeerIDsToConsolidate.append(storedPeerID)
                 }

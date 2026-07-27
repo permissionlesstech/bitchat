@@ -9,6 +9,21 @@
 import Foundation
 
 extension String {
+    /// Unicode NFC form used when storing and comparing nicknames (#214).
+    /// Typing "café" (NFC) vs "café" (NFD) must resolve to the same peer.
+    var bitchatCanonicalNickname: String {
+        precomposedStringWithCanonicalMapping
+    }
+
+    /// Case-folded NFC key for nickname equality / prefix matching.
+    var bitchatNicknameKey: String {
+        bitchatCanonicalNickname.lowercased()
+    }
+
+    func bitchatNicknameMatches(_ other: String) -> Bool {
+        bitchatNicknameKey == other.bitchatNicknameKey
+    }
+
     /// Split a nickname into base and a '#abcd' suffix if present
     func splitSuffix() -> (String, String) {
         let name = self.replacingOccurrences(of: "@", with: "")

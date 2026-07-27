@@ -28,7 +28,7 @@ enum ChatUnreadStateResolver {
             return true
         }
 
-        guard let peerNickname = context.nickname?.lowercased(), !peerNickname.isEmpty else {
+        guard let peerNickname = context.nickname?.bitchatNicknameKey, !peerNickname.isEmpty else {
             return false
         }
 
@@ -37,7 +37,7 @@ enum ChatUnreadStateResolver {
                   let firstMessage = privateChats[unreadPeerID]?.first else {
                 return false
             }
-            return firstMessage.sender.lowercased() == peerNickname
+            return firstMessage.sender.bitchatNicknameKey == peerNickname
         }
     }
 }

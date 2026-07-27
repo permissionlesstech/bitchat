@@ -55,10 +55,10 @@ final class AutocompleteService {
         
         let fullRange = match.range(at: 0)
         let captureRange = match.range(at: 1)
-        let prefix = nsText.substring(with: captureRange).lowercased()
+        let prefix = nsText.substring(with: captureRange).bitchatNicknameKey
         
         let suggestions = peers
-            .filter { $0.lowercased().hasPrefix(prefix) }
+            .filter { $0.bitchatNicknameKey.hasPrefix(prefix) }
             .sorted()
             .prefix(5)
             .map { "@\($0)" }

@@ -176,8 +176,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     var networkActivationAllowed: Bool { !panicRecoveryBlocked }
     @Published var nickname: String = "" {
         didSet {
-            // Trim whitespace whenever nickname is set; whitespace-only becomes ""
-            let trimmed = nickname.trimmedOrNilIfEmpty ?? ""
+            // Trim whitespace and normalize to Unicode NFC whenever nickname
+            // is set (#214). Whitespace-only becomes "".
+            let trimmed = (nickname.trimmedOrNilIfEmpty ?? "").bitchatCanonicalNickname
             if trimmed != nickname {
                 nickname = trimmed
                 return
@@ -1256,7 +1257,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
     func loadNickname() {
         if let savedNickname = userDefaults.string(forKey: nicknameKey) {
-            nickname = savedNickname.trimmed
+            nickname = savedNickname.trimmed.bitchatCanonicalNickname
         } else {
             nickname = "anon\(Int.random(in: 1000...9999))"
             saveNickname()

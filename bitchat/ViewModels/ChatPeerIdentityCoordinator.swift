@@ -505,7 +505,7 @@ final class ChatPeerIdentityCoordinator {
         case .location:
             if nickname.contains("#"),
                let person = context.visibleGeohashPeople()
-                .first(where: { $0.displayName == nickname }) {
+                .first(where: { $0.displayName.bitchatNicknameMatches(nickname) }) {
                 let conversationKey = PeerID(nostr_: person.id)
                 context.registerNostrKeyMapping(person.id, for: conversationKey)
                 return conversationKey
@@ -515,8 +515,8 @@ final class ChatPeerIdentityCoordinator {
                 .split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)
                 .first
                 .map(String.init)?
-                .lowercased() ?? nickname.lowercased()
-            if let pubkey = context.geoNicknames.first(where: { $0.value.lowercased() == base })?.key {
+                .bitchatNicknameKey ?? nickname.bitchatNicknameKey
+            if let pubkey = context.geoNicknames.first(where: { $0.value.bitchatNicknameKey == base })?.key {
                 let conversationKey = PeerID(nostr_: pubkey)
                 context.registerNostrKeyMapping(pubkey, for: conversationKey)
                 return conversationKey
