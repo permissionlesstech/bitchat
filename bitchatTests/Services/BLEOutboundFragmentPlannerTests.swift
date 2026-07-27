@@ -78,6 +78,34 @@ struct BLEOutboundFragmentPlannerTests {
         #expect(plan.fragmentPackets.allSatisfy { $0.recipientID == Data(hexString: directedPeer.id) })
     }
 
+    @Test("link-derived chunks keep every directed fragment within the link limit")
+    func linkDerivedChunksFitTheLinkLimit() throws {
+        let linkLimit = 512
+        let directedPeer = PeerID(str: "8877665544332211")
+        let packet = makePacket(payload: makePayload(count: 1_024))
+        let request = BLEOutboundFragmentTransferRequest(
+            packet: packet,
+            pad: false,
+            maxChunk: BLEOutboundPacketPolicy.fragmentChunkSize(
+                forLinkLimit: linkLimit
+            ),
+            directedPeer: directedPeer,
+            transferId: nil
+        )
+
+        let plan = try #require(BLEOutboundFragmentPlanner.makePlan(
+            for: request,
+            defaultChunkSize: TransportConfig.bleDefaultFragmentSize,
+            bleMaxMTU: linkLimit,
+            fragmentID: Data(repeating: 0xB3, count: 8)
+        ))
+        let encodedFragments = try plan.fragmentPackets.map {
+            try #require($0.toBinaryData(padding: false))
+        }
+
+        #expect(encodedFragments.allSatisfy { $0.count <= linkLimit })
+    }
+
     @Test("route-aware fragments use version two and route-sized chunking")
     func routeAwareFragmentsUseVersionTwoAndRouteSizedChunking() throws {
         let route = [
@@ -105,6 +133,43 @@ struct BLEOutboundFragmentPlannerTests {
         #expect(plan.chunkSize == 64)
         #expect(firstHeader.fragmentData.count <= 64)
         #expect(plan.fragmentPackets.allSatisfy { $0.route == route && $0.isRSR })
+    }
+
+    @Test("link-derived chunks cannot override route-safe fragment sizing")
+    func linkDerivedChunksRespectRouteOverhead() throws {
+        let linkLimit = 512
+        let route = [
+            Data([0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17]),
+            Data([0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27])
+        ]
+        let directedPeer = PeerID(str: "8877665544332211")
+        let packet = makePacket(
+            payload: makePayload(count: 1_024),
+            route: route
+        )
+        let requestedChunk = BLEOutboundPacketPolicy.fragmentChunkSize(
+            forLinkLimit: linkLimit
+        )
+        let request = BLEOutboundFragmentTransferRequest(
+            packet: packet,
+            pad: false,
+            maxChunk: requestedChunk,
+            directedPeer: directedPeer,
+            transferId: nil
+        )
+
+        let plan = try #require(BLEOutboundFragmentPlanner.makePlan(
+            for: request,
+            defaultChunkSize: TransportConfig.bleDefaultFragmentSize,
+            bleMaxMTU: linkLimit,
+            fragmentID: Data(repeating: 0xC4, count: 8)
+        ))
+        let encodedFragments = try plan.fragmentPackets.map {
+            try #require($0.toBinaryData(padding: false))
+        }
+
+        #expect(plan.chunkSize < requestedChunk)
+        #expect(encodedFragments.allSatisfy { $0.count <= linkLimit })
     }
 
     @Test("invalid fragment IDs do not produce a plan")
