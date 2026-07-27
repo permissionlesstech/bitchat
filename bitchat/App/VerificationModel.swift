@@ -8,6 +8,9 @@ struct FingerprintPresentationState: Equatable {
     let theirFingerprint: String?
     let myFingerprint: String
     let isVerified: Bool
+    /// User-assigned local alias (petname), if any — distinct from the
+    /// peer-claimed nickname.
+    let localPetname: String?
     /// Number of currently-valid vouches from peers the user verified
     /// (0 when the peer is explicitly verified — the stronger badge wins).
     let voucherCount: Int
@@ -19,6 +22,11 @@ struct FingerprintPresentationState: Equatable {
 
     var canToggleVerification: Bool {
         encryptionStatus == .noiseSecured || encryptionStatus == .noiseVerified
+    }
+
+    /// Alias field is editable once we know who we're looking at.
+    var canEditLocalAlias: Bool {
+        theirFingerprint != nil
     }
 }
 
@@ -75,6 +83,36 @@ final class VerificationModel: ObservableObject {
         chatViewModel.unverifyFingerprint(for: peerID)
     }
 
+    /// Persist a local alias for this peer. Empty/whitespace clears it so the
+    /// claimed nickname shows again. Read paths already prefer `localPetname`
+    /// when set (#1439).
+    func setLocalPetname(_ petname: String?, for peerID: PeerID) {
+        let statusPeerID = chatViewModel.getShortIDForNoiseKey(peerID)
+        guard let fingerprint = chatViewModel.getFingerprint(for: statusPeerID) else { return }
+
+        let trimmed = petname?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized: String? = (trimmed?.isEmpty == false) ? trimmed : nil
+
+        let existing = chatViewModel.identityManager.getSocialIdentity(for: fingerprint)
+        let claimed = existing?.claimedNickname
+            ?? chatViewModel.resolveNickname(for: statusPeerID)
+        var identity = existing ?? SocialIdentity(
+            fingerprint: fingerprint,
+            localPetname: nil,
+            claimedNickname: claimed,
+            trustLevel: .unknown,
+            isFavorite: false,
+            isBlocked: false,
+            notes: nil
+        )
+        identity.localPetname = normalized
+        if identity.claimedNickname.isEmpty {
+            identity.claimedNickname = claimed
+        }
+        chatViewModel.identityManager.updateSocialIdentity(identity)
+        objectWillChange.send()
+    }
+
     func isVerified(peerID: PeerID) -> Bool {
         guard let fingerprint = chatViewModel.getFingerprint(for: peerID) else { return false }
         return peerIdentityStore.isVerified(fingerprint)
@@ -86,6 +124,8 @@ final class VerificationModel: ObservableObject {
         let theirFingerprint = chatViewModel.getFingerprint(for: statusPeerID)
         let peerNickname = resolveDisplayName(for: peerID, statusPeerID: statusPeerID)
         let isVerified = theirFingerprint.map { peerIdentityStore.isVerified($0) } ?? false
+        let localPetname = theirFingerprint
+            .flatMap { chatViewModel.identityManager.getSocialIdentity(for: $0)?.localPetname }
 
         // Vouch state is recomputed on read: only vouchers still in the
         // verified set count, so removing a verification silently retires the
@@ -110,6 +150,7 @@ final class VerificationModel: ObservableObject {
             theirFingerprint: theirFingerprint,
             myFingerprint: chatViewModel.getMyFingerprint(),
             isVerified: isVerified,
+            localPetname: localPetname,
             voucherCount: vouchers.count,
             voucherNames: voucherNames
         )
