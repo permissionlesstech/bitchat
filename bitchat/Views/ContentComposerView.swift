@@ -25,6 +25,11 @@ struct ContentComposerView: View {
     @Binding var showMacImagePicker: Bool
     #endif
 
+    /// When non-nil the composer shows a sticker button that opens the Sonar
+    /// sticker picker. Optional (nil) so the DM composer in ContentSheetViews
+    /// compiles unchanged; the public composer passes this closure.
+    var onShowStickerPicker: (() -> Void)? = nil
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if conversationUIModel.showAutocomplete && !conversationUIModel.autocompleteSuggestions.isEmpty {
@@ -103,6 +108,9 @@ struct ContentComposerView: View {
 
                     if conversationUIModel.canSendMediaInCurrentContext {
                         attachmentButton
+                        if onShowStickerPicker != nil {
+                            stickerButton
+                        }
                     }
 
                     sendOrMicButton
@@ -267,6 +275,19 @@ private extension ContentComposerView {
             String(localized: "content.accessibility.choose_photo", comment: "Accessibility label for the macOS photo picker button")
         )
         #endif
+    }
+
+    var stickerButton: some View {
+        Button(action: { onShowStickerPicker?() }) {
+            Image(systemName: "face.smiling")
+                .font(.bitchatSystem(size: 22))
+                .foregroundColor(composerAccentColor)
+                .frame(width: 36, height: 36)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            String(localized: "content.accessibility.open_sticker_picker", comment: "Accessibility label for the sticker picker button in the composer")
+        )
     }
 
     @ViewBuilder
