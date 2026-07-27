@@ -82,6 +82,7 @@ enum IdentityBackupError: Error, Equatable, LocalizedError {
     case decryptionFailed
     case unsupportedVersion
     case encodingFailed
+    case persistenceFailed
 
     var errorDescription: String? {
         switch self {
@@ -126,6 +127,12 @@ enum IdentityBackupError: Error, Equatable, LocalizedError {
                 localized: "identity_backup.error.encoding_failed",
                 defaultValue: "failed to build the encrypted backup",
                 comment: "Error when encrypting or encoding the backup envelope fails"
+            )
+        case .persistenceFailed:
+            return String(
+                localized: "identity_backup.error.persistence_failed",
+                defaultValue: "could not save the restored identity to the keychain",
+                comment: "Error when keychain write/read-back of restored identity keys fails"
             )
         }
     }
@@ -259,6 +266,12 @@ enum IdentityBackupService {
             UInt32(bigEndian: $0.load(as: UInt32.self))
         }
         offset += 4
+        // Envelope fields before the AEAD tag are unauthenticated. Bound the
+        // iteration count before PBKDF2 so a crafted backup cannot force
+        // billions of derivation rounds on the main actor (DoS).
+        guard iterations == pbkdf2Iterations else {
+            throw IdentityBackupError.invalidPayload
+        }
 
         let salt = envelope.subdata(in: offset..<(offset + saltByteCount))
         offset += saltByteCount

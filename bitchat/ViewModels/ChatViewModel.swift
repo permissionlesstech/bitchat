@@ -1824,37 +1824,61 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
         bleService.suspendForPanicReset()
 
-        try idBridge.installRestoredIdentity(
-            privateKey: material.nostrPrivateKey,
-            deviceSeed: material.nostrDeviceSeed
-        )
+        // Always reopen admission + Nostr after a suspend, even when install
+        // throws — otherwise a failed restore leaves BLE/internet dead until
+        // relaunch.
+        do {
+            try idBridge.installRestoredIdentity(
+                privateKey: material.nostrPrivateKey,
+                deviceSeed: material.nostrDeviceSeed
+            )
 
-        try bleService.installRestoredNoiseIdentity(
-            noiseStaticPrivateKey: material.noiseStaticPrivateKey,
-            ed25519SigningPrivateKey: material.ed25519SigningPrivateKey,
-            currentNickname: nickname,
-            restartServices: false
-        )
+            try bleService.installRestoredNoiseIdentity(
+                noiseStaticPrivateKey: material.noiseStaticPrivateKey,
+                ed25519SigningPrivateKey: material.ed25519SigningPrivateKey,
+                currentNickname: nickname,
+                restartServices: false
+            )
 
-        // Nostr transport caches the previous sender peer ID; point it at the
-        // restored mesh identity.
-        messageRouter.updateNostrSenderPeerID(meshService.myPeerID)
+            // Nostr transport caches the previous sender peer ID; point it at the
+            // restored mesh identity.
+            messageRouter.updateNostrSenderPeerID(meshService.myPeerID)
 
-        bleService.completePanicReset(restartServices: restartServices)
+            resumeTransportsAfterIdentityRestore(
+                bleService: bleService,
+                restartServices: restartServices
+            )
 
-        if restartServices {
-            if !TestEnvironment.isRunningTests {
-                nostrRelayManager = NostrRelayManager.shared
-                setupNostrMessageHandling()
-            }
-            panicNetworkLifecycle.restart()
+            SecureLogger.info(
+                "Identity restored from backup; fingerprint=\(fingerprint.prefix(16))…",
+                category: .security
+            )
+            return fingerprint
+        } catch {
+            resumeTransportsAfterIdentityRestore(
+                bleService: bleService,
+                restartServices: restartServices
+            )
+            SecureLogger.error(
+                "Identity restore failed after transport suspend; services reopened: \(error)",
+                category: .security
+            )
+            throw error
         }
+    }
 
-        SecureLogger.info(
-            "Identity restored from backup; fingerprint=\(fingerprint.prefix(16))…",
-            category: .security
-        )
-        return fingerprint
+    @MainActor
+    private func resumeTransportsAfterIdentityRestore(
+        bleService: BLEService,
+        restartServices: Bool
+    ) {
+        bleService.completePanicReset(restartServices: restartServices)
+        guard restartServices else { return }
+        if !TestEnvironment.isRunningTests {
+            nostrRelayManager = NostrRelayManager.shared
+            setupNostrMessageHandling()
+        }
+        panicNetworkLifecycle.restart()
     }
 
     /// BCH-01-013: Clear iOS app switcher snapshots during panic mode

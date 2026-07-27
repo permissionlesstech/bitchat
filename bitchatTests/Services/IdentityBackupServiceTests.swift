@@ -136,6 +136,47 @@ struct IdentityBackupServiceTests {
         let restored = try IdentityBackupService.decrypt(token, passphrase: passphrase)
         #expect(restored == material)
     }
+
+    @Test func rejectsUnauthenticatedPBKDFIterationCount() throws {
+        let material = try sampleMaterial()
+        let passphrase = "twelve-chars-min"
+        let uri = try IdentityBackupService.encrypt(material, passphrase: passphrase)
+        let token = try #require(URL(string: uri)?.pathComponents.last)
+        let envelope = try #require(Base64URLCoding.decode(token))
+
+        // Flip the big-endian iteration field (bytes after magic+version+kdf)
+        // to UInt32.max without touching the AEAD ciphertext — the point is
+        // that we must reject before running PBKDF2.
+        var poisoned = envelope
+        let iterationsOffset = 4 /* BCID */ + 1 /* version */ + 1 /* kdf */
+        poisoned.replaceSubrange(
+            iterationsOffset..<(iterationsOffset + 4),
+            with: Data([0xFF, 0xFF, 0xFF, 0xFF])
+        )
+        let poisonedURI =
+            "bitchat://identity-backup/v1/\(Base64URLCoding.encode(poisoned))"
+
+        #expect(throws: IdentityBackupError.invalidPayload) {
+            _ = try IdentityBackupService.decrypt(poisonedURI, passphrase: passphrase)
+        }
+    }
+
+    @Test func nostrInstallFailsWhenKeychainWriteDoesNotStick() throws {
+        let keychain = DropWritesKeychain()
+        let bridge = NostrIdentityBridge(keychain: keychain)
+        let nostr = try NostrIdentity.generate()
+        var seed = Data(count: 32)
+        seed.withUnsafeMutableBytes { ptr in
+            _ = SecRandomCopyBytes(kSecRandomDefault, 32, ptr.baseAddress!)
+        }
+
+        #expect(throws: IdentityBackupError.persistenceFailed) {
+            _ = try bridge.installRestoredIdentity(
+                privateKey: nostr.privateKey,
+                deviceSeed: seed
+            )
+        }
+    }
 }
 
 struct IdentityBackupInstallTests {
@@ -161,5 +202,49 @@ struct IdentityBackupInstallTests {
         #expect(restored.getIdentityFingerprint() == fingerprint)
         #expect(restored.getStaticPublicKeyData() == staticPub)
         #expect(restored.getSigningPublicKeyData() == signingPub)
+    }
+}
+
+/// Keychain that accepts writes but never retains them — models a failed
+/// `SecItemAdd` after `clearAllAssociations` so restore must throw instead of
+/// reporting success with an empty Nostr identity.
+private final class DropWritesKeychain: KeychainManagerProtocol {
+    private var serviceStorage: [String: [String: Data]] = [:]
+
+    func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool { true }
+    func getIdentityKey(forKey key: String) -> Data? { nil }
+    func deleteIdentityKey(forKey key: String) -> Bool { true }
+    func deleteAllKeychainData() -> Bool {
+        serviceStorage.removeAll()
+        return true
+    }
+    func secureClear(_ data: inout Data) { data = Data() }
+    func secureClear(_ string: inout String) { string = "" }
+    func verifyIdentityKeyExists() -> Bool { false }
+    func getIdentityKeyWithResult(forKey key: String) -> KeychainReadResult { .itemNotFound }
+    func saveIdentityKeyWithResult(_ keyData: Data, forKey key: String) -> KeychainSaveResult { .success }
+
+    func save(key: String, data: Data, service: String, accessible: CFString?) {
+        // Pretend to succeed; do not retain — read-back must fail.
+        _ = (key, data, service, accessible)
+    }
+
+    func load(key: String, service: String) -> Data? {
+        serviceStorage[service]?[key]
+    }
+
+    func loadWithResult(key: String, service: String) -> KeychainReadResult {
+        if let data = serviceStorage[service]?[key] {
+            return .success(data)
+        }
+        return .itemNotFound
+    }
+
+    func delete(key: String, service: String) {
+        serviceStorage[service]?.removeValue(forKey: key)
+    }
+
+    func deleteAll(service: String) {
+        serviceStorage.removeValue(forKey: service)
     }
 }

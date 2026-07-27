@@ -947,7 +947,7 @@ final class BLEService: NSObject {
         }
         guard keychain.getIdentityKey(forKey: "noiseStaticKey") == noiseStaticPrivateKey,
               keychain.getIdentityKey(forKey: "ed25519SigningKey") == ed25519SigningPrivateKey else {
-            throw IdentityBackupError.encodingFailed
+            throw IdentityBackupError.persistenceFailed
         }
 
         localIdentityState.setNickname(currentNickname)
