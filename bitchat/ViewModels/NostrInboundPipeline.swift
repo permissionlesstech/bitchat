@@ -2,6 +2,11 @@ import BitFoundation
 import BitLogger
 import Foundation
 
+enum NostrPrivateMessageSource: Equatable {
+    case legacy1059
+    case ndr
+}
+
 /// The narrow surface `NostrInboundPipeline` needs from its owner.
 ///
 /// Split out of `ChatNostrContext`: member names are shared with the sibling
@@ -51,7 +56,8 @@ protocol NostrInboundPipelineContext: AnyObject {
         senderPubkey: String,
         convKey: PeerID,
         id: NostrIdentity,
-        messageTimestamp: Date
+        messageTimestamp: Date,
+        source: NostrPrivateMessageSource
     )
     func handleDelivered(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID)
     func handleReadReceipt(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID)
@@ -427,7 +433,8 @@ final class NostrInboundPipeline {
                     senderPubkey: senderPubkey,
                     convKey: convKey,
                     id: id,
-                    messageTimestamp: messageTimestamp
+                    messageTimestamp: messageTimestamp,
+                    source: .legacy1059
                 )
             case .delivered:
                 context.handleDelivered(payload, senderPubkey: senderPubkey, convKey: convKey)
@@ -493,7 +500,7 @@ final class NostrInboundPipeline {
                 currentIdentity: currentIdentity,
                 wipeGeneration: wipeGeneration,
                 expiresAtSeconds: message.expiresAtSeconds,
-                requiresFavoriteBinding: true
+                source: .ndr
             )
             guard self.wipeGeneration == wipeGeneration else {
                 completion(.retry)
@@ -548,7 +555,8 @@ final class NostrInboundPipeline {
                 senderPubkey: senderPubkey,
                 rumorTimestamp: rumorTimestamp,
                 currentIdentity: currentIdentity,
-                wipeGeneration: wipeGeneration
+                wipeGeneration: wipeGeneration,
+                source: .legacy1059
             )
         } catch {
             SecureLogger.error("Failed to decrypt Nostr message: \(error)", category: .session)
@@ -563,7 +571,7 @@ final class NostrInboundPipeline {
         currentIdentity: NostrIdentity,
         wipeGeneration: UInt64,
         expiresAtSeconds: UInt64? = nil,
-        requiresFavoriteBinding: Bool = false
+        source: NostrPrivateMessageSource
     ) async -> NdrDeliveryDisposition {
         guard let context else { return .retry }
         if content.hasPrefix("verify:") {
@@ -587,7 +595,7 @@ final class NostrInboundPipeline {
         let actualSenderNoiseKey: Data? = await MainActor.run {
             self.findNoiseKey(for: routingPubkey)
         }
-        if requiresFavoriteBinding, actualSenderNoiseKey == nil {
+        if source == .ndr, actualSenderNoiseKey == nil {
             // Keep the native delivery durable until the favorite binding
             // journal is recovered. Falling through to a virtual Nostr peer
             // would bypass the fail-closed pairwise identity binding.
@@ -626,7 +634,8 @@ final class NostrInboundPipeline {
                     senderPubkey: senderPubkey,
                     convKey: targetPeerID,
                     id: currentIdentity,
-                    messageTimestamp: messageTimestamp
+                    messageTimestamp: messageTimestamp,
+                    source: source
                 )
             case .delivered:
                 context.handleDelivered(

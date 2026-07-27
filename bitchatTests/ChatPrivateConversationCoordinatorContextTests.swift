@@ -176,6 +176,8 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
     private(set) var geoPrivateMessages: [(content: String, recipientHex: String, messageID: String)] = []
     private(set) var geoDeliveryAcks: [(messageID: String, recipientHex: String)] = []
     private(set) var geoReadReceipts: [(messageID: String, recipientHex: String)] = []
+    private(set) var accountNostrDeliveryAcks: [(messageID: String, peerID: PeerID)] = []
+    private(set) var accountNostrReadReceipts: [(messageID: String, peerID: PeerID)] = []
     var queuedMessageIDsByPeerID: [PeerID: Set<String>] = [:]
     private(set) var deliveryAckAttempts: [(messageID: String, peerIDs: [PeerID])] = []
     private(set) var deliveredMessageIDs: [String] = []
@@ -220,6 +222,14 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
 
     func sendGeohashReadReceipt(_ messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity) {
         geoReadReceipts.append((messageID, recipientHex))
+    }
+
+    func sendAccountNostrDeliveryAck(for messageID: String, to peerID: PeerID) {
+        accountNostrDeliveryAcks.append((messageID, peerID))
+    }
+
+    func sendAccountNostrReadReceipt(for messageID: String, to peerID: PeerID) {
+        accountNostrReadReceipts.append((messageID, peerID))
     }
 
     // Favorites & notifications
@@ -474,6 +484,8 @@ struct ChatPrivateConversationCoordinatorContextTests {
         #expect(context.geoDeliveryAcks.map(\.messageID) == ["geo-1"])
         #expect(context.geoDeliveryAcks.first?.recipientHex == senderPubkey)
         #expect(context.sentGeoDeliveryAcks == ["geo-1"])
+        #expect(context.accountNostrDeliveryAcks.isEmpty)
+        #expect(context.accountNostrReadReceipts.isEmpty)
         #expect(context.privateChats[convKey]?.map(\.id) == ["geo-1"])
         #expect(context.privateChats[convKey]?.first?.sender == "bob#5678")
         #expect(context.unreadPrivateMessages.isEmpty)
@@ -489,6 +501,91 @@ struct ChatPrivateConversationCoordinatorContextTests {
         )
         #expect(context.geoDeliveryAcks.count == 1)
         #expect(context.privateChats[convKey]?.count == 1)
+    }
+
+    @Test @MainActor
+    func ndrPrivateMessage_sendsOnlyPairwiseDeliveryAndReadAcks() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let stablePeerID = PeerID(
+            hexData: Data(repeating: 0xA6, count: 32)
+        )
+        let senderPubkey = String(repeating: "b", count: 64)
+        context.selectedPrivateChatPeer = stablePeerID
+        context.displayNamesByPubkey[senderPubkey] = "bob"
+        let payloadData = PrivateMessagePacket(
+            messageID: "ndr-ack-1",
+            content: "pairwise"
+        ).encode()!
+        let payload = NoisePayload(
+            type: .privateMessage,
+            data: payloadData
+        )
+
+        coordinator.handlePrivateMessage(
+            payload,
+            senderPubkey: senderPubkey,
+            convKey: stablePeerID,
+            id: MockChatPrivateConversationContext.dummyIdentity,
+            messageTimestamp: Date(),
+            source: .ndr
+        )
+
+        #expect(context.accountNostrDeliveryAcks.count == 1)
+        #expect(context.accountNostrDeliveryAcks.first?.messageID == "ndr-ack-1")
+        #expect(context.accountNostrDeliveryAcks.first?.peerID == stablePeerID)
+        #expect(context.accountNostrReadReceipts.count == 1)
+        #expect(context.accountNostrReadReceipts.first?.messageID == "ndr-ack-1")
+        #expect(context.accountNostrReadReceipts.first?.peerID == stablePeerID)
+        #expect(context.geoDeliveryAcks.isEmpty)
+        #expect(context.geoReadReceipts.isEmpty)
+
+        coordinator.handlePrivateMessage(
+            payload,
+            senderPubkey: senderPubkey,
+            convKey: stablePeerID,
+            id: MockChatPrivateConversationContext.dummyIdentity,
+            messageTimestamp: Date(),
+            source: .ndr
+        )
+
+        #expect(context.accountNostrDeliveryAcks.count == 1)
+        #expect(context.accountNostrReadReceipts.count == 1)
+        #expect(context.privateChats[stablePeerID]?.count == 1)
+    }
+
+    @Test @MainActor
+    func ndrPrivateMessage_notViewingSendsOnlyPairwiseDeliveryAck() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let stablePeerID = PeerID(
+            hexData: Data(repeating: 0xA5, count: 32)
+        )
+        let senderPubkey = String(repeating: "c", count: 64)
+        context.displayNamesByPubkey[senderPubkey] = "carol"
+        let payload = NoisePayload(
+            type: .privateMessage,
+            data: PrivateMessagePacket(
+                messageID: "ndr-background-1",
+                content: "background"
+            ).encode()!
+        )
+
+        coordinator.handlePrivateMessage(
+            payload,
+            senderPubkey: senderPubkey,
+            convKey: stablePeerID,
+            id: MockChatPrivateConversationContext.dummyIdentity,
+            messageTimestamp: Date(),
+            source: .ndr
+        )
+
+        #expect(context.accountNostrDeliveryAcks.count == 1)
+        #expect(context.accountNostrDeliveryAcks.first?.peerID == stablePeerID)
+        #expect(context.accountNostrReadReceipts.isEmpty)
+        #expect(context.geoDeliveryAcks.isEmpty)
+        #expect(context.geoReadReceipts.isEmpty)
+        #expect(context.unreadPrivateMessages == Set([stablePeerID]))
     }
 
     @Test @MainActor

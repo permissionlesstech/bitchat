@@ -744,6 +744,126 @@ struct NostrTransportTests {
         #expect(result.packet.recipientID == fullPeerID.toShort().routingData)
     }
 
+    @Test("Direct delivery and read ACKs stay on an established NDR session")
+    @MainActor
+    func directAcksUseNdrWhenSessionExists() async throws {
+        let keychain = MockKeychain()
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let senderRelay = FakeRelayManager()
+        let recipientRelay = FakeRelayManager()
+        let senderNdr = NdrNostrService(
+            relayManager: senderRelay,
+            rolloutEnabled: true,
+            storageDirectoryProvider: {
+                try makeTempDir(label: "direct-ack-ndr-sender")
+            }
+        )
+        let recipientNdr = NdrNostrService(
+            relayManager: recipientRelay,
+            rolloutEnabled: true,
+            storageDirectoryProvider: {
+                try makeTempDir(label: "direct-ack-ndr-recipient")
+            }
+        )
+        senderNdr.configureIfNeeded(identity: sender)
+        recipientNdr.configureIfNeeded(identity: recipient)
+        try establishMutualSession(
+            senderNdr,
+            recipientNdr,
+            senderIdentity: sender,
+            recipientIdentity: recipient,
+            senderRelay: senderRelay,
+            recipientRelay: recipientRelay
+        )
+        senderRelay.resetSentEvents()
+
+        let noiseKey = Data((144..<176).map(UInt8.init))
+        let peerID = PeerID(hexData: noiseKey)
+        let relationship = makeRelationship(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: recipient.npub,
+            peerNickname: "Ack peer"
+        )
+        let legacyProbe = NostrTransportProbe()
+        let transport = NostrTransport(
+            keychain: keychain,
+            idBridge: NostrIdentityBridge(keychain: keychain),
+            ndrService: senderNdr,
+            dependencies: makeDependencies(
+                favoriteStatusForNoiseKey: {
+                    $0 == noiseKey ? relationship : nil
+                },
+                isNdrFallbackBlockedForPeerID: {
+                    $0.toShort() == peerID.toShort()
+                },
+                currentIdentity: { sender },
+                sendEvent: legacyProbe.record(event:),
+                scheduleAfter: { delay, action in
+                    legacyProbe.enqueueScheduledAction(
+                        delay: delay,
+                        action: action
+                    )
+                }
+            )
+        )
+        transport.senderPeerID = PeerID(str: "0123456789abcdef")
+        var decryptedMessages: [NdrDecryptedMessage] = []
+        recipientNdr.onDecryptedMessage = { message, completion in
+            decryptedMessages.append(message)
+            completion(.consumed)
+        }
+
+        transport.sendDeliveryAck(for: "ndr-delivered-1", to: peerID)
+        let deliveredSent = await TestHelpers.waitUntil({
+            senderRelay.sentEvents.filter { $0.kind == 1060 }.count == 1
+        })
+        #expect(deliveredSent)
+        let deliveredOuter = try #require(
+            senderRelay.sentEvents.first { $0.kind == 1060 }
+        )
+        recipientNdr.processInboundRelayEvent(deliveredOuter)
+
+        let receipt = ReadReceipt(
+            originalMessageID: "ndr-read-1",
+            readerID: transport.myPeerID,
+            readerNickname: "me"
+        )
+        transport.sendReadReceipt(receipt, to: peerID)
+        let readQueued = await TestHelpers.waitUntil({
+            legacyProbe.scheduledActionCount == 1
+        })
+        #expect(readQueued)
+        #expect(legacyProbe.runNextScheduledAction())
+        let readSent = await TestHelpers.waitUntil({
+            senderRelay.sentEvents.filter { $0.kind == 1060 }.count == 2
+        })
+        #expect(readSent)
+        let readOuter = try #require(
+            senderRelay.sentEvents.filter { $0.kind == 1060 }.last
+        )
+        recipientNdr.processInboundRelayEvent(readOuter)
+
+        #expect(legacyProbe.sentEvents.isEmpty)
+        #expect(decryptedMessages.count == 2)
+        let deliveredPayload = try decodeNdrEmbeddedPayload(
+            from: decryptedMessages[0].event.content
+        )
+        #expect(deliveredPayload.type == .delivered)
+        #expect(
+            String(data: deliveredPayload.data, encoding: .utf8)
+                == "ndr-delivered-1"
+        )
+        let readPayload = try decodeNdrEmbeddedPayload(
+            from: decryptedMessages[1].event.content
+        )
+        #expect(readPayload.type == .readReceipt)
+        #expect(
+            String(data: readPayload.data, encoding: .utf8)
+                == "ndr-read-1"
+        )
+    }
+
     @Test("Geohash private message registers pending gift wrap")
     @MainActor
     func sendPrivateMessageGeohashRegistersPendingGiftWrap() async throws {
@@ -1064,6 +1184,21 @@ struct NostrTransportTests {
             throw NostrTransportTestError.invalidPacket
         }
         return (packet, payload, senderPubkey)
+    }
+
+    private func decodeNdrEmbeddedPayload(
+        from content: String
+    ) throws -> NoisePayload {
+        guard content.hasPrefix("bitchat1:") else {
+            throw NostrTransportTestError.invalidEmbeddedContent
+        }
+        let encoded = String(content.dropFirst("bitchat1:".count))
+        guard let packetData = base64URLDecode(encoded),
+              let packet = BitchatPacket.from(packetData),
+              let payload = NoisePayload.decode(packet.payload) else {
+            throw NostrTransportTestError.invalidPacket
+        }
+        return payload
     }
 
     private func decodePrivateMessage(from payload: NoisePayload) throws -> PrivateMessagePacket {

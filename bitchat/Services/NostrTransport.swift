@@ -140,7 +140,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
 
     /// Ack pacing shared across transport instances. Geohash acks are sent
     /// through short-lived transports created per ack
-    /// (`makeGeohashNostrTransport()`), so a per-instance queue would only
+    /// (`makeNostrTransport()`), so a per-instance queue would only
     /// ever hold one item and never pace a burst (flagged by Codex on
     /// #1398). Production wires `sharedAckPacer` via `Dependencies.live`;
     /// tests get an isolated instance per `Dependencies` by default.
