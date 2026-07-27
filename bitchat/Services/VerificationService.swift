@@ -1,3 +1,4 @@
+import BitFoundation
 import Foundation
 
 /// QR verification scaffolding: schema, signing, and basic challenge/response helpers.
@@ -85,7 +86,7 @@ final class VerificationService {
         let ts = Int64(Date().timeIntervalSince1970)
         var nonce = Data(count: 16)
         _ = nonce.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
-        let nonceB64 = nonce.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
+        let nonceB64 = Base64URLCoding.encode(nonce)
         let payload = VerificationQR(v: 1, noiseKeyHex: noiseKey, signKeyHex: signKey, npub: npub, nickname: nickname, ts: ts, nonceB64: nonceB64, sigHex: "")
         let msg = payload.canonicalBytes()
         guard let sig = transport.noiseSignData(msg) else { return nil }
