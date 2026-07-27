@@ -653,7 +653,7 @@ struct MessageRouterTests {
     }
 
     @Test @MainActor
-    func sendFavoriteNotification_usesConnectedOrReachable() async {
+    func sendFavoriteNotification_routesThroughOutboxAsPrivateMessage() async {
         let peerID = PeerID(str: "0000000000000004")
         let transport = MockTransport()
         transport.reachablePeers.insert(peerID)
@@ -661,7 +661,28 @@ struct MessageRouterTests {
         let router = MessageRouter(transports: [transport])
         router.sendFavoriteNotification(to: peerID, isFavorite: true)
 
-        #expect(transport.sentFavoriteNotifications.count == 1)
+        // Favorites ride the outbox (sendPrivate) so they survive offline /
+        // handshake gaps; the recipient parses the [FAVORITED] prefix.
+        #expect(transport.sentFavoriteNotifications.isEmpty)
+        #expect(transport.sentPrivateMessages.count == 1)
+        #expect(transport.sentPrivateMessages.first?.content.hasPrefix("[FAVORITED]") == true)
+    }
+
+    @Test @MainActor
+    func sendFavoriteNotification_whileOffline_queuesAndFlushesOnReconnect() async {
+        let peerID = PeerID(str: "0000000000000009")
+        let transport = MockTransport()
+        // Peer is neither connected nor reachable: the favorite must be retained.
+        let router = MessageRouter(transports: [transport])
+        router.sendFavoriteNotification(to: peerID, isFavorite: false)
+        #expect(transport.sentPrivateMessages.isEmpty)
+
+        // Peer comes back: the queued favorite flushes.
+        transport.connectedPeers.insert(peerID)
+        router.flushOutbox(for: peerID)
+
+        #expect(transport.sentPrivateMessages.count == 1)
+        #expect(transport.sentPrivateMessages.first?.content.hasPrefix("[UNFAVORITED]") == true)
     }
 
     // MARK: - Courier deposits

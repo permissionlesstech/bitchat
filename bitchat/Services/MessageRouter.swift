@@ -48,6 +48,9 @@ final class MessageRouter {
     private let courierDirectory: CourierDirectory
     private let outboxStore: MessageOutboxStore?
     private let metrics: StoreAndForwardMetrics?
+    // Stamps our npub onto favorite notifications so the recipient can learn
+    // our Nostr identity. Optional so tests can omit it.
+    private let idBridge: NostrIdentityBridge?
 
     /// Invoked whenever a retained private message is dropped without a
     /// delivery ack (attempt cap, TTL expiry, or per-peer overflow eviction)
@@ -141,9 +144,11 @@ final class MessageRouter {
         now: @escaping () -> Date = Date.init,
         courierDirectory: CourierDirectory? = nil,
         outboxStore: MessageOutboxStore? = nil,
-        metrics: StoreAndForwardMetrics? = nil
+        metrics: StoreAndForwardMetrics? = nil,
+        idBridge: NostrIdentityBridge? = nil
     ) {
         self.transports = transports
+        self.idBridge = idBridge
         self.now = now
         self.courierDirectory = courierDirectory ?? .favoritesBacked()
         self.outboxStore = outboxStore
@@ -572,11 +577,19 @@ final class MessageRouter {
     }
 
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
-        if let transport = connectedTransport(for: peerID) {
-            transport.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
-        } else if let transport = reachableTransport(for: peerID) {
-            transport.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
+        // Route favorites through the outbox instead of fire-and-forget: a
+        // toggle sent while the peer is offline or mid-handshake used to be
+        // silently dropped, which for mesh-only peers meant a missed npub
+        // exchange. The outbox retains until an ack, and the alias flush
+        // drains the queue on reconnect/authentication no matter which PeerID
+        // form the toggle was keyed under. The payload is the same
+        // [FAVORITED]:<npub> content the transports built internally — the
+        // receiver parses the prefix from PM content and never displays it.
+        var content = isFavorite ? "[FAVORITED]" : "[UNFAVORITED]"
+        if let identity = try? idBridge?.getCurrentNostrIdentity() {
+            content += ":" + identity.npub
         }
+        sendPrivate(content, to: peerID, recipientNickname: "", messageID: UUID().uuidString)
     }
 
     /// Retries only messages that the router previously transmitted through
