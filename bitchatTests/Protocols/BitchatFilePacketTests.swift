@@ -155,4 +155,33 @@ final class BitchatFilePacketTests: XCTestCase {
             "media-910bd42c65060ab76bb6406f220c4516"
         )
     }
+
+    func testPrivateMediaMessageIdentityHandlesAndroidFilenameVariants() throws {
+        let alice = PeerID(str: "0011223344556677")
+        let bob = PeerID(str: "8899aabbccddeeff")
+
+        // Test uppercase prefix IMG_
+        let imgID = try XCTUnwrap(PrivateMediaMessageIdentity.stableID(
+            senderPeerID: alice,
+            recipientPeerID: bob,
+            fileName: "IMG_20260725_105708_1CC2760D-76AA-40C3-8013-C7FAA6C2EF99.jpg"
+        ))
+        XCTAssertTrue(PrivateMediaMessageIdentity.isStableID(imgID))
+
+        // Test uppercase prefix VOICE_ and extension .ogg for Android voice notes
+        let voiceID = try XCTUnwrap(PrivateMediaMessageIdentity.stableID(
+            senderPeerID: alice,
+            recipientPeerID: bob,
+            fileName: "VOICE_20260725_105708_0123456789abcdef.ogg"
+        ))
+        XCTAssertTrue(PrivateMediaMessageIdentity.isStableID(voiceID))
+
+        // Test standard lowercase voice_ note with .ogg extension
+        let lowerVoiceID = try XCTUnwrap(PrivateMediaMessageIdentity.stableID(
+            senderPeerID: alice,
+            recipientPeerID: bob,
+            fileName: "voice_20260725_105708_0123456789abcdef.ogg"
+        ))
+        XCTAssertTrue(PrivateMediaMessageIdentity.isStableID(lowerVoiceID))
+    }
 }

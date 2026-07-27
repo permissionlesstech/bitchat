@@ -169,7 +169,8 @@ enum MimeType: CaseIterable, Hashable {
     init?(_ mimeString: String?) {
         guard let mimeString else { return nil }
         
-        let normalized = mimeString.lowercased()
+        let cleaned = mimeString.split(separator: ";").first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? mimeString
+        let normalized = cleaned.lowercased()
 
         // Direct match with our canonical list
         if let match = MimeType.allCases.first(where: { $0.mimeString == normalized }) {

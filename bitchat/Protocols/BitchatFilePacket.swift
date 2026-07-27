@@ -192,17 +192,22 @@ enum PrivateMediaMessageIdentity {
         let path = leafName as NSString
         let stem = path.deletingPathExtension
         let fileExtension = path.pathExtension.lowercased()
+        let lowerStem = stem.lowercased()
+        
+        let isImage = lowerStem.hasPrefix("img_")
+        let isVoice = lowerStem.hasPrefix("voice_")
+        
         switch true {
-        case stem.hasPrefix("img_"):
+        case isImage:
             guard fileExtension == "jpg" || fileExtension == "jpeg" else { return nil }
-        case stem.hasPrefix("voice_"):
-            guard fileExtension == "m4a" else { return nil }
+        case isVoice:
+            guard fileExtension == "m4a" || fileExtension == "ogg" else { return nil }
         default:
             return nil
         }
         let entropyToken = stem.split(separator: "_").last.map(String.init)
         let hasUUIDEntropy = entropyToken.flatMap(UUID.init(uuidString:)) != nil
-        let voiceBurstID = stem.hasPrefix("voice_")
+        let voiceBurstID = isVoice
             ? String(stem.dropFirst("voice_".count))
             : ""
         let hasBurstEntropy = voiceBurstID.count == 16

@@ -87,4 +87,13 @@ struct MimeTypeTests {
         #expect(MimeType.octetStream.matches(data: randomData),
                 "application/octet-stream should always be considered valid")
     }
+
+    // MARK: - MIME Parsing with Parameters
+    @Test func mimeParsingWithParameters() throws {
+        let mime = MimeType("audio/ogg; codecs=opus")
+        #expect(mime == .ogg)
+
+        let mimeImage = MimeType("image/jpeg; charset=utf-8")
+        #expect(mimeImage == .jpeg)
+    }
 }

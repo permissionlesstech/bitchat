@@ -44,14 +44,17 @@ enum BLEIncomingFileRejection: Error, Equatable {
 enum BLEIncomingFileValidator {
     static func validate(payload: Data) -> Result<BLEIncomingFileAcceptance, BLEIncomingFileRejection> {
         guard let filePacket = BitchatFilePacket.decode(payload) else {
+            SecureLogger.error("❌ BLEIncomingFileValidator: BitchatFilePacket.decode returned nil", category: .session)
             return .failure(.malformedPayload)
         }
 
         guard FileTransferLimits.isValidPayload(filePacket.content.count) else {
+            SecureLogger.warning("🚫 BLEIncomingFileValidator: payloadTooLarge (\(filePacket.content.count) bytes)", category: .security)
             return .failure(.payloadTooLarge(bytes: filePacket.content.count))
         }
 
         guard let mime = MimeType(filePacket.mimeType), mime.isAllowed else {
+            SecureLogger.warning("🚫 BLEIncomingFileValidator: unsupportedMime '\(filePacket.mimeType ?? "nil")'", category: .security)
             return .failure(.unsupportedMime(
                 mimeType: filePacket.mimeType,
                 bytes: filePacket.content.count
@@ -59,10 +62,12 @@ enum BLEIncomingFileValidator {
         }
 
         guard mime.matches(data: filePacket.content) else {
+            let prefix = filePacket.content.prefix(20).map { String(format: "%02x", $0) }.joined(separator: " ")
+            SecureLogger.warning("🚫 BLEIncomingFileValidator: magicMismatch for \(mime) (prefix: \(prefix))", category: .security)
             return .failure(.magicMismatch(
                 mime: mime,
                 bytes: filePacket.content.count,
-                prefixHex: filePacket.content.prefix(20).map { String(format: "%02x", $0) }.joined(separator: " ")
+                prefixHex: prefix
             ))
         }
 

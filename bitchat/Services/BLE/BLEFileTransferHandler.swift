@@ -177,6 +177,10 @@ final class BLEFileTransferHandler {
     /// quota, persistence, and UI-delivery behavior as public files.
     @discardableResult
     func handlePrivatePayload(_ payload: Data, from peerID: PeerID, timestamp: Date) -> Bool {
+        SecureLogger.debug(
+            "📁 handlePrivatePayload: received \(payload.count) bytes from \(peerID.id.prefix(8))…, prefix=[\(payload.prefix(8).map { String(format: "%02x", $0) }.joined(separator: " "))]",
+            category: .session
+        )
         let env = environment
         let peers = env.peersSnapshot()
         let senderNickname = BLEPeerSenderDisplayName.resolveKnownPeer(
