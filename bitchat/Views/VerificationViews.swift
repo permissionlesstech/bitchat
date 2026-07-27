@@ -11,7 +11,10 @@ import AppKit
 struct MyQRView: View {
     let qrString: String
     @Environment(\.colorScheme) var colorScheme
-    private var boxColor: Color { Color.gray.opacity(0.1) }
+    @ThemedPalette private var palette
+    // Palette-tinted so the box follows the theme (green under matrix)
+    // instead of a fixed gray band over the glass gradient.
+    private var boxColor: Color { palette.secondary.opacity(0.1) }
 
     private enum Strings {
         static let title: LocalizedStringKey = "verification.my_qr.title"
@@ -21,7 +24,7 @@ struct MyQRView: View {
     var body: some View {
         VStack(spacing: 12) {
             Text(Strings.title)
-                .font(.bitchatSystem(size: 16, weight: .bold, design: .monospaced))
+                .bitchatFont(size: 16, weight: .bold)
 
             VStack(spacing: 10) {
                 QRCodeImage(data: qrString, size: 240)
@@ -29,7 +32,7 @@ struct MyQRView: View {
 
                 // Non-scrolling, fully visible URL (wraps across lines)
                 Text(qrString)
-                    .font(.bitchatSystem(size: 11, design: .monospaced))
+                    .bitchatFont(size: 11)
                     .textSelection(.enabled)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
@@ -50,6 +53,7 @@ struct MyQRView: View {
 struct QRCodeImage: View {
     let data: String
     let size: CGFloat
+    @ThemedPalette private var palette
 
     private let context = CIContext()
     private let filter = CIFilter.qrCodeGenerator()
@@ -65,12 +69,12 @@ struct QRCodeImage: View {
                     .frame(width: size, height: size)
             } else {
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.gray.opacity(0.5), lineWidth: 1)
+                    .stroke(palette.secondary.opacity(0.5), lineWidth: 1)
                     .frame(width: size, height: size)
                     .overlay(
                         Text(Strings.unavailable)
-                            .font(.bitchatSystem(size: 12, design: .monospaced))
-                            .foregroundColor(.gray)
+                            .bitchatFont(size: 12)
+                            .foregroundColor(palette.secondary)
                     )
             }
         }
@@ -107,7 +111,8 @@ struct ImageWrapper: View {
 
 /// Placeholder scanner UI; real camera scanning will be added later.
 struct QRScanView: View {
-    @EnvironmentObject var viewModel: ChatViewModel
+    @EnvironmentObject private var verificationModel: VerificationModel
+    @ThemedPalette private var palette
     var isActive: Bool = true
     var onSuccess: (() -> Void)? = nil  // Called when verification succeeds
     @State private var input = ""
@@ -135,27 +140,25 @@ struct QRScanView: View {
                 // Deduplicate: ignore if we just processed this exact QR code
                 guard code != lastValid else { return }
 
-                if let qr = VerificationService.shared.verifyScannedQR(code) {
-                    let ok = viewModel.beginQRVerification(with: qr)
-                    if ok {
-                        // Successfully initiated verification; remember this QR to prevent re-scanning
-                        lastValid = code
-                        // Close scanner and return to "My QR" view
-                        onSuccess?()
-                    }
-                    // If !ok, peer not found or already pending - don't set lastValid so user can retry
-                } else {
-                    // ignore invalid reads; continue scanning
+                switch verificationModel.verifyScannedPayload(code) {
+                case .requested:
+                    // Successfully initiated verification; remember this QR to prevent re-scanning
+                    lastValid = code
+                    // Close scanner and return to "My QR" view
+                    onSuccess?()
+                case .notFound, .invalid:
+                    // Ignore invalid/no-match reads and keep scanning
+                    break
                 }
             }
             .frame(height: 260)
             .clipShape(RoundedRectangle(cornerRadius: 8))
             #else
             Text(Strings.pastePrompt)
-                .font(.bitchatSystem(size: 14, weight: .medium, design: .monospaced))
+                .bitchatFont(size: 14, weight: .medium)
             TextEditor(text: $input)
                 .frame(height: 100)
-                .border(Color.gray.opacity(0.4))
+                .border(palette.secondary.opacity(0.4))
             Button(Strings.validate) {
                 // Deduplicate: ignore if we just processed this exact QR
                 guard input != lastValid else {
@@ -163,17 +166,15 @@ struct QRScanView: View {
                     return
                 }
 
-                if let qr = VerificationService.shared.verifyScannedQR(input) {
-                    let ok = viewModel.beginQRVerification(with: qr)
-                    if ok {
-                        result = Strings.requested(qr.nickname)
-                        lastValid = input
-                        // Close scanner and return to "My QR" view
-                        onSuccess?()
-                    } else {
-                        result = Strings.notFound
-                    }
-                } else {
+                switch verificationModel.verifyScannedPayload(input) {
+                case .requested(let nickname):
+                    result = Strings.requested(nickname)
+                    lastValid = input
+                    // Close scanner and return to "My QR" view
+                    onSuccess?()
+                case .notFound:
+                    result = Strings.notFound
+                case .invalid:
                     result = Strings.invalid
                 }
             }
@@ -269,7 +270,7 @@ struct CameraScannerView: UIViewRepresentable {
     }
 
     final class PreviewView: UIView {
-        override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
+        override static var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
         var videoPreviewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -282,37 +283,27 @@ struct CameraScannerView: UIViewRepresentable {
 
 // Combined sheet: shows my QR by default with a button to scan instead
 struct VerificationSheetView: View {
-    @EnvironmentObject var viewModel: ChatViewModel
+    @EnvironmentObject private var verificationModel: VerificationModel
     @Binding var isPresented: Bool
     @State private var showingScanner = false
-    @Environment(\.colorScheme) var colorScheme
+    @ThemedPalette private var palette
 
-    private var backgroundColor: Color { colorScheme == .dark ? Color.black : Color.white }
-    private var accentColor: Color { colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0) }
-    private var boxColor: Color { Color.gray.opacity(0.1) }
-
-    private func myQRString() -> String {
-        let npub = try? viewModel.idBridge.getCurrentNostrIdentity()?.npub
-        return VerificationService.shared.buildMyQRString(nickname: viewModel.nickname, npub: npub) ?? ""
-    }
+    private var accentColor: Color { palette.accent }
+    private var boxColor: Color { palette.secondary.opacity(0.1) }
 
     var body: some View {
         VStack(spacing: 0) {
             // Top header (always at top)
             HStack {
                 Text("verification.sheet.title")
-                    .font(.bitchatSystem(size: 14, weight: .bold, design: .monospaced))
+                    .bitchatFont(size: 14, weight: .bold)
                     .foregroundColor(accentColor)
                 Spacer()
-                Button(action: {
+                SheetCloseButton {
                     showingScanner = false
                     isPresented = false
-                }) {
-                    Image(systemName: "xmark")
-                        .font(.bitchatSystem(size: 14, weight: .semibold))
-                        .foregroundColor(accentColor)
                 }
-                .buttonStyle(.plain)
+                .foregroundColor(accentColor)
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -325,7 +316,7 @@ struct VerificationSheetView: View {
                 if showingScanner {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("verification.scan.prompt_friend")
-                            .font(.bitchatSystem(size: 16, weight: .bold, design: .monospaced))
+                            .bitchatFont(size: 16, weight: .bold)
                             .frame(maxWidth: .infinity)
                             .multilineTextAlignment(.center)
                             .foregroundColor(accentColor)
@@ -333,14 +324,14 @@ struct VerificationSheetView: View {
                         QRScanView(isActive: showingScanner, onSuccess: {
                             showingScanner = false
                         })
-                            .environmentObject(viewModel)
+                            .environmentObject(verificationModel)
                             .frame(height: 280)
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                         #else
                         QRScanView(onSuccess: {
                             showingScanner = false
                         })
-                            .environmentObject(viewModel)
+                            .environmentObject(verificationModel)
                         #endif
                     }
                     .padding()
@@ -348,8 +339,7 @@ struct VerificationSheetView: View {
                     .background(boxColor)
                     .cornerRadius(8)
                 } else {
-                    let qr = myQRString()
-                    MyQRView(qrString: qr)
+                    MyQRView(qrString: verificationModel.myQRString())
                 }
             }
             .padding(16)
@@ -360,25 +350,24 @@ struct VerificationSheetView: View {
                 if showingScanner {
                     Button(action: { showingScanner = false }) {
                         Label("show my qr", systemImage: "qrcode")
-                            .font(.bitchatSystem(size: 13, design: .monospaced))
+                            .bitchatFont(size: 13)
                     }
                     .buttonStyle(.bordered)
                 } else {
                     Button(action: { showingScanner = true }) {
                         Label("scan someone else's qr", systemImage: "camera.viewfinder")
-                            .font(.bitchatSystem(size: 13, weight: .medium, design: .monospaced))
+                            .bitchatFont(size: 13, weight: .medium)
                     }
                     .buttonStyle(.bordered)
                     .tint(.gray)
                 }
 
                 // Optional: Remove verification for selected peer (if verified)
-                if let pid = viewModel.selectedPrivateChatPeer,
-                   let fp = viewModel.getFingerprint(for: pid),
-                   viewModel.verifiedFingerprints.contains(fp) {
-                    Button(action: { viewModel.unverifyFingerprint(for: pid) }) {
+                if let peerID = verificationModel.selectedPeerID,
+                   verificationModel.isVerified(peerID: peerID) {
+                    Button(action: { verificationModel.unverifyFingerprint(for: peerID) }) {
                         Label("remove verification", systemImage: "minus.circle")
-                            .font(.bitchatSystem(size: 12, design: .monospaced))
+                            .bitchatFont(size: 12)
                     }
                     .buttonStyle(.bordered)
                     .tint(.gray)
@@ -387,7 +376,7 @@ struct VerificationSheetView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
         }
-        .background(backgroundColor)
+        .themedSheetBackground()
         .onDisappear { showingScanner = false }
     }
 }

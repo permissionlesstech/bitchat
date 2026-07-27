@@ -70,7 +70,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     }
 
     // TransportPeerEventsDelegate
-    func didUpdatePeerSnapshots(_ peers: [TransportPeerSnapshot]) {
+    func didUpdatePeerSnapshots(_: [TransportPeerSnapshot]) {
         updatePeers()
     }
     
@@ -86,45 +86,44 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         var enrichedPeers: [BitchatPeer] = []
         var connected: Set<PeerID> = []
         var addedPeerIDs: Set<PeerID> = []
-        
+        var meshNoiseKeys: Set<Data> = []
+
         // Phase 1: Add all mesh peers (connected and reachable)
         for peerInfo in meshPeers {
             let peerID = peerInfo.peerID
             guard peerID != meshService.myPeerID else { continue }  // Never add self
-            
+
             let peer = buildPeerFromMesh(
                 peerInfo: peerInfo,
                 favorites: favorites,
                 meshAttached: hasAnyConnected
             )
-            
+
             enrichedPeers.append(peer)
             if peer.isConnected { connected.insert(peerID) }
             addedPeerIDs.insert(peerID)
-            
+
             // Update fingerprint cache
             if let publicKey = peerInfo.noisePublicKey {
+                meshNoiseKeys.insert(publicKey)
                 fingerprintCache[peerID] = publicKey.sha256Fingerprint()
             }
         }
-        
-        // Phase 2: Add offline favorites that we actively favorite
+
+        // Phase 2: Add offline favorites that we actively favorite.
+        // Mesh rows use the short 16-hex peer ID while favorites are keyed by
+        // the full 32-byte noise key, so dedup must compare noise keys — a
+        // PeerID comparison between the two forms can never match.
         for (favoriteKey, favorite) in favorites where favorite.isFavorite {
+            if meshNoiseKeys.contains(favoriteKey) { continue }
+
             let peerID = PeerID(hexData: favoriteKey)
-            
-            // Skip if already added (connected peer)
             if addedPeerIDs.contains(peerID) { continue }
-            
-            // Skip if connected under different ID but same nickname
-            let isConnectedByNickname = enrichedPeers.contains { 
-                $0.nickname == favorite.peerNickname && $0.isConnected 
-            }
-            if isConnectedByNickname { continue }
-            
+
             let peer = buildPeerFromFavorite(favorite: favorite, peerID: peerID)
             enrichedPeers.append(peer)
             addedPeerIDs.insert(peerID)
-            
+
             // Update fingerprint cache
             fingerprintCache[peerID] = favoriteKey.sha256Fingerprint()
         }
@@ -257,7 +256,35 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         
         return false
     }
-    
+
+    /// Block or unblock a mesh peer by its stable Noise identity.
+    ///
+    /// The block is keyed by the peer's fingerprint, resolved from `peerID`
+    /// (cache / mesh session / known-peer Noise key). This works even when the
+    /// peer is offline — including offline favorites — so the exact tapped peer
+    /// is (un)blocked unambiguously instead of being re-resolved by a
+    /// display-name string that two peers could share.
+    /// - Returns: the resolved fingerprint, or `nil` if the identity is unknown.
+    @discardableResult
+    func setBlocked(_ peerID: PeerID, blocked: Bool) -> String? {
+        guard let fingerprint = getFingerprint(for: peerID) else {
+            SecureLogger.warning(
+                "⚠️ Cannot \(blocked ? "block" : "unblock") - unknown identity for peer: \(peerID)",
+                category: .session
+            )
+            return nil
+        }
+        identityManager.setBlocked(fingerprint, isBlocked: blocked)
+        if blocked {
+            // Purge while the fingerprint↔peerID mapping is still known: the
+            // archived-echo seed filter can't resolve offline strangers, so
+            // scrub their carried messages now rather than at relaunch.
+            meshService.purgeArchivedPublicMessages(from: peerID)
+        }
+        updatePeers()
+        return fingerprint
+    }
+
     /// Toggle favorite status
     func toggleFavorite(_ peerID: PeerID) {
         guard let peer = getPeer(by: peerID) else {
@@ -346,12 +373,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     }
     
     // MARK: - Compatibility Methods (for easy migration)
-    
-    var allPeers: [BitchatPeer] { peers }
-    var connectedPeers: Set<PeerID> { connectedPeerIDs }
-    var favoritePeers: Set<String> {
-        Set(favorites.compactMap { getFingerprint(for: $0.peerID) })
-    }
+
     var blockedUsers: Set<String> {
         Set(peers.compactMap { peer in
             isBlocked(peer.peerID) ? getFingerprint(for: peer.peerID) : nil

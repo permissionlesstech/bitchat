@@ -80,4 +80,7 @@ build.log
 
 # Local configs
 Local.xcconfig
-.local/
+*.profraw
+
+# Built from the pinned iris-chat-rs submodule; never commit native crypto.
+localPackages/NdrFfi/Frameworks/NdrFfi.xcframework/

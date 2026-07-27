@@ -1,3 +1,4 @@
+import BitFoundation
 import Foundation
 import Testing
 
@@ -106,6 +107,75 @@ struct PacketsTests {
 
         let decoded = try #require(AnnouncementPacket.decode(from: encoded))
         #expect(decoded.directNeighbors == nil)
+    }
+
+    @Test
+    func announcementPacketRoundTripsCapabilities() throws {
+        let capabilities: PeerCapabilities = [.prekeys, .board, .meshDiagnostics]
+        let packet = AnnouncementPacket(
+            nickname: "alice",
+            noisePublicKey: Data(repeating: 0x11, count: 32),
+            signingPublicKey: Data(repeating: 0x22, count: 32),
+            directNeighbors: nil,
+            capabilities: capabilities
+        )
+
+        let encoded = try #require(packet.encode())
+        let decoded = try #require(AnnouncementPacket.decode(from: encoded))
+        #expect(decoded.capabilities == capabilities)
+    }
+
+    @Test
+    func announcementPacketWithoutCapabilitiesDecodesNilAndUnknownBitsSurvive() throws {
+        let legacy = try #require(
+            AnnouncementPacket(
+                nickname: "alice",
+                noisePublicKey: Data(repeating: 0x11, count: 32),
+                signingPublicKey: Data(repeating: 0x22, count: 32),
+                directNeighbors: nil
+            ).encode()
+        )
+        // The TLV is emitted only when capabilities are set, so legacy peers
+        // (and this packet) decode as nil rather than empty.
+        #expect(try #require(AnnouncementPacket.decode(from: legacy)).capabilities == nil)
+
+        var withFutureBits = legacy
+        withFutureBits.append(makeTLV(type: 0x05, value: Data([0x80, 0x01])))
+        let decoded = try #require(AnnouncementPacket.decode(from: withFutureBits))
+        #expect(decoded.capabilities?.rawValue == 0x0180)
+    }
+
+    @Test
+    func authenticatedPeerStateUsesVersionedCanonicalTLVs() throws {
+        let signingKey = Data(repeating: 0xA5, count: 32)
+        let packet = AuthenticatedPeerStatePacket(
+            capabilities: [.privateMedia, .vouch],
+            signingPublicKey: signingKey
+        )
+
+        var encoded = try #require(packet.encode())
+        #expect(encoded.prefix(5) == Data([0x01, 0x01, 0x02, 0x20, 0x01]))
+        // Unknown TLVs are forward-compatible and do not alter v1 state.
+        encoded.append(makeTLV(type: 0x7F, value: Data([0xCA, 0xFE])))
+
+        #expect(AuthenticatedPeerStatePacket.decode(from: encoded) == packet)
+    }
+
+    @Test
+    func authenticatedPeerStateRejectsMalformedAmbiguousOrUnknownVersion() {
+        let key = Data(repeating: 0x44, count: 32)
+        let capabilities = makeTLV(type: 0x01, value: Data([0x00, 0x01]))
+        let signing = makeTLV(type: 0x02, value: key)
+
+        #expect(AuthenticatedPeerStatePacket.decode(from: Data([0x02]) + capabilities + signing) == nil)
+        #expect(AuthenticatedPeerStatePacket.decode(from: Data([0x01]) + signing) == nil)
+        #expect(AuthenticatedPeerStatePacket.decode(from: Data([0x01]) + capabilities + capabilities + signing) == nil)
+        #expect(AuthenticatedPeerStatePacket.decode(from: Data([0x01, 0x01, 0x00]) + signing) == nil)
+        // 0x0001 is non-minimal little endian; the canonical form is [0x01].
+        #expect(AuthenticatedPeerStatePacket.decode(from: Data([0x01]) + makeTLV(type: 0x01, value: Data([0x01, 0x00])) + signing) == nil)
+        #expect(AuthenticatedPeerStatePacket.decode(from: Data([0x01]) + capabilities + makeTLV(type: 0x02, value: Data(key.dropLast()))) == nil)
+        #expect(AuthenticatedPeerStatePacket.decode(from: Data([0x01]) + capabilities + Data(signing.dropLast())) == nil)
+        #expect(AuthenticatedPeerStatePacket.decode(from: Data([0x01]) + makeTLV(type: 0x01, value: Data(repeating: 0x01, count: 9)) + signing) == nil)
     }
 
     @Test

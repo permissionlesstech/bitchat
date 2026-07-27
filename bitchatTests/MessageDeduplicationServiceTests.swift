@@ -312,6 +312,30 @@ struct MessageDeduplicationServiceTests {
         #expect(service.contentTimestamp(forKey: key) == now)
     }
 
+    @Test func forgetContent_allowsAuthenticatedReplacementThroughNextBatch() {
+        let service = MessageDeduplicationService(contentCapacity: 100, nostrEventCapacity: 100)
+        let content = "bridge alias payload"
+        let timestamp = Date()
+        service.recordContent(content, timestamp: timestamp)
+
+        service.forgetContent(content, ifRecordedAt: timestamp)
+
+        #expect(service.contentTimestamp(for: content) == nil)
+    }
+
+    @Test func forgetContent_doesNotEraseNewerSameContentMarker() {
+        let service = MessageDeduplicationService(contentCapacity: 100, nostrEventCapacity: 100)
+        let content = "repeated payload"
+        let old = Date(timeIntervalSince1970: 1_000)
+        let newer = Date(timeIntervalSince1970: 2_000)
+        service.recordContent(content, timestamp: old)
+        service.recordContent(content, timestamp: newer)
+
+        service.forgetContent(content, ifRecordedAt: old)
+
+        #expect(service.contentTimestamp(for: content) == newer)
+    }
+
     @Test func normalizedContentKey_consistentWithNormalizer() {
         let service = MessageDeduplicationService(contentCapacity: 100, nostrEventCapacity: 100)
         let content = "Hello World"

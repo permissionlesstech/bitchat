@@ -1,3 +1,4 @@
+import BitFoundation
 import XCTest
 @testable import bitchat
 
@@ -72,5 +73,86 @@ final class BitchatFilePacketTests: XCTestCase {
         let decoded = try XCTUnwrap(BitchatFilePacket.decode(data))
         XCTAssertEqual(decoded.fileSize, UInt64(content.count))
         XCTAssertEqual(decoded.content, content)
+    }
+
+    func testPrivateMediaMessageIdentityConvergesAcrossPeerIDAliases() throws {
+        let senderKey = Data(repeating: 0x11, count: 32)
+        let recipientKey = Data(repeating: 0x22, count: 32)
+        let senderStable = PeerID(hexData: senderKey)
+        let recipientStable = PeerID(hexData: recipientKey)
+        let fileName = "img_20260725_105708_1CC2760D-76AA-40C3-8013-C7FAA6C2EF99.jpg"
+
+        let senderID = try XCTUnwrap(PrivateMediaMessageIdentity.stableID(
+            senderPeerID: senderStable.toShort(),
+            recipientPeerID: PeerID(str: "mesh:\(recipientStable.toShort().bare)"),
+            fileName: fileName
+        ))
+        let receiverID = try XCTUnwrap(PrivateMediaMessageIdentity.stableID(
+            senderPeerID: senderStable,
+            recipientPeerID: recipientStable.toShort(),
+            fileName: fileName
+        ))
+
+        XCTAssertEqual(senderID, receiverID)
+        XCTAssertTrue(senderID.hasPrefix("media-"))
+        XCTAssertEqual(senderID.count, 38)
+        XCTAssertTrue(PrivateMediaMessageIdentity.isStableID(senderID))
+        XCTAssertFalse(PrivateMediaMessageIdentity.isStableID("media-\(String(repeating: "A", count: 32))"))
+        XCTAssertFalse(PrivateMediaMessageIdentity.isStableID("media-\(String(repeating: "a", count: 31))"))
+        XCTAssertFalse(PrivateMediaMessageIdentity.isStableID(UUID().uuidString))
+    }
+
+    func testPrivateMediaMessageIdentitySeparatesDirectionAndFilename() throws {
+        let alice = PeerID(str: "0011223344556677")
+        let bob = PeerID(str: "8899aabbccddeeff")
+        let firstName = "voice_20260725_105708_11111111-1111-1111-1111-111111111111.m4a"
+        let secondName = "voice_20260725_105709_22222222-2222-2222-2222-222222222222.m4a"
+        let first = try XCTUnwrap(PrivateMediaMessageIdentity.stableID(
+            senderPeerID: alice,
+            recipientPeerID: bob,
+            fileName: firstName
+        ))
+
+        XCTAssertNotEqual(first, PrivateMediaMessageIdentity.stableID(
+            senderPeerID: bob,
+            recipientPeerID: alice,
+            fileName: firstName
+        ))
+        XCTAssertNotEqual(first, PrivateMediaMessageIdentity.stableID(
+            senderPeerID: alice,
+            recipientPeerID: bob,
+            fileName: secondName
+        ))
+        XCTAssertNil(PrivateMediaMessageIdentity.stableID(
+            senderPeerID: alice,
+            recipientPeerID: bob,
+            fileName: nil
+        ))
+        XCTAssertNil(PrivateMediaMessageIdentity.stableID(
+            senderPeerID: alice,
+            recipientPeerID: bob,
+            fileName: "photo.jpg"
+        ))
+        XCTAssertNil(PrivateMediaMessageIdentity.stableID(
+            senderPeerID: alice,
+            recipientPeerID: bob,
+            fileName: "img_11111111-1111-1111-1111-111111111111.pdf"
+        ))
+        XCTAssertNotNil(PrivateMediaMessageIdentity.stableID(
+            senderPeerID: alice,
+            recipientPeerID: bob,
+            fileName: "voice_0011223344556677.m4a"
+        ))
+    }
+
+    func testPrivateMediaMessageIdentityMatchesVersionOneGoldenVector() {
+        XCTAssertEqual(
+            PrivateMediaMessageIdentity.stableID(
+                senderPeerID: PeerID(str: "0011223344556677"),
+                recipientPeerID: PeerID(str: "8899aabbccddeeff"),
+                fileName: "img_20260725_105708_1CC2760D-76AA-40C3-8013-C7FAA6C2EF99.jpg"
+            ),
+            "media-910bd42c65060ab76bb6406f220c4516"
+        )
     }
 }

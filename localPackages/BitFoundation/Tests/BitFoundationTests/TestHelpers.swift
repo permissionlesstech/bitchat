@@ -10,7 +10,7 @@ import Foundation
 import CryptoKit
 @testable import BitFoundation
 
-// TODO: Create a module for test helpers
+// Kept local until the test-helper module is split out.
 final class TestHelpers {
     
     // MARK: - Key Generation
@@ -54,13 +54,13 @@ final class TestHelpers {
         type: UInt8 = 0x01,
         senderID: PeerID = PeerID(str: UUID().uuidString),
         recipientID: PeerID? = nil,
-        payload: Data = "test payload".data(using: .utf8)!,
+        payload: Data = Data("test payload".utf8),
         signature: Data? = nil,
         ttl: UInt8 = 3
     ) -> BitchatPacket {
         return BitchatPacket(
             type: type,
-            senderID: senderID.id.data(using: .utf8)!,
+            senderID: Data(senderID.id.utf8),
             recipientID: recipientID?.id.data(using: .utf8),
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: payload,

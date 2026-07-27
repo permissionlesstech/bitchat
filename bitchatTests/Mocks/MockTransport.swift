@@ -14,20 +14,18 @@ import BitFoundation
 
 /// Mock Transport implementation for testing ChatViewModel in isolation.
 /// Records all method calls and allows test code to verify interactions.
-final class MockTransport: Transport {
+final class MockTransport: Transport, PrivateMediaDeletionPersisting {
 
     // MARK: - Protocol Properties
 
     weak var delegate: BitchatDelegate?
+    weak var eventDelegate: TransportEventDelegate?
     weak var peerEventsDelegate: TransportPeerEventsDelegate?
 
     var myPeerID: PeerID = PeerID(str: "TESTPEER")
     var myNickname: String = "TestUser"
 
     private let peerSnapshotSubject = CurrentValueSubject<[TransportPeerSnapshot], Never>([])
-    var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> {
-        peerSnapshotSubject.eraseToAnyPublisher()
-    }
 
     // MARK: - Recording Properties (for test assertions)
 
@@ -38,22 +36,44 @@ final class MockTransport: Transport {
     private(set) var sentFavoriteNotifications: [(peerID: PeerID, isFavorite: Bool)] = []
     private(set) var sentBroadcastFiles: [(packet: BitchatFilePacket, transferID: String)] = []
     private(set) var sentPrivateFiles: [(packet: BitchatFilePacket, peerID: PeerID, transferID: String)] = []
+    private(set) var sentPrivateFileLegacyAllowances: [Bool] = []
     private(set) var cancelledTransfers: [String] = []
+    private(set) var deletedPrivateMediaMessageIDBatches: [[String]] = []
+    private(set) var deletedPrivateMediaRelativePaths: [
+        [String: String]
+    ] = []
+    private(set) var protectedPrivateMediaRelativePaths: [Set<String>] = []
     private(set) var sentVerifyChallenges: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
     private(set) var sentVerifyResponses: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
+    private(set) var sentCourierMessages: [(content: String, messageID: String, recipientNoiseKey: Data, couriers: [PeerID])] = []
     private(set) var startServicesCallCount = 0
     private(set) var stopServicesCallCount = 0
     private(set) var emergencyDisconnectCallCount = 0
     private(set) var broadcastAnnounceCallCount = 0
     private(set) var triggeredHandshakes: [PeerID] = []
+    private(set) var purgedArchivePeers: [PeerID] = []
 
     // MARK: - Configurable Mock State
 
     var connectedPeers: Set<PeerID> = []
     var reachablePeers: Set<PeerID> = []
+    /// Peers with an established secure session. `nil` mirrors the protocol
+    /// default (prompt delivery), so connected peers stay "secure" for tests
+    /// that never care about the distinction.
+    var securePeers: Set<PeerID>?
     var peerNicknames: [PeerID: String] = [:]
     var peerFingerprints: [PeerID: String] = [:]
     var peerNoiseStates: [PeerID: LazyHandshakeState] = [:]
+    var privateMediaPolicies: [PeerID: PrivateMediaSendPolicy] = [:]
+    var privateMediaReceiptSessionGenerations: [PeerID: UUID] = [:]
+    var persistDeletedPrivateMediaResult = true
+    var deferDeletedPrivateMediaPersistence = false
+    private var pendingDeletedPrivateMediaCompletions: [
+        @MainActor (Bool) -> Void
+    ] = []
+    /// Optional synchronous hook for send-ordering tests (for example, an ack
+    /// arriving before the router's send call returns).
+    var onSendPrivateMessage: (@MainActor (_ messageID: String) -> Void)?
     private let mockKeychain = MockKeychain()
 
     // MARK: - Transport Protocol Implementation
@@ -88,6 +108,10 @@ final class MockTransport: Transport {
         reachablePeers.contains(peerID) || connectedPeers.contains(peerID)
     }
 
+    func canDeliverSecurely(to peerID: PeerID) -> Bool {
+        securePeers?.contains(peerID) ?? canDeliverPromptly(to: peerID)
+    }
+
     func peerNickname(peerID: PeerID) -> String? {
         peerNicknames[peerID]
     }
@@ -108,8 +132,38 @@ final class MockTransport: Transport {
         triggeredHandshakes.append(peerID)
     }
 
-    func getNoiseService() -> NoiseEncryptionService {
-        NoiseEncryptionService(keychain: mockKeychain)
+    func purgeArchivedPublicMessages(from peerID: PeerID) {
+        purgedArchivePeers.append(peerID)
+    }
+
+    // Noise identity wrappers backed by a mock-keychain encryption service
+    // (mirrors the previous `getNoiseService()` placeholder behavior: a real
+    // identity, but no peer sessions). Exposed so tests can assert against
+    // the same identity the wrappers use.
+    private(set) lazy var mockNoiseService = NoiseEncryptionService(keychain: mockKeychain)
+
+    func noiseSessionPublicKeyData(for peerID: PeerID) -> Data? {
+        mockNoiseService.getPeerPublicKeyData(peerID)
+    }
+
+    func noiseIdentityFingerprint() -> String {
+        mockNoiseService.getIdentityFingerprint()
+    }
+
+    func noiseStaticPublicKeyData() -> Data {
+        mockNoiseService.getStaticPublicKeyData()
+    }
+
+    func noiseSigningPublicKeyData() -> Data {
+        mockNoiseService.getSigningPublicKeyData()
+    }
+
+    func noiseSignData(_ data: Data) -> Data? {
+        mockNoiseService.signData(data)
+    }
+
+    func noiseVerifySignature(_ signature: Data, for data: Data, publicKey: Data) -> Bool {
+        mockNoiseService.verifySignature(signature, for: data, publicKey: publicKey)
     }
 
     // MARK: - Messaging
@@ -124,6 +178,11 @@ final class MockTransport: Transport {
 
     func sendPrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
         sentPrivateMessages.append((content, peerID, recipientNickname, messageID))
+        if let onSendPrivateMessage {
+            MainActor.assumeIsolated {
+                onSendPrivateMessage(messageID)
+            }
+        }
     }
 
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
@@ -148,10 +207,79 @@ final class MockTransport: Transport {
 
     func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String) {
         sentPrivateFiles.append((packet, peerID, transferId))
+        sentPrivateFileLegacyAllowances.append(false)
+    }
+
+    func sendFilePrivate(
+        _ packet: BitchatFilePacket,
+        to peerID: PeerID,
+        transferId: String,
+        allowLegacyFallback: Bool
+    ) {
+        sentPrivateFiles.append((packet, peerID, transferId))
+        sentPrivateFileLegacyAllowances.append(allowLegacyFallback)
+    }
+
+    func privateMediaSendPolicy(to peerID: PeerID) -> PrivateMediaSendPolicy {
+        privateMediaPolicies[peerID] ?? .encrypted
+    }
+
+    func authenticatedPrivateMediaReceiptSessionGeneration(
+        to peerID: PeerID
+    ) -> UUID? {
+        privateMediaReceiptSessionGenerations[peerID]
+    }
+
+    func resolvePrivateMediaSendPolicy(
+        to peerID: PeerID,
+        completion: @escaping @MainActor (PrivateMediaSendPolicy) -> Void
+    ) {
+        let policy = privateMediaPolicies[peerID] ?? .encrypted
+        Task { @MainActor in completion(policy) }
     }
 
     func cancelTransfer(_ transferId: String) {
         cancelledTransfers.append(transferId)
+    }
+
+    @MainActor
+    func persistDeletedPrivateMedia(
+        messageIDs: [String],
+        payloadRelativePaths: [String: String],
+        protectedPayloadRelativePaths: Set<String>,
+        completion: @escaping @MainActor (Bool) -> Void
+    ) {
+        deletedPrivateMediaMessageIDBatches.append(messageIDs)
+        deletedPrivateMediaRelativePaths.append(payloadRelativePaths)
+        protectedPrivateMediaRelativePaths.append(
+            protectedPayloadRelativePaths
+        )
+        if deferDeletedPrivateMediaPersistence {
+            pendingDeletedPrivateMediaCompletions.append(completion)
+        } else {
+            completion(persistDeletedPrivateMediaResult)
+        }
+    }
+
+    @MainActor
+    func resolveNextDeletedPrivateMediaPersistence(
+        _ result: Bool? = nil
+    ) {
+        guard !pendingDeletedPrivateMediaCompletions.isEmpty else { return }
+        let completion = pendingDeletedPrivateMediaCompletions.removeFirst()
+        completion(result ?? persistDeletedPrivateMediaResult)
+    }
+
+    /// Real store instance so view-model tests exercise the gated legacy
+    /// unlink end to end (same Application Support tree the tests write to).
+    let legacyIncomingFileStore = BLEIncomingFileStore()
+    private(set) var removedLegacyPrivateMediaPaths: [String] = []
+
+    func removeLegacyPrivateMediaPayload(relativePath: String) {
+        removedLegacyPrivateMediaPaths.append(relativePath)
+        legacyIncomingFileStore.removeLegacyIncomingFile(
+            relativePath: relativePath
+        )
     }
 
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {
@@ -160,6 +288,33 @@ final class MockTransport: Transport {
 
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {
         sentVerifyResponses.append((peerID, noiseKeyHex, nonceA))
+    }
+
+    var courierSendResult = true
+    func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool {
+        sentCourierMessages.append((content, messageID, recipientNoiseKey, couriers))
+        return courierSendResult
+    }
+
+    // MARK: - Mesh Diagnostics
+
+    private(set) var sentMeshPings: [PeerID] = []
+    var meshPingResult: MeshPingResult?
+    var meshPaths: [PeerID: [PeerID]] = [:]
+    var meshTopologySnapshot: MeshTopologySnapshot?
+
+    func sendMeshPing(to peerID: PeerID, completion: @escaping @MainActor (MeshPingResult?) -> Void) {
+        sentMeshPings.append(peerID)
+        let result = meshPingResult
+        Task { @MainActor in completion(result) }
+    }
+
+    func computeMeshPath(to peerID: PeerID) -> [PeerID]? {
+        meshPaths[peerID]
+    }
+
+    func currentMeshTopology() -> MeshTopologySnapshot? {
+        meshTopologySnapshot
     }
 
     // MARK: - Test Helpers
@@ -174,6 +329,9 @@ final class MockTransport: Transport {
         sentBroadcastFiles.removeAll()
         sentPrivateFiles.removeAll()
         cancelledTransfers.removeAll()
+        deletedPrivateMediaMessageIDBatches.removeAll()
+        deletedPrivateMediaRelativePaths.removeAll()
+        protectedPrivateMediaRelativePaths.removeAll()
         sentVerifyChallenges.removeAll()
         sentVerifyResponses.removeAll()
         startServicesCallCount = 0

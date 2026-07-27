@@ -15,30 +15,39 @@ enum ImageUtilsError: Error {
 enum ImageUtils {
     private static let compressionQuality: CGFloat = 0.82
     private static let targetImageBytes: Int = 45_000
+    private static let maxSourceImageBytes: Int = 10 * 1024 * 1024
 
-    static func processImage(at url: URL, maxDimension: CGFloat = 448) throws -> URL {
-        // Security H1: Check file size BEFORE reading into memory
-        let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
-        guard let fileSize = attrs[.size] as? Int else {
-            throw ImageUtilsError.invalidImage
-        }
-        // Allow up to 10MB source images (will be scaled down)
-        guard fileSize <= 10 * 1024 * 1024 else {
-            throw ImageUtilsError.invalidImage
-        }
+    static func processImage(at url: URL, maxDimension: CGFloat = 448, outputDirectory: URL? = nil) throws -> URL {
+        try validateImageSource(at: url)
 
         let data = try Data(contentsOf: url)
         #if os(iOS)
         guard let image = UIImage(data: data) else { throw ImageUtilsError.invalidImage }
-        return try processImage(image, maxDimension: maxDimension)
+        return try processImage(image, maxDimension: maxDimension, outputDirectory: outputDirectory)
         #else
         guard let image = NSImage(data: data) else { throw ImageUtilsError.invalidImage }
-        return try processImage(image, maxDimension: maxDimension)
+        return try processImage(image, maxDimension: maxDimension, outputDirectory: outputDirectory)
         #endif
     }
 
+    static func validateImageSource(at url: URL) throws {
+        // Security H1: Check file size BEFORE reading into memory.
+        let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+        guard let fileSize = attrs[.size] as? Int,
+              fileSize > 0,
+              fileSize <= maxSourceImageBytes else {
+            throw ImageUtilsError.invalidImage
+        }
+
+        let options = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, options),
+              CGImageSourceGetType(source) != nil else {
+            throw ImageUtilsError.invalidImage
+        }
+    }
+
     #if os(iOS)
-    static func processImage(_ image: UIImage, maxDimension: CGFloat = 448) throws -> URL {
+    static func processImage(_ image: UIImage, maxDimension: CGFloat = 448, outputDirectory: URL? = nil) throws -> URL {
         return try autoreleasepool {
             // Scale the image first
             let scaled = scaledImage(image, maxDimension: maxDimension)
@@ -64,7 +73,7 @@ enum ImageUtils {
                 }
             }
 
-            let outputURL = try makeOutputURL()
+            let outputURL = try makeOutputURL(outputDirectory: outputDirectory)
             try jpegData.write(to: outputURL, options: .atomic)
             return outputURL
         }
@@ -106,7 +115,7 @@ enum ImageUtils {
         return data as Data
     }
     #else
-    static func processImage(_ image: NSImage, maxDimension: CGFloat = 448) throws -> URL {
+    static func processImage(_ image: NSImage, maxDimension: CGFloat = 448, outputDirectory: URL? = nil) throws -> URL {
         return try autoreleasepool {
             let scaled = scaledImage(image, maxDimension: maxDimension)
             guard let inputCG = scaled.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
@@ -142,7 +151,7 @@ enum ImageUtils {
                     }
                 }
             }
-            let outputURL = try makeOutputURL()
+            let outputURL = try makeOutputURL(outputDirectory: outputDirectory)
             try jpegData.write(to: outputURL, options: .atomic)
             return outputURL
         }
@@ -186,12 +195,17 @@ enum ImageUtils {
     }
     #endif
 
-    private static func makeOutputURL() throws -> URL {
+    private static func makeOutputURL(outputDirectory: URL? = nil) throws -> URL {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd_HHmmss"
-        let fileName = "img_\(formatter.string(from: Date())).jpg"
+        let fileName = "img_\(formatter.string(from: Date()))_\(UUID().uuidString).jpg"
 
-        let directory = try applicationFilesDirectory().appendingPathComponent("images/outgoing", isDirectory: true)
+        let directory: URL
+        if let outputDirectory {
+            directory = outputDirectory
+        } else {
+            directory = try applicationFilesDirectory().appendingPathComponent("images/outgoing", isDirectory: true)
+        }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
         return directory.appendingPathComponent(fileName)
     }

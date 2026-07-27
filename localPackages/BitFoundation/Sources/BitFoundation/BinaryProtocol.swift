@@ -105,10 +105,6 @@ public struct BinaryProtocol {
 
     // Field offsets within packet header
     public struct Offsets {
-        static let version = 0
-        static let type = 1
-        static let ttl = 2
-        static let timestamp = 3
         public static let flags = 11  // After version(1) + type(1) + ttl(1) + timestamp(8)
     }
 

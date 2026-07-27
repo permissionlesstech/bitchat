@@ -93,6 +93,7 @@ enum NoisePattern {
     case XX  // Most versatile, mutual authentication
     case IK  // Initiator knows responder's static key
     case NK  // Anonymous initiator
+    case X   // One-way: single message to a known static key (no response)
 }
 
 enum NoiseRole {
@@ -322,6 +323,13 @@ final class NoiseCipherState {
                 throw NoiseError.replayDetected
             }
             
+            // The 4-byte nonce prefix has been stripped, so the remaining bytes
+            // must still hold at least the 16-byte Poly1305 tag. The up-front
+            // `ciphertext.count >= 16` guard is not sufficient here (it counts
+            // the nonce), and `prefix(count - 16)` would trap on a short payload.
+            guard actualCiphertext.count >= 16 else {
+                throw NoiseError.invalidCiphertext
+            }
             // Split ciphertext and tag
             encryptedData = actualCiphertext.prefix(actualCiphertext.count - 16)
             tag = actualCiphertext.suffix(16)
@@ -594,7 +602,7 @@ final class NoiseHandshakeState {
         switch pattern {
         case .XX:
             break // No pre-message keys
-        case .IK, .NK:
+        case .IK, .NK, .X:
             if role == .initiator, let remoteStatic = remoteStaticPublic {
                 symmetricState.mixHash(remoteStatic.rawRepresentation)
             } else if role == .responder, let localStatic = localStaticPublic {
@@ -715,7 +723,7 @@ final class NoiseHandshakeState {
         return messageBuffer
     }
     
-    func readMessage(_ message: Data, expectedPayloadLength: Int = 0) throws -> Data {
+    func readMessage(_ message: Data, expectedPayloadLength _: Int = 0) throws -> Data {
         
         guard currentPattern < messagePatterns.count else {
             throw NoiseError.handshakeComplete
@@ -897,6 +905,7 @@ extension NoisePattern {
         case .XX: return "XX"
         case .IK: return "IK"
         case .NK: return "NK"
+        case .X: return "X"
         }
     }
     
@@ -917,6 +926,10 @@ extension NoisePattern {
             return [
                 [.e, .es],      // -> e, es
                 [.e, .ee]       // <- e, ee
+            ]
+        case .X:
+            return [
+                [.e, .es, .s, .ss] // -> e, es, s, ss (single one-way message)
             ]
         }
     }

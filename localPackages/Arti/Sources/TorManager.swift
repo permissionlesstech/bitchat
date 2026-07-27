@@ -30,12 +30,6 @@ private func arti_bootstrap_progress() -> Int32
 @_silgen_name("arti_bootstrap_summary")
 private func arti_bootstrap_summary(_ buf: UnsafeMutablePointer<CChar>, _ len: Int32) -> Int32
 
-@_silgen_name("arti_go_dormant")
-private func arti_go_dormant() -> Int32
-
-@_silgen_name("arti_wake")
-private func arti_wake() -> Int32
-
 /// Arti-based Tor integration for BitChat.
 /// - Boots a local Arti client and exposes a SOCKS5 proxy
 ///   on 127.0.0.1:socksPort. All app networking should await readiness and
@@ -54,6 +48,15 @@ public final class TorManager: ObservableObject {
     @Published private(set) var lastError: Error?
     @Published private(set) var bootstrapProgress: Int = 0
     @Published private(set) var bootstrapSummary: String = ""
+    /// True once a bootstrap attempt has spent its whole deadline without
+    /// completing.
+    ///
+    /// This separates "still starting" from "not getting through", which are
+    /// indistinguishable from `isStarting` alone. The second is what a network
+    /// that blocks Tor looks like from inside the app, and without it the UI
+    /// says "starting tor…" indefinitely while nothing is happening. Cleared on
+    /// each new start attempt.
+    @Published private(set) public var bootstrapDidStall: Bool = false
 
     // Internal readiness trackers
     private var socksReady: Bool = false { didSet { recomputeReady() } }
@@ -75,10 +78,18 @@ public final class TorManager: ObservableObject {
     }
 
     private var didStart = false
+    // shutdownCompletely() resets `didStart` asynchronously (after Arti has
+    // actually stopped). A startIfNeeded() arriving in that window must not be
+    // dropped — it is recorded here and honored when the shutdown finishes.
+    private var shutdownsInFlight = 0
+    private var startPendingAfterShutdown = false
     private var bootstrapMonitorStarted = false
+    // Fences the detached poll loop: shutdown, dormancy, and restart each bump
+    // this, so a loop from a previous attempt cannot run out its deadline and
+    // report a stall over state that a newer lifecycle event already owns.
+    private var bootstrapGeneration = 0
     private var pathMonitor: NWPathMonitor?
     private var isAppForeground: Bool = true
-    private var isDormant: Bool = false
     private var lastRestartAt: Date? = nil
     private var startedAt: Date? = nil  // Tracks initial startup time for grace period
     private(set) var allowAutoStart: Bool = false
@@ -90,10 +101,15 @@ public final class TorManager: ObservableObject {
     public func startIfNeeded() {
         guard allowAutoStart else { return }
         guard isAppForeground else { return }
+        if shutdownsInFlight > 0 {
+            SecureLogger.debug("TorManager: startIfNeeded() deferred - shutdown in flight", category: .session)
+            startPendingAfterShutdown = true
+            return
+        }
         guard !didStart else { return }
         didStart = true
-        isDormant = false
         isStarting = true
+        bootstrapDidStall = false
         startedAt = Date()  // Track startup time for grace period
         SecureLogger.debug("TorManager: startIfNeeded() - startedAt set", category: .session)
         lastError = nil
@@ -110,7 +126,9 @@ public final class TorManager: ObservableObject {
     public func isForeground() -> Bool { isAppForeground }
 
     nonisolated
-    public func awaitReady(timeout: TimeInterval = 25.0) async -> Bool {
+    // Default matches the bootstrap monitor deadline (75s); a shorter wait here
+    // reports "not ready" while Arti is still legitimately bootstrapping.
+    public func awaitReady(timeout: TimeInterval = 75.0) async -> Bool {
         await MainActor.run {
             if self.isAppForeground { self.startIfNeeded() }
         }
@@ -254,26 +272,46 @@ public final class TorManager: ObservableObject {
     private func startBootstrapMonitor() {
         guard !bootstrapMonitorStarted else { return }
         bootstrapMonitorStarted = true
+        bootstrapGeneration += 1
+        let generation = bootstrapGeneration
         Task.detached(priority: .utility) { [weak self] in
-            await self?.bootstrapPollLoop()
+            await self?.bootstrapPollLoop(generation: generation)
         }
     }
 
-    private func bootstrapPollLoop() async {
+    private func bootstrapPollLoop(generation: Int) async {
         let deadline = Date().addingTimeInterval(75)
+        var didComplete = false
         while Date() < deadline {
+            guard generation == bootstrapGeneration else { return }
             let progress = Int(arti_bootstrap_progress())
             let summary = getBootstrapSummary()
 
-            await MainActor.run {
-                self.bootstrapProgress = progress
-                self.bootstrapSummary = summary
-                if progress >= 100 { self.isStarting = false }
-                self.recomputeReady()
-            }
+            self.bootstrapProgress = progress
+            self.bootstrapSummary = summary
+            if progress >= 100 { self.isStarting = false }
+            self.recomputeReady()
 
-            if progress >= 100 { break }
+            if progress >= 100 {
+                didComplete = true
+                break
+            }
             try? await Task.sleep(nanoseconds: 1_000_000_000)
+        }
+
+        // Running out the deadline is a reportable outcome, not silence. The
+        // loop previously just ended, leaving `isStarting` true forever, so a
+        // blocked network was indistinguishable from a slow one. A deliberate
+        // shutdown mid-bootstrap is not a stall, hence the generation check.
+        if !didComplete {
+            guard generation == bootstrapGeneration else { return }
+            self.isStarting = false
+            self.bootstrapDidStall = true
+            SecureLogger.warning(
+                "TorManager: bootstrap did not complete within its deadline (progress=\(self.bootstrapProgress)); network may be blocking Tor",
+                category: .session
+            )
+            NotificationCenter.default.post(name: .TorBootstrapDidStall, object: nil)
         }
     }
 
@@ -319,6 +357,7 @@ public final class TorManager: ObservableObject {
         // Clear isStarting so foreground recovery can proceed if bootstrap was interrupted.
         SecureLogger.debug("TorManager: goDormantOnBackground() called", category: .session)
         Task { @MainActor in
+            self.bootstrapGeneration += 1
             self.isReady = false
             self.socksReady = false
             self.isStarting = false
@@ -327,6 +366,9 @@ public final class TorManager: ObservableObject {
 
     public func shutdownCompletely() {
         SecureLogger.debug("TorManager: shutdownCompletely() called", category: .session)
+        startPendingAfterShutdown = false
+        bootstrapGeneration += 1
+        shutdownsInFlight += 1
         Task.detached { [weak self] in
             guard let self = self else { return }
             _ = arti_stop()
@@ -339,7 +381,6 @@ public final class TorManager: ObservableObject {
             }
 
             await MainActor.run {
-                self.isDormant = false
                 self.isReady = false
                 self.socksReady = false
                 self.bootstrapProgress = 0
@@ -350,6 +391,12 @@ public final class TorManager: ObservableObject {
                 self.bootstrapMonitorStarted = false
                 // Note: Don't clear startedAt here - it will be set fresh on next startIfNeeded()
                 // Clearing it here races with startup and defeats the grace period
+                self.shutdownsInFlight -= 1
+                if self.shutdownsInFlight == 0 && self.startPendingAfterShutdown {
+                    self.startPendingAfterShutdown = false
+                    SecureLogger.debug("TorManager: honoring start deferred during shutdown", category: .session)
+                    self.startIfNeeded()
+                }
             }
         }
     }
@@ -358,12 +405,13 @@ public final class TorManager: ObservableObject {
         SecureLogger.debug("TorManager: restartArti() starting", category: .session)
         await MainActor.run {
             NotificationCenter.default.post(name: .TorWillRestart, object: nil)
+            self.bootstrapGeneration += 1
             self.isReady = false
             self.socksReady = false
             self.bootstrapProgress = 0
             self.bootstrapSummary = ""
             self.isStarting = true
-            self.isDormant = false
+            self.bootstrapDidStall = false
             self.lastRestartAt = Date()
         }
 

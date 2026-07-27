@@ -1,3 +1,4 @@
+import BitFoundation
 import Foundation
 
 // MARK: - Protocol TLV Packets
@@ -7,12 +8,35 @@ struct AnnouncementPacket {
     let noisePublicKey: Data            // Noise static public key (Curve25519.KeyAgreement)
     let signingPublicKey: Data          // Ed25519 public key for signing
     let directNeighbors: [Data]?        // 8-byte peer IDs
+    let capabilities: PeerCapabilities? // advertised feature bits; nil when absent (old clients)
+    /// Rendezvous geohash cell this peer bridges, when advertising `.bridge`.
+    /// Coarse (cell-level) by design; lets mesh-only peers compose correctly
+    /// tagged rendezvous events without their own location fix.
+    let bridgeGeohash: String?
+
+    init(
+        nickname: String,
+        noisePublicKey: Data,
+        signingPublicKey: Data,
+        directNeighbors: [Data]?,
+        capabilities: PeerCapabilities? = nil,
+        bridgeGeohash: String? = nil
+    ) {
+        self.nickname = nickname
+        self.noisePublicKey = noisePublicKey
+        self.signingPublicKey = signingPublicKey
+        self.directNeighbors = directNeighbors
+        self.capabilities = capabilities
+        self.bridgeGeohash = bridgeGeohash
+    }
 
     private enum TLVType: UInt8 {
         case nickname = 0x01
         case noisePublicKey = 0x02
         case signingPublicKey = 0x03
         case directNeighbors = 0x04
+        case capabilities = 0x05
+        case bridgeGeohash = 0x06
     }
 
     func encode() -> Data? {
@@ -48,6 +72,24 @@ struct AnnouncementPacket {
             }
         }
 
+        // TLV for capabilities (optional)
+        if let capabilities = capabilities {
+            let capabilityBytes = capabilities.encoded()
+            guard capabilityBytes.count <= 255 else { return nil }
+            data.append(TLVType.capabilities.rawValue)
+            data.append(UInt8(capabilityBytes.count))
+            data.append(capabilityBytes)
+        }
+
+        // TLV for bridge rendezvous cell (optional; old clients skip it)
+        if let bridgeGeohash = bridgeGeohash,
+           let cellData = bridgeGeohash.data(using: .utf8),
+           !cellData.isEmpty, cellData.count <= 12 {
+            data.append(TLVType.bridgeGeohash.rawValue)
+            data.append(UInt8(cellData.count))
+            data.append(cellData)
+        }
+
         return data
     }
 
@@ -57,6 +99,8 @@ struct AnnouncementPacket {
         var noisePublicKey: Data?
         var signingPublicKey: Data?
         var directNeighbors: [Data]?
+        var capabilities: PeerCapabilities?
+        var bridgeGeohash: String?
 
         while offset + 2 <= data.count {
             let typeRaw = data[offset]
@@ -87,6 +131,12 @@ struct AnnouncementPacket {
                         }
                         directNeighbors = neighbors
                     }
+                case .capabilities:
+                    capabilities = PeerCapabilities(encoded: Data(value))
+                case .bridgeGeohash:
+                    if length <= 12 {
+                        bridgeGeohash = String(data: value, encoding: .utf8)
+                    }
                 }
             } else {
                 // Unknown TLV; skip (tolerant decoder for forward compatibility)
@@ -99,7 +149,92 @@ struct AnnouncementPacket {
             nickname: nickname,
             noisePublicKey: noisePublicKey,
             signingPublicKey: signingPublicKey,
-            directNeighbors: directNeighbors
+            directNeighbors: directNeighbors,
+            capabilities: capabilities,
+            bridgeGeohash: bridgeGeohash
+        )
+    }
+}
+
+/// State that is authoritative only because it is carried inside an
+/// established Noise session. The public announce remains useful for
+/// discovery, but its self-signature cannot prove possession of the copied
+/// Noise public key it contains.
+///
+/// Wire format (v1):
+/// `[version=0x01][type][length][value]...`
+/// - TLV `0x01`: canonical minimal little-endian `PeerCapabilities`
+/// - TLV `0x02`: 32-byte Ed25519 signing public key
+///
+/// Unknown TLVs are skipped for forward compatibility. Unknown versions,
+/// duplicates, non-canonical capability fields, and malformed lengths are
+/// rejected without changing authenticated state.
+struct AuthenticatedPeerStatePacket: Equatable {
+    static let currentVersion: UInt8 = 1
+    static let signingPublicKeyLength = 32
+
+    let capabilities: PeerCapabilities
+    let signingPublicKey: Data
+
+    private enum TLVType: UInt8 {
+        case capabilities = 0x01
+        case signingPublicKey = 0x02
+    }
+
+    func encode() -> Data? {
+        guard signingPublicKey.count == Self.signingPublicKeyLength else { return nil }
+        let capabilityBytes = capabilities.encoded()
+        guard !capabilityBytes.isEmpty, capabilityBytes.count <= 8 else { return nil }
+
+        var data = Data([Self.currentVersion])
+        data.append(TLVType.capabilities.rawValue)
+        data.append(UInt8(capabilityBytes.count))
+        data.append(capabilityBytes)
+        data.append(TLVType.signingPublicKey.rawValue)
+        data.append(UInt8(signingPublicKey.count))
+        data.append(signingPublicKey)
+        return data
+    }
+
+    static func decode(from data: Data) -> AuthenticatedPeerStatePacket? {
+        guard data.first == Self.currentVersion else { return nil }
+
+        var offset = 1
+        var capabilities: PeerCapabilities?
+        var signingPublicKey: Data?
+
+        while offset < data.count {
+            guard offset + 2 <= data.count else { return nil }
+            let typeRaw = data[offset]
+            let length = Int(data[offset + 1])
+            offset += 2
+            guard offset + length <= data.count else { return nil }
+            let value = Data(data[offset..<(offset + length)])
+            offset += length
+
+            guard let type = TLVType(rawValue: typeRaw) else {
+                continue
+            }
+            switch type {
+            case .capabilities:
+                guard capabilities == nil,
+                      !value.isEmpty,
+                      value.count <= 8 else { return nil }
+                let decoded = PeerCapabilities(encoded: value)
+                guard decoded.encoded() == value else { return nil }
+                capabilities = decoded
+
+            case .signingPublicKey:
+                guard signingPublicKey == nil,
+                      value.count == Self.signingPublicKeyLength else { return nil }
+                signingPublicKey = value
+            }
+        }
+
+        guard let capabilities, let signingPublicKey else { return nil }
+        return AuthenticatedPeerStatePacket(
+            capabilities: capabilities,
+            signingPublicKey: signingPublicKey
         )
     }
 }

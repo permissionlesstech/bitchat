@@ -70,10 +70,6 @@ final class MessageFormattingEngine {
         static let quickCashuPresence: NSRegularExpression = {
             try! NSRegularExpression(pattern: "\\bcashu[AB][A-Za-z0-9._-]{40,}\\b", options: [])
         }()
-
-        static let simplifyHTTPURL: NSRegularExpression = {
-            try! NSRegularExpression(pattern: "https?://[^\\s?#]+(?:[?#][^\\s]*)?", options: [.caseInsensitive])
-        }()
     }
 
     // MARK: - Match Types
@@ -195,7 +191,7 @@ final class MessageFormattingEngine {
 
     // MARK: - Private Helpers
 
-    private static func formatSystemMessage(_ message: BitchatMessage, isDark: Bool) -> AttributedString {
+    private static func formatSystemMessage(_ message: BitchatMessage, isDark _: Bool) -> AttributedString {
         var result = AttributedString()
 
         let content = AttributedString("* \(message.content) *")
@@ -255,9 +251,9 @@ final class MessageFormattingEngine {
         isSelf: Bool,
         isMentioned: Bool
     ) -> AttributedString {
-        // For very long content without special tokens, use plain formatting
-        let containsCashu = containsCashuToken(content)
-        if (content.count > 4000 || content.hasVeryLongToken(threshold: 1024)) && !containsCashu {
+        // For very long content, use plain formatting to avoid expensive
+        // regex/detector work. Cashu presence must not disable this guard.
+        if content.isOversizedForRichFormatting() {
             return formatPlainContent(content, baseColor: baseColor, isSelf: isSelf)
         }
 
@@ -414,7 +410,7 @@ final class MessageFormattingEngine {
         return AttributedString(text).mergingAttributes(style)
     }
 
-    private static func formatMatch(_ text: String, type: MatchType, baseColor: Color, isSelf: Bool) -> AttributedString {
+    private static func formatMatch(_ text: String, type: MatchType, baseColor _: Color, isSelf _: Bool) -> AttributedString {
         var style = AttributeContainer()
 
         switch type {

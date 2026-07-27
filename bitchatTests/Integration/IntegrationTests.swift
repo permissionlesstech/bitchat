@@ -12,6 +12,7 @@ import Testing
 @testable import BitFoundation // to avoid unnecessary public's
 @testable import bitchat
 
+@Suite("Integration Tests", .serialized)
 struct IntegrationTests {
     
     private var helper = TestNetworkHelper()
@@ -174,7 +175,7 @@ struct IntegrationTests {
             }
             
             // Encrypted path: use NoiseSessionManager explicitly
-            let plaintext = "Encrypted message".data(using: .utf8)!
+            let plaintext = Data("Encrypted message".utf8)
             let ciphertext = try helper.noiseManagers["Alice"]!.encrypt(plaintext, for: helper.nodes["Bob"]!.peerID)
             
             helper.nodes["Bob"]!.packetDeliveryHandler = { packet in
@@ -206,7 +207,7 @@ struct IntegrationTests {
         
         try await confirmation("Messages delivered despite churn", expectedCount: totalMessages) { completion in
             // David tracks received messages
-            helper.nodes["David"]!.messageDeliveryHandler = { message in
+            helper.nodes["David"]!.messageDeliveryHandler = { _ in
                 completion()
             }
             
@@ -272,8 +273,18 @@ struct IntegrationTests {
         // Re-establish Noise handshake explicitly via managers
         do {
             let m1 = try helper.noiseManagers["Bob"]!.initiateHandshake(with: helper.nodes["Alice"]!.peerID)
-            let m2 = try helper.noiseManagers["Alice"]!.handleIncomingHandshake(from: helper.nodes["Bob"]!.peerID, message: m1)!
-            let m3 = try helper.noiseManagers["Bob"]!.handleIncomingHandshake(from: helper.nodes["Alice"]!.peerID, message: m2)!
+            let m2 = try #require(
+                try helper.noiseManagers["Alice"]!.handleIncomingHandshake(
+                    from: helper.nodes["Bob"]!.peerID,
+                    message: m1
+                )
+            )
+            let m3 = try #require(
+                try helper.noiseManagers["Bob"]!.handleIncomingHandshake(
+                    from: helper.nodes["Alice"]!.peerID,
+                    message: m2
+                )
+            )
             _ = try helper.noiseManagers["Alice"]!.handleIncomingHandshake(from: helper.nodes["Bob"]!.peerID, message: m3)
         } catch {
             Issue.record("Failed to re-establish Noise session after restart: \(error)")
@@ -288,7 +299,7 @@ struct IntegrationTests {
             }
             
             do {
-                let plaintext = "After restart success".data(using: .utf8)!
+                let plaintext = Data("After restart success".utf8)
                 let ciphertext = try helper.noiseManagers["Bob"]!.encrypt(plaintext, for: helper.nodes["Alice"]!.peerID)
                 let packet = TestHelpers.createTestPacket(type: MessageType.noiseEncrypted.rawValue, payload: ciphertext)
                 helper.nodes["Alice"]!.packetDeliveryHandler = { pkt in

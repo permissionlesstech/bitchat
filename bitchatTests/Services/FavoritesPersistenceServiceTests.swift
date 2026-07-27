@@ -15,7 +15,7 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
 
         service.addFavorite(peerNoisePublicKey: peerKey, peerNostrPublicKey: "npub1alice", peerNickname: "Alice")
 
-        wait(for: [expectation], timeout: 1.0)
+        wait(for: [expectation], timeout: TestConstants.settleTimeout)
         XCTAssertTrue(service.isFavorite(peerKey))
         XCTAssertEqual(service.getFavoriteStatus(for: peerKey)?.peerNickname, "Alice")
         XCTAssertNotNil(keychain.load(key: storageKey, service: serviceKey))
@@ -47,6 +47,21 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
 
         XCTAssertNil(service.getFavoriteStatus(for: peerKey))
         XCTAssertFalse(service.isMutualFavorite(peerKey))
+    }
+
+    func test_updatePeerFavoritedUs_keepsStoredNicknameOverUnknownPlaceholder() {
+        let service = FavoritesPersistenceService(keychain: MockKeychain())
+        let peerKey = Data((128..<160).map(UInt8.init))
+
+        service.addFavorite(peerNoisePublicKey: peerKey, peerNickname: "Erin")
+
+        // A notification arriving before the peer is known passes "Unknown".
+        service.updatePeerFavoritedUs(peerNoisePublicKey: peerKey, favorited: true, peerNickname: "Unknown")
+        XCTAssertEqual(service.getFavoriteStatus(for: peerKey)?.peerNickname, "Erin")
+
+        // A real nickname still updates the stored one.
+        service.updatePeerFavoritedUs(peerNoisePublicKey: peerKey, favorited: true, peerNickname: "Erin2")
+        XCTAssertEqual(service.getFavoriteStatus(for: peerKey)?.peerNickname, "Erin2")
     }
 
     func test_getFavoriteStatus_forPeerID_returnsMutualFavorite() {

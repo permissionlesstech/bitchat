@@ -7,7 +7,6 @@ struct BitchatPeer: Equatable {
     let peerID: PeerID // Hex-encoded peer ID
     let noisePublicKey: Data
     let nickname: String
-    let lastSeen: Date
     let isConnected: Bool
     let isReachable: Bool
     
@@ -77,14 +76,13 @@ struct BitchatPeer: Equatable {
         peerID: PeerID,
         noisePublicKey: Data,
         nickname: String,
-        lastSeen: Date = Date(),
+        lastSeen _: Date = Date(),
         isConnected: Bool = false,
         isReachable: Bool = false
     ) {
         self.peerID = peerID
         self.noisePublicKey = noisePublicKey
         self.nickname = nickname
-        self.lastSeen = lastSeen
         self.isConnected = isConnected
         self.isReachable = isReachable
         

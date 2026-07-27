@@ -11,6 +11,10 @@ private func makeTemporaryFileURL(_ name: String) -> URL {
     FileManager.default.temporaryDirectory.appendingPathComponent(name)
 }
 
+private func makeTemporaryDirectoryURL(_ name: String) -> URL {
+    FileManager.default.temporaryDirectory.appendingPathComponent(name, isDirectory: true)
+}
+
 #if os(iOS)
 private func makePlatformImage(size: CGSize) -> UIImage {
     UIGraphicsImageRenderer(size: size).image { context in
@@ -55,13 +59,30 @@ struct ImageUtilsTests {
     @Test
     func processImage_writesCompressedJpeg() throws {
         let image = makePlatformImage(size: CGSize(width: 1024, height: 768))
-        let outputURL = try ImageUtils.processImage(image, maxDimension: 256)
-        defer { try? FileManager.default.removeItem(at: outputURL) }
+        let outputDirectory = makeTemporaryDirectoryURL("image-output-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: outputDirectory) }
+
+        let outputURL = try ImageUtils.processImage(image, maxDimension: 256, outputDirectory: outputDirectory)
 
         let data = try Data(contentsOf: outputURL)
 
+        #expect(outputURL.deletingLastPathComponent() == outputDirectory)
         #expect(outputURL.pathExtension.lowercased() == "jpg")
         #expect(data.starts(with: Data([0xFF, 0xD8])))
         #expect(data.count > 0)
+    }
+
+    @Test
+    func processImage_usesUniqueOutputURLs() throws {
+        let image = makePlatformImage(size: CGSize(width: 64, height: 64))
+        let outputDirectory = makeTemporaryDirectoryURL("image-output-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: outputDirectory) }
+
+        let firstURL = try ImageUtils.processImage(image, maxDimension: 64, outputDirectory: outputDirectory)
+        let secondURL = try ImageUtils.processImage(image, maxDimension: 64, outputDirectory: outputDirectory)
+
+        #expect(firstURL != secondURL)
+        #expect(FileManager.default.fileExists(atPath: firstURL.path))
+        #expect(FileManager.default.fileExists(atPath: secondURL.path))
     }
 }

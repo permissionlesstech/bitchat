@@ -3,15 +3,212 @@ import BitFoundation
 import Foundation
 import CoreBluetooth
 import Combine
-import CryptoKit
 #if os(iOS)
 import UIKit
 #endif
 
+/// Linearizes app-private-media admission against cancellation before work is
+/// handed to the fragment scheduler. A transfer starts here synchronously,
+/// before its `messageQueue` work item is enqueued; cancel/delete can therefore
+/// leave a tombstone that the deferred work must observe.
+///
+/// Active admissions and cancellation tombstones have independent count
+/// bounds. Tombstones may age out or evict older tombstones; active entries
+/// are never evicted under pressure. A one-hour active timeout is reported as
+/// an explicit transfer failure and removes any handshake-queued payload.
+private final class BLEPrivateMediaTransferAdmissionRegistry {
+    enum BeginResult: Equatable {
+        case admitted
+        case alreadyKnown
+        case capacityExhausted
+    }
+
+    private enum State: Equatable {
+        case active
+        case cancelled
+    }
+
+    private struct Entry {
+        var state: State
+        var updatedAt: Date
+    }
+
+    private let lock = NSLock()
+    private let maxActiveEntries = 512
+    private let maxCancelledTombstones = 512
+    private let lifetime: TimeInterval = 60 * 60
+    private let onActiveExpired: (String) -> Void
+    private var entries: [String: Entry] = [:]
+
+    init(onActiveExpired: @escaping (String) -> Void) {
+        self.onActiveExpired = onActiveExpired
+    }
+
+    func begin(_ transferId: String, now: Date = Date()) -> BeginResult {
+        guard !transferId.isEmpty else { return .alreadyKnown }
+        lock.lock()
+        let expiredActive = pruneLocked(now: now)
+        // Transfer IDs are invocation-unique. Never revive a cancellation or
+        // admit a duplicate invocation that reused an in-flight identifier.
+        let result: BeginResult
+        if entries[transferId] != nil {
+            result = .alreadyKnown
+        } else if activeCountLocked >= maxActiveEntries {
+            // Never evict an admitted transfer: doing so strands its UI
+            // placeholder with no completion event. Reject the newcomer and
+            // let the caller surface the bounded-pressure failure instead.
+            result = .capacityExhausted
+        } else {
+            entries[transferId] = Entry(state: .active, updatedAt: now)
+            result = .admitted
+        }
+        lock.unlock()
+        notifyExpired(expiredActive)
+        return result
+    }
+
+    func cancel(_ transferId: String, now: Date = Date()) {
+        guard !transferId.isEmpty else { return }
+        lock.lock()
+        // Cancel the requested active entry before expiry pruning so a user
+        // cancellation wins over a simultaneous timeout notification.
+        entries[transferId] = Entry(state: .cancelled, updatedAt: now)
+        let expiredActive = pruneLocked(now: now)
+        trimCancelledTombstonesLocked()
+        lock.unlock()
+        notifyExpired(expiredActive)
+    }
+
+    func isActive(_ transferId: String, now: Date = Date()) -> Bool {
+        lock.lock()
+        let expiredActive = pruneLocked(now: now)
+        let active = entries[transferId]?.state == .active
+        if active {
+            entries[transferId]?.updatedAt = now
+        }
+        lock.unlock()
+        notifyExpired(expiredActive)
+        return active
+    }
+
+    /// Runs `body` while holding the admission lock. Callers use this at the
+    /// collections-queue append/submit boundary so cancellation and admission
+    /// have one deterministic order: whichever acquires this lock first wins.
+    func withActive<Result>(
+        _ transferId: String,
+        now: Date = Date(),
+        _ body: () -> Result
+    ) -> Result? {
+        lock.lock()
+        let expiredActive = pruneLocked(now: now)
+        guard entries[transferId]?.state == .active else {
+            lock.unlock()
+            notifyExpired(expiredActive)
+            return nil
+        }
+        entries[transferId]?.updatedAt = now
+        let result = body()
+        lock.unlock()
+        notifyExpired(expiredActive)
+        return result
+    }
+
+    func finish(_ transferId: String) {
+        lock.lock()
+        entries.removeValue(forKey: transferId)
+        lock.unlock()
+    }
+
+    var count: Int {
+        lock.lock()
+        let expiredActive = pruneLocked(now: Date())
+        let result = entries.count
+        lock.unlock()
+        notifyExpired(expiredActive)
+        return result
+    }
+
+    func prune(now: Date = Date()) {
+        lock.lock()
+        let expiredActive = pruneLocked(now: now)
+        lock.unlock()
+        notifyExpired(expiredActive)
+    }
+
+    private var activeCountLocked: Int {
+        entries.values.reduce(into: 0) { count, entry in
+            if entry.state == .active { count += 1 }
+        }
+    }
+
+    /// Removes stale tombstones silently and stale active admissions with a
+    /// caller-visible timeout notification. Must be called with `lock` held;
+    /// notifications are delivered only after the lock is released.
+    private func pruneLocked(now: Date) -> [String] {
+        var expiredActive: [String] = []
+        let expiredEntries = entries.filter {
+            now.timeIntervalSince($0.value.updatedAt) > lifetime
+        }
+        for (transferId, entry) in expiredEntries {
+            if entry.state == .active {
+                expiredActive.append(transferId)
+            }
+            entries.removeValue(forKey: transferId)
+        }
+        trimCancelledTombstonesLocked()
+        return expiredActive
+    }
+
+    private func trimCancelledTombstonesLocked() {
+        let cancelled = entries
+            .filter { $0.value.state == .cancelled }
+            .sorted { $0.value.updatedAt < $1.value.updatedAt }
+        let overflow = max(0, cancelled.count - maxCancelledTombstones)
+        for victim in cancelled.prefix(overflow) {
+            entries.removeValue(forKey: victim.key)
+        }
+    }
+
+    private func notifyExpired(_ transferIds: [String]) {
+        for transferId in transferIds {
+            onActiveExpired(transferId)
+        }
+    }
+}
+
+private struct BLEAuthenticatedPeerStateObservation: Equatable {
+    let fingerprint: String
+    let sessionGeneration: UUID
+    let capabilities: PeerCapabilities
+}
+
+private struct BLEPrivateMediaProofTimeoutMarker {
+    let fingerprint: String
+    let sessionGeneration: UUID?
+}
+
+private struct BLEPrivateMediaProofWatchdog {
+    let fingerprint: String
+    let sessionGeneration: UUID
+    let timeoutNonce: UUID
+}
+
+private struct BLEPendingPrivateMediaPolicyResolution {
+    let fingerprint: String
+    var sessionGeneration: UUID?
+    var timeoutNonce: UUID
+    var completions: [UUID: @MainActor (PrivateMediaSendPolicy) -> Void]
+}
+
+private struct BLEAuthenticatedPeerStateSendProgress {
+    let sessionGeneration: UUID
+    var sentInitial = false
+    var sentEcho = false
+}
+
 /// BLEService — Bluetooth Mesh Transport
 /// - Emits events exclusively via `BitchatDelegate` for UI.
 /// - ChatViewModel must consume delegate callbacks (`didReceivePublicMessage`, `didReceiveNoisePayload`).
-/// - A lightweight `peerSnapshotPublisher` is provided for non-UI services.
 final class BLEService: NSObject {
     
     // MARK: - Constants
@@ -35,78 +232,151 @@ final class BLEService: NSObject {
     private let highDegreeThreshold = TransportConfig.bleHighDegreeThreshold // for adaptive TTL/probabilistic relays
     
     // MARK: - Core State (5 Essential Collections)
-    
-    // 1. Consolidated Peripheral Tracking
-    private struct PeripheralState {
-        let peripheral: CBPeripheral
-        var characteristic: CBCharacteristic?
-        var peerID: PeerID?
-        var isConnecting: Bool = false
-        var isConnected: Bool = false
-        var lastConnectionAttempt: Date? = nil
-        var assembler = NotificationStreamAssembler()
-    }
-    private var peripherals: [String: PeripheralState] = [:]  // UUID -> PeripheralState
-    private var peerToPeripheralUUID: [PeerID: String] = [:]  // PeerID -> Peripheral UUID
-    
-    // 2. BLE Centrals (when acting as peripheral)
-    private var subscribedCentrals: [CBCentral] = []
-    private var centralToPeerID: [String: PeerID] = [:]  // Central UUID -> Peer ID mapping
 
-    // BCH-01-004: Rate-limiting for subscription-triggered announces
-    // Tracks subscription attempts per central to prevent enumeration attacks
-    private struct SubscriptionRateLimitState {
-        var lastAnnounceTime: Date
-        var attemptCount: Int
-        var currentBackoffSeconds: TimeInterval
-    }
-    private var centralSubscriptionRateLimits: [String: SubscriptionRateLimitState] = [:]  // Central UUID -> rate limit state
+    // 1. Consolidated BLE link tracking for both central and peripheral roles.
+    private var linkStateStore = BLELinkStateStore()
+
+    // A peer ID can retain an established Noise session after its physical
+    // link disappears. Courier handover therefore needs the stronger fact
+    // that the session was established *on this current ingress link*, not
+    // merely that some session exists for the claimed ID. bleQueue-owned.
+    private var noiseAuthenticatedLinkOwners: [BLEIngressLinkID: PeerID] = [:]
+    private var noiseReconnectPolicy = BLENoiseReconnectPolicy()
+
+    // Rotation-rebind cooldown per link UUID (bleQueue-owned, like the link
+    // store): entries older than the cooldown are pruned on insert.
+    private var lastLinkRebindAt: [String: Date] = [:]
+
+    // Redundant-link retirement cooldown per peer (bleQueue-owned): bounds
+    // how often a replayed announce could flip which duplicate link survives.
+    private var lastRedundantLinkRetirementAt: [PeerID: Date] = [:]
+
+    // BCH-01-004: Rate-limiting for subscription-triggered announces.
+    private var subscriptionAnnounceLimiter = BLESubscriptionAnnounceLimiter()
     
     // 3. Peer Information (single source of truth)
-    private struct PeerInfo {
-        let peerID: PeerID
-        var nickname: String
-        var isConnected: Bool
-        var noisePublicKey: Data?
-        var signingPublicKey: Data?
-        var isVerifiedNickname: Bool
-        var lastSeen: Date
-    }
-    private var peers: [PeerID: PeerInfo] = [:]
-    private var currentPeerIDs: [PeerID] {
-        Array(peers.keys)
-    }
+    private var peerRegistry = BLEPeerRegistry()
     
     // 4. Efficient Message Deduplication
     private let messageDeduplicator = MessageDeduplicator()
-    private var selfBroadcastMessageIDs: [String: (id: String, timestamp: Date)] = [:]
-    private lazy var mediaDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd_HHmmss"
-        return formatter
-    }()
-    private let meshTopology = MeshTopologyTracker()
-    
-    // 5. Fragment Reassembly (necessary for messages > MTU)
-    private struct FragmentKey: Hashable { let sender: UInt64; let id: UInt64 }
-    private var incomingFragments: [FragmentKey: [Int: Data]] = [:]
-    private var fragmentMetadata: [FragmentKey: (type: UInt8, total: Int, timestamp: Date)] = [:]
-    private struct ActiveTransferState {
-        let totalFragments: Int
-        var sentFragments: Int
-        var workItems: [DispatchWorkItem]
+
+    // Courier store-and-forward: envelopes this device carries for offline
+    // third parties, and the trust gate for accepting deposits. The policy
+    // maps (depositor key, announce-verified?) to a quota tier, or nil to
+    // reject. Injectable for tests; main-actor policy because favorites live
+    // on the main actor.
+    var courierStore: CourierStore = .shared
+    // Bulletin-board posts this device carries; injectable for tests.
+    var boardStore: BoardStore = .shared
+    var courierDepositPolicy: @MainActor (Data, Bool) -> CourierDepositTier? = { depositorNoiseKey, isVerifiedPeer in
+        if FavoritesPersistenceService.shared.isMutualFavorite(depositorNoiseKey) { return .favorite }
+        return isVerifiedPeer ? .verified : nil
     }
-    private var activeTransfers: [String: ActiveTransferState] = [:]
-    // Backoff for peripherals that recently timed out connecting
-    private var recentConnectTimeouts: [String: Date] = [:] // Peripheral UUID -> last timeout
+    // Local-only store-and-forward counters; nil in unit tests.
+    var sfMetrics: StoreAndForwardMetrics?
+
+    // Verified one-time prekey bundles gossiped by other peers, used to seal
+    // courier mail forward-secretly. Injectable for tests.
+    var prekeyBundleStore: PrekeyBundleStore = .shared
+    // Throttle for re-broadcasting our own (unchanged) bundle; guarded by
+    // collectionsQueue barriers.
+    private var lastPrekeyBundleSentAt: Date?
+    // Prekey bundles that arrived before their owner's verified announce bound
+    // a signing key. The receive queue is concurrent, so a bundle can race
+    // ahead of the announce it depends on; we retain the latest such bundle per
+    // owner (bounded) and re-attempt attribution when the announce lands.
+    // Guarded by collectionsQueue barriers.
+    private var pendingPrekeyBundles: [PeerID: BitchatPacket] = [:]
+    private static let pendingPrekeyBundleCap = 64
+    // Gateway mode: sink for received nostrCarrier packets (set by app
+    // wiring, called on the main actor after transport-level checks) and the
+    // runtime-toggled capability bits ORed into `PeerCapabilities.localSupported`
+    // for every announce. `directedToUs` distinguishes an uplink deposit
+    // addressed to this device from a downlink broadcast.
+    var onNostrCarrierPacket: (@MainActor (_ payload: Data, _ from: PeerID, _ directedToUs: Bool) -> Void)?
+    /// Fired (off-main) when a signature-verified announce is processed —
+    /// the bridge courier watch refreshes its tag set on new arrivals.
+    var onVerifiedPeerAnnounce: ((_ peerID: PeerID) -> Void)?
+    private var runtimeCapabilities: PeerCapabilities = []  // collectionsQueue
+    private var localBridgeGeohash: String?  // collectionsQueue
+    private let doubleRatchetEnabled: Bool
+
+    #if DEBUG
+    // Test-only tap on the outbound pipeline so multi-node tests can ferry
+    // packets between in-process service instances.
+    var _test_onOutboundPacket: ((BitchatPacket) -> Void)?
+    /// May block a synthetic CoreBluetooth receive callback immediately
+    /// before it hands a packet to `messageQueue`.
+    var _test_beforeReceivePacketHandoff: (() -> Void)?
+    var _test_onReceivePacketHandoff: (() -> Void)?
+    var _test_onPrivateMediaSessionReconciled: ((PeerID) -> Void)?
+    /// May block in tests to hold the serial message queue immediately before
+    /// the deferred private-media admission check.
+    var _test_beforePrivateMediaDeferredSend: ((String) -> Void)?
+    /// May block announce handling after verified-link rebind work is queued.
+    /// Tests use this boundary to prove rebind and reconnect are serialized.
+    var _test_afterVerifiedDirectRebindEnqueued: (() -> Void)?
+    /// May block the convergence-recovery callback on its global-queue thread
+    /// before it enqueues onto `messageQueue`. Tests use this boundary to
+    /// force the quarantine-restore handler to win the dispatch race.
+    var _test_beforeHandshakeRecoveryEnqueued: ((PeerID) -> Void)?
+    #endif
+    private var selfBroadcastTracker = BLESelfBroadcastTracker()
+    private let meshTopology = MeshTopologyTracker()
+    // Route health for originated source routes; guarded by collectionsQueue.
+    private var sourceRouteFailures = BLESourceRouteFailureCache()
+
+    // Mesh diagnostics: outstanding /ping probes keyed by nonce, plus the
+    // inbound ping budget — keyed by the ingress link (the directly connected
+    // peer that delivered the packet), since the unsigned claimed sender is
+    // spoofable — so a directed unencrypted probe cannot be turned into an
+    // amplification primitive. Both are owned by collectionsQueue barriers
+    // like the other mutable collections.
+    private struct PendingMeshPing {
+        let peerID: PeerID
+        let sentAt: Date
+        let lifecycleGeneration: UInt64
+        let completion: @MainActor (MeshPingResult?) -> Void
+        let timeout: DispatchWorkItem
+    }
+    private var pendingMeshPings: [Data: PendingMeshPing] = [:]
+    private var meshPingResponseLimiter = SyncResponseRateLimiter(
+        maxResponses: TransportConfig.meshPingInboundMaxPerLink,
+        window: TransportConfig.meshPingInboundWindowSeconds
+    )
+
+    // 5. Fragment Reassembly (necessary for messages > MTU)
+    private var fragmentAssemblyBuffer = BLEFragmentAssemblyBuffer()
+    private var outboundFragmentTransfers = BLEOutboundFragmentTransferScheduler()
+    private lazy var privateMediaTransferAdmissions = BLEPrivateMediaTransferAdmissionRegistry { [weak self] transferId in
+        self?.handlePrivateMediaAdmissionExpiry(transferId)
+    }
+    // All six maps below are protected by `collectionsQueue`. A fresh Noise
+    // authentication rotates the generation UUID, so stale proof timers and
+    // proof packets cannot classify a replacement session.
+    private var privateMediaSessionGenerations: [PeerID: UUID] = [:]
+    private var authenticatedPeerStates: [PeerID: BLEAuthenticatedPeerStateObservation] = [:]
+    private var privateMediaProofTimeoutMarkers: [PeerID: BLEPrivateMediaProofTimeoutMarker] = [:]
+    private var privateMediaProofWatchdogs: [PeerID: BLEPrivateMediaProofWatchdog] = [:]
+    private var pendingPrivateMediaPolicyResolutions: [PeerID: BLEPendingPrivateMediaPolicyResolution] = [:]
+    private var authenticatedPeerStateSendProgress: [PeerID: BLEAuthenticatedPeerStateSendProgress] = [:]
+    private let incomingFileStore: BLEIncomingFileStore
     
     // Simple announce throttling
-    private var lastAnnounceSent = Date.distantPast
-    private let announceMinInterval: TimeInterval = TransportConfig.bleAnnounceMinInterval
+    private let announceThrottle = BLEAnnounceThrottle()
     
     // Application state tracking (thread-safe)
     #if os(iOS)
     private var isAppActive: Bool = true  // Assume active initially
+    /// Last `UIApplication.shared.backgroundTimeRemaining` sampled on the
+    /// main thread, cached so bleQueue status logs can read it without ever
+    /// dispatching to main (see `captureBluetoothStatus` for the invariant).
+    private let backgroundTimeLock = NSLock()
+    private var _cachedBackgroundTimeRemaining: TimeInterval = .greatestFiniteMagnitude
+    private var cachedBackgroundTimeRemaining: TimeInterval {
+        backgroundTimeLock.lock(); defer { backgroundTimeLock.unlock() }
+        return _cachedBackgroundTimeRemaining
+    }
     #endif
     
     // MARK: - Core BLE Objects
@@ -114,14 +384,21 @@ final class BLEService: NSObject {
     private var centralManager: CBCentralManager?
     private var peripheralManager: CBPeripheralManager?
     private var characteristic: CBMutableCharacteristic?
+    private let shouldInitializeBluetoothManagers: Bool
+    private let panicLifecycleLock = NSLock()
+    private var _isPanicSuspended: Bool
+    private var panicLifecycleGeneration: UInt64 = 0
     
     // MARK: - Identity
     
     private var noiseService: NoiseEncryptionService
+    /// Injected so tests can compress the quarantine/rollback window;
+    /// production always passes the security-constant default.
+    private let noiseResponderHandshakeTimeout: TimeInterval
     private let identityManager: SecureIdentityStateManagerProtocol
     private let keychain: KeychainManagerProtocol
     private let idBridge: NostrIdentityBridge
-    private var myPeerIDData: Data = Data()
+    private let localIdentityState = BLELocalIdentityStateStore()
 
     // MARK: - Advertising Privacy
     // No Local Name by default for maximum privacy. No rotating alias.
@@ -134,64 +411,50 @@ final class BLEService: NSObject {
     private let bleQueue = DispatchQueue(label: "mesh.bluetooth", qos: .userInitiated)
     private let bleQueueKey = DispatchSpecificKey<Void>()
     
-    // Queue for messages pending handshake completion
-    private var pendingMessagesAfterHandshake: [PeerID: [(content: String, messageID: String)]] = [:]
-    // Noise typed payloads (ACKs, read receipts, etc.) pending handshake
-    private var pendingNoisePayloadsAfterHandshake: [PeerID: [Data]] = [:]
+    // Noise messages and typed payloads pending handshake completion.
+    private var pendingNoiseSessionQueues = BLENoiseSessionQueues()
     // Queue for notifications that failed due to full queue
-    private var pendingNotifications: [(data: Data, centrals: [CBCentral]?)] = []
+    private var pendingNotifications = BLEOutboundNotificationBuffer<CBCentral>()
+    // Backpressure logging fires per fragment during media transfers
+    // (hundreds of lines per image); sampled via this counter, which is
+    // only touched inside collectionsQueue barriers (no sync needed).
+    var notificationBackpressureLogCount = 0
 
     // Accumulate long write chunks per central until a full frame decodes
-    private var pendingWriteBuffers: [String: Data] = [:]
+    private var pendingWriteBuffers = BLEInboundWriteBuffer()
     // Relay jitter scheduling to reduce redundant floods
-    private var scheduledRelays: [String: DispatchWorkItem] = [:]
+    private var scheduledRelays = BLEScheduledRelayStore()
     // Track short-lived traffic bursts to adapt announces/scanning under load
-    private var recentPacketTimestamps: [Date] = []
+    private var recentTrafficTracker = BLERecentTrafficTracker()
 
-    // Ingress link tracking for last-hop suppression
-    private enum LinkID: Hashable {
-        case peripheral(String)
-        case central(String)
-    }
-    private var ingressByMessageID: [String: (link: LinkID, timestamp: Date)] = [:]
+    // Ingress link tracking for duplicate and last-hop suppression
+    private var ingressLinks = BLEIngressLinkRegistry()
+    // Inner message IDs of recently opened courier envelopes. Redundant
+    // copies of one message ride different envelopes (each seal uses a fresh
+    // ephemeral key, and bridge drops multiply across relays/couriers), so
+    // envelope-level dedup can't catch them; dedup on the inner ID before
+    // delivery so a duplicate costs one decrypt instead of a delivery + ack
+    // + handshake each. Owned by collectionsQueue barriers.
+    private var openedCourierMessageIDs = BoundedIDSet(capacity: TransportConfig.courierOpenedMessageIDCap)
+    private let logRateLimiter = BLELogRateLimiter(defaultMinimumInterval: 5)
 
-    // Backpressure-aware write queue per peripheral
-    private struct OutboundPriority: Comparable {
-        let level: Int
-        let suborder: Int
-
-        static let high = OutboundPriority(level: 0, suborder: 0)
-        static func fragment(totalFragments: Int) -> OutboundPriority {
-            OutboundPriority(level: 1, suborder: max(1, min(totalFragments, Int(UInt16.max))))
-        }
-        static let fileTransfer = OutboundPriority(level: 2, suborder: Int.max - 1)
-        static let low = OutboundPriority(level: 2, suborder: Int.max)
-
-        static func < (lhs: OutboundPriority, rhs: OutboundPriority) -> Bool {
-            if lhs.level != rhs.level { return lhs.level < rhs.level }
-            return lhs.suborder < rhs.suborder
-        }
-    }
-    private struct PendingWrite {
-        let priority: OutboundPriority
-        let data: Data
-    }
-    private struct PendingFragmentTransfer {
-        let packet: BitchatPacket
-        let pad: Bool
-        let maxChunk: Int?
-        let directedPeer: PeerID?
-        let transferId: String?
-    }
-    private var pendingPeripheralWrites: [String: [PendingWrite]] = [:]
-    private var pendingFragmentTransfers: [PendingFragmentTransfer] = []
+    private var pendingPeripheralWrites = BLEOutboundWriteBuffer()
     // Debounce duplicate disconnect notifies
-    private var recentDisconnectNotifies: [PeerID: Date] = [:]
+    private var disconnectNotifyDebouncer = BLEPeerEventDebouncer()
     // Store-and-forward for directed messages when we have no links
-    // Keyed by recipient short peerID -> messageID -> (packet, enqueuedAt)
-    private var pendingDirectedRelays: [PeerID: [String: (packet: BitchatPacket, enqueuedAt: Date)]] = [:]
+    private var pendingDirectedRelays = BLEDirectedRelaySpool()
     // Debounce for 'reconnected' logs
-    private var lastReconnectLogAt: [PeerID: Date] = [:]
+    private var reconnectLogDebouncer = BLEPeerEventDebouncer()
+    // Announce-packet orchestration (queue hops stay in the environment closures)
+    private lazy var announceHandler = BLEAnnounceHandler(environment: makeAnnounceHandlerEnvironment())
+    // Public-message orchestration (queue hops stay in the environment closures)
+    private lazy var publicMessageHandler = BLEPublicMessageHandler(environment: makePublicMessageHandlerEnvironment())
+    // Noise handshake/encrypted orchestration (queue hops and crypto stay in the environment closures)
+    private lazy var noisePacketHandler = BLENoisePacketHandler(environment: makeNoisePacketHandlerEnvironment())
+    // Fragment-assembly orchestration (queue hops stay in the environment closures)
+    private lazy var fragmentHandler = BLEFragmentHandler(environment: makeFragmentHandlerEnvironment())
+    // File-transfer orchestration (queue hops stay in the environment closures)
+    private lazy var fileTransferHandler = BLEFileTransferHandler(environment: makeFileTransferHandlerEnvironment())
 
     // MARK: - Gossip Sync
     private var gossipSyncManager: GossipSyncManager?
@@ -201,22 +464,20 @@ final class BLEService: NSObject {
     
     private var maintenanceTimer: DispatchSourceTimer?  // Single timer for all maintenance tasks
     private var maintenanceCounter = 0  // Track maintenance cycles
+    private var lastMaintenanceAt = Date.distantPast  // bleQueue-confined; drives background-wake catch-up passes
+    /// Whether real CoreBluetooth managers were initialized. When false (unit
+    /// tests), periodic mesh background work is not started — the maintenance
+    /// timer and the gossip-sync timers only drain BLE writes/notifications,
+    /// re-announce, and sign/broadcast sync packets, all meaningless without
+    /// Bluetooth. Leaving them running in the test process is pure background
+    /// churn that aggravates flaky exit hangs.
+    private var meshBackgroundEnabled = false
 
     // MARK: - Connection budget & scheduling (central role)
-    private let maxCentralLinks = TransportConfig.bleMaxCentralLinks
-    private let connectRateLimitInterval: TimeInterval = TransportConfig.bleConnectRateLimitInterval
-    private var lastGlobalConnectAttempt: Date = .distantPast
-    private struct ConnectionCandidate {
-        let peripheral: CBPeripheral
-        let rssi: Int
-        let name: String
-        let isConnectable: Bool
-        let discoveredAt: Date
-    }
-    private var connectionCandidates: [ConnectionCandidate] = []
-    private var failureCounts: [String: Int] = [:] // Peripheral UUID -> failures
-    private var lastIsolatedAt: Date? = nil
-    private var dynamicRSSIThreshold: Int = TransportConfig.bleDynamicRSSIThresholdDefault
+    private var connectionScheduler = BLEConnectionScheduler<CBPeripheral>()
+    // Recently seen peripherals retained for background wake-on-proximity
+    // connects (bleQueue-confined, like the link state store)
+    private let recentPeripheralCache = BLERecentPeripheralCache<CBPeripheral>()
 
     // MARK: - Adaptive scanning duty-cycle
     private var scanDutyTimer: DispatchSourceTimer?
@@ -226,48 +487,46 @@ final class BLEService: NSObject {
     private var dutyActive: Bool = false
     
     // Debounced publish to coalesce rapid changes
-    private var lastPeerPublishAt: Date = .distantPast
-    private var peerPublishPending: Bool = false
-    private let peerPublishMinInterval: TimeInterval = 0.1
+    private var peerPublishCoalescer = BLEPeerPublishCoalescer()
     private func requestPeerDataPublish() {
-        let now = Date()
-        let elapsed = now.timeIntervalSince(lastPeerPublishAt)
-        if elapsed >= peerPublishMinInterval {
-            lastPeerPublishAt = now
+        switch peerPublishCoalescer.requestPublish(now: Date()) {
+        case .publishNow:
             publishFullPeerData()
-        } else if !peerPublishPending {
-            peerPublishPending = true
-            let delay = peerPublishMinInterval - elapsed
+        case .schedule(let delay):
             messageQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
                 guard let self = self else { return }
-                self.lastPeerPublishAt = Date()
-                self.peerPublishPending = false
+                self.peerPublishCoalescer.scheduledPublishFired(now: Date())
                 self.publishFullPeerData()
             }
+        case .skip:
+            break
         }
     }
     
     // MARK: - Initialization
-
-    private static func shouldEnableCoreBluetooth() -> Bool {
-        // SwiftPM's swift-testing/xctest runner is a command-line tool without an Info.plist.
-        // On macOS, touching CoreBluetooth there can crash due to missing usage-description keys (TCC).
-        let processName = ProcessInfo.processInfo.processName.lowercased()
-        if processName.contains("swiftpm-testing-helper") { return false }
-        if processName.contains("xctest") { return false }
-        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return false }
-        return true
-    }
     
     init(
         keychain: KeychainManagerProtocol,
         idBridge: NostrIdentityBridge,
         identityManager: SecureIdentityStateManagerProtocol,
-        initializeBluetoothManagers: Bool = BLEService.shouldEnableCoreBluetooth()
+        initializeBluetoothManagers: Bool = true,
+        incomingFileStore: BLEIncomingFileStore = BLEIncomingFileStore(),
+        startSuspendedForPanicRecovery: Bool = false,
+        doubleRatchetEnabled: Bool = DoubleRatchetFeature.isEnabled,
+        noiseResponderHandshakeTimeout: TimeInterval =
+            NoiseSecurityConstants.ordinaryResponderHandshakeTimeout
     ) {
         self.keychain = keychain
         self.idBridge = idBridge
-        noiseService = NoiseEncryptionService(keychain: keychain)
+        self.incomingFileStore = incomingFileStore
+        self.shouldInitializeBluetoothManagers = initializeBluetoothManagers
+        self._isPanicSuspended = startSuspendedForPanicRecovery
+        self.doubleRatchetEnabled = doubleRatchetEnabled
+        self.noiseResponderHandshakeTimeout = noiseResponderHandshakeTimeout
+        noiseService = NoiseEncryptionService(
+            keychain: keychain,
+            ordinaryResponderHandshakeTimeout: noiseResponderHandshakeTimeout
+        )
         self.identityManager = identityManager
         super.init()
         
@@ -279,12 +538,18 @@ final class BLEService: NSObject {
         
         // Set up application state tracking (iOS only)
         #if os(iOS)
-        // Check initial state on main thread
+        // Check initial state on main thread. The background-budget cache is
+        // seeded here too: a background-restore launch captures Bluetooth
+        // status before any lifecycle notification fires, and the init-time
+        // sentinel would log a meaningless bgRemaining=∞ for exactly the
+        // wake window that matters.
         if Thread.isMainThread {
             isAppActive = UIApplication.shared.applicationState == .active
+            refreshCachedBackgroundTimeRemaining()
         } else {
             DispatchQueue.main.sync {
                 isAppActive = UIApplication.shared.applicationState == .active
+                refreshCachedBackgroundTimeRemaining()
             }
         }
         
@@ -305,46 +570,94 @@ final class BLEService: NSObject {
         
         // Tag BLE queue for re-entrancy detection
         bleQueue.setSpecific(key: bleQueueKey, value: ())
+        // Link state is owned exclusively by bleQueue; debug builds trap
+        // any access from another queue (cross-queue reads use readLinkState).
+        linkStateStore.assumeOwnership(of: bleQueue)
 
-        if initializeBluetoothManagers {
-            // Initialize BLE on background queue to prevent main thread blocking.
-            #if os(iOS)
-            let centralOptions: [String: Any] = [
-                CBCentralManagerOptionRestoreIdentifierKey: BLEService.centralRestorationID
-            ]
-            centralManager = CBCentralManager(delegate: self, queue: bleQueue, options: centralOptions)
-
-            let peripheralOptions: [String: Any] = [
-                CBPeripheralManagerOptionRestoreIdentifierKey: BLEService.peripheralRestorationID
-            ]
-            peripheralManager = CBPeripheralManager(delegate: self, queue: bleQueue, options: peripheralOptions)
-            #else
-            centralManager = CBCentralManager(delegate: self, queue: bleQueue)
-            peripheralManager = CBPeripheralManager(delegate: self, queue: bleQueue)
-            #endif
-        } else {
-            SecureLogger.info("CoreBluetooth disabled (test environment)", category: .session)
+        if !startSuspendedForPanicRecovery {
+            initializeBluetoothManagersIfNeeded()
         }
         
-        // Single maintenance timer for all periodic tasks (dispatch-based for determinism)
-        let timer = DispatchSource.makeTimerSource(queue: bleQueue)
-        timer.schedule(deadline: .now() + TransportConfig.bleMaintenanceInterval,
-                       repeating: TransportConfig.bleMaintenanceInterval,
-                       leeway: .seconds(TransportConfig.bleMaintenanceLeewaySeconds))
-        timer.setEventHandler { [weak self] in
-            self?.performMaintenance()
+        // Single maintenance timer for all periodic tasks (dispatch-based for
+        // determinism). Only run it when real Bluetooth managers exist.
+        meshBackgroundEnabled = initializeBluetoothManagers
+        if !startSuspendedForPanicRecovery {
+            startMaintenanceTimer()
         }
-        timer.resume()
-        maintenanceTimer = timer
 
         // Publish initial empty state
         requestPeerDataPublish()
 
         // Initialize gossip sync manager
-        restartGossipManager()
+        if !startSuspendedForPanicRecovery {
+            restartGossipManager()
+        }
+    }
+
+    private var isPanicSuspended: Bool {
+        panicLifecycleLock.lock()
+        defer { panicLifecycleLock.unlock() }
+        return _isPanicSuspended
+    }
+
+    private func setPanicSuspended(_ suspended: Bool) {
+        panicLifecycleLock.lock()
+        if suspended {
+            panicLifecycleGeneration &+= 1
+        }
+        _isPanicSuspended = suspended
+        panicLifecycleLock.unlock()
+    }
+
+    private func capturePanicLifecycleGeneration() -> UInt64? {
+        panicLifecycleLock.lock()
+        defer { panicLifecycleLock.unlock() }
+        return _isPanicSuspended ? nil : panicLifecycleGeneration
+    }
+
+    private func isCurrentPanicLifecycleGeneration(_ generation: UInt64) -> Bool {
+        panicLifecycleLock.lock()
+        defer { panicLifecycleLock.unlock() }
+        return !_isPanicSuspended && panicLifecycleGeneration == generation
+    }
+
+    private func initializeBluetoothManagersIfNeeded() {
+        guard shouldInitializeBluetoothManagers,
+              centralManager == nil,
+              peripheralManager == nil,
+              !isPanicSuspended else { return }
+
+        // Initialize BLE on its dedicated delegate queue. On iOS, retain the
+        // restoration identifiers even when construction was deferred by a
+        // pending panic-recovery latch.
+        #if os(iOS)
+        let centralOptions: [String: Any] = [
+            CBCentralManagerOptionRestoreIdentifierKey:
+                BLEService.centralRestorationID
+        ]
+        centralManager = CBCentralManager(
+            delegate: self,
+            queue: bleQueue,
+            options: centralOptions
+        )
+
+        let peripheralOptions: [String: Any] = [
+            CBPeripheralManagerOptionRestoreIdentifierKey:
+                BLEService.peripheralRestorationID
+        ]
+        peripheralManager = CBPeripheralManager(
+            delegate: self,
+            queue: bleQueue,
+            options: peripheralOptions
+        )
+        #else
+        centralManager = CBCentralManager(delegate: self, queue: bleQueue)
+        peripheralManager = CBPeripheralManager(delegate: self, queue: bleQueue)
+        #endif
     }
     
     private func restartGossipManager() {
+        guard !isPanicSuspended else { return }
         // Stop existing
         gossipSyncManager?.stop()
         
@@ -353,6 +666,7 @@ final class BLEService: NSObject {
             gcsMaxBytes: TransportConfig.syncGCSMaxBytes,
             gcsTargetFpr: TransportConfig.syncGCSTargetFpr,
             maxMessageAgeSeconds: TransportConfig.syncMaxMessageAgeSeconds,
+            publicMessageMaxAgeSeconds: TransportConfig.syncPublicMessageMaxAgeSeconds,
             maintenanceIntervalSeconds: TransportConfig.syncMaintenanceIntervalSeconds,
             stalePeerCleanupIntervalSeconds: TransportConfig.syncStalePeerCleanupIntervalSeconds,
             stalePeerTimeoutSeconds: TransportConfig.syncStalePeerTimeoutSeconds,
@@ -360,12 +674,32 @@ final class BLEService: NSObject {
             fileTransferCapacity: TransportConfig.syncFileTransferCapacity,
             fragmentSyncIntervalSeconds: TransportConfig.syncFragmentIntervalSeconds,
             fileTransferSyncIntervalSeconds: TransportConfig.syncFileTransferIntervalSeconds,
-            messageSyncIntervalSeconds: TransportConfig.syncMessageIntervalSeconds
+            messageSyncIntervalSeconds: TransportConfig.syncMessageIntervalSeconds,
+            responseRateLimitMaxResponses: TransportConfig.syncResponseRateLimitMaxResponses,
+            responseRateLimitWindowSeconds: TransportConfig.syncResponseRateLimitWindowSeconds,
+            prekeyBundleCapacity: TransportConfig.syncPrekeyBundleCapacity,
+            prekeyBundleSyncIntervalSeconds: TransportConfig.syncPrekeyBundleIntervalSeconds,
+            prekeyBundleMaxAgeSeconds: TransportConfig.syncPrekeyBundleMaxAgeSeconds
         )
-        
-        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
+
+        // Only real Bluetooth sessions archive to disk; unit tests stay hermetic.
+        let archive = meshBackgroundEnabled ? GossipMessageArchive() : nil
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager, archive: archive)
         manager.delegate = self
-        manager.start()
+        // Board posts sync from the board store (their retention owner) so
+        // deleted/expired posts drop out of rounds immediately. Real sessions
+        // only, matching the archive: unit tests stay hermetic.
+        if meshBackgroundEnabled {
+            manager.boardPacketsProvider = { [weak self] in
+                self?.boardStore.syncCandidates() ?? []
+            }
+        }
+        // Only start the periodic sync timers when real Bluetooth exists. In unit
+        // tests there is no mesh to sync with, and the periodic sign/broadcast
+        // churn just keeps the process busy and aggravates flaky exit hangs.
+        if meshBackgroundEnabled {
+            manager.start()
+        }
         gossipSyncManager = manager
     }
 
@@ -382,46 +716,128 @@ final class BLEService: NSObject {
         #endif
     }
 
-    func resetIdentityForPanic(currentNickname: String) {
+    /// Close radio admission before application state starts disappearing.
+    /// CoreBluetooth callbacks consult the same gate and cannot restart scan
+    /// or advertising while the full panic transaction is incomplete.
+    func suspendForPanicReset() {
+        setPanicSuspended(true)
+        noisePacketHandler.resetForPanic()
+        gossipSyncManager?.stop()
+        gossipSyncManager = nil
+        // Stop the radio and drain CoreBluetooth's delegate queue first. A
+        // callback may already have passed its initial suspension check; the
+        // bleQueue drain forces its final messageQueue handoff to happen
+        // before the receive barrier below.
+        stopServicesImmediatelyForPanic()
+        // Drain every receive/send submitted by callbacks that finished ahead
+        // of the radio stop. Later callbacks observe the closed lifecycle, and
+        // generation-bound handoffs that raced this barrier reject themselves.
+        // Clear the old identity's bounded early-ciphertext queue again after
+        // those callbacks drain so none can repopulate it after the first wipe.
         messageQueue.sync(flags: .barrier) {
-            pendingMessagesAfterHandshake.removeAll()
-            pendingNoisePayloadsAfterHandshake.removeAll()
+            noisePacketHandler.resetForPanic()
+        }
+        clearEmergencySessionState()
+    }
+
+    /// Reopen the radio only after media deletion and recovery-marker commit.
+    func completePanicReset(restartServices: Bool) {
+        // The media wipe ran on the recovery operations' own file store; this
+        // service's store still caches pre-panic receipt decisions (and a
+        // callback drained during suspension may have re-read the pre-wipe
+        // ledger). Drop the cache before admission reopens so the next lookup
+        // rebuilds from the wiped directory.
+        incomingFileStore.resetPrivateMediaReceiptsForPanic()
+        setPanicSuspended(false)
+        guard restartServices else { return }
+        startServices()
+        sendAnnounce(forceSend: true)
+    }
+
+    func resetIdentityForPanic(
+        currentNickname: String,
+        restartServices: Bool = true
+    ) {
+        gossipSyncManager?.stop()
+        gossipSyncManager = nil
+        // Discard deferred pre-panic ciphertext behind any in-flight receive
+        // handlers so none can repopulate the handler's bounded queue.
+        messageQueue.sync(flags: .barrier) {
+            noisePacketHandler.resetForPanic()
+        }
+        // pendingNoiseSessionQueues is owned by collectionsQueue everywhere
+        // else, so clear it there too rather than on messageQueue.
+        collectionsQueue.sync(flags: .barrier) {
+            pendingNoiseSessionQueues.removeAll()
         }
 
-        collectionsQueue.sync(flags: .barrier) {
+        let panicReset = collectionsQueue.sync(flags: .barrier) {
             pendingPeripheralWrites.removeAll()
-            pendingFragmentTransfers.removeAll()
             pendingNotifications.removeAll()
+            let transfers = outboundFragmentTransfers.removeAll()
+            fragmentAssemblyBuffer.removeAll()
             pendingDirectedRelays.removeAll()
-            ingressByMessageID.removeAll()
-            recentPacketTimestamps.removeAll()
-            scheduledRelays.values.forEach { $0.cancel() }
-            scheduledRelays.removeAll()
+            ingressLinks.removeAll()
+            recentTrafficTracker.removeAll()
+            scheduledRelays.cancelAll()
+            // These callbacks belong to pre-panic transfer state. Invoking
+            // them would let queued UI work recreate or resend wiped media.
+            pendingPrivateMediaPolicyResolutions.removeAll()
+            privateMediaSessionGenerations.removeAll()
+            authenticatedPeerStates.removeAll()
+            privateMediaProofTimeoutMarkers.removeAll()
+            privateMediaProofWatchdogs.removeAll()
+            authenticatedPeerStateSendProgress.removeAll()
+            // Let the post-panic identity publish its fresh bundle promptly.
+            lastPrekeyBundleSentAt = nil
+            return transfers
+        }
+
+        for entry in panicReset {
+            entry.workItems.forEach { $0.cancel() }
+            TransferProgressManager.shared.cancel(id: entry.id)
         }
 
         bleQueue.sync {
             pendingWriteBuffers.removeAll()
-            recentConnectTimeouts.removeAll()
+            noiseAuthenticatedLinkOwners.removeAll()
+            noiseReconnectPolicy.removeAll()
+            connectionScheduler.reset()
         }
-        recentDisconnectNotifies.removeAll()
+        disconnectNotifyDebouncer.removeAll()
 
-        noiseService.clearEphemeralStateForPanic()
-        noiseService.clearPersistentIdentity()
+        // The crypto-service replacement and the derived identity swap must be
+        // one atomic unit with respect to messageQueue senders: a queued send
+        // must never observe the new Noise service alongside the old peer ID
+        // (it would sign with the new identity while carrying the old sender).
+        // refreshPeerIdentity() executes inline here via its re-entrancy check.
+        messageQueue.sync(flags: .barrier) {
+            noiseService.clearEphemeralStateForPanic()
+            noiseService.clearPersistentIdentity()
 
-        let newNoise = NoiseEncryptionService(keychain: keychain)
-        noiseService = newNoise
-        configureNoiseServiceCallbacks(for: newNoise)
-        refreshPeerIdentity()
-        restartGossipManager()
-
-        setNickname(currentNickname)
-
+            let newNoise = NoiseEncryptionService(
+                keychain: keychain,
+                ordinaryResponderHandshakeTimeout: noiseResponderHandshakeTimeout
+            )
+            noiseService = newNoise
+            configureNoiseServiceCallbacks(for: newNoise)
+            refreshPeerIdentity()
+        }
+        // Keep the transport silent until the application-level transaction
+        // has also removed its media and committed both recovery markers.
+        // Set through the identity store directly (not setNickname(_:), which
+        // would force-send an announce and break that silence).
+        localIdentityState.setNickname(currentNickname)
         messageDeduplicator.reset()
         messageQueue.async(flags: .barrier) { [weak self] in
-            self?.selfBroadcastMessageIDs.removeAll()
+            self?.selfBroadcastTracker.removeAll()
         }
         requestPeerDataPublish()
-        startServices()
+        if restartServices {
+            restartGossipManager()
+            startServices()
+            sendAnnounce(forceSend: true)
+        }
     }
     
     // Ensure this runs on message queue to avoid main thread blocking
@@ -433,6 +849,7 @@ final class BLEService: NSObject {
             }
             return
         }
+        guard !isPanicSuspended else { return }
         
         guard content.count <= maxMessageLength else {
             SecureLogger.error("Message too long: \(content.count) chars", category: .session)
@@ -462,11 +879,10 @@ final class BLEService: NSObject {
             return
         }
         // Pre-mark our own broadcast as processed to avoid handling relayed self copy
-        let senderHex = signedPacket.senderID.hexEncodedString()
-        let dedupID = "\(senderHex)-\(signedPacket.timestamp)-\(signedPacket.type)"
+        let dedupID = BLESelfBroadcastTracker.dedupID(for: signedPacket)
         messageDeduplicator.markProcessed(dedupID)
         if let messageID {
-            selfBroadcastMessageIDs[dedupID] = (id: messageID, timestamp: sendDate)
+            selfBroadcastTracker.record(messageID: messageID, packet: signedPacket, sentAt: sendDate)
         }
         // Call synchronously since we're already on background queue
         broadcastPacket(signedPacket)
@@ -477,50 +893,67 @@ final class BLEService: NSObject {
     // MARK: - Transport Protocol Conformance
 
     // MARK: Delegates
-    
+
     weak var delegate: BitchatDelegate?
+    weak var eventDelegate: TransportEventDelegate?
     weak var peerEventsDelegate: TransportPeerEventsDelegate?
-    
-    // MARK: Peer snapshots publisher (non-UI convenience)
-    
-    private let peerSnapshotSubject = PassthroughSubject<[TransportPeerSnapshot], Never>()
-    var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> {
-        peerSnapshotSubject.eraseToAnyPublisher()
-    }
 
     func currentPeerSnapshots() -> [TransportPeerSnapshot] {
         collectionsQueue.sync {
-            let snapshot = Array(peers.values)
-            let resolvedNames = PeerDisplayNameResolver.resolve(
-                snapshot.map { ($0.peerID, $0.nickname, $0.isConnected) },
-                selfNickname: myNickname
-            )
-            return snapshot.map { info in
-                TransportPeerSnapshot(
-                    peerID: info.peerID,
-                    nickname: resolvedNames[info.peerID] ?? info.nickname,
-                    isConnected: info.isConnected,
-                    noisePublicKey: info.noisePublicKey,
-                    lastSeen: info.lastSeen
-                )
-            }
+            peerRegistry.transportSnapshots(selfNickname: myNickname)
         }
     }
     
     // MARK: Identity
-    
-    var myPeerID = PeerID(str: "")
-    var myNickname: String = "anon"
-    
+
+    /// Derived from the Noise identity fingerprint. Reads can originate from
+    /// the main actor, message queue, Bluetooth queue, and maintenance timer,
+    /// so all three local identity fields live in one lock-backed snapshot.
+    var myPeerID: PeerID { localIdentityState.snapshot().peerID }
+    var myNickname: String { localIdentityState.snapshot().nickname }
+    private var myPeerIDData: Data { localIdentityState.snapshot().peerIDData }
+
+    /// Sole mutator for `myNickname`: updates the stored value and force-sends
+    /// an announce so peers learn the new name.
     func setNickname(_ nickname: String) {
-        self.myNickname = nickname
+        localIdentityState.setNickname(nickname)
         // Send announce to notify peers of nickname change (force send)
         sendAnnounce(forceSend: true)
     }
     
     // MARK: Lifecycle
     
+    /// Creates and starts the periodic maintenance timer if it is not already
+    /// running. Idempotent so it can be called from both `init` and
+    /// `startServices()` — the latter matters after a panic reset, where
+    /// `stopServices()` cancels and nils the timer.
+    private func startMaintenanceTimer() {
+        guard !isPanicSuspended,
+              meshBackgroundEnabled,
+              maintenanceTimer == nil else { return }
+        let timer = DispatchSource.makeTimerSource(queue: bleQueue)
+        timer.schedule(deadline: .now() + TransportConfig.bleMaintenanceInterval,
+                       repeating: TransportConfig.bleMaintenanceInterval,
+                       leeway: .seconds(TransportConfig.bleMaintenanceLeewaySeconds))
+        timer.setEventHandler { [weak self] in
+            self?.performMaintenance()
+        }
+        timer.resume()
+        maintenanceTimer = timer
+    }
+
     func startServices() {
+        guard let lifecycleGeneration =
+                capturePanicLifecycleGeneration() else { return }
+        initializeBluetoothManagersIfNeeded()
+        if gossipSyncManager == nil {
+            restartGossipManager()
+        }
+        // Restart the maintenance timer if a prior stopServices() cancelled it
+        // (e.g. the panic flow), otherwise periodic announces, peer reconciliation
+        // and cache cleanup would never resume until app restart.
+        startMaintenanceTimer()
+
         // Start BLE services if not already running
         if centralManager?.state == .poweredOn {
             centralManager?.scanForPeripherals(
@@ -532,15 +965,20 @@ final class BLEService: NSObject {
         // Send initial announce after services are ready
         // Use longer delay to avoid conflicts with other announces
         messageQueue.asyncAfter(deadline: .now() + TransportConfig.bleInitialAnnounceDelaySeconds) { [weak self] in
-            self?.sendAnnounce(forceSend: true)
+            guard let self,
+                  self.isCurrentPanicLifecycleGeneration(
+                    lifecycleGeneration
+                  ) else { return }
+            self.sendAnnounce(forceSend: true)
         }
     }
     
     func stopServices() {
+        let localIdentity = localIdentityState.snapshot()
         // Send leave message synchronously to ensure delivery
         var leavePacket = BitchatPacket(
             type: MessageType.leave.rawValue,
-            senderID: myPeerIDData,
+            senderID: localIdentity.peerIDData,
             recipientID: nil,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: Data(),
@@ -554,11 +992,11 @@ final class BLEService: NSObject {
 
         // Send immediately to all connected peers (synchronized access to BLE state)
         if let data = leavePacket.toBinaryData(padding: false) {
-            let leavePriority = priority(for: leavePacket, data: data)
+            let leavePriority = BLEOutboundPacketPolicy.priority(for: leavePacket, data: data)
 
             // Snapshot BLE state under bleQueue to avoid races with delegate callbacks
             let (peripheralStates, centralsCount, char) = bleQueue.sync {
-                (Array(peripherals.values), subscribedCentrals.count, characteristic)
+                (linkStateStore.peripheralStates, linkStateStore.subscribedCentralCount, characteristic)
             }
 
             // Send to peripherals we're connected to as central
@@ -595,7 +1033,31 @@ final class BLEService: NSObject {
         peripheralManager?.stopAdvertising()
 
         // Disconnect all peripherals (synchronized access)
-        let peripheralsToDisconnect = bleQueue.sync { Array(peripherals.values) }
+        let peripheralsToDisconnect = bleQueue.sync { linkStateStore.peripheralStates }
+        for state in peripheralsToDisconnect {
+            centralManager?.cancelPeripheralConnection(state.peripheral)
+        }
+    }
+
+    /// Panic cannot spend its security boundary sending a signed LEAVE or
+    /// pumping the main run loop. Close the radio and timers immediately;
+    /// the identity/session cleanup follows synchronously.
+    private func stopServicesImmediatelyForPanic() {
+        collectionsQueue.sync(flags: .barrier) {
+            pendingNotifications.removeAll()
+        }
+
+        maintenanceTimer?.cancel()
+        maintenanceTimer = nil
+        scanDutyTimer?.cancel()
+        scanDutyTimer = nil
+
+        centralManager?.stopScan()
+        peripheralManager?.stopAdvertising()
+
+        let peripheralsToDisconnect = bleQueue.sync {
+            linkStateStore.peripheralStates
+        }
         for state in peripheralsToDisconnect {
             centralManager?.cancelPeripheralConnection(state.peripheral)
         }
@@ -603,36 +1065,46 @@ final class BLEService: NSObject {
     
     func emergencyDisconnectAll() {
         stopServices()
+        clearEmergencySessionState()
+    }
 
+    private func clearEmergencySessionState() {
         // Clear all sessions and peers
-        let cancelledTransfers: [(id: String, items: [DispatchWorkItem])] = collectionsQueue.sync(flags: .barrier) {
-            let entries = activeTransfers.map { ($0.key, $0.value.workItems) }
-            peers.removeAll()
-            incomingFragments.removeAll()
-            fragmentMetadata.removeAll()
-            activeTransfers.removeAll()
+        let cancelled = collectionsQueue.sync(flags: .barrier) {
+            let entries = outboundFragmentTransfers.removeAll().map {
+                (id: $0.id, items: $0.workItems)
+            }
+            let pingTimeouts = pendingMeshPings.values.map(\.timeout)
+            pendingMeshPings.removeAll()
+            meshPingResponseLimiter = SyncResponseRateLimiter(
+                maxResponses: TransportConfig.meshPingInboundMaxPerLink,
+                window: TransportConfig.meshPingInboundWindowSeconds
+            )
+            peerRegistry.removeAll()
+            fragmentAssemblyBuffer.removeAll()
+            sourceRouteFailures = BLESourceRouteFailureCache()
             // Also clear pending message queues to avoid stale state across sessions
-            pendingMessagesAfterHandshake.removeAll()
-            pendingNoisePayloadsAfterHandshake.removeAll()
+            pendingNoiseSessionQueues.removeAll()
             pendingDirectedRelays.removeAll()
-            return entries
+            return (transfers: entries, pingTimeouts: pingTimeouts)
         }
 
-        for entry in cancelledTransfers {
+        for entry in cancelled.transfers {
             entry.items.forEach { $0.cancel() }
             TransferProgressManager.shared.cancel(id: entry.id)
         }
+        cancelled.pingTimeouts.forEach { $0.cancel() }
 
         // Clear processed messages
         messageDeduplicator.reset()
 
         // Clear peripheral references (synchronized access to avoid races with BLE callbacks)
         bleQueue.sync {
-            peripherals.removeAll()
-            peerToPeripheralUUID.removeAll()
-            subscribedCentrals.removeAll()
-            centralToPeerID.removeAll()
-            centralSubscriptionRateLimits.removeAll()
+            linkStateStore.clearAll()
+            noiseAuthenticatedLinkOwners.removeAll()
+            noiseReconnectPolicy.removeAll()
+            connectionScheduler.reset()
+            subscriptionAnnounceLimiter.removeAll()
         }
         meshTopology.reset()
     }
@@ -641,38 +1113,415 @@ final class BLEService: NSObject {
     
     func isPeerConnected(_ peerID: PeerID) -> Bool {
         // Accept both 16-hex short IDs and 64-hex Noise keys
-        let shortID = peerID.toShort()
-        return collectionsQueue.sync { peers[shortID]?.isConnected ?? false }
+        return collectionsQueue.sync { peerRegistry.isConnected(peerID) }
     }
 
     func isPeerReachable(_ peerID: PeerID) -> Bool {
         // Accept both 16-hex short IDs and 64-hex Noise keys
-        let shortID = peerID.toShort()
         return collectionsQueue.sync {
-            // Must be mesh-attached: at least one live direct link to the mesh
-            let meshAttached = peers.values.contains { $0.isConnected }
-            guard let info = peers[shortID] else { return false }
-            if info.isConnected { return true }
-            guard meshAttached else { return false }
-            // Apply reachability retention window
-            let isVerified = info.isVerifiedNickname
-            let retention: TimeInterval = isVerified ? TransportConfig.bleReachabilityRetentionVerifiedSeconds : TransportConfig.bleReachabilityRetentionUnverifiedSeconds
-            return Date().timeIntervalSince(info.lastSeen) <= retention
+            peerRegistry.isReachable(peerID, now: Date())
         }
+    }
+
+    func canDeliverSecurely(to peerID: PeerID) -> Bool {
+        // A live link binding alone is forgeable: the rotation heal rebinds a
+        // link on a signature-verified "direct" announce, but directness rides
+        // on the unsigned TTL, so a replayed announce can bind an absent
+        // peer's ID to the replayer's link. An established Noise session
+        // proves the other end of the link holds the peer's private key.
+        //
+        // Sessions are keyed by the short wire ID, so normalize like
+        // isPeerConnected does — a send keyed by the full 64-hex Noise key
+        // must not misread an established session as insecure.
+        noiseService.hasEstablishedSession(with: peerID.toShort())
     }
 
     func peerNickname(peerID: PeerID) -> String? {
         collectionsQueue.sync {
-            guard let peer = peers[peerID], peer.isConnected else { return nil }
-            return peer.nickname
+            peerRegistry.nickname(for: peerID, connectedOnly: true)
         }
+    }
+
+    /// Capabilities the peer advertised in its last verified announce.
+    /// Empty for peers that predate the capabilities TLV.
+    func peerCapabilities(_ peerID: PeerID) -> PeerCapabilities {
+        collectionsQueue.sync { peerRegistry.capabilities(for: peerID) }
+    }
+
+    func authenticatedPeerTransportState(
+        _ peerID: PeerID
+    ) -> AuthenticatedPeerTransportState? {
+        let normalizedPeerID = peerID.toShort()
+        guard let generation = noiseService.sessionGeneration(for: normalizedPeerID),
+              let publicKey = noiseService.getPeerPublicKeyData(normalizedPeerID),
+              let fingerprint = noiseService.getPeerFingerprint(normalizedPeerID),
+              publicKey.sha256Fingerprint().caseInsensitiveCompare(fingerprint) == .orderedSame
+        else {
+            return nil
+        }
+        let observation = collectionsQueue.sync {
+            () -> BLEAuthenticatedPeerStateObservation? in
+            guard privateMediaSessionGenerations[normalizedPeerID] == generation,
+                  let authenticated = authenticatedPeerStates[normalizedPeerID],
+                  authenticated.sessionGeneration == generation,
+                  authenticated.fingerprint.caseInsensitiveCompare(fingerprint) == .orderedSame
+            else {
+                return nil
+            }
+            return authenticated
+        }
+        guard let observation,
+              noiseService.sessionGeneration(for: normalizedPeerID) == generation
+        else {
+            return nil
+        }
+        return AuthenticatedPeerTransportState(
+            capabilities: observation.capabilities,
+            sessionGeneration: generation,
+            noisePublicKey: publicKey
+        )
+    }
+
+    private func isNoisePayloadAuthorized(
+        _ type: NoisePayloadType,
+        from peerID: PeerID,
+        sessionGeneration: UUID
+    ) -> Bool {
+        guard type == .ndrEvent else { return true }
+        guard doubleRatchetEnabled,
+              let authenticated = authenticatedPeerTransportState(peerID)
+        else {
+            return false
+        }
+        return authenticated.sessionGeneration == sessionGeneration
+            && authenticated.capabilities.contains(.doubleRatchet)
+    }
+
+    func authenticatedPrivateMediaReceiptSessionGeneration(
+        to peerID: PeerID
+    ) -> UUID? {
+        let normalizedPeerID = peerID.toShort()
+        let currentNoiseGeneration =
+            noiseService.sessionGeneration(for: normalizedPeerID)
+        return collectionsQueue.sync {
+            guard let generation =
+                    privateMediaSessionGenerations[normalizedPeerID],
+                  generation == currentNoiseGeneration,
+                  let authenticated =
+                    authenticatedPeerStates[normalizedPeerID],
+                  authenticated.sessionGeneration == generation,
+                  authenticated.capabilities.contains(.privateMedia),
+                  authenticated.capabilities.contains(
+                    .privateMediaReceipts
+                  ) else {
+                return nil
+            }
+            return generation
+        }
+    }
+
+    private func privateMediaPolicyFingerprint(
+        for peerID: PeerID,
+        expectedSessionGeneration: UUID?
+    ) -> String? {
+        let normalizedPeerID = peerID.toShort()
+        if let expectedSessionGeneration,
+           noiseService.sessionGeneration(for: normalizedPeerID)
+                == expectedSessionGeneration,
+           let fingerprint = noiseService.getPeerFingerprint(normalizedPeerID),
+           noiseService.sessionGeneration(for: normalizedPeerID)
+                == expectedSessionGeneration {
+            // The exact authenticated Noise static key is stronger than a
+            // registry entry populated by a public announce.
+            return fingerprint
+        }
+        return collectionsQueue.sync {
+            peerRegistry.info(for: normalizedPeerID)?
+                .noisePublicKey?
+                .sha256Fingerprint()
+        }
+    }
+
+    func privateMediaSendPolicy(to peerID: PeerID) -> PrivateMediaSendPolicy {
+        let normalizedPeerID = peerID.toShort()
+        let state: (
+            capabilities: PeerCapabilities,
+            fingerprint: String?,
+            sessionGeneration: UUID?,
+            authenticatedState: BLEAuthenticatedPeerStateObservation?,
+            timedOut: BLEPrivateMediaProofTimeoutMarker?
+        ) = collectionsQueue.sync {
+            let info = peerRegistry.info(for: normalizedPeerID)
+            return (
+                info?.capabilities ?? [],
+                info?.noisePublicKey?.sha256Fingerprint(),
+                privateMediaSessionGenerations[normalizedPeerID],
+                authenticatedPeerStates[normalizedPeerID],
+                privateMediaProofTimeoutMarkers[normalizedPeerID]
+            )
+        }
+        let currentNoiseGeneration = noiseService.sessionGeneration(for: normalizedPeerID)
+
+        // A session replacement can happen before its authentication callback
+        // reaches messageQueue. Never reuse an observation from the previous
+        // transport generation during that window.
+        if state.sessionGeneration != currentNoiseGeneration {
+            return .awaitingCapabilityProof
+        }
+
+        guard let fingerprint = privateMediaPolicyFingerprint(
+            for: normalizedPeerID,
+            expectedSessionGeneration: state.sessionGeneration
+        ) ?? state.fingerprint else {
+            // A raw fallback must be bound to the stable Noise key from a
+            // verified registry entry; a routing ID alone can rotate or be
+            // spoofed. Without that key neither proof nor safe migration state
+            // can be attributed.
+            return .blockedDowngrade
+        }
+
+        let wasPreviouslyCapable = identityManager.hasObservedPrivateMediaCapability(
+            fingerprint: fingerprint
+        )
+
+        if let authenticated = state.authenticatedState,
+           authenticated.fingerprint.caseInsensitiveCompare(fingerprint) == .orderedSame,
+           authenticated.sessionGeneration == state.sessionGeneration {
+            if authenticated.capabilities.contains(.privateMedia) {
+                return .encrypted
+            }
+            return wasPreviouslyCapable ? .blockedDowngrade : .legacyRequiresConsent
+        }
+
+        if let timedOut = state.timedOut,
+           timedOut.fingerprint.caseInsensitiveCompare(fingerprint) == .orderedSame,
+           timedOut.sessionGeneration == state.sessionGeneration {
+            return wasPreviouslyCapable ? .blockedDowngrade : .legacyRequiresConsent
+        }
+
+        // The announce bit is a discovery hint only. It can trigger a Noise
+        // handshake, but it cannot select encrypted media or create a durable
+        // pin because anyone can copy a public Noise key into a self-signed
+        // announce. A prior pin also re-confirms on each replacement session
+        // so an authenticated no-bit response becomes a visible downgrade.
+        if state.capabilities.contains(.privateMedia) || wasPreviouslyCapable {
+            return .awaitingCapabilityProof
+        }
+
+        // Old clients that never advertised the bit remain eligible only for
+        // the explicit, invocation-scoped legacy consent path.
+        return .legacyRequiresConsent
+    }
+
+    func resolvePrivateMediaSendPolicy(
+        to peerID: PeerID,
+        completion: @escaping @MainActor (PrivateMediaSendPolicy) -> Void
+    ) {
+        let normalizedPeerID = peerID.toShort()
+        messageQueue.async { [weak self] in
+            guard let self else { return }
+            let immediate = self.privateMediaSendPolicy(to: normalizedPeerID)
+            guard immediate == .awaitingCapabilityProof else {
+                self.completePrivateMediaPolicyResolution([completion], with: immediate)
+                return
+            }
+
+            let generation = self.collectionsQueue.sync {
+                self.privateMediaSessionGenerations[normalizedPeerID]
+            }
+            let fingerprint = self.privateMediaPolicyFingerprint(
+                for: normalizedPeerID,
+                expectedSessionGeneration: generation
+            )
+            guard let fingerprint else {
+                self.completePrivateMediaPolicyResolution([completion], with: .blockedDowngrade)
+                return
+            }
+
+            let requestID = UUID()
+            let registration = self.collectionsQueue.sync(flags: .barrier) {
+                () -> (registered: Bool, shouldSchedule: Bool, nonce: UUID, generation: UUID?) in
+                let generation = self.privateMediaSessionGenerations[normalizedPeerID]
+                if var pending = self.pendingPrivateMediaPolicyResolutions[normalizedPeerID] {
+                    guard pending.fingerprint.caseInsensitiveCompare(fingerprint) == .orderedSame,
+                          pending.completions.count
+                            < TransportConfig.privateMediaCapabilityProofWaitersPerPeerCap else {
+                        return (false, false, UUID(), generation)
+                    }
+                    pending.completions[requestID] = completion
+                    self.pendingPrivateMediaPolicyResolutions[normalizedPeerID] = pending
+                    return (true, false, pending.timeoutNonce, pending.sessionGeneration)
+                }
+
+                guard self.pendingPrivateMediaPolicyResolutions.count
+                        < TransportConfig.privateMediaCapabilityProofPendingPeerCap else {
+                    return (false, false, UUID(), generation)
+                }
+                let currentWatchdog = self.privateMediaProofWatchdogs[normalizedPeerID]
+                let reusesWatchdog = currentWatchdog?.fingerprint
+                    .caseInsensitiveCompare(fingerprint) == .orderedSame
+                    && currentWatchdog?.sessionGeneration == generation
+                let nonce: UUID
+                if reusesWatchdog, let currentWatchdog {
+                    nonce = currentWatchdog.timeoutNonce
+                } else {
+                    nonce = UUID()
+                }
+                self.pendingPrivateMediaPolicyResolutions[normalizedPeerID] =
+                    BLEPendingPrivateMediaPolicyResolution(
+                        fingerprint: fingerprint,
+                        sessionGeneration: generation,
+                        timeoutNonce: nonce,
+                        completions: [requestID: completion]
+                    )
+                return (true, !reusesWatchdog, nonce, generation)
+            }
+
+            guard registration.registered else {
+                self.completePrivateMediaPolicyResolution([completion], with: .blockedDowngrade)
+                return
+            }
+            if registration.shouldSchedule {
+                self.schedulePrivateMediaProofTimeout(
+                    for: normalizedPeerID,
+                    fingerprint: fingerprint,
+                    sessionGeneration: registration.generation,
+                    nonce: registration.nonce
+                )
+            }
+
+            if !self.noiseService.hasEstablishedSession(with: normalizedPeerID) {
+                self.initiateNoiseHandshake(with: normalizedPeerID)
+            }
+        }
+    }
+
+    private func completePrivateMediaPolicyResolution(
+        _ completions: [@MainActor (PrivateMediaSendPolicy) -> Void],
+        with policy: PrivateMediaSendPolicy
+    ) {
+        guard !completions.isEmpty else { return }
+        notifyUI {
+            completions.forEach { $0(policy) }
+        }
+    }
+
+    private func schedulePrivateMediaProofTimeout(
+        for peerID: PeerID,
+        fingerprint: String,
+        sessionGeneration: UUID?,
+        nonce: UUID
+    ) {
+        messageQueue.asyncAfter(
+            deadline: .now() + TransportConfig.privateMediaCapabilityProofTimeoutSeconds
+        ) { [weak self] in
+            self?.handlePrivateMediaProofTimeout(
+                for: peerID,
+                fingerprint: fingerprint,
+                sessionGeneration: sessionGeneration,
+                nonce: nonce
+            )
+        }
+    }
+
+    private func handlePrivateMediaProofTimeout(
+        for peerID: PeerID,
+        fingerprint: String,
+        sessionGeneration: UUID?,
+        nonce: UUID
+    ) {
+        let expiration = collectionsQueue.sync(flags: .barrier) {
+            () -> (expired: Bool, completions: [@MainActor (PrivateMediaSendPolicy) -> Void]) in
+            let pending = pendingPrivateMediaPolicyResolutions[peerID]
+            let pendingMatches = pending?.timeoutNonce == nonce
+                && pending?.sessionGeneration == sessionGeneration
+                && pending?.fingerprint.caseInsensitiveCompare(fingerprint) == .orderedSame
+            let watchdog = privateMediaProofWatchdogs[peerID]
+            let watchdogMatches = sessionGeneration != nil
+                && watchdog?.timeoutNonce == nonce
+                && watchdog?.sessionGeneration == sessionGeneration
+                && watchdog?.fingerprint.caseInsensitiveCompare(fingerprint) == .orderedSame
+            guard pendingMatches || watchdogMatches else {
+                return (false, [])
+            }
+            var completions: [@MainActor (PrivateMediaSendPolicy) -> Void] = []
+            if pendingMatches, let pending {
+                completions = Array(pending.completions.values)
+            }
+            if pendingMatches {
+                pendingPrivateMediaPolicyResolutions.removeValue(forKey: peerID)
+            }
+            if watchdogMatches {
+                privateMediaProofWatchdogs.removeValue(forKey: peerID)
+            }
+            privateMediaProofTimeoutMarkers[peerID] = BLEPrivateMediaProofTimeoutMarker(
+                fingerprint: fingerprint,
+                sessionGeneration: sessionGeneration
+            )
+            return (true, completions)
+        }
+        guard expiration.expired else { return }
+        let policy = privateMediaSendPolicy(to: peerID)
+        sendPendingNoisePayloadsAfterHandshake(for: peerID)
+        completePrivateMediaPolicyResolution(expiration.completions, with: policy)
+    }
+
+    /// Enables or disables a runtime-advertised capability bit (e.g. the
+    /// internet-gateway toggle) and re-announces so peers learn promptly.
+    /// Build-time bits stay in `PeerCapabilities.localSupported`.
+    func setLocalCapability(_ capability: PeerCapabilities, enabled: Bool) {
+        let changed: Bool = collectionsQueue.sync(flags: .barrier) {
+            let before = runtimeCapabilities
+            if enabled {
+                runtimeCapabilities.insert(capability)
+            } else {
+                runtimeCapabilities.remove(capability)
+            }
+            return runtimeCapabilities != before
+        }
+        guard changed else { return }
+        sendAnnounce(forceSend: true)
+    }
+
+    /// Reachable peers currently advertising the `.gateway` capability.
+    func reachableGatewayPeers() -> [PeerID] {
+        let now = Date()
+        return collectionsQueue.sync {
+            peerRegistry.peers(advertising: .gateway)
+                .filter { peerRegistry.isReachable($0, now: now) }
+        }
+    }
+
+    /// Reachable peers currently advertising the `.bridge` capability.
+    func reachableBridgePeers() -> [PeerID] {
+        let now = Date()
+        return collectionsQueue.sync {
+            peerRegistry.peers(advertising: .bridge)
+                .filter { peerRegistry.isReachable($0, now: now) }
+        }
+    }
+
+    /// A rendezvous cell advertised by a bridge-capable peer's announce.
+    func advertisedBridgeGeohash() -> String? {
+        collectionsQueue.sync { peerRegistry.advertisedBridgeGeohash() }
+    }
+
+    /// The rendezvous cell this device advertises in its own announces while
+    /// bridging with the gateway toggle on. Set from the main actor; the
+    /// value rides the next (forced) announce.
+    func setLocalBridgeGeohash(_ cell: String?) {
+        let changed: Bool = collectionsQueue.sync(flags: .barrier) {
+            guard localBridgeGeohash != cell else { return false }
+            localBridgeGeohash = cell
+            return true
+        }
+        guard changed else { return }
+        sendAnnounce(forceSend: true)
     }
 
     func getPeerNicknames() -> [PeerID: String] {
         return collectionsQueue.sync {
-            let connected = peers.filter { $0.value.isConnected }
-            let tuples = connected.map { ($0.key, $0.value.nickname, true) }
-            return PeerDisplayNameResolver.resolve(tuples, selfNickname: myNickname)
+            peerRegistry.displayNicknames(selfNickname: myNickname)
         }
     }
     
@@ -680,7 +1529,7 @@ final class BLEService: NSObject {
     
     func getFingerprint(for peerID: PeerID) -> String? {
         return collectionsQueue.sync {
-            return peers[peerID]?.noisePublicKey?.sha256Fingerprint()
+            peerRegistry.fingerprint(for: peerID)
         }
     }
     
@@ -695,11 +1544,47 @@ final class BLEService: NSObject {
     }
     
     func triggerHandshake(with peerID: PeerID) {
-        initiateNoiseHandshake(with: peerID)
+        // Callers are on the main actor; the handshake broadcast sync-waits
+        // on bleQueue for link state, so hop off main first.
+        messageQueue.async { [weak self] in
+            self?.initiateNoiseHandshake(with: peerID)
+        }
     }
     
-    func getNoiseService() -> NoiseEncryptionService {
-        return noiseService
+    // MARK: Noise identity/session access (narrow Transport wrappers)
+
+    func noiseSessionPublicKeyData(for peerID: PeerID) -> Data? {
+        noiseService.getPeerPublicKeyData(peerID)
+    }
+
+    func noiseIdentityFingerprint() -> String {
+        noiseService.getIdentityFingerprint()
+    }
+
+    func noiseStaticPublicKeyData() -> Data {
+        noiseService.getStaticPublicKeyData()
+    }
+
+    func noiseSigningPublicKeyData() -> Data {
+        noiseService.getSigningPublicKeyData()
+    }
+
+    func noiseSignData(_ data: Data) -> Data? {
+        noiseService.signData(data)
+    }
+
+    func noiseVerifySignature(_ signature: Data, for data: Data, publicKey: Data) -> Bool {
+        noiseService.verifySignature(signature, for: data, publicKey: publicKey)
+    }
+
+    func installNoiseSessionCallbacks(
+        onPeerAuthenticated: @escaping (PeerID, String) -> Void,
+        onHandshakeRequired: @escaping (PeerID) -> Void
+    ) {
+        // `onPeerAuthenticated` is additive (the encryption service keeps an
+        // array of handlers); `onHandshakeRequired` is a single slot.
+        noiseService.onPeerAuthenticated = onPeerAuthenticated
+        noiseService.onHandshakeRequired = onHandshakeRequired
     }
 
     func getCurrentBluetoothState() -> CBManagerState {
@@ -708,20 +1593,48 @@ final class BLEService: NSObject {
 
     // MARK: Messaging
 
+    private func handlePrivateMediaAdmissionExpiry(_ transferId: String) {
+        // Expiry can be discovered from the BLE maintenance queue or while a
+        // caller already owns collectionsQueue. Cleanup is therefore
+        // fire-and-forget; never synchronously re-enter the collections lock.
+        collectionsQueue.async(flags: .barrier) { [weak self] in
+            _ = self?.pendingNoiseSessionQueues.removeTypedPayload(transferId: transferId)
+        }
+        TransferProgressManager.shared.rejectBeforeStart(
+            id: transferId,
+            reason: String(
+                localized: "content.delivery.reason.private_media_admission_expired",
+                defaultValue: "Media transfer timed out before it could start",
+                comment: "Failure reason when private-media admission expires before fragment scheduling"
+            )
+        )
+    }
+
     func cancelTransfer(_ transferId: String) {
+        // Cancellation must become visible synchronously. Scheduler/pending-
+        // Noise cleanup remains asynchronous, but deferred private-media work
+        // cannot pass another admission boundary after this returns.
+        privateMediaTransferAdmissions.cancel(transferId)
         collectionsQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
-            if let state = self.activeTransfers.removeValue(forKey: transferId) {
-                state.workItems.forEach { $0.cancel() }
+
+            switch self.outboundFragmentTransfers.cancelTransfer(transferId) {
+            case let .active(id, workItems):
+                workItems.forEach { $0.cancel() }
                 TransferProgressManager.shared.cancel(id: transferId)
-                SecureLogger.debug("🛑 Cancelled transfer \(transferId.prefix(8))…", category: .session)
+                SecureLogger.debug("🛑 Cancelled transfer \(id.prefix(8))…", category: .session)
                 self.messageQueue.async { [weak self] in
                     self?.startNextPendingTransferIfNeeded()
                 }
-            } else if let pendingIndex = self.pendingFragmentTransfers.firstIndex(where: { $0.transferId == transferId }) {
-                self.pendingFragmentTransfers.remove(at: pendingIndex)
+
+            case let .pending(id):
                 TransferProgressManager.shared.cancel(id: transferId)
-                SecureLogger.debug("🛑 Removed pending transfer \(transferId.prefix(8))… before start", category: .session)
+                SecureLogger.debug("🛑 Removed pending transfer \(id.prefix(8))… before start", category: .session)
+
+            case .missing:
+                if self.pendingNoiseSessionQueues.removeTypedPayload(transferId: transferId) {
+                    SecureLogger.debug("🛑 Removed handshake-queued transfer \(transferId.prefix(8))…", category: .session)
+                }
             }
         }
     }
@@ -743,6 +1656,7 @@ final class BLEService: NSObject {
     func sendFileBroadcast(_ filePacket: BitchatFilePacket, transferId: String) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
+            guard !self.isPanicSuspended else { return }
             guard let payload = filePacket.encode() else {
                 SecureLogger.error("❌ Failed to encode file packet for broadcast", category: .session)
                 return
@@ -777,113 +1691,464 @@ final class BLEService: NSObject {
     }
 
     func sendFilePrivate(_ filePacket: BitchatFilePacket, to peerID: PeerID, transferId: String) {
+        sendFilePrivate(
+            filePacket,
+            to: peerID,
+            transferId: transferId,
+            allowLegacyFallback: false
+        )
+    }
+
+    func sendFilePrivate(
+        _ filePacket: BitchatFilePacket,
+        to peerID: PeerID,
+        transferId: String,
+        allowLegacyFallback: Bool
+    ) {
+        sendFilePrivate(
+            filePacket,
+            to: peerID,
+            transferId: transferId,
+            allowLegacyFallback: allowLegacyFallback,
+            requiresAuthenticatedPrivateMediaReceipts: false
+        )
+    }
+
+    func sendFilePrivateReceiptRetry(
+        _ filePacket: BitchatFilePacket,
+        to peerID: PeerID,
+        transferId: String
+    ) {
+        sendFilePrivate(
+            filePacket,
+            to: peerID,
+            transferId: transferId,
+            allowLegacyFallback: false,
+            requiresAuthenticatedPrivateMediaReceipts: true
+        )
+    }
+
+    private func sendFilePrivate(
+        _ filePacket: BitchatFilePacket,
+        to peerID: PeerID,
+        transferId: String,
+        allowLegacyFallback: Bool,
+        requiresAuthenticatedPrivateMediaReceipts: Bool
+    ) {
+        // Register before enqueueing onto messageQueue. This closes the window
+        // where cancel/delete could run first, observe no scheduler state, and
+        // then be followed by a deferred clear-media send.
+        switch privateMediaTransferAdmissions.begin(transferId) {
+        case .admitted:
+            break
+
+        case .alreadyKnown:
+            SecureLogger.debug(
+                "Private media admission already cancelled or duplicated for \(transferId.prefix(8))…",
+                category: .security
+            )
+            return
+
+        case .capacityExhausted:
+            SecureLogger.warning(
+                "Private media admission capacity exhausted for \(transferId.prefix(8))…",
+                category: .security
+            )
+            TransferProgressManager.shared.rejectBeforeStart(
+                id: transferId,
+                reason: String(
+                    localized: "content.delivery.reason.private_media_admission_full",
+                    defaultValue: "Too many media transfers are waiting; try again shortly",
+                    comment: "Failure reason when too many private-media transfers are awaiting admission"
+                )
+            )
+            return
+        }
         messageQueue.async { [weak self] in
             guard let self = self else { return }
-            guard let payload = filePacket.encode() else {
-                SecureLogger.error("❌ Failed to encode file packet for private send", category: .session)
+            #if DEBUG
+            self._test_beforePrivateMediaDeferredSend?(transferId)
+            #endif
+            guard !self.isPanicSuspended else {
+                self.privateMediaTransferAdmissions.finish(transferId)
                 return
             }
-            // Normalize to short form (SHA256-derived 16-hex) for wire protocol compatibility
-            // This ensures 64-hex Noise keys are converted to the canonical routing format
+            guard self.privateMediaTransferAdmissions.isActive(transferId) else {
+                self.privateMediaTransferAdmissions.finish(transferId)
+                return
+            }
             let targetID = peerID.toShort()
-            guard let recipientData = Data(hexString: targetID.id) else {
-                SecureLogger.error("❌ Invalid recipient peer ID for file transfer: \(peerID)", category: .session)
+            switch self.privateMediaSendPolicy(to: targetID) {
+            case .encrypted:
+                break
+
+            case .awaitingCapabilityProof:
+                // The UI coordinator resolves this state before calling the
+                // transport. Keep the transport guard fail-closed for direct
+                // callers and for a session replacement that races the call.
+                SecureLogger.warning(
+                    "Private media held pending authenticated capability proof for \(targetID.id.prefix(8))…",
+                    category: .security
+                )
+                TransferProgressManager.shared.rejectBeforeStart(
+                    id: transferId,
+                    reason: String(
+                        localized: "content.delivery.reason.private_media_capability_unresolved",
+                        defaultValue: "Could not confirm encrypted media support",
+                        comment: "Failure reason when private-media capability negotiation did not resolve"
+                    )
+                )
+                self.privateMediaTransferAdmissions.finish(transferId)
+                return
+
+            case .legacyRequiresConsent:
+                guard allowLegacyFallback else {
+                    SecureLogger.warning(
+                        "Private media blocked pending explicit legacy-clear consent for \(targetID.id.prefix(8))…",
+                        category: .security
+                    )
+                    TransferProgressManager.shared.rejectBeforeStart(
+                        id: transferId,
+                        reason: String(
+                            localized: "content.delivery.reason.legacy_media_consent_required",
+                            defaultValue: "Confirmation required before sending without end-to-end encryption",
+                            comment: "Failure reason when a legacy private-media send lacks per-send consent"
+                        )
+                    )
+                    self.privateMediaTransferAdmissions.finish(transferId)
+                    return
+                }
+                // Migration path accepted by current Android and used by older
+                // iOS releases: preserve the directed raw file-transfer wire
+                // shape, but require the signature the receive path verifies.
+                // The allow flag belongs to this invocation only and is
+                // consumed here; a retry must obtain fresh user consent.
+                self.sendSignedLegacyPrivateFile(
+                    filePacket,
+                    to: targetID,
+                    transferId: transferId
+                )
+                return
+
+            case .blockedDowngrade:
+                SecureLogger.warning(
+                    "Private media downgrade blocked for \(targetID.id.prefix(8))…",
+                    category: .security
+                )
+                TransferProgressManager.shared.rejectBeforeStart(
+                    id: transferId,
+                    reason: String(
+                        localized: "content.delivery.reason.private_media_downgrade_blocked",
+                        defaultValue: "Encrypted media required; ask this contact to upgrade",
+                        comment: "Failure reason when a peer that previously supported encrypted media appears to downgrade"
+                    )
+                )
+                self.privateMediaTransferAdmissions.finish(transferId)
+                return
+            }
+            if requiresAuthenticatedPrivateMediaReceipts,
+               self.authenticatedPrivateMediaReceiptSessionGeneration(
+                    to: targetID
+               ) == nil {
+                SecureLogger.warning(
+                    "Private media retry blocked without current authenticated receipt support for \(targetID.id.prefix(8))…",
+                    category: .security
+                )
+                TransferProgressManager.shared.rejectBeforeStart(
+                    id: transferId,
+                    reason: String(
+                        localized: "content.delivery.reason.private_media_capability_unresolved",
+                        defaultValue: "Could not confirm encrypted media support",
+                        comment: "Failure reason when private-media capability negotiation did not resolve"
+                    )
+                )
+                self.privateMediaTransferAdmissions.finish(transferId)
+                return
+            }
+            guard let typedPayload = BLENoisePayloadFactory.privateFile(filePacket) else {
+                SecureLogger.error("❌ Failed to encode file packet for private send", category: .session)
+                TransferProgressManager.shared.rejectBeforeStart(
+                    id: transferId,
+                    reason: String(localized: "content.delivery.reason.media_encoding_failed", defaultValue: "Failed to prepare media", comment: "Failure reason when private media cannot be encoded")
+                )
+                self.privateMediaTransferAdmissions.finish(transferId)
+                return
+            }
+            guard self.noiseService.hasEstablishedSession(with: targetID) else {
+                if requiresAuthenticatedPrivateMediaReceipts {
+                    // A retry belongs to one exact authenticated generation.
+                    // Never let it enter the ordinary pending queue where a
+                    // bit-8-only replacement session could later flush it.
+                    TransferProgressManager.shared.rejectBeforeStart(
+                        id: transferId,
+                        reason: String(
+                            localized: "content.delivery.reason.private_media_capability_unresolved",
+                            defaultValue: "Could not confirm encrypted media support",
+                            comment: "Failure reason when private-media capability negotiation did not resolve"
+                        )
+                    )
+                    self.privateMediaTransferAdmissions.finish(transferId)
+                    return
+                }
+                let queued = self.collectionsQueue.sync(flags: .barrier) {
+                    self.privateMediaTransferAdmissions.withActive(transferId) {
+                        self.pendingNoiseSessionQueues.appendTypedPayload(
+                            typedPayload,
+                            transferId: transferId,
+                            for: targetID
+                        )
+                        return true
+                    } ?? false
+                }
+                guard queued else {
+                    self.privateMediaTransferAdmissions.finish(transferId)
+                    return
+                }
+                SecureLogger.debug("📥 Queued private file for \(targetID.id.prefix(8))… pending handshake", category: .session)
+                guard self.privateMediaTransferAdmissions.isActive(transferId) else {
+                    self.collectionsQueue.sync(flags: .barrier) {
+                        _ = self.pendingNoiseSessionQueues.removeTypedPayload(transferId: transferId)
+                    }
+                    self.privateMediaTransferAdmissions.finish(transferId)
+                    return
+                }
+                self.initiateNoiseHandshake(with: targetID)
                 return
             }
 
-            var packet = BitchatPacket(
-                type: MessageType.fileTransfer.rawValue,
-                senderID: self.myPeerIDData,
-                recipientID: recipientData,
-                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                payload: payload,
-                signature: nil,
-                ttl: self.messageTTL,
-                version: 2
-            )
-
-            if let signed = self.noiseService.signPacket(packet) {
-                packet = signed
+            do {
+                guard self.privateMediaTransferAdmissions.isActive(transferId) else {
+                    self.privateMediaTransferAdmissions.finish(transferId)
+                    return
+                }
+                let packet = try self.makeEncryptedNoisePacket(
+                    typedPayload,
+                    to: targetID,
+                    requiresAuthenticatedPrivateMediaReceipts:
+                        requiresAuthenticatedPrivateMediaReceipts
+                )
+                guard self.privateMediaTransferAdmissions.isActive(transferId) else {
+                    self.privateMediaTransferAdmissions.finish(transferId)
+                    return
+                }
+                SecureLogger.debug("📁 Sending encrypted private file to \(targetID.id.prefix(8))… plaintextBytes=\(typedPayload.count)", category: .session)
+                self.broadcastPacket(
+                    packet,
+                    transferId: transferId,
+                    requiresPrivateMediaAdmission: true
+                )
+            } catch {
+                SecureLogger.error("❌ Failed to encrypt private file for \(targetID.id.prefix(8))…: \(error)", category: .security)
+                TransferProgressManager.shared.rejectBeforeStart(
+                    id: transferId,
+                    reason: String(localized: "content.delivery.reason.encryption_failed", comment: "Failure reason shown when a message could not be encrypted for the peer")
+                )
+                self.privateMediaTransferAdmissions.finish(transferId)
             }
-
-            SecureLogger.debug("📁 Sending private file transfer to \(peerID.id.prefix(8))… bytes=\(payload.count)", category: .session)
-            self.broadcastPacket(packet, transferId: transferId)
         }
+    }
+
+    /// Compatibility-only fallback for peers that have not advertised
+    /// encrypted private media. The payload is authenticated but visible to
+    /// relays, matching the pre-migration behavior until those clients upgrade.
+    private func sendSignedLegacyPrivateFile(
+        _ filePacket: BitchatFilePacket,
+        to targetID: PeerID,
+        transferId: String
+    ) {
+        guard privateMediaTransferAdmissions.isActive(transferId) else {
+            privateMediaTransferAdmissions.finish(transferId)
+            return
+        }
+        guard let payload = filePacket.encode(),
+              let recipientData = Data(hexString: targetID.id) else {
+            SecureLogger.error("❌ Failed to encode legacy private file transfer", category: .session)
+            TransferProgressManager.shared.rejectBeforeStart(
+                id: transferId,
+                reason: String(localized: "content.delivery.reason.media_encoding_failed", defaultValue: "Failed to prepare media", comment: "Failure reason when private media cannot be encoded")
+            )
+            privateMediaTransferAdmissions.finish(transferId)
+            return
+        }
+
+        let unsigned = BitchatPacket(
+            type: MessageType.fileTransfer.rawValue,
+            senderID: myPeerIDData,
+            recipientID: recipientData,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: messageTTL,
+            version: 2
+        )
+        guard let signed = noiseService.signPacket(unsigned) else {
+            SecureLogger.error("❌ Failed to sign legacy private file transfer", category: .security)
+            TransferProgressManager.shared.rejectBeforeStart(
+                id: transferId,
+                reason: String(localized: "content.delivery.reason.media_signing_failed", defaultValue: "Failed to authenticate media", comment: "Failure reason when a legacy private-media packet cannot be signed")
+            )
+            privateMediaTransferAdmissions.finish(transferId)
+            return
+        }
+
+        // Signing can be non-trivial; cancellation that won while it ran must
+        // still prevent the clear payload from reaching the broadcast path.
+        guard privateMediaTransferAdmissions.isActive(transferId) else {
+            privateMediaTransferAdmissions.finish(transferId)
+            return
+        }
+
+        SecureLogger.warning(
+            "📁 Sending signed legacy private file to \(targetID.id.prefix(8))…; peer has not advertised E2E media",
+            category: .security
+        )
+        broadcastPacket(
+            signed,
+            transferId: transferId,
+            requiresPrivateMediaAdmission: true
+        )
     }
 
     
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
-        // Create typed payload: [type byte] + [message ID]
-        var payload = Data([NoisePayloadType.readReceipt.rawValue])
-        payload.append(contentsOf: receipt.originalMessageID.utf8)
+        // Hop like sendMessage: callers are often on the main actor, and the
+        // send path sync-waits on bleQueue for link state — the main thread
+        // must never block on bleQueue (see captureBluetoothStatus).
+        if DispatchQueue.getSpecific(key: messageQueueKey) == nil {
+            messageQueue.async { [weak self] in
+                self?.sendReadReceipt(receipt, to: peerID)
+            }
+            return
+        }
+        let payload = BLENoisePayloadFactory.readReceipt(originalMessageID: receipt.originalMessageID)
 
         if noiseService.hasEstablishedSession(with: peerID) {
-            SecureLogger.debug("📤 Sending READ receipt for message \(receipt.originalMessageID) to \(peerID)", category: .session)
+            SecureLogger.debug("📤 Sending READ receipt id=\(receipt.originalMessageID.prefix(8))… to \(peerID.id.prefix(8))…", category: .session)
             do {
-                let encrypted = try noiseService.encrypt(payload, for: peerID)
-                let packet = BitchatPacket(
-                    type: MessageType.noiseEncrypted.rawValue,
-                    senderID: myPeerIDData,
-                    recipientID: Data(hexString: peerID.id),
-                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                    payload: encrypted,
-                    signature: nil,
-                    ttl: messageTTL
-                )
-                broadcastPacket(packet)
+                broadcastPacket(try makeEncryptedNoisePacket(payload, to: peerID))
             } catch {
                 SecureLogger.error("Failed to send read receipt: \(error)")
             }
         } else {
-            // Queue for after handshake and initiate if needed
-            collectionsQueue.async(flags: .barrier) { [weak self] in
-                guard let self = self else { return }
-                self.pendingNoisePayloadsAfterHandshake[peerID, default: []].append(payload)
+            // Queue for after handshake; initiate only while the peer is
+            // around to answer (see sendDeliveryAck — absent senders must
+            // not turn queued acks into handshake floods).
+            collectionsQueue.sync(flags: .barrier) {
+                pendingNoiseSessionQueues.appendTypedPayload(payload, for: peerID)
             }
-            if !noiseService.hasSession(with: peerID) { initiateNoiseHandshake(with: peerID) }
-            SecureLogger.debug("🕒 Queued READ receipt for \(peerID) until handshake completes", category: .session)
+            if !noiseService.hasSession(with: peerID), isPeerReachable(peerID) {
+                initiateNoiseHandshake(with: peerID)
+            }
+            SecureLogger.debug("🕒 Queued READ receipt for \(peerID.id.prefix(8))… until handshake completes", category: .session)
         }
     }
     
-    private enum ConnectionSource {
-        case peripheral(String)
-        case central(String)
-        case unknown
+    private func acceptedIngressContext(
+        for packet: BitchatPacket,
+        claimedSenderID: PeerID,
+        boundPeerID: PeerID?,
+        linkDescription: String
+    ) -> BLEIngressPacketContext? {
+        switch BLEIngressPacketGuard.evaluate(
+            packet: packet,
+            claimedSenderID: claimedSenderID,
+            boundPeerID: boundPeerID,
+            localPeerID: myPeerID,
+            directAnnounceTTL: messageTTL,
+            isValidSyncResponse: { [requestSyncManager] peerID in
+                requestSyncManager.isValidResponse(from: peerID, isRSR: true)
+            }
+        ) {
+        case .success(let context):
+            if packet.isRSR {
+                logValidRSR(from: context.validationPeerID)
+            }
+            return context
+        case .failure(.selfLoopback):
+            logSelfLoopback(packetType: packet.type, linkDescription: linkDescription)
+            return nil
+        case .failure(.directSenderMismatch(let boundPeerID, let claimedSenderID)):
+            SecureLogger.warning("🚫 SECURITY: Sender ID spoofing attempt detected! \(linkDescription) claimed to be \(claimedSenderID.id.prefix(8))… but is bound to \(boundPeerID.id.prefix(8))…", category: .security)
+            return nil
+        case .failure(.invalidRSR(let peerID)):
+            SecureLogger.warning("Invalid or unsolicited RSR packet from \(peerID.id.prefix(8))… - rejecting", category: .security)
+            return nil
+        case .failure(.timestampSkew(let peerID, let skewMs, let maxSkewMs)):
+            SecureLogger.warning("Packet timestamp skewed by \(skewMs)ms (max \(maxSkewMs)ms) from \(peerID.id.prefix(8))…", category: .security)
+            return nil
+        }
     }
 
-    private func validatePacket(_ packet: BitchatPacket, from peerID: PeerID, connectionSource: ConnectionSource = .unknown) -> Bool {
-        let currentTime = UInt64(Date().timeIntervalSince1970 * 1000)
-
-        let isRSR = packet.isRSR
-        var skipTimestampCheck = false
-
-        if isRSR {
-            if requestSyncManager.isValidResponse(from: peerID, isRSR: true) {
-                SecureLogger.debug("Valid RSR packet from \(peerID.id.prefix(8))… - skipping timestamp check", category: .security)
-                skipTimestampCheck = true
-            } else {
-                SecureLogger.warning("Invalid or unsolicited RSR packet from \(peerID.id.prefix(8))… - rejecting", category: .security)
-                return false
+    private func isAcceptedIngressPayload(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
+        switch BLEIngressPacketGuard.validatePayload(
+            packet,
+            from: peerID,
+            isValidSyncResponse: { [requestSyncManager] peerID in
+                requestSyncManager.isValidResponse(from: peerID, isRSR: true)
             }
-        }
-
-        if !skipTimestampCheck {
-            let maxSkew: UInt64 = 120_000
-            let packetTime = packet.timestamp
-            let skew = (packetTime > currentTime) ? (packetTime - currentTime) : (currentTime - packetTime)
-
-            if skew > maxSkew {
-                SecureLogger.warning("Packet timestamp skewed by \(skew)ms (max \(maxSkew)ms) from \(peerID.id.prefix(8))…", category: .security)
-                return false
+        ) {
+        case .success:
+            if packet.isRSR {
+                logValidRSR(from: peerID)
             }
+            return true
+        case .failure(.invalidRSR(let peerID)):
+            SecureLogger.warning("Invalid or unsolicited RSR packet from \(peerID.id.prefix(8))… - rejecting", category: .security)
+            return false
+        case .failure(.timestampSkew(let peerID, let skewMs, let maxSkewMs)):
+            SecureLogger.warning("Packet timestamp skewed by \(skewMs)ms (max \(maxSkewMs)ms) from \(peerID.id.prefix(8))…", category: .security)
+            return false
+        case .failure(.selfLoopback), .failure(.directSenderMismatch):
+            return false
         }
+    }
 
-        return true
+    private func logValidRSR(from peerID: PeerID) {
+        guard logRateLimiter.shouldLog(key: "valid-rsr:\(peerID.id)") else { return }
+        SecureLogger.debug("Valid RSR packet from \(peerID.id.prefix(8))… - skipping timestamp check", category: .security)
+    }
+
+    private func logSelfLoopback(packetType: UInt8, linkDescription: String) {
+        guard logRateLimiter.shouldLog(
+            key: "self-loopback:\(packetType)",
+            minimumInterval: 30
+        ) else { return }
+        SecureLogger.debug("↩️ Dropping BLE self-loopback packet type \(packetType) from \(linkDescription)", category: .session)
+    }
+
+    private func recordIngressIfNew(_ packet: BitchatPacket, link: BLEIngressLinkID, peerID: PeerID) -> Bool {
+        return collectionsQueue.sync(flags: .barrier) {
+            ingressLinks.recordIfNew(
+                packet,
+                link: link,
+                peerID: peerID,
+                lifetime: TransportConfig.bleIngressRecordLifetimeSeconds
+            )
+        }
     }
 
     // MARK: - Packet Broadcasting
     
-    private func broadcastPacket(_ packet: BitchatPacket, transferId: String? = nil) {
+    private func broadcastPacket(
+        _ packet: BitchatPacket,
+        transferId: String? = nil,
+        requiresPrivateMediaAdmission: Bool = false
+    ) {
+        guard !isPanicSuspended else {
+            if requiresPrivateMediaAdmission, let transferId {
+                privateMediaTransferAdmissions.finish(transferId)
+            }
+            return
+        }
+        if requiresPrivateMediaAdmission {
+            guard let transferId,
+                  privateMediaTransferAdmissions.isActive(transferId) else {
+                if let transferId {
+                    privateMediaTransferAdmissions.finish(transferId)
+                }
+                return
+            }
+        }
         // Apply route if recipient exists (centralized route application)
         let packetToSend: BitchatPacket
         if let recipientPeerID = PeerID(hexData: packet.recipientID) {
@@ -891,11 +2156,113 @@ final class BLEService: NSObject {
         } else {
             packetToSend = packet
         }
-        
+
         // Encode once using a small per-type padding policy, then delegate by type
-        let padForBLE = padPolicy(for: packetToSend.type)
+        let padForBLE = BLEOutboundPacketPolicy.padsBLEFrame(for: packetToSend.type)
+
+        // The 256-fragment ceiling exists to protect *current Android*
+        // receivers, which only ever receive private media over the directed
+        // raw-file migration fallback (they do not implement the encrypted
+        // 0x20 path). Encrypted private media (`noiseEncrypted`) is sent only to
+        // peers that advertised the `.privateMedia` capability — modern clients
+        // that assemble up to the full receiver ceiling (see
+        // `BLEFragmentAssemblyBuffer`'s 10,000-fragment guard) — so forcing them
+        // down to Android's 256 cap would needlessly reject iOS→iOS photos in
+        // the ~120–512 KiB range that work today. Restrict the low cap to the
+        // migration fallback (directed `fileTransfer`); public media is
+        // unaffected. Run the same planner the scheduler will use, after route
+        // application, and reject before reserving a transfer slot or writing
+        // any fragment.
+        // TODO(#1434): negotiate an explicit per-peer fragment limit so a future
+        // Android client that adopts the encrypted 0x20 path but still caps its
+        // reassembler can advertise its own ceiling instead of relying on the
+        // capability/type proxy above.
+        if let transferId,
+           let recipientPeerID = PeerID(hexData: packetToSend.recipientID),
+           packetToSend.type == MessageType.fileTransfer.rawValue {
+            let compatibilityRequest = BLEOutboundFragmentTransferRequest(
+                packet: packetToSend,
+                pad: padForBLE,
+                maxChunk: nil,
+                directedPeer: recipientPeerID,
+                transferId: transferId
+            )
+            guard let plan = BLEOutboundFragmentPlanner.makePlan(
+                for: compatibilityRequest,
+                defaultChunkSize: defaultFragmentSize,
+                bleMaxMTU: bleMaxMTU
+            ), BLEOutboundFragmentPlanner.isPrivateMediaV1Compatible(plan) else {
+                SecureLogger.warning(
+                    "Private media rejected: exceeds cross-platform 256-fragment limit",
+                    category: .security
+                )
+                TransferProgressManager.shared.rejectBeforeStart(
+                    id: transferId,
+                    reason: String(
+                        localized: "content.delivery.reason.private_media_too_many_fragments",
+                        defaultValue: "File is too large for this contact's client (more than 256 mesh fragments)",
+                        comment: "Failure reason when private media exceeds the Android-compatible fragment limit"
+                    )
+                )
+                if requiresPrivateMediaAdmission {
+                    privateMediaTransferAdmissions.finish(transferId)
+                }
+                return
+            }
+        }
+
+        // Route planning and fragment preflight can take enough time for a
+        // user cancellation to win. Recheck before exposing even the test tap,
+        // then check atomically with scheduler admission below.
+        if requiresPrivateMediaAdmission {
+            guard let transferId,
+                  privateMediaTransferAdmissions.isActive(transferId) else {
+                if let transferId {
+                    privateMediaTransferAdmissions.finish(transferId)
+                }
+                return
+            }
+        }
+
+        #if DEBUG
+        _test_onOutboundPacket?(packetToSend)
+        #endif
+
         if packetToSend.type == MessageType.fileTransfer.rawValue {
-            sendFragmentedPacket(packetToSend, pad: padForBLE, maxChunk: nil, directedOnlyPeer: nil, transferId: transferId)
+            sendFragmentedPacket(
+                packetToSend,
+                pad: padForBLE,
+                maxChunk: nil,
+                directedOnlyPeer: nil,
+                transferId: transferId,
+                requiresPrivateMediaAdmission: requiresPrivateMediaAdmission
+            )
+            return
+        }
+        // App-initiated private media is already one opaque Noise ciphertext.
+        // Always fragment that outer packet so the existing transfer scheduler
+        // retains progress/cancel behavior without exposing the file TLVs.
+        if packetToSend.type == MessageType.noiseEncrypted.rawValue,
+           let transferId,
+           let recipientPeerID = PeerID(hexData: packetToSend.recipientID) {
+            sendFragmentedPacket(
+                packetToSend,
+                pad: padForBLE,
+                maxChunk: nil,
+                directedOnlyPeer: recipientPeerID,
+                transferId: transferId,
+                requiresPrivateMediaAdmission: requiresPrivateMediaAdmission
+            )
+            return
+        }
+        if requiresPrivateMediaAdmission {
+            if let transferId {
+                privateMediaTransferAdmissions.finish(transferId)
+            }
+            SecureLogger.error(
+                "Private media admission reached an unsupported non-directed packet shape",
+                category: .security
+            )
             return
         }
         guard let data = packetToSend.toBinaryData(padding: padForBLE) else {
@@ -909,52 +2276,31 @@ final class BLEService: NSObject {
         sendGenericBroadcast(packetToSend, data: data, pad: padForBLE)
     }
 
-    // MARK: - Broadcast helpers (single responsibility)
-    private func padPolicy(for type: UInt8) -> Bool {
-        switch MessageType(rawValue: type) {
-        case .noiseEncrypted, .noiseHandshake:
-            return true
-        case .none, .announce, .message, .leave, .requestSync, .fragment, .fileTransfer:
-            return false
-        }
-    }
-
     private func sendEncrypted(_ packet: BitchatPacket, data: Data, pad: Bool) {
         guard let recipientPeerID = PeerID(hexData: packet.recipientID) else { return }
         var sentEncrypted = false
 
-        let outboundPriority = priority(for: packet, data: data)
+        let outboundPriority = BLEOutboundPacketPolicy.priority(for: packet, data: data)
 
         // Per-link limits for the specific peer
-        var peripheralMaxLen: Int?
-        if let perUUID = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peerToPeripheralUUID[recipientPeerID] : bleQueue.sync(execute: { peerToPeripheralUUID[recipientPeerID] }) {
-            if let state = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peripherals[perUUID] : bleQueue.sync(execute: { peripherals[perUUID] }) {
-                peripheralMaxLen = state.peripheral.maximumWriteValueLength(for: .withoutResponse)
-            }
-        }
-        var centralMaxLen: Int?
-        do {
-            let (centrals, mapping) = snapshotSubscribedCentrals()
-            if let central = centrals.first(where: { mapping[$0.identifier.uuidString] == recipientPeerID }) {
-                centralMaxLen = central.maximumUpdateValueLength
-            }
-        }
-        if let pm = peripheralMaxLen, data.count > pm {
-            let overhead = 13 + 8 + 8 + 13
-            let chunk = max(64, pm - overhead)
+        let directPeripheralState = snapshotDirectPeripheralState(for: recipientPeerID)
+        let recipientCentral = snapshotSubscribedCentrals().central(for: recipientPeerID)
+
+        if let peripheralMaxLen = directPeripheralState?.peripheral.maximumWriteValueLength(for: .withoutResponse),
+           data.count > peripheralMaxLen {
+            let chunk = BLEOutboundPacketPolicy.fragmentChunkSize(forLinkLimit: peripheralMaxLen)
             sendFragmentedPacket(packet, pad: pad, maxChunk: chunk, directedOnlyPeer: recipientPeerID)
             return
         }
-        if let cm = centralMaxLen, data.count > cm {
-            let overhead = 13 + 8 + 8 + 13
-            let chunk = max(64, cm - overhead)
+        if let centralMaxLen = recipientCentral?.maximumUpdateValueLength,
+           data.count > centralMaxLen {
+            let chunk = BLEOutboundPacketPolicy.fragmentChunkSize(forLinkLimit: centralMaxLen)
             sendFragmentedPacket(packet, pad: pad, maxChunk: chunk, directedOnlyPeer: recipientPeerID)
             return
         }
 
         // Direct write via peripheral link
-        if let peripheralUUID = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peerToPeripheralUUID[recipientPeerID] : bleQueue.sync(execute: { peerToPeripheralUUID[recipientPeerID] }),
-           let state = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peripherals[peripheralUUID] : bleQueue.sync(execute: { peripherals[peripheralUUID] }),
+        if let state = directPeripheralState,
            state.isConnected,
            let characteristic = state.characteristic {
             writeOrEnqueue(data, to: state.peripheral, characteristic: characteristic, priority: outboundPriority)
@@ -962,12 +2308,12 @@ final class BLEService: NSObject {
         }
 
         // Notify via central link (dual-role)
-        if let characteristic = characteristic, !sentEncrypted {
-            let (centrals, mapping) = snapshotSubscribedCentrals()
-            for central in centrals where mapping[central.identifier.uuidString] == recipientPeerID {
-                let success = peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: [central]) ?? false
-                if success { sentEncrypted = true; break }
-                enqueuePendingNotification(data: data, centrals: [central], context: "encrypted")
+        if let characteristic = characteristic, !sentEncrypted, let recipientCentral {
+            let success = peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: [recipientCentral]) ?? false
+            if success {
+                sentEncrypted = true
+            } else {
+                enqueuePendingNotification(data: data, centrals: [recipientCentral], context: "encrypted")
             }
         }
 
@@ -982,11 +2328,18 @@ final class BLEService: NSObject {
     }
 
     private func enqueuePendingNotification(data: Data, centrals: [CBCentral]?, context: String, attempt: Int = 0) {
+        guard !isPanicSuspended else { return }
         collectionsQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
-            if self.pendingNotifications.count < TransportConfig.blePendingNotificationsCapCount {
-                self.pendingNotifications.append((data: data, centrals: centrals))
-                SecureLogger.debug("📋 Queued \(context) packet for retry (pending=\(self.pendingNotifications.count))", category: .session)
+            guard !self.isPanicSuspended else { return }
+            let result = self.pendingNotifications.enqueue(
+                data: data,
+                targets: centrals,
+                capCount: TransportConfig.blePendingNotificationsCapCount
+            )
+
+            if case let .enqueued(count) = result {
+                self.logBackpressureSampled("📋 Queued \(context) packet for retry (pending=\(count))")
                 return
             }
 
@@ -1003,286 +2356,467 @@ final class BLEService: NSObject {
         }
     }
 
-    private func sendOnAllLinks(packet: BitchatPacket, data: Data, pad: Bool, directedOnlyPeer: PeerID?) {
-        // Determine last-hop link for this message to avoid echoing back
-        let messageID = makeMessageID(for: packet)
-        let ingressLink: LinkID? = collectionsQueue.sync { ingressByMessageID[messageID]?.link }
-        let directedPeerHint: PeerID? = {
-            if let explicit = directedOnlyPeer { return explicit }
-            if let recipient = PeerID(str: packet.recipientID?.hexEncodedString()), !recipient.isEmpty {
-                return recipient
+    /// Synchronously admits a notification to the link-specific retry queue.
+    /// Destructive courier handoff uses this result as its commit point, so a
+    /// full process-local queue must be reported as rejection, not success.
+    private func enqueuePendingNotificationIfAccepted(
+        data: Data,
+        centrals: [CBCentral],
+        context: String
+    ) -> Bool {
+        let result = collectionsQueue.sync(flags: .barrier) {
+            pendingNotifications.enqueue(
+                data: data,
+                targets: centrals,
+                capCount: TransportConfig.blePendingNotificationsCapCount
+            )
+        }
+        switch result {
+        case let .enqueued(count):
+            SecureLogger.debug("📋 Queued \(context) packet for retry (pending=\(count))", category: .session)
+            return true
+        case let .full(count):
+            SecureLogger.warning("⚠️ Rejecting \(context) packet: notification queue full (pending=\(count))", category: .session)
+            return false
+        }
+    }
+
+    /// Serializes the final authenticated-link check with CoreBluetooth's
+    /// notification admission on `bleQueue`, closing the rebind/disconnect
+    /// race between fanout planning and the actual handoff.
+    private func notifyOrEnqueueIfAccepted(
+        data: Data,
+        centrals: [CBCentral],
+        characteristic: CBMutableCharacteristic,
+        context: String,
+        requiredAuthenticatedPeer: PeerID?
+    ) -> Bool {
+        let accept = { [self] in
+            let eligible: [CBCentral]
+            if let peerID = requiredAuthenticatedPeer {
+                eligible = centrals.filter { central in
+                    let link = BLEIngressLinkID.central(central.identifier.uuidString)
+                    return noiseAuthenticatedLinkOwners[link] == peerID
+                        && linkStateStore.peerID(forCentralUUID: central.identifier.uuidString) == peerID
+                }
+            } else {
+                eligible = centrals
             }
-            return nil
-        }()
-        let outboundPriority = priority(for: packet, data: data)
+            guard !eligible.isEmpty else { return false }
+            if peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: eligible) == true {
+                return true
+            }
+            return enqueuePendingNotificationIfAccepted(
+                data: data,
+                centrals: eligible,
+                context: context
+            )
+        }
+
+        if DispatchQueue.getSpecific(key: bleQueueKey) != nil {
+            return accept()
+        }
+        return bleQueue.sync(execute: accept)
+    }
+
+    /// Returns true only when the packet was accepted by at least one current
+    /// physical link (including its link-specific backpressure queue). A
+    /// process-local directed spool is deliberately not success: callers
+    /// that own a durable upstream copy must keep it retryable.
+    @discardableResult
+    private func sendOnAllLinks(
+        packet: BitchatPacket,
+        data: Data,
+        pad: Bool,
+        directedOnlyPeer: PeerID?,
+        requireDirectPeerLink: Bool = false,
+        requireNoiseAuthenticatedPeerLink: Bool = false
+    ) -> Bool {
+        guard !isPanicSuspended else { return false }
+        let ingressRecord = collectionsQueue.sync { ingressLinks.record(for: packet) }
+        var excludedPeerLinks = links(to: ingressRecord?.peerID)
+        if requireNoiseAuthenticatedPeerLink {
+            guard let directedOnlyPeer else { return false }
+            let boundLinks = links(to: directedOnlyPeer)
+            let authenticatedLinks = currentNoiseAuthenticatedLinks(to: directedOnlyPeer)
+            guard !authenticatedLinks.isEmpty else { return false }
+            excludedPeerLinks.formUnion(boundLinks.subtracting(authenticatedLinks))
+        }
+        let outboundPriority = BLEOutboundPacketPolicy.priority(for: packet, data: data)
 
         let states = snapshotPeripheralStates()
-        var minCentralWriteLen: Int?
-        for s in states where s.isConnected {
-            let m = s.peripheral.maximumWriteValueLength(for: .withoutResponse)
-            minCentralWriteLen = minCentralWriteLen.map { min($0, m) } ?? m
-        }
-        var snapshotCentrals: [CBCentral] = []
-        if let _ = characteristic {
-            let (centrals, _) = snapshotSubscribedCentrals()
-            snapshotCentrals = centrals
-        }
-        var minNotifyLen: Int?
-        if !snapshotCentrals.isEmpty {
-            minNotifyLen = snapshotCentrals.map { $0.maximumUpdateValueLength }.min()
-        }
-        // Avoid re-fragmenting fragment packets
-        if packet.type != MessageType.fragment.rawValue,
-           let minLen = [minCentralWriteLen, minNotifyLen].compactMap({ $0 }).min(),
-           data.count > minLen {
-            let overhead = 13 + 8 + 8 + 13
-            let chunk = max(64, minLen - overhead)
-            sendFragmentedPacket(packet, pad: pad, maxChunk: chunk, directedOnlyPeer: directedOnlyPeer)
-            return
-        }
-        // Build link lists and apply K-of-N fanout for broadcasts; always exclude ingress link
-        let connectedPeripheralIDs: [String] = states.filter { $0.isConnected }.map { $0.peripheral.identifier.uuidString }
-        let subscribedCentrals: [CBCentral]
-        var centralIDs: [String] = []
-        if let _ = characteristic {
-            let (centrals, _) = snapshotSubscribedCentrals()
-            subscribedCentrals = centrals
-            centralIDs = centrals.map { $0.identifier.uuidString }
-        } else {
-            subscribedCentrals = []
-        }
+        // A link without a discovered characteristic cannot be written to
+        // (the write loop below skips it); offering it to the planner only
+        // wastes fanout slots — and a peer's single collapsed copy would be
+        // silently dropped if its bound link is still mid-rediscovery.
+        let connectedStates = states.filter { $0.isConnected && $0.characteristic != nil }
+        let centralSnapshot = snapshotSubscribedCentrals()
+        let subscribedCentrals = characteristic == nil ? [] : centralSnapshot.centrals
+        let connectedPeripheralIDs = connectedStates.map { $0.peripheral.identifier.uuidString }
+        let centralIDs = subscribedCentrals.map { $0.identifier.uuidString }
+        let peripheralPeerBindings = Dictionary(uniqueKeysWithValues: connectedStates.compactMap { state in
+            state.peerID.map { (state.peripheral.identifier.uuidString, $0) }
+        })
+        let plan = BLEOutboundLinkPlanner.plan(
+            packet: packet,
+            dataCount: data.count,
+            peripheralIDs: connectedPeripheralIDs,
+            peripheralWriteLimits: connectedStates.map { $0.peripheral.maximumWriteValueLength(for: .withoutResponse) },
+            centralIDs: centralIDs,
+            centralNotifyLimits: subscribedCentrals.map { $0.maximumUpdateValueLength },
+            ingressRecord: ingressRecord,
+            excludedLinks: excludedPeerLinks,
+            peripheralPeerBindings: peripheralPeerBindings,
+            centralPeerBindings: centralSnapshot.peerIDsByCentralUUID,
+            // Perf note: this is a third bleQueue hop per send; if send-path
+            // profiling ever flags it, fold it into snapshotPeripheralStates
+            // as a combined snapshot.
+            preferredPeripheralPerPeer: readLinkState { $0.preferredPeripheralBindings },
+            directAnnounceTTL: messageTTL,
+            directedOnlyPeer: directedOnlyPeer,
+            requireDirectPeerLink: requireDirectPeerLink || requireNoiseAuthenticatedPeerLink
+        )
 
-        // Exclude ingress link
-        var allowedPeripheralIDs = connectedPeripheralIDs
-        var allowedCentralIDs = centralIDs
-        if let ingress = ingressLink {
-            switch ingress {
-            case .peripheral(let id):
-                allowedPeripheralIDs.removeAll { $0 == id }
-            case .central(let id):
-                allowedCentralIDs.removeAll { $0 == id }
+        if let chunk = plan.fragmentChunkSize {
+            guard !plan.selectedLinks.peripheralIDs.isEmpty || !plan.selectedLinks.centralIDs.isEmpty else {
+                return false
             }
-        }
-
-        // For broadcast (no directed peer) and non-fragment, choose a subset deterministically
-        // Special-case control/presence messages: do NOT subset to maximize immediate coverage
-        var selectedPeripheralIDs = Set(allowedPeripheralIDs)
-        var selectedCentralIDs = Set(allowedCentralIDs)
-        if directedPeerHint == nil
-            && packet.type != MessageType.fragment.rawValue
-            && packet.type != MessageType.announce.rawValue
-            && packet.type != MessageType.requestSync.rawValue {
-            let kp = subsetSizeForFanout(allowedPeripheralIDs.count)
-            let kc = subsetSizeForFanout(allowedCentralIDs.count)
-            selectedPeripheralIDs = selectDeterministicSubset(ids: allowedPeripheralIDs, k: kp, seed: messageID)
-            selectedCentralIDs = selectDeterministicSubset(ids: allowedCentralIDs, k: kc, seed: messageID)
+            return sendFragmentedPacket(
+                packet,
+                pad: pad,
+                maxChunk: chunk,
+                directedOnlyPeer: directedOnlyPeer,
+                requireDirectPeerLink: requireDirectPeerLink || requireNoiseAuthenticatedPeerLink,
+                requireNoiseAuthenticatedPeerLink: requireNoiseAuthenticatedPeerLink
+            )
         }
 
         // If directed and we currently have no links to forward on, spool for a short window
-        if let only = directedPeerHint,
-           selectedPeripheralIDs.isEmpty && selectedCentralIDs.isEmpty,
-           (packet.type == MessageType.noiseEncrypted.rawValue || packet.type == MessageType.noiseHandshake.rawValue) {
+        if let only = plan.directedPeerHint,
+           plan.shouldSpoolDirectedPacket {
             spoolDirectedPacket(packet, recipientPeerID: only)
         }
 
+        var acceptedByPhysicalLink = false
+
         // Writes to selected connected peripherals
-        for s in states where s.isConnected {
+        for s in connectedStates {
             let pid = s.peripheral.identifier.uuidString
-            guard selectedPeripheralIDs.contains(pid) else { continue }
+            guard plan.selectedLinks.peripheralIDs.contains(pid) else { continue }
             if let ch = s.characteristic {
-                writeOrEnqueue(data, to: s.peripheral, characteristic: ch, priority: outboundPriority)
+                if requireDirectPeerLink || requireNoiseAuthenticatedPeerLink {
+                    acceptedByPhysicalLink = writeOrEnqueueIfAccepted(
+                        data,
+                        to: s.peripheral,
+                        characteristic: ch,
+                        priority: outboundPriority,
+                        requiredAuthenticatedPeer: requireNoiseAuthenticatedPeerLink ? directedOnlyPeer : nil
+                    ) || acceptedByPhysicalLink
+                } else {
+                    writeOrEnqueue(data, to: s.peripheral, characteristic: ch, priority: outboundPriority)
+                }
             }
         }
         // Notify selected subscribed centrals
         if let ch = characteristic {
-            let targets = subscribedCentrals.filter { selectedCentralIDs.contains($0.identifier.uuidString) }
+            let targets = subscribedCentrals.filter { plan.selectedLinks.centralIDs.contains($0.identifier.uuidString) }
             if !targets.isEmpty {
-                let success = peripheralManager?.updateValue(data, for: ch, onSubscribedCentrals: targets) ?? false
-                if !success {
-                    // Notification queue full - queue for retry to prevent silent packet loss
-                    // This is critical for fragment delivery reliability
-                    let context = packet.type == MessageType.fragment.rawValue ? "fragment" : "broadcast"
-                    enqueuePendingNotification(data: data, centrals: targets, context: context)
+                if requireDirectPeerLink || requireNoiseAuthenticatedPeerLink {
+                    acceptedByPhysicalLink = notifyOrEnqueueIfAccepted(
+                        data: data,
+                        centrals: targets,
+                        characteristic: ch,
+                        context: "directed",
+                        requiredAuthenticatedPeer: requireNoiseAuthenticatedPeerLink ? directedOnlyPeer : nil
+                    ) || acceptedByPhysicalLink
+                } else {
+                    let success = peripheralManager?.updateValue(data, for: ch, onSubscribedCentrals: targets) ?? false
+                    if !success {
+                        // Notification queue full - queue for retry to prevent silent packet loss
+                        // This is critical for fragment delivery reliability
+                        let context = packet.type == MessageType.fragment.rawValue ? "fragment" : "broadcast"
+                        enqueuePendingNotification(data: data, centrals: targets, context: context)
+                    }
                 }
             }
         }
+        if requireDirectPeerLink || requireNoiseAuthenticatedPeerLink { return acceptedByPhysicalLink }
+        return !plan.selectedLinks.peripheralIDs.isEmpty || !plan.selectedLinks.centralIDs.isEmpty
     }
 
     // Directed send helper (unicast to a specific peerID) without altering packet contents
-    private func sendPacketDirected(_ packet: BitchatPacket, to peerID: PeerID) {
-        guard let data = packet.toBinaryData(padding: false) else { return }
-        sendOnAllLinks(packet: packet, data: data, pad: false, directedOnlyPeer: peerID)
+    @discardableResult
+    private func sendPacketDirected(
+        _ packet: BitchatPacket,
+        to peerID: PeerID,
+        requireDirectPeerLink: Bool = false,
+        requireNoiseAuthenticatedPeerLink: Bool = false
+    ) -> Bool {
+        #if DEBUG
+        _test_onOutboundPacket?(packet)
+        #endif
+        guard let data = packet.toBinaryData(padding: false) else { return false }
+        return sendOnAllLinks(
+            packet: packet,
+            data: data,
+            pad: false,
+            directedOnlyPeer: peerID,
+            requireDirectPeerLink: requireDirectPeerLink,
+            requireNoiseAuthenticatedPeerLink: requireNoiseAuthenticatedPeerLink
+        )
     }
 
     // MARK: - Directed store-and-forward
     private func spoolDirectedPacket(_ packet: BitchatPacket, recipientPeerID: PeerID) {
-        let msgID = makeMessageID(for: packet)
+        let msgID = BLEOutboundPacketPolicy.messageID(for: packet)
         collectionsQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
-            var byMsg = self.pendingDirectedRelays[recipientPeerID] ?? [:]
-            if byMsg[msgID] == nil {
-                byMsg[msgID] = (packet: packet, enqueuedAt: Date())
-                self.pendingDirectedRelays[recipientPeerID] = byMsg
+            if self.pendingDirectedRelays.enqueue(
+                packet: packet,
+                recipient: recipientPeerID,
+                messageID: msgID,
+                enqueuedAt: Date()
+            ) {
                 SecureLogger.debug("🧳 Spooling directed packet for \(recipientPeerID) mid=\(msgID.prefix(8))…", category: .session)
             }
         }
     }
 
     private func flushDirectedSpool() {
+        guard !isPanicSuspended else { return }
         // Move items out and attempt broadcast; if still no links, they'll be re-spooled
-        let toSend: [(String, BitchatPacket)] = collectionsQueue.sync(flags: .barrier) {
-            var out: [(String, BitchatPacket)] = []
-            let now = Date()
-            for (recipient, dict) in pendingDirectedRelays {
-                for (_, entry) in dict {
-                    if now.timeIntervalSince(entry.enqueuedAt) <= TransportConfig.bleDirectedSpoolWindowSeconds {
-                        out.append((recipient.id, entry.packet))
-                    }
-                }
-                // Clear recipient bucket; items will be re-spooled if still no links
-                pendingDirectedRelays.removeValue(forKey: recipient)
-            }
-            return out
+        let toSend = collectionsQueue.sync(flags: .barrier) {
+            pendingDirectedRelays.drainUnexpired(
+                now: Date(),
+                window: TransportConfig.bleDirectedSpoolWindowSeconds
+            )
         }
         guard !toSend.isEmpty else { return }
-        for (_, packet) in toSend {
-            messageQueue.async { [weak self] in self?.broadcastPacket(packet) }
+        for entry in toSend {
+            messageQueue.async { [weak self] in self?.broadcastPacket(entry.packet) }
         }
     }
 
-    private func handleFileTransfer(_ packet: BitchatPacket, from peerID: PeerID) {
-        if peerID == myPeerID && packet.ttl != 0 { return }
+    private func signedSenderDisplayName(for packet: BitchatPacket, from peerID: PeerID) -> String? {
+        guard let signature = packet.signature,
+              let packetData = packet.toBinaryDataForSigning() else {
+            return nil
+        }
 
-        var accepted = false
-        var senderNickname = ""
-
-        let peersSnapshot = collectionsQueue.sync { peers }
-
-        if peerID == myPeerID {
-            accepted = true
-            senderNickname = myNickname
-        } else if let info = peersSnapshot[peerID], info.isVerifiedNickname {
-            accepted = true
-            senderNickname = info.nickname
-            let hasCollision = peersSnapshot.values.contains { $0.isConnected && $0.nickname == info.nickname && $0.peerID != peerID } || (myNickname == info.nickname)
-            if hasCollision {
-                senderNickname += "#" + String(peerID.id.prefix(4))
+        let candidates = identityManager.getCryptoIdentitiesByPeerIDPrefix(peerID)
+        for candidate in candidates {
+            guard let signingKey = candidate.signingPublicKey,
+                  noiseService.verifySignature(signature, for: packetData, publicKey: signingKey) else {
+                continue
             }
-        } else if let info = peersSnapshot[peerID], info.isConnected {
-            accepted = true
-            senderNickname = info.nickname.isEmpty ? "anon" + String(peerID.id.prefix(4)) : info.nickname
-            let hasCollision = peersSnapshot.values.contains { $0.isConnected && $0.nickname == info.nickname && $0.peerID != peerID } || (myNickname == info.nickname)
-            if hasCollision {
-                senderNickname += "#" + String(peerID.id.prefix(4))
+
+            if let social = identityManager.getSocialIdentity(for: candidate.fingerprint) {
+                return social.localPetname ?? social.claimedNickname
             }
-        } else if let signature = packet.signature, let packetData = packet.toBinaryDataForSigning() {
-            let candidates = identityManager.getCryptoIdentitiesByPeerIDPrefix(peerID)
-            for candidate in candidates {
-                if let signingKey = candidate.signingPublicKey,
-                   noiseService.verifySignature(signature, for: packetData, publicKey: signingKey) {
-                    accepted = true
-                    if let social = identityManager.getSocialIdentity(for: candidate.fingerprint) {
-                        senderNickname = social.localPetname ?? social.claimedNickname
-                    } else {
-                        senderNickname = "anon" + String(peerID.id.prefix(4))
+
+            return BLEPeerSenderDisplayName.anonymousNickname(for: peerID)
+        }
+
+        return nil
+    }
+
+    // MARK: - Archived public messages ("heard here earlier")
+
+    func purgeArchivedPublicMessages(from peerID: PeerID) {
+        gossipSyncManager?.removePublicMessages(from: peerID)
+    }
+
+    /// Clearing the mesh timeline erases the archive behind it, so the cleared
+    /// history is gone from disk rather than merely hidden from the timeline.
+    func purgeAllArchivedPublicMessages() {
+        gossipSyncManager?.removeAllPublicMessages()
+    }
+
+    func collectArchivedPublicMessages(completion: @escaping @MainActor ([ArchivedPublicMessage]) -> Void) {
+        guard let generation = capturePanicLifecycleGeneration() else {
+            return
+        }
+        guard let sync = gossipSyncManager else {
+            notifyUI { [weak self] in
+                guard let self,
+                      self.isCurrentPanicLifecycleGeneration(generation) else {
+                    return
+                }
+                completion([])
+            }
+            return
+        }
+        sync.collectPublicMessagePackets { [weak self] packets in
+            guard let self,
+                  self.isCurrentPanicLifecycleGeneration(generation) else {
+                return
+            }
+            // Signature verification and registry lookups run on messageQueue
+            // like the live receive path.
+            self.messageQueue.async {
+                guard self.isCurrentPanicLifecycleGeneration(generation) else {
+                    return
+                }
+                let decoded = packets
+                    .compactMap { self.decodeArchivedPublicMessage($0) }
+                    .sorted { $0.timestamp < $1.timestamp }
+                self.notifyUI { [weak self] in
+                    guard let self,
+                          self.isCurrentPanicLifecycleGeneration(generation) else {
+                        return
                     }
-                    break
+                    completion(decoded)
                 }
             }
         }
+    }
 
-        guard accepted else {
-            SecureLogger.warning("🚫 Dropping file transfer from unverified or unknown peer \(peerID.id.prefix(8))…", category: .security)
-            return
-        }
-
-        // Skip directed packets that are not intended for us
-        if let recipient = packet.recipientID {
-            if PeerID(hexData: recipient) != myPeerID && !recipient.allSatisfy({ $0 == 0xFF }) {
-                return
-            }
-        }
-
-        if let recipient = packet.recipientID,
-           recipient.allSatisfy({ $0 == 0xFF }) {
-            gossipSyncManager?.onPublicPacketSeen(packet)
-        } else if packet.recipientID == nil {
-            gossipSyncManager?.onPublicPacketSeen(packet)
-        }
-
-        guard let filePacket = BitchatFilePacket.decode(packet.payload) else {
-            SecureLogger.error("❌ Failed to decode file transfer payload", category: .session)
-            return
-        }
-
-        guard FileTransferLimits.isValidPayload(filePacket.content.count) else {
-            SecureLogger.warning("🚫 Dropping file transfer exceeding size cap (\(filePacket.content.count) bytes)", category: .security)
-            return
-        }
-
-        guard let mime = MimeType(filePacket.mimeType), mime.isAllowed else {
-            SecureLogger.warning("🚫 MIME REJECT: '\(filePacket.mimeType ?? "<empty>")' not supported. Size=\(filePacket.content.count)b from \(peerID.id.prefix(8))...", category: .security)
-            return
-        }
-
-        // Validate content matches declared MIME type (magic byte check)
-        guard mime.matches(data: filePacket.content) else {
-            let prefix = filePacket.content.prefix(20).map { String(format: "%02x", $0) }.joined(separator: " ")
-            SecureLogger.warning("🚫 MAGIC REJECT: MIME='\(mime)' size=\(filePacket.content.count)b prefix=[\(prefix)] from \(peerID.id.prefix(8))...", category: .security)
-            return
-        }
-
-        // BCH-01-002: Enforce storage quota before saving
-        enforceIncomingFilesQuota(reservingBytes: filePacket.content.count)
-
-        guard let destination = saveIncomingFile(
-            data: filePacket.content,
-            preferredName: filePacket.fileName,
-            subdirectory: "\(mime.category.mediaDir)/incoming",
-            fallbackExtension: mime.defaultExtension,
-            defaultPrefix: mime.category.rawValue
-        ) else {
-            return
-        }
-
-        let isPrivateMessage = PeerID(hexData: packet.recipientID) == myPeerID
-
-        if isPrivateMessage {
-            updatePeerLastSeen(peerID)
-        }
-
-        let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
-        let message = BitchatMessage(
-            sender: senderNickname,
-            content: "\(mime.category.messagePrefix)\(destination.lastPathComponent)",
-            timestamp: ts,
-            isRelay: false,
-            originalSender: nil,
-            isPrivate: isPrivateMessage,
-            recipientNickname: nil,
-            senderPeerID: peerID
+    private func decodeArchivedPublicMessage(_ packet: BitchatPacket) -> ArchivedPublicMessage? {
+        guard packet.type == MessageType.message.rawValue,
+              let content = String(data: packet.payload, encoding: .utf8)?.trimmedOrNilIfEmpty
+        else { return nil }
+        let senderPeerID = PeerID(hexData: packet.senderID)
+        let peers = collectionsQueue.sync { peerRegistry.snapshotByID }
+        // Archived senders are usually long gone, so the signature-derived
+        // identity is the best shot at a name; a live registry entry is
+        // next; anonymous fallback matches the live path.
+        let nickname = signedSenderDisplayName(for: packet, from: senderPeerID)
+            ?? BLEPeerSenderDisplayName.resolveKnownPeer(
+                peerID: senderPeerID,
+                localPeerID: myPeerID,
+                localNickname: myNickname,
+                peers: peers,
+                allowConnectedUnverified: false
+            )
+            ?? BLEPeerSenderDisplayName.anonymousNickname(for: senderPeerID)
+        return ArchivedPublicMessage(
+            packetIdHex: PacketIdUtil.computeId(packet).hexEncodedString(),
+            senderPeerID: senderPeerID,
+            senderNickname: nickname,
+            content: content,
+            timestamp: Date(timeIntervalSince1970: TimeInterval(packet.timestamp) / 1000)
         )
+    }
 
-        SecureLogger.debug("📁 Stored incoming media from \(peerID.id.prefix(8))… -> \(destination.lastPathComponent)", category: .session)
+    private func handleFileTransfer(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
+        fileTransferHandler.handle(packet, from: peerID)
+    }
 
-        notifyUI { [weak self] in
-            self?.delegate?.didReceiveMessage(message)
-        }
+    /// Builds the file-transfer handler environment. All queue hops stay here
+    /// so `BLEFileTransferHandler` remains queue-agnostic and synchronously
+    /// testable.
+    private func makeFileTransferHandlerEnvironment() -> BLEFileTransferHandlerEnvironment {
+        BLEFileTransferHandlerEnvironment(
+            localPeerID: { [weak self] in
+                self?.myPeerID ?? PeerID(str: "")
+            },
+            localNickname: { [weak self] in
+                self?.myNickname ?? ""
+            },
+            peersSnapshot: { [weak self] in
+                guard let self = self else { return [:] }
+                return self.collectionsQueue.sync { self.peerRegistry.snapshotByID }
+            },
+            verifyPacketSignature: { [weak self] packet, signingPublicKey in
+                self?.noiseService.verifyPacketSignature(packet, publicKey: signingPublicKey) ?? false
+            },
+            localSigningPublicKey: { [weak self] in
+                self?.noiseService.getSigningPublicKeyData() ?? Data()
+            },
+            signedSenderDisplayName: { [weak self] packet, peerID in
+                self?.signedSenderDisplayName(for: packet, from: peerID)
+            },
+            trackPacketSeen: { [weak self] packet in
+                self?.gossipSyncManager?.onPublicPacketSeen(packet)
+            },
+            enforceStorageQuota: { [weak self] reservingBytes in
+                self?.incomingFileStore.enforceQuota(reservingBytes: reservingBytes)
+            },
+            saveIncomingFile: { [weak self] data, preferredName, subdirectory, fallbackExtension, defaultPrefix in
+                self?.incomingFileStore.save(
+                    data: data,
+                    preferredName: preferredName,
+                    subdirectory: subdirectory,
+                    fallbackExtension: fallbackExtension,
+                    defaultPrefix: defaultPrefix
+                )
+            },
+            privateMediaReceiptState: { [weak self] messageID in
+                self?.incomingFileStore.privateMediaReceiptState(
+                    messageID: messageID
+                ) ?? .unavailable
+            },
+            commitPrivateMediaFile: { [weak self] messageID, storedURL in
+                self?.incomingFileStore.commitPrivateMediaFile(
+                    messageID: messageID,
+                    storedURL: storedURL
+                ) ?? false
+            },
+            removeIncomingFile: { [weak self] storedURL in
+                self?.incomingFileStore.removeIncomingFile(at: storedURL)
+            },
+            finishIncomingFileDelivery: { [weak self] storedURL in
+                // Serialize pending-owner release behind deletion barriers.
+                // If /clear snapshots before this UI insertion, its already
+                // queued barrier must still observe the path as pending. If
+                // insertion wins first, the next MainActor snapshot sees the
+                // new bubble and protects the path explicitly.
+                self?.messageQueue.async(flags: .barrier) {
+                    self?.incomingFileStore.finishIncomingFileDelivery(
+                        at: storedURL
+                    )
+                }
+            },
+            isPrivateMediaSenderBlocked: { [weak self] peerID in
+                guard let self else { return false }
+                let senderStaticKey = self.noiseService.getPeerPublicKeyData(peerID)
+                    ?? self.collectionsQueue.sync {
+                        self.peerRegistry.info(for: peerID)?.noisePublicKey
+                    }
+                guard let senderStaticKey else { return false }
+                return self.identityManager.isBlocked(
+                    fingerprint: senderStaticKey.sha256Fingerprint()
+                )
+            },
+            updatePeerLastSeen: { [weak self] peerID in
+                self?.updatePeerLastSeen(peerID)
+            },
+            acknowledgePrivateMedia: { [weak self] messageID, peerID in
+                guard let self,
+                      let senderStaticKey = self.noiseService.getPeerPublicKeyData(peerID),
+                      !self.identityManager.isBlocked(
+                        fingerprint: senderStaticKey.sha256Fingerprint()
+                      ) else {
+                    return
+                }
+                self.sendDeliveryAck(for: messageID, to: peerID)
+            },
+            deliverMessage: { [weak self] message, shouldDeliver, completion, finalization in
+                self?.emitTransportEvent(
+                    .messageReceived(message),
+                    shouldDeliver: shouldDeliver,
+                    completion: completion,
+                    finalization: finalization
+                )
+            }
+        )
     }
     
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
-        SecureLogger.debug("🔔 sendFavoriteNotification called - peerID: \(peerID), isFavorite: \(isFavorite)", category: .session)
+        SecureLogger.debug("🔔 sendFavoriteNotification peer=\(peerID.id.prefix(8))… isFavorite=\(isFavorite)", category: .session)
         
         // Include Nostr public key in the notification
         var content = isFavorite ? "[FAVORITED]" : "[UNFAVORITED]"
+        var includesNostrIdentity = false
         
         // Add our Nostr public key if available
         if let myNostrIdentity = try? idBridge.getCurrentNostrIdentity() {
             content += ":" + myNostrIdentity.npub
-            SecureLogger.debug("📝 Sending favorite notification with Nostr npub: \(myNostrIdentity.npub)", category: .session)
+            includesNostrIdentity = true
+            SecureLogger.debug("📝 Favorite notification includes Nostr npub=\(myNostrIdentity.npub.prefix(16))…", category: .session)
         }
         
-        SecureLogger.debug("📤 Sending favorite notification to \(peerID): \(content)", category: .session)
+        SecureLogger.debug("📤 Sending favorite notification to \(peerID.id.prefix(8))… isFavorite=\(isFavorite) includesNostrIdentity=\(includesNostrIdentity)", category: .session)
         sendPrivateMessage(content, to: peerID, messageID: UUID().uuidString)
     }
     
@@ -1291,41 +2825,82 @@ final class BLEService: NSObject {
     }
     
     func sendDeliveryAck(for messageID: String, to peerID: PeerID) {
-        // Create typed payload: [type byte] + [message ID]
-        var payload = Data([NoisePayloadType.delivered.rawValue])
-        payload.append(contentsOf: messageID.utf8)
+        // Hop like sendMessage: callers are often on the main actor, and the
+        // send path sync-waits on bleQueue for link state — the main thread
+        // must never block on bleQueue (see captureBluetoothStatus).
+        if DispatchQueue.getSpecific(key: messageQueueKey) == nil {
+            messageQueue.async { [weak self] in
+                self?.sendDeliveryAck(for: messageID, to: peerID)
+            }
+            return
+        }
+        let payload = BLENoisePayloadFactory.delivered(messageID: messageID)
 
         if noiseService.hasEstablishedSession(with: peerID) {
             do {
-                let encrypted = try noiseService.encrypt(payload, for: peerID)
-                let packet = BitchatPacket(
-                    type: MessageType.noiseEncrypted.rawValue,
-                    senderID: myPeerIDData,
-                    recipientID: Data(hexString: peerID.id),
-                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                    payload: encrypted,
-                    signature: nil,
-                    ttl: messageTTL
-                )
-                broadcastPacket(packet)
+                broadcastPacket(try makeEncryptedNoisePacket(payload, to: peerID))
             } catch {
                 SecureLogger.error("Failed to send delivery ACK: \(error)")
             }
         } else {
-            // Queue for after handshake and initiate if needed
-            collectionsQueue.async(flags: .barrier) { [weak self] in
-                guard let self = self else { return }
-                self.pendingNoisePayloadsAfterHandshake[peerID, default: []].append(payload)
+            // Queue for after handshake; initiate only while the peer is
+            // around to answer — couriered/bridged mail routinely arrives
+            // from absent (or rotated) identities, and every duplicate copy
+            // initiating a handshake broadcast turns one undeliverable ack
+            // into a mesh-wide flood. The queued ack flushes whenever a
+            // session eventually establishes.
+            collectionsQueue.sync(flags: .barrier) {
+                pendingNoiseSessionQueues.appendTypedPayload(payload, for: peerID)
             }
-            if !noiseService.hasSession(with: peerID) { initiateNoiseHandshake(with: peerID) }
-            SecureLogger.debug("🕒 Queued DELIVERED ack for \(peerID) until handshake completes", category: .session)
+            if !noiseService.hasSession(with: peerID), isPeerReachable(peerID) {
+                initiateNoiseHandshake(with: peerID)
+            }
+            SecureLogger.debug("🕒 Queued DELIVERED ack for \(peerID.id.prefix(8))… until handshake completes", category: .session)
         }
     }
 
-    private func handleLeave(_ packet: BitchatPacket, from peerID: PeerID) {
+    /// Accept a leave only when the claimed sender proves possession of the
+    /// signing key bound by a verified announce. The persisted identity cache
+    /// keeps delayed/relayed leaves verifiable after the live registry entry
+    /// has aged out.
+    private func handleLeave(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
+        let registrySigningKey = collectionsQueue.sync {
+            peerRegistry.info(for: peerID)?.signingPublicKey
+        }
+        let verifiedViaRegistry = registrySigningKey.map {
+            noiseService.verifyPacketSignature(packet, publicKey: $0)
+        } ?? false
+        let verifiedViaPersistedIdentity = !verifiedViaRegistry
+            && identityManager.getCryptoIdentitiesByPeerIDPrefix(peerID).contains { identity in
+                PeerID(publicKey: identity.publicKey) == peerID
+                    && identity.signingPublicKey.map {
+                        noiseService.verifyPacketSignature(packet, publicKey: $0)
+                    } == true
+            }
+
+        guard verifiedViaRegistry || verifiedViaPersistedIdentity else {
+            SecureLogger.warning(
+                "🚫 Dropping leave with missing/invalid signature for claimed sender \(peerID.id.prefix(8))…",
+                category: .security
+            )
+            return false
+        }
+
+        // A valid departure retires transport state too; otherwise
+        // canDeliverSecurely could remain true for a peer we just removed.
+        clearNoiseSession(for: peerID)
+        readLinkState { _ in
+            let departedLinks = noiseAuthenticatedLinkOwners.compactMap { link, owner in
+                owner == peerID ? link : nil
+            }
+            for link in departedLinks {
+                noiseAuthenticatedLinkOwners.removeValue(forKey: link)
+                noiseReconnectPolicy.endLinkEpoch(link)
+            }
+        }
         _ = collectionsQueue.sync(flags: .barrier) {
             // Remove the peer when they leave
-            peers.removeValue(forKey: peerID)
+            peerRegistry.remove(peerID)
         }
         // Remove any stored announcement for sync purposes
         gossipSyncManager?.removeAnnouncementForPeer(peerID)
@@ -1334,215 +2909,59 @@ final class BLEService: NSObject {
             guard let self = self else { return }
             
             // Get current peer list (after removal)
-            let currentPeerIDs = self.collectionsQueue.sync { Array(self.peers.keys) }
+            let currentPeerIDs = self.collectionsQueue.sync { self.peerRegistry.peerIDs }
             
-            self.delegate?.didDisconnectFromPeer(peerID)
-            self.delegate?.didUpdatePeerList(currentPeerIDs)
+            self.deliverTransportEvent(.peerDisconnected(peerID))
+            self.deliverTransportEvent(.peerListUpdated(currentPeerIDs))
         }
+        return true
     }
-    
-    // MARK: - Helper Functions
-
-    private func applicationFilesDirectory() throws -> URL {
-        let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-        let filesDir = base.appendingPathComponent("files", isDirectory: true)
-        try FileManager.default.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: nil)
-        return filesDir
-    }
-
-    private func sanitizeFileName(_ name: String?, defaultName: String, fallbackExtension: String?) -> String {
-        var candidate = name ?? ""
-
-        // Security: Remove null bytes (path traversal vector)
-        candidate = candidate.replacingOccurrences(of: "\0", with: "")
-
-        // Security: Unicode normalization prevents fullwidth character bypass
-        candidate = candidate.precomposedStringWithCanonicalMapping
-
-        // Security: Remove ALL path separators (not just strip last component)
-        candidate = candidate.replacingOccurrences(of: "/", with: "_")
-        candidate = candidate.replacingOccurrences(of: "\\", with: "_")
-
-        // Security: Remove control characters and dangerous filesystem chars
-        let invalid = CharacterSet(charactersIn: "<>:\"|?*\0").union(.controlCharacters)
-        candidate = candidate.components(separatedBy: invalid).joined(separator: "_")
-
-        candidate = candidate.trimmed
-        if candidate.isEmpty { candidate = defaultName }
-
-        // Security: Reject dotfiles (hidden file attacks)
-        if candidate.hasPrefix(".") {
-            candidate = "_" + candidate
-        }
-
-        // Truncate while preserving extension
-        if candidate.count > 120 {
-            let ext = (candidate as NSString).pathExtension
-            let base = (candidate as NSString).deletingPathExtension
-            if ext.isEmpty {
-                candidate = String(candidate.prefix(120))
-            } else {
-                let maxBase = max(10, 120 - ext.count - 1)
-                candidate = String(base.prefix(maxBase)) + "." + ext
-            }
-        }
-
-        if let fallbackExtension = fallbackExtension, (candidate as NSString).pathExtension.isEmpty {
-            candidate += ".\(fallbackExtension)"
-        }
-
-        if candidate.isEmpty { candidate = defaultName }
-        return candidate
-    }
-
-    private func uniqueFileURL(in directory: URL, fileName: String) -> URL {
-        var candidate = directory.appendingPathComponent(fileName)
-
-        // Security: Validate path doesn't escape directory
-        if !candidate.path.hasPrefix(directory.path) {
-            SecureLogger.warning("⚠️ Path traversal blocked: \(fileName)", category: .security)
-            return directory.appendingPathComponent("blocked_\(UUID().uuidString)")
-        }
-
-        if !FileManager.default.fileExists(atPath: candidate.path) {
-            return candidate
-        }
-
-        let baseName = (fileName as NSString).deletingPathExtension
-        let ext = (fileName as NSString).pathExtension
-        var counter = 1
-
-        // Limit iterations to prevent DoS
-        while counter < 100 {
-            let newName = ext.isEmpty ? "\(baseName) (\(counter))" : "\(baseName) (\(counter)).\(ext)"
-            candidate = directory.appendingPathComponent(newName)
-
-            // Validate each iteration
-            guard candidate.path.hasPrefix(directory.path) else {
-                return directory.appendingPathComponent("blocked_\(UUID().uuidString)")
-            }
-
-            if !FileManager.default.fileExists(atPath: candidate.path) {
-                return candidate
-            }
-            counter += 1
-        }
-
-        // Fallback: UUID to guarantee uniqueness
-        return directory.appendingPathComponent("\(baseName)_\(UUID().uuidString).\(ext.isEmpty ? "dat" : ext)")
-    }
-
-    private func saveIncomingFile(data: Data, preferredName: String?, subdirectory: String, fallbackExtension: String?, defaultPrefix: String) -> URL? {
-        do {
-            let base = try applicationFilesDirectory().appendingPathComponent(subdirectory, isDirectory: true)
-            try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true, attributes: nil)
-            let timestamp = mediaDateFormatter.string(from: Date())
-            let defaultName = "\(defaultPrefix)_\(timestamp)"
-            let sanitized = sanitizeFileName(preferredName, defaultName: defaultName, fallbackExtension: fallbackExtension)
-            let destination = uniqueFileURL(in: base, fileName: sanitized)
-            try data.write(to: destination, options: .atomic)
-            return destination
-        } catch {
-            SecureLogger.error("❌ Failed to persist incoming media: \(error)", category: .session)
-            return nil
-        }
-    }
-
-    // MARK: - Storage Quota Management (BCH-01-002)
-
-    /// Maximum total storage for incoming files (100 MB)
-    private static let incomingFilesQuota: Int64 = 100 * 1024 * 1024
-
-    /// Enforces storage quota for incoming files by deleting oldest files when quota is exceeded.
-    /// Call before saving a new incoming file.
-    private func enforceIncomingFilesQuota(reservingBytes: Int) {
-        do {
-            let base = try applicationFilesDirectory()
-            let incomingDirs = [
-                base.appendingPathComponent("voicenotes/incoming", isDirectory: true),
-                base.appendingPathComponent("images/incoming", isDirectory: true),
-                base.appendingPathComponent("files/incoming", isDirectory: true)
-            ]
-
-            // Gather all incoming files with their sizes and modification dates
-            var allFiles: [(url: URL, size: Int64, modified: Date)] = []
-            let fileManager = FileManager.default
-
-            for dir in incomingDirs {
-                guard fileManager.fileExists(atPath: dir.path) else { continue }
-                guard let contents = try? fileManager.contentsOfDirectory(
-                    at: dir,
-                    includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey],
-                    options: [.skipsHiddenFiles]
-                ) else { continue }
-
-                for fileURL in contents {
-                    guard let attrs = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]),
-                          let size = attrs.fileSize,
-                          let modified = attrs.contentModificationDate else { continue }
-                    allFiles.append((url: fileURL, size: Int64(size), modified: modified))
-                }
-            }
-
-            // Calculate current usage
-            let currentUsage = allFiles.reduce(0) { $0 + $1.size }
-            let targetUsage = Self.incomingFilesQuota - Int64(reservingBytes)
-
-            guard currentUsage > targetUsage else { return }
-
-            // Sort by modification date (oldest first) and delete until under quota
-            let sortedFiles = allFiles.sorted { $0.modified < $1.modified }
-            var freedSpace: Int64 = 0
-            let needToFree = currentUsage - targetUsage
-
-            for file in sortedFiles {
-                guard freedSpace < needToFree else { break }
-                do {
-                    try fileManager.removeItem(at: file.url)
-                    freedSpace += file.size
-                    SecureLogger.debug("🗑️ BCH-01-002: Deleted old incoming file to free space: \(file.url.lastPathComponent)", category: .security)
-                } catch {
-                    SecureLogger.warning("⚠️ Failed to delete old file for quota: \(error)", category: .security)
-                }
-            }
-
-            if freedSpace > 0 {
-                SecureLogger.info("📊 BCH-01-002: Freed \(ByteCountFormatter.string(fromByteCount: freedSpace, countStyle: .file)) to stay within incoming files quota", category: .security)
-            }
-        } catch {
-            SecureLogger.warning("⚠️ Could not enforce storage quota: \(error)", category: .security)
-        }
-    }
-
     private func sendAnnounce(forceSend: Bool = false) {
+        guard !isPanicSuspended else { return }
+        // Announce construction reads the replaceable Noise service and several
+        // related state snapshots. Serialize the whole operation with identity
+        // rotation instead of letting CoreBluetooth and maintenance callbacks
+        // execute it directly on their own queues.
+        messageQueue.async(flags: .barrier) { [weak self] in
+            self?.sendAnnounceNow(forceSend: forceSend)
+        }
+    }
+
+    private func sendAnnounceNow(forceSend: Bool) {
+        // Re-check on the serialized queue: a panic suspend may have started
+        // after this announce was scheduled but before it runs.
+        guard !isPanicSuspended else { return }
         // Throttle announces to prevent flooding
-        let now = Date()
-        let timeSinceLastAnnounce = now.timeIntervalSince(lastAnnounceSent)
-        
-        // Even forced sends should respect a minimum interval to avoid overwhelming BLE
-        let minInterval = forceSend ? TransportConfig.bleForceAnnounceMinIntervalSeconds : announceMinInterval
-        
-        if timeSinceLastAnnounce < minInterval {
-            // Skipping announce (rate limited)
+        if !announceThrottle.shouldSend(force: forceSend, now: Date()) {
             return
         }
-        lastAnnounceSent = now
-        
+
         // Reduced logging - only log errors, not every announce
         
         // Create announce payload with both noise and signing public keys
         let noisePub = noiseService.getStaticPublicKeyData()  // For noise handshakes and peer identification
         let signingPub = noiseService.getSigningPublicKeyData()  // For signature verification
         
-        let connectedPeerIDs: [Data] = collectionsQueue.sync {
-            peers.values.filter { $0.isConnected }.compactMap { $0.peerID.routingData }
+        let (connectedPeerIDs, advertisedCapabilities, advertisedBridgeCell): ([Data], PeerCapabilities, String?) = collectionsQueue.sync {
+            var capabilities = PeerCapabilities.localSupported.union(runtimeCapabilities)
+            if doubleRatchetEnabled {
+                capabilities.insert(.doubleRatchet)
+            }
+            return (
+                peerRegistry.connectedRoutingData,
+                capabilities,
+                runtimeCapabilities.contains(.bridge) ? localBridgeGeohash : nil
+            )
         }
-        
+
+        let localIdentity = localIdentityState.snapshot()
         let announcement = AnnouncementPacket(
-            nickname: myNickname,
+            nickname: localIdentity.nickname,
             noisePublicKey: noisePub,
             signingPublicKey: signingPub,
-            directNeighbors: connectedPeerIDs
+            directNeighbors: connectedPeerIDs,
+            capabilities: advertisedCapabilities,
+            bridgeGeohash: advertisedBridgeCell
         )
         
         guard let payload = announcement.encode() else {
@@ -1553,7 +2972,7 @@ final class BLEService: NSObject {
         // Create packet with signature using the noise private key
         let packet = BitchatPacket(
             type: MessageType.announce.rawValue,
-            senderID: myPeerIDData,
+            senderID: localIdentity.peerIDData,
             recipientID: nil,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: payload,
@@ -1567,20 +2986,59 @@ final class BLEService: NSObject {
             return
         }
         
-        // Call directly if on messageQueue, otherwise dispatch
-        if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
-            broadcastPacket(signedPacket)
-        } else {
-            messageQueue.async { [weak self] in
-                self?.broadcastPacket(signedPacket)
-            }
-        }
+        broadcastPacket(signedPacket)
         // Ensure our own announce is included in sync state
         gossipSyncManager?.onPublicPacketSeen(signedPacket)
+
+        // Keep our prekey bundle riding alongside presence (throttled; the
+        // send is a no-op when the bundle was refreshed recently).
+        sendPrekeyBundle()
     }
 
     // MARK: QR Verification over Noise
     
+    // MARK: Private Groups
+
+    /// Sends creator-signed group state (invite) 1:1 over the Noise session,
+    /// queueing behind a handshake when none is established yet.
+    func sendGroupInvite(_ statePayload: Data, to peerID: PeerID) {
+        sendNoisePayload(NoisePayload(type: .groupInvite, data: statePayload).encode(), to: peerID)
+    }
+
+    /// Sends creator-signed group state (key rotation / roster update) 1:1
+    /// over the Noise session.
+    func sendGroupKeyUpdate(_ statePayload: Data, to peerID: PeerID) {
+        sendNoisePayload(NoisePayload(type: .groupKeyUpdate, data: statePayload).encode(), to: peerID)
+    }
+
+    /// Broadcasts a sealed group message (MessageType 0x25) like a public
+    /// message: fire-and-flood with gossip-sync backfill. The outer packet is
+    /// intentionally unsigned — receivers authenticate the sender's Ed25519
+    /// signature inside the ciphertext, which still verifies for backfilled
+    /// copies long after the sender's announce has expired.
+    func broadcastGroupMessage(_ envelope: Data) {
+        guard !envelope.isEmpty else { return }
+        messageQueue.async { [weak self] in
+            guard let self else { return }
+            let packet = BitchatPacket(
+                type: MessageType.groupMessage.rawValue,
+                senderID: Data(hexString: self.myPeerID.id) ?? Data(),
+                recipientID: nil,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: envelope,
+                signature: nil,
+                ttl: self.messageTTL
+            )
+            // Pre-mark our own broadcast as processed to avoid handling a
+            // relayed self copy.
+            let dedupID = BLESelfBroadcastTracker.dedupID(for: packet)
+            self.messageDeduplicator.markProcessed(dedupID)
+            self.broadcastPacket(packet)
+            // Track our own broadcast for gossip sync
+            self.gossipSyncManager?.onPublicPacketSeen(packet)
+        }
+    }
+
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {
         let payload = VerificationService.shared.buildVerifyChallenge(noiseKeyHex: noiseKeyHex, nonceA: nonceA)
         sendNoisePayload(payload, to: peerID)
@@ -1591,11 +3049,107 @@ final class BLEService: NSObject {
         sendNoisePayload(payload, to: peerID)
     }
 
-    func sendNdrEvent(to peerID: PeerID, eventJson: String) {
-        guard let data = eventJson.data(using: .utf8), !data.isEmpty else { return }
-        var payload = Data([NoisePayloadType.ndrEvent.rawValue])
-        payload.append(data)
-        sendNoisePayload(payload, to: peerID)
+    func sendNdrEvent(
+        to peerID: PeerID,
+        eventJson: String,
+        expectedTransportState: AuthenticatedPeerTransportState
+    ) {
+        guard let data = eventJson.data(using: .utf8),
+              !data.isEmpty,
+              data.count <= NostrProtocol.maximumPrivateEnvelopeCiphertextBytes
+        else {
+            return
+        }
+        let normalizedPeerID = peerID.toShort()
+        messageQueue.async { [weak self] in
+            guard let self,
+                  self.doubleRatchetEnabled,
+                  let authenticated = self.authenticatedPeerTransportState(normalizedPeerID),
+                  authenticated == expectedTransportState,
+                  authenticated.capabilities.contains(.doubleRatchet)
+            else {
+                SecureLogger.warning(
+                    "NDR: dropping OOB send without the expected authenticated capability proof",
+                    category: .security
+                )
+                return
+            }
+            let typedPayload = NoisePayload(type: .ndrEvent, data: data).encode()
+            do {
+                let packet = try self.makeEncryptedNoisePacket(
+                    typedPayload,
+                    to: normalizedPeerID,
+                    expectedSessionGeneration: authenticated.sessionGeneration
+                )
+                self.broadcastPacket(packet)
+            } catch {
+                SecureLogger.warning(
+                    "NDR: dropping OOB send because the authenticated Noise generation changed",
+                    category: .security
+                )
+            }
+        }
+    }
+
+    // MARK: Vouching over Noise
+
+    func sendVouchAttestations(_ payload: Data, to peerID: PeerID) {
+        sendNoisePayload(NoisePayload(type: .vouch, data: payload).encode(), to: peerID)
+    }
+
+    // MARK: Live Voice (PTT)
+
+    /// Sends one live voice-burst packet inside the Noise session. Unlike
+    /// `sendNoisePayload` this never queues behind a handshake: live audio is
+    /// only useful now, so without an established session frames are dropped.
+    func sendVoiceFrame(_ burstContent: Data, to peerID: PeerID) {
+        messageQueue.async { [weak self] in
+            guard let self else { return }
+            guard self.noiseService.hasEstablishedSession(with: peerID) else {
+                SecureLogger.debug("PTT: dropping voice frame — no established session with \(peerID.id.prefix(8))…", category: .session)
+                return
+            }
+            do {
+                let typedPayload = NoisePayload(type: .voiceFrame, data: burstContent).encode()
+                self.broadcastPacket(try self.makeEncryptedNoisePacket(typedPayload, to: peerID))
+            } catch {
+                SecureLogger.error("Failed to send voice frame: \(error)", category: .session)
+            }
+        }
+    }
+
+    /// Broadcasts one live voice-burst packet to the public mesh, signed like
+    /// a public message so receivers can authenticate the talker. Ephemeral:
+    /// never tracked for gossip sync (stale audio is worthless to replay).
+    func sendVoiceFrameBroadcast(_ burstContent: Data) {
+        guard !burstContent.isEmpty else { return }
+        messageQueue.async { [weak self] in
+            guard let self else { return }
+            let packet = BitchatPacket(
+                type: MessageType.voiceFrame.rawValue,
+                senderID: self.myPeerIDData,
+                recipientID: nil,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: burstContent,
+                signature: nil,
+                ttl: self.messageTTL
+            )
+            guard let signedPacket = self.noiseService.signPacket(packet) else {
+                SecureLogger.error("❌ Failed to sign voice frame", category: .security)
+                return
+            }
+            // Pre-mark our own broadcast as processed to avoid handling a
+            // relayed self copy.
+            let dedupID = BLESelfBroadcastTracker.dedupID(for: signedPacket)
+            self.messageDeduplicator.markProcessed(dedupID)
+            self.broadcastPacket(signedPacket)
+        }
+    }
+
+    func addPeerAuthenticatedObserver(_ handler: @escaping (PeerID, String) -> Void) {
+        // Appends to the encryption service's handler array, so this never
+        // displaces the callbacks installed by installNoiseSessionCallbacks.
+        noiseService.addOnPeerAuthenticatedHandler(handler)
     }
 }
 
@@ -1615,7 +3169,7 @@ extension BLEService: GossipSyncManager.Delegate {
     
     func getConnectedPeers() -> [PeerID] {
         return collectionsQueue.sync {
-            peers.values.compactMap { $0.isConnected ? $0.peerID : nil }
+            peerRegistry.connectedPeerIDs
         }
     }
 }
@@ -1624,8 +3178,15 @@ extension BLEService: GossipSyncManager.Delegate {
 
 extension BLEService: CBCentralManagerDelegate {
     #if os(iOS)
-    func centralManager(_ central: CBCentralManager, willRestoreState dict: [String : Any]) {
+    func centralManager(_ central: CBCentralManager, willRestoreState dict: [String: Any]) {
         let restoredPeripherals = (dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral]) ?? []
+        guard !isPanicSuspended else {
+            central.stopScan()
+            restoredPeripherals.forEach {
+                central.cancelPeripheralConnection($0)
+            }
+            return
+        }
         let restoredServices = (dict[CBCentralManagerRestoredStateScanServicesKey] as? [CBUUID]) ?? []
         let restoredOptions = (dict[CBCentralManagerRestoredStateScanOptionsKey] as? [String: Any]) ?? [:]
         let allowDuplicates = restoredOptions[CBCentralManagerScanOptionAllowDuplicatesKey] as? Bool
@@ -1638,14 +3199,14 @@ extension BLEService: CBCentralManagerDelegate {
         for peripheral in restoredPeripherals {
             let identifier = peripheral.identifier.uuidString
             peripheral.delegate = self
-            let existing = peripherals[identifier]
+            let existing = linkStateStore.state(forPeripheralID: identifier)
             let assembler = existing?.assembler ?? NotificationStreamAssembler()
             let characteristic = existing?.characteristic
             let peerID = existing?.peerID
             let wasConnecting = existing?.isConnecting ?? false
             let wasConnected = existing?.isConnected ?? false
 
-            let restoredState = PeripheralState(
+            let restoredState = BLEPeripheralLinkState(
                 peripheral: peripheral,
                 characteristic: characteristic,
                 peerID: peerID,
@@ -1654,10 +3215,21 @@ extension BLEService: CBCentralManagerDelegate {
                 lastConnectionAttempt: existing?.lastConnectionAttempt,
                 assembler: assembler
             )
-            peripherals[identifier] = restoredState
+            linkStateStore.setPeripheralState(restoredState, for: identifier)
+
+            // Restored peripherals are the freshest wake-on-proximity
+            // candidates we have after a relaunch — without this the cache
+            // starts empty and backgrounding right after a restore arms
+            // nothing. Service rediscovery for restored-connected links waits
+            // for poweredOn: CoreBluetooth drops commands issued during
+            // restoration (API MISUSE warnings).
+            recentPeripheralCache.record(peripheral, peripheralID: identifier, at: Date())
         }
 
-        captureBluetoothStatus(context: "central-restore")
+        // Via the sampler (not a direct capture): it refreshes the cached
+        // background budget on main first, so the restore log shows the real
+        // wake window instead of the init sentinel.
+        logBluetoothStatus("central-restore")
 
         if central.state == .poweredOn {
             startScanning()
@@ -1666,27 +3238,46 @@ extension BLEService: CBCentralManagerDelegate {
     #endif
 
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        // Notify delegate about state change on main thread
-        Task { @MainActor in
-            self.delegate?.didUpdateBluetoothState(central.state)
-        }
+        emitTransportEvent(.bluetoothStateUpdated(central.state))
 
         switch central.state {
         case .poweredOn:
+            guard !isPanicSuspended else {
+                central.stopScan()
+                return
+            }
+            // Links restored as connected have no characteristic in the new
+            // process; without rediscovery they sit connected-but-unusable
+            // until the peer disconnects. Runs here (not willRestoreState)
+            // because commands issued before poweredOn are dropped.
+            for state in linkStateStore.peripheralStates where state.isConnected
+                && state.characteristic == nil
+                && state.peripheral.state == .connected {
+                SecureLogger.info("♻️ Rediscovering services on restored link: \(state.peripheral.identifier.uuidString.prefix(8))…", category: .session)
+                state.peripheral.discoverServices([BLEService.serviceUUID])
+            }
+
             // Start scanning - use allow duplicates for faster discovery when active
             startScanning()
 
         case .poweredOff:
-            // Bluetooth was turned off - stop scanning and clean up connection state
+            // CoreBluetooth has already transitioned out of poweredOn. Do
+            // not issue stop/cancel commands now; they are rejected as API
+            // misuse. Retire our link state locally instead.
             SecureLogger.info("📴 Bluetooth powered off - cleaning up central state", category: .session)
-            central.stopScan()
-            // Mark all peripheral connections as disconnected (they are now invalid)
-            let peerIDs: [PeerID] = peripherals.compactMap { $0.value.peerID }
-            for state in peripherals.values {
-                central.cancelPeripheralConnection(state.peripheral)
+            let peripheralStates = linkStateStore.peripheralStates
+            let peerIDs: [PeerID] = peripheralStates.compactMap(\.peerID)
+            for state in peripheralStates {
+                let peripheralID = state.peripheral.identifier.uuidString
+                collectionsQueue.sync(flags: .barrier) {
+                    pendingPeripheralWrites.discardAll(for: peripheralID)
+                }
+                noiseAuthenticatedLinkOwners.removeValue(
+                    forKey: .peripheral(peripheralID)
+                )
+                noiseReconnectPolicy.endLinkEpoch(.peripheral(peripheralID))
             }
-            peripherals.removeAll()
-            peerToPeripheralUUID.removeAll()
+            _ = linkStateStore.clearPeripherals()
             // Notify UI of disconnections
             for peerID in peerIDs {
                 notifyUI { [weak self] in
@@ -1697,9 +3288,7 @@ extension BLEService: CBCentralManagerDelegate {
         case .unauthorized:
             // User denied Bluetooth permission
             SecureLogger.warning("🚫 Bluetooth unauthorized - user denied permission", category: .session)
-            central.stopScan()
-            peripherals.removeAll()
-            peerToPeripheralUUID.removeAll()
+            _ = linkStateStore.clearPeripherals()
 
         case .unsupported:
             // Device doesn't support BLE
@@ -1719,7 +3308,8 @@ extension BLEService: CBCentralManagerDelegate {
     }
     
     private func startScanning() {
-        guard let central = centralManager,
+        guard !isPanicSuspended,
+              let central = centralManager,
               central.state == .poweredOn,
               !central.isScanning else { return }
         
@@ -1740,164 +3330,67 @@ extension BLEService: CBCentralManagerDelegate {
     }
     
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
+        guard !isPanicSuspended else { return }
         let peripheralID = peripheral.identifier.uuidString
         let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? (peripheralID.prefix(6) + "…")
         let isConnectable = (advertisementData[CBAdvertisementDataIsConnectable] as? NSNumber)?.boolValue ?? true
         let rssiValue = RSSI.intValue
-        
-        // Skip if peripheral is not connectable (per advertisement data)
-        guard isConnectable else { return }
 
-        // Skip immediate connect if signal too weak for current conditions; enqueue instead
-        if rssiValue <= dynamicRSSIThreshold {
-            connectionCandidates.append(ConnectionCandidate(peripheral: peripheral, rssi: rssiValue, name: String(advertisedName), isConnectable: isConnectable, discoveredAt: Date()))
-            // Keep list tidy
-            connectionCandidates.sort { (a, b) in
-                if a.rssi != b.rssi { return a.rssi > b.rssi }
-                return a.discoveredAt < b.discoveredAt
-            }
-            if connectionCandidates.count > TransportConfig.bleConnectionCandidatesMax {
-                connectionCandidates.removeLast(connectionCandidates.count - TransportConfig.bleConnectionCandidatesMax)
-            }
-            return
+        let candidate = BLEConnectionCandidate(
+            peripheral: peripheral,
+            peripheralID: peripheralID,
+            rssi: rssiValue,
+            name: String(advertisedName),
+            isConnectable: isConnectable,
+            discoveredAt: Date()
+        )
+        if isConnectable {
+            recentPeripheralCache.record(peripheral, peripheralID: peripheralID, at: candidate.discoveredAt)
         }
-        
-        // Budget: limit simultaneous central links (connected + connecting)
-        let currentCentralLinks = peripherals.values.filter { $0.isConnected || $0.isConnecting }.count
-        if currentCentralLinks >= maxCentralLinks {
-            // Enqueue as candidate; we'll attempt later as slots open
-            connectionCandidates.append(ConnectionCandidate(peripheral: peripheral, rssi: rssiValue, name: String(advertisedName), isConnectable: isConnectable, discoveredAt: Date()))
-            // Keep candidate list tidy: prefer stronger RSSI, then recency; cap list
-            connectionCandidates.sort { (a, b) in
-                if a.rssi != b.rssi { return a.rssi > b.rssi }
-                return a.discoveredAt < b.discoveredAt
-            }
-            if connectionCandidates.count > TransportConfig.bleConnectionCandidatesMax {
-                connectionCandidates.removeLast(connectionCandidates.count - TransportConfig.bleConnectionCandidatesMax)
-            }
-            return
-        }
+        let existingState = linkStateStore.state(forPeripheralID: peripheralID).map(BLEExistingConnectionState.init)
 
-        // Rate limit global connect attempts
-        let sinceLast = Date().timeIntervalSince(lastGlobalConnectAttempt)
-        if sinceLast < connectRateLimitInterval {
-            connectionCandidates.append(ConnectionCandidate(peripheral: peripheral, rssi: rssiValue, name: String(advertisedName), isConnectable: isConnectable, discoveredAt: Date()))
-            connectionCandidates.sort { (a, b) in
-                if a.rssi != b.rssi { return a.rssi > b.rssi }
-                return a.discoveredAt < b.discoveredAt
-            }
-            // Schedule a deferred attempt after rate-limit interval
-            let delay = connectRateLimitInterval - sinceLast + 0.05
+        switch connectionScheduler.handleDiscovery(
+            candidate,
+            connectedOrConnectingCount: linkStateStore.connectedOrConnectingPeripheralCount,
+            existingState: existingState,
+            peripheralState: peripheral.state.connectionSchedulerState,
+            now: candidate.discoveredAt
+        ) {
+        case .ignore, .queued:
+            return
+        case .scheduleRetry(let delay):
             bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
                 self?.tryConnectFromQueue()
             }
             return
-        }
-
-        // Check if we already have this peripheral
-        if let state = peripherals[peripheralID] {
-            if state.isConnected || state.isConnecting {
-                return // Already connected or connecting
-            }
-            
-        // Add backoff for reconnection attempts
-        if let lastAttempt = state.lastConnectionAttempt {
-            let timeSinceLastAttempt = Date().timeIntervalSince(lastAttempt)
-            if timeSinceLastAttempt < 2.0 {
-                return // Wait at least 2 seconds between connection attempts
-            }
-        }
-        }
-        
-        // Backoff if this peripheral recently timed out connection within the last 15 seconds
-        if let lastTimeout = recentConnectTimeouts[peripheralID], Date().timeIntervalSince(lastTimeout) < 15 {
-            return
-        }
-
-        // Check peripheral state - but cancel if stale
-        if peripheral.state == .connecting || peripheral.state == .connected {
-            // iOS might have stale state - force disconnect and retry
+        case .cancelStaleConnection:
             central.cancelPeripheralConnection(peripheral)
-            // Will retry on next discovery
             return
-        }
-        
-        // Only log when we're actually attempting connection
-        // Discovered BLE peripheral
-        
-        // Store the peripheral and mark as connecting
-        peripherals[peripheralID] = PeripheralState(
-            peripheral: peripheral,
-            characteristic: nil,
-            peerID: nil,
-            isConnecting: true,
-            isConnected: false,
-            lastConnectionAttempt: Date(),
-            assembler: NotificationStreamAssembler()
-        )
-        peripheral.delegate = self
-        
-        // Connect to the peripheral with options for faster connection
-        SecureLogger.debug("📱 Connect: \(advertisedName) [RSSI:\(rssiValue)]", category: .session)
-        
-        // Use connection options for faster reconnection
-        let options: [String: Any] = [
-            CBConnectPeripheralOptionNotifyOnConnectionKey: true,
-            CBConnectPeripheralOptionNotifyOnDisconnectionKey: true,
-            CBConnectPeripheralOptionNotifyOnNotificationKey: true
-        ]
-        central.connect(peripheral, options: options)
-        lastGlobalConnectAttempt = Date()
-        
-        // Set a timeout for the connection attempt (slightly longer for reliability)
-        // Use BLE queue to mutate BLE-related state consistently
-        bleQueue.asyncAfter(deadline: .now() + TransportConfig.bleConnectTimeoutSeconds) { [weak self] in
-            guard let self = self,
-                  let state = self.peripherals[peripheralID],
-                  state.isConnecting && !state.isConnected else { return }
-
-            // Double-check actual CBPeripheral state to avoid canceling a just-connected peripheral
-            // This prevents a race where connection completes just as timeout fires
-            guard peripheral.state != .connected else {
-                SecureLogger.debug("⏱️ Timeout fired but peripheral already connected: \(advertisedName)", category: .session)
-                return
-            }
-
-            // Connection timed out - cancel it
-            SecureLogger.debug("⏱️ Timeout: \(advertisedName)", category: .session)
-            central.cancelPeripheralConnection(peripheral)
-            self.peripherals[peripheralID] = nil
-            self.recentConnectTimeouts[peripheralID] = Date()
-            self.failureCounts[peripheralID, default: 0] += 1
-            // Try next candidate if any
-            self.tryConnectFromQueue()
+        case .connectNow:
+            beginCentralConnection(candidate, using: central, logPrefix: "📱 Connect")
         }
     }
     
-func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        let peripheralID = peripheral.identifier.uuidString
-        
-        // Update state to connected
-        if var state = peripherals[peripheralID] {
-            state.isConnecting = false
-            state.isConnected = true
-            peripherals[peripheralID] = state
-        } else {
-            // Create new state if not found
-            peripherals[peripheralID] = PeripheralState(
-                peripheral: peripheral,
-                characteristic: nil,
-                peerID: nil,
-                isConnecting: false,
-                isConnected: true,
-                lastConnectionAttempt: nil,
-                assembler: NotificationStreamAssembler()
-            )
+    func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        guard !isPanicSuspended else {
+            central.cancelPeripheralConnection(peripheral)
+            return
         }
+        let peripheralID = peripheral.identifier.uuidString
+
+        #if os(iOS)
+        // A connect completing while backgrounded is the wake-on-proximity
+        // path doing its job — worth an info line for field verification.
+        if !isAppActive {
+            SecureLogger.info("🌙 Background wake: connected to \(peripheral.name ?? peripheralID) while backgrounded", category: .session)
+        }
+        #endif
+
+        // Update state to connected
+        linkStateStore.markConnected(peripheral)
         
         // Reset backoff state on success
-        failureCounts[peripheralID] = 0
-        recentConnectTimeouts.removeValue(forKey: peripheralID)
+        connectionScheduler.recordConnectionSuccess(peripheralID: peripheralID)
 
         SecureLogger.debug("✅ Connected: \(peripheral.name ?? "Unknown") [\(peripheralID)]", category: .session)
         
@@ -1909,33 +3402,60 @@ func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeriph
         let peripheralID = peripheral.identifier.uuidString
         
         // Find the peer ID if we have it
-        let peerID = peripherals[peripheralID]?.peerID
+        let peerID = linkStateStore.peerID(forPeripheralID: peripheralID)
         
         SecureLogger.debug("📱 Disconnect: \(peerID?.id ?? peripheralID)\(error != nil ? " (\(error!.localizedDescription))" : "")", category: .session)
 
         // If disconnect carried an error (often timeout), apply short backoff to avoid thrash
         if error != nil {
-            recentConnectTimeouts[peripheralID] = Date()
+            connectionScheduler.recordDisconnectError(peripheralID: peripheralID, at: Date())
         }
-        
-        // Clean up references
-        peripherals.removeValue(forKey: peripheralID)
-        
-        // Clean up peer mappings
-        if let peerID {
-            peerToPeripheralUUID.removeValue(forKey: peerID)
-            
+
+        // Retain the handle: a dropped link is the best wake-on-proximity
+        // candidate if the app backgrounds before the peer returns.
+        recentPeripheralCache.record(peripheral, peripheralID: peripheralID, at: Date())
+
+        #if os(iOS)
+        // Link lost while backgrounded (peer walked away): re-arm a pending
+        // connect during this wake window so the peer's return wakes us again.
+        // Delayed past the disconnect-settle window to avoid reconnect thrash
+        // at range edge.
+        if !isAppActive {
+            bleQueue.asyncAfter(deadline: .now() + TransportConfig.bleDisconnectDiscoveryIgnoreSeconds) { [weak self] in
+                guard let self, !self.isAppActive else { return }
+                // Reserve 0: use the slot this disconnect freed even in a
+                // dense mesh, so the lost peer can wake us when it returns.
+                self.armPendingBackgroundConnects(slotReserve: 0)
+            }
+        }
+        #endif
+
+        // Clean up references and peer mappings
+        collectionsQueue.sync(flags: .barrier) {
+            pendingPeripheralWrites.discardAll(for: peripheralID)
+        }
+        noiseAuthenticatedLinkOwners.removeValue(forKey: .peripheral(peripheralID))
+        noiseReconnectPolicy.endLinkEpoch(.peripheral(peripheralID))
+        _ = linkStateStore.removePeripheral(peripheralID)
+        // A duplicate link can drop while the peer stays live on another
+        // (the dual-role central link, or a second bound link after a
+        // restore): peer-disconnect bookkeeping only runs once the peer's
+        // last live link is gone. removePeripheral just repaired the reverse
+        // map onto a connected survivor, so directLinkState is accurate
+        // here. The scan restart and connect-slot refill below stay
+        // unguarded — they respond to the physical drop regardless of
+        // remaining logical links.
+        let remainingLinks = peerID.map { linkStateStore.directLinkState(for: $0) }
+        let peerStillLinked = (remainingLinks?.hasPeripheral ?? false) || (remainingLinks?.hasCentral ?? false)
+        if let peerID, !peerStillLinked {
             // Do not remove peer; mark as not connected but retain for reachability
             collectionsQueue.sync(flags: .barrier) {
-                if var info = peers[peerID] {
-                    info.isConnected = false
-                    peers[peerID] = info
-                }
+                peerRegistry.markDisconnected(peerID)
             }
             refreshLocalTopology()
         }
 
-        
+
         // Restart scanning with allow duplicates for faster rediscovery
         if centralManager?.state == .poweredOn {
             // Stop and restart scanning to ensure we get fresh discovery events
@@ -1946,19 +3466,19 @@ func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeriph
         }
         // Attempt to fill freed slot from queue
         bleQueue.async { [weak self] in self?.tryConnectFromQueue() }
-        
+
         // Notify delegate about disconnection on main thread (direct link dropped)
         notifyUI { [weak self] in
             guard let self = self else { return }
-            
+
             // Get current peer list (after removal)
-            let currentPeerIDs = self.collectionsQueue.sync { self.currentPeerIDs }
-            
-            if let peerID {
+            let currentPeerIDs = self.collectionsQueue.sync { self.peerRegistry.peerIDs }
+
+            if let peerID, !peerStillLinked {
                 self.notifyPeerDisconnectedDebounced(peerID)
             }
             self.requestPeerDataPublish()
-            self.delegate?.didUpdatePeerList(currentPeerIDs)
+            self.deliverTransportEvent(.peerListUpdated(currentPeerIDs))
         }
     }
     
@@ -1966,74 +3486,80 @@ func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeriph
         let peripheralID = peripheral.identifier.uuidString
         
         // Clean up the references
-        peripherals.removeValue(forKey: peripheralID)
+        collectionsQueue.sync(flags: .barrier) {
+            pendingPeripheralWrites.discardAll(for: peripheralID)
+        }
+        noiseAuthenticatedLinkOwners.removeValue(forKey: .peripheral(peripheralID))
+        noiseReconnectPolicy.endLinkEpoch(.peripheral(peripheralID))
+        _ = linkStateStore.removePeripheral(peripheralID)
         
         SecureLogger.error("❌ Failed to connect to peripheral: \(peripheral.name ?? "Unknown") [\(peripheralID)] - Error: \(error?.localizedDescription ?? "Unknown")", category: .session)
-        failureCounts[peripheralID, default: 0] += 1
+        connectionScheduler.recordConnectionFailure(peripheralID: peripheralID)
         // Try next candidate
         bleQueue.async { [weak self] in self?.tryConnectFromQueue() }
     }
 }
 
 // MARK: - Connection scheduling helpers
+private extension BLEExistingConnectionState {
+    init(_ state: BLEPeripheralLinkState) {
+        self.init(
+            isConnecting: state.isConnecting,
+            isConnected: state.isConnected,
+            lastConnectionAttempt: state.lastConnectionAttempt
+        )
+    }
+}
+
+private extension CBPeripheralState {
+    var connectionSchedulerState: BLEPeripheralConnectionState {
+        switch self {
+        case .connected:
+            return .connected
+        case .connecting:
+            return .connecting
+        case .disconnected, .disconnecting:
+            return .disconnected
+        @unknown default:
+            return .disconnected
+        }
+    }
+}
+
 extension BLEService {
     private func tryConnectFromQueue() {
-        guard let central = centralManager, central.state == .poweredOn else { return }
-        // Check budget and rate limit
-        let current = peripherals.values.filter { $0.isConnected || $0.isConnecting }.count
-        guard current < maxCentralLinks else { return }
-        let delta = Date().timeIntervalSince(lastGlobalConnectAttempt)
-        guard delta >= connectRateLimitInterval else {
-            let delay = connectRateLimitInterval - delta + 0.05
-            bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in self?.tryConnectFromQueue() }
-            return
-        }
-        // Pull best candidate by composite score
-        guard !connectionCandidates.isEmpty else { return }
-        // compute score: connectable> RSSI > recency, with backoff penalty
-        func score(_ c: ConnectionCandidate) -> Int {
-            let uuid = c.peripheral.identifier.uuidString
-            // Penalty if recently timed out (exponential)
-            let fails = failureCounts[uuid] ?? 0
-            let penalty = min(20, (1 << min(4, fails))) // 1,2,4,8,16 cap 16-20
-            let timeoutRecent = recentConnectTimeouts[uuid]
-            let timeoutBias = (timeoutRecent != nil && Date().timeIntervalSince(timeoutRecent!) < 60) ? 10 : 0
-            let base = (c.isConnectable ? 1000 : 0) + (c.rssi + 100) * 2
-            let rec = -Int(Date().timeIntervalSince(c.discoveredAt) * 10)
-            return base + rec - penalty - timeoutBias
-        }
-        connectionCandidates.sort { score($0) > score($1) }
-        let candidate = connectionCandidates.removeFirst()
-        guard candidate.isConnectable else { return }
-        let peripheral = candidate.peripheral
-        let peripheralID = peripheral.identifier.uuidString
-        // Weak-link cooldown: if we recently timed out and RSSI is very weak, delay retries
-        if let lastTO = recentConnectTimeouts[peripheralID] {
-            let elapsed = Date().timeIntervalSince(lastTO)
-            if elapsed < TransportConfig.bleWeakLinkCooldownSeconds && candidate.rssi <= TransportConfig.bleWeakLinkRSSICutoff {
-                // Requeue the candidate and try again later
-                connectionCandidates.append(candidate)
-                let remaining = TransportConfig.bleWeakLinkCooldownSeconds - elapsed
-                let delay = min(max(2.0, remaining), 15.0)
-                bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in self?.tryConnectFromQueue() }
-                return
-            }
-        }
-        if peripherals[peripheralID]?.isConnected == true || peripherals[peripheralID]?.isConnecting == true {
-            // Already in progress; skip
-            bleQueue.async { [weak self] in self?.tryConnectFromQueue() }
-            return
-        }
-        // Initiate connection
-        peripherals[peripheralID] = PeripheralState(
-            peripheral: peripheral,
-            characteristic: nil,
-            peerID: nil,
-            isConnecting: true,
-            isConnected: false,
-            lastConnectionAttempt: Date(),
-            assembler: NotificationStreamAssembler()
+        guard !isPanicSuspended,
+              let central = centralManager,
+              central.state == .poweredOn else { return }
+
+        let decision = connectionScheduler.nextCandidate(
+            connectedOrConnectingCount: linkStateStore.connectedOrConnectingPeripheralCount,
+            isAlreadyConnectingOrConnected: { [linkStateStore] peripheralID in
+                let state = linkStateStore.state(forPeripheralID: peripheralID)
+                return state?.isConnected == true || state?.isConnecting == true
+            },
+            now: Date()
         )
+
+        switch decision {
+        case .none:
+            return
+        case .retryAfter(let delay):
+            bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in self?.tryConnectFromQueue() }
+        case .connect(let candidate):
+            beginCentralConnection(candidate, using: central, logPrefix: "⏩ Queue connect")
+        }
+    }
+
+    private func beginCentralConnection(
+        _ candidate: BLEConnectionCandidate<CBPeripheral>,
+        using central: CBCentralManager,
+        logPrefix: String
+    ) {
+        guard !isPanicSuspended else { return }
+        let peripheral = candidate.peripheral
+        let peripheralID = candidate.peripheralID
+        linkStateStore.beginConnecting(to: peripheral, at: Date())
         peripheral.delegate = self
         let options: [String: Any] = [
             CBConnectPeripheralOptionNotifyOnConnectionKey: true,
@@ -2041,39 +3567,392 @@ extension BLEService {
             CBConnectPeripheralOptionNotifyOnNotificationKey: true
         ]
         central.connect(peripheral, options: options)
-        lastGlobalConnectAttempt = Date()
-        SecureLogger.debug("⏩ Queue connect: \(candidate.name) [RSSI:\(candidate.rssi)]", category: .session)
+        connectionScheduler.recordConnectionAttempt(at: Date())
+        SecureLogger.debug("\(logPrefix): \(candidate.name) [RSSI:\(candidate.rssi)]", category: .session)
+
+        bleQueue.asyncAfter(deadline: .now() + TransportConfig.bleConnectTimeoutSeconds) { [weak self] in
+            guard let self = self,
+                  let state = self.linkStateStore.state(forPeripheralID: peripheralID),
+                  state.isConnecting && !state.isConnected else { return }
+
+            guard peripheral.state != .connected else {
+                SecureLogger.debug("⏱️ Timeout fired but peripheral already connected: \(candidate.name)", category: .session)
+                return
+            }
+
+            #if os(iOS)
+            if !self.isAppActive {
+                // Backgrounded: leave the connect pending. iOS never expires
+                // it — the controller completes it whenever the peer comes
+                // back into range, waking the app (state restoration relaunches
+                // us if we were terminated). Foreground return cancels stale
+                // pendings via cancelStalePendingConnects().
+                SecureLogger.info("🌙 Connect timeout deferred while backgrounded, left pending for wake-on-proximity: \(candidate.name)", category: .session)
+                return
+            }
+            #endif
+
+            SecureLogger.debug("⏱️ Timeout: \(candidate.name)", category: .session)
+            central.cancelPeripheralConnection(peripheral)
+            self.collectionsQueue.sync(flags: .barrier) {
+                self.pendingPeripheralWrites.discardAll(for: peripheralID)
+            }
+            self.noiseAuthenticatedLinkOwners.removeValue(forKey: .peripheral(peripheralID))
+            self.noiseReconnectPolicy.endLinkEpoch(.peripheral(peripheralID))
+            _ = self.linkStateStore.removePeripheral(peripheralID)
+            self.connectionScheduler.recordConnectionTimeout(peripheralID: peripheralID, at: Date())
+            self.tryConnectFromQueue()
+        }
+    }
+}
+
+private extension BLEService {
+    static func shouldRediscoverBitChatService(
+        invalidatedServiceUUIDs: [CBUUID],
+        cachedServiceUUIDs: [CBUUID]?
+    ) -> Bool {
+        invalidatedServiceUUIDs.contains(serviceUUID) || cachedServiceUUIDs?.contains(serviceUUID) != true
     }
 }
 
 #if DEBUG
 // Test-only helper to inject packets into the receive pipeline
 extension BLEService {
-    func _test_handlePacket(_ packet: BitchatPacket, fromPeerID: PeerID, preseedPeer: Bool = true) {
+    /// Queues an event through the same MainActor hop as production receive
+    /// handlers so panic-boundary tests can deterministically invalidate it.
+    func _test_emitTransportEvent(_ event: TransportEvent) {
+        emitTransportEvent(event)
+    }
+
+    var _test_isPanicIngressOpen: Bool {
+        capturePanicLifecycleGeneration() != nil
+    }
+
+    /// Queries the receipt store of the service's OWN incoming-file store —
+    /// the instance production lookups run against — so panic tests exercise
+    /// the real wiring instead of a same-instance shortcut.
+    func _test_privateMediaReceiptState(
+        messageID: String
+    ) -> BLEPrivateMediaReceiptState {
+        incomingFileStore.privateMediaReceiptState(messageID: messageID)
+    }
+
+    /// Models a CoreBluetooth delegate callback without requiring a physical
+    /// peripheral. The callback itself runs on `bleQueue`, exactly where the
+    /// panic radio-stop barrier must linearize it.
+    func _test_handlePacketFromBLEQueue(
+        _ packet: BitchatPacket,
+        fromPeerID: PeerID
+    ) {
+        bleQueue.async { [weak self] in
+            self?.handleReceivedPacket(packet, from: fromPeerID)
+        }
+    }
+
+    func _test_emitTransportEvent(
+        _ event: TransportEvent,
+        completion: @escaping () -> Void,
+        finalization: @escaping (TransportEventDeliveryOutcome) -> Void
+    ) {
+        emitTransportEvent(
+            event,
+            completion: completion,
+            finalization: finalization
+        )
+    }
+
+    func _test_handlePacket(_ packet: BitchatPacket, fromPeerID: PeerID, preseedPeer: Bool = true, signingPublicKey: Data? = nil) {
         if preseedPeer {
             // Ensure the synthetic peer is known and marked verified for public-message tests
             let normalizedID = PeerID(hexData: packet.senderID)
             collectionsQueue.sync(flags: .barrier) {
-                if peers[normalizedID] == nil {
-                    peers[normalizedID] = PeerInfo(
+                if var existing = peerRegistry.info(for: normalizedID) {
+                    existing.isConnected = true
+                    existing.isVerifiedNickname = true
+                    if let signingPublicKey { existing.signingPublicKey = signingPublicKey }
+                    existing.lastSeen = Date()
+                    peerRegistry.upsert(existing)
+                } else {
+                    peerRegistry.upsert(BLEPeerInfo(
                         peerID: normalizedID,
                         nickname: "TestPeer_\(fromPeerID.id.prefix(4))",
                         isConnected: true,
                         noisePublicKey: packet.senderID,
-                        signingPublicKey: nil,
+                        signingPublicKey: signingPublicKey,
                         isVerifiedNickname: true,
                         lastSeen: Date()
-                    )
-                } else {
-                    var p = peers[normalizedID]!
-                    p.isConnected = true
-                    p.isVerifiedNickname = true
-                    p.lastSeen = Date()
-                    peers[normalizedID] = p
+                    ))
                 }
             }
         }
         handleReceivedPacket(packet, from: fromPeerID)
+    }
+
+    /// Waits until fragment ingress already submitted by a test has finished
+    /// reassembly/reinjection and any resulting transport event has crossed
+    /// the MainActor delivery hop. This is a deterministic pipeline fence,
+    /// avoiding wall-clock sleeps that become flaky under a parallel suite.
+    func _test_drainFragmentPipeline() async {
+        await withCheckedContinuation { continuation in
+            messageQueue.async(flags: .barrier) {
+                // Reassembled packets are reinjected synchronously on
+                // `messageQueue`; their UI delivery task is therefore already
+                // enqueued before this later MainActor marker.
+                Task { @MainActor in
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
+    func _test_hasGossipPrekeyBundle(for peerID: PeerID) -> Bool {
+        gossipSyncManager?._hasPrekeyBundle(for: peerID) ?? false
+    }
+
+    func _test_acceptsIngress(packet: BitchatPacket, boundPeerID: PeerID?) -> Bool {
+        let claimedSenderID = PeerID(hexData: packet.senderID)
+        guard case .success = BLEIngressLinkRegistry.packetContext(
+            for: packet,
+            claimedSenderID: claimedSenderID,
+            boundPeerID: boundPeerID,
+            localPeerID: myPeerID,
+            directAnnounceTTL: messageTTL
+        ) else {
+            return false
+        }
+        return true
+    }
+
+    func _test_recordIngressIfNew(packet: BitchatPacket, linkID: String) -> Bool {
+        recordIngressIfNew(packet, link: .central(linkID), peerID: PeerID(hexData: packet.senderID))
+    }
+
+    func _test_bindCentral(_ centralUUID: String, to peerID: PeerID) {
+        bleQueue.sync { linkStateStore.bindCentral(centralUUID, to: peerID) }
+    }
+
+    func _test_centralBinding(_ centralUUID: String) -> PeerID? {
+        bleQueue.sync { linkStateStore.peerID(forCentralUUID: centralUUID) }
+    }
+
+    func _test_markNoiseAuthenticatedCentral(_ centralUUID: String, to peerID: PeerID) {
+        bleQueue.sync {
+            guard linkStateStore.peerID(forCentralUUID: centralUUID) == peerID else { return }
+            noiseAuthenticatedLinkOwners[.central(centralUUID)] = peerID
+        }
+    }
+
+    func _test_isNoiseAuthenticatedCentral(_ centralUUID: String, for peerID: PeerID) -> Bool {
+        bleQueue.sync {
+            noiseAuthenticatedLinkOwners[.central(centralUUID)] == peerID
+        }
+    }
+
+    func _test_seedConnectedPeer(
+        _ peerID: PeerID,
+        nickname: String,
+        capabilities: PeerCapabilities? = nil,
+        noisePublicKey: Data? = nil
+    ) {
+        collectionsQueue.sync(flags: .barrier) {
+            peerRegistry.upsert(BLEPeerInfo(
+                peerID: peerID,
+                nickname: nickname,
+                isConnected: true,
+                noisePublicKey: noisePublicKey,
+                signingPublicKey: nil,
+                isVerifiedNickname: true,
+                lastSeen: Date(),
+                capabilities: capabilities ?? [],
+                capabilitiesWereExplicitlyAdvertised: capabilities != nil
+            ))
+        }
+    }
+
+    /// Handshake plumbing for tests that need a real established Noise
+    /// session (e.g. canDeliverSecurely) without Bluetooth in the loop.
+    func _test_noiseInitiateHandshake(with peerID: PeerID) throws -> Data {
+        try noiseService.initiateHandshake(with: peerID)
+    }
+
+    func _test_noiseProcessHandshakeMessage(from peerID: PeerID, message: Data) throws -> Data? {
+        try noiseService.processHandshakeMessage(from: peerID, message: message)
+    }
+
+    func _test_enqueuePendingPrivateMessage(
+        content: String,
+        messageID: String,
+        for peerID: PeerID
+    ) {
+        collectionsQueue.sync(flags: .barrier) {
+            pendingNoiseSessionQueues.appendPrivateMessage(
+                content: content,
+                messageID: messageID,
+                for: peerID
+            )
+        }
+    }
+
+    func _test_enqueuePendingNoisePayload(
+        _ payload: Data,
+        transferId: String,
+        for peerID: PeerID
+    ) {
+        guard privateMediaTransferAdmissions.begin(transferId) == .admitted else { return }
+        collectionsQueue.sync(flags: .barrier) {
+            pendingNoiseSessionQueues.appendTypedPayload(
+                payload,
+                transferId: transferId,
+                for: peerID
+            )
+        }
+    }
+
+    func _test_sendPendingNoisePayloadsAfterHandshake(for peerID: PeerID) {
+        sendPendingNoisePayloadsAfterHandshake(for: peerID)
+    }
+
+    func _test_hasPendingPrivateMediaPolicyResolution(for peerID: PeerID) -> Bool {
+        collectionsQueue.sync {
+            pendingPrivateMediaPolicyResolutions[peerID.toShort()] != nil
+        }
+    }
+
+    func _test_forcePrivateMediaProofTimeout(for peerID: PeerID) {
+        let normalizedPeerID = peerID.toShort()
+        let target = collectionsQueue.sync {
+            () -> (fingerprint: String, generation: UUID?, nonce: UUID)? in
+            if let watchdog = privateMediaProofWatchdogs[normalizedPeerID] {
+                return (
+                    watchdog.fingerprint,
+                    watchdog.sessionGeneration,
+                    watchdog.timeoutNonce
+                )
+            }
+            if let pending = pendingPrivateMediaPolicyResolutions[normalizedPeerID] {
+                return (
+                    pending.fingerprint,
+                    pending.sessionGeneration,
+                    pending.timeoutNonce
+                )
+            }
+            return nil
+        }
+        guard let target else { return }
+        handlePrivateMediaProofTimeout(
+            for: normalizedPeerID,
+            fingerprint: target.fingerprint,
+            sessionGeneration: target.generation,
+            nonce: target.nonce
+        )
+    }
+
+    func _test_privateMediaTransferState(
+        transferId: String
+    ) -> (admissionActive: Bool, pendingNoise: Bool, activeScheduler: Int, pendingScheduler: Int) {
+        let scheduler = collectionsQueue.sync {
+            (
+                pendingNoiseSessionQueues.containsTypedPayload(transferId: transferId),
+                outboundFragmentTransfers.activeCount,
+                outboundFragmentTransfers.pendingCount
+            )
+        }
+        return (
+            privateMediaTransferAdmissions.isActive(transferId),
+            scheduler.0,
+            scheduler.1,
+            scheduler.2
+        )
+    }
+
+    func _test_privateMediaAdmissionEntryCount() -> Int {
+        privateMediaTransferAdmissions.count
+    }
+
+    @discardableResult
+    func _test_beginPrivateMediaAdmission(_ transferId: String, now: Date) -> Bool {
+        privateMediaTransferAdmissions.begin(transferId, now: now) == .admitted
+    }
+
+    func _test_isPrivateMediaAdmissionActive(_ transferId: String, now: Date) -> Bool {
+        privateMediaTransferAdmissions.isActive(transferId, now: now)
+    }
+
+    func _test_finishPrivateMediaAdmission(_ transferId: String) {
+        privateMediaTransferAdmissions.finish(transferId)
+    }
+
+    func _test_drainPrivateMediaSendPipeline() async {
+        let collectionsQueue = self.collectionsQueue
+        await withCheckedContinuation { continuation in
+            messageQueue.async {
+                collectionsQueue.async(flags: .barrier) {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
+    func _test_broadcastPrivateMediaPacket(
+        _ packet: BitchatPacket,
+        transferId: String
+    ) {
+        broadcastPacket(
+            packet,
+            transferId: transferId,
+            requiresPrivateMediaAdmission: true
+        )
+    }
+
+    func _test_drainNoiseMessagePipeline() async {
+        let collectionsQueue = self.collectionsQueue
+        await withCheckedContinuation { continuation in
+            messageQueue.async(flags: .barrier) {
+                collectionsQueue.async(flags: .barrier) {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
+    /// Replays the current generation's ready callback. Restore tests use
+    /// this to prove same-generation reconciliation is idempotent.
+    func _test_reconcileCurrentNoiseSession(for peerID: PeerID) {
+        let normalizedPeerID = peerID.toShort()
+        messageQueue.async(flags: .barrier) { [weak self] in
+            guard let self,
+                  let generation = self.noiseService.sessionGeneration(
+                    for: normalizedPeerID
+                  ),
+                  let fingerprint = self.noiseService.getPeerFingerprint(
+                    normalizedPeerID
+                  ) else {
+                return
+            }
+            self.handleNoisePeerAuthenticated(
+                peerID: normalizedPeerID,
+                fingerprint: fingerprint,
+                sessionGeneration: generation
+            )
+        }
+    }
+
+    /// Builds an authenticated-session packet from an exact typed plaintext.
+    /// Compatibility tests use this to model Android's deployed 0x20 file
+    /// payload and the short-lived 0x09 prerelease payload without exposing a
+    /// production API that can emit the old value.
+    func _test_makeEncryptedNoisePacket(_ typedPayload: Data, to peerID: PeerID) throws -> BitchatPacket {
+        try makeEncryptedNoisePacket(typedPayload, to: peerID)
+    }
+
+    static func _test_shouldRediscoverBitChatService(
+        invalidatedServiceUUIDs: [CBUUID],
+        cachedServiceUUIDs: [CBUUID]?
+    ) -> Bool {
+        shouldRediscoverBitChatService(
+            invalidatedServiceUUIDs: invalidatedServiceUUIDs,
+            cachedServiceUUIDs: cachedServiceUUIDs
+        )
     }
 }
 #endif
@@ -2082,6 +3961,7 @@ extension BLEService {
 
 extension BLEService: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
+        guard !isPanicSuspended else { return }
         if let error = error {
             SecureLogger.error("❌ Error discovering services for \(peripheral.name ?? "Unknown"): \(error.localizedDescription)", category: .session)
             // Retry service discovery after a delay
@@ -2108,6 +3988,7 @@ extension BLEService: CBPeripheralDelegate {
     }
     
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
+        guard !isPanicSuspended else { return }
         if let error = error {
             SecureLogger.error("❌ Error discovering characteristics for \(peripheral.name ?? "Unknown"): \(error.localizedDescription)", category: .session)
             return
@@ -2136,10 +4017,7 @@ extension BLEService: CBPeripheralDelegate {
         
         // Store characteristic in our consolidated structure
         let peripheralID = peripheral.identifier.uuidString
-        if var state = peripherals[peripheralID] {
-            state.characteristic = characteristic
-            peripherals[peripheralID] = state
-        }
+        linkStateStore.updateCharacteristic(characteristic, forPeripheralID: peripheralID)
         
         // Subscribe for notifications
         if characteristic.properties.contains(.notify) {
@@ -2158,6 +4036,7 @@ extension BLEService: CBPeripheralDelegate {
     }
     
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
+        guard !isPanicSuspended else { return }
         if let error = error {
             SecureLogger.error("❌ Error receiving notification: \(error.localizedDescription)", category: .session)
             return
@@ -2174,7 +4053,7 @@ extension BLEService: CBPeripheralDelegate {
     private func bufferNotificationChunk(_ chunk: Data, from peripheral: CBPeripheral) {
         let peripheralUUID = peripheral.identifier.uuidString
 
-        var state = peripherals[peripheralUUID] ?? PeripheralState(
+        var state = linkStateStore.state(forPeripheralID: peripheralUUID) ?? BLEPeripheralLinkState(
             peripheral: peripheral,
             characteristic: nil,
             peerID: nil,
@@ -2187,7 +4066,7 @@ extension BLEService: CBPeripheralDelegate {
         var assembler = state.assembler
         let result = assembler.append(chunk)
         state.assembler = assembler
-        peripherals[peripheralUUID] = state
+        linkStateStore.setPeripheralState(state, for: peripheralUUID)
 
         for byte in result.droppedPrefixes {
             SecureLogger.warning("⚠️ Dropping byte from BLE stream (unexpected prefix \(String(format: "%02x", byte)))", category: .session)
@@ -2199,7 +4078,7 @@ extension BLEService: CBPeripheralDelegate {
         
         // Codex review identified TOCTOU in this patch.
         // Enforce per-link sender binding immediately within the same notification batch.
-        // NOTE: `processNotificationPacket` may bind `peripherals[peripheralUUID].peerID` when an announce
+        // NOTE: `processNotificationPacket` may bind the stored peer ID when an announce
         // is processed, but `state` above is a snapshot. Track a local binding that we update as soon as
         // we see a binding-eligible announce so subsequent frames can't spoof a different sender.
         var boundPeerID: PeerID? = state.peerID
@@ -2212,21 +4091,14 @@ extension BLEService: CBPeripheralDelegate {
             }
 
             let claimedSenderID = PeerID(hexData: packet.senderID)
+            let context = acceptedIngressContext(
+                for: packet,
+                claimedSenderID: claimedSenderID,
+                boundPeerID: boundPeerID,
+                linkDescription: "Peripheral \(peripheralUUID.prefix(8))…"
+            )
 
-            let trustedSenderID: PeerID?
-            if let knownPeerID = boundPeerID {
-                if knownPeerID != claimedSenderID {
-                    SecureLogger.warning("🚫 SECURITY: Sender ID spoofing attempt detected! Peripheral \(peripheralUUID.prefix(8))… claimed to be \(claimedSenderID.id.prefix(8))… but is bound to \(knownPeerID.id.prefix(8))…", category: .security)
-                    continue
-                }
-                trustedSenderID = knownPeerID
-            } else {
-                trustedSenderID = nil
-            }
-
-            if !validatePacket(packet, from: trustedSenderID ?? claimedSenderID, connectionSource: .peripheral(peripheralUUID)) {
-                continue
-            }
+            guard let context else { continue }
 
             // If this is a direct-link announce, bind immediately for the remainder of this batch.
             if boundPeerID == nil,
@@ -2234,41 +4106,42 @@ extension BLEService: CBPeripheralDelegate {
                packet.ttl == messageTTL {
                 boundPeerID = claimedSenderID
                 state.peerID = claimedSenderID
-                peripherals[peripheralUUID] = state
+                linkStateStore.bindPeripheral(peripheralUUID, to: claimedSenderID)
             }
-            processNotificationPacket(packet, from: peripheral, peripheralUUID: peripheralUUID)
+
+            if !recordIngressIfNew(packet, link: .peripheral(peripheralUUID), peerID: context.receivedFromPeerID) {
+                continue
+            }
+            processNotificationPacket(
+                packet,
+                from: peripheral,
+                peripheralUUID: peripheralUUID,
+                receivedFrom: context.receivedFromPeerID
+            )
         }
     }
 
-    private func processNotificationPacket(_ packet: BitchatPacket, from peripheral: CBPeripheral, peripheralUUID: String) {
+    private func processNotificationPacket(_ packet: BitchatPacket, from _: CBPeripheral, peripheralUUID: String, receivedFrom peerID: PeerID) {
         let senderID = PeerID(hexData: packet.senderID)
 
         if packet.type != MessageType.announce.rawValue {
-            SecureLogger.debug("📦 Decoded notification packet type: \(packet.type) from sender: \(senderID)", category: .session)
+            SecureLogger.debug("📦 Decoded notification packet type: \(packet.type) from sender: \(senderID.id.prefix(8))…", category: .session)
         }
 
-        if packet.type == MessageType.announce.rawValue {
-            if packet.ttl == messageTTL {
-                if var state = peripherals[peripheralUUID] {
-                    state.peerID = senderID
-                    peripherals[peripheralUUID] = state
-                }
-                peerToPeripheralUUID[senderID] = peripheralUUID
+        if packet.type == MessageType.announce.rawValue,
+           packet.ttl == messageTTL {
+            // Only bind an unbound link here: this runs before signature
+            // verification, so a bound link must not be re-bound by a raw
+            // announce (spoofable). Rotation rebinds happen after the announce
+            // verifies (rebindLinkAfterVerifiedDirectAnnounce).
+            let boundPeerID = linkStateStore.peerID(forPeripheralID: peripheralUUID)
+            if boundPeerID == nil || boundPeerID == senderID {
+                linkStateStore.bindPeripheral(peripheralUUID, to: senderID)
                 refreshLocalTopology()
             }
-
-            let msgID = makeMessageID(for: packet)
-            collectionsQueue.async(flags: .barrier) { [weak self] in
-                self?.ingressByMessageID[msgID] = (.peripheral(peripheralUUID), Date())
-            }
-            handleReceivedPacket(packet, from: senderID)
-        } else {
-            let msgID = makeMessageID(for: packet)
-            collectionsQueue.async(flags: .barrier) { [weak self] in
-                self?.ingressByMessageID[msgID] = (.peripheral(peripheralUUID), Date())
-            }
-            handleReceivedPacket(packet, from: senderID)
         }
+
+        handleReceivedPacket(packet, from: peerID)
     }
     
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
@@ -2281,28 +4154,37 @@ extension BLEService: CBPeripheralDelegate {
     }
     
     func peripheralIsReady(toSendWriteWithoutResponse peripheral: CBPeripheral) {
+        guard !isPanicSuspended else { return }
         // Resume queued writes for this peripheral - called when canSendWriteWithoutResponse becomes true again
-        SecureLogger.debug("📤 Peripheral \(peripheral.name ?? peripheral.identifier.uuidString.prefix(8).description) ready for more writes", category: .session)
+        if logRateLimiter.shouldLog(key: "peripheral-ready:\(peripheral.identifier.uuidString)") {
+            SecureLogger.debug("📤 Peripheral \(peripheral.name ?? peripheral.identifier.uuidString.prefix(8).description) ready for more writes", category: .session)
+        }
         drainPendingWrites(for: peripheral)
     }
     
     func peripheral(_ peripheral: CBPeripheral, didModifyServices invalidatedServices: [CBService]) {
+        guard !isPanicSuspended else { return }
         SecureLogger.warning("⚠️ Services modified for \(peripheral.name ?? peripheral.identifier.uuidString)", category: .session)
-        
-        // Check if our service was invalidated (peer app quit)
-        let hasOurService = peripheral.services?.contains { $0.uuid == BLEService.serviceUUID } ?? false
-        
-        if !hasOurService {
-            // Service is gone - disconnect
-            SecureLogger.warning("❌ BitChat service removed - disconnecting from \(peripheral.name ?? peripheral.identifier.uuidString)", category: .session)
-            centralManager?.cancelPeripheralConnection(peripheral)
-        } else {
-            // Try to rediscover
-            peripheral.discoverServices([BLEService.serviceUUID])
+
+        let shouldRediscover = BLEService.shouldRediscoverBitChatService(
+            invalidatedServiceUUIDs: invalidatedServices.map(\.uuid),
+            cachedServiceUUIDs: peripheral.services?.map(\.uuid)
+        )
+
+        guard shouldRediscover else { return }
+
+        let peripheralID = peripheral.identifier.uuidString
+        linkStateStore.updatePeripheral(peripheralID) {
+            $0.characteristic = nil
+            $0.assembler = NotificationStreamAssembler()
         }
+
+        SecureLogger.debug("🔄 BitChat service changed for \(peripheral.name ?? peripheral.identifier.uuidString), rediscovering", category: .session)
+        peripheral.discoverServices([BLEService.serviceUUID])
     }
     
     func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
+        guard !isPanicSuspended else { return }
         if let error = error {
             SecureLogger.error("❌ Error updating notification state: \(error.localizedDescription)", category: .session)
         } else {
@@ -2326,6 +4208,12 @@ extension BLEService: CBPeripheralManagerDelegate {
 
         switch peripheral.state {
         case .poweredOn:
+            guard !isPanicSuspended else {
+                peripheral.stopAdvertising()
+                peripheral.removeAllServices()
+                characteristic = nil
+                return
+            }
             // Remove all services first to ensure clean state
             peripheral.removeAllServices()
 
@@ -2348,12 +4236,21 @@ extension BLEService: CBPeripheralManagerDelegate {
         case .poweredOff:
             // Bluetooth was turned off - clean up peripheral state
             SecureLogger.info("📴 Bluetooth powered off - cleaning up peripheral state", category: .session)
-            peripheral.stopAdvertising()
             // Clear subscribed centrals (they are now invalid)
-            let centralPeerIDs = centralToPeerID.values.map { $0 }
-            subscribedCentrals.removeAll()
-            centralToPeerID.removeAll()
-            centralSubscriptionRateLimits.removeAll()
+            let centralSnapshot = linkStateStore.subscribedCentralSnapshot
+            for central in centralSnapshot.centrals {
+                let centralID = central.identifier.uuidString
+                noiseAuthenticatedLinkOwners.removeValue(
+                    forKey: .central(centralID)
+                )
+                noiseReconnectPolicy.endLinkEpoch(.central(centralID))
+            }
+            collectionsQueue.sync(flags: .barrier) {
+                pendingNotifications.removeAll()
+                pendingWriteBuffers.removeAll()
+            }
+            let centralPeerIDs = linkStateStore.clearCentrals()
+            subscriptionAnnounceLimiter.removeAll()
             characteristic = nil
             // Notify UI of disconnections
             for peerID in centralPeerIDs {
@@ -2365,10 +4262,8 @@ extension BLEService: CBPeripheralManagerDelegate {
         case .unauthorized:
             // User denied Bluetooth permission
             SecureLogger.warning("🚫 Bluetooth unauthorized for peripheral role", category: .session)
-            peripheral.stopAdvertising()
-            subscribedCentrals.removeAll()
-            centralToPeerID.removeAll()
-            centralSubscriptionRateLimits.removeAll()
+            _ = linkStateStore.clearCentrals()
+            subscriptionAnnounceLimiter.removeAll()
             characteristic = nil
 
         case .unsupported:
@@ -2388,7 +4283,13 @@ extension BLEService: CBPeripheralManagerDelegate {
     }
     
     #if os(iOS)
-    func peripheralManager(_ peripheral: CBPeripheralManager, willRestoreState dict: [String : Any]) {
+    func peripheralManager(_ peripheral: CBPeripheralManager, willRestoreState dict: [String: Any]) {
+        guard !isPanicSuspended else {
+            peripheral.stopAdvertising()
+            peripheral.removeAllServices()
+            characteristic = nil
+            return
+        }
         let restoredServices = (dict[CBPeripheralManagerRestoredStateServicesKey] as? [CBMutableService]) ?? []
         let restoredAdvertisement = (dict[CBPeripheralManagerRestoredStateAdvertisementDataKey] as? [String: Any]) ?? [:]
 
@@ -2405,7 +4306,8 @@ extension BLEService: CBPeripheralManagerDelegate {
             }
         }
 
-        captureBluetoothStatus(context: "peripheral-restore")
+        // Via the sampler for a fresh background budget (see central-restore).
+        logBluetoothStatus("peripheral-restore")
 
         if peripheral.state == .poweredOn && !peripheral.isAdvertising {
             peripheral.startAdvertising(buildAdvertisementData())
@@ -2414,6 +4316,10 @@ extension BLEService: CBPeripheralManagerDelegate {
     #endif
     
     func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?) {
+        guard !isPanicSuspended else {
+            peripheral.stopAdvertising()
+            return
+        }
         if let error = error {
             SecureLogger.error("❌ Failed to add service: \(error.localizedDescription)", category: .session)
             return
@@ -2429,67 +4335,29 @@ extension BLEService: CBPeripheralManagerDelegate {
     }
     
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {
+        guard !isPanicSuspended else { return }
         let centralUUID = central.identifier.uuidString
-        SecureLogger.debug("📥 Central subscribed: \(centralUUID)", category: .session)
-        subscribedCentrals.append(central)
+        SecureLogger.debug("📥 Central subscribed: \(centralUUID.prefix(8))…", category: .session)
+        linkStateStore.addSubscribedCentral(central)
 
         // BCH-01-004: Rate-limit subscription-triggered announces to prevent enumeration attacks
         let now = Date()
-        var state = centralSubscriptionRateLimits[centralUUID]
-
-        // Clean up stale entries periodically
-        cleanupStaleSubscriptionRateLimits()
-
-        // Check if this central is rate-limited
-        if let existingState = state {
-            let timeSinceLastAnnounce = now.timeIntervalSince(existingState.lastAnnounceTime)
-
-            // If within backoff period, skip the announce
-            if timeSinceLastAnnounce < existingState.currentBackoffSeconds {
-                SecureLogger.warning("🛡️ BCH-01-004: Rate-limited announce for central \(centralUUID.prefix(8))... (backoff: \(Int(existingState.currentBackoffSeconds))s, attempts: \(existingState.attemptCount))", category: .security)
-
-                // Increment attempt count and increase backoff
-                // Update lastAnnounceTime to 'now' so each blocked attempt extends the suppression window
-                // This prevents attackers from waiting out the backoff while spamming attempts
-                let newAttemptCount = existingState.attemptCount + 1
-                let newBackoff = min(
-                    existingState.currentBackoffSeconds * TransportConfig.bleSubscriptionRateLimitBackoffFactor,
-                    TransportConfig.bleSubscriptionRateLimitMaxBackoffSeconds
-                )
-                centralSubscriptionRateLimits[centralUUID] = SubscriptionRateLimitState(
-                    lastAnnounceTime: now,  // Reset timer on each blocked attempt
-                    attemptCount: newAttemptCount,
-                    currentBackoffSeconds: newBackoff
-                )
-
-                // If too many rapid attempts, this is likely an enumeration attack - don't respond
-                if newAttemptCount >= TransportConfig.bleSubscriptionRateLimitMaxAttempts {
-                    SecureLogger.warning("🚨 BCH-01-004: Possible enumeration attack from central \(centralUUID.prefix(8))... - suppressing announce", category: .security)
-                    return
-                }
-
-                // Still flush directed packets for legitimate mesh operation
-                messageQueue.asyncAfter(deadline: .now() + TransportConfig.blePostAnnounceDelaySeconds) { [weak self] in
-                    self?.flushDirectedSpool()
-                }
+        switch subscriptionAnnounceLimiter.decision(for: centralUUID, now: now) {
+        case .allowed:
+            break
+        case let .rateLimited(backoffSeconds, attemptCount, suppressAnnounce):
+            SecureLogger.warning("🛡️ BCH-01-004: Rate-limited announce for central \(centralUUID.prefix(8))... (backoff: \(Int(backoffSeconds))s, attempts: \(attemptCount))", category: .security)
+            if suppressAnnounce {
+                SecureLogger.warning("🚨 BCH-01-004: Possible enumeration attack from central \(centralUUID.prefix(8))... - suppressing announce", category: .security)
                 return
             }
 
-            // Outside backoff period - allow announce but track it
-            state = SubscriptionRateLimitState(
-                lastAnnounceTime: now,
-                attemptCount: 1,
-                currentBackoffSeconds: TransportConfig.bleSubscriptionRateLimitMinSeconds
-            )
-        } else {
-            // First subscription from this central - track it
-            state = SubscriptionRateLimitState(
-                lastAnnounceTime: now,
-                attemptCount: 1,
-                currentBackoffSeconds: TransportConfig.bleSubscriptionRateLimitMinSeconds
-            )
+            // Still flush directed packets for legitimate mesh operation
+            messageQueue.asyncAfter(deadline: .now() + TransportConfig.blePostAnnounceDelaySeconds) { [weak self] in
+                self?.flushDirectedSpool()
+            }
+            return
         }
-        centralSubscriptionRateLimits[centralUUID] = state
 
         // Send announce to the newly subscribed central after a small delay
         messageQueue.asyncAfter(deadline: .now() + TransportConfig.blePostAnnounceDelaySeconds) { [weak self] in
@@ -2498,39 +4366,37 @@ extension BLEService: CBPeripheralManagerDelegate {
             self?.flushDirectedSpool()
         }
     }
-
-    /// BCH-01-004: Clean up stale rate-limit entries to prevent memory growth
-    private func cleanupStaleSubscriptionRateLimits() {
-        let now = Date()
-        let windowSeconds = TransportConfig.bleSubscriptionRateLimitWindowSeconds
-        centralSubscriptionRateLimits = centralSubscriptionRateLimits.filter { _, state in
-            now.timeIntervalSince(state.lastAnnounceTime) < windowSeconds
-        }
-    }
     
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
-        SecureLogger.debug("📤 Central unsubscribed: \(central.identifier.uuidString)", category: .session)
-        subscribedCentrals.removeAll { $0.identifier == central.identifier }
+        let centralID = central.identifier.uuidString
+        SecureLogger.debug("📤 Central unsubscribed: \(centralID.prefix(8))…", category: .session)
+        collectionsQueue.sync(flags: .barrier) {
+            pendingNotifications.removeTarget { $0.identifier.uuidString == centralID }
+        }
+        noiseAuthenticatedLinkOwners.removeValue(forKey: .central(centralID))
+        noiseReconnectPolicy.endLinkEpoch(.central(centralID))
+        let removedPeerID = linkStateStore.removeSubscribedCentral(central)
         
         // Ensure we're still advertising for other devices to find us
-        if peripheral.isAdvertising == false {
+        if !isPanicSuspended, peripheral.isAdvertising == false {
             SecureLogger.debug("📡 Restarting advertising after central unsubscribed", category: .session)
             peripheral.startAdvertising(buildAdvertisementData())
         }
         
         // Find and disconnect the peer associated with this central
-        let centralUUID = central.identifier.uuidString
-        if let peerID = centralToPeerID[centralUUID] {
+        if let peerID = removedPeerID {
+            // The remote side retiring a redundant duplicate connection
+            // arrives here as an unsubscribe while the peer stays live on
+            // its other links; only the peer's last link disconnecting
+            // counts. If every link truly dropped, the surviving-link
+            // callbacks (didDisconnectPeripheral, or this one again) run
+            // the bookkeeping.
+            guard linkStateStore.links(to: peerID).isEmpty else { return }
             // Mark peer as not connected; retain for reachability
             collectionsQueue.sync(flags: .barrier) {
-                if var info = peers[peerID] {
-                    info.isConnected = false
-                    peers[peerID] = info
-                }
+                peerRegistry.markDisconnected(peerID)
             }
             
-            // Clean up mappings
-            centralToPeerID.removeValue(forKey: centralUUID)
             refreshLocalTopology()
             
             // Update UI immediately
@@ -2538,66 +4404,65 @@ extension BLEService: CBPeripheralManagerDelegate {
                 guard let self = self else { return }
                 
                 // Get current peer list (after removal)
-                let currentPeerIDs = self.collectionsQueue.sync { self.currentPeerIDs }
+                let currentPeerIDs = self.collectionsQueue.sync { self.peerRegistry.peerIDs }
                 
                 self.notifyPeerDisconnectedDebounced(peerID)
                 // Publish snapshots so UnifiedPeerService can refresh icons promptly
                 self.requestPeerDataPublish()
-                self.delegate?.didUpdatePeerList(currentPeerIDs)
+                self.deliverTransportEvent(.peerListUpdated(currentPeerIDs))
             }
         }
     }
     
     func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager) {
-        SecureLogger.debug("📤 Peripheral manager ready to send more notifications", category: .session)
-        
-        // Retry pending notifications now that queue has space
+        guard !isPanicSuspended else { return }
+        drainPendingNotifications(logPrefix: "✅ Sent")
+    }
+
+    private func logBackpressureSampled(_ message: @autoclosure () -> String) {
+        notificationBackpressureLogCount += 1
+        if notificationBackpressureLogCount == 1 ||
+            notificationBackpressureLogCount.isMultiple(of: TransportConfig.bleBackpressureLogInterval) {
+            SecureLogger.debug("\(message()) [backpressure event #\(notificationBackpressureLogCount)]", category: .session)
+        }
+    }
+
+    private func drainPendingNotifications(logPrefix: String) {
         collectionsQueue.async(flags: .barrier) { [weak self] in
             guard let self = self,
                   let characteristic = self.characteristic,
                   !self.pendingNotifications.isEmpty else { return }
-            
-            let pending = self.pendingNotifications
-            self.pendingNotifications.removeAll()
-            
-            // Try to send pending notifications
-            var sentCount = 0
-            for (index, (data, centrals)) in pending.enumerated() {
-                if let centrals = centrals {
-                    // Send to specific centrals
-                    let success = self.peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: centrals) ?? false
-                    if !success {
-                        // Still full, re-queue this and all remaining items
-                        let remaining = pending.dropFirst(index)
-                        self.pendingNotifications.append(contentsOf: remaining)
-                        SecureLogger.debug("⚠️ Notification queue still full after \(sentCount) sent, re-queuing \(remaining.count) items", category: .session)
-                        break  // Stop trying, wait for next ready callback
-                    } else {
-                        sentCount += 1
-                    }
-                } else {
-                    // Broadcast to all
-                    let success = self.peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: nil) ?? false
-                    if !success {
-                        // Still full, re-queue this and all remaining items
-                        let remaining = pending.dropFirst(index)
-                        self.pendingNotifications.append(contentsOf: remaining)
-                        SecureLogger.debug("⚠️ Notification queue still full after \(sentCount) sent, re-queuing \(remaining.count) items", category: .session)
-                        break
-                    } else {
-                        sentCount += 1
-                    }
-                }
-            }
+
+            let pending = self.pendingNotifications.takeAll()
+            let sentCount = self.sendPendingNotifications(pending, characteristic: characteristic)
 
             if sentCount > 0 {
-                SecureLogger.debug("✅ Sent \(sentCount) pending notifications from retry queue", category: .session)
-            }
-            
-            if !self.pendingNotifications.isEmpty {
-                SecureLogger.debug("📋 Still have \(self.pendingNotifications.count) pending notifications", category: .session)
+                self.logBackpressureSampled("\(logPrefix) \(sentCount) pending notifications from retry queue (\(self.pendingNotifications.count) still pending)")
             }
         }
+    }
+
+    private func sendPendingNotifications(_ pending: [BLEPendingNotification<CBCentral>], characteristic: CBMutableCharacteristic) -> Int {
+        var sentCount = 0
+
+        for (index, notification) in pending.enumerated() {
+            let success = peripheralManager?.updateValue(
+                notification.data,
+                for: characteristic,
+                onSubscribedCentrals: notification.targets
+            ) ?? false
+
+            guard success else {
+                let remaining = Array(pending.dropFirst(index))
+                pendingNotifications.prepend(remaining)
+                logBackpressureSampled("⚠️ Notification queue still full after \(sentCount) sent, re-queuing \(remaining.count) items")
+                break
+            }
+
+            sentCount += 1
+        }
+
+        return sentCount
     }
     
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {
@@ -2611,6 +4476,7 @@ extension BLEService: CBPeripheralManagerDelegate {
         for request in requests {
             peripheral.respond(to: request, withResult: .success)
         }
+        guard !isPanicSuspended else { return }
         
         // Process writes. For long writes, CoreBluetooth may deliver multiple CBATTRequest values with offsets.
         // Combine per-central request values by offset before decoding.
@@ -2620,93 +4486,84 @@ extension BLEService: CBPeripheralManagerDelegate {
             // Sort by offset ascending
             let sorted = group.sorted { $0.offset < $1.offset }
             let hasMultiple = sorted.count > 1 || (sorted.first?.offset ?? 0) > 0
-
-            // Always merge into a persistent per-central buffer to handle multi-callback long writes
-            var combined = pendingWriteBuffers[centralUUID] ?? Data()
-            var appendedBytes = 0
-            var offsets: [Int] = []
-            for r in sorted {
-                guard let chunk = r.value, !chunk.isEmpty else { continue }
-                offsets.append(r.offset)
-                let end = r.offset + chunk.count
-                if combined.count < end {
-                    combined.append(Data(repeating: 0, count: end - combined.count))
-                }
-                // Write chunk into the correct position (supports out-of-order and overlapping writes)
-                combined.replaceSubrange(r.offset..<end, with: chunk)
-                appendedBytes += chunk.count
-            }
-            pendingWriteBuffers[centralUUID] = combined
-
-            // Peek type byte for debug: version is at 0, type at 1 when well-formed
-            if combined.count >= 2 {
-                let peekType = combined[1]
-                if peekType != MessageType.announce.rawValue {
-                    SecureLogger.debug("📥 Accumulated write from central \(centralUUID): size=\(combined.count) (+\(appendedBytes)) bytes (type=\(peekType)), offsets=\(offsets)", category: .session)
-                }
+            let chunks = sorted.compactMap { request -> BLEInboundWriteChunk? in
+                guard let data = request.value, !data.isEmpty else { return nil }
+                return BLEInboundWriteChunk(offset: request.offset, data: data)
             }
 
-            // Try decode the accumulated buffer
-            if let packet = BinaryProtocol.decode(combined) {
-                // Clear buffer on success
-                pendingWriteBuffers.removeValue(forKey: centralUUID)
+            let result = pendingWriteBuffers.append(
+                chunks: chunks,
+                for: centralUUID,
+                capBytes: TransportConfig.blePendingWriteBufferCapBytes
+            )
 
-                let claimedSenderID = PeerID(hexData: packet.senderID)
+            switch result {
+            case let .decoded(packet, metadata):
+                logAccumulatedCentralWrite(metadata, centralUUID: centralUUID)
+                processDecodedCentralWrite(packet, centralUUID: centralUUID, central: sorted[0].central)
 
-                let trustedSenderID: PeerID?
-                if let knownPeerID = centralToPeerID[centralUUID] {
-                    if knownPeerID != claimedSenderID {
-                        SecureLogger.warning("🚫 SECURITY: Sender ID spoofing attempt detected! Central \(centralUUID.prefix(8))… claimed to be \(claimedSenderID.id.prefix(8))… but is bound to \(knownPeerID.id.prefix(8))…", category: .security)
-                        continue
-                    }
-                    trustedSenderID = knownPeerID
-                } else {
-                    trustedSenderID = nil
-                }
+            case let .waiting(metadata):
+                logAccumulatedCentralWrite(metadata, centralUUID: centralUUID)
+                logFailedSingleWriteIfNeeded(hasMultiple: hasMultiple, sortedRequests: sorted)
 
-                if !validatePacket(packet, from: trustedSenderID ?? claimedSenderID, connectionSource: .central(centralUUID)) {
-                    continue
-                }
-
-                if packet.type != MessageType.announce.rawValue {
-                    SecureLogger.debug("📦 Decoded (combined) packet type: \(packet.type) from sender: \(claimedSenderID)", category: .session)
-                }
-                if !subscribedCentrals.contains(sorted[0].central) {
-                    subscribedCentrals.append(sorted[0].central)
-                }
-                if packet.type == MessageType.announce.rawValue {
-                    if packet.ttl == messageTTL {
-                        centralToPeerID[centralUUID] = claimedSenderID
-                        refreshLocalTopology()
-                    }
-                    // Record ingress link for last-hop suppression then process
-                    let msgID = makeMessageID(for: packet)
-                    collectionsQueue.async(flags: .barrier) { [weak self] in
-                        self?.ingressByMessageID[msgID] = (.central(centralUUID), Date())
-                    }
-                    handleReceivedPacket(packet, from: claimedSenderID)
-                } else {
-                    // Record ingress link for last-hop suppression then process
-                    let msgID = makeMessageID(for: packet)
-                    collectionsQueue.async(flags: .barrier) { [weak self] in
-                        self?.ingressByMessageID[msgID] = (.central(centralUUID), Date())
-                    }
-                    handleReceivedPacket(packet, from: claimedSenderID)
-                }
-            } else {
-                // If buffer grows suspiciously large, reset to avoid memory leak
-                if combined.count > TransportConfig.blePendingWriteBufferCapBytes { // cap for safety
-                    pendingWriteBuffers.removeValue(forKey: centralUUID)
-                    SecureLogger.warning("⚠️ Dropping oversized pending write buffer (\(combined.count) bytes) for central \(centralUUID)", category: .session)
-                }
-                // If this was a single short write and still failed, log the raw chunk for debugging
-                if !hasMultiple, let only = sorted.first, let raw = only.value {
-                    let prefix = raw.prefix(16).map { String(format: "%02x", $0) }.joined(separator: " ")
-                    SecureLogger.error("❌ Failed to decode packet from central (len=\(raw.count), prefix=\(prefix))", category: .session)
-                }
+            case let .oversized(metadata):
+                logAccumulatedCentralWrite(metadata, centralUUID: centralUUID)
+                SecureLogger.warning("⚠️ Dropping oversized pending write buffer (\(metadata.accumulatedBytes) bytes) for central \(centralUUID.prefix(8))…", category: .session)
+                logFailedSingleWriteIfNeeded(hasMultiple: hasMultiple, sortedRequests: sorted)
             }
         }
-    }    
+    }
+
+    private func logAccumulatedCentralWrite(_ metadata: BLEInboundWriteAppendMetadata, centralUUID: String) {
+        guard let packetType = metadata.packetType,
+              packetType != MessageType.announce.rawValue else { return }
+
+        SecureLogger.debug(
+            "📥 Accumulated write from central \(centralUUID.prefix(8))…: size=\(metadata.accumulatedBytes) (+\(metadata.appendedBytes)) bytes (type=\(packetType)), offsets=\(metadata.offsets)",
+            category: .session
+        )
+    }
+
+    private func logFailedSingleWriteIfNeeded(hasMultiple: Bool, sortedRequests: [CBATTRequest]) {
+        guard !hasMultiple, let raw = sortedRequests.first?.value else { return }
+
+        let prefix = raw.prefix(16).map { String(format: "%02x", $0) }.joined(separator: " ")
+        SecureLogger.error("❌ Failed to decode packet from central (len=\(raw.count), prefix=\(prefix))", category: .session)
+    }
+
+    private func processDecodedCentralWrite(_ packet: BitchatPacket, centralUUID: String, central: CBCentral) {
+        let claimedSenderID = PeerID(hexData: packet.senderID)
+        let context = acceptedIngressContext(
+            for: packet,
+            claimedSenderID: claimedSenderID,
+            boundPeerID: linkStateStore.peerID(forCentralUUID: centralUUID),
+            linkDescription: "Central \(centralUUID.prefix(8))…"
+        )
+        guard let context else { return }
+
+        if packet.type != MessageType.announce.rawValue {
+            SecureLogger.debug("📦 Decoded (combined) packet type: \(packet.type) from sender: \(claimedSenderID.id.prefix(8))…", category: .session)
+        }
+
+        linkStateStore.addSubscribedCentral(central)
+
+        if packet.type == MessageType.announce.rawValue,
+           packet.ttl == messageTTL {
+            // Same rule as the peripheral path: raw announces only bind
+            // unbound links; rotation rebinds require a verified announce.
+            let boundPeerID = linkStateStore.peerID(forCentralUUID: centralUUID)
+            if boundPeerID == nil || boundPeerID == claimedSenderID {
+                linkStateStore.bindCentral(centralUUID, to: claimedSenderID)
+                refreshLocalTopology()
+            }
+        }
+
+        guard recordIngressIfNew(packet, link: .central(centralUUID), peerID: context.receivedFromPeerID) else {
+            return
+        }
+
+        handleReceivedPacket(packet, from: context.receivedFromPeerID)
+    }
 }
 
 // MARK: - Advertising Builders & Alias Rotation
@@ -2723,31 +4580,231 @@ extension BLEService {
     // No alias rotation or advertising restarts required.
 }
 
+// MARK: - Private Media Deletion
+
+extension BLEService: PrivateMediaDeletionPersisting {
+    @MainActor
+    func persistDeletedPrivateMedia(
+        messageIDs: [String],
+        payloadRelativePaths: [String: String],
+        protectedPayloadRelativePaths: Set<String>,
+        completion: @escaping @MainActor (Bool) -> Void
+    ) {
+        let fileStore = incomingFileStore
+        messageQueue.async(flags: .barrier) {
+            guard let reservation = fileStore
+                    .reservePrivateMediaDeletion(
+                        messageIDs: messageIDs,
+                        payloadRelativePaths: payloadRelativePaths
+                    ) else {
+                Task { @MainActor in
+                    completion(false)
+                }
+                return
+            }
+            let persisted = fileStore
+                .commitPrivateMediaDeletion(
+                    reservation: reservation,
+                    messageIDs: messageIDs,
+                    payloadRelativePaths: payloadRelativePaths,
+                    protectedPayloadRelativePaths:
+                        protectedPayloadRelativePaths
+                )
+            Task { @MainActor in
+                completion(persisted)
+            }
+        }
+    }
+
+    @MainActor
+    func removeLegacyPrivateMediaPayload(relativePath: String) {
+        let fileStore = incomingFileStore
+        messageQueue.async(flags: .barrier) {
+            fileStore.removeLegacyIncomingFile(relativePath: relativePath)
+        }
+    }
+}
+
 // MARK: - Private Helpers
+
+enum TransportEventDeliveryOutcome: Equatable {
+    /// A synchronous sink inserted the message and revalidation succeeded.
+    case accepted
+    /// A supported plain delegate was invoked, but insertion cannot be
+    /// confirmed synchronously.
+    case invokedUnconfirmed
+    /// No sink accepted the event, or receipt revalidation rejected it.
+    case rejected
+}
+
+enum TransportEventDeliveryGate {
+    /// Runs finalization exactly once for every attempted main-actor delivery,
+    /// including pre-insertion rejection, a missing/rejecting sink, and
+    /// post-insertion revalidation failure. Only a fully accepted delivery
+    /// runs `completion` (for example, a stable-media ACK).
+    @MainActor
+    static func attempt(
+        shouldDeliver: () -> Bool,
+        deliver: () -> TransportEventDeliveryOutcome,
+        completion: () -> Void,
+        finalization: (TransportEventDeliveryOutcome) -> Void
+    ) {
+        var outcome = TransportEventDeliveryOutcome.rejected
+        defer { finalization(outcome) }
+        guard shouldDeliver() else {
+            return
+        }
+        switch deliver() {
+        case .rejected:
+            return
+        case .invokedUnconfirmed:
+            outcome = .invokedUnconfirmed
+            return
+        case .accepted:
+            break
+        }
+        guard shouldDeliver() else { return }
+        outcome = .accepted
+        completion()
+    }
+}
 
 extension BLEService {
     
     /// Notify UI on the MainActor to satisfy Swift concurrency isolation
-    private func notifyUI(_ block: @escaping () -> Void) {
-        // Always hop onto the MainActor so calls to @MainActor delegates are safe
-        Task { @MainActor in
+    private func notifyUI(_ block: @escaping @MainActor () -> Void) {
+        // Capture the panic lifecycle before queueing the MainActor hop. A
+        // receive callback can enqueue UI delivery immediately before panic
+        // clears application state; rechecking here prevents that stale work
+        // from repopulating the wiped conversation store afterward.
+        guard let generation = capturePanicLifecycleGeneration() else {
+            return
+        }
+        Task { @MainActor [weak self] in
+            guard let self,
+                  self.isCurrentPanicLifecycleGeneration(generation) else {
+                return
+            }
             block()
         }
     }
 
-    private func logBluetoothStatus(_ context: String) {
-        bleQueue.async { [weak self] in
-            guard let self = self else { return }
-            self.captureBluetoothStatus(context: context)
+    private func emitTransportEvent(
+        _ event: TransportEvent,
+        shouldDeliver: (() -> Bool)? = nil,
+        completion: (() -> Void)? = nil,
+        finalization: ((TransportEventDeliveryOutcome) -> Void)? = nil
+    ) {
+        guard let generation = capturePanicLifecycleGeneration() else {
+            Task { @MainActor in
+                finalization?(.rejected)
+            }
+            return
+        }
+        Task { @MainActor [weak self] in
+            guard let self,
+                  self.isCurrentPanicLifecycleGeneration(generation) else {
+                finalization?(.rejected)
+                return
+            }
+            TransportEventDeliveryGate.attempt(
+                shouldDeliver: {
+                    self.isCurrentPanicLifecycleGeneration(generation)
+                        && (shouldDeliver?() ?? true)
+                },
+                deliver: {
+                    return self.deliverTransportEvent(event)
+                },
+                completion: { completion?() },
+                finalization: { finalization?($0) }
+            )
         }
     }
 
-    private func scheduleBluetoothStatusSample(after delay: TimeInterval, context: String) {
-        bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let self = self else { return }
-            self.captureBluetoothStatus(context: context)
+    /// Delivers a transport event to the installed delegates and reports
+    /// whether acceptance was confirmed.
+    ///
+    /// For `.messageReceived`, returns `true` only when a
+    /// `SynchronousMessageTransportEventDelegate` synchronously confirmed
+    /// acceptance of the message (duplicates count as accepted). Returns
+    /// `false` when acceptance cannot be confirmed: the sink blocked the
+    /// message, the content was empty, or only a non-synchronous delegate is
+    /// installed so delivery happens without confirmation. Downstream logic
+    /// MUST NOT treat `false` as safe to acknowledge — a `false` return
+    /// means do not ACK.
+    ///
+    /// For all other events, returns `true` when any delegate received the
+    /// event and `false` when no delegate is installed.
+    @MainActor
+    @discardableResult
+    private func deliverTransportEvent(
+        _ event: TransportEvent
+    ) -> TransportEventDeliveryOutcome {
+        if case .messageReceived(let message) = event {
+            if let synchronousDelegate =
+                eventDelegate as? SynchronousMessageTransportEventDelegate {
+                return synchronousDelegate
+                    .didReceiveTransportMessageSynchronously(message)
+                    ? .accepted
+                    : .rejected
+            }
+            if let eventDelegate {
+                eventDelegate.didReceiveTransportEvent(event)
+                return .invokedUnconfirmed
+            }
+            if let synchronousDelegate =
+                delegate as? SynchronousMessageTransportEventDelegate {
+                return synchronousDelegate
+                    .didReceiveTransportMessageSynchronously(message)
+                    ? .accepted
+                    : .rejected
+            }
+        }
+
+        if let eventDelegate {
+            eventDelegate.didReceiveTransportEvent(event)
+            return .accepted
+        } else {
+            guard let delegate else { return .rejected }
+            delegate.receiveTransportEvent(event)
+            if case .messageReceived = event {
+                return .invokedUnconfirmed
+            }
+            return .accepted
         }
     }
+
+    private func logBluetoothStatus(_ context: String) {
+        scheduleBluetoothStatusSample(after: 0, context: context)
+    }
+
+    private func scheduleBluetoothStatusSample(after delay: TimeInterval, context: String) {
+        #if os(iOS)
+        // Sample the main-actor background budget first (async hop, never a
+        // sync wait), then log from bleQueue off the cache — bleQueue must
+        // never block on main (see captureBluetoothStatus).
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self else { return }
+            self.refreshCachedBackgroundTimeRemaining()
+            self.bleQueue.async { self.captureBluetoothStatus(context: context) }
+        }
+        #else
+        bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
+            self?.captureBluetoothStatus(context: context)
+        }
+        #endif
+    }
+
+    #if os(iOS)
+    /// Main thread only (reads main-actor UIApplication state).
+    private func refreshCachedBackgroundTimeRemaining() {
+        dispatchPrecondition(condition: .onQueue(.main))
+        let seconds = UIApplication.shared.backgroundTimeRemaining
+        backgroundTimeLock.lock()
+        _cachedBackgroundTimeRemaining = seconds
+        backgroundTimeLock.unlock()
+    }
+    #endif
 
     private func captureBluetoothStatus(context: String) {
         assert(DispatchQueue.getSpecific(key: bleQueueKey) != nil, "captureBluetoothStatus must run on bleQueue")
@@ -2759,18 +4816,22 @@ extension BLEService {
 
         let peerSummary = collectionsQueue.sync {
             (
-                connected: peers.values.filter { $0.isConnected }.count,
-                known: peers.count,
-                candidates: connectionCandidates.count
+                connected: peerRegistry.connectedCount,
+                known: peerRegistry.count,
+                candidates: connectionScheduler.candidateCount
             )
         }
 
         #if os(iOS)
-        var backgroundDescriptor = ""
-        var backgroundSeconds: TimeInterval = 0
-        DispatchQueue.main.sync {
-            backgroundSeconds = UIApplication.shared.backgroundTimeRemaining
-        }
+        // INVARIANT: bleQueue must NEVER sync-dispatch to the main thread.
+        // The main actor sync-waits on bleQueue along the send paths
+        // (readLinkState), so a main.sync here completes an ABBA deadlock —
+        // field-verified as a permanent freeze when a courier-drop storm put
+        // an ack send (main → bleQueue.sync) up against a status capture
+        // (bleQueue → main.sync). backgroundTimeRemaining is main-actor
+        // state, so it is sampled on main and cached.
+        let backgroundSeconds = cachedBackgroundTimeRemaining
+        let backgroundDescriptor: String
         if backgroundSeconds == .greatestFiniteMagnitude {
             backgroundDescriptor = " bgRemaining=∞"
         } else {
@@ -2794,19 +4855,37 @@ extension BLEService {
 
     private func refreshLocalTopology() {
         let neighbors: [Data] = collectionsQueue.sync {
-            peers.values.filter { $0.isConnected }.compactMap { $0.peerID.routingData }
+            peerRegistry.connectedRoutingData
         }
         meshTopology.updateNeighbors(for: myPeerIDData, neighbors: neighbors)
     }
 
     private func computeRoute(to peerID: PeerID) -> [Data]? {
-        meshTopology.computeRoute(from: myPeerIDData, to: routingData(for: peerID))
+        // Version-gated: every hop and the recipient must have been observed
+        // speaking v2, since a v1-only node drops v2 frames on decode.
+        meshTopology.computeRoute(
+            from: myPeerIDData,
+            to: routingData(for: peerID),
+            maxHops: TransportConfig.bleSourceRouteMaxIntermediateHops,
+            requiringVersion: 2
+        )
     }
 
     private func applyRouteIfAvailable(_ packet: BitchatPacket, to recipient: PeerID) -> BitchatPacket {
-        guard let route = computeRoute(to: recipient), route.count >= 1 else {
-            return packet
-        }
+        let now = Date()
+        let route = BLESourceRouteOriginationPolicy.route(
+            for: packet,
+            to: recipient,
+            localPeerIDData: myPeerIDData,
+            isRecipientConnected: { self.isPeerConnected($0) },
+            shouldAttemptRoute: { peer in
+                self.collectionsQueue.sync(flags: .barrier) {
+                    self.sourceRouteFailures.shouldAttemptRoute(to: peer, now: now)
+                }
+            },
+            computeRoute: { self.computeRoute(to: $0) }
+        )
+        guard let route else { return packet }
         // Create new packet with route applied and version upgraded to 2
         let routedPacket = BitchatPacket(
             type: packet.type,
@@ -2824,6 +4903,9 @@ extension BLEService {
             SecureLogger.error("❌ Failed to re-sign packet with route", category: .security)
             return packet // Return original packet if signing fails
         }
+        collectionsQueue.sync(flags: .barrier) {
+            sourceRouteFailures.noteRoutedSend(to: recipient, now: now)
+        }
         return signedPacket
     }
 
@@ -2831,199 +4913,1428 @@ extension BLEService {
         PeerID(routingData: data)
     }
 
+    // MARK: - Mesh Diagnostics (/ping, /trace, topology map)
+
+    /// Sends a directed unencrypted ping probe (8-byte nonce + origin TTL).
+    /// The completion fires exactly once on the main actor: with RTT/hops
+    /// when the matching pong returns, or nil after the timeout window.
+    func sendMeshPing(to peerID: PeerID, completion: @escaping @MainActor (MeshPingResult?) -> Void) {
+        guard let generation = capturePanicLifecycleGeneration() else {
+            return
+        }
+        messageQueue.async { [weak self] in
+            guard let self,
+                  self.isCurrentPanicLifecycleGeneration(generation),
+                  let recipientData = peerID.toShort().routingData,
+                  let payload = MeshPingPayload(
+                    nonce: Data((0..<MeshPingPayload.nonceLength).map { _ in UInt8.random(in: .min ... .max) }),
+                    originTTL: self.messageTTL
+                  ) else {
+                self?.notifyUI { [weak self] in
+                    guard let self,
+                          self.isCurrentPanicLifecycleGeneration(generation) else {
+                        return
+                    }
+                    completion(nil)
+                }
+                return
+            }
+            let nonce = payload.nonce
+            let packet = BitchatPacket(
+                type: MessageType.ping.rawValue,
+                senderID: self.myPeerIDData,
+                recipientID: recipientData,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: payload.encode(),
+                signature: nil,
+                ttl: self.messageTTL
+            )
+            let timeout = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                let expired = self.collectionsQueue.sync(flags: .barrier) {
+                    self.pendingMeshPings.removeValue(forKey: nonce)
+                }
+                guard let expired else { return }
+                self.notifyUI { [weak self] in
+                    guard let self,
+                          self.isCurrentPanicLifecycleGeneration(
+                              expired.lifecycleGeneration
+                          ) else {
+                        return
+                    }
+                    expired.completion(nil)
+                }
+            }
+            self.collectionsQueue.sync(flags: .barrier) {
+                self.pendingMeshPings[nonce] = PendingMeshPing(
+                    peerID: PeerID(hexData: recipientData),
+                    sentAt: Date(),
+                    lifecycleGeneration: generation,
+                    completion: completion,
+                    timeout: timeout
+                )
+            }
+            self.messageQueue.asyncAfter(
+                deadline: .now() + TransportConfig.meshPingTimeoutSeconds,
+                execute: timeout
+            )
+            self.broadcastPacket(packet)
+        }
+    }
+
+    /// Answers a ping addressed to us with a pong echoing its nonce; pings
+    /// addressed elsewhere are left to the generic directed-relay path.
+    ///
+    /// `linkPeerID` is the directly connected peer that delivered the packet
+    /// (the ingress link), NOT the packet's claimed sender: pings are
+    /// unsigned, so `packet.senderID` is attacker-controlled, and keying the
+    /// response budget on it would let one connected peer rotate forged
+    /// sender IDs to emit unbounded pongs. The budget is per physical link;
+    /// the pong still goes to the claimed sender (that's the protocol).
+    private func handleMeshPing(_ packet: BitchatPacket, fromLink linkPeerID: PeerID) {
+        guard packet.recipientID == myPeerIDData else { return }
+        guard let ping = MeshPingPayload.decode(packet.payload) else {
+            SecureLogger.debug("⚠️ Malformed ping via \(linkPeerID.id.prefix(8))…", category: .session)
+            return
+        }
+        let allowed = collectionsQueue.sync(flags: .barrier) {
+            meshPingResponseLimiter.shouldRespond(to: linkPeerID, now: Date())
+        }
+        guard allowed else {
+            if logRateLimiter.shouldLog(key: "ping-limit:\(linkPeerID.id)") {
+                SecureLogger.warning("🚫 Rate-limiting pings via link \(linkPeerID.id.prefix(8))…", category: .security)
+            }
+            return
+        }
+        guard let pong = MeshPingPayload(nonce: ping.nonce, originTTL: messageTTL) else { return }
+        let reply = BitchatPacket(
+            type: MessageType.pong.rawValue,
+            senderID: myPeerIDData,
+            recipientID: packet.senderID,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: pong.encode(),
+            signature: nil,
+            ttl: messageTTL
+        )
+        broadcastPacket(reply)
+    }
+
+    /// Resolves a pong against its outstanding probe. The unguessable echoed
+    /// nonce plus the sender check bind the reply to the probed peer; hops
+    /// come from the pong's TTL decrements on the return path.
+    private func handleMeshPong(_ packet: BitchatPacket, from peerID: PeerID) {
+        guard packet.recipientID == myPeerIDData else { return }
+        guard let pong = MeshPingPayload.decode(packet.payload) else { return }
+        let pending = collectionsQueue.sync(flags: .barrier) { () -> PendingMeshPing? in
+            guard pendingMeshPings[pong.nonce]?.peerID == peerID else { return nil }
+            return pendingMeshPings.removeValue(forKey: pong.nonce)
+        }
+        guard let pending else { return }
+        pending.timeout.cancel()
+        let rttMs = Int((Date().timeIntervalSince(pending.sentAt) * 1000).rounded())
+        let result = MeshPingResult(
+            rttMs: max(0, rttMs),
+            hops: MeshPingPayload.hopCount(originTTL: pong.originTTL, receivedTTL: packet.ttl)
+        )
+        notifyUI { [weak self] in
+            guard let self,
+                  self.isCurrentPanicLifecycleGeneration(
+                      pending.lifecycleGeneration
+                  ) else {
+                return
+            }
+            pending.completion(result)
+        }
+    }
+
+    /// Estimated intermediate hops toward `peerID`, BFS over gossiped
+    /// bidirectionally-confirmed neighbor claims ([] = direct, nil = none).
+    func computeMeshPath(to peerID: PeerID) -> [PeerID]? {
+        refreshLocalTopology()
+        if let route = computeRoute(to: peerID) {
+            return route.compactMap { PeerID(routingData: $0) }
+        }
+        // Confirmed claims can lag a brand-new link (the peer's next announce
+        // hasn't arrived yet); a live direct connection is still a known path.
+        return isPeerConnected(peerID) ? [] : nil
+    }
+
+    /// Mesh graph for the topology map. Edges are advisory: announces cap
+    /// neighbor lists at 10, so an edge claimed by either endpoint counts.
+    func currentMeshTopology() -> MeshTopologySnapshot? {
+        refreshLocalTopology()
+        let claims = meshTopology.adjacencySnapshot()
+        var nodes = Set<PeerID>()
+        var edges = Set<MeshTopologyEdge>()
+        for (source, neighbors) in claims {
+            guard let sourcePeer = PeerID(routingData: source) else { continue }
+            nodes.insert(sourcePeer)
+            for neighborData in neighbors {
+                guard let neighborPeer = PeerID(routingData: neighborData),
+                      neighborPeer != sourcePeer else { continue }
+                nodes.insert(neighborPeer)
+                edges.insert(MeshTopologyEdge(sourcePeer, neighborPeer))
+            }
+        }
+        nodes.insert(myPeerID)
+        return MeshTopologySnapshot(
+            localPeerID: myPeerID,
+            nodes: nodes.sorted(),
+            edges: edges.sorted { ($0.a, $0.b) < ($1.a, $1.b) }
+        )
+    }
+
     private func forwardAlongRouteIfNeeded(_ packet: BitchatPacket) -> Bool {
-        guard let route = packet.route, !route.isEmpty else { return false }
         let myRoutingData = routingData(for: myPeerID) ?? (myPeerIDData.isEmpty ? nil : myPeerIDData)
-        guard let selfData = myRoutingData else { return false }
-        
-        // Route contains only intermediate hops (start and end excluded)
-        // If we're not in the route, we're the sender - forward to first hop
-        guard let index = route.firstIndex(of: selfData) else {
-            // We're the sender, forward to first intermediate hop
-            guard packet.ttl > 1 else { return true }
-            let firstHopData = route[0]
-            guard let nextPeer = routingPeer(from: firstHopData),
-                  isPeerConnected(nextPeer) else {
-                return false
-            }
-            var relayPacket = packet
-            relayPacket.ttl = packet.ttl - 1
-            sendPacketDirected(relayPacket, to: nextPeer)
-            return true
+        let plan = BLERouteForwardingPolicy.plan(
+            for: packet,
+            localPeerID: myPeerID,
+            localRoutingData: myRoutingData,
+            routingPeer: routingPeer(from:),
+            isPeerConnected: isPeerConnected(_:)
+        )
+
+        if let forwardPacket = plan.forwardPacket, let nextHop = plan.nextHop {
+            sendPacketDirected(forwardPacket, to: nextHop)
         }
 
-        // We're an intermediate node in the route
-        // If we're the last intermediate hop, forward to destination
-        if index == route.count - 1 {
-            guard packet.ttl > 1 else { return true }
-            guard let destinationPeer = PeerID(hexData: packet.recipientID),
-                  isPeerConnected(destinationPeer) else {
-                return false
-            }
-            var relayPacket = packet
-            relayPacket.ttl = packet.ttl - 1
-            sendPacketDirected(relayPacket, to: destinationPeer)
-            return true
-        }
-
-        // Forward to next intermediate hop
-        guard packet.ttl > 1 else { return true }
-        let nextHopData = route[index + 1]
-        guard let nextPeer = routingPeer(from: nextHopData),
-              isPeerConnected(nextPeer) else {
-            return false
-        }
-
-        var relayPacket = packet
-        relayPacket.ttl = packet.ttl - 1
-        sendPacketDirected(relayPacket, to: nextPeer)
-        return true
+        return plan.shouldSuppressFloodRelay
     }
 
     /// Safely fetch the current direct-link state for a peer using the BLE queue.
     private func linkState(for peerID: PeerID) -> (hasPeripheral: Bool, hasCentral: Bool) {
-        let computeState = { () -> (Bool, Bool) in
-            let peripheralUUID = self.peerToPeripheralUUID[peerID]
-            let hasPeripheral = peripheralUUID.flatMap { self.peripherals[$0]?.isConnected } ?? false
-            let hasCentral = self.centralToPeerID.values.contains(peerID)
-            return (hasPeripheral, hasCentral)
+        let state = readLinkState { $0.directLinkState(for: peerID) }
+        return (state.hasPeripheral, state.hasCentral)
+    }
+
+    private func links(to peerID: PeerID?) -> Set<BLEIngressLinkID> {
+        readLinkState { $0.links(to: peerID) }
+    }
+
+    private func boundPeerID(for link: BLEIngressLinkID, in store: BLELinkStateStore) -> PeerID? {
+        switch link {
+        case .peripheral(let peripheralUUID):
+            store.peerID(forPeripheralID: peripheralUUID)
+        case .central(let centralUUID):
+            store.peerID(forCentralUUID: centralUUID)
+        }
+    }
+
+    /// Marks the exact physical ingress link that completed a fresh Noise
+    /// handshake. An old session keyed only by peer ID is insufficient: a
+    /// replayed announce can rebind an attacker's link to that ID.
+    private func markNoiseAuthenticatedIngressLink(for packet: BitchatPacket, peerID: PeerID) {
+        guard let link = collectionsQueue.sync(execute: { ingressLinks.link(for: packet) }) else { return }
+        readLinkState { store in
+            guard boundPeerID(for: link, in: store) == peerID else { return }
+            noiseAuthenticatedLinkOwners[link] = peerID
+        }
+    }
+
+    private func isNoiseAuthenticatedIngressLink(for packet: BitchatPacket, peerID: PeerID) -> Bool {
+        guard let link = collectionsQueue.sync(execute: { ingressLinks.link(for: packet) }) else { return false }
+        return readLinkState { store in
+            noiseAuthenticatedLinkOwners[link] == peerID && boundPeerID(for: link, in: store) == peerID
+        }
+    }
+
+    private func hasCurrentNoiseAuthenticatedLink(to peerID: PeerID) -> Bool {
+        !currentNoiseAuthenticatedLinks(to: peerID).isEmpty
+    }
+
+    private func currentNoiseAuthenticatedLinks(to peerID: PeerID) -> Set<BLEIngressLinkID> {
+        readLinkState { store in
+            Set(noiseAuthenticatedLinkOwners.compactMap { link, owner in
+                owner == peerID && boundPeerID(for: link, in: store) == peerID ? link : nil
+            })
+        }
+    }
+
+    /// A peer-level session can outlive the physical link that established it.
+    /// Revalidate a fresh direct link with an ordinary XX exchange, retiring
+    /// cached sending keys atomically before message 1 can leave.
+    private func refreshNoiseSessionForVerifiedDirectLink(
+        _ packet: BitchatPacket,
+        peerID: PeerID
+    ) {
+        guard let link = collectionsQueue.sync(execute: { ingressLinks.link(for: packet) }) else {
+            return
         }
 
-        if DispatchQueue.getSpecific(key: bleQueueKey) != nil {
-            return computeState()
-        } else {
-            return bleQueue.sync { computeState() }
+        let hasEstablishedSession = noiseService.hasEstablishedSession(with: peerID)
+        let authenticatedPeerLinks = currentNoiseAuthenticatedLinks(to: peerID)
+        let shouldRevalidate = readLinkState { store in
+            guard boundPeerID(for: link, in: store) == peerID else {
+                return false
+            }
+            return noiseReconnectPolicy.shouldRevalidate(
+                on: link,
+                hasEstablishedSession: hasEstablishedSession,
+                isNoiseAuthenticatedLink: noiseAuthenticatedLinkOwners[link] == peerID,
+                hasAuthenticatedPeerLink: !authenticatedPeerLinks.isEmpty,
+                now: Date()
+            )
         }
+        guard shouldRevalidate else { return }
+
+        SecureLogger.info(
+            "🔄 Revalidating cached Noise session on fresh direct link to \(peerID.id.prefix(8))…",
+            category: .session
+        )
+        initiateNoiseReconnectHandshake(with: peerID)
     }
     
     private func configureNoiseServiceCallbacks(for service: NoiseEncryptionService) {
-        service.onPeerAuthenticated = { [weak self] peerID, fingerprint in
-            SecureLogger.debug("🔐 Noise session authenticated with \(peerID), fingerprint: \(fingerprint.prefix(16))...")
-            self?.messageQueue.async { [weak self] in
-                self?.sendPendingMessagesAfterHandshake(for: peerID)
-                self?.sendPendingNoisePayloadsAfterHandshake(for: peerID)
+        service.onPeerAuthenticatedWithGeneration = { [weak self] peerID, fingerprint, generation in
+            SecureLogger.debug("🔐 Noise session authenticated with \(peerID.id.prefix(8))…, fingerprint: \(fingerprint.prefix(16))…")
+            // Authentication can be reported while an initiator is still
+            // returning XX message 3. Serialize generation-bound state and
+            // every post-handshake drain behind the handshake packet handler.
+            self?.messageQueue.async(flags: .barrier) { [weak self] in
+                self?.handleNoisePeerAuthenticated(
+                    peerID: peerID,
+                    fingerprint: fingerprint,
+                    sessionGeneration: generation
+                )
             }
-            self?.messageQueue.async { [weak self] in
-                self?.sendAnnounce(forceSend: true)
+        }
+        service.onRekeyHandshakeReady = {
+            [weak self, weak service] peerID, initiation in
+            self?.messageQueue.async(flags: .barrier) {
+                [weak self, weak service] in
+                guard let self,
+                      let service,
+                      self.noiseService === service else {
+                    return
+                }
+                self.noteNoiseSessionCleared(for: peerID)
+                guard let message = service.claimHandshakeInitiation(
+                    initiation,
+                    for: peerID
+                ) else {
+                    return
+                }
+                self.broadcastNoiseHandshake(message, to: peerID)
+            }
+        }
+        service.onHandshakeRecoveryRequired = {
+            [weak self, weak service] request in
+            guard let self, let service else { return }
+            #if DEBUG
+            self._test_beforeHandshakeRecoveryEnqueued?(request.peerID)
+            #endif
+            self.messageQueue.async(flags: .barrier) {
+                [weak self, weak service] in
+                guard let self,
+                      let service,
+                      self.noiseService === service else {
+                    return
+                }
+                let peerID = request.peerID
+                guard self.isPeerReachable(peerID) else {
+                    service.cancelHandshakeRecovery(request)
+                    return
+                }
+
+                do {
+                    guard let preparation =
+                        try service.prepareHandshakeRecovery(request) else {
+                        return
+                    }
+                    switch preparation {
+                    case .ordinary(let initiation):
+                        self.noteNoiseSessionCleared(for: peerID)
+                        guard let handshakeData =
+                            service.claimHandshakeInitiation(
+                                initiation,
+                                for: peerID
+                            ) else {
+                            return
+                        }
+                        self.broadcastNoiseHandshake(
+                            handshakeData,
+                            to: peerID
+                        )
+                    case .transferred:
+                        return
+                    }
+                } catch {
+                    SecureLogger.error(
+                        "Failed to prepare handshake recovery with \(peerID.id.prefix(8))…: \(error)",
+                        category: .session
+                    )
+                }
+            }
+        }
+        service.onSessionRestoredWithGeneration = { [weak self, weak service] peerID, generation, reason in
+            guard let self, let service else { return }
+            // The manager makes restored keys visible atomically. Reconcile
+            // transport state and queued sends as the next serialized phase.
+            self.messageQueue.async(flags: .barrier) { [weak self, weak service] in
+                guard let self,
+                      let service,
+                      self.noiseService === service,
+                      let fingerprint = service.getPeerFingerprint(peerID) else {
+                    return
+                }
+                SecureLogger.debug(
+                    "🔐 Restored quarantined Noise session with \(peerID.id.prefix(8))…",
+                    category: .session
+                )
+                // Re-enter the same generation-bound transition used after a
+                // successful handshake to restore authenticated protocol
+                // state. Only a terminal restore may also drain the PM and
+                // typed-payload queues: after a responder timeout the
+                // counterpart may have completed the replacement handshake
+                // and discarded the restored keys, so encrypting the queues
+                // under them would lose every message silently. The mandatory
+                // convergence retry that accompanies the restore drains them
+                // under the new session instead (any establishment does).
+                self.handleNoisePeerAuthenticated(
+                    peerID: peerID,
+                    fingerprint: fingerprint,
+                    sessionGeneration: generation,
+                    deferOutboundUntilConvergence: reason == .pendingConvergence
+                )
             }
         }
     }
 
+    private func handleNoisePeerAuthenticated(
+        peerID: PeerID,
+        fingerprint: String,
+        sessionGeneration generation: UUID,
+        deferOutboundUntilConvergence: Bool = false
+    ) {
+        let normalizedPeerID = peerID.toShort()
+        guard let transition = noiseService.withCurrentSessionGeneration(
+            for: normalizedPeerID,
+            expected: generation,
+            {
+                collectionsQueue.sync(flags: .barrier) {
+                    () -> (
+                        watchdog: (fingerprint: String, nonce: UUID)?,
+                        rejected: [@MainActor (PrivateMediaSendPolicy) -> Void]
+                    ) in
+                    guard privateMediaSessionGenerations[normalizedPeerID] != generation else {
+                        return (nil, [])
+                    }
+                    let watchdogNonce = UUID()
+                    privateMediaSessionGenerations[normalizedPeerID] = generation
+                    authenticatedPeerStates.removeValue(forKey: normalizedPeerID)
+                    privateMediaProofTimeoutMarkers.removeValue(forKey: normalizedPeerID)
+                    privateMediaProofWatchdogs[normalizedPeerID] = BLEPrivateMediaProofWatchdog(
+                        fingerprint: fingerprint,
+                        sessionGeneration: generation,
+                        timeoutNonce: watchdogNonce
+                    )
+                    authenticatedPeerStateSendProgress[normalizedPeerID] =
+                        BLEAuthenticatedPeerStateSendProgress(sessionGeneration: generation)
+
+                    guard var pending = pendingPrivateMediaPolicyResolutions[normalizedPeerID] else {
+                        return ((fingerprint, watchdogNonce), [])
+                    }
+                    guard pending.fingerprint.caseInsensitiveCompare(fingerprint) == .orderedSame else {
+                        pendingPrivateMediaPolicyResolutions.removeValue(forKey: normalizedPeerID)
+                        return ((fingerprint, watchdogNonce), Array(pending.completions.values))
+                    }
+                    pending.sessionGeneration = generation
+                    pending.timeoutNonce = watchdogNonce
+                    pendingPrivateMediaPolicyResolutions[normalizedPeerID] = pending
+                    return ((pending.fingerprint, watchdogNonce), [])
+                }
+            }
+        ) else { return }
+
+        guard let watchdog = transition.watchdog else {
+            // A quarantined transport restored the same cryptographic
+            // generation. Its capability proof and announce state never
+            // became stale; only work queued while outbound keys were paused
+            // needs one idempotent ready transition. Retrying the bounded
+            // early-ciphertext queue is receive-side and therefore always
+            // safe under the restored keys.
+            noisePacketHandler.handleSessionAuthenticated(normalizedPeerID)
+            #if DEBUG
+            _test_onPrivateMediaSessionReconciled?(normalizedPeerID)
+            #endif
+            if deferOutboundUntilConvergence {
+                // Timeout-restore: the counterpart may have completed the
+                // replacement handshake and discarded these keys, so
+                // encrypting the parked queues here would lose them silently.
+                // The restore's mandatory convergence retry — or any later
+                // handshake the reconnect policy initiates — re-enters this
+                // transition with a fresh generation and drains them under
+                // keys both sides hold.
+                return
+            }
+            sendPendingMessagesAfterHandshake(for: normalizedPeerID)
+            sendPendingNoisePayloadsAfterHandshake(for: normalizedPeerID)
+            return
+        }
+
+        completePrivateMediaPolicyResolution(transition.rejected, with: .blockedDowngrade)
+        schedulePrivateMediaProofTimeout(
+            for: normalizedPeerID,
+            fingerprint: watchdog.fingerprint,
+            sessionGeneration: generation,
+            nonce: watchdog.nonce
+        )
+        // Cross-link delivery can put ciphertext sent immediately after
+        // message 3 ahead of message 3 itself. Retry the bounded queue only
+        // after this generation's transport state has been fully installed.
+        noisePacketHandler.handleSessionAuthenticated(normalizedPeerID)
+
+        if deferOutboundUntilConvergence {
+            // Timeout-restore: the session is back for receive purposes and
+            // the generation-bound protocol state above is rebuilt, but the
+            // counterpart may already hold replacement keys that discarded
+            // this generation's. Encrypting the pending queues here would
+            // lose them silently, so leave them parked: the restore's
+            // mandatory convergence retry — or any later handshake the
+            // reconnect policy initiates — re-enters this transition with a
+            // fresh generation and drains them under keys both sides hold.
+            #if DEBUG
+            _test_onPrivateMediaSessionReconciled?(normalizedPeerID)
+            #endif
+            return
+        }
+
+        // `onPeerAuthenticated` can fire while the initiator is returning XX
+        // message 3. This callback is queued behind the handshake handler, so
+        // message 3 is broadcast first. Both peers also send one idempotent
+        // echo after receiving the other's state to recover cross-link races.
+        sendAuthenticatedPeerState(to: normalizedPeerID, echo: false)
+        #if DEBUG
+        _test_onPrivateMediaSessionReconciled?(normalizedPeerID)
+        #endif
+        sendPendingMessagesAfterHandshake(for: normalizedPeerID)
+        sendPendingNoisePayloadsAfterHandshake(for: normalizedPeerID)
+        sendAnnounce(forceSend: true)
+    }
+
+    private func sendAuthenticatedPeerState(to peerID: PeerID, echo: Bool) {
+        let normalizedPeerID = peerID.toShort()
+        let shouldSend = collectionsQueue.sync(flags: .barrier) {
+            guard let generation = privateMediaSessionGenerations[normalizedPeerID],
+                  var progress = authenticatedPeerStateSendProgress[normalizedPeerID],
+                  progress.sessionGeneration == generation else { return false }
+            if echo {
+                guard !progress.sentEcho else { return false }
+                progress.sentEcho = true
+            } else {
+                guard !progress.sentInitial else { return false }
+                progress.sentInitial = true
+            }
+            authenticatedPeerStateSendProgress[normalizedPeerID] = progress
+            return true
+        }
+        guard shouldSend else { return }
+
+        let capabilities = collectionsQueue.sync {
+            var capabilities = PeerCapabilities.localSupported.union(runtimeCapabilities)
+            if doubleRatchetEnabled {
+                capabilities.insert(.doubleRatchet)
+            }
+            return capabilities
+        }
+        let state = AuthenticatedPeerStatePacket(
+            capabilities: capabilities,
+            signingPublicKey: noiseService.getSigningPublicKeyData()
+        )
+        guard let payload = BLENoisePayloadFactory.authenticatedPeerState(state) else {
+            SecureLogger.error("Failed to encode authenticated peer state", category: .security)
+            return
+        }
+        sendNoisePayload(payload, to: normalizedPeerID)
+    }
+
+    private func handleAuthenticatedPeerState(
+        _ payload: Data,
+        from peerID: PeerID,
+        sessionGeneration generation: UUID
+    ) {
+        let normalizedPeerID = peerID.toShort()
+        guard let state = AuthenticatedPeerStatePacket.decode(from: payload) else {
+            SecureLogger.warning(
+                "Ignoring malformed authenticated peer state from \(normalizedPeerID.id.prefix(8))…",
+                category: .security
+            )
+            return
+        }
+        guard let fingerprint = noiseService.getPeerFingerprint(normalizedPeerID),
+              let publicKey = noiseService.getPeerPublicKeyData(normalizedPeerID),
+              publicKey.sha256Fingerprint().caseInsensitiveCompare(fingerprint) == .orderedSame else {
+            SecureLogger.warning(
+                "Ignoring peer state without a matching authenticated Noise identity",
+                category: .security
+            )
+            return
+        }
+        guard let application = noiseService.withCurrentSessionGeneration(
+            for: normalizedPeerID,
+            expected: generation,
+            {
+                () -> (
+                    accepted: Bool,
+                    completions: [@MainActor (PrivateMediaSendPolicy) -> Void],
+                    observationChanged: Bool
+                ) in
+                guard collectionsQueue.sync(execute: {
+                    privateMediaSessionGenerations[normalizedPeerID] == generation
+                }) else {
+                    return (false, [], false)
+                }
+
+                // The generation lease prevents rekey/session promotion from
+                // interleaving between validation and these durable mutations.
+                identityManager.bindAuthenticatedSigningPublicKey(
+                    state.signingPublicKey,
+                    fingerprint: fingerprint
+                )
+                identityManager.upsertCryptographicIdentity(
+                    fingerprint: fingerprint,
+                    noisePublicKey: publicKey,
+                    signingPublicKey: state.signingPublicKey,
+                    claimedNickname: nil
+                )
+                if state.capabilities.contains(.privateMedia) {
+                    identityManager.markPrivateMediaCapable(fingerprint: fingerprint)
+                }
+
+                let update = collectionsQueue.sync(flags: .barrier) {
+                    () -> (
+                        completions: [@MainActor (PrivateMediaSendPolicy) -> Void],
+                        observationChanged: Bool
+                    ) in
+                    guard privateMediaSessionGenerations[normalizedPeerID] == generation else {
+                        return ([], false)
+                    }
+                    peerRegistry.bindAuthenticatedSigningPublicKey(
+                        state.signingPublicKey,
+                        for: normalizedPeerID
+                    )
+                    let observation = BLEAuthenticatedPeerStateObservation(
+                        fingerprint: fingerprint,
+                        sessionGeneration: generation,
+                        capabilities: state.capabilities
+                    )
+                    let observationChanged =
+                        authenticatedPeerStates[normalizedPeerID] != observation
+                    authenticatedPeerStates[normalizedPeerID] = observation
+                    privateMediaProofTimeoutMarkers.removeValue(forKey: normalizedPeerID)
+                    privateMediaProofWatchdogs.removeValue(forKey: normalizedPeerID)
+                    guard let pending = pendingPrivateMediaPolicyResolutions.removeValue(
+                        forKey: normalizedPeerID
+                    ), pending.fingerprint.caseInsensitiveCompare(fingerprint) == .orderedSame,
+                       pending.sessionGeneration == generation else {
+                        return ([], observationChanged)
+                    }
+                    return (
+                        Array(pending.completions.values),
+                        observationChanged
+                    )
+                }
+                return (
+                    true,
+                    update.completions,
+                    update.observationChanged
+                )
+            }
+        ), application.accepted else { return }
+
+        // One bounded echo makes initiator/responder proof ordering converge
+        // even when message 3 and the first proof take different mesh links.
+        sendAuthenticatedPeerState(to: normalizedPeerID, echo: true)
+        let policy = privateMediaSendPolicy(to: normalizedPeerID)
+        sendPendingNoisePayloadsAfterHandshake(for: normalizedPeerID)
+        completePrivateMediaPolicyResolution(application.completions, with: policy)
+        if application.observationChanged {
+            notifyUI { [weak self] in
+                self?.deliverTransportEvent(
+                    .authenticatedPeerTransportStateUpdated(normalizedPeerID)
+                )
+            }
+        }
+    }
+
+    private func noteNoiseSessionCleared(for peerID: PeerID) {
+        let normalizedPeerID = peerID.toShort()
+        let reset = collectionsQueue.sync(flags: .barrier) {
+            () -> (fingerprint: String, nonce: UUID)? in
+            privateMediaSessionGenerations.removeValue(forKey: normalizedPeerID)
+            authenticatedPeerStates.removeValue(forKey: normalizedPeerID)
+            privateMediaProofTimeoutMarkers.removeValue(forKey: normalizedPeerID)
+            privateMediaProofWatchdogs.removeValue(forKey: normalizedPeerID)
+            authenticatedPeerStateSendProgress.removeValue(forKey: normalizedPeerID)
+            guard var pending = pendingPrivateMediaPolicyResolutions[normalizedPeerID] else {
+                return nil
+            }
+            let nonce = UUID()
+            pending.sessionGeneration = nil
+            pending.timeoutNonce = nonce
+            pendingPrivateMediaPolicyResolutions[normalizedPeerID] = pending
+            return (pending.fingerprint, nonce)
+        }
+        if let reset {
+            schedulePrivateMediaProofTimeout(
+                for: normalizedPeerID,
+                fingerprint: reset.fingerprint,
+                sessionGeneration: nil,
+                nonce: reset.nonce
+            )
+        }
+    }
+
+    private func clearNoiseSession(for peerID: PeerID) {
+        noiseService.clearSession(for: peerID)
+        noteNoiseSessionCleared(for: peerID)
+    }
+
+    /// Swaps `myPeerID`/`myPeerIDData` to match the current Noise identity.
+    /// The swap runs as a `messageQueue` barrier so in-flight work items that
+    /// read the identity (e.g. `sendMessage` building packets) complete
+    /// against the old value and everything after sees the new one atomically.
+    /// Callers (init, panic reset on the main thread) are never on
+    /// `messageQueue`; the re-entrancy check keeps any future on-queue caller
+    /// from deadlocking.
     private func refreshPeerIdentity() {
-        let fingerprint = noiseService.getIdentityFingerprint()
-        myPeerID = PeerID(str: fingerprint.prefix(16))
-        myPeerIDData = Data(hexString: myPeerID.id) ?? Data()
-        meshTopology.reset()
+        let swap = {
+            let fingerprint = self.noiseService.getIdentityFingerprint()
+            self.localIdentityState.replacePeerIdentity(
+                with: PeerID(str: fingerprint.prefix(16))
+            )
+            self.meshTopology.reset()
+        }
+        if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
+            swap()
+        } else {
+            messageQueue.sync(flags: .barrier, execute: swap)
+        }
     }
 
 
     
     private func sendNoisePayload(_ typedPayload: Data, to peerID: PeerID) {
-        guard noiseService.hasSession(with: peerID) else {
-            // No session yet - queue the payload SYNCHRONOUSLY before initiating handshake
+        // Hop like sendMessage: the Transport-facing wrappers (verify/vouch/
+        // group payloads) call this from the main actor, and the send path
+        // sync-waits on bleQueue for link state.
+        if DispatchQueue.getSpecific(key: messageQueueKey) == nil {
+            messageQueue.async { [weak self] in
+                self?.sendNoisePayload(typedPayload, to: peerID)
+            }
+            return
+        }
+        guard noiseService.hasEstablishedSession(with: peerID) else {
+            // No established session yet - queue the payload synchronously
+            // before initiating a handshake
             // to prevent race where fast handshake completion drains empty queue
             collectionsQueue.sync(flags: .barrier) {
-                if self.pendingNoisePayloadsAfterHandshake[peerID] == nil {
-                    self.pendingNoisePayloadsAfterHandshake[peerID] = []
-                }
-                self.pendingNoisePayloadsAfterHandshake[peerID]?.append(typedPayload)
-                SecureLogger.debug("📥 Queued noise payload for \(peerID) pending handshake", category: .session)
+                self.pendingNoiseSessionQueues.appendTypedPayload(typedPayload, for: peerID)
+                SecureLogger.debug("📥 Queued noise payload for \(peerID.id.prefix(8))… pending handshake", category: .session)
             }
             initiateNoiseHandshake(with: peerID)
             return
         }
         do {
-            let encrypted = try noiseService.encrypt(typedPayload, for: peerID)
-            let packet = BitchatPacket(
-                type: MessageType.noiseEncrypted.rawValue,
-                senderID: myPeerIDData,
-                recipientID: Data(hexString: peerID.id),
-                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                payload: encrypted,
-                signature: nil,
-                ttl: messageTTL
-            )
-            broadcastPacket(packet)
+            broadcastPacket(try makeEncryptedNoisePacket(typedPayload, to: peerID))
         } catch {
             SecureLogger.error("Failed to send verification payload: \(error)")
         }
     }
-    
-    // MARK: Link capability snapshots (thread-safe via bleQueue)
-    
-    private func snapshotPeripheralStates() -> [PeripheralState] {
-        if DispatchQueue.getSpecific(key: bleQueueKey) != nil {
-            return Array(peripherals.values)
+
+    private func makeEncryptedNoisePacket(
+        _ typedPayload: Data,
+        to peerID: PeerID,
+        requiresAuthenticatedPrivateMediaReceipts: Bool = false,
+        expectedSessionGeneration: UUID? = nil
+    ) throws -> BitchatPacket {
+        let encrypted: Data
+        let isPrivateFile = NoisePayloadType.isPrivateFile(rawValue: typedPayload.first)
+        if isPrivateFile {
+            let provenGeneration: UUID? = collectionsQueue.sync {
+                () -> UUID? in
+                guard let generation = privateMediaSessionGenerations[peerID],
+                      let authenticated = authenticatedPeerStates[peerID],
+                      authenticated.sessionGeneration == generation,
+                      authenticated.capabilities.contains(.privateMedia) else { return nil }
+                if requiresAuthenticatedPrivateMediaReceipts {
+                    guard authenticated.capabilities.contains(
+                        .privateMediaReceipts
+                    ) else {
+                        return nil
+                    }
+                }
+                return generation
+            }
+            guard let provenGeneration else {
+                throw NoiseEncryptionError.sessionNotEstablished
+            }
+            encrypted = try noiseService.encryptPrivateFilePayload(
+                typedPayload,
+                for: peerID,
+                sessionGeneration: provenGeneration
+            )
+        } else if let expectedSessionGeneration {
+            encrypted = try noiseService.encrypt(
+                typedPayload,
+                for: peerID,
+                sessionGeneration: expectedSessionGeneration
+            )
         } else {
-            return bleQueue.sync { Array(peripherals.values) }
+            encrypted = try noiseService.encrypt(typedPayload, for: peerID)
+        }
+        return BitchatPacket(
+            type: MessageType.noiseEncrypted.rawValue,
+            senderID: myPeerIDData,
+            recipientID: Data(hexString: peerID.id),
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: encrypted,
+            signature: nil,
+            ttl: messageTTL,
+            // v1 has a 16-bit payload length; finalized media can exceed it.
+            version: isPrivateFile ? 2 : 1
+        )
+    }
+
+    // MARK: Courier Store-and-Forward
+
+    /// Seal `content` for the recipient and hand the envelope to the given
+    /// couriers for physical delivery. When a verified one-time prekey bundle
+    /// is cached for the recipient, sealing targets one of its prekeys
+    /// (forward secret, envelope v2); otherwise it falls back to their static
+    /// key (one-way Noise X, v1) exactly as before. Returns false when no
+    /// courier is connected, the payload cannot be built, or sealing fails;
+    /// link writes are queued asynchronously after the envelope is ready.
+    func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool {
+        let connected = couriers.filter { isPeerConnected($0) }
+        guard !connected.isEmpty,
+              let typedPayload = BLENoisePayloadFactory.privateMessage(content: content, messageID: messageID) else {
+            return false
+        }
+
+        let payload: Data
+        do {
+            let now = Date()
+            let sealed: Data
+            let prekeyID: UInt32?
+            if let prekey = assignRecipientPrekey(messageID: messageID, recipientNoiseKey: recipientNoiseKey) {
+                sealed = try noiseService.sealPrekeyPayload(typedPayload, recipientPrekey: prekey)
+                prekeyID = prekey.id
+            } else {
+                sealed = try noiseService.sealCourierPayload(typedPayload, recipientStaticKey: recipientNoiseKey)
+                prekeyID = nil
+            }
+            let envelope = CourierEnvelope(
+                recipientTag: CourierEnvelope.recipientTag(
+                    noiseStaticKey: recipientNoiseKey,
+                    epochDay: CourierEnvelope.epochDay(for: now)
+                ),
+                expiry: UInt64((now.timeIntervalSince1970 + CourierEnvelope.maxLifetimeSeconds) * 1000),
+                ciphertext: sealed,
+                copies: TransportConfig.courierInitialCopies,
+                prekeyID: prekeyID
+            )
+            guard let encoded = envelope.encode() else { return false }
+            payload = encoded
+        } catch {
+            SecureLogger.error("Failed to seal courier envelope: \(error)", category: .encryption)
+            return false
+        }
+
+        messageQueue.async { [weak self] in
+            guard let self else { return }
+            for courier in connected {
+                SecureLogger.debug("📦 Depositing courier envelope with \(courier.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
+                self.sendPacketDirected(self.makeCourierPacket(payload, to: courier), to: courier)
+            }
+        }
+        return true
+    }
+
+    // MARK: Courier over the bridge
+
+    /// Seals `content` into a courier envelope for relay parking (a bridge
+    /// courier drop). Same sealing rules as `sendCourierMessage` — prekey
+    /// (v2) when a verified bundle is cached, static Noise X (v1) otherwise —
+    /// but carry-only: a relay copy never sprays.
+    func sealBridgeCourierEnvelope(_ content: String, messageID: String, recipientNoiseKey: Data) -> CourierEnvelope? {
+        guard let typedPayload = BLENoisePayloadFactory.privateMessage(content: content, messageID: messageID) else {
+            return nil
+        }
+        do {
+            let now = Date()
+            let sealed: Data
+            let prekeyID: UInt32?
+            if let prekey = assignRecipientPrekey(messageID: messageID, recipientNoiseKey: recipientNoiseKey) {
+                sealed = try noiseService.sealPrekeyPayload(typedPayload, recipientPrekey: prekey)
+                prekeyID = prekey.id
+            } else {
+                sealed = try noiseService.sealCourierPayload(typedPayload, recipientStaticKey: recipientNoiseKey)
+                prekeyID = nil
+            }
+            return CourierEnvelope(
+                recipientTag: CourierEnvelope.recipientTag(
+                    noiseStaticKey: recipientNoiseKey,
+                    epochDay: CourierEnvelope.epochDay(for: now)
+                ),
+                expiry: UInt64((now.timeIntervalSince1970 + CourierEnvelope.maxLifetimeSeconds) * 1000),
+                ciphertext: sealed,
+                copies: 1,
+                prekeyID: prekeyID
+            )
+        } catch {
+            SecureLogger.error("Failed to seal bridge courier envelope: \(error)", category: .encryption)
+            return nil
         }
     }
-    private func snapshotSubscribedCentrals() -> ([CBCentral], [String: PeerID]) {
-        if DispatchQueue.getSpecific(key: bleQueueKey) != nil {
-            return (self.subscribedCentrals, self.centralToPeerID)
-        } else {
-            return bleQueue.sync { (self.subscribedCentrals, self.centralToPeerID) }
+
+    /// Opens a courier envelope that arrived as a bridge drop (relay fetch,
+    /// not a directed mesh packet). Returns false when the rotating tag does
+    /// not match our static key — a drop for someone else, or a stale tag.
+    /// The inner Noise X seal authenticates the sender; there is no packet
+    /// signature to check on this path.
+    @discardableResult
+    func openBridgedCourierEnvelope(_ envelope: CourierEnvelope) -> Bool {
+        guard !envelope.isExpired else { return false }
+        let myKey = noiseService.getStaticPublicKeyData()
+        guard CourierEnvelope.candidateTags(noiseStaticKey: myKey, around: Date()).contains(envelope.recipientTag) else {
+            return false
         }
+        return openCourierEnvelope(envelope)
+    }
+
+    /// Hands a bridge-fetched envelope directly to the matching local peer
+    /// as a directed courier packet. Delivery-only by design: the recipient's
+    /// tag matched, so this never lands in a stranger's carry quota.
+    /// Returns true only if a current Noise-authenticated physical link
+    /// accepted the packet; a stale peer-level session, reachability record,
+    /// replay-rebound link, or process-local spool is not delivery.
+    @discardableResult
+    func deliverBridgedEnvelope(_ envelope: CourierEnvelope, to peerID: PeerID) -> Bool {
+        guard hasCurrentNoiseAuthenticatedLink(to: peerID) else { return false }
+        guard let payload = envelope.encode() else { return false }
+        let packet = makeCourierPacket(payload, to: peerID)
+        let send = { [weak self] in
+            self?.sendPacketDirected(
+                packet,
+                to: peerID,
+                requireDirectPeerLink: true,
+                requireNoiseAuthenticatedPeerLink: true
+            ) ?? false
+        }
+        if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
+            return send()
+        }
+        return messageQueue.sync(execute: send)
+    }
+
+    /// Our own Noise static public key (for computing our courier tags).
+    func myNoiseStaticPublicKey() -> Data {
+        noiseService.getStaticPublicKeyData()
+    }
+
+    /// Verified reachable peers with known Noise keys — the set a bridge
+    /// gateway watches courier drops for.
+    func verifiedPeersWithNoiseKeys() -> [(peerID: PeerID, noiseKey: Data)] {
+        let now = Date()
+        return collectionsQueue.sync {
+            peerRegistry.snapshotByID.values.compactMap { info in
+                guard info.isVerifiedNickname,
+                      let key = info.noisePublicKey,
+                      peerRegistry.isReachable(info.peerID, now: now) else { return nil }
+                return (info.peerID, key)
+            }
+        }
+    }
+
+    /// The prekey to seal a courier message with, or nil to fall back to
+    /// static sealing. The real signal is a verified, unexpired bundle with a
+    /// spare prekey; the advertised `.prekeys` capability only acts as a veto
+    /// for peers we currently see on the mesh (a cached bundle can outlive a
+    /// peer's downgrade to a build that no longer holds the privates).
+    /// Re-deposits of the same message reuse its assigned prekey, so one
+    /// message consumes exactly one prekey ID regardless of courier count.
+    private func assignRecipientPrekey(messageID: String, recipientNoiseKey: Data) -> PrekeyBundle.Prekey? {
+        let shortID = PeerID(publicKey: recipientNoiseKey)
+        let knownOnMesh = collectionsQueue.sync { peerRegistry.info(for: shortID) != nil }
+        if knownOnMesh, !peerCapabilities(shortID).contains(.prekeys) {
+            return nil
+        }
+        return prekeyBundleStore.assignPrekey(messageID: messageID, recipientNoiseKey: recipientNoiseKey)
+    }
+
+    private func makeCourierPacket(_ payload: Data, to peerID: PeerID) -> BitchatPacket {
+        let packet = BitchatPacket(
+            type: MessageType.courierEnvelope.rawValue,
+            senderID: myPeerIDData,
+            recipientID: Data(hexString: peerID.id),
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: messageTTL
+        )
+        // Signed so a courier can authenticate the depositor before carrying
+        // mail under their quota. Handover to the recipient doesn't need the
+        // packet signature — the inner Noise X seal authenticates the sender.
+        return noiseService.signPacket(packet) ?? packet
+    }
+
+    /// Handles both courier roles for an incoming envelope addressed to us:
+    /// recipient (the rotating tag matches our static key → open and deliver)
+    /// or courier (a trusted peer is depositing mail for someone else → store).
+    private func handleCourierEnvelope(_ packet: BitchatPacket, from peerID: PeerID) {
+        // Directed packets only; envelopes addressed elsewhere ride the
+        // generic relay path untouched.
+        guard packet.recipientID == myPeerIDData else { return }
+        guard let envelope = CourierEnvelope.decode(packet.payload), !envelope.isExpired else { return }
+
+        let myKey = noiseService.getStaticPublicKeyData()
+        if CourierEnvelope.candidateTags(noiseStaticKey: myKey, around: Date()).contains(envelope.recipientTag) {
+            openCourierEnvelope(envelope)
+        } else {
+            acceptCourierDeposit(envelope, from: peerID, packet: packet)
+        }
+    }
+
+    @discardableResult
+    private func openCourierEnvelope(_ envelope: CourierEnvelope) -> Bool {
+        do {
+            let typedPayload: Data
+            let senderStaticKey: Data
+            if let prekeyID = envelope.prekeyID {
+                // Envelope v2: sealed to one of our one-time prekeys. Opening
+                // consumes the prekey (48h redelivery grace), which shrinks our
+                // published bundle under a strictly newer generatedAt. Re-gossip
+                // so peers replace their cached copy and stop assigning the
+                // consumed ID before the grace lapses; force the broadcast when
+                // the batch also topped back up (low-water), otherwise let the
+                // rebroadcast throttle coalesce bursts.
+                let opened = try noiseService.openPrekeyPayload(envelope.ciphertext, prekeyID: prekeyID)
+                (typedPayload, senderStaticKey) = (opened.payload, opened.senderStaticKey)
+                if opened.consumedPrekey {
+                    let replenished = noiseService.replenishPrekeysIfNeeded()
+                    sendPrekeyBundle(force: replenished)
+                }
+            } else {
+                (typedPayload, senderStaticKey) = try noiseService.openCourierPayload(envelope.ciphertext)
+            }
+            guard let typeRaw = typedPayload.first,
+                  let payloadType = NoisePayloadType(rawValue: typeRaw),
+                  payloadType == .privateMessage else {
+                SecureLogger.warning("⚠️ Courier envelope carried unsupported payload type", category: .session)
+                return true // decrypted but deterministically unsupported
+            }
+            let payload = Data(typedPayload.dropFirst())
+            guard let innerMessageID = PrivateMessagePacket.decode(from: payload)?.messageID else {
+                SecureLogger.warning("⚠️ Courier envelope carried undecodable private message", category: .session)
+                return true // decrypted but deterministically malformed
+            }
+            // Redundant copies of one message arrive as distinct envelopes
+            // (fresh seal each: mesh couriers, bridge drops across relays),
+            // so dedup here on the inner message ID — before delivery, ack,
+            // and handshake work. A duplicate costs only the decrypt above
+            // and at most one ack ever goes out per message ID.
+            let firstOpen = collectionsQueue.sync(flags: .barrier) {
+                openedCourierMessageIDs.insert(innerMessageID)
+            }
+            guard firstOpen else {
+                SecureLogger.debug("📦 Dropping duplicate courier envelope for message \(innerMessageID.prefix(8))…", category: .session)
+                return true
+            }
+            // Couriered mail arrives while the sender is absent, so the UI's
+            // block check can't resolve their fingerprint from a live session.
+            // Gate here, where the full static key is in hand.
+            guard !identityManager.isBlocked(fingerprint: senderStaticKey.sha256Fingerprint()) else {
+                SecureLogger.debug("🚫 Dropping courier envelope from blocked sender", category: .security)
+                return true
+            }
+            // A present sender resolves to their live mesh thread via the
+            // derived short ID. An absent sender — the usual courier case —
+            // uses the full noise-key ID so the message lands on the stable
+            // favorite conversation instead of an unresolvable short-ID
+            // thread labeled "Unknown".
+            let shortID = PeerID(publicKey: senderStaticKey)
+            let isKnownOnMesh = collectionsQueue.sync { peerRegistry.info(for: shortID) != nil }
+            let senderPeerID = isKnownOnMesh ? shortID : PeerID(hexData: senderStaticKey)
+            SecureLogger.debug("📦 Opened courier envelope from \(senderPeerID.id.prefix(8))…", category: .session)
+            sfMetrics?.record(.courierOpened)
+            notifyUI { [weak self] in
+                self?.deliverTransportEvent(.noisePayloadReceived(
+                    peerID: senderPeerID,
+                    type: payloadType,
+                    payload: payload,
+                    timestamp: Date()
+                ))
+            }
+            return true
+        } catch {
+            // Tag collision or stale key: not addressed to us after all.
+            SecureLogger.debug("📦 Courier envelope failed to open: \(error)", category: .encryption)
+            return false
+        }
+    }
+
+    private func acceptCourierDeposit(_ envelope: CourierEnvelope, from peerID: PeerID, packet: BitchatPacket) {
+        // A deposit must come from its depositor over the direct link: the
+        // claimed sender has to be the ingress peer, and the packet signature
+        // has to verify against that peer's announced signing key. Otherwise
+        // an untrusted sender could route an envelope through any trusted
+        // neighbor and have us carry it under the neighbor's quota.
+        guard PeerID(hexData: packet.senderID) == peerID else {
+            SecureLogger.debug("📦 Courier deposit rejected: relayed envelope claims sender \(PeerID(hexData: packet.senderID).id.prefix(8))… but arrived from \(peerID.id.prefix(8))…", category: .security)
+            return
+        }
+        let depositorInfo = collectionsQueue.sync { peerRegistry.info(for: peerID) }
+        guard let depositorKey = depositorInfo?.noisePublicKey else {
+            SecureLogger.debug("📦 Courier deposit from unknown peer \(peerID.id.prefix(8))… rejected", category: .session)
+            return
+        }
+        guard let signingKey = depositorInfo?.signingPublicKey,
+              noiseService.verifyPacketSignature(packet, publicKey: signingKey) else {
+            SecureLogger.debug("📦 Courier deposit from \(peerID.id.prefix(8))… rejected (missing/invalid signature)", category: .security)
+            return
+        }
+        let isVerifiedPeer = depositorInfo?.isVerifiedNickname ?? false
+        let store = courierStore
+        let policy = courierDepositPolicy
+        let metrics = sfMetrics
+        notifyUI {
+            guard let tier = policy(depositorKey, isVerifiedPeer) else {
+                SecureLogger.debug("📦 Courier deposit from \(peerID.id.prefix(8))… rejected (neither favorite nor verified)", category: .session)
+                return
+            }
+            if store.deposit(envelope, from: depositorKey, tier: tier) {
+                SecureLogger.debug("📦 Carrying courier envelope deposited by \(peerID.id.prefix(8))… (\(tier.rawValue))", category: .session)
+                metrics?.record(.courierAccepted)
+            }
+        }
+    }
+
+    /// Hand over any carried envelopes addressed to a peer we just heard from.
+    private func deliverCourierMail(to peerID: PeerID, noiseKey: Data) {
+        let metrics = sfMetrics
+        let accepted = courierStore.handoverEnvelopes(for: noiseKey) { [weak self] envelope in
+            guard let self,
+                  let payload = envelope.encode(),
+                  self.sendPacketDirected(
+                      self.makeCourierPacket(payload, to: peerID),
+                      to: peerID,
+                      requireDirectPeerLink: true,
+                      requireNoiseAuthenticatedPeerLink: true
+                  ) else {
+                return false
+            }
+            metrics?.record(.courierHandedOver)
+            return true
+        }
+        if accepted > 0 {
+            SecureLogger.debug("📦 Handed over \(accepted) courier envelope(s) to \(peerID.id.prefix(8))…", category: .session)
+        }
+    }
+
+    /// Speculative handover toward a recipient heard only via a relayed
+    /// announce: the envelope floods the mesh as a directed packet (relays
+    /// treat it like a directed DM). Non-destructive — the carried copy stays
+    /// until a direct handover or expiry, throttled per envelope so repeated
+    /// announces don't re-flood.
+    private func deliverCourierMailRemotely(to peerID: PeerID, noiseKey: Data) {
+        let envelopes = courierStore.envelopesForRemoteHandover(
+            recipientNoiseKey: noiseKey,
+            cooldown: TransportConfig.courierRemoteHandoverCooldownSeconds
+        )
+        guard !envelopes.isEmpty else { return }
+        SecureLogger.debug("📦 Remote handover: flooding \(envelopes.count) envelope(s) toward \(peerID.id.prefix(8))…", category: .session)
+        for envelope in envelopes {
+            guard let payload = envelope.encode() else { continue }
+            broadcastPacket(makeCourierPacket(payload, to: peerID))
+            sfMetrics?.record(.courierRemoteHandover)
+        }
+    }
+
+    /// Spray-and-wait: split copy budgets with another courier we just
+    /// encountered, so carried mail diffuses through a moving crowd instead
+    /// of riding a single carrier. Only favorites and verified peers qualify,
+    /// mirroring the deposit policy they would apply to us.
+    private func sprayCourierMail(to peerID: PeerID, noiseKey: Data, isVerifiedPeer: Bool) {
+        let store = courierStore
+        let metrics = sfMetrics
+        let sendSpray: () -> Void = { [weak self] in
+            guard let self else { return }
+            let accepted = store.transferSprayCopies(to: noiseKey) { envelope in
+                guard let payload = envelope.encode(),
+                      self.sendPacketDirected(
+                          self.makeCourierPacket(payload, to: peerID),
+                          to: peerID,
+                          requireDirectPeerLink: true,
+                          requireNoiseAuthenticatedPeerLink: true
+                      ) else {
+                    return false
+                }
+                metrics?.record(.courierSprayed)
+                return true
+            }
+            if accepted > 0 {
+                SecureLogger.debug("📦 Sprayed \(accepted) envelope copy(ies) to courier \(peerID.id.prefix(8))…", category: .session)
+            }
+        }
+        let policy = courierDepositPolicy
+        notifyUI {
+            // Same trust gate as deposits: don't hand mail to a peer who
+            // would reject it from us.
+            guard policy(noiseKey, isVerifiedPeer) != nil else { return }
+            sendSpray()
+        }
+    }
+
+    // MARK: One-Time Prekey Bundles
+
+    /// Broadcasts our signed prekey bundle and tracks it for gossip sync.
+    /// Unforced sends (piggybacked on announces) are throttled — gossip does
+    /// the spreading, the broadcast just keeps our own gossip entry fresh.
+    /// Forced sends (bundle changed after consumption) go immediately.
+    private func sendPrekeyBundle(force: Bool = false) {
+        let now = Date()
+        let shouldSend: Bool = collectionsQueue.sync(flags: .barrier) {
+            if !force,
+               let last = lastPrekeyBundleSentAt,
+               now.timeIntervalSince(last) < TransportConfig.prekeyBundleRebroadcastSeconds {
+                return false
+            }
+            lastPrekeyBundleSentAt = now
+            return true
+        }
+        guard shouldSend else { return }
+        guard let bundle = noiseService.currentPrekeyBundle(),
+              let payload = bundle.encode() else {
+            SecureLogger.error("❌ Failed to build prekey bundle", category: .security)
+            return
+        }
+        let packet = BitchatPacket(
+            type: MessageType.prekeyBundle.rawValue,
+            senderID: myPeerIDData,
+            recipientID: nil,
+            timestamp: UInt64(now.timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: messageTTL
+        )
+        guard let signedPacket = noiseService.signPacket(packet) else {
+            SecureLogger.error("❌ Failed to sign prekey bundle packet", category: .security)
+            return
+        }
+        if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
+            broadcastPacket(signedPacket)
+        } else {
+            messageQueue.async { [weak self] in
+                self?.broadcastPacket(signedPacket)
+            }
+        }
+        gossipSyncManager?.onPublicPacketSeen(signedPacket)
+    }
+
+    /// Ingests a gossiped prekey bundle. Attribution is layered: the outer
+    /// packet must originate from the bundle owner (fabricated sender IDs, used
+    /// to multiply cache/gossip entries, are rejected), and BOTH the inner
+    /// bundle signature and the outer packet signature must verify against the
+    /// owner's announce-bound signing key. Verifying the outer packet — whose
+    /// signed bytes cover senderID and timestamp — stops a valid bundle from
+    /// being replayed under a fresh timestamp or spoofed sender to pass
+    /// freshness or poison attribution. Only after that does the packet enter
+    /// our own gossip store, so we never help spread a bundle we couldn't
+    /// attribute.
+    private func handlePrekeyBundle(_ packet: BitchatPacket, from peerID: PeerID) {
+        guard let bundle = PrekeyBundle.decode(packet.payload) else {
+            SecureLogger.debug("🔑 Ignoring malformed prekey bundle from \(peerID.id.prefix(8))…", category: .security)
+            return
+        }
+        // Our own bundle is tracked at send time; a copy echoing back adds nothing.
+        guard bundle.noiseStaticPublicKey != noiseService.getStaticPublicKeyData() else { return }
+        let owner = PeerID(publicKey: bundle.noiseStaticPublicKey)
+        // The owner's genuine bundle (direct or relayed) always carries the
+        // owner's senderID + outer signature; gossip resends preserve both. A
+        // packet whose senderID isn't the owner can't be authenticated here.
+        guard PeerID(hexData: packet.senderID) == owner else {
+            SecureLogger.debug("🔑 Ignoring prekey bundle whose sender ≠ owner \(owner.id.prefix(8))…", category: .security)
+            return
+        }
+        // Look up the announce-bound signing key and stash-if-unbound in ONE
+        // barrier: the receive queue is concurrent, so this bundle can race
+        // ahead of the announce that binds the key. Reading the live registry
+        // and stashing atomically closes the check-then-act gap against
+        // handleAnnounce's drain (see drainPendingPrekeyBundles).
+        let signingKey: Data? = collectionsQueue.sync(flags: .barrier) {
+            if let info = peerRegistry.info(for: owner),
+               info.noisePublicKey == bundle.noiseStaticPublicKey,
+               let key = info.signingPublicKey {
+                return key
+            }
+            // Offline-verified identities are stable across this race.
+            for candidate in identityManager.getCryptoIdentitiesByPeerIDPrefix(owner)
+            where candidate.publicKey == bundle.noiseStaticPublicKey {
+                if let key = candidate.signingPublicKey { return key }
+            }
+            // No binding yet: retain the latest bundle per owner, bounded, and
+            // retry once the verified announce lands.
+            if pendingPrekeyBundles[owner] != nil
+                || pendingPrekeyBundles.count < Self.pendingPrekeyBundleCap {
+                pendingPrekeyBundles[owner] = packet
+            }
+            return nil
+        }
+        guard let signingKey else {
+            SecureLogger.debug("🔑 Deferring prekey bundle without a bound signing key (owner \(owner.id.prefix(8))…)", category: .security)
+            return
+        }
+        ingestVerifiedPrekeyBundle(bundle, packet: packet, owner: owner, signingKey: signingKey)
+    }
+
+    /// Verify a bundle's inner + outer signatures against the owner's bound
+    /// signing key and, on success, cache it and let it enter our gossip store.
+    private func ingestVerifiedPrekeyBundle(_ bundle: PrekeyBundle, packet: BitchatPacket, owner: PeerID, signingKey: Data) {
+        guard noiseService.verifyPrekeyBundleSignature(bundle, signingPublicKey: signingKey),
+              noiseService.verifyPacketSignature(packet, publicKey: signingKey) else {
+            SecureLogger.debug("🔑 Ignoring prekey bundle without verifiable signature (owner \(owner.id.prefix(8))…)", category: .security)
+            return
+        }
+        if prekeyBundleStore.ingest(bundle) {
+            SecureLogger.debug("🔑 Cached prekey bundle for \(owner.id.prefix(8))… (\(bundle.prekeys.count) prekeys)", category: .security)
+        }
+        gossipSyncManager?.onPublicPacketSeen(packet)
+    }
+
+    /// Re-attempt any prekey bundle that arrived before this owner's announce
+    /// bound a signing key. Called from handleAnnounce after a verified
+    /// announce, in a barrier ordered after the registry write, so a bundle
+    /// stashed before the write is always observed here.
+    private func drainPendingPrekeyBundles(for owner: PeerID) {
+        let pending: BitchatPacket? = collectionsQueue.sync(flags: .barrier) {
+            pendingPrekeyBundles.removeValue(forKey: owner)
+        }
+        guard let packet = pending,
+              let bundle = PrekeyBundle.decode(packet.payload),
+              let signingKey = announceBoundSigningKey(forNoiseKey: bundle.noiseStaticPublicKey) else { return }
+        ingestVerifiedPrekeyBundle(bundle, packet: packet, owner: owner, signingKey: signingKey)
+    }
+
+    /// Ed25519 signing key bound to a Noise static key by a verified
+    /// announce: from the live registry when the owner is on the mesh, else
+    /// from identities persisted for offline verification.
+    private func announceBoundSigningKey(forNoiseKey noiseKey: Data) -> Data? {
+        let shortID = PeerID(publicKey: noiseKey)
+        if let info = collectionsQueue.sync(execute: { peerRegistry.info(for: shortID) }),
+           info.noisePublicKey == noiseKey,
+           let signingKey = info.signingPublicKey {
+            return signingKey
+        }
+        for candidate in identityManager.getCryptoIdentitiesByPeerIDPrefix(shortID)
+        where candidate.publicKey == noiseKey {
+            if let signingKey = candidate.signingPublicKey {
+                return signingKey
+            }
+        }
+        return nil
+    }
+
+    // MARK: Gateway carrier (nostrCarrier)
+
+    /// Sign and send an encoded `toGateway` carrier payload directed at a
+    /// gateway peer. The packet is signed so the gateway can key its uplink
+    /// quotas to an authenticated depositor; the carried Nostr event has its
+    /// own Schnorr signature for content authenticity. Returns false when
+    /// the gateway is not reachable or signing fails.
+    func sendNostrCarrier(_ payload: Data, to gatewayPeer: PeerID) -> Bool {
+        guard isPeerReachable(gatewayPeer) else { return false }
+        let packet = BitchatPacket(
+            type: MessageType.nostrCarrier.rawValue,
+            senderID: myPeerIDData,
+            recipientID: Data(hexString: gatewayPeer.id),
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: messageTTL
+        )
+        guard let signed = noiseService.signPacket(packet) else { return false }
+        messageQueue.async { [weak self] in
+            // broadcastPacket applies a known route when one exists and
+            // otherwise floods the directed packet like a DM, so a gateway
+            // that is reachable but multi-hop still gets the deposit.
+            self?.broadcastPacket(signed)
+        }
+        return true
+    }
+
+    /// Broadcast an encoded `fromGateway` carrier payload on the mesh with
+    /// the default TTL. Unsigned at the packet layer — receivers verify the
+    /// carried event's own Schnorr signature.
+    func broadcastNostrCarrier(_ payload: Data) {
+        let packet = BitchatPacket(
+            type: MessageType.nostrCarrier.rawValue,
+            senderID: myPeerIDData,
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: messageTTL
+        )
+        messageQueue.async { [weak self] in
+            self?.broadcastPacket(packet)
+        }
+    }
+
+    /// Transport-level handling for a received nostrCarrier packet; policy
+    /// (verification of the carried event, quotas, loop prevention) lives in
+    /// `GatewayService` behind `onNostrCarrierPacket`.
+    private func handleNostrCarrier(_ packet: BitchatPacket, from _: PeerID) {
+        let senderID = PeerID(hexData: packet.senderID)
+        let directedToUs: Bool
+        if let recipientID = packet.recipientID {
+            // Carriers addressed elsewhere ride the generic relay path untouched.
+            guard recipientID == myPeerIDData else { return }
+            // Uplink deposit: quotas are keyed by the depositor, so the
+            // packet signature must verify against the sender's announced
+            // signing key. Unlike courier deposits the depositor may be
+            // multi-hop away, so ingress-link identity is not required.
+            let signingKey = collectionsQueue.sync { peerRegistry.info(for: senderID)?.signingPublicKey }
+            guard let signingKey,
+                  noiseService.verifyPacketSignature(packet, publicKey: signingKey) else {
+                SecureLogger.debug("🌐 nostrCarrier uplink from \(senderID.id.prefix(8))… rejected (missing/invalid packet signature)", category: .security)
+                return
+            }
+            directedToUs = true
+        } else {
+            directedToUs = false
+        }
+        let payload = packet.payload
+        notifyUI { [weak self] in
+            self?.onNostrCarrierPacket?(payload, senderID, directedToUs)
+        }
+    }
+
+    // MARK: Link capability snapshots (thread-safe via bleQueue)
+
+    private func readLinkState<T>(_ body: (BLELinkStateStore) -> T) -> T {
+        if DispatchQueue.getSpecific(key: bleQueueKey) != nil {
+            return body(linkStateStore)
+        } else {
+            return bleQueue.sync { body(linkStateStore) }
+        }
+    }
+
+    private func snapshotDirectPeripheralState(for peerID: PeerID) -> BLEPeripheralLinkState? {
+        readLinkState { $0.directPeripheralState(for: peerID) }
+    }
+
+    private func snapshotPeripheralStates() -> [BLEPeripheralLinkState] {
+        readLinkState(\.peripheralStates)
+    }
+
+    private func snapshotSubscribedCentrals() -> BLESubscribedCentralSnapshot {
+        readLinkState(\.subscribedCentralSnapshot)
     }
     
     // MARK: Helpers: IDs, selection, and write backpressure
     
-    private func makeMessageID(for packet: BitchatPacket) -> String {
-        let senderID = packet.senderID.hexEncodedString()
-        let digestPrefix = packet.payload.sha256Hash().prefix(4).hexEncodedString()
-        return "\(senderID)-\(packet.timestamp)-\(packet.type)-\(digestPrefix)"
-    }
-
-    private func subsetSizeForFanout(_ n: Int) -> Int {
-        guard n > 0 else { return 0 }
-        if n <= 2 { return n }
-        // approx ceil(log2(n)) + 1 without floating point
-        var v = n - 1
-        var bits = 0
-        while v > 0 { v >>= 1; bits += 1 }
-        return min(n, max(1, bits + 1))
-    }
-
-    private func selectDeterministicSubset(ids: [String], k: Int, seed: String) -> Set<String> {
-        guard k > 0 && ids.count > k else { return Set(ids) }
-        // Stable order by SHA256(seed || "::" || id)
-        var scored: [(score: [UInt8], id: String)] = []
-        for id in ids {
-            let msg = (seed + "::" + id).data(using: .utf8) ?? Data()
-            let digest = Array(SHA256.hash(data: msg))
-            scored.append((digest, id))
-        }
-        scored.sort { a, b in
-            for i in 0..<min(a.score.count, b.score.count) {
-                if a.score[i] != b.score[i] { return a.score[i] < b.score[i] }
-            }
-            return a.id < b.id
-        }
-        return Set(scored.prefix(k).map { $0.id })
-    }
-
-    private func priority(for packet: BitchatPacket, data: Data) -> OutboundPriority {
-        guard let messageType = MessageType(rawValue: packet.type) else { return .low }
-        switch messageType {
-        case .fragment:
-            let total = fragmentTotalCount(from: packet.payload)
-            return OutboundPriority.fragment(totalFragments: total)
-        case .fileTransfer:
-            return .fileTransfer
-        default:
-            return .high
-        }
-    }
-
-    private func fragmentTotalCount(from payload: Data) -> Int {
-        guard payload.count >= 12 else { return Int(UInt16.max) }
-        let totalHigh = Int(payload[10])
-        let totalLow = Int(payload[11])
-        let total = (totalHigh << 8) | totalLow
-        return max(total, 1)
-    }
-
-    private func writeOrEnqueue(_ data: Data, to peripheral: CBPeripheral, characteristic: CBCharacteristic, priority: OutboundPriority) {
+    private func writeOrEnqueue(_ data: Data, to peripheral: CBPeripheral, characteristic: CBCharacteristic, priority: BLEOutboundWritePriority) {
         // BLE operations run on bleQueue; keep queue affinity
         bleQueue.async { [weak self] in
             guard let self = self else { return }
@@ -3032,47 +6343,93 @@ extension BLEService {
                 peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
             } else {
                 self.collectionsQueue.async(flags: .barrier) {
-                    var queue = self.pendingPeripheralWrites[uuid] ?? []
-                    let capBytes = TransportConfig.blePendingWriteBufferCapBytes
-                    let newSize = data.count
-                    // If single chunk exceeds cap, drop it immediately
-                    if newSize > capBytes {
-                        SecureLogger.warning("⚠️ Dropping oversized write chunk (\(newSize)B) for peripheral \(uuid)", category: .session)
-                    } else {
-                        let item = PendingWrite(priority: priority, data: data)
-                        var total = queue.reduce(0) { $0 + $1.data.count } + newSize
-                        let insertIndex = queue.firstIndex { item.priority < $0.priority } ?? queue.count
-                        queue.insert(item, at: insertIndex)
-                        if total > capBytes {
-                            var removedBytes = 0
-                            while total > capBytes && !queue.isEmpty {
-                                let removed = queue.removeLast()
-                                removedBytes += removed.data.count
-                                total -= removed.data.count
-                            }
-                            if removedBytes > 0 {
-                                SecureLogger.warning("📉 Trimmed pending write buffer for \(uuid) by \(removedBytes)B to \(total)B", category: .session)
-                            }
-                        }
-                        self.pendingPeripheralWrites[uuid] = queue.isEmpty ? nil : queue
+                    let result = self.pendingPeripheralWrites.enqueue(
+                        data: data,
+                        for: uuid,
+                        priority: priority,
+                        capBytes: TransportConfig.blePendingWriteBufferCapBytes
+                    )
+
+                    switch result {
+                    case .oversized(let bytes):
+                        SecureLogger.warning("⚠️ Dropping oversized write chunk (\(bytes)B) for peripheral \(uuid)", category: .session)
+                    case let .enqueued(trimmedBytes, remainingBytes) where trimmedBytes > 0:
+                        SecureLogger.warning("📉 Trimmed pending write buffer for \(uuid) by \(trimmedBytes)B to \(remainingBytes)B", category: .session)
+                    case .enqueued:
+                        break
                     }
                 }
             }
         }
     }
 
+    /// Writes immediately or synchronously admits the packet to this
+    /// peripheral's bounded retry queue. Unlike `writeOrEnqueue`, the return
+    /// value distinguishes a retained queue item from one rejected or trimmed
+    /// immediately, which lets durable courier state commit truthfully.
+    private func writeOrEnqueueIfAccepted(
+        _ data: Data,
+        to peripheral: CBPeripheral,
+        characteristic: CBCharacteristic,
+        priority: BLEOutboundWritePriority,
+        requiredAuthenticatedPeer: PeerID?
+    ) -> Bool {
+        let accept = { [self] in
+            let uuid = peripheral.identifier.uuidString
+            guard let state = linkStateStore.state(forPeripheralID: uuid),
+                  state.isConnected,
+                  state.characteristic?.uuid == characteristic.uuid else {
+                return false
+            }
+            if let peerID = requiredAuthenticatedPeer {
+                let link = BLEIngressLinkID.peripheral(uuid)
+                guard state.peerID == peerID,
+                      noiseAuthenticatedLinkOwners[link] == peerID else {
+                    return false
+                }
+            }
+
+            if peripheral.canSendWriteWithoutResponse {
+                peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
+                return true
+            }
+
+            let attempt = collectionsQueue.sync(flags: .barrier) {
+                pendingPeripheralWrites.enqueueReportingAcceptance(
+                    data: data,
+                    for: uuid,
+                    priority: priority,
+                    capBytes: TransportConfig.blePendingWriteBufferCapBytes
+                )
+            }
+            switch attempt.result {
+            case .oversized(let bytes):
+                SecureLogger.warning("⚠️ Rejecting oversized write chunk (\(bytes)B) for peripheral \(uuid)", category: .session)
+            case let .enqueued(trimmedBytes, remainingBytes) where trimmedBytes > 0:
+                SecureLogger.warning("📉 Trimmed pending write buffer for \(uuid) by \(trimmedBytes)B to \(remainingBytes)B", category: .session)
+            case .enqueued:
+                break
+            }
+            return attempt.accepted
+        }
+
+        if DispatchQueue.getSpecific(key: bleQueueKey) != nil {
+            return accept()
+        }
+        return bleQueue.sync(execute: accept)
+    }
+
     private func drainPendingWrites(for peripheral: CBPeripheral) {
         let uuid = peripheral.identifier.uuidString
         bleQueue.async { [weak self] in
             guard let self = self else { return }
-            guard let state = self.peripherals[uuid], let ch = state.characteristic else { return }
+            guard !self.isPanicSuspended else { return }
+            guard let state = self.linkStateStore.state(forPeripheralID: uuid), let ch = state.characteristic else { return }
 
             // Atomically take all pending items from the queue to avoid race conditions
             // where new items could be enqueued between read and update
-            let itemsToSend: [PendingWrite] = self.collectionsQueue.sync(flags: .barrier) {
-                let items = self.pendingPeripheralWrites[uuid] ?? []
-                self.pendingPeripheralWrites[uuid] = nil
-                return items
+            let itemsToSend: [BLEPendingWrite] = self.collectionsQueue.sync(flags: .barrier) {
+                self.pendingPeripheralWrites.takeAll(for: uuid)
             }
             guard !itemsToSend.isEmpty else { return }
 
@@ -3091,10 +6448,7 @@ extension BLEService {
             let unsent = Array(itemsToSend.dropFirst(sent))
             if !unsent.isEmpty {
                 self.collectionsQueue.async(flags: .barrier) {
-                    var existing = self.pendingPeripheralWrites[uuid] ?? []
-                    // Prepend unsent items to maintain priority order
-                    existing.insert(contentsOf: unsent, at: 0)
-                    self.pendingPeripheralWrites[uuid] = existing
+                    self.pendingPeripheralWrites.prepend(unsent, for: uuid)
                 }
             }
         }
@@ -3102,44 +6456,14 @@ extension BLEService {
 
     /// Periodically try to drain pending notifications as a backup mechanism
     private func drainPendingNotificationsIfPossible() {
-        collectionsQueue.async(flags: .barrier) { [weak self] in
-            guard let self = self,
-                  let characteristic = self.characteristic,
-                  !self.pendingNotifications.isEmpty else { return }
-
-            let pending = self.pendingNotifications
-            self.pendingNotifications.removeAll()
-
-            var sentCount = 0
-            for (index, (data, centrals)) in pending.enumerated() {
-                let success: Bool
-                if let centrals = centrals {
-                    success = self.peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: centrals) ?? false
-                } else {
-                    success = self.peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: nil) ?? false
-                }
-
-                if !success {
-                    // Re-queue this and all remaining items
-                    let remaining = pending.dropFirst(index)
-                    self.pendingNotifications.append(contentsOf: remaining)
-                    break
-                } else {
-                    sentCount += 1
-                }
-            }
-
-            if sentCount > 0 {
-                SecureLogger.debug("🔄 Periodic drain: sent \(sentCount) pending notifications", category: .session)
-            }
-        }
+        drainPendingNotifications(logPrefix: "🔄 Periodic drain: sent")
     }
 
     /// Periodically try to drain pending writes for all connected peripherals
     private func drainAllPendingWrites() {
-        let uuids = collectionsQueue.sync { Array(pendingPeripheralWrites.keys) }
+        let uuids = collectionsQueue.sync { pendingPeripheralWrites.peripheralIDs }
         for uuid in uuids {
-            guard let state = peripherals[uuid], state.isConnected else { continue }
+            guard let state = linkStateStore.state(forPeripheralID: uuid), state.isConnected else { continue }
             drainPendingWrites(for: state.peripheral)
         }
     }
@@ -3149,187 +6473,287 @@ extension BLEService {
     #if os(iOS)
     @objc private func appDidBecomeActive() {
         isAppActive = true
+        refreshCachedBackgroundTimeRemaining()
         // Restart scanning with allow duplicates when app becomes active
         if centralManager?.state == .poweredOn {
             centralManager?.stopScan()
             startScanning()
         }
+        cancelStalePendingConnects()
         logBluetoothStatus("became-active")
         scheduleBluetoothStatusSample(after: 5.0, context: "active-5s")
         // No Local Name; nothing to refresh for advertising policy
     }
-    
+
     @objc private func appDidEnterBackground() {
         isAppActive = false
+        refreshCachedBackgroundTimeRemaining()
         // Restart scanning without allow duplicates in background
         if centralManager?.state == .poweredOn {
             centralManager?.stopScan()
             startScanning()
         }
+        armPendingBackgroundConnects()
+        // Backgrounding may precede a kill; flush the public-history archive
+        // outside its 30s maintenance cadence.
+        gossipSyncManager?.persistNow()
         logBluetoothStatus("entered-background")
         scheduleBluetoothStatusSample(after: 15.0, context: "background-15s")
         // No Local Name; nothing to refresh for advertising policy
+    }
+
+    /// Issue indefinite `connect()` requests to recently seen peripherals on
+    /// backgrounding. Pending connects live in the Bluetooth controller's
+    /// allowlist — no scanning and no app CPU — and complete whenever a peer
+    /// comes into range, waking (or relaunching) the app. A couple of central
+    /// slots stay reserved for connects driven by live background discovery —
+    /// except on the disconnect re-arm path, which may consume the slot the
+    /// disconnect itself just freed (a dense mesh with 4+ remaining links
+    /// would otherwise compute a zero budget and never re-arm the lost peer).
+    private func armPendingBackgroundConnects(
+        slotReserve: Int = TransportConfig.bleBackgroundPendingConnectSlotReserve
+    ) {
+        bleQueue.async { [weak self] in
+            guard let self,
+                  !self.isPanicSuspended,
+                  let central = self.centralManager,
+                  central.state == .poweredOn else { return }
+            let budget = TransportConfig.bleMaxCentralLinks
+                - slotReserve
+                - self.linkStateStore.connectedOrConnectingPeripheralCount
+            let now = Date()
+            let targets = self.recentPeripheralCache.reconnectTargets(now: now, limit: budget) { peripheralID in
+                let state = self.linkStateStore.state(forPeripheralID: peripheralID)
+                return state?.isConnected == true || state?.isConnecting == true
+            }
+            guard !targets.isEmpty else { return }
+            for target in targets {
+                // lastConnectionAttempt stays nil: an indefinite pending connect
+                // has no attempt clock, and nil marks it always-stale so
+                // cancelStalePendingConnects() reclaims it on foreground even
+                // after a quick background→foreground bounce.
+                self.linkStateStore.setPeripheralState(
+                    BLEPeripheralLinkState(
+                        peripheral: target.peripheral,
+                        characteristic: nil,
+                        peerID: nil,
+                        isConnecting: true,
+                        isConnected: false,
+                        lastConnectionAttempt: nil,
+                        assembler: NotificationStreamAssembler()
+                    ),
+                    for: target.peripheralID
+                )
+                target.peripheral.delegate = self
+                central.connect(target.peripheral, options: [
+                    CBConnectPeripheralOptionNotifyOnConnectionKey: true,
+                    CBConnectPeripheralOptionNotifyOnDisconnectionKey: true,
+                    CBConnectPeripheralOptionNotifyOnNotificationKey: true
+                ])
+            }
+            SecureLogger.info("🌙 Armed \(targets.count) pending background connect(s) for wake-on-proximity", category: .session)
+        }
+    }
+
+    /// Foreground restores normal connection management: pending connects
+    /// older than the connect timeout (including ones rebuilt by state
+    /// restoration after a relaunch) are cancelled so live scanning and the
+    /// scheduler take over. Anything still nearby is rediscovered within
+    /// seconds by the allow-duplicates foreground scan.
+    private func cancelStalePendingConnects() {
+        bleQueue.async { [weak self] in
+            guard let self, let central = self.centralManager else { return }
+            let now = Date()
+            var cancelled = 0
+            for state in self.linkStateStore.peripheralStates where state.isConnecting && !state.isConnected {
+                let age = state.lastConnectionAttempt.map { now.timeIntervalSince($0) } ?? .infinity
+                guard age > TransportConfig.bleConnectTimeoutSeconds else { continue }
+                let peripheralID = state.peripheral.identifier.uuidString
+                central.cancelPeripheralConnection(state.peripheral)
+                self.collectionsQueue.sync(flags: .barrier) {
+                    self.pendingPeripheralWrites.discardAll(for: peripheralID)
+                }
+                self.noiseAuthenticatedLinkOwners.removeValue(forKey: .peripheral(peripheralID))
+                self.noiseReconnectPolicy.endLinkEpoch(.peripheral(peripheralID))
+                _ = self.linkStateStore.removePeripheral(peripheralID)
+                cancelled += 1
+            }
+            if cancelled > 0 {
+                SecureLogger.info("🌅 Cancelled \(cancelled) stale pending connect(s) on foreground", category: .session)
+                self.tryConnectFromQueue()
+            }
+        }
     }
     #endif
     
     // MARK: Private Message Handling
     
     private func sendPrivateMessage(_ content: String, to recipientID: PeerID, messageID: String) {
-        SecureLogger.debug("📨 Sending PM to \(recipientID): \(content.prefix(30))...", category: .session)
-        
+        // Hop like sendMessage: the Transport-facing wrappers call this from
+        // the main actor (router sends, favorite notifications), and the send
+        // path sync-waits on bleQueue for link state.
+        if DispatchQueue.getSpecific(key: messageQueueKey) == nil {
+            messageQueue.async { [weak self] in
+                self?.sendPrivateMessage(content, to: recipientID, messageID: messageID)
+            }
+            return
+        }
+        // Sessions and wire recipient IDs are keyed by the short 16-hex form;
+        // callers may pass the full 64-hex noise key (mirrors sendFilePrivate).
+        let recipientID = recipientID.toShort()
+        SecureLogger.debug("📨 Sending PM to \(recipientID.id.prefix(8))… id=\(messageID.prefix(8))… chars=\(content.count) bytes=\(content.utf8.count)", category: .session)
+
         // Check if we have an established Noise session
         if noiseService.hasEstablishedSession(with: recipientID) {
             // Encrypt and send
             do {
-                // Create TLV-encoded private message
-                let privateMessage = PrivateMessagePacket(messageID: messageID, content: content)
-                guard let tlvData = privateMessage.encode() else {
+                guard let messagePayload = BLENoisePayloadFactory.privateMessage(content: content, messageID: messageID) else {
                     SecureLogger.error("Failed to encode private message with TLV")
                     return
                 }
                 
-                // Create message payload with TLV: [type byte] + [TLV data]
-                var messagePayload = Data([NoisePayloadType.privateMessage.rawValue])
-                messagePayload.append(tlvData)
-                
-                let encrypted = try noiseService.encrypt(messagePayload, for: recipientID)
-                
-                // Convert recipientID to Data (assuming it's a hex string)
-                var recipientData = Data()
-                var tempID = recipientID.id
-                while tempID.count >= 2 {
-                    let hexByte = String(tempID.prefix(2))
-                    if let byte = UInt8(hexByte, radix: 16) {
-                        recipientData.append(byte)
-                    }
-                    tempID = String(tempID.dropFirst(2))
-                }
-                if tempID.count == 1 {
-                    if let byte = UInt8(tempID, radix: 16) {
-                        recipientData.append(byte)
-                    }
-                }
-
-                let packet = BitchatPacket(
-                    type: MessageType.noiseEncrypted.rawValue,
-                    senderID: myPeerIDData,
-                    recipientID: recipientData,
-                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                    payload: encrypted,
-                    signature: nil,
-                    ttl: messageTTL
-                )
-                
-                broadcastPacket(packet)
+                broadcastPacket(try makeEncryptedNoisePacket(messagePayload, to: recipientID))
                 
                 // Notify delegate that message was sent
                 notifyUI { [weak self] in
-                    self?.delegate?.didUpdateMessageDeliveryStatus(messageID, status: .sent)
+                    self?.deliverTransportEvent(.messageDeliveryStatusUpdated(messageID: messageID, status: .sent))
                 }
             } catch {
                 SecureLogger.error("Failed to encrypt message: \(error)")
             }
         } else {
             // Queue message for sending after handshake completes
-            SecureLogger.debug("🤝 No session with \(recipientID), initiating handshake and queueing message", category: .session)
+            SecureLogger.debug("🤝 No session with \(recipientID.id.prefix(8))…, initiating handshake and queueing message", category: .session)
             
             // Queue the message (especially important for favorite notifications)
             collectionsQueue.sync(flags: .barrier) {
-                if pendingMessagesAfterHandshake[recipientID] == nil {
-                    pendingMessagesAfterHandshake[recipientID] = []
-                }
-                pendingMessagesAfterHandshake[recipientID]?.append((content, messageID))
+                pendingNoiseSessionQueues.appendPrivateMessage(content: content, messageID: messageID, for: recipientID)
             }
             
             initiateNoiseHandshake(with: recipientID)
             
             // Notify delegate that message is pending
             notifyUI { [weak self] in
-                self?.delegate?.didUpdateMessageDeliveryStatus(messageID, status: .sending)
+                self?.deliverTransportEvent(.messageDeliveryStatusUpdated(messageID: messageID, status: .sending))
             }
         }
     }
     
     private func initiateNoiseHandshake(with peerID: PeerID) {
-        // Use NoiseEncryptionService for handshake
-        guard !noiseService.hasSession(with: peerID) else { return }
-        
+        let service = noiseService
         do {
-            let handshakeData = try noiseService.initiateHandshake(with: peerID)
-            
-            // Send handshake init
-            let packet = BitchatPacket(
-                type: MessageType.noiseHandshake.rawValue,
-                senderID: myPeerIDData,
-                recipientID: Data(hexString: peerID.id),
-                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                payload: handshakeData,
-                signature: nil,
-                ttl: messageTTL
-            )
-            broadcastPacket(packet)
+            guard let initiation = try service.initiateHandshakeIfNeeded(
+                with: peerID,
+                retryOnTimeout: true
+            ) else {
+                return
+            }
+            messageQueue.async(flags: .barrier) {
+                [weak self, weak service] in
+                guard let self,
+                      let service,
+                      self.noiseService === service,
+                      let handshakeData = service.claimHandshakeInitiation(
+                        initiation,
+                        for: peerID
+                      ) else {
+                    return
+                }
+                self.broadcastNoiseHandshake(handshakeData, to: peerID)
+            }
         } catch {
             SecureLogger.error("Failed to initiate handshake: \(error)")
+        }
+    }
+
+    private func broadcastNoiseHandshake(_ handshakeData: Data, to peerID: PeerID) {
+        let packet = BitchatPacket(
+            type: MessageType.noiseHandshake.rawValue,
+            senderID: myPeerIDData,
+            recipientID: Data(hexString: peerID.id),
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: handshakeData,
+            signature: nil,
+            ttl: messageTTL
+        )
+        broadcastPacket(packet)
+    }
+
+    /// Starts a wire-compatible ordinary XX reconnect. The manager prepares
+    /// the initiator before atomically retiring the cached transport; the
+    /// one-shot claim prevents a crossed inbound message from making a stale
+    /// message 1 leave after this peer has already become responder.
+    private func initiateNoiseReconnectHandshake(with peerID: PeerID) {
+        let service = noiseService
+        do {
+            let initiation = try service.initiateReconnectHandshake(
+                with: peerID,
+                retryOnTimeout: true
+            )
+            messageQueue.async(flags: .barrier) { [weak self, weak service] in
+                guard let self,
+                      let service,
+                      self.noiseService === service else {
+                    return
+                }
+                self.noteNoiseSessionCleared(for: peerID)
+                guard let handshakeData = service.claimHandshakeInitiation(
+                          initiation,
+                          for: peerID
+                      ) else {
+                    return
+                }
+                self.broadcastNoiseHandshake(handshakeData, to: peerID)
+            }
+        } catch NoiseSessionError.notEstablished {
+            initiateNoiseHandshake(with: peerID)
+        } catch {
+            SecureLogger.error(
+                "Failed to initiate ordinary reconnect: \(error)",
+                category: .session
+            )
         }
     }
     
     private func sendPendingMessagesAfterHandshake(for peerID: PeerID) {
         // Atomically take all pending messages to process (prevents concurrent modification)
-        let pendingMessages = collectionsQueue.sync(flags: .barrier) { () -> [(content: String, messageID: String)]? in
-            let messages = pendingMessagesAfterHandshake[peerID]
-            pendingMessagesAfterHandshake.removeValue(forKey: peerID)
-            return messages
+        let pendingMessages = collectionsQueue.sync(flags: .barrier) { () -> [BLEPendingPrivateMessage] in
+            pendingNoiseSessionQueues.takePrivateMessages(for: peerID)
         }
 
-        guard let messages = pendingMessages, !messages.isEmpty else { return }
+        guard !pendingMessages.isEmpty else { return }
 
-        SecureLogger.debug("📤 Sending \(messages.count) pending messages after handshake to \(peerID)", category: .session)
+        SecureLogger.debug("📤 Sending \(pendingMessages.count) pending messages after handshake to \(peerID.id.prefix(8))…", category: .session)
 
         // Track failed messages for re-queuing
-        var failedMessages: [(content: String, messageID: String)] = []
+        var failedMessages: [BLEPendingPrivateMessage] = []
 
         // Send each pending message directly (we know session is established)
-        for (content, messageID) in messages {
+        for message in pendingMessages {
             do {
                 // Use the same TLV format as normal sends to keep receiver decoding consistent
-                let privateMessage = PrivateMessagePacket(messageID: messageID, content: content)
-                guard let tlvData = privateMessage.encode() else {
+                guard let messagePayload = BLENoisePayloadFactory.privateMessage(content: message.content, messageID: message.messageID) else {
                     SecureLogger.error("Failed to encode pending private message TLV")
-                    failedMessages.append((content, messageID))
+                    failedMessages.append(message)
                     continue
                 }
 
-                var messagePayload = Data([NoisePayloadType.privateMessage.rawValue])
-                messagePayload.append(tlvData)
-
-                let encrypted = try noiseService.encrypt(messagePayload, for: peerID)
-
-                let packet = BitchatPacket(
-                    type: MessageType.noiseEncrypted.rawValue,
-                    senderID: myPeerIDData,
-                    recipientID: Data(hexString: peerID.id),
-                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                    payload: encrypted,
-                    signature: nil,
-                    ttl: messageTTL
-                )
-
                 // We're already on messageQueue from the callback
-                broadcastPacket(packet)
+                broadcastPacket(try makeEncryptedNoisePacket(messagePayload, to: peerID))
 
                 // Notify delegate that message was sent
                 notifyUI { [weak self] in
-                    self?.delegate?.didUpdateMessageDeliveryStatus(messageID, status: .sent)
+                    self?.deliverTransportEvent(.messageDeliveryStatusUpdated(messageID: message.messageID, status: .sent))
                 }
 
-                SecureLogger.debug("✅ Sent pending message \(messageID) to \(peerID) after handshake", category: .session)
+                SecureLogger.debug("✅ Sent pending message id=\(message.messageID.prefix(8))… to \(peerID.id.prefix(8))… after handshake", category: .session)
             } catch {
                 SecureLogger.error("Failed to send pending message after handshake: \(error)")
-                failedMessages.append((content, messageID))
+                failedMessages.append(message)
 
                 // Notify delegate of failure
                 notifyUI { [weak self] in
-                    self?.delegate?.didUpdateMessageDeliveryStatus(messageID, status: .failed(reason: "Encryption failed"))
+                    self?.deliverTransportEvent(.messageDeliveryStatusUpdated(messageID: message.messageID, status: .failed(reason: String(localized: "content.delivery.reason.encryption_failed", comment: "Failure reason shown when a message could not be encrypted for the peer"))))
                 }
             }
         }
@@ -3338,176 +6762,207 @@ extension BLEService {
         if !failedMessages.isEmpty {
             collectionsQueue.async(flags: .barrier) { [weak self] in
                 guard let self = self else { return }
-                if self.pendingMessagesAfterHandshake[peerID] == nil {
-                    self.pendingMessagesAfterHandshake[peerID] = []
-                }
                 // Prepend failed messages to maintain order
-                self.pendingMessagesAfterHandshake[peerID]?.insert(contentsOf: failedMessages, at: 0)
-                SecureLogger.warning("⚠️ Re-queued \(failedMessages.count) failed messages for \(peerID)", category: .session)
+                self.pendingNoiseSessionQueues.prependPrivateMessages(failedMessages, for: peerID)
+                SecureLogger.warning("⚠️ Re-queued \(failedMessages.count) failed messages for \(peerID.id.prefix(8))…", category: .session)
             }
         }
     }
     
     // MARK: Fragmentation (Required for messages > BLE MTU)
     
-    private func sendFragmentedPacket(_ packet: BitchatPacket, pad: Bool, maxChunk: Int? = nil, directedOnlyPeer: PeerID? = nil, transferId: String? = nil) {
-        let context = PendingFragmentTransfer(packet: packet, pad: pad, maxChunk: maxChunk, directedPeer: directedOnlyPeer, transferId: transferId)
-        if packet.type == MessageType.fileTransfer.rawValue {
-            let shouldQueue = collectionsQueue.sync {
-                self.activeTransfers.count >= TransportConfig.bleMaxConcurrentTransfers
+    @discardableResult
+    private func sendFragmentedPacket(
+        _ packet: BitchatPacket,
+        pad: Bool,
+        maxChunk: Int? = nil,
+        directedOnlyPeer: PeerID? = nil,
+        transferId: String? = nil,
+        requireDirectPeerLink: Bool = false,
+        requireNoiseAuthenticatedPeerLink: Bool = false,
+        requiresPrivateMediaAdmission: Bool = false
+    ) -> Bool {
+        let request = BLEOutboundFragmentTransferRequest(
+            packet: packet,
+            pad: pad,
+            maxChunk: maxChunk,
+            directedPeer: directedOnlyPeer,
+            transferId: transferId,
+            requireDirectPeerLink: requireDirectPeerLink,
+            requireNoiseAuthenticatedPeerLink: requireNoiseAuthenticatedPeerLink
+        )
+
+        let result: BLEOutboundFragmentTransferScheduler.SubmitResult? = collectionsQueue.sync(flags: .barrier) {
+            if requiresPrivateMediaAdmission {
+                guard let transferId else { return nil }
+                // This lock is taken while the scheduler is already protected
+                // by collectionsQueue. Cancellation takes the admission lock
+                // synchronously but never waits on collectionsQueue, avoiding
+                // lock inversion while giving submit/cancel one linear order.
+                return privateMediaTransferAdmissions.withActive(transferId) {
+                    outboundFragmentTransfers.submit(
+                        request,
+                        maxConcurrentTransfers: TransportConfig.bleMaxConcurrentTransfers
+                    )
+                }
             }
-            if shouldQueue {
-                queueFragmentTransfer(context, prioritizeFront: false)
-                return
-            }
+            return outboundFragmentTransfers.submit(
+                request,
+                maxConcurrentTransfers: TransportConfig.bleMaxConcurrentTransfers
+            )
         }
-        startFragmentedPacket(context)
+        guard let result else {
+            if let transferId, requiresPrivateMediaAdmission {
+                privateMediaTransferAdmissions.finish(transferId)
+            }
+            return false
+        }
+        if let transferId, requiresPrivateMediaAdmission {
+            // The scheduler now owns normal cancellation (active or pending).
+            privateMediaTransferAdmissions.finish(transferId)
+        }
+        return handleFragmentTransferSubmitResult(result)
     }
 
-    private func queueFragmentTransfer(_ context: PendingFragmentTransfer, prioritizeFront: Bool) {
-        collectionsQueue.async(flags: .barrier) { [weak self] in
-            guard let self = self else { return }
-            if prioritizeFront {
-                self.pendingFragmentTransfers.insert(context, at: 0)
+    @discardableResult
+    private func handleFragmentTransferSubmitResult(_ result: BLEOutboundFragmentTransferScheduler.SubmitResult) -> Bool {
+        switch result {
+        case let .start(request, reservedTransferId):
+            return startFragmentedPacket(request, reservedTransferId: reservedTransferId)
+
+        case let .queued(_, transferId, _):
+            if let transferId {
+                SecureLogger.debug("🚦 Queued media transfer \(transferId.prefix(8))… waiting for slot", category: .session)
             } else {
-                self.pendingFragmentTransfers.append(context)
+                SecureLogger.debug("🚦 Queued fragment transfer waiting for slot", category: .session)
             }
-        }
-        if let transferId = context.transferId {
-            SecureLogger.debug("🚦 Queued media transfer \(transferId.prefix(8))… waiting for slot", category: .session)
-        } else {
-            SecureLogger.debug("🚦 Queued fragment transfer waiting for slot", category: .session)
+            return false
+
+        case let .rejectedStrict(_, transferId):
+            SecureLogger.debug(
+                "🚫 Strict directed fragment transfer \(transferId?.prefix(8) ?? "?")… rejected while scheduler busy",
+                category: .session
+            )
+            return false
+
+        case let .droppedDuplicate(_, activeTransferId):
+            SecureLogger.debug(
+                "🔁 Skipping duplicate outbound transfer — same content already in flight as \(activeTransferId?.prefix(8) ?? "?")…",
+                category: .session
+            )
+            return false
         }
     }
 
-    private func startFragmentedPacket(_ context: PendingFragmentTransfer) {
-        let packet = context.packet
-        let isFileTransfer = packet.type == MessageType.fileTransfer.rawValue
-        var reservedTransferId: String?
-
-        let releaseReservedSlot: (String) -> Void = { id in
+    @discardableResult
+    private func startFragmentedPacket(
+        _ request: BLEOutboundFragmentTransferRequest,
+        reservedTransferId: String?
+    ) -> Bool {
+        let releaseReservedSlot: (String) -> Void = { [weak self] id in
+            guard let self = self else { return }
             TransferProgressManager.shared.cancel(id: id)
             self.collectionsQueue.async(flags: .barrier) { [weak self] in
-                self?.activeTransfers.removeValue(forKey: id)
+                _ = self?.outboundFragmentTransfers.releaseReservation(id)
             }
             self.messageQueue.async { [weak self] in
                 self?.startNextPendingTransferIfNeeded()
             }
         }
 
-        if isFileTransfer {
-            let candidateId = context.transferId ?? packet.payload.sha256Hex()
-            var didReserve = false
-            collectionsQueue.sync(flags: .barrier) {
-                if self.activeTransfers.count < TransportConfig.bleMaxConcurrentTransfers,
-                   self.activeTransfers[candidateId] == nil {
-                    self.activeTransfers[candidateId] = ActiveTransferState(totalFragments: 0, sentFragments: 0, workItems: [])
-                    didReserve = true
-                }
-            }
-            guard didReserve else {
-                queueFragmentTransfer(context, prioritizeFront: true)
-                return
-            }
-            reservedTransferId = candidateId
-        }
-
-        guard let fullData = packet.toBinaryData(padding: context.pad) else {
+        guard let plan = BLEOutboundFragmentPlanner.makePlan(
+            for: request,
+            defaultChunkSize: defaultFragmentSize,
+            bleMaxMTU: bleMaxMTU
+        ) else {
             if let id = reservedTransferId {
                 releaseReservedSlot(id)
             }
-            return
-        }
-        // Fragment the unpadded frame; each fragment will be encoded independently
-        let fragmentID = Data((0..<8).map { _ in UInt8.random(in: 0...255) })
-        // Dynamic Fragment Sizing (Source Routing v2)
-        // See docs/SOURCE_ROUTING.md Section 5.1
-        var fragmentVersion: UInt8 = 1
-        var calculatedChunk = defaultFragmentSize
-
-        if let route = packet.route, !route.isEmpty {
-            fragmentVersion = 2
-            // RouteSize = 1 + (Hops * 8)
-            let routeSize = 1 + (route.count * 8)
-            // Overhead = HeaderV2(16) + SenderID(8) + RecipientID(8) + RouteSize + FragmentHeader(13) + PaddingBuffer(16)
-            let overhead = 16 + 8 + 8 + routeSize + 13 + 16
-            calculatedChunk = max(64, bleMaxMTU - overhead)
-        }
-
-        let chunk = context.maxChunk ?? calculatedChunk
-        let safeChunk = max(64, chunk)
-        let fragments = stride(from: 0, to: fullData.count, by: safeChunk).map { offset in
-            Data(fullData[offset..<min(offset + safeChunk, fullData.count)])
-        }
-        guard !fragments.isEmpty else {
-            if let id = reservedTransferId {
-                releaseReservedSlot(id)
-            }
-            return
+            return false
         }
 
         // Lightweight pacing to reduce floods and allow BLE buffers to drain
         // Also briefly pause scanning during long fragment trains to save battery
-        let totalFragments = fragments.count
-        if totalFragments > 4 {
+        if plan.shouldPauseScanning {
             bleQueue.async { [weak self] in
                 guard let self = self, let c = self.centralManager, c.state == .poweredOn else { return }
                 if c.isScanning { c.stopScan() }
+                let totalFragments = plan.totalFragments
                 let expectedMs = min(TransportConfig.bleExpectedWriteMaxMs, totalFragments * TransportConfig.bleExpectedWritePerFragmentMs)
                 self.bleQueue.asyncAfter(deadline: .now() + .milliseconds(expectedMs)) { [weak self] in
                     self?.startScanning()
                 }
             }
         }
-        let perFragMs = (context.directedPeer != nil || packet.recipientID != nil) ? TransportConfig.bleFragmentSpacingDirectedMs : TransportConfig.bleFragmentSpacingMs
 
-        let transferIdentifier: String? = {
-            guard let id = reservedTransferId else { return nil }
-            collectionsQueue.sync(flags: .barrier) {
-                self.activeTransfers[id] = ActiveTransferState(totalFragments: totalFragments, sentFragments: 0, workItems: [])
+        let transferIdentifier: String?
+        if let id = reservedTransferId {
+            let activated = collectionsQueue.sync(flags: .barrier) {
+                self.outboundFragmentTransfers.activateReservedTransfer(
+                    id: id,
+                    totalFragments: plan.totalFragments,
+                    workItems: []
+                )
             }
-            TransferProgressManager.shared.start(id: id, totalFragments: totalFragments)
-            return id
-        }()
+            // Cancellation may remove the reservation between submit and plan
+            // construction. Treat that as cancellation, not as permission to
+            // schedule an untracked fragment train.
+            guard activated else { return false }
+            TransferProgressManager.shared.start(id: id, totalFragments: plan.totalFragments)
+            transferIdentifier = id
+        } else {
+            transferIdentifier = nil
+        }
+
+        let sendFragment: (BitchatPacket) -> Bool = { [weak self] fragmentPacket in
+            guard let self else { return false }
+            if request.requireDirectPeerLink, let directedPeer = request.directedPeer {
+                return self.sendPacketDirected(
+                    fragmentPacket,
+                    to: directedPeer,
+                    requireDirectPeerLink: true,
+                    requireNoiseAuthenticatedPeerLink: request.requireNoiseAuthenticatedPeerLink
+                )
+            }
+            self.broadcastPacket(fragmentPacket)
+            return true
+        }
+
+        // Strict courier handoff is transactional at the fragment-admission
+        // boundary: every fragment must enter the intended authenticated
+        // link or its bounded retry queue before the durable owner may commit.
+        // A partial train is harmlessly abandoned and the envelope stays
+        // retryable with a fresh fragment ID on the next encounter.
+        if request.requireDirectPeerLink {
+            let admitted = BLEStrictFragmentAdmission.admitAll(plan.fragmentPackets) { fragmentPacket in
+                guard sendFragment(fragmentPacket) else { return false }
+                if let transferId = transferIdentifier {
+                    markFragmentSent(transferId: transferId)
+                }
+                return true
+            }
+            guard admitted else {
+                if let id = reservedTransferId {
+                    releaseReservedSlot(id)
+                }
+                return false
+            }
+            return true
+        }
 
         var scheduledItems: [(item: DispatchWorkItem, index: Int)] = []
 
-        for (index, fragment) in fragments.enumerated() {
-            var payload = Data()
-            payload.append(fragmentID)
-            payload.append(contentsOf: withUnsafeBytes(of: UInt16(index).bigEndian) { Data($0) })
-            payload.append(contentsOf: withUnsafeBytes(of: UInt16(fragments.count).bigEndian) { Data($0) })
-            payload.append(packet.type)
-            payload.append(fragment)
-
-            let fragmentRecipient: Data? = {
-                if let only = context.directedPeer { return Data(hexString: only.id) }
-                return packet.recipientID
-            }()
-
-            let fragmentPacket = BitchatPacket(
-                type: MessageType.fragment.rawValue,
-                senderID: packet.senderID,
-                recipientID: fragmentRecipient,
-                timestamp: packet.timestamp,
-                payload: payload,
-                signature: nil,
-                ttl: packet.ttl,
-                version: fragmentVersion,
-                route: packet.route,
-                isRSR: packet.isRSR
-            )
-
+        for (index, fragmentPacket) in plan.fragmentPackets.enumerated() {
             let workItem = DispatchWorkItem { [weak self] in
                 guard let self = self else { return }
                 if let transferId = transferIdentifier {
-                    let isActive = self.collectionsQueue.sync { self.activeTransfers[transferId] != nil }
+                    let isActive = self.collectionsQueue.sync { self.outboundFragmentTransfers.isActive(transferId) }
                     guard isActive else { return }
                 }
-                if fragmentRecipient == nil || fragmentRecipient?.allSatisfy({ $0 == 0xFF }) == true {
+                if fragmentPacket.recipientID == nil || fragmentPacket.recipientID?.allSatisfy({ $0 == 0xFF }) == true {
                     self.gossipSyncManager?.onPublicPacketSeen(fragmentPacket)
                 }
-                self.broadcastPacket(fragmentPacket)
+                _ = sendFragment(fragmentPacket)
                 if let transferId = transferIdentifier {
                     self.markFragmentSent(transferId: transferId)
                 }
@@ -3519,32 +6974,32 @@ extension BLEService {
         if let transferId = transferIdentifier {
             let workItems = scheduledItems.map { $0.item }
             collectionsQueue.async(flags: .barrier) { [weak self] in
-                guard let self = self, var state = self.activeTransfers[transferId] else { return }
-                state.workItems = workItems
-                self.activeTransfers[transferId] = state
+                _ = self?.outboundFragmentTransfers.updateWorkItems(workItems, for: transferId)
             }
         }
 
         for (workItem, index) in scheduledItems {
-            let delayMs = index * perFragMs
+            let delayMs = index * plan.spacingMs
             messageQueue.asyncAfter(deadline: .now() + .milliseconds(delayMs), execute: workItem)
         }
+        return true
     }
     
     // MARK: - Fragmentation (Required for messages > BLE MTU)
 
     private func markFragmentSent(transferId: String) {
         collectionsQueue.async(flags: .barrier) { [weak self] in
-            guard let self = self, var state = self.activeTransfers[transferId] else { return }
-            state.sentFragments = min(state.sentFragments + 1, state.totalFragments)
-            let isComplete = state.sentFragments >= state.totalFragments
-            if isComplete {
-                self.activeTransfers.removeValue(forKey: transferId)
-            } else {
-                self.activeTransfers[transferId] = state
+            guard let self = self else { return }
+
+            switch self.outboundFragmentTransfers.markFragmentSent(transferId: transferId) {
+            case .progress, .complete:
+                TransferProgressManager.shared.recordFragmentSent(id: transferId)
+
+            case .missing:
+                return
             }
-            TransferProgressManager.shared.recordFragmentSent(id: transferId)
-            if isComplete {
+
+            if !self.outboundFragmentTransfers.isActive(transferId) {
                 self.messageQueue.async { [weak self] in
                     self?.startNextPendingTransferIfNeeded()
                 }
@@ -3553,226 +7008,154 @@ extension BLEService {
     }
 
     private func startNextPendingTransferIfNeeded() {
-        collectionsQueue.async(flags: .barrier) { [weak self] in
-            guard let self = self else { return }
-            let limit = TransportConfig.bleMaxConcurrentTransfers
-            var availableSlots = max(0, limit - self.activeTransfers.count)
-            guard availableSlots > 0, !self.pendingFragmentTransfers.isEmpty else { return }
-            var toStart: [PendingFragmentTransfer] = []
-            while availableSlots > 0, !self.pendingFragmentTransfers.isEmpty {
-                toStart.append(self.pendingFragmentTransfers.removeFirst())
-                availableSlots -= 1
-            }
-            for context in toStart {
-                self.messageQueue.async { [weak self] in
-                    self?.startFragmentedPacket(context)
-                }
+        let results = collectionsQueue.sync(flags: .barrier) {
+            outboundFragmentTransfers.reservePendingStarts(maxConcurrentTransfers: TransportConfig.bleMaxConcurrentTransfers)
+        }
+
+        for result in results {
+            messageQueue.async { [weak self] in
+                self?.handleFragmentTransferSubmitResult(result)
             }
         }
     }
     
     private func handleFragment(_ packet: BitchatPacket, from peerID: PeerID) {
         if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
-            _handleFragment(packet, from: peerID)
+            fragmentHandler.handle(packet, from: peerID)
         } else {
             messageQueue.async(flags: .barrier) { [weak self] in
-                self?._handleFragment(packet, from: peerID)
+                self?.fragmentHandler.handle(packet, from: peerID)
             }
         }
     }
 
-    private func _handleFragment(_ packet: BitchatPacket, from peerID: PeerID) {
-        // Don't process our own fragments
-        if peerID == myPeerID {
-            return
-        }
-
-        // Minimum header: 8 bytes ID + 2 index + 2 total + 1 type
-        guard packet.payload.count >= 13 else { return }
-
-        // Compute compact fragment key (sender: 8 bytes, id: 8 bytes), big-endian
-        var senderU64: UInt64 = 0
-        for b in packet.senderID.prefix(8) { senderU64 = (senderU64 << 8) | UInt64(b) }
-        var fragU64: UInt64 = 0
-        for b in packet.payload.prefix(8) { fragU64 = (fragU64 << 8) | UInt64(b) }
-        // Parse big-endian UInt16 safely without alignment assumptions
-        let idxHi = UInt16(packet.payload[8])
-        let idxLo = UInt16(packet.payload[9])
-        let index = Int((idxHi << 8) | idxLo)
-        let totHi = UInt16(packet.payload[10])
-        let totLo = UInt16(packet.payload[11])
-        let total = Int((totHi << 8) | totLo)
-        let originalType = packet.payload[12]
-        let fragmentData = packet.payload.suffix(from: 13)
-
-        // Sanity checks - add reasonable upper bound on total to prevent DoS
-        guard total > 0 && total <= 10000 && index >= 0 && index < total else { return }
-
-        let isBroadcastFragment: Bool = {
-            guard let recipient = packet.recipientID else { return true }
-            return recipient.count == 8 && recipient.allSatisfy { $0 == 0xFF }
-        }()
-        if isBroadcastFragment {
-            gossipSyncManager?.onPublicPacketSeen(packet)
-        }
-
-        // Compute fragment key for this assembly
-        let key = FragmentKey(sender: senderU64, id: fragU64)
-
-        // Critical section: Store fragment and check completion status
-        var shouldReassemble: Bool = false
-        var fragmentsToReassemble: [Int: Data]? = nil
-
-        collectionsQueue.sync(flags: .barrier) {
-            if incomingFragments[key] == nil {
-                // Cap in-flight assemblies to prevent memory/battery blowups
-                if incomingFragments.count >= maxInFlightAssemblies {
-                    // Evict the oldest assembly by timestamp
-                    if let oldest = fragmentMetadata.min(by: { $0.value.timestamp < $1.value.timestamp })?.key {
-                        incomingFragments.removeValue(forKey: oldest)
-                        fragmentMetadata.removeValue(forKey: oldest)
-                    }
+    /// Builds the fragment handler environment. All queue hops stay here so
+    /// `BLEFragmentHandler` remains queue-agnostic and synchronously testable.
+    private func makeFragmentHandlerEnvironment() -> BLEFragmentHandlerEnvironment {
+        BLEFragmentHandlerEnvironment(
+            localPeerID: { [weak self] in
+                self?.myPeerID ?? PeerID(str: "")
+            },
+            trackPacketSeen: { [weak self] packet in
+                self?.gossipSyncManager?.onPublicPacketSeen(packet)
+            },
+            appendFragment: { [weak self] header in
+                guard let self = self else {
+                    return .stored(header: header, started: false)
                 }
-                incomingFragments[key] = [:]
-                fragmentMetadata[key] = (originalType, total, Date())
-                SecureLogger.debug("📦 Started fragment assembly id=\(String(format: "%016llx", fragU64)) total=\(total)", category: .session)
-            }
-
-            // Check cumulative size before storing this fragment
-            let currentSize = incomingFragments[key]?.values.reduce(0) { $0 + $1.count } ?? 0
-            let assemblyLimit: Int = {
-                if originalType == MessageType.fileTransfer.rawValue {
-                    // Allow headroom for TLV metadata and binary framing overhead.
-                    return FileTransferLimits.maxFramedFileBytes
+                return self.collectionsQueue.sync(flags: .barrier) {
+                    self.fragmentAssemblyBuffer.append(header, maxInFlightAssemblies: self.maxInFlightAssemblies)
                 }
-                return FileTransferLimits.maxPayloadBytes
-            }()
-            let projectedSize = currentSize + fragmentData.count
-            guard projectedSize <= assemblyLimit else {
-                // Exceeds size limit - evict this assembly
-                SecureLogger.warning(
-                    "🚫 Fragment assembly exceeds size limit (\(projectedSize) bytes > \(assemblyLimit)), evicting. Type=\(originalType) Index=\(index)/\(total)",
-                    category: .security
-                )
-                incomingFragments.removeValue(forKey: key)
-                fragmentMetadata.removeValue(forKey: key)
-                shouldReassemble = false
-                fragmentsToReassemble = nil
-                return
+            },
+            isAcceptedIngressPayload: { [weak self] packet, innerSender in
+                self?.isAcceptedIngressPayload(packet, from: innerSender) ?? false
+            },
+            processReassembledPacket: { [weak self] packet, peerID in
+                self?.handleReceivedPacket(packet, from: peerID)
             }
-
-            incomingFragments[key]?[index] = Data(fragmentData)
-            SecureLogger.debug("📦 Fragment \(index + 1)/\(total) (len=\(fragmentData.count)) for id=\(String(format: "%016llx", fragU64))", category: .session)
-
-            // Check if complete
-            if let fragments = incomingFragments[key], fragments.count == total {
-                shouldReassemble = true
-                fragmentsToReassemble = fragments
-            } else {
-                shouldReassemble = false
-                fragmentsToReassemble = nil
-            }
-        }
-
-        // Heavy work outside lock: reassemble and decode
-        guard shouldReassemble, let fragments = fragmentsToReassemble else { return }
-
-        var reassembled = Data()
-        for i in 0..<total {
-            if let fragment = fragments[i] {
-                reassembled.append(fragment)
-            }
-        }
-
-        // Decode the original packet bytes we reassembled, so flags/compression are preserved
-        if var originalPacket = BinaryProtocol.decode(reassembled) {
-            
-            // Reassembled packet validation
-            let innerSender = PeerID(hexData: originalPacket.senderID)
-            if !validatePacket(originalPacket, from: innerSender) {
-                // Cleanup below
-            } else {
-                SecureLogger.debug("✅ Reassembled packet id=\(String(format: "%016llx", fragU64)) type=\(originalPacket.type) bytes=\(reassembled.count)", category: .session)
-                originalPacket.ttl = 0
-                handleReceivedPacket(originalPacket, from: peerID)
-            }
-        } else {
-            SecureLogger.error("❌ Failed to decode reassembled packet (type=\(originalType), total=\(total))", category: .session)
-        }
-
-        // Critical section: Cleanup completed assembly
-        collectionsQueue.sync(flags: .barrier) {
-            incomingFragments.removeValue(forKey: key)
-            fragmentMetadata.removeValue(forKey: key)
-        }
+        )
     }
     
     // MARK: Packet Reception
     
     private func handleReceivedPacket(_ packet: BitchatPacket, from peerID: PeerID) {
-        // Call directly if already on messageQueue, otherwise dispatch
+        let isNoisePacket = packet.type == MessageType.noiseHandshake.rawValue
+            || packet.type == MessageType.noiseEncrypted.rawValue
+
+        // Capture the panic lifecycle at the first off-messageQueue handoff.
+        // Noise packets still enter through a barrier so handshake promotion,
+        // quarantine, and encrypted delivery share one ordered session.
         if DispatchQueue.getSpecific(key: messageQueueKey) == nil {
-            messageQueue.async { [weak self] in
-                self?.handleReceivedPacket(packet, from: peerID)
+            guard let lifecycleGeneration =
+                    capturePanicLifecycleGeneration() else {
+                return
+            }
+            #if DEBUG
+            _test_beforeReceivePacketHandoff?()
+            #endif
+            let flags: DispatchWorkItemFlags = isNoisePacket ? .barrier : []
+            messageQueue.async(flags: flags) { [weak self] in
+                guard let self,
+                      self.isCurrentPanicLifecycleGeneration(
+                          lifecycleGeneration
+                      ) else {
+                    return
+                }
+                #if DEBUG
+                self._test_onReceivePacketHandoff?()
+                #endif
+                self.handleReceivedPacketOnQueue(packet, from: peerID)
             }
             return
         }
 
-        
-        // Deduplication (thread-safe)
-        let senderID = PeerID(hexData: packet.senderID)
-        // Include packet type in message ID to prevent collisions between different packet types
-        let messageID = "\(senderID)-\(packet.timestamp)-\(packet.type)"
+        if isNoisePacket {
+            guard let lifecycleGeneration =
+                    capturePanicLifecycleGeneration() else {
+                return
+            }
+            messageQueue.async(flags: .barrier) { [weak self] in
+                guard let self,
+                      self.isCurrentPanicLifecycleGeneration(
+                          lifecycleGeneration
+                      ) else {
+                    return
+                }
+                self.handleReceivedPacketOnQueue(packet, from: peerID)
+            }
+        } else {
+            handleReceivedPacketOnQueue(packet, from: peerID)
+        }
+    }
+
+    private func handleReceivedPacketOnQueue(
+        _ packet: BitchatPacket,
+        from peerID: PeerID
+    ) {
+        let context = BLEReceivePipeline.context(for: packet, localPeerID: myPeerID)
+        let senderID = context.senderID
+        let messageID = context.messageID
         
         // Only log non-announce packets to reduce noise
-        if packet.type != MessageType.announce.rawValue {
+        if context.logsHandlingDetails {
             // Log packet details for debugging
-            SecureLogger.debug("📦 Handling packet type \(packet.type) from \(senderID), messageID: \(messageID)", category: .session)
+            SecureLogger.debug("📦 Handling packet type \(packet.type) from \(senderID.id.prefix(8))…, messageID: \(messageID.prefix(24))…", category: .session)
         }
         
-        // Efficient deduplication
-        // Important: do not dedup fragment packets globally (each piece must pass)
-        // Special case: allow our own packets recovered via sync (TTL==0) to pass
-        // through even if we've marked them as seen at send time.
-        let allowSelfSyncReplay = (packet.ttl == 0) && (senderID == myPeerID)
-        if packet.type != MessageType.fragment.rawValue && !allowSelfSyncReplay && messageDeduplicator.isDuplicate(messageID) {
-            // Announce packets (type 1) are sent every 10 seconds for peer discovery
-            // It's normal to see these as duplicates - don't log them to reduce noise
-            if packet.type != MessageType.announce.rawValue {
-                SecureLogger.debug("⚠️ Duplicate packet ignored: \(messageID)", category: .session)
-            }
-            // In sparse graphs (<=2 neighbors), keep the pending relay to ensure bridging.
-            // In denser graphs, cancel the pending relay to reduce redundant floods.
-            let connectedCount = collectionsQueue.sync { peers.values.filter { $0.isConnected }.count }
-            if connectedCount > 2 {
-                collectionsQueue.async(flags: .barrier) { [weak self] in
-                    if let task = self?.scheduledRelays.removeValue(forKey: messageID) {
-                        task.cancel()
-                    }
-                }
-            }
-            return // Duplicate ignored
-        }
+        if dropDuplicatePacketIfNeeded(context: context, messageID: messageID) { return }
         
         // Update peer info without verbose logging - update the peer we received from, not the original sender
         updatePeerLastSeen(peerID)
 
-        // Track recent traffic timestamps for adaptive behavior
+        // Track recent traffic timestamps for adaptive behavior; the same
+        // barrier hop confirms route health for the packet's originator.
         collectionsQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
-            let now = Date()
-            self.recentPacketTimestamps.append(now)
-            // keep last N timestamps within window
-            let cutoff = now.addingTimeInterval(-TransportConfig.bleRecentPacketWindowSeconds)
-            if self.recentPacketTimestamps.count > TransportConfig.bleRecentPacketWindowMaxCount {
-                self.recentPacketTimestamps.removeFirst(self.recentPacketTimestamps.count - TransportConfig.bleRecentPacketWindowMaxCount)
-            }
-            self.recentPacketTimestamps.removeAll { $0 < cutoff }
+            self.recentTrafficTracker.recordPacket(at: Date())
+            self.sourceRouteFailures.noteInboundActivity(from: senderID)
         }
 
-        
+        // Per-peer protocol version: originated source routes only use hops
+        // observed speaking v2 (a v1-only node cannot decode v2 frames).
+        if packet.version >= 2 {
+            meshTopology.recordObservedVersion(packet.version, for: packet.senderID)
+            if peerID != senderID {
+                meshTopology.recordObservedVersion(packet.version, for: routingData(for: peerID))
+            }
+        }
+
+        #if os(iOS)
+        // The maintenance timer is suspended with the app, so a packet arriving
+        // while backgrounded means the radio woke us — use the wake window to
+        // run the announce/flush/drain pass the timer would have run.
+        if !isAppActive {
+            bleQueue.async { [weak self] in self?.performBackgroundWakeMaintenanceIfStale() }
+        }
+        #endif
+
+
         // Process by type
-        switch MessageType(rawValue: packet.type) {
+        switch context.messageType {
         case .announce:
             handleAnnounce(packet, from: senderID)
             
@@ -3792,243 +7175,611 @@ extension BLEService {
             handleFragment(packet, from: senderID)
             
         case .fileTransfer:
-            handleFileTransfer(packet, from: senderID)
-            
+            // Broadcast files that fail sender authentication must not spread
+            // to downstream (possibly older, ungated) nodes; skip the relay
+            // step below, like invalid board posts and voice frames.
+            guard handleFileTransfer(packet, from: senderID) else { return }
+
+        case .courierEnvelope:
+            handleCourierEnvelope(packet, from: peerID)
+
+        case .groupMessage:
+            handleGroupMessage(packet, from: senderID)
+
+        case .prekeyBundle:
+            handlePrekeyBundle(packet, from: senderID)
+
+        case .boardPost:
+            // Invalid or deleted posts must not spread; skip the relay step.
+            guard handleBoardPost(packet, from: senderID) else { return }
+        case .nostrCarrier:
+            handleNostrCarrier(packet, from: peerID)
+
+        case .voiceFrame:
+            // Rejected frames (unsigned/stale/spoofed) must not spread; skip
+            // the relay step below, like invalid board posts.
+            guard handleVoiceFrame(packet, from: senderID) else { return }
+
+        case .ping:
+            // Rate limiting must key on the ingress link (`peerID`), not the
+            // packet-claimed sender: pings are unsigned, so `senderID` is
+            // attacker-controlled and rotating it would reset the budget.
+            handleMeshPing(packet, fromLink: peerID)
+
+        case .pong:
+            handleMeshPong(packet, from: senderID)
+
         case .leave:
-            handleLeave(packet, from: senderID)
-            
+            // A forged leave must neither evict the claimed peer nor spread
+            // to downstream nodes.
+            guard handleLeave(packet, from: senderID) else { return }
+
         case .none:
             SecureLogger.warning("⚠️ Unknown message type: \(packet.type)", category: .session)
-            break
         }
         
         if forwardAlongRouteIfNeeded(packet) {
             return
         }
         
-        // Relay if TTL > 1 and we're not the original sender
-        // Relay decision and scheduling (extracted via RelayController)
-        do {
-            let degree = collectionsQueue.sync { peers.values.filter { $0.isConnected }.count }
-            let decision = RelayController.decide(
-                ttl: packet.ttl,
-                senderIsSelf: senderID == myPeerID,
-                isEncrypted: packet.type == MessageType.noiseEncrypted.rawValue,
-                isDirectedEncrypted: (packet.type == MessageType.noiseEncrypted.rawValue) && (packet.recipientID != nil),
-                isFragment: packet.type == MessageType.fragment.rawValue,
-                isDirectedFragment: packet.type == MessageType.fragment.rawValue && packet.recipientID != nil,
-                isHandshake: packet.type == MessageType.noiseHandshake.rawValue,
-                isAnnounce: packet.type == MessageType.announce.rawValue,
-                degree: degree,
-                highDegreeThreshold: highDegreeThreshold
-            )
-            guard decision.shouldRelay else { return }
-            let work = DispatchWorkItem { [weak self] in
-                guard let self = self else { return }
-                // Remove scheduled task before executing
-                self.collectionsQueue.async(flags: .barrier) { [weak self] in
-                    _ = self?.scheduledRelays.removeValue(forKey: messageID)
-                }
-                var relayPacket = packet
-                relayPacket.ttl = decision.newTTL
-                self.broadcastPacket(relayPacket)
-            }
-            // Track the scheduled relay so duplicates can cancel it
-            collectionsQueue.async(flags: .barrier) { [weak self] in
-                self?.scheduledRelays[messageID] = work
-            }
-            messageQueue.asyncAfter(deadline: .now() + .milliseconds(decision.delayMs), execute: work)
+        scheduleRelayIfNeeded(packet, senderID: senderID, messageID: messageID)
+    }
+
+    private func dropDuplicatePacketIfNeeded(context: BLEReceivedPacketContext, messageID: String) -> Bool {
+        guard context.shouldDeduplicate, messageDeduplicator.isDuplicate(messageID) else {
+            return false
         }
+
+        if context.logsHandlingDetails {
+            SecureLogger.debug("⚠️ Duplicate packet ignored: \(messageID.prefix(24))…", category: .session)
+        }
+
+        let connectedCount = collectionsQueue.sync { peerRegistry.connectedCount }
+        if BLEReceivePipeline.shouldCancelScheduledRelayForDuplicate(connectedPeerCount: connectedCount) {
+            collectionsQueue.async(flags: .barrier) { [weak self] in
+                self?.scheduledRelays.cancel(messageID: messageID)
+            }
+        }
+
+        return true
+    }
+
+    private func scheduleRelayIfNeeded(_ packet: BitchatPacket, senderID: PeerID, messageID: String) {
+        let degree = collectionsQueue.sync { peerRegistry.connectedCount }
+        let decision = BLEReceivePipeline.relayDecision(
+            for: packet,
+            senderID: senderID,
+            localPeerID: myPeerID,
+            degree: degree,
+            highDegreeThreshold: highDegreeThreshold
+        )
+        guard decision.shouldRelay else { return }
+
+        let work = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            self.collectionsQueue.async(flags: .barrier) { [weak self] in
+                self?.scheduledRelays.remove(messageID: messageID)
+            }
+            var relayPacket = packet
+            relayPacket.ttl = decision.newTTL
+            self.broadcastPacket(relayPacket)
+        }
+
+        collectionsQueue.async(flags: .barrier) { [weak self] in
+            self?.scheduledRelays.schedule(work, messageID: messageID)
+        }
+        messageQueue.asyncAfter(deadline: .now() + .milliseconds(decision.delayMs), execute: work)
     }
     
     private func handleAnnounce(_ packet: BitchatPacket, from peerID: PeerID) {
-        guard let announcement = AnnouncementPacket.decode(from: packet.payload) else {
-            SecureLogger.error("❌ Failed to decode announce packet from \(peerID)", category: .session)
-            return
-        }
-        
-        // Verify that the sender's derived ID from the announced noise public key matches the packet senderID
-        // This helps detect relayed or spoofed announces. Only warn in release; assert in debug.
-        let derivedFromKey = PeerID(publicKey: announcement.noisePublicKey)
-        if derivedFromKey != peerID {
-            SecureLogger.warning("⚠️ Announce sender mismatch: derived \(derivedFromKey.id.prefix(8))… vs packet \(peerID.id.prefix(8))…", category: .security)
-            return
-        }
-        
-        // Don't add ourselves as a peer
-        if peerID == myPeerID {
-            return
+        let result = announceHandler.handle(packet, from: peerID)
+
+        // A capability bit in the public announce is only a discovery hint.
+        // Start authentication promptly for a directly connected candidate,
+        // but never pin or pre-queue private bytes until encrypted 0x21 state
+        // arrives from the completed Noise session.
+        if let result,
+           result.isVerified,
+           result.isDirectAnnounce,
+           result.announcement.capabilities?.contains(.privateMedia) == true,
+           privateMediaSendPolicy(to: result.peerID) == .awaitingCapabilityProof,
+           !noiseService.hasSession(with: result.peerID) {
+            initiateNoiseHandshake(with: result.peerID)
         }
 
-        // Reject stale announces to prevent ghost peers from appearing
-        // Use same 15-minute window as gossip sync (900 seconds)
-        let maxAnnounceAgeSeconds: TimeInterval = 900
-        let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
-        let ageThresholdMs = UInt64(maxAnnounceAgeSeconds * 1000)
-        if nowMs >= ageThresholdMs {
-            let cutoffMs = nowMs - ageThresholdMs
-            if packet.timestamp < cutoffMs {
-                SecureLogger.debug("⏰ Ignoring stale announce from \(peerID.id.prefix(8))… (age: \(Double(nowMs - packet.timestamp) / 1000.0)s)", category: .session)
-                return
-            }
+        // A verified announce is the moment a signing key becomes bound to this
+        // owner's noise key: retry any prekey bundle that raced ahead of it.
+        if let result, result.isVerified {
+            drainPendingPrekeyBundles(for: result.peerID)
         }
 
-        // Suppress announce logs to reduce noise
-
-        // Precompute signature verification outside barrier to reduce contention
-        let existingPeerForVerify = collectionsQueue.sync { peers[peerID] }
-        var verifiedAnnounce = false
-        if packet.signature != nil {
-            verifiedAnnounce = noiseService.verifyPacketSignature(packet, publicKey: announcement.signingPublicKey)
-            if !verifiedAnnounce {
-                SecureLogger.warning("⚠️ Signature verification for announce failed \(peerID.id.prefix(8))", category: .security)
-            }
-        }
-        if let existingKey = existingPeerForVerify?.noisePublicKey, existingKey != announcement.noisePublicKey {
-            SecureLogger.warning("⚠️ Announce key mismatch for \(peerID.id.prefix(8))… — keeping unverified", category: .security)
-            verifiedAnnounce = false
+        // A verified direct announce proves the sender owns the link it came
+        // in on: heal any stale binding left by a peer-ID rotation, and
+        // consolidate duplicate same-role connections onto that link.
+        if let result, result.isVerified, result.isDirectAnnounce {
+            rebindLinkAfterVerifiedDirectAnnounce(packet, to: result.peerID)
+            #if DEBUG
+            _test_afterVerifiedDirectRebindEnqueued?()
+            #endif
+            retireRedundantPeripheralLinks(packet, to: result.peerID)
         }
 
-        // Track if this is a new or reconnected peer
-        var isNewPeer = false
-        var isReconnectedPeer = false
-        let directLinkState = linkState(for: peerID)
-        
-        collectionsQueue.sync(flags: .barrier) {
-            // Check if we have an actual BLE connection to this peer
-            let hasPeripheralConnection = directLinkState.hasPeripheral
-            
-            // Check if this peer is subscribed to us as a central
-            // Note: We can't identify which specific central is which peer without additional mapping
-            let hasCentralSubscription = directLinkState.hasCentral
-            
-            // Direct announces arrive with full TTL (no prior hop)
-            let isDirectAnnounce = (packet.ttl == messageTTL)
-            
-            // Check if we already have this peer (might be reconnecting)
-            let existingPeer = peers[peerID]
-            let wasDisconnected = existingPeer?.isConnected == false
-            
-            // Set flags for use outside the sync block
-            isNewPeer = (existingPeer == nil)
-            isReconnectedPeer = wasDisconnected
-            
-            // Use precomputed verification result
-            let verified = verifiedAnnounce
+        // Bridge courier watch: a verified announce may add a peer whose
+        // relay-parked drops we should start watching for.
+        if let result, result.isVerified {
+            onVerifiedPeerAnnounce?(result.peerID)
+        }
 
-            // Require verified announce; ignore otherwise (no backward compatibility)
-            if !verified {
-                SecureLogger.warning("❌ Ignoring unverified announce from \(peerID.id.prefix(8))…", category: .security)
-                // Reset flags to prevent post-barrier code from acting on unverified announces
-                isNewPeer = false
-                isReconnectedPeer = false
-                return
-            }
-
-            // Update or create peer info
-            if let existing = existingPeer, existing.isConnected {
-                // Update lastSeen and identity info
-                peers[peerID] = PeerInfo(
-                    peerID: existing.peerID,
-                    nickname: announcement.nickname,
-                    isConnected: isDirectAnnounce || hasPeripheralConnection || hasCentralSubscription,
-                    noisePublicKey: announcement.noisePublicKey,
-                    signingPublicKey: announcement.signingPublicKey,
-                    isVerifiedNickname: true,
-                    lastSeen: Date()
-                )
-            } else {
-                // New peer or reconnecting peer
-                peers[peerID] = PeerInfo(
-                    peerID: peerID,
-                    nickname: announcement.nickname,
-                    isConnected: isDirectAnnounce || hasPeripheralConnection || hasCentralSubscription,
-                    noisePublicKey: announcement.noisePublicKey,
-                    signingPublicKey: announcement.signingPublicKey,
-                    isVerifiedNickname: true,
-                    lastSeen: Date()
-                )
-            }
-            
-            // Log connection status only for direct connectivity changes; debounce to reduce spam
-            if isDirectAnnounce || hasPeripheralConnection || hasCentralSubscription {
-                let now = Date()
-                if existingPeer == nil {
-                    SecureLogger.debug("🆕 New peer: \(announcement.nickname)", category: .session)
-                } else if wasDisconnected {
-                    // Debounce 'reconnected' logs within short window
-                    if let last = lastReconnectLogAt[peerID], now.timeIntervalSince(last) < TransportConfig.bleReconnectLogDebounceSeconds {
-                        // Skip duplicate log
-                    } else {
-                        SecureLogger.debug("🔄 Peer \(announcement.nickname) reconnected", category: .session)
-                        lastReconnectLogAt[peerID] = now
-                    }
-                } else if existingPeer?.nickname != announcement.nickname {
-                    SecureLogger.debug("🔄 Peer \(peerID) changed nickname: \(existingPeer?.nickname ?? "Unknown") -> \(announcement.nickname)", category: .session)
+        // Courier work: an announce is the moment we learn a peer's Noise
+        // static key, so check whether we're carrying mail addressed to them
+        // (or spray-able mail they could carry). Verified announces only.
+        guard !courierStore.isEmpty,
+              let result,
+              result.isVerified else { return }
+        let noiseKey = result.announcement.noisePublicKey
+        let authenticatedIngress = result.isDirectAnnounce
+            && canDeliverSecurely(to: result.peerID)
+            && isNoiseAuthenticatedIngressLink(for: packet, peerID: result.peerID)
+        if authenticatedIngress {
+            // The session was established on this still-bound ingress link.
+            // A peer-level Noise session alone is not enough: it can outlive
+            // its physical link while a replay rebinds an attacker's link to
+            // the victim's ID.
+            deliverCourierMail(to: result.peerID, noiseKey: noiseKey)
+            sprayCourierMail(to: result.peerID, noiseKey: noiseKey, isVerifiedPeer: true)
+        } else {
+            // Relayed announce, or a direct-looking announce that has not yet
+            // proved link ownership with Noise: push a speculative copy while
+            // retaining the durable carried original.
+            deliverCourierMailRemotely(to: result.peerID, noiseKey: noiseKey)
+            if result.isDirectAnnounce,
+               !hasCurrentNoiseAuthenticatedLink(to: result.peerID) {
+                // A cached session may predate this physical link.
+                // rebindLinkAfterVerifiedDirectAnnounce performs its atomic
+                // ordinary reconnect after the binding is published.
+                if !noiseService.hasSession(with: result.peerID) {
+                    initiateNoiseHandshake(with: result.peerID)
                 }
             }
         }
+    }
 
-        // Update topology with verified neighbor claims (only for authenticated announces)
-        if verifiedAnnounce, let neighbors = announcement.directNeighbors {
-            meshTopology.updateNeighbors(for: peerID.routingData, neighbors: neighbors)
+    /// When a peer relaunches it rotates its ephemeral peer ID, but an
+    /// already-open BLE connection keeps its old peripheral/central→peerID
+    /// binding. Until that binding heals, the rotated peer shows up twice in
+    /// the peer list and its directed traffic on this link is dropped as
+    /// spoofed. A signature-verified direct announce proves the claimed
+    /// sender owns the link it arrived on, so rebind the link to the new ID
+    /// and retire the old identity.
+    private func rebindLinkAfterVerifiedDirectAnnounce(_ packet: BitchatPacket, to peerID: PeerID) {
+        guard let link = (collectionsQueue.sync { ingressLinks.link(for: packet) }) else { return }
+        bleQueue.async { [weak self] in
+            guard let self else { return }
+            let linkUUID: String
+            let previousPeerID: PeerID?
+            switch link {
+            case .peripheral(let peripheralUUID):
+                linkUUID = peripheralUUID
+                previousPeerID = self.linkStateStore.peerID(forPeripheralID: peripheralUUID)
+            case .central(let centralUUID):
+                linkUUID = centralUUID
+                previousPeerID = self.linkStateStore.peerID(forCentralUUID: centralUUID)
+            }
+            guard let previousPeerID else { return }
+            guard previousPeerID != peerID else {
+                self.refreshNoiseSessionForVerifiedDirectLink(
+                    packet,
+                    peerID: peerID
+                )
+                return
+            }
+
+            // The signature does not authenticate directness (TTL is excluded
+            // from signing because relays mutate it), so a "verified direct"
+            // announce can be a replay of another peer's fresh announce with
+            // its TTL restored. Contain what a forged rebind could do:
+            // never steal an identity another live link already owns, and
+            // allow at most one rebind per link per cooldown window so two
+            // identities can't fight over a link in a replay flip-flop.
+            guard self.linkStateStore.links(to: peerID).isEmpty else {
+                SecureLogger.warning("🚫 Refusing link rebind to \(peerID.id.prefix(8))…: identity already owns another live link", category: .security)
+                return
+            }
+            let now = Date()
+            self.lastLinkRebindAt = self.lastLinkRebindAt.filter {
+                now.timeIntervalSince($0.value) < TransportConfig.bleLinkRebindCooldownSeconds
+            }
+            guard self.lastLinkRebindAt[linkUUID] == nil else {
+                SecureLogger.warning("🚫 Refusing link rebind to \(peerID.id.prefix(8))…: rebind cooldown active for this link", category: .security)
+                return
+            }
+            self.lastLinkRebindAt[linkUUID] = now
+
+            // A Noise proof belongs to the old physical binding. Never carry
+            // it across an announce-driven rebind, whose direct TTL is
+            // replayable; the new owner must complete a fresh handshake.
+            self.noiseAuthenticatedLinkOwners.removeValue(forKey: link)
+            self.noiseReconnectPolicy.endLinkEpoch(link)
+            switch link {
+            case .peripheral(let peripheralUUID):
+                self.linkStateStore.bindPeripheral(peripheralUUID, to: peerID)
+            case .central(let centralUUID):
+                self.linkStateStore.bindCentral(centralUUID, to: peerID)
+            }
+            // Keep the rebind and reconnect decision in one bleQueue critical
+            // section. No observer may see the new binding while a cached
+            // peer-level sender is still considered established.
+            self.refreshNoiseSessionForVerifiedDirectLink(
+                packet,
+                peerID: peerID
+            )
+            SecureLogger.debug("🔄 Rebinding link after peer-ID rotation: \(previousPeerID.id.prefix(8))… → \(peerID.id.prefix(8))…", category: .session)
+            self.refreshLocalTopology()
+            // The announce that triggered this rebind was upserted as
+            // disconnected: the registry ran while the link still belonged
+            // to the previous ID (the ambiguous state BLEAnnounceHandler
+            // denies the connected shortcut). The rebind has now
+            // containment-checked the claim and the identity owns a live
+            // link, so promote it — otherwise a healed rotation leaves a
+            // live link that reads as disconnected until the next announce.
+            self.messageQueue.async { [weak self] in
+                self?.promoteReboundPeerToConnected(peerID)
+            }
+            // Any other peripheral links still bound to the rotated-away ID
+            // are stale duplicates of the same physical device (its restored
+            // connections outlived the relaunch that rotated the ID): cancel
+            // them now instead of leaving ghost links that spray duplicate
+            // traffic until the inactivity timeout.
+            self.cancelBoundPeripheralLinks(to: previousPeerID, keeping: linkUUID)
+            // Retire the rotated-away ID only once its last link is gone; a
+            // remaining stale link heals the same way or ages out.
+            guard self.linkStateStore.links(to: previousPeerID).isEmpty else { return }
+            self.messageQueue.async { [weak self] in
+                self?.retireRotatedPeer(previousPeerID)
+            }
         }
+    }
 
-        // Persist cryptographic identity and signing key for robust offline verification
-        identityManager.upsertCryptographicIdentity(
-            fingerprint: announcement.noisePublicKey.sha256Fingerprint(),
-            noisePublicKey: announcement.noisePublicKey,
-            signingPublicKey: announcement.signingPublicKey,
-            claimedNickname: announcement.nickname
+    /// After a restore relaunch the same phone can reappear under a fresh
+    /// peripheral UUID while its restored connection lives on, leaving
+    /// several live central-role connections to one peer that each carry
+    /// every packet (field-verified: every voice frame arrived 2-3x). A
+    /// verified direct announce is the consolidation point: keep the link it
+    /// proves live (or the peer's most recently bound one) and cancel the
+    /// rest. Only same-role duplicates are touched — one connection per role
+    /// is the normal dual-role topology — and only connections we own as
+    /// central: the peer's central subscriptions on our peripheral manager
+    /// are its connections to cancel, and it runs this same policy.
+    ///
+    /// Directness is forgeable (TTL is unsigned), so a replayed announce
+    /// could nominate the replayer's link as the survivor. Containment
+    /// mirrors the rotation rebind: only links already BOUND to the peer are
+    /// retired (announce-evidenced, never pre-announce links), at most one
+    /// retirement per peer per cooldown window, and the peer keeps a live
+    /// link either way.
+    private func retireRedundantPeripheralLinks(_ packet: BitchatPacket, to peerID: PeerID) {
+        let ingressLink = collectionsQueue.sync { ingressLinks.link(for: packet) }
+        bleQueue.async { [weak self] in
+            guard let self else { return }
+            let now = Date()
+            self.lastRedundantLinkRetirementAt = self.lastRedundantLinkRetirementAt.filter {
+                now.timeIntervalSince($0.value) < TransportConfig.bleLinkRebindCooldownSeconds
+            }
+            guard self.lastRedundantLinkRetirementAt[peerID] == nil else { return }
+
+            var ingressPeripheralUUID: String?
+            if case .peripheral(let uuid) = ingressLink {
+                ingressPeripheralUUID = uuid
+            }
+            guard let keptUUID = BLERedundantLinkPolicy.keptPeripheralUUID(
+                ingressPeripheralUUID: ingressPeripheralUUID,
+                mostRecentlyBoundUUID: self.linkStateStore.preferredPeripheralBindings[peerID],
+                links: self.peripheralLinkPolicySnapshot(),
+                peerID: peerID
+            ) else { return }
+
+            self.lastRedundantLinkRetirementAt[peerID] = now
+            // The survivor becomes the peer's reverse-mapped link so directed
+            // sends follow the consolidation.
+            self.linkStateStore.bindPeripheral(keptUUID, to: peerID)
+            self.cancelBoundPeripheralLinks(to: peerID, keeping: keptUUID)
+            self.refreshLocalTopology()
+        }
+    }
+
+    /// Cancels our central-role connections whose link is bound to `peerID`,
+    /// except `keptUUID`. bleQueue only. Each entry is removed from the link
+    /// store BEFORE cancelling so didDisconnectPeripheral sees no peer
+    /// binding and skips its peer-disconnect bookkeeping — the peer is still
+    /// live (on the kept link, or under its rotated identity).
+    private func cancelBoundPeripheralLinks(to peerID: PeerID, keeping keptUUID: String?) {
+        let retiring = BLERedundantLinkPolicy.peripheralUUIDsToRetire(
+            links: peripheralLinkPolicySnapshot(),
+            peerID: peerID,
+            keeping: keptUUID ?? ""
         )
+        for uuid in retiring {
+            guard let state = linkStateStore.state(forPeripheralID: uuid) else { continue }
+            collectionsQueue.sync(flags: .barrier) {
+                pendingPeripheralWrites.discardAll(for: uuid)
+            }
+            noiseAuthenticatedLinkOwners.removeValue(forKey: .peripheral(uuid))
+            noiseReconnectPolicy.endLinkEpoch(.peripheral(uuid))
+            _ = linkStateStore.removePeripheral(uuid)
+            SecureLogger.info(
+                "🔗 Retiring redundant link \(uuid.prefix(8))… bound to \(peerID.id.prefix(8))…\(keptUUID.map { " (keeping \($0.prefix(8))…)" } ?? "")",
+                category: .session
+            )
+            centralManager?.cancelPeripheralConnection(state.peripheral)
+        }
+    }
 
-        // Notify UI on main thread
+    /// bleQueue only (reads the link store).
+    private func peripheralLinkPolicySnapshot() -> [BLERedundantLinkPolicy.PeripheralLink] {
+        linkStateStore.peripheralStates.map {
+            BLERedundantLinkPolicy.PeripheralLink(
+                uuid: $0.peripheral.identifier.uuidString,
+                peerID: $0.peerID,
+                isConnected: $0.isConnected,
+                hasCharacteristic: $0.characteristic != nil
+            )
+        }
+    }
+
+    /// After a successful verified rebind the new identity owns a live link,
+    /// but its announce was stored disconnected (the link was still bound to
+    /// the rotated-away ID when the registry upsert ran). Flip it to
+    /// connected and republish so routing and the peer list see the healed
+    /// link. The `.peerConnected` UI event already fired from the announce
+    /// path (new/reconnected + direct), so only list state needs refreshing.
+    private func promoteReboundPeerToConnected(_ peerID: PeerID) {
+        let promoted = collectionsQueue.sync(flags: .barrier) {
+            peerRegistry.markConnected(peerID)
+        }
+        guard promoted else { return }
+        refreshLocalTopology()
+        publishFullPeerData()
         notifyUI { [weak self] in
-            guard let self = self else { return }
-            
-            // Get current peer list (after addition)
-            let currentPeerIDs = self.collectionsQueue.sync { self.currentPeerIDs }
-            
-            // Only notify of connection for new or reconnected peers when it is a direct announce
-            if (packet.ttl == self.messageTTL) && (isNewPeer || isReconnectedPeer) {
-                self.delegate?.didConnectToPeer(peerID)
-                // Schedule initial unicast sync to this peer
-                self.gossipSyncManager?.scheduleInitialSyncToPeer(peerID, delaySeconds: 1.0)
-            }
-            
-            self.requestPeerDataPublish()
-            self.delegate?.didUpdatePeerList(currentPeerIDs)
+            guard let self else { return }
+            let currentPeerIDs = self.collectionsQueue.sync { self.peerRegistry.peerIDs }
+            self.deliverTransportEvent(.peerListUpdated(currentPeerIDs))
         }
-        
-        // Track for sync (include our own and others' announces)
-        gossipSyncManager?.onPublicPacketSeen(packet)
+    }
 
-        // Send announce back for bidirectional discovery (only once per peer)
-        let announceBackID = "announce-back-\(peerID)"
-        let shouldSendBack = !messageDeduplicator.contains(announceBackID)
-        if shouldSendBack {
-            messageDeduplicator.markProcessed(announceBackID)
+    /// Rotation is an implicit leave of the old identity: drop it immediately
+    /// instead of letting a ghost duplicate linger for the reachability
+    /// retention window.
+    private func retireRotatedPeer(_ peerID: PeerID) {
+        let removed = collectionsQueue.sync(flags: .barrier) {
+            peerRegistry.remove(peerID) != nil
         }
-        
-        if shouldSendBack {
-            // Reciprocate announce for bidirectional discovery
-            // Force send to ensure the peer receives our announce
-            sendAnnounce(forceSend: true)
+        guard removed else { return }
+        gossipSyncManager?.removeAnnouncementForPeer(peerID)
+        refreshLocalTopology()
+        notifyUI { [weak self] in
+            guard let self else { return }
+            let currentPeerIDs = self.collectionsQueue.sync { self.peerRegistry.peerIDs }
+            self.deliverTransportEvent(.peerDisconnected(peerID))
+            self.deliverTransportEvent(.peerListUpdated(currentPeerIDs))
         }
+    }
 
-        // Afterglow: on first-seen peers, schedule a short re-announce to push presence one more hop
-        if isNewPeer {
-            let delay = Double.random(in: 0.3...0.6)
-            messageQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
+    /// Builds the announce handler environment. All queue hops stay here so
+    /// `BLEAnnounceHandler` remains queue-agnostic and synchronously testable.
+    private func makeAnnounceHandlerEnvironment() -> BLEAnnounceHandlerEnvironment {
+        BLEAnnounceHandlerEnvironment(
+            localPeerID: { [weak self] in
+                self?.myPeerID ?? PeerID(str: "")
+            },
+            messageTTL: messageTTL,
+            now: { Date() },
+            existingPeerKeys: { [weak self] peerID in
+                guard let self = self else { return (nil, nil) }
+                return self.collectionsQueue.sync {
+                    let info = self.peerRegistry.info(for: peerID)
+                    return (info?.noisePublicKey, info?.signingPublicKey)
+                }
+            },
+            persistedSigningPublicKey: { [weak self] peerID in
+                // Same synchronous identity-manager read pattern as
+                // signedSenderDisplayName(for:from:); the manager serializes
+                // access on its own internal queue.
+                guard let self = self else { return nil }
+                return self.identityManager.getCryptoIdentitiesByPeerIDPrefix(peerID)
+                    .compactMap { $0.signingPublicKey }
+                    .first
+            },
+            authenticatedSigningPublicKey: { [weak self] noisePublicKey in
+                self?.identityManager.authenticatedSigningPublicKey(
+                    forFingerprint: noisePublicKey.sha256Fingerprint()
+                )
+            },
+            verifySignature: { [weak self] packet, signingPublicKey in
+                self?.noiseService.verifyPacketSignature(packet, publicKey: signingPublicKey) ?? false
+            },
+            linkState: { [weak self] peerID in
+                self?.linkState(for: peerID) ?? (hasPeripheral: false, hasCentral: false)
+            },
+            linkBoundToOtherPeer: { [weak self] packet, peerID in
+                // Reads the CURRENT binding — i.e. the state before
+                // rebindLinkAfterVerifiedDirectAnnounce (which runs after the
+                // handler) may steal the link and promote the new owner to
+                // connected. See the caller in BLEAnnounceHandler for why the
+                // residual forged-presence window this leaves is accepted.
+                guard let self else { return false }
+                guard let link = (self.collectionsQueue.sync { self.ingressLinks.link(for: packet) }) else { return false }
+                let boundPeerID: PeerID? = self.readLinkState { store in
+                    switch link {
+                    case .peripheral(let peripheralUUID):
+                        return store.peerID(forPeripheralID: peripheralUUID)
+                    case .central(let centralUUID):
+                        return store.peerID(forCentralUUID: centralUUID)
+                    }
+                }
+                guard let boundPeerID else { return false }
+                return boundPeerID != peerID
+            },
+            withRegistryBarrier: { [weak self] body in
+                self?.collectionsQueue.sync(flags: .barrier) { body() }
+            },
+            upsertVerifiedAnnounce: { [weak self] peerID, announcement, isConnected, now in
+                // Called from inside withRegistryBarrier; access registry directly.
+                guard let self = self else {
+                    return BLEPeerAnnounceUpdate(isNewPeer: false, wasDisconnected: false, previousNickname: nil)
+                }
+                return self.peerRegistry.upsertVerifiedAnnounce(
+                    peerID: peerID,
+                    nickname: announcement.nickname,
+                    noisePublicKey: announcement.noisePublicKey,
+                    signingPublicKey: announcement.signingPublicKey,
+                    isConnected: isConnected,
+                    // Propagate `nil` (registry refused the announce because it
+                    // carries a signing key different from the pinned one) so
+                    // the handler's guard rejects it instead of overwriting the
+                    // pinned identity. Main's capabilities/bridgeGeohash are
+                    // preserved.
+                    now: now,
+                    capabilities: announcement.capabilities,
+                    bridgeGeohash: announcement.bridgeGeohash
+                )
+            },
+            shouldEmitReconnectLog: { [weak self] peerID, now in
+                // Called from inside withRegistryBarrier; access debouncer directly.
+                self?.reconnectLogDebouncer.shouldEmit(
+                    peerID: peerID,
+                    now: now,
+                    minimumInterval: TransportConfig.bleReconnectLogDebounceSeconds
+                ) ?? false
+            },
+            updateTopology: { [weak self] peerID, neighbors in
+                self?.meshTopology.updateNeighbors(for: peerID.routingData, neighbors: neighbors)
+            },
+            persistIdentity: { [weak self] announcement in
+                self?.identityManager.upsertCryptographicIdentity(
+                    fingerprint: announcement.noisePublicKey.sha256Fingerprint(),
+                    noisePublicKey: announcement.noisePublicKey,
+                    signingPublicKey: announcement.signingPublicKey,
+                    claimedNickname: announcement.nickname
+                )
+            },
+            dedupContains: { [weak self] id in
+                self?.messageDeduplicator.contains(id) ?? true
+            },
+            dedupMarkProcessed: { [weak self] id in
+                self?.messageDeduplicator.markProcessed(id)
+            },
+            deliverAnnounceUIEvents: { [weak self] peerID, notifyPeerConnected, scheduleInitialSync in
+                // Single main-actor hop so event order is guaranteed:
+                // .peerConnected → initial sync scheduling → .peerListUpdated.
+                self?.notifyUI { [weak self] in
+                    guard let self = self else { return }
+                    if notifyPeerConnected {
+                        self.deliverTransportEvent(.peerConnected(peerID))
+                    }
+                    if scheduleInitialSync {
+                        self.gossipSyncManager?.scheduleInitialSyncToPeer(peerID, delaySeconds: 1.0)
+                    }
+                    // Get current peer list (after addition)
+                    let currentPeerIDs = self.collectionsQueue.sync { self.peerRegistry.peerIDs }
+                    self.requestPeerDataPublish()
+                    self.deliverTransportEvent(.peerListUpdated(currentPeerIDs))
+                }
+            },
+            trackPacketSeen: { [weak self] packet in
+                self?.gossipSyncManager?.onPublicPacketSeen(packet)
+            },
+            sendAnnounceBack: { [weak self] in
                 self?.sendAnnounce(forceSend: true)
+            },
+            scheduleAfterglow: { [weak self] delay in
+                self?.messageQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    self?.sendAnnounce(forceSend: true)
+                }
             }
+        )
+    }
+
+    // MARK: - Board (geohash bulletin board)
+
+    /// Validates and stores an incoming board post or tombstone. Returns
+    /// whether the packet is worth relaying onward.
+    private func handleBoardPost(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
+        guard let wire = BoardWire.decode(from: packet.payload) else {
+            SecureLogger.warning("⚠️ Malformed board packet from \(peerID.id.prefix(8))…", category: .session)
+            return false
+        }
+        // Posts are self-authenticating: the payload embeds the author's
+        // Ed25519 key and signature, so verification does not depend on the
+        // author still being around to announce.
+        guard wire.verifySignature() else {
+            if logRateLimiter.shouldLog(key: "board-sig:\(peerID.id)") {
+                SecureLogger.warning("🚫 Dropping board packet with invalid signature from \(peerID.id.prefix(8))…", category: .security)
+            }
+            return false
+        }
+        switch boardStore.ingest(wire, packet: packet) {
+        case .accepted, .duplicate:
+            return true
+        case .rejected:
+            return false
+        }
+    }
+
+    /// Broadcasts a pre-signed board payload (post or tombstone) built by the
+    /// board manager, and ingests it locally so it shows up on our own board
+    /// and joins gossip sync immediately.
+    func sendBoardPayload(_ payload: Data) {
+        guard let wire = BoardWire.decode(from: payload), wire.verifySignature() else {
+            SecureLogger.error("❌ Refusing to send invalid board payload", category: .session)
+            return
+        }
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            let basePacket = BitchatPacket(
+                type: MessageType.boardPost.rawValue,
+                senderID: Data(hexString: self.myPeerID.id) ?? Data(),
+                recipientID: nil,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: payload,
+                signature: nil,
+                ttl: self.messageTTL
+            )
+            guard let signedPacket = self.noiseService.signPacket(basePacket) else {
+                SecureLogger.error("❌ Failed to sign board packet", category: .security)
+                return
+            }
+            // Pre-mark our own broadcast as processed to avoid handling a relayed self copy
+            let dedupID = BLESelfBroadcastTracker.dedupID(for: signedPacket)
+            self.messageDeduplicator.markProcessed(dedupID)
+            self.boardStore.ingest(wire, packet: signedPacket)
+            self.broadcastPacket(signedPacket)
         }
     }
 
     // Handle REQUEST_SYNC: decode payload and respond with missing packets via sync manager
     private func handleRequestSync(_ packet: BitchatPacket, from peerID: PeerID) {
+        // REQUEST_SYNC is link-local by design (always sent with ttl 0): a
+        // nonzero TTL means a crafted or relayed request, and answering one
+        // would let a single small packet fan a full store replay out of
+        // every node it reaches.
+        guard packet.ttl == 0 else {
+            if logRateLimiter.shouldLog(key: "sync-ttl:\(peerID.id)") {
+                SecureLogger.warning("🚫 Dropping REQUEST_SYNC with nonzero TTL from \(peerID.id.prefix(8))…", category: .security)
+            }
+            return
+        }
+        // A response can replay the entire gossip store, so require proof the
+        // requester owns the claimed sender ID: the request must verify
+        // against the signing key from that peer's announce.
+        let signingKey = collectionsQueue.sync { peerRegistry.info(for: peerID)?.signingPublicKey }
+        guard let signingKey, noiseService.verifyPacketSignature(packet, publicKey: signingKey) else {
+            if logRateLimiter.shouldLog(key: "sync-sig:\(peerID.id)") {
+                SecureLogger.warning("🚫 Dropping REQUEST_SYNC without verifiable signature from \(peerID.id.prefix(8))…", category: .security)
+            }
+            return
+        }
         guard let req = RequestSyncPacket.decode(from: packet.payload) else {
-            SecureLogger.warning("⚠️ Malformed REQUEST_SYNC from \(peerID)", category: .session)
+            SecureLogger.warning("⚠️ Malformed REQUEST_SYNC from \(peerID.id.prefix(8))…", category: .session)
             return
         }
         gossipSyncManager?.handleRequestSync(from: peerID, request: req)
@@ -4037,242 +7788,337 @@ extension BLEService {
     // Mention parsing moved to ChatViewModel
     
     private func handleMessage(_ packet: BitchatPacket, from peerID: PeerID) {
-        // Ignore self-origin public messages except when returned via sync (TTL==0).
-        // This allows our own messages to be surfaced when they come back via
-        // the sync path without re-processing regular relayed copies.
-        if peerID == myPeerID && packet.ttl != 0 { return }
+        publicMessageHandler.handle(packet, from: peerID)
+    }
 
-        // Reject stale broadcast messages to prevent old messages from appearing
-        // Use same 15-minute window as gossip sync (900 seconds)
-        // Check if this is a broadcast message (recipient is all 0xFF or nil)
-        let isBroadcast: Bool = {
-            guard let r = packet.recipientID else { return true }
-            return r.count == 8 && r.allSatisfy { $0 == 0xFF }
+    /// Builds the public-message handler environment. All queue hops stay here
+    /// so `BLEPublicMessageHandler` remains queue-agnostic and synchronously
+    /// testable.
+    private func makePublicMessageHandlerEnvironment() -> BLEPublicMessageHandlerEnvironment {
+        BLEPublicMessageHandlerEnvironment(
+            localPeerID: { [weak self] in
+                self?.myPeerID ?? PeerID(str: "")
+            },
+            localNickname: { [weak self] in
+                self?.myNickname ?? ""
+            },
+            now: { Date() },
+            peersSnapshot: { [weak self] in
+                guard let self = self else { return [:] }
+                return self.collectionsQueue.sync { self.peerRegistry.snapshotByID }
+            },
+            verifyPacketSignature: { [weak self] packet, signingPublicKey in
+                self?.noiseService.verifyPacketSignature(packet, publicKey: signingPublicKey) ?? false
+            },
+            signedSenderDisplayName: { [weak self] packet, peerID in
+                self?.signedSenderDisplayName(for: packet, from: peerID)
+            },
+            trackPacketSeen: { [weak self] packet in
+                self?.gossipSyncManager?.onPublicPacketSeen(packet)
+            },
+            linkState: { [weak self] peerID in
+                self?.linkState(for: peerID) ?? (hasPeripheral: false, hasCentral: false)
+            },
+            takeSelfBroadcastMessageID: { [weak self] packet in
+                // Caller is on messageQueue, where the tracker is owned.
+                self?.selfBroadcastTracker.takeMessageID(for: packet)
+            },
+            deliverPublicMessage: { [weak self] peerID, nickname, content, timestamp, messageID in
+                // Single main-actor hop delivering `.publicMessageReceived`.
+                self?.notifyUI { [weak self] in
+                    self?.deliverTransportEvent(
+                        .publicMessageReceived(
+                            peerID: peerID,
+                            nickname: nickname,
+                            content: content,
+                            timestamp: timestamp,
+                            messageID: messageID
+                        )
+                    )
+                }
+            }
+        )
+    }
+
+    /// Group broadcasts are opaque ciphertext to this layer: track them for
+    /// gossip backfill and hand the payload to the UI layer, where the group
+    /// coordinator decrypts and authenticates against the roster. Non-members
+    /// still relay (generic broadcast relay path) but never decode.
+    private func handleGroupMessage(_ packet: BitchatPacket, from _: PeerID) {
+        let isBroadcastRecipient: Bool = {
+            guard let recipient = packet.recipientID else { return true }
+            return recipient.count == 8 && recipient.allSatisfy { $0 == 0xFF }
         }()
-        if isBroadcast {
-            let maxMessageAgeSeconds: TimeInterval = 900
-            let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
-            let ageThresholdMs = UInt64(maxMessageAgeSeconds * 1000)
-            if nowMs >= ageThresholdMs {
-                let cutoffMs = nowMs - ageThresholdMs
-                if packet.timestamp < cutoffMs {
-                    SecureLogger.debug("⏰ Ignoring stale broadcast message from \(peerID.id.prefix(8))… (age: \(Double(nowMs - packet.timestamp) / 1000.0)s)", category: .session)
+        guard isBroadcastRecipient, !packet.payload.isEmpty else { return }
+
+        gossipSyncManager?.onPublicPacketSeen(packet)
+
+        let payload = packet.payload
+        let timestamp = Date(timeIntervalSince1970: TimeInterval(packet.timestamp) / 1000)
+        notifyUI { [weak self] in
+            self?.deliverTransportEvent(.groupMessageReceived(payload: payload, timestamp: timestamp))
+        }
+    }
+
+    /// Inbound public live-voice packet: broadcast-only, freshness-gated, and
+    /// signature-verified against the claimed sender's announce (mirrors the
+    /// public-message identity gate — `senderID` is attacker-controlled, so a
+    /// valid packet signature is required before any audio reaches the UI).
+    /// Returns whether the packet was accepted; rejected packets must not be
+    /// relayed either, or spoofed 0x29 floods would still amplify.
+    private func handleVoiceFrame(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
+        guard peerID != myPeerID else { return false }
+        guard BLEPacketFreshnessPolicy.isBroadcastRecipient(packet.recipientID) else { return false }
+        guard !BLEPacketFreshnessPolicy.isStale(
+            timestampMilliseconds: packet.timestamp,
+            now: Date(),
+            maxAgeSeconds: TransportConfig.pttPublicFrameMaxAgeSeconds
+        ) else { return false }
+
+        let peersSnapshot = collectionsQueue.sync { peerRegistry.snapshotByID }
+        let registrySigningKey = peersSnapshot[peerID]?.signingPublicKey
+        let verifiedViaRegistry = registrySigningKey.map { noiseService.verifyPacketSignature(packet, publicKey: $0) } ?? false
+        let signedDisplayName = verifiedViaRegistry ? nil : signedSenderDisplayName(for: packet, from: peerID)
+        guard verifiedViaRegistry || signedDisplayName != nil else {
+            SecureLogger.warning("🚫 Dropping voice frame with missing/invalid signature for claimed sender \(peerID.id.prefix(8))…", category: .security)
+            return false
+        }
+        guard let senderNickname = BLEPeerSenderDisplayName.resolveKnownPeer(
+            peerID: peerID,
+            localPeerID: myPeerID,
+            localNickname: myNickname,
+            peers: peersSnapshot,
+            allowConnectedUnverified: false
+        ) ?? signedDisplayName else {
+            return false
+        }
+
+        let payload = packet.payload
+        let timestamp = Date(timeIntervalSince1970: TimeInterval(packet.timestamp) / 1000)
+        notifyUI { [weak self] in
+            self?.deliverTransportEvent(.publicVoiceFrameReceived(
+                peerID: peerID,
+                nickname: senderNickname,
+                payload: payload,
+                timestamp: timestamp
+            ))
+        }
+        return true
+    }
+
+    private func handleNoiseHandshake(_ packet: BitchatPacket, from peerID: PeerID) {
+        let result = noisePacketHandler.handleHandshakeWithResult(
+            packet,
+            from: peerID
+        )
+        // An inbound message 1 quarantines the old transport receive-only.
+        // Keep its generation-bound BLE state intact: the manager's new
+        // handshaking generation already gates every outbound policy, while
+        // a rollback can become ready again without repeating capability
+        // proof or announce side effects. Only the exact handshake candidate's
+        // authenticated completion may promote the physical ingress link.
+        if result.didEstablishAuthenticatedSession {
+            markNoiseAuthenticatedIngressLink(for: packet, peerID: peerID)
+        }
+    }
+
+    private func handleNoiseEncrypted(_ packet: BitchatPacket, from peerID: PeerID) {
+        noisePacketHandler.handleEncrypted(packet, from: peerID)
+    }
+
+    /// Builds the Noise packet handler environment. All queue hops and
+    /// `noiseService` crypto calls stay here so `BLENoisePacketHandler`
+    /// remains queue-agnostic and synchronously testable.
+    private func makeNoisePacketHandlerEnvironment() -> BLENoisePacketHandlerEnvironment {
+        BLENoisePacketHandlerEnvironment(
+            localPeerID: { [weak self] in
+                self?.myPeerID ?? PeerID(str: "")
+            },
+            localPeerIDData: { [weak self] in
+                self?.myPeerIDData ?? Data()
+            },
+            messageTTL: messageTTL,
+            now: { Date() },
+            processHandshakeMessage: { [weak self] peerID, message in
+                guard let self else {
+                    return NoiseHandshakeProcessingResult(
+                        response: nil,
+                        didEstablishAuthenticatedSession: false
+                    )
+                }
+                return try self.noiseService.processHandshakeMessageWithResult(
+                    from: peerID,
+                    message: message
+                )
+            },
+            hasNoiseSession: { [weak self] peerID in
+                self?.noiseService.hasSession(with: peerID) ?? false
+            },
+            isAwaitingResponderHandshakeCompletion: { [weak self] peerID in
+                self?.noiseService.isAwaitingResponderHandshakeCompletion(
+                    with: peerID
+                ) ?? false
+            },
+            initiateHandshake: { [weak self] peerID in
+                self?.initiateNoiseHandshake(with: peerID)
+            },
+            broadcastPacket: { [weak self] packet in
+                self?.broadcastPacket(packet)
+            },
+            updatePeerLastSeen: { [weak self] peerID in
+                self?.updatePeerLastSeen(peerID)
+            },
+            decrypt: { [weak self] payload, peerID in
+                guard let self = self else { throw NoiseEncryptionError.sessionNotEstablished }
+                let result = try self.noiseService.decryptWithSessionGeneration(
+                    payload,
+                    from: peerID,
+                    establishedGenerationIsReady: { generation in
+                        self.collectionsQueue.sync {
+                            self.privateMediaSessionGenerations[
+                                peerID.toShort()
+                            ] == generation
+                        }
+                    }
+                )
+                return BLENoiseDecryptionResult(
+                    plaintext: result.plaintext,
+                    sessionGeneration: result.sessionGeneration
+                )
+            },
+            clearSession: { [weak self] peerID in
+                self?.clearNoiseSession(for: peerID)
+            },
+            handleAuthenticatedPeerState: { [weak self] peerID, payload, generation in
+                self?.handleAuthenticatedPeerState(
+                    payload,
+                    from: peerID,
+                    sessionGeneration: generation
+                )
+            },
+            authorizeNoisePayload: { [weak self] peerID, type, generation in
+                self?.isNoisePayloadAuthorized(
+                    type,
+                    from: peerID,
+                    sessionGeneration: generation
+                ) ?? false
+            },
+            deliverNoisePayload: { [weak self] peerID, type, payload, timestamp, generation in
+                if type == .privateFile {
+                    self?.fileTransferHandler.handlePrivatePayload(
+                        payload,
+                        from: peerID,
+                        timestamp: timestamp
+                    )
                     return
                 }
-            }
-        }
-
-        var accepted = false
-        var senderNickname: String = ""
-        // Snapshot peers to avoid concurrent mutation while iterating during nickname collision checks.
-        let peersSnapshot = collectionsQueue.sync { peers }
-
-        // If the packet is from ourselves (e.g., recovered via sync TTL==0), accept immediately
-        if peerID == myPeerID {
-            accepted = true
-            senderNickname = myNickname
-        }
-        else if let info = peersSnapshot[peerID], info.isVerifiedNickname {
-            // Known verified peer path
-            accepted = true
-            senderNickname = info.nickname
-            // Handle nickname collisions
-            let hasCollision = peersSnapshot.values.contains { $0.isConnected && $0.nickname == info.nickname && $0.peerID != peerID } || (myNickname == info.nickname)
-            if hasCollision {
-                senderNickname += "#" + String(peerID.id.prefix(4))
-            }
-        } else {
-            // Fallback: verify signature using persisted signing key for this peerID's fingerprint prefix
-            if let signature = packet.signature, let packetData = packet.toBinaryDataForSigning() {
-                // Find candidate identities by peerID prefix (16 hex)
-                let candidates = identityManager.getCryptoIdentitiesByPeerIDPrefix(peerID)
-                for candidate in candidates {
-                    if let signingKey = candidate.signingPublicKey,
-                       noiseService.verifySignature(signature, for: packetData, publicKey: signingKey) {
-                        accepted = true
-                        // Prefer persisted social petname or claimed nickname
-                        if let social = identityManager.getSocialIdentity(for: candidate.fingerprint) {
-                            senderNickname = social.localPetname ?? social.claimedNickname
-                        } else {
-                            senderNickname = "anon" + String(peerID.id.prefix(4))
-                        }
-                        break
+                guard self?.isNoisePayloadAuthorized(
+                    type,
+                    from: peerID,
+                    sessionGeneration: generation
+                ) == true else {
+                    return
+                }
+                // Single main-actor hop delivering `.noisePayloadReceived`.
+                self?.notifyUI { [weak self] in
+                    guard self?.isNoisePayloadAuthorized(
+                        type,
+                        from: peerID,
+                        sessionGeneration: generation
+                    ) == true else {
+                        return
                     }
+                    self?.deliverTransportEvent(.noisePayloadReceived(
+                        peerID: peerID,
+                        type: type,
+                        payload: payload,
+                        timestamp: timestamp
+                    ))
                 }
             }
-        }
-
-        guard accepted else {
-            SecureLogger.warning("🚫 Dropping public message from unverified or unknown peer \(peerID.id.prefix(8))…", category: .security)
-            return
-        }
-
-        let isBroadcastRecipient: Bool = {
-            guard let r = packet.recipientID else { return true }
-            return r.count == 8 && r.allSatisfy { $0 == 0xFF }
-        }()
-        if isBroadcastRecipient && packet.type == MessageType.message.rawValue {
-            gossipSyncManager?.onPublicPacketSeen(packet)
-        }
-
-        guard let content = String(data: packet.payload, encoding: .utf8) else {
-            SecureLogger.error("❌ Failed to decode message payload as UTF-8", category: .session)
-            return
-        }
-        // Determine if we have a direct link to the sender
-        let directLink = linkState(for: peerID)
-        let hasDirectLink = directLink.hasPeripheral || directLink.hasCentral
-
-        let pathTag = hasDirectLink ? "direct" : "mesh"
-        SecureLogger.debug("💬 [\(senderNickname)] TTL:\(packet.ttl) (\(pathTag)): \(String(content.prefix(50)))\(content.count > 50 ? "..." : "")", category: .session)
-
-        let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
-        var resolvedSelfMessageID: String? = nil
-        if peerID == myPeerID {
-            let senderHex = packet.senderID.hexEncodedString()
-            let dedupID = "\(senderHex)-\(packet.timestamp)-\(packet.type)"
-            resolvedSelfMessageID = selfBroadcastMessageIDs.removeValue(forKey: dedupID)?.id
-        }
-        notifyUI { [weak self] in
-            self?.delegate?.didReceivePublicMessage(from: peerID,
-                                                    nickname: senderNickname,
-                                                    content: content,
-                                                    timestamp: ts,
-                                                    messageID: resolvedSelfMessageID)
-        }
-    }
-    
-    private func handleNoiseHandshake(_ packet: BitchatPacket, from peerID: PeerID) {
-        // Use NoiseEncryptionService for handshake processing
-        if PeerID(hexData: packet.recipientID) == myPeerID {
-            // Handshake is for us
-            do {
-                if let response = try noiseService.processHandshakeMessage(from: peerID, message: packet.payload) {
-                    // Send response
-                    let responsePacket = BitchatPacket(
-                        type: MessageType.noiseHandshake.rawValue,
-                        senderID: myPeerIDData,
-                        recipientID: Data(hexString: peerID.id),
-                        timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                        payload: response,
-                        signature: nil,
-                        ttl: messageTTL
-                    )
-                    // We're on messageQueue from delegate callback
-                    broadcastPacket(responsePacket)
-                }
-                
-                // Session establishment will trigger onPeerAuthenticated callback
-                // which will send any pending messages at the right time
-            } catch {
-                SecureLogger.error("Failed to process handshake: \(error)")
-                // Try initiating a new handshake
-                if !noiseService.hasSession(with: peerID) {
-                    initiateNoiseHandshake(with: peerID)
-                }
-            }
-        }
-    }
-    
-    private func handleNoiseEncrypted(_ packet: BitchatPacket, from peerID: PeerID) {
-        SecureLogger.debug("🔐 handleNoiseEncrypted called for packet from \(peerID)")
-        
-        guard let recipientID = PeerID(hexData: packet.recipientID) else {
-            SecureLogger.warning("⚠️ Encrypted message has no recipient ID", category: .session)
-            return
-        }
-        
-        if recipientID != myPeerID {
-            SecureLogger.debug("🔐 Encrypted message not for me (for \(recipientID), I am \(myPeerID))", category: .session)
-            return
-        }
-        
-        // Update lastSeen for the peer we received from (important for private messages)
-        updatePeerLastSeen(peerID)
-        
-        do {
-            let decrypted = try noiseService.decrypt(packet.payload, from: peerID)
-            guard decrypted.count > 0 else { return }
-            
-            // First byte indicates the payload type
-            let payloadType = decrypted[0]
-            let payloadData = decrypted.dropFirst()
-            
-            switch NoisePayloadType(rawValue: payloadType) {
-            case .privateMessage:
-                let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
-                notifyUI { [weak self] in
-                    self?.delegate?.didReceiveNoisePayload(from: peerID, type: .privateMessage, payload: Data(payloadData), timestamp: ts)
-                }
-            case .delivered:
-                let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
-                notifyUI { [weak self] in
-                    self?.delegate?.didReceiveNoisePayload(from: peerID, type: .delivered, payload: Data(payloadData), timestamp: ts)
-                }
-            case .readReceipt:
-                let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
-                notifyUI { [weak self] in
-                    self?.delegate?.didReceiveNoisePayload(from: peerID, type: .readReceipt, payload: Data(payloadData), timestamp: ts)
-                }
-            case .verifyChallenge:
-                let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
-                notifyUI { [weak self] in
-                    self?.delegate?.didReceiveNoisePayload(from: peerID, type: .verifyChallenge, payload: Data(payloadData), timestamp: ts)
-                }
-            case .verifyResponse:
-                let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
-                notifyUI { [weak self] in
-                    self?.delegate?.didReceiveNoisePayload(from: peerID, type: .verifyResponse, payload: Data(payloadData), timestamp: ts)
-                }
-            case .ndrEvent:
-                let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
-                notifyUI { [weak self] in
-                    self?.delegate?.didReceiveNoisePayload(from: peerID, type: .ndrEvent, payload: Data(payloadData), timestamp: ts)
-                }
-            case .none:
-                SecureLogger.warning("⚠️ Unknown noise payload type: \(payloadType)")
-            }
-        } catch NoiseEncryptionError.sessionNotEstablished {
-            // We received an encrypted message before establishing a session with this peer.
-            // Trigger a handshake so future messages can be decrypted.
-            SecureLogger.debug("🔑 Encrypted message from \(peerID) without session; initiating handshake")
-            if !noiseService.hasSession(with: peerID) {
-                initiateNoiseHandshake(with: peerID)
-            }
-        } catch {
-            // Decryption failed - clear the corrupted session and re-initiate handshake
-            // This handles cases where session state got out of sync (nonce mismatch, etc.)
-            SecureLogger.error("❌ Failed to decrypt message from \(peerID): \(error) - clearing session and re-initiating handshake")
-            noiseService.clearSession(for: peerID)
-            initiateNoiseHandshake(with: peerID)
-        }
+        )
     }
 
     // MARK: Helper Functions
     
     private func sendPendingNoisePayloadsAfterHandshake(for peerID: PeerID) {
-        let payloads = collectionsQueue.sync(flags: .barrier) { () -> [Data] in
-            let list = pendingNoisePayloadsAfterHandshake[peerID] ?? []
-            pendingNoisePayloadsAfterHandshake.removeValue(forKey: peerID)
-            return list
+        let payloads = collectionsQueue.sync(flags: .barrier) { () -> [BLEPendingTypedPayload] in
+            pendingNoiseSessionQueues.takeTypedPayloads(for: peerID)
         }
         guard !payloads.isEmpty else { return }
-        SecureLogger.debug("📤 Sending \(payloads.count) pending noise payloads to \(peerID) after handshake", category: .session)
-        for payload in payloads {
+        SecureLogger.debug("📤 Sending \(payloads.count) pending noise payloads to \(peerID.id.prefix(8))… after handshake", category: .session)
+        for pending in payloads {
+            let isPrivateMedia = NoisePayloadType.isPrivateFile(rawValue: pending.payload.first)
+            let privateMediaTransferId = isPrivateMedia ? pending.transferId : nil
+
+            if isPrivateMedia {
+                switch privateMediaSendPolicy(to: peerID) {
+                case .encrypted:
+                    break
+
+                case .awaitingCapabilityProof:
+                    // Handshake completion alone is insufficient. Put the
+                    // exact payload back until authenticated 0x21 state
+                    // arrives; that handler calls this drain again.
+                    collectionsQueue.sync(flags: .barrier) {
+                        pendingNoiseSessionQueues.appendTypedPayload(
+                            pending.payload,
+                            transferId: pending.transferId,
+                            for: peerID
+                        )
+                    }
+                    continue
+
+                case .legacyRequiresConsent, .blockedDowngrade:
+                    if let transferId = pending.transferId {
+                        TransferProgressManager.shared.rejectBeforeStart(
+                            id: transferId,
+                            reason: String(
+                                localized: "content.delivery.reason.private_media_capability_unresolved",
+                                defaultValue: "Could not confirm encrypted media support",
+                                comment: "Failure reason when queued private media cannot be authenticated after handshake"
+                            )
+                        )
+                        privateMediaTransferAdmissions.finish(transferId)
+                    }
+                    continue
+                }
+            }
+            if let transferId = privateMediaTransferId,
+               !privateMediaTransferAdmissions.isActive(transferId) {
+                privateMediaTransferAdmissions.finish(transferId)
+                continue
+            }
             do {
-                let encrypted = try noiseService.encrypt(payload, for: peerID)
-                let packet = BitchatPacket(
-                    type: MessageType.noiseEncrypted.rawValue,
-                    senderID: myPeerIDData,
-                    recipientID: Data(hexString: peerID.id),
-                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                    payload: encrypted,
-                    signature: nil,
-                    ttl: messageTTL
+                if let transferId = privateMediaTransferId,
+                   !privateMediaTransferAdmissions.isActive(transferId) {
+                    privateMediaTransferAdmissions.finish(transferId)
+                    continue
+                }
+                let packet = try makeEncryptedNoisePacket(pending.payload, to: peerID)
+                if let transferId = privateMediaTransferId,
+                   !privateMediaTransferAdmissions.isActive(transferId) {
+                    privateMediaTransferAdmissions.finish(transferId)
+                    continue
+                }
+                broadcastPacket(
+                    packet,
+                    transferId: pending.transferId,
+                    requiresPrivateMediaAdmission: privateMediaTransferId != nil
                 )
-                broadcastPacket(packet)
             } catch {
-                SecureLogger.error("❌ Failed to send pending noise payload to \(peerID): \(error)")
+                SecureLogger.error("❌ Failed to send pending noise payload to \(peerID.id.prefix(8))…: \(error)")
+                if let transferId = pending.transferId {
+                    TransferProgressManager.shared.rejectBeforeStart(
+                        id: transferId,
+                        reason: String(
+                            localized: "content.delivery.reason.encryption_failed",
+                            defaultValue: "Failed to encrypt media",
+                            comment: "Failure reason shown when queued private media cannot be encrypted after handshake"
+                        )
+                    )
+                    privateMediaTransferAdmissions.finish(transferId)
+                }
             }
         }
     }
@@ -4280,51 +8126,28 @@ extension BLEService {
     private func updatePeerLastSeen(_ peerID: PeerID) {
         // Use async to avoid deadlock - we don't need immediate consistency for last seen updates
         collectionsQueue.async(flags: .barrier) {
-            if var peer = self.peers[peerID] {
-                peer.lastSeen = Date()
-                self.peers[peerID] = peer
-            }
+            self.peerRegistry.updateLastSeen(peerID, at: Date())
         }
     }
 
     // Debounced disconnect notifier to avoid duplicate disconnect callbacks within a short window
+    @MainActor
     private func notifyPeerDisconnectedDebounced(_ peerID: PeerID) {
-        let now = Date()
-        let last = recentDisconnectNotifies[peerID]
-        if last == nil || now.timeIntervalSince(last!) >= TransportConfig.bleDisconnectNotifyDebounceSeconds {
-            delegate?.didDisconnectFromPeer(peerID)
-            recentDisconnectNotifies[peerID] = now
-        } else {
-            // Suppressed duplicate disconnect notification
+        if disconnectNotifyDebouncer.shouldEmit(
+            peerID: peerID,
+            now: Date(),
+            minimumInterval: TransportConfig.bleDisconnectNotifyDebounceSeconds
+        ) {
+            deliverTransportEvent(.peerDisconnected(peerID))
         }
     }
     
     // NEW: Publish peer snapshots to subscribers and notify Transport delegates
     private func publishFullPeerData() {
         let transportPeers: [TransportPeerSnapshot] = collectionsQueue.sync {
-            // Compute nickname collision counts for connected peers
-            let connected = peers.values.filter { $0.isConnected }
-            var counts: [String: Int] = [:]
-            for p in connected { counts[p.nickname, default: 0] += 1 }
-            counts[myNickname, default: 0] += 1
-            return peers.values.map { info in
-                var display = info.nickname
-                if info.isConnected, (counts[info.nickname] ?? 0) > 1 {
-                    display += "#" + String(info.peerID.id.prefix(4))
-                }
-                return TransportPeerSnapshot(
-                    peerID: info.peerID,
-                    nickname: display,
-                    isConnected: info.isConnected,
-                    noisePublicKey: info.noisePublicKey,
-                    lastSeen: info.lastSeen
-                )
-            }
+            peerRegistry.transportSnapshots(selfNickname: myNickname)
         }
-        // Notify non-UI listeners
-        peerSnapshotSubject.send(transportPeers)
-        // Notify UI on MainActor via delegate
-        Task { @MainActor [weak self] in
+        notifyUI { [weak self] in
             self?.peerEventsDelegate?.didUpdatePeerSnapshots(transportPeers)
         }
     }
@@ -4332,37 +8155,30 @@ extension BLEService {
     // MARK: Consolidated Maintenance
     
     private func performMaintenance() {
+        guard !isPanicSuspended else { return }
         maintenanceCounter += 1
-        
-        // Adaptive announce: reduce frequency when we have connected peers
-        let now = Date()
-        let connectedCount = collectionsQueue.sync { peers.values.filter { $0.isConnected }.count }
-        let elapsed = now.timeIntervalSince(lastAnnounceSent)
-        if connectedCount == 0 {
-            // Discovery mode: keep frequent announces
-            if elapsed >= TransportConfig.bleAnnounceIntervalSeconds { sendAnnounce(forceSend: true) }
-        } else {
-            // Connected mode: announce less often; much less in dense networks
-            let base = connectedCount >= TransportConfig.bleHighDegreeThreshold ?
-                TransportConfig.bleConnectedAnnounceBaseSecondsDense : TransportConfig.bleConnectedAnnounceBaseSecondsSparse
-            let jitter = connectedCount >= TransportConfig.bleHighDegreeThreshold ?
-                TransportConfig.bleConnectedAnnounceJitterDense : TransportConfig.bleConnectedAnnounceJitterSparse
-            let target = base + Double.random(in: -jitter...jitter)
-            if elapsed >= target { sendAnnounce(forceSend: true) }
-        }
+        lastMaintenanceAt = Date()
 
-        // Activity-driven quick-announce: if we've seen any packet in last 5s and it has
-        // been >=10s since the last announce, send a presence nudge.
+        let now = Date()
+        let connectedCount = collectionsQueue.sync { peerRegistry.connectedCount }
+        let elapsed = announceThrottle.elapsed(since: now)
         let recentSeen = collectionsQueue.sync { () -> Bool in
-            let cutoff = now.addingTimeInterval(-5.0)
-            return recentPacketTimestamps.contains(where: { $0 >= cutoff })
+            recentTrafficTracker.hasTraffic(within: 5.0, now: now)
         }
-        if recentSeen && elapsed >= 10.0 {
+        let hasNoPeers = collectionsQueue.sync { peerRegistry.isEmpty }
+        let plan = BLEMaintenancePolicy.plan(
+            cycle: maintenanceCounter,
+            connectedCount: connectedCount,
+            peerRegistryIsEmpty: hasNoPeers,
+            elapsedSinceLastAnnounce: elapsed,
+            hasRecentTraffic: recentSeen
+        )
+
+        if plan.shouldSendAnnounce {
             sendAnnounce(forceSend: true)
         }
-        
-        // If we have no peers, ensure we're scanning and advertising
-        if peers.isEmpty {
+
+        if plan.shouldEnsureAdvertising {
             // Ensure we're advertising as peripheral
             if let pm = peripheralManager, pm.state == .poweredOn && !pm.isAdvertising {
                 pm.startAdvertising(buildAdvertisementData())
@@ -4372,17 +8188,24 @@ extension BLEService {
         // Update scanning duty-cycle based on connectivity
         updateScanningDutyCycle(connectedCount: connectedCount)
         updateRSSIThreshold(connectedCount: connectedCount)
+
+        // Drain the connection candidate queue. Weak-RSSI discoveries are
+        // enqueued rather than connected immediately, and the event-driven
+        // drains (disconnect/failure/timeout) never fire when we're idle —
+        // without this, an isolated node surrounded only by weak (distant)
+        // peers would queue them all and never connect to anyone.
+        tryConnectFromQueue()
         
         // Check peer connectivity every cycle for snappier UI updates
         checkPeerConnectivity()
         
         // Every 30 seconds (3 cycles): Cleanup
-        if maintenanceCounter % 3 == 0 {
+        if plan.shouldRunCleanup {
             performCleanup()
         }
 
         // Attempt to flush any spooled directed messages periodically (~every 5 seconds)
-        if maintenanceCounter % 2 == 1 {
+        if plan.shouldFlushDirectedSpool {
             flushDirectedSpool()
         }
 
@@ -4394,66 +8217,57 @@ extension BLEService {
         // No rotating alias: nothing to refresh
         
         // Reset counter to prevent overflow (every 60 seconds)
-        if maintenanceCounter >= 6 {
+        if plan.shouldResetCounter {
             maintenanceCounter = 0
         }
     }
     
+    #if os(iOS)
+    /// Catch-up maintenance for background wake windows (bleQueue-confined).
+    /// Rate-limited to the normal maintenance cadence so a burst of inbound
+    /// packets during one wake still runs at most one extra pass.
+    private func performBackgroundWakeMaintenanceIfStale() {
+        guard meshBackgroundEnabled,
+              !isAppActive,
+              Date().timeIntervalSince(lastMaintenanceAt) >= TransportConfig.bleMaintenanceInterval else { return }
+        performMaintenance()
+    }
+    #endif
+
     private func checkPeerConnectivity() {
         let now = Date()
-        var disconnectedPeers: [PeerID] = []
-        let peerIDsForLinkState: [PeerID] = collectionsQueue.sync { Array(peers.keys) }
-        var cachedLinkStates: [PeerID: (hasPeripheral: Bool, hasCentral: Bool)] = [:]
+        let peerIDsForLinkState: [PeerID] = collectionsQueue.sync { peerRegistry.peerIDs }
+        var cachedLinkStates: [PeerID: BLEPeerLinkPresence] = [:]
         for peerID in peerIDsForLinkState {
-            cachedLinkStates[peerID] = linkState(for: peerID)
+            let state = linkState(for: peerID)
+            cachedLinkStates[peerID] = BLEPeerLinkPresence(
+                hasPeripheral: state.hasPeripheral,
+                hasCentral: state.hasCentral
+            )
         }
         
-        var removedOfflineCount = 0
-        collectionsQueue.sync(flags: .barrier) {
-            for (peerID, peer) in peers {
-                let age = now.timeIntervalSince(peer.lastSeen)
-                let retention: TimeInterval = peer.isVerifiedNickname ? TransportConfig.bleReachabilityRetentionVerifiedSeconds : TransportConfig.bleReachabilityRetentionUnverifiedSeconds
-                if peer.isConnected && age > TransportConfig.blePeerInactivityTimeoutSeconds {
-                    // Check if we still have an active BLE connection to this peer
-                    let state = cachedLinkStates[peerID] ?? (hasPeripheral: false, hasCentral: false)
-                    let hasPeripheralConnection = state.hasPeripheral
-                    let hasCentralConnection = state.hasCentral
-                    
-                    // If direct link is gone, mark as not connected (retain entry for reachability)
-                    if !hasPeripheralConnection && !hasCentralConnection {
-                        var updated = peer
-                        updated.isConnected = false
-                        peers[peerID] = updated
-                        disconnectedPeers.append(peerID)
-                    }
-                }
-                // Cleanup: remove peers that are not connected and past reachability retention
-                if !peer.isConnected {
-                    if age > retention {
-                        SecureLogger.debug("🗑️ Removing stale peer after reachability window: \(peerID) (\(peer.nickname))", category: .session)
-                        // Also remove any stored announcement from sync candidates
-                        gossipSyncManager?.removeAnnouncementForPeer(peerID)
-                        peers.removeValue(forKey: peerID)
-                        removedOfflineCount += 1
-                    }
-                }
-            }
+        let changes = collectionsQueue.sync(flags: .barrier) {
+            peerRegistry.reconcileConnectivity(now: now, linkStates: cachedLinkStates)
+        }
+        for removedPeer in changes.removedPeers {
+            SecureLogger.debug("🗑️ Removing stale peer after reachability window: \(removedPeer.peerID.id.prefix(8))… (\(removedPeer.nickname))", category: .session)
+            gossipSyncManager?.removeAnnouncementForPeer(removedPeer.peerID)
         }
         
         // Update UI if there were direct disconnections or offline removals
-        if !disconnectedPeers.isEmpty || removedOfflineCount > 0 {
+        if !changes.disconnectedPeerIDs.isEmpty || !changes.removedPeers.isEmpty {
             notifyUI { [weak self] in
                 guard let self else { return }
                 
                 // Get current peer list (after removal)
-                let currentPeerIDs = self.collectionsQueue.sync { self.currentPeerIDs }
+                let currentPeerIDs = self.collectionsQueue.sync { self.peerRegistry.peerIDs }
                 
-                for peerID in disconnectedPeers {
-                    self.delegate?.didDisconnectFromPeer(peerID)
+                for peerID in changes.disconnectedPeerIDs {
+                    self.deliverTransportEvent(.peerDisconnected(peerID))
                 }
                 // Publish snapshots so UnifiedPeerService updates connection/reachability icons
                 self.requestPeerDataPublish()
-                self.delegate?.didUpdatePeerList(currentPeerIDs)
+                self.deliverTransportEvent(.peerListUpdated(currentPeerIDs))
             }
         }
         
@@ -4465,58 +8279,62 @@ extension BLEService {
     
     private func performCleanup() {
         let now = Date()
+
+        // Admission expiry is a visible transfer failure, never a silent
+        // eviction. The registry delivers notifications after releasing its
+        // lock, so this maintenance pass cannot deadlock a concurrent cancel.
+        privateMediaTransferAdmissions.prune(now: now)
         
         // Clean old processed messages efficiently
         messageDeduplicator.cleanup()
         
-        // Clean old fragments (> configured seconds old)
-        collectionsQueue.sync(flags: .barrier) {
+        // Clean old fragments (> configured seconds old), then ask peers for
+        // the specific fragment streams whose reassembly has stalled instead
+        // of waiting for the next periodic GCS fragment round.
+        let stalledFragmentIDs = collectionsQueue.sync(flags: .barrier) { () -> [Data] in
             let cutoff = now.addingTimeInterval(-TransportConfig.bleFragmentLifetimeSeconds)
-            let oldFragments = fragmentMetadata.filter { $0.value.timestamp < cutoff }.map { $0.key }
-            for fragmentID in oldFragments {
-                incomingFragments.removeValue(forKey: fragmentID)
-                fragmentMetadata.removeValue(forKey: fragmentID)
-            }
+            fragmentAssemblyBuffer.removeExpired(before: cutoff)
+            sourceRouteFailures.prune(now: now)
+            return fragmentAssemblyBuffer.stalledBroadcastFragmentIDs(
+                stalledAfter: TransportConfig.bleFragmentResyncStallSeconds,
+                retryAfter: TransportConfig.bleFragmentResyncRetrySeconds,
+                now: now
+            )
+        }
+        if !stalledFragmentIDs.isEmpty {
+            gossipSyncManager?.requestMissingFragments(fragmentIDs: stalledFragmentIDs)
         }
 
         // Clean old connection timeout backoff entries (> window)
         let timeoutCutoff = now.addingTimeInterval(-TransportConfig.bleConnectTimeoutBackoffWindowSeconds)
-        recentConnectTimeouts = recentConnectTimeouts.filter { $0.value >= timeoutCutoff }
+        connectionScheduler.pruneConnectionTimeouts(before: timeoutCutoff)
 
         // Clean up stale scheduled relays that somehow persisted (> 2s)
         collectionsQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
-            if !self.scheduledRelays.isEmpty {
-                // Nothing to compare times to; just cap the size defensively
-                if self.scheduledRelays.count > 512 {
-                    self.scheduledRelays.removeAll()
-                }
-            }
+            // Nothing to compare times to; just cap the size defensively
+            self.scheduledRelays.removeAllIfOverCapacity(512)
         }
 
         // Clean ingress link records older than configured seconds
         collectionsQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
             let cutoff = now.addingTimeInterval(-TransportConfig.bleIngressRecordLifetimeSeconds)
-            if !self.ingressByMessageID.isEmpty {
-                self.ingressByMessageID = self.ingressByMessageID.filter { $0.value.timestamp >= cutoff }
+            if !self.ingressLinks.isEmpty {
+                self.ingressLinks.prune(before: cutoff)
             }
             // Clean expired directed spooled items
-            if !self.pendingDirectedRelays.isEmpty {
-                var cleaned: [PeerID: [String: (packet: BitchatPacket, enqueuedAt: Date)]] = [:]
-                for (recipient, dict) in self.pendingDirectedRelays {
-                    let pruned = dict.filter { now.timeIntervalSince($0.value.enqueuedAt) <= TransportConfig.bleDirectedSpoolWindowSeconds }
-                    if !pruned.isEmpty { cleaned[recipient] = pruned }
-                }
-                self.pendingDirectedRelays = cleaned
-            }
+            self.pendingDirectedRelays.pruneExpired(
+                now: now,
+                window: TransportConfig.bleDirectedSpoolWindowSeconds
+            )
         }
 
         messageQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
-            guard !self.selfBroadcastMessageIDs.isEmpty else { return }
+            guard !self.selfBroadcastTracker.isEmpty else { return }
             let cutoff = now.addingTimeInterval(-TransportConfig.messageDedupMaxAgeSeconds)
-            self.selfBroadcastMessageIDs = self.selfBroadcastMessageIDs.filter { cutoff <= $0.value.timestamp }
+            self.selfBroadcastTracker.prune(before: cutoff)
         }
     }
 
@@ -4530,26 +8348,30 @@ extension BLEService {
         #endif
         // Force full-time scanning if we have very few neighbors or very recent traffic
         let hasRecentTraffic: Bool = collectionsQueue.sync {
-            let cutoff = Date().addingTimeInterval(-TransportConfig.bleRecentTrafficForceScanSeconds)
-            return recentPacketTimestamps.contains(where: { $0 >= cutoff })
+            recentTrafficTracker.hasTraffic(
+                within: TransportConfig.bleRecentTrafficForceScanSeconds,
+                now: Date()
+            )
         }
-        let forceScanOn = (connectedCount <= 2) || hasRecentTraffic
-        let shouldDuty = dutyEnabled && active && connectedCount > 0 && !forceScanOn
-        if shouldDuty {
+        let scanPlan = BLEScanDutyPolicy.plan(
+            dutyEnabled: dutyEnabled,
+            appIsActive: active,
+            connectedCount: connectedCount,
+            hasRecentTraffic: hasRecentTraffic
+        )
+
+        switch scanPlan {
+        case .dutyCycle(let onDuration, let offDuration):
+            let durationsChanged = dutyOnDuration != onDuration || dutyOffDuration != offDuration
+            dutyOnDuration = onDuration
+            dutyOffDuration = offDuration
+
             if scanDutyTimer == nil {
                 // Start timer to toggle scanning on/off
                 let t = DispatchSource.makeTimerSource(queue: bleQueue)
                 // Start with scanning ON; we'll turn OFF after onDuration
                 if !central.isScanning { startScanning() }
                 dutyActive = true
-                // Adjust duty cycle under dense networks to save battery
-                if connectedCount >= TransportConfig.bleHighDegreeThreshold {
-                    dutyOnDuration = TransportConfig.bleDutyOnDurationDense
-                    dutyOffDuration = TransportConfig.bleDutyOffDurationDense
-                } else {
-                    dutyOnDuration = TransportConfig.bleDutyOnDuration
-                    dutyOffDuration = TransportConfig.bleDutyOffDuration
-                }
                 t.schedule(deadline: .now() + dutyOnDuration, repeating: dutyOnDuration + dutyOffDuration)
                 t.setEventHandler { [weak self] in
                     guard let self = self, let c = self.centralManager else { return }
@@ -4566,8 +8388,12 @@ extension BLEService {
                 }
                 t.resume()
                 scanDutyTimer = t
+            } else if durationsChanged {
+                scanDutyTimer?.schedule(deadline: .now() + dutyOnDuration, repeating: dutyOnDuration + dutyOffDuration)
+                if !central.isScanning { startScanning() }
+                dutyActive = true
             }
-        } else {
+        case .continuous:
             // Cancel duty cycle and ensure scanning is ON for discovery
             scanDutyTimer?.cancel()
             scanDutyTimer = nil
@@ -4576,32 +8402,10 @@ extension BLEService {
     }
 
     private func updateRSSIThreshold(connectedCount: Int) {
-        // Adjust RSSI threshold based on connectivity, candidate pressure, and failures
-        if connectedCount == 0 {
-            // Isolated: relax floor slowly to hunt for distant nodes
-            if lastIsolatedAt == nil { lastIsolatedAt = Date() }
-            let iso = lastIsolatedAt ?? Date()
-            let elapsed = Date().timeIntervalSince(iso)
-            if elapsed > TransportConfig.bleIsolationRelaxThresholdSeconds {
-                dynamicRSSIThreshold = TransportConfig.bleRSSIIsolatedRelaxed
-            } else {
-                dynamicRSSIThreshold = TransportConfig.bleRSSIIsolatedBase
-            }
-            return
-        }
-        lastIsolatedAt = nil
-        // Base threshold when connected
-        var threshold = TransportConfig.bleDynamicRSSIThresholdDefault
-        // If we're at budget or queue is large, prefer closer peers
-        let linkCount = peripherals.values.filter { $0.isConnected || $0.isConnecting }.count
-        if linkCount >= maxCentralLinks || connectionCandidates.count > TransportConfig.bleConnectionCandidatesMax {
-            threshold = TransportConfig.bleRSSIConnectedThreshold
-        }
-        // If we have many recent timeouts, raise further
-        let recentTimeouts = recentConnectTimeouts.filter { Date().timeIntervalSince($0.value) < TransportConfig.bleRecentTimeoutWindowSeconds }.count
-        if recentTimeouts >= TransportConfig.bleRecentTimeoutCountThreshold {
-            threshold = max(threshold, TransportConfig.bleRSSIHighTimeoutThreshold)
-        }
-        dynamicRSSIThreshold = threshold
+        connectionScheduler.updateRSSIThreshold(
+            connectedCount: connectedCount,
+            connectedOrConnectingLinkCount: linkStateStore.connectedOrConnectingPeripheralCount,
+            now: Date()
+        )
     }
 }

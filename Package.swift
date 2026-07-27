@@ -13,26 +13,23 @@ let package = Package(
         .executable(
             name: "bitchat",
             targets: ["bitchat"]
-        ),
+        )
     ],
-    dependencies:[
+    dependencies: [
+        .package(path: "localPackages/Arti"),
         .package(path: "localPackages/BitFoundation"),
         .package(path: "localPackages/BitLogger"),
         .package(path: "localPackages/NdrFfi"),
         .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1", exact: "0.21.1")
     ],
     targets: [
-        .target(
-            name: "Tor",
-            path: "localPackages/TorShim/Sources"
-        ),
         .executableTarget(
             name: "bitchat",
             dependencies: [
                 .product(name: "P256K", package: "swift-secp256k1"),
                 .product(name: "BitFoundation", package: "BitFoundation"),
                 .product(name: "BitLogger", package: "BitLogger"),
-                "Tor",
+                .product(name: "Tor", package: "Arti"),
                 .product(name: "NdrFfi", package: "NdrFfi")
             ],
             path: "bitchat",
@@ -59,11 +56,21 @@ let package = Package(
             path: "bitchatTests",
             exclude: [
                 "Info.plist",
-                "README.md"
+                "README.md",
+                // CI perf gate data (read by scripts/check-perf-floors.sh),
+                // not a test resource.
+                "Performance/perf-floors.json"
             ],
             resources: [
                 .process("Localization"),
-                .process("Noise")
+                // Only the vector fixture: declaring the whole "Noise"
+                // directory would claim its .swift test files as resources
+                // and silently drop them from compilation.
+                .process("Noise/NoiseTestVectors.json"),
+                // Frozen envelopes produced by the released iOS (733098bb)
+                // and Android (b7f0b33d) private-DM implementations; prove
+                // receive compatibility independently of the local generator.
+                .process("Nostr/Fixtures")
             ]
         )
     ]

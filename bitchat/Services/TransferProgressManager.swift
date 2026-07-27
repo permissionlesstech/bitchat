@@ -11,6 +11,7 @@ final class TransferProgressManager {
         case updated(id: String, sentFragments: Int, totalFragments: Int)
         case completed(id: String, totalFragments: Int)
         case cancelled(id: String, sentFragments: Int, totalFragments: Int)
+        case rejected(id: String, reason: String)
     }
 
     private let subject = PassthroughSubject<Event, Never>()
@@ -49,9 +50,14 @@ final class TransferProgressManager {
         }
     }
 
-    func reset(id: String) {
+    /// Fails a preflight check while keeping the outgoing placeholder visible
+    /// with an actionable reason instead of treating policy/size rejection as
+    /// a user cancellation.
+    func rejectBeforeStart(id: String, reason: String) {
         queue.async(flags: .barrier) { [weak self] in
-            self?.states.removeValue(forKey: id)
+            guard let self = self else { return }
+            self.states.removeValue(forKey: id)
+            self.subject.send(.rejected(id: id, reason: reason))
         }
     }
 

@@ -32,8 +32,25 @@ public protocol KeychainManagerProtocol {
     func save(key: String, data: Data, service: String, accessible: CFString?)
     /// Load data from a custom service
     func load(key: String, service: String) -> Data?
+    /// Load data from a custom service while preserving Keychain status.
+    /// Callers that own encrypted files need to distinguish a missing key
+    /// from a temporarily inaccessible key before replacing those files.
+    func loadWithResult(key: String, service: String) -> KeychainReadResult
     /// Delete data from a custom service
     func delete(key: String, service: String)
+    /// Delete every item stored under a custom service
+    func deleteAll(service: String)
+}
+
+public extension KeychainManagerProtocol {
+    /// Source-compatible fallback for lightweight/test implementations. The
+    /// production manager overrides this with the underlying OSStatus.
+    func loadWithResult(key: String, service: String) -> KeychainReadResult {
+        if let data = load(key: key, service: service) {
+            return .success(data)
+        }
+        return .itemNotFound
+    }
 }
 
 // MARK: - Keychain Error Types

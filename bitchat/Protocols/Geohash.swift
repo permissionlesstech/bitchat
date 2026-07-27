@@ -10,11 +10,11 @@ enum Geohash {
         return map
     }()
 
-    /// Validates a geohash string for building-level precision (8 characters).
+    /// Validates a geohash string at any channel precision (1-12 characters).
     /// - Parameter geohash: The geohash string to validate
-    /// - Returns: true if valid 8-character base32 geohash, false otherwise
-    static func isValidBuildingGeohash(_ geohash: String) -> Bool {
-        guard geohash.count == 8 else { return false }
+    /// - Returns: true if a non-empty base32 geohash of at most 12 characters
+    static func isValidGeohash(_ geohash: String) -> Bool {
+        guard (1...12).contains(geohash.count) else { return false }
         return geohash.lowercased().allSatisfy { base32Map[$0] != nil }
     }
 

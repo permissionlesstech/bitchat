@@ -7,14 +7,13 @@
 //
 
 import struct Foundation.Data
-import struct Foundation.Date
 
 /// The core packet structure for all BitChat protocol messages.
 /// Encapsulates all data needed for routing through the mesh network,
 /// including TTL for hop limiting and optional encryption.
 /// - Note: Packets larger than BLE MTU (512 bytes) are automatically fragmented
 public struct BitchatPacket: Codable {
-    let version: UInt8
+    public let version: UInt8
     public let type: UInt8
     public let senderID: Data
     public let recipientID: Data?
@@ -37,35 +36,7 @@ public struct BitchatPacket: Codable {
         self.route = route
         self.isRSR = isRSR
     }
-    
-    // Convenience initializer for new binary format
-    init(type: UInt8, ttl: UInt8, senderID: PeerID, payload: Data, isRSR: Bool = false) {
-        self.version = 1
-        self.type = type
-        // Convert hex string peer ID to binary data (8 bytes)
-        var senderData = Data()
-        var tempID = senderID.id
-        while tempID.count >= 2 {
-            let hexByte = String(tempID.prefix(2))
-            if let byte = UInt8(hexByte, radix: 16) {
-                senderData.append(byte)
-            }
-            tempID = String(tempID.dropFirst(2))
-        }
-        self.senderID = senderData
-        self.recipientID = nil
-        self.timestamp = UInt64(Date().timeIntervalSince1970 * 1000) // milliseconds
-        self.payload = payload
-        self.signature = nil
-        self.ttl = ttl
-        self.route = nil
-        self.isRSR = isRSR
-    }
-    
-    var data: Data? {
-        BinaryProtocol.encode(self)
-    }
-    
+
     public func toBinaryData(padding: Bool = true) -> Data? {
         BinaryProtocol.encode(self, padding: padding)
     }

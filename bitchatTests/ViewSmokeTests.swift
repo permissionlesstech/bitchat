@@ -1,3 +1,4 @@
+import Combine
 import Testing
 import Foundation
 import SwiftUI
@@ -27,6 +28,159 @@ private func makeSmokeViewModel() -> (viewModel: ChatViewModel, transport: MockT
     )
 
     return (viewModel, transport, identityManager)
+}
+
+@MainActor
+private struct SmokeFeatureModels {
+    let publicChatModel: PublicChatModel
+    let appChromeModel: AppChromeModel
+    let locationChannelsModel: LocationChannelsModel
+    let privateInboxModel: PrivateInboxModel
+    let privateConversationModel: PrivateConversationModel
+    let verificationModel: VerificationModel
+    let conversationUIModel: ConversationUIModel
+    let peerListModel: PeerListModel
+    let boardAlertsModel: BoardAlertsModel
+    let sharedContentImportModel: SharedContentImportModel
+}
+
+@MainActor
+private func makeSmokeLocationManager() -> LocationChannelManager {
+    let suiteName = "ViewSmokeTests.\(UUID().uuidString)"
+    let storage = UserDefaults(suiteName: suiteName) ?? .standard
+    storage.removePersistentDomain(forName: suiteName)
+    return LocationChannelManager(storage: storage)
+}
+
+@MainActor
+private func makeSmokeFeatureModels(for viewModel: ChatViewModel) -> SmokeFeatureModels {
+    let locationManager = makeSmokeLocationManager()
+    let conversations = viewModel.conversations
+    let publicChatModel = PublicChatModel(conversations: conversations)
+    let locationChannelsModel = LocationChannelsModel(manager: locationManager)
+    let privateInboxModel = PrivateInboxModel(conversations: conversations)
+    let appChromeModel = AppChromeModel(
+        chatViewModel: viewModel,
+        privateInboxModel: privateInboxModel
+    )
+    let privateConversationModel = PrivateConversationModel(
+        chatViewModel: viewModel,
+        conversations: conversations,
+        locationChannelsModel: locationChannelsModel
+    )
+    let verificationModel = VerificationModel(
+        chatViewModel: viewModel,
+        privateConversationModel: privateConversationModel
+    )
+    let conversationUIModel = ConversationUIModel(
+        chatViewModel: viewModel,
+        privateConversationModel: privateConversationModel,
+        conversations: conversations
+    )
+    let peerListModel = PeerListModel(
+        chatViewModel: viewModel,
+        conversations: conversations,
+        locationChannelsModel: locationChannelsModel
+    )
+
+    let boardAlertsModel = BoardAlertsModel(
+        arrivals: Empty(completeImmediately: false).eraseToAnyPublisher(),
+        dependencies: BoardAlertsModel.Dependencies(
+            isOwnPost: { _ in false },
+            emitSystemLine: { _, _ in }
+        )
+    )
+
+    return SmokeFeatureModels(
+        publicChatModel: publicChatModel,
+        appChromeModel: appChromeModel,
+        locationChannelsModel: locationChannelsModel,
+        privateInboxModel: privateInboxModel,
+        privateConversationModel: privateConversationModel,
+        verificationModel: verificationModel,
+        conversationUIModel: conversationUIModel,
+        peerListModel: peerListModel,
+        boardAlertsModel: boardAlertsModel,
+        sharedContentImportModel: SharedContentImportModel(store: nil)
+    )
+}
+
+@MainActor
+private func installSmokeEnvironment<V: View>(
+    _ view: V,
+    featureModels: SmokeFeatureModels
+) -> some View {
+    view
+        .environmentObject(featureModels.publicChatModel)
+        .environmentObject(featureModels.appChromeModel)
+        .environmentObject(featureModels.locationChannelsModel)
+        .environmentObject(featureModels.privateInboxModel)
+        .environmentObject(featureModels.privateConversationModel)
+        .environmentObject(featureModels.verificationModel)
+        .environmentObject(featureModels.conversationUIModel)
+        .environmentObject(featureModels.peerListModel)
+        .environmentObject(featureModels.boardAlertsModel)
+        .environmentObject(featureModels.sharedContentImportModel)
+}
+
+@MainActor
+private struct ContentPeopleSheetHarness: View {
+    @State private var showSidebar = true
+    @State private var messageText = ""
+    @State private var selectedMessageSender: String?
+    @State private var selectedMessageSenderID: PeerID?
+    @State private var imagePreviewURL: URL?
+    @State private var windowCountPublic = 300
+    @State private var windowCountPrivate: [PeerID: Int] = [:]
+    @State private var isAtBottomPrivate = true
+    @State private var autocompleteDebounceTimer: Timer?
+    @StateObject private var voiceRecordingVM = VoiceRecordingViewModel()
+    @FocusState private var isTextFieldFocused: Bool
+    #if os(iOS)
+    @State private var showImagePicker = false
+    @State private var imagePickerSourceType: UIImagePickerController.SourceType = .photoLibrary
+    #else
+    @State private var showMacImagePicker = false
+    #endif
+
+    var body: some View {
+        #if os(iOS)
+        ContentPeopleSheetView(
+            showSidebar: $showSidebar,
+            messageText: $messageText,
+            selectedMessageSender: $selectedMessageSender,
+            selectedMessageSenderID: $selectedMessageSenderID,
+            imagePreviewURL: $imagePreviewURL,
+            windowCountPublic: $windowCountPublic,
+            windowCountPrivate: $windowCountPrivate,
+            isAtBottomPrivate: $isAtBottomPrivate,
+            isTextFieldFocused: $isTextFieldFocused,
+            voiceRecordingVM: voiceRecordingVM,
+            autocompleteDebounceTimer: $autocompleteDebounceTimer,
+            headerHeight: 44,
+            onSendMessage: {},
+            showImagePicker: $showImagePicker,
+            imagePickerSourceType: $imagePickerSourceType
+        )
+        #else
+        ContentPeopleSheetView(
+            showSidebar: $showSidebar,
+            messageText: $messageText,
+            selectedMessageSender: $selectedMessageSender,
+            selectedMessageSenderID: $selectedMessageSenderID,
+            imagePreviewURL: $imagePreviewURL,
+            windowCountPublic: $windowCountPublic,
+            windowCountPrivate: $windowCountPrivate,
+            isAtBottomPrivate: $isAtBottomPrivate,
+            isTextFieldFocused: $isTextFieldFocused,
+            voiceRecordingVM: voiceRecordingVM,
+            autocompleteDebounceTimer: $autocompleteDebounceTimer,
+            headerHeight: 44,
+            onSendMessage: {},
+            showMacImagePicker: $showMacImagePicker
+        )
+        #endif
+    }
 }
 
 @MainActor
@@ -112,11 +266,13 @@ private func makeTemporaryImageURL() throws -> URL {
     return url
 }
 
+@Suite("View Smoke Tests", .serialized)
 @MainActor
 struct ViewSmokeTests {
     @Test
     func fingerprintView_renders_verifiedAndPendingStates() async {
         let (viewModel, transport, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
         let verifiedPeer = PeerID(str: "0102030405060708")
         let pendingPeer = PeerID(str: "1112131415161718")
         let verifiedFingerprint = String(repeating: "ab", count: 32)
@@ -131,11 +287,11 @@ struct ViewSmokeTests {
 
         viewModel.verifiedFingerprints.insert(verifiedFingerprint)
 
-        let verifiedView = FingerprintView(viewModel: viewModel, peerID: verifiedPeer)
-        let pendingView = FingerprintView(viewModel: viewModel, peerID: pendingPeer)
+        let verifiedView = FingerprintView(peerID: verifiedPeer)
+            .environmentObject(featureModels.verificationModel)
+        let pendingView = FingerprintView(peerID: pendingPeer)
+            .environmentObject(featureModels.verificationModel)
 
-        _ = verifiedView.body
-        _ = pendingView.body
         _ = mount(verifiedView)
         _ = mount(pendingView)
 
@@ -145,13 +301,14 @@ struct ViewSmokeTests {
     @Test
     func verificationViews_renderCoreBranches() throws {
         let (viewModel, transport, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
         let peerID = PeerID(str: "2122232425262728")
         let fingerprint = String(repeating: "cd", count: 32)
         var isPresented = true
 
         transport.peerFingerprints[peerID] = fingerprint
         transport.updatePeerSnapshots([makeSnapshot(peerID: peerID, nickname: "Verifier", noiseByte: 0x33)])
-        viewModel.selectedPrivateChatPeer = peerID
+        featureModels.privateConversationModel.startConversation(with: peerID)
         viewModel.verifiedFingerprints.insert(fingerprint)
 
         let image = try makeCGImage()
@@ -173,35 +330,32 @@ struct ViewSmokeTests {
                     set: { isPresented = $0 }
                 )
             )
-            .environmentObject(viewModel)
+            .environmentObject(featureModels.verificationModel)
         )
     }
 
     @Test
     func meshPeerList_renders_emptyAndPopulatedStates() async {
         let (viewModel, transport, identityManager) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
         let connectedPeer = PeerID(str: "3132333435363738")
         let blockedPeer = PeerID(str: "4142434445464748")
         let blockedFingerprint = String(repeating: "ef", count: 32)
 
         _ = mount(
             MeshPeerList(
-                viewModel: viewModel,
-                textColor: .green,
-                secondaryTextColor: .gray,
                 onTapPeer: { _ in },
                 onToggleFavorite: { _ in },
                 onShowFingerprint: { _ in }
             )
+            .environmentObject(featureModels.peerListModel)
         )
         _ = MeshPeerList(
-            viewModel: viewModel,
-            textColor: .green,
-            secondaryTextColor: .gray,
             onTapPeer: { _ in },
             onToggleFavorite: { _ in },
             onShowFingerprint: { _ in }
-        ).body
+        )
+        .environmentObject(featureModels.peerListModel)
 
         transport.peerFingerprints[blockedPeer] = blockedFingerprint
         identityManager.setBlocked(blockedFingerprint, isBlocked: true)
@@ -210,17 +364,15 @@ struct ViewSmokeTests {
             makeSnapshot(peerID: blockedPeer, nickname: "Mallory", noiseByte: 0x55)
         ])
         try? await Task.sleep(nanoseconds: 50_000_000)
-        viewModel.unreadPrivateMessages.insert(blockedPeer)
+        viewModel.markPrivateChatUnread(blockedPeer)
 
         _ = mount(
             MeshPeerList(
-                viewModel: viewModel,
-                textColor: .green,
-                secondaryTextColor: .gray,
                 onTapPeer: { _ in },
                 onToggleFavorite: { _ in },
                 onShowFingerprint: { _ in }
             )
+            .environmentObject(featureModels.peerListModel)
         )
 
         #expect(viewModel.hasUnreadMessages(for: blockedPeer))
@@ -229,37 +381,46 @@ struct ViewSmokeTests {
     @Test
     func commandSuggestionsAndLocationViews_render() {
         let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
         let channel = GeohashChannel(level: .city, geohash: "u4pruy")
         var messageText = "/f"
 
-        LocationChannelManager.shared.select(.location(channel))
+        featureModels.locationChannelsModel.select(.location(channel))
 
         _ = mount(
             CommandSuggestionsView(
                 messageText: Binding(
                     get: { messageText },
                     set: { messageText = $0 }
-                ),
-                textColor: .green,
-                backgroundColor: .black,
-                secondaryTextColor: .gray
+                )
             )
-            .environmentObject(viewModel)
+            .environmentObject(featureModels.privateConversationModel)
+            .environmentObject(featureModels.locationChannelsModel)
         )
 
         _ = mount(
             LocationChannelsSheet(isPresented: .constant(true))
-                .environmentObject(viewModel)
+                .environmentObject(featureModels.locationChannelsModel)
+                .environmentObject(featureModels.peerListModel)
         )
 
         #expect(messageText == "/f")
-        LocationChannelManager.shared.select(.mesh)
-        LocationChannelManager.shared.endLiveRefresh()
+        featureModels.locationChannelsModel.select(.mesh)
+        featureModels.locationChannelsModel.endLiveRefresh()
     }
 
     @Test
-    func locationNotesView_rendersNoRelayAndLoadedStates() throws {
-        let (viewModel, _, _) = makeSmokeViewModel()
+    func noticesView_rendersNoRelayAndLoadedStates() throws {
+        let (viewModel, transport, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        featureModels.locationChannelsModel.select(.location(GeohashChannel(level: .building, geohash: "u4pruydq")))
+        defer { featureModels.locationChannelsModel.select(.mesh) }
+        let board = BoardManager(
+            transport: transport,
+            store: BoardStore(persistsToDisk: false, fileURL: nil, now: { Date() }),
+            publishToNostr: { _, _, _, _, _ in nil },
+            deleteFromNostr: { _, _ in }
+        )
 
         let noRelayManager = LocationNotesManager(
             geohash: "u4pruydq",
@@ -302,12 +463,30 @@ struct ViewSmokeTests {
         eose?()
 
         _ = mount(
-            LocationNotesView(geohash: "u4pruydq", manager: noRelayManager)
-                .environmentObject(viewModel)
+            NoticesView(
+                senderNickname: viewModel.nickname,
+                board: board,
+                initialTab: .geo,
+                notesManager: noRelayManager
+            )
+            .environmentObject(featureModels.locationChannelsModel)
         )
         _ = mount(
-            LocationNotesView(geohash: "u4pruydq", manager: loadedManager)
-                .environmentObject(viewModel)
+            NoticesView(
+                senderNickname: viewModel.nickname,
+                board: board,
+                initialTab: .geo,
+                notesManager: loadedManager
+            )
+            .environmentObject(featureModels.locationChannelsModel)
+        )
+        _ = mount(
+            NoticesView(
+                senderNickname: viewModel.nickname,
+                board: board,
+                initialTab: .mesh
+            )
+            .environmentObject(featureModels.locationChannelsModel)
         )
 
         #expect(loadedManager.notes.count == 1)
@@ -322,13 +501,15 @@ struct ViewSmokeTests {
             description: "app_info.features.encryption.description"
         )
 
+        // AppInfoView's settings pane reads LocationChannelsModel from the
+        // environment, so it can only render mounted with one installed.
         let appInfo = AppInfoView()
+            .environmentObject(LocationChannelsModel(manager: makeSmokeLocationManager()))
         let header = SectionHeader("app_info.features.title")
         let featureRow = FeatureRow(info: feature)
         let paymentCashu = PaymentChipView(paymentType: .cashu("cashuA_test-token"))
         let paymentLightning = PaymentChipView(paymentType: .lightning("lightning:lnbc1test"))
 
-        _ = appInfo.body
         _ = header.body
         _ = featureRow.body
         _ = paymentCashu.body
@@ -351,12 +532,130 @@ struct ViewSmokeTests {
     }
 
     @Test
+    func contentShellViews_renderPublicAndPrivateBranches() async {
+        let (viewModel, transport, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let peerID = PeerID(str: "5152535455565758")
+
+        transport.updatePeerSnapshots([
+            makeSnapshot(peerID: peerID, nickname: "Alice", noiseByte: 0x66)
+        ])
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        _ = mount(installSmokeEnvironment(ContentView(), featureModels: featureModels))
+        _ = mount(installSmokeEnvironment(ContentPeopleSheetHarness(), featureModels: featureModels))
+
+        featureModels.privateConversationModel.startConversation(with: peerID)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        _ = mount(installSmokeEnvironment(ContentPeopleSheetHarness(), featureModels: featureModels))
+
+        #expect(featureModels.privateConversationModel.selectedPeerID == peerID)
+        #expect(featureModels.privateConversationModel.selectedHeaderState?.headerPeerID == peerID)
+    }
+
+    @Test("Root Bluetooth alert waits for location and notices sheets")
+    func rootBluetoothAlertGuard_includesHeaderSheets() {
+        #expect(!ContentRootModalPresentationState().hasPresentation)
+        #expect(
+            ContentRootModalPresentationState(
+                isLocationChannelsSheetPresented: true
+            ).hasPresentation
+        )
+        #expect(
+            ContentRootModalPresentationState(
+                isNoticesSheetPresented: true
+            ).hasPresentation
+        )
+    }
+
+    @Test("People-sheet Bluetooth alert waits for local verification sheet")
+    func peopleSheetBluetoothAlertGuard_includesVerificationSheet() {
+        #expect(!ContentPeopleSheetModalPresentationState().hasPresentation)
+        #expect(
+            ContentPeopleSheetModalPresentationState(
+                isVerificationSheetPresented: true
+            ).hasPresentation
+        )
+    }
+
+    @Test("Bluetooth alerts wait for the voice recording error alert")
+    func bluetoothAlertGuards_includeVoiceAlert() {
+        #expect(
+            ContentRootModalPresentationState(
+                isVoiceAlertPresented: true
+            ).hasPresentation
+        )
+        #expect(
+            ContentPeopleSheetModalPresentationState(
+                isVoiceAlertPresented: true
+            ).hasPresentation
+        )
+    }
+
+    @Test("Root Bluetooth alert waits for screenshot privacy alert")
+    @MainActor
+    func rootBluetoothAlertGuard_tracksScreenshotPrivacyState() {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+
+        #expect(
+            !ContentRootModalPresentationState(
+                appChromeModel: featureModels.appChromeModel
+            ).hasPresentation
+        )
+
+        featureModels.appChromeModel.showScreenshotPrivacyWarning = true
+
+        #expect(
+            ContentRootModalPresentationState(
+                appChromeModel: featureModels.appChromeModel
+            ).hasPresentation
+        )
+    }
+
+    @Test("People-sheet Bluetooth alert waits for legacy media consent")
+    @MainActor
+    func peopleSheetBluetoothAlertGuard_tracksLegacyConsentState() async {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+
+        #expect(
+            !ContentPeopleSheetModalPresentationState(
+                legacyPrivateMediaConsentRequest:
+                    featureModels.conversationUIModel
+                        .legacyPrivateMediaConsentRequest
+            ).hasPresentation
+        )
+
+        viewModel.enqueueLegacyPrivateMediaConsent(
+            for: PeerID(str: "5152535455565758"),
+            transferId: "legacy-consent-transfer",
+            messageID: "legacy-consent-message"
+        ) { _ in }
+        defer { viewModel.cancelAllLegacyPrivateMediaConsents() }
+
+        let consentPropagated = await TestHelpers.waitUntil {
+            featureModels.conversationUIModel
+                .legacyPrivateMediaConsentRequest != nil
+        }
+        #expect(
+            consentPropagated
+        )
+        #expect(
+            ContentPeopleSheetModalPresentationState(
+                legacyPrivateMediaConsentRequest:
+                    featureModels.conversationUIModel
+                        .legacyPrivateMediaConsentRequest
+            ).hasPresentation
+        )
+    }
+
+    @Test
     func geohashAndTextMessageViews_renderCoreBranches() {
         let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
         let geohashPeopleList = GeohashPeopleList(
-            viewModel: viewModel,
-            textColor: .green,
-            secondaryTextColor: .gray,
             onTapPerson: {}
         )
         let truncatableMessage = BitchatMessage(
@@ -377,10 +676,10 @@ struct ViewSmokeTests {
             deliveryStatus: .partiallyDelivered(reached: 1, total: 2)
         )
 
-        _ = geohashPeopleList.body
-        _ = mount(geohashPeopleList)
-        _ = mount(TextMessageView(message: truncatableMessage).environmentObject(viewModel))
-        _ = mount(TextMessageView(message: paymentMessage).environmentObject(viewModel))
+        _ = mount(geohashPeopleList.environmentObject(featureModels.peerListModel))
+        _ = mount(geohashPeopleList.environmentObject(featureModels.peerListModel))
+        _ = mount(TextMessageView(message: truncatableMessage).environmentObject(featureModels.conversationUIModel))
+        _ = mount(TextMessageView(message: paymentMessage).environmentObject(featureModels.conversationUIModel))
 
         #expect(truncatableMessage.content.count > TransportConfig.uiLongMessageLengthThreshold)
         #expect(paymentMessage.content.contains("lightning:") && paymentMessage.content.contains("cashu"))
@@ -389,11 +688,19 @@ struct ViewSmokeTests {
     @Test
     func voiceAndMediaViews_renderAndWarmCaches() async throws {
         let audioURL = try makeTemporaryAudioURL()
+        // Probed directly below. Deliberately a separate file from `audioURL`:
+        // `WaveformCache.shared` is process-wide and the mounted
+        // `VoiceNoteView` warms it for `audioURL` at the view's default bin
+        // width concurrently, so asserting an exact bin count for that URL
+        // races with the view's own cache write.
+        let waveformProbeURL = try makeTemporaryAudioURL()
         let imageURL = try makeTemporaryImageURL()
         defer {
             try? FileManager.default.removeItem(at: audioURL)
+            try? FileManager.default.removeItem(at: waveformProbeURL)
             try? FileManager.default.removeItem(at: imageURL)
             WaveformCache.shared.purge(url: audioURL)
+            WaveformCache.shared.purge(url: waveformProbeURL)
         }
 
         let waveformView = WaveformView(
@@ -427,22 +734,70 @@ struct ViewSmokeTests {
         _ = mount(voiceNoteView)
 
         let bins = await withCheckedContinuation { continuation in
-            WaveformCache.shared.waveform(for: audioURL, bins: 16) { values in
+            WaveformCache.shared.waveform(for: waveformProbeURL, bins: 16) { values in
                 continuation.resume(returning: values)
             }
         }
         playback.loadDuration()
-        try? await Task.sleep(nanoseconds: 250_000_000)
+        // loadDuration hops through a background queue and back to main; poll
+        // instead of a fixed sleep so a loaded runner can't outlast the wait.
+        _ = await TestHelpers.waitUntil({ playback.duration > 0 })
         playback.seek(to: 1.25)
         playback.stop()
         VoiceNotePlaybackCoordinator.shared.activate(playback)
         VoiceNotePlaybackCoordinator.shared.deactivate(playback)
-        await VoiceRecorder.shared.cancelRecording()
+        await VoiceRecorder.shared.cancelRecording(owner: VoiceRecorder.RecordingOwner())
 
         #expect(bins.count == 16)
-        #expect(WaveformCache.shared.cachedWaveform(for: audioURL)?.count == 16)
+        #expect(WaveformCache.shared.cachedWaveform(for: waveformProbeURL)?.count == 16)
         #expect(playback.duration > 0)
         #expect(playback.progress == 0)
+    }
+
+    @Test
+    func messageRows_snapshotDeliveryStatusForSwiftUIDiffing() {
+        // Regression: `BitchatMessage` is a reference type mutated in place
+        // by `ConversationStore.applyDeliveryStatus`, and SwiftUI compares
+        // reference-typed view fields by identity — so a status-only change
+        // (delivered → read) on the SAME instance is invisible to the row's
+        // structural diff and its body gets skipped even when the list
+        // re-renders. The row views must therefore snapshot the status as a
+        // value-typed stored property at init, so a rebuilt row value
+        // compares different and re-renders.
+        func deliveryStatusSnapshot(of row: Any) -> DeliveryStatus? {
+            Mirror(reflecting: row).children
+                .first { $0.label == "deliveryStatus" }?
+                .value as? DeliveryStatus
+        }
+
+        let delivered = DeliveryStatus.delivered(to: "builder", at: Date(timeIntervalSince1970: 50))
+        let message = BitchatMessage(
+            id: "dm-status-1",
+            sender: "anon",
+            content: "hello",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: "builder",
+            senderPeerID: PeerID(str: "abcdef1234567890"),
+            deliveryStatus: delivered
+        )
+
+        #expect(deliveryStatusSnapshot(of: TextMessageView(message: message)) == delivered)
+
+        // In-place mutation of the shared instance (what the store does on a
+        // READ ack); a freshly built row must carry the new status value.
+        let read = DeliveryStatus.read(by: "builder", at: Date(timeIntervalSince1970: 100))
+        message.deliveryStatus = read
+
+        #expect(deliveryStatusSnapshot(of: TextMessageView(message: message)) == read)
+
+        let mediaRow = MediaMessageView(
+            message: message,
+            media: .image(URL(fileURLWithPath: "/tmp/never-loaded.jpg")),
+            imagePreviewURL: .constant(nil)
+        )
+        #expect(deliveryStatusSnapshot(of: mediaRow) == read)
     }
 
     #if os(iOS)

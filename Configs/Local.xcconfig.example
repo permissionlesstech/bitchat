@@ -3,3 +3,6 @@ DEVELOPMENT_TEAM = ABC123
 
 // Unique bundle id to be able to register and run locally
 PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat.$(DEVELOPMENT_TEAM)
+
+// App and share extension must use an App Group registered to your team.
+APP_GROUP_ID = group.chat.bitchat.$(DEVELOPMENT_TEAM)

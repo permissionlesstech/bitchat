@@ -98,10 +98,13 @@ final class VerificationServiceTests: XCTestCase {
     }
 
     private func makeService() -> (VerificationService, NoiseEncryptionService) {
-        let noise = NoiseEncryptionService(keychain: MockKeychain())
+        // The service consumes Noise identity operations through the
+        // Transport's narrow noise* wrappers; the mock transport's backing
+        // encryption service is returned for direct assertions.
+        let transport = MockTransport()
         let service = VerificationService()
-        service.configure(with: noise)
-        return (service, noise)
+        service.configure(with: transport)
+        return (service, transport.mockNoiseService)
     }
 
     private func makeSignedQR(

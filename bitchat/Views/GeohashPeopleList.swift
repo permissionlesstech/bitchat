@@ -1,9 +1,8 @@
 import SwiftUI
 
 struct GeohashPeopleList: View {
-    @ObservedObject var viewModel: ChatViewModel
-    let textColor: Color
-    let secondaryTextColor: Color
+    @EnvironmentObject private var peerListModel: PeerListModel
+    @ThemedPalette private var palette
     let onTapPerson: () -> Void
     @Environment(\.colorScheme) var colorScheme
     @State private var orderedIDs: [String] = []
@@ -14,38 +13,35 @@ struct GeohashPeopleList: View {
         static let blockedTooltip = String(localized: "geohash_people.tooltip.blocked", comment: "Tooltip shown next to users blocked in geohash channels")
         static let unblock: LocalizedStringKey = "geohash_people.action.unblock"
         static let block: LocalizedStringKey = "geohash_people.action.block"
+        static let unblockText = String(localized: "geohash_people.action.unblock", comment: "Context menu action to unblock a person")
+        static let blockText = String(localized: "geohash_people.action.block", comment: "Context menu action to block a person")
+        static let teleported = String(localized: "geohash_people.state.teleported", comment: "State label for someone who joined the location channel from elsewhere")
+        static let nearby = String(localized: "geohash_people.state.nearby", comment: "State label for someone physically in the location channel's area")
+        static let blockedState = String(localized: "mesh_peers.state.blocked", comment: "State label for a blocked peer")
+        static let youState = String(localized: "geohash_people.state.you", comment: "State label marking your own row in the people list")
+        static let openDMHint = String(localized: "mesh_peers.accessibility.open_dm_hint", comment: "Accessibility hint on a peer row explaining activation opens a private chat")
     }
 
     var body: some View {
-        if viewModel.visibleGeohashPeople().isEmpty {
+        if peerListModel.geohashPeople.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 Text(Strings.noneNearby)
-                    .font(.bitchatSystem(size: 14, design: .monospaced))
-                    .foregroundColor(secondaryTextColor)
+                    .bitchatFont(size: 14)
+                    .foregroundColor(palette.secondary)
                     .padding(.horizontal)
                     .padding(.top, 12)
             }
         } else {
-            let myHex: String? = {
-                if case .location(let ch) = LocationChannelManager.shared.selectedChannel,
-                   let id = try? viewModel.idBridge.deriveIdentity(forGeohash: ch.geohash) {
-                    return id.publicKeyHex.lowercased()
-                }
-                return nil
-            }()
-            let people = viewModel.visibleGeohashPeople()
-            let currentIDs = people.map { $0.id }
-
-            let teleportedSet = Set(viewModel.teleportedGeo.map { $0.lowercased() })
-            let isTeleportedID: (String) -> Bool = { id in
-                if teleportedSet.contains(id.lowercased()) { return true }
-                if let me = myHex, id == me, LocationChannelManager.shared.teleported { return true }
-                return false
-            }
+            let people = peerListModel.geohashPeople
+            let currentIDs = people.map(\.id)
 
             let displayIDs = orderedIDs.filter { currentIDs.contains($0) } + currentIDs.filter { !orderedIDs.contains($0) }
-            let nonTele = displayIDs.filter { !isTeleportedID($0) }
-            let tele = displayIDs.filter { isTeleportedID($0) }
+            let nonTele = displayIDs.filter { id in
+                !(people.first(where: { $0.id == id })?.isTeleported ?? false)
+            }
+            let tele = displayIDs.filter { id in
+                people.first(where: { $0.id == id })?.isTeleported ?? false
+            }
             let finalOrder: [String] = nonTele + tele
             let firstID = finalOrder.first
             let personByID = Dictionary(uniqueKeysWithValues: people.map { ($0.id, $0) })
@@ -54,38 +50,41 @@ struct GeohashPeopleList: View {
                 ForEach(finalOrder.filter { personByID[$0] != nil }, id: \.self) { pid in
                     let person = personByID[pid]!
                     HStack(spacing: 4) {
-                        let isMe = (person.id == myHex)
-                        let teleported = viewModel.teleportedGeo.contains(person.id.lowercased()) || (isMe && LocationChannelManager.shared.teleported)
-                        let icon = teleported ? "face.dashed" : "mappin.and.ellipse"
-                        let assignedColor = viewModel.colorForNostrPubkey(person.id, isDark: colorScheme == .dark)
-                        let rowColor: Color = isMe ? .orange : assignedColor
-                        Image(systemName: icon).font(.bitchatSystem(size: 12)).foregroundColor(rowColor)
+                        let icon = person.isTeleported ? "face.dashed" : "mappin.and.ellipse"
+                        let assignedColor = peerListModel.colorForGeohashPerson(id: person.id, isDark: colorScheme == .dark)
+                        let rowColor: Color = person.isMe ? .orange : assignedColor
+                        Image(systemName: icon)
+                            // Size 10 to match the mesh rows' leading glyphs —
+                            // both lists share the sidebar.
+                            .font(.bitchatSystem(size: 10))
+                            .foregroundColor(rowColor)
+                            .help(person.isTeleported ? Strings.teleported : Strings.nearby)
 
                         let (base, suffix) = person.displayName.splitSuffix()
                         HStack(spacing: 0) {
                             Text(base)
-                                .font(.bitchatSystem(size: 14, design: .monospaced))
-                                .fontWeight(isMe ? .bold : .regular)
+                                .bitchatFont(size: 14)
+                                .fontWeight(person.isMe ? .bold : .regular)
                                 .foregroundColor(rowColor)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
                             if !suffix.isEmpty {
-                                let suffixColor = isMe ? Color.orange.opacity(0.6) : rowColor.opacity(0.6)
+                                let suffixColor = person.isMe ? Color.orange.opacity(0.6) : rowColor.opacity(0.6)
                                 Text(suffix)
-                                    .font(.bitchatSystem(size: 14, design: .monospaced))
+                                    .bitchatFont(size: 14)
                                     .foregroundColor(suffixColor)
                             }
-                            if isMe {
+                            if person.isMe {
                                 Text(Strings.youSuffix)
-                                    .font(.bitchatSystem(size: 14, design: .monospaced))
+                                    .bitchatFont(size: 14)
                                     .foregroundColor(rowColor)
                             }
                         }
-                        if let me = myHex, person.id != me {
-                            if viewModel.isGeohashUserBlocked(pubkeyHexLowercased: person.id) {
-                                Image(systemName: "nosign")
-                                    .font(.bitchatSystem(size: 10))
-                                    .foregroundColor(.red)
-                                    .help(Strings.blockedTooltip)
-                            }
+                        if person.isBlocked {
+                            Image(systemName: "nosign")
+                                .font(.bitchatSystem(size: 10))
+                                .foregroundColor(.red)
+                                .help(Strings.blockedTooltip)
                         }
                         Spacer()
                     }
@@ -94,20 +93,50 @@ struct GeohashPeopleList: View {
                     .padding(.top, person.id == firstID ? 10 : 0)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        if person.id != myHex {
-                            viewModel.startGeohashDM(withPubkeyHex: person.id)
+                        if !person.isMe {
+                            peerListModel.openGeohashDirectMessage(with: person.id)
                             onTapPerson()
                         }
                     }
                     .contextMenu {
-                        if let me = myHex, person.id == me {
+                        if person.isMe {
                             EmptyView()
                         } else {
-                            let blocked = viewModel.isGeohashUserBlocked(pubkeyHexLowercased: person.id)
-                            if blocked {
-                                Button(Strings.unblock) { viewModel.unblockGeohashUser(pubkeyHexLowercased: person.id, displayName: person.displayName) }
+                            if person.isBlocked {
+                                Button(Strings.unblock) {
+                                    peerListModel.unblockGeohashUser(
+                                        pubkeyHexLowercased: person.id,
+                                        displayName: person.displayName
+                                    )
+                                }
                             } else {
-                                Button(Strings.block) { viewModel.blockGeohashUser(pubkeyHexLowercased: person.id, displayName: person.displayName) }
+                                Button(Strings.block) {
+                                    peerListModel.blockGeohashUser(
+                                        pubkeyHexLowercased: person.id,
+                                        displayName: person.displayName
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(accessibilityDescription(for: person))
+                    .accessibilityAddTraits(person.isMe ? [] : .isButton)
+                    .accessibilityHint(person.isMe ? "" : Strings.openDMHint)
+                    .accessibilityActions {
+                        if !person.isMe {
+                            Button(person.isBlocked ? Strings.unblockText : Strings.blockText) {
+                                if person.isBlocked {
+                                    peerListModel.unblockGeohashUser(
+                                        pubkeyHexLowercased: person.id,
+                                        displayName: person.displayName
+                                    )
+                                } else {
+                                    peerListModel.blockGeohashUser(
+                                        pubkeyHexLowercased: person.id,
+                                        displayName: person.displayName
+                                    )
+                                }
                             }
                         }
                     }
@@ -124,5 +153,14 @@ struct GeohashPeopleList: View {
                 if newOrder != orderedIDs { orderedIDs = newOrder }
             }
         }
+    }
+
+    /// One spoken sentence per row: name, presence type, and block state.
+    private func accessibilityDescription(for person: GeohashPersonRow) -> String {
+        var parts: [String] = [person.displayName]
+        if person.isMe { parts.append(Strings.youState) }
+        parts.append(person.isTeleported ? Strings.teleported : Strings.nearby)
+        if person.isBlocked { parts.append(Strings.blockedState) }
+        return parts.joined(separator: ", ")
     }
 }

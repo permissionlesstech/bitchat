@@ -1,0 +1,45 @@
+name: Dead Code
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  periphery:
+    name: Periphery scan
+    runs-on: macos-latest
+    timeout-minutes: 30
+    # Advisory, like SwiftLint (#1361): findings annotate the PR but don't
+    # block merges. Drop continue-on-error once the baseline proves stable.
+    continue-on-error: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - name: Build NdrFfi from pinned source
+        run: |
+          rust_version="$(tr -d '[:space:]' < localPackages/NdrFfi/RUST_TOOLCHAIN)"
+          rustup toolchain install "$rust_version" --profile minimal
+          rustup default "$rust_version"
+          rustup target add \
+            aarch64-apple-darwin \
+            x86_64-apple-darwin \
+            aarch64-apple-ios \
+            aarch64-apple-ios-sim \
+            x86_64-apple-ios
+          ./localPackages/NdrFfi/build-apple.sh
+
+      - name: Install Periphery
+        # homebrew-core formula; the peripheryapp tap lags years behind.
+        run: brew install periphery
+
+      - name: Scan for dead code
+        # Config comes from .periphery.yml; known findings (mostly iOS-only
+        # code invisible to a macOS scan) are suppressed by the committed
+        # baseline. --strict fails the step when NEW dead code appears.
+        run: periphery scan --strict --disable-update-check

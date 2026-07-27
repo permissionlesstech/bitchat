@@ -4,9 +4,11 @@ import Foundation
 final class VerificationService {
     static let shared = VerificationService()
 
-    // Injected Noise service from the running transport (do NOT create new BLEService)
-    private var noise: NoiseEncryptionService?
-    func configure(with noise: NoiseEncryptionService) { self.noise = noise }
+    // Injected running transport (do NOT create new BLEService). Noise
+    // identity operations go through the transport's narrow noise* wrappers
+    // so the raw NoiseEncryptionService is never exposed.
+    private var transport: Transport?
+    func configure(with transport: Transport) { self.transport = transport }
 
     /// Encapsulates the data encoded into a verification QR
     struct VerificationQR: Codable {
@@ -77,16 +79,16 @@ final class VerificationService {
         if let c = Cache.last, c.nick == nickname, c.npub == npub, Date().timeIntervalSince(c.builtAt) < 60 {
             return c.value
         }
-        guard let noise = noise else { return nil }
-        let noiseKey = noise.getStaticPublicKeyData().hexEncodedString()
-        let signKey = noise.getSigningPublicKeyData().hexEncodedString()
+        guard let transport = transport else { return nil }
+        let noiseKey = transport.noiseStaticPublicKeyData().hexEncodedString()
+        let signKey = transport.noiseSigningPublicKeyData().hexEncodedString()
         let ts = Int64(Date().timeIntervalSince1970)
         var nonce = Data(count: 16)
         _ = nonce.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
         let nonceB64 = nonce.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
         let payload = VerificationQR(v: 1, noiseKeyHex: noiseKey, signKeyHex: signKey, npub: npub, nickname: nickname, ts: ts, nonceB64: nonceB64, sigHex: "")
         let msg = payload.canonicalBytes()
-        guard let sig = noise.signData(msg) else { return nil }
+        guard let sig = transport.noiseSignData(msg) else { return nil }
         let signed = VerificationQR(v: payload.v,
                                     noiseKeyHex: payload.noiseKeyHex,
                                     signKeyHex: payload.signKeyHex,
@@ -108,8 +110,8 @@ final class VerificationService {
         if now - Double(qr.ts) > maxAge { return nil }
         // Verify signature using embedded ed25519 signKey
         guard let sig = Data(hexString: qr.sigHex), let signKey = Data(hexString: qr.signKeyHex) else { return nil }
-        guard let noise = noise else { return nil }
-        let ok = noise.verifySignature(sig, for: qr.canonicalBytes(), publicKey: signKey)
+        guard let transport = transport else { return nil }
+        let ok = transport.noiseVerifySignature(sig, for: qr.canonicalBytes(), publicKey: signKey)
         return ok ? qr : nil
     }
 
@@ -133,7 +135,7 @@ final class VerificationService {
         let nk = noiseKeyHex.data(using: .utf8) ?? Data()
         msg.append(UInt8(min(nk.count, 255))); msg.append(nk.prefix(255))
         msg.append(nonceA)
-        guard let noise = noise, let sig = noise.signData(msg) else { return nil }
+        guard let transport = transport, let sig = transport.noiseSignData(msg) else { return nil }
         var tlv = Data()
         tlv.append(0x01); tlv.append(UInt8(min(nk.count, 255))); tlv.append(nk.prefix(255))
         tlv.append(0x02); tlv.append(UInt8(min(nonceA.count, 255))); tlv.append(nonceA.prefix(255))
@@ -178,7 +180,7 @@ final class VerificationService {
         let nk = noiseKeyHex.data(using: .utf8) ?? Data()
         msg.append(UInt8(min(nk.count, 255))); msg.append(nk.prefix(255))
         msg.append(nonceA)
-        guard let noise = noise, let pub = Data(hexString: signerPublicKeyHex) else { return false }
-        return noise.verifySignature(signature, for: msg, publicKey: pub)
+        guard let transport = transport, let pub = Data(hexString: signerPublicKeyHex) else { return false }
+        return transport.noiseVerifySignature(signature, for: msg, publicKey: pub)
     }
 }
