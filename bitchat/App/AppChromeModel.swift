@@ -18,6 +18,8 @@ final class AppChromeModel: ObservableObject {
     @Published var bluetoothAlertMessage = ""
     @Published var bluetoothState: CBManagerState = .unknown
     @Published var showScreenshotPrivacyWarning = false
+    /// Confirmation gate for the triple-tap logo panic shortcut (#152).
+    @Published var showPanicConfirmation = false
 
     private let chatViewModel: ChatViewModel
     private let onPanicWipe: () -> Void
@@ -109,6 +111,20 @@ final class AppChromeModel: ObservableObject {
 
     func setPanicPreparation(_ preparation: (@MainActor () -> Void)?) {
         prepareForPanic = preparation
+    }
+
+    /// Triple-tap (and any other undiscoverable shortcut) must confirm first.
+    func requestPanicWipe() {
+        showPanicConfirmation = true
+    }
+
+    func confirmPanicWipe() {
+        showPanicConfirmation = false
+        panicClearAllData()
+    }
+
+    func cancelPanicWipe() {
+        showPanicConfirmation = false
     }
 
     func panicClearAllData() {
