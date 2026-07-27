@@ -81,6 +81,7 @@ construction, not NIP-44 encryption.
   - `region` (2 chars): Country/large region
 - **Internet**: Required (connects to Nostr relays)
 - **Use Case**: Location-based community chat, local events, regional discussions
+- **External publishers:** relays are chosen by proximity to the geohash — see [Geohash publisher relays](docs/GEOHASH-PUBLISHER-RELAYS.md)
 
 ### Direct Message Routing
 
