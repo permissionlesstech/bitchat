@@ -1,6 +1,6 @@
 # Conformance
 
-**Spec:** 1.0.0
+**Spec:** 1.0.1
 
 This file is a living checklist. Golden hex vectors for every mesh type are a
 planned follow-up (see issue
@@ -40,7 +40,8 @@ just test
 
 - [ ] Encode/decode v1 and v2 packets with correct endianness.
 - [ ] Honor optional recipient, signature, compression, route flags.
-- [ ] Exclude TTL/`isRSR` from signature canonicalization.
+- [ ] Exclude TTL/`isRSR` from signature canonicalization; include PKCS#7
+      padding from `encode(padding: true)` in the preimage.
 - [ ] Derive 8-byte peer IDs as `SHA256(noiseStatic)[0..<8]`.
 
 ### BLE
@@ -48,6 +49,7 @@ just test
 - [ ] Use release GATT service UUID `…4B5C` and characteristic `…4C5D`.
 - [ ] Advertise service UUID only (no local name).
 - [ ] Fragment with 13-byte header; reassemble with first-wins metadata.
+- [ ] Dispatch reassembled packets by decoded type, not header `originalType`.
 - [ ] Default origination TTL = 7.
 
 ### Noise
@@ -64,6 +66,7 @@ just test
 - [ ] Capability bitfield little-endian.
 - [ ] File TLV content length 4-byte BE; private files via Noise `0x20`.
 - [ ] Courier recipient tag HMAC construction.
+- [ ] Unknown-TLV skip only where listed; private-message unknown tags reject.
 
 ### Nostr
 

@@ -1,6 +1,6 @@
 # 05 — Nostr Bridge
 
-**Spec:** 1.0.0  
+**Spec:** 1.0.1  
 **Canonical prose:** `WHITEPAPER.md` §5.3, §6.4; `README.md`;
 `docs/GeohashPresenceSpec.md`
 

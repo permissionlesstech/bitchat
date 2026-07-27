@@ -1,6 +1,6 @@
 # 03 — Noise Handshake and Encrypted Transport
 
-**Spec:** 1.0.0  
+**Spec:** 1.0.1  
 **Canonical source:** `bitchat/Noise/NoiseProtocol.swift`,  
 `NoiseSession.swift`, `NoiseEncryptionService.swift`,  
 `bitchat/Protocols/BitchatProtocol.swift` (`NoisePayloadType`)  

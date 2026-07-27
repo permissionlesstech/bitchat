@@ -1,6 +1,6 @@
 # BitChat Protocol Specification
 
-**Spec version:** [`1.0.0`](VERSION)  
+**Spec version:** [`1.0.1`](VERSION)  
 **Status:** Draft extracted from the reference implementation  
 **Canonical codec:** `localPackages/BitFoundation`  
 **Architecture overview:** [`WHITEPAPER.md`](../WHITEPAPER.md)
@@ -39,9 +39,10 @@ wire types) as authoritative until this document is amended. Open a PR against
 - **PATCH** — clarifications, errata, conformance notes with no wire change.
 - Spec version is **independent** of App Store / Android release numbers.
 
-Unknown TLV types and unknown high capability bits **MUST** be skipped so
-older clients can carry newer packets opaquely where the outer type is already
-understood.
+Unknown TLV types and unknown high capability bits are handled
+per-family: most public TLV decoders skip unknowns so older clients can carry
+newer packets opaquely, but some inner payloads (notably private-message TLVs)
+reject unknowns — see [`04-payloads.md`](04-payloads.md).
 
 ## Suggested reading order for implementers
 

@@ -1,6 +1,6 @@
 # 02 — BLE Transport
 
-**Spec:** 1.0.0  
+**Spec:** 1.0.1  
 **Canonical source:** `bitchat/Services/BLE/BLEService.swift`,  
 `BLEOutboundFragmentPlanner.swift`, `BLEFragmentAssemblyBuffer.swift`,  
 `TransportConfig.swift`
@@ -149,7 +149,16 @@ Validation:
 - Oversize fragments **MUST NOT** destroy an assembly they did not create
 
 On completion, concatenate chunks in index order and run `BinaryProtocol.decode`
-on the result; then dispatch as `originalType`.
+on the result. Dispatch using the **decoded inner packet's `type` field**
+(`originalPacket.type`), then re-enter the normal receive path with that
+packet (reference: `BLEFragmentHandler` sets `ttl = 0` and reinjects).
+
+The fragment-header `originalType` byte is **not authenticated** and **MUST
+NOT** be used as the sole dispatch key. Implementations **SHOULD** require
+`originalType == decoded.type` and drop the assembly on mismatch; at minimum
+they **MUST** ignore the header value for parser/policy selection and follow
+the decoded type so a spoofed header cannot steer valid inner bytes into the
+wrong handler.
 
 ---
 
@@ -191,4 +200,5 @@ interoperability timing):
 - [ ] Reassemble ATT notifications into BinaryProtocol frames before parsing.
 - [ ] Fragment at ≤469 B chunks with the 13-byte fragment header.
 - [ ] Cap assemblies (128 / 30 s) and reject conflicting fragment metadata.
+- [ ] After reassembly, dispatch by decoded packet type (not header `originalType`).
 - [ ] Originate mesh packets with TTL 7 unless a documented exception applies.

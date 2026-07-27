@@ -1,6 +1,6 @@
 # 04 — Payload Layouts
 
-**Spec:** 1.0.0  
+**Spec:** 1.0.1  
 
 TLV conventions differ by packet family — do not mix length widths.
 
@@ -10,7 +10,23 @@ TLV conventions differ by packet family — do not mix length widths.
 | Courier envelope / prekey bundle | `uint16` BE |
 | File transfer content TLV | `uint32` BE (canonical); other file TLVs `uint16` BE |
 
-Unknown TLV types **MUST** be skipped (forward compatibility).
+### Unknown-TLV policy (do not over-promise)
+
+Forward-compatible **skip** of unknown TLV types applies only where the
+reference decoder actually skips:
+
+| Family | Unknown TLV behaviour |
+|--------|------------------------|
+| Announce | **Skip** and continue |
+| Authenticated peer state | **Skip** and continue |
+| Courier envelope | **Skip** and continue |
+| Prekey bundle | **Skip** and continue |
+| File transfer | **Skip** and continue |
+| Private message (`PrivateMessagePacket`) | **Reject** entire payload (`nil`) |
+
+Adding a new private-message TLV under a SemVer **minor** bump would break
+current reference DM decoders. Treat private-message TLV extensions as a
+**MAJOR** wire change (or change the decoder first), not as a silent skip.
 
 ---
 
@@ -197,6 +213,10 @@ TLV `[type:u8][len:u8][value]`:
 
 Prefixed by `NoisePayloadType.privateMessage` (`0x01`) when inside Noise.
 
+Unlike announce/courier TLVs, any unknown type byte causes
+`PrivateMessagePacket.decode` to return `nil` immediately (no skip). Both
+`messageID` and `content` are required.
+
 ---
 
 ## 10. Noise inner: authenticated peer state
@@ -235,3 +255,4 @@ the encode/decode in:
 - [ ] File content TLV uses 4-byte length; tolerate legacy widths on decode.
 - [ ] Prekey bundle signature verifies over domain-prefixed signable bytes.
 - [ ] Private DM content is Noise-typed, not a public `0x02` packet.
+- [ ] Confirm unknown private-message TLVs reject; unknown announce TLVs skip.

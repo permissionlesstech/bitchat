@@ -1,6 +1,6 @@
 # 01 — Wire Format
 
-**Spec:** 1.0.0  
+**Spec:** 1.0.1  
 **Canonical source:** `localPackages/BitFoundation/Sources/BitFoundation/BinaryProtocol.swift`
 
 All multi-byte integers on the mesh wire are **network byte order (big-endian)**
@@ -127,13 +127,20 @@ Decompression:
 `MessagePadding` buckets: **256, 512, 1024, 2048**.
 
 - Pad bytes are all equal to the pad length (1…255).
-- If more than 255 pad bytes would be required to reach the next bucket, the
-  frame is left **unpadded**.
+- Bucket selection (`optimalBlockSize`): choose the smallest bucket such that
+  `encodedSize + 16 ≤ bucket` (the `+16` accounts for AEAD tag headroom used by
+  the helper even when the frame is not a Noise ciphertext). If no bucket fits,
+  or more than 255 pad bytes would be required, the frame is left **unpadded**.
 - Decode tries the buffer as-is, then strips padding and retries.
 
-**Only** `noiseHandshake` and `noiseEncrypted` frames are padded on the BLE
-outbound path. All other types travel at natural length — payload length is
-observable for those types.
+Two different call sites use this helper — do not conflate them:
+
+| Path | Padding? |
+|------|----------|
+| **BLE outbound encode** (`padsBLEFrame`) | **Only** `noiseHandshake` / `noiseEncrypted`. All other types travel at natural length on the air (payload length observable). |
+| **Packet signature preimage** (`toBinaryDataForSigning` → `BinaryProtocol.encode` default `padding: true`) | Padding **MAY** be present for *any* signed type (including announces). Verifiers **MUST** use the same padded canonical bytes. |
+
+See §9 for the signature preimage rules.
 
 ---
 
@@ -187,11 +194,23 @@ packet signatures; they are distinct from the Noise static key.
 ## 9. Packet signatures
 
 - Algorithm: **Ed25519** (`Curve25519.Signing`), 64-byte signature.
-- Canonical bytes: encode the packet with `signature = nil`, `ttl = 0`,
-  `isRSR = false` (TTL and RSR are mutable in flight and excluded).
+- Canonical preimage (`BitchatPacket.toBinaryDataForSigning()`):
+  1. Copy the packet with `signature = nil`, `ttl = 0`, `isRSR = false`
+     (TTL and RSR are mutable in flight and excluded from the signed bytes).
+  2. Encode with `BinaryProtocol.encode(..., padding: true)` — the **default**.
+     Apply §6 PKCS#7-style padding / bucket selection to that encoding.
+  3. Sign or verify those exact bytes. An unpadded encode of the same fields
+     **will not** verify against reference-client signatures whenever padding
+     was applied (common for compact announces that land in the 256-byte bucket).
 - Relays **MUST** decrement TTL without recomputing the signature.
 - Announces, leaves, public file transfers, and other authenticated public
   types set `hasSignature` when the reference clients emit them.
+
+BLE air frames for non-Noise types are often sent **without** this padding
+(§6 table). That is independent of the signature preimage: the signature
+covers the padded canonical encoding, then the on-air frame for that type may
+omit pad bytes. Verifiers rebuild the preimage themselves; they do not require
+the received ATT blob to still carry the pad.
 
 Optional helper `bitchat-announce-v1` binding bytes exist in the Noise service
 for nickname/key binding tests; live mesh announces sign the **full packet**
@@ -214,7 +233,9 @@ TLV payload.
 ## 11. Implementer checklist
 
 - [ ] Round-trip v1 packet with no recipient, no signature, empty payload.
-- [ ] Round-trip v1 with recipient + signature.
+- [ ] Round-trip v1 with recipient + signature using **padded** canonical bytes.
+- [ ] Confirm an unpadded announce preimage fails verification against a
+      reference signature when padding would have applied.
 - [ ] Round-trip v2 with route hops; confirm route bytes are outside `payloadLength`.
 - [ ] Compress a low-entropy &gt;100 B payload; confirm preamble + flag.
 - [ ] Reject version `0x00` / `0x03`.
