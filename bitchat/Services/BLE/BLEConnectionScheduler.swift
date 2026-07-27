@@ -112,6 +112,14 @@ final class BLEConnectionScheduler<Peripheral> {
             }
         }
 
+        let failures = failureCounts[candidate.peripheralID] ?? 0
+        if failures >= 3 {
+            if let lastTimeout = recentConnectTimeouts[candidate.peripheralID],
+               now.timeIntervalSince(lastTimeout) < 600 {
+                return .ignore
+            }
+        }
+
         if let lastTimeout = recentConnectTimeouts[candidate.peripheralID],
            now.timeIntervalSince(lastTimeout) < TransportConfig.bleTimeoutDiscoveryIgnoreSeconds {
             return .ignore

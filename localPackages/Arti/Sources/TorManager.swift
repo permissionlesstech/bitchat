@@ -352,15 +352,13 @@ public final class TorManager: ObservableObject {
     }
 
     public func goDormantOnBackground() {
-        // Arti doesn't support real dormant mode, so just mark as not ready.
-        // iOS will suspend the runtime anyway. On foreground we do a full restart.
-        // Clear isStarting so foreground recovery can proceed if bootstrap was interrupted.
-        SecureLogger.debug("TorManager: goDormantOnBackground() called", category: .session)
+        SecureLogger.debug("TorManager: goDormantOnBackground() called - shutting down Arti to save battery", category: .session)
         Task { @MainActor in
             self.bootstrapGeneration += 1
             self.isReady = false
             self.socksReady = false
             self.isStarting = false
+            self.shutdownCompletely()
         }
     }
 

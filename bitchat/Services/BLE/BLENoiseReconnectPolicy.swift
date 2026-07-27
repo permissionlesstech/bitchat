@@ -7,6 +7,20 @@ struct BLENoiseReconnectPolicy {
     static let minimumRetryInterval: TimeInterval = 60
 
     private var lastAttemptAt: [BLEIngressLinkID: Date] = [:]
+    private var activeHandshakesCount: Int = 0
+    private let maxBackgroundConcurrentHandshakes: Int = 2
+
+    mutating func canStartHandshake(isBackgrounded: Bool) -> Bool {
+        if isBackgrounded && activeHandshakesCount >= maxBackgroundConcurrentHandshakes {
+            return false
+        }
+        activeHandshakesCount += 1
+        return true
+    }
+
+    mutating func handshakeCompleted() {
+        activeHandshakesCount = max(0, activeHandshakesCount - 1)
+    }
 
     mutating func shouldRevalidate(
         on link: BLEIngressLinkID,
@@ -36,5 +50,6 @@ struct BLENoiseReconnectPolicy {
 
     mutating func removeAll() {
         lastAttemptAt.removeAll()
+        activeHandshakesCount = 0
     }
 }

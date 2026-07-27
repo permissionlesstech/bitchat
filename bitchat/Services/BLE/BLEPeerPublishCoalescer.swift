@@ -14,7 +14,7 @@ struct BLEPeerPublishCoalescer {
     init(
         lastPublishAt: Date = .distantPast,
         publishPending: Bool = false,
-        minimumInterval: TimeInterval = 0.1
+        minimumInterval: TimeInterval = 10.0
     ) {
         self.lastPublishAt = lastPublishAt
         self.publishPending = publishPending
