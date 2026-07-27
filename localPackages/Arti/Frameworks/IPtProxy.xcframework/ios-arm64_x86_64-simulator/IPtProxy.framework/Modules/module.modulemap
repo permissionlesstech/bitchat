@@ -1,0 +1,8 @@
+framework module "IPtProxy" {
+	header "ref.h"
+    header "IPtProxy.objc.h"
+    header "Universe.objc.h"
+    header "IPtProxy.h"
+
+    export *
+}
