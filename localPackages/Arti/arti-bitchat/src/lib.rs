@@ -577,6 +577,12 @@ async fn run_arti_lifecycle(
     });
     let bootstrapped = client.bootstrap().await;
     progress_reporter.abort();
+    // `abort` only requests cancellation at the next await point, so the
+    // reporter can still be mid-iteration on another worker and overwrite the
+    // completion value stored below with a clamped one. Waiting for it to
+    // actually finish is what makes 100 stick; without this the host sees a
+    // bootstrap that never completes and tears down a working Tor.
+    let _ = progress_reporter.await;
     bootstrapped?;
     let _transport_monitor = transport_monitor;
 

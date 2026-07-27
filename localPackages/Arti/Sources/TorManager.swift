@@ -567,6 +567,14 @@ public final class TorManager: ObservableObject {
                 continue
             }
             drainArtiDiagnostics()
+            // A route that is already carrying traffic is finished, whatever
+            // the reported percentage says. Without this, any failure to
+            // observe completion tears down a working Tor, which is a far
+            // worse outcome than a stall that goes unreported.
+            if socksReady {
+                didComplete = true
+                break
+            }
             let summary = getBootstrapSummary()
             if arti_is_running() == 0 {
                 self.bootstrapSummary = summary
