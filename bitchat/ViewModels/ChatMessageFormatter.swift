@@ -183,7 +183,8 @@ final class ChatMessageFormatter {
                 allMatches.sort { $0.range.location < $1.range.location }
 
                 var lastEnd = content.startIndex
-                let isMentioned = message.mentions?.contains(viewModel.nickname) ?? false
+                let myNickname = viewModel.nickname.normalizedNickname
+                let isMentioned = message.mentions?.contains { $0.normalizedNickname == myNickname } ?? false
 
                 for (range, type) in allMatches {
                     guard let swiftRange = Range(range, in: content) else { continue }

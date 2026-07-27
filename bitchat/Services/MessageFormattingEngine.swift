@@ -110,11 +110,12 @@ final class MessageFormattingEngine {
             )
 
             // Format content
+            let myNickname = context.nickname.normalizedNickname
             let contentResult = formatContent(
                 message.content,
                 baseColor: baseColor,
                 isSelf: isSelf,
-                isMentioned: message.mentions?.contains(context.nickname) ?? false
+                isMentioned: message.mentions?.contains { $0.normalizedNickname == myNickname } ?? false
             )
             result.append(contentResult)
 
