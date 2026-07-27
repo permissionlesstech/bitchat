@@ -81,6 +81,16 @@ private func waitUntil(
     }
 }
 
+@MainActor
+private func drainArchitecturePublicationQueue() async {
+    for _ in 0..<5 {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+        await Task.yield()
+    }
+}
+
 @Suite("App Architecture Tests", .serialized)
 struct AppArchitectureTests {
 
@@ -671,7 +681,8 @@ struct AppArchitectureTests {
     @Test("PeerListModel publishes mesh and geohash directory state")
     @MainActor
     func peerListModelPublishesDirectoryState() async {
-        let viewModel = makeArchitectureViewModel()
+        let locationManager = makeArchitectureLocationManager()
+        let viewModel = makeArchitectureViewModel(locationManager: locationManager)
         guard let transport = viewModel.meshService as? MockTransport else {
             Issue.record("Expected ChatViewModel meshService to be a MockTransport in architecture tests")
             return
@@ -681,7 +692,6 @@ struct AppArchitectureTests {
         let otherPeerID = PeerID(str: "0011223344556677")
         let geohash = "9q8yy"
         let remoteGeoID = String(repeating: "b", count: 64)
-        let locationManager = makeArchitectureLocationManager()
         let locationChannelsModel = LocationChannelsModel(manager: locationManager)
         let otherNoiseKey = Data((0..<32).map(UInt8.init))
         let verifiedFingerprint = otherNoiseKey.sha256Fingerprint()
@@ -711,17 +721,19 @@ struct AppArchitectureTests {
         locationManager.select(.location(GeohashChannel(level: .city, geohash: geohash)))
         await waitUntil {
             if case .location(let channel) = locationManager.selectedChannel {
-                return channel.geohash == geohash && !viewModel.allPeers.isEmpty
+                return channel.geohash == geohash &&
+                    viewModel.currentGeohash == geohash &&
+                    !viewModel.allPeers.isEmpty
             }
             return false
         }
 
-        viewModel.participantTracker.setActiveGeohash(geohash)
-        viewModel.teleportedGeo = Set([remoteGeoID])
         viewModel.participantTracker.recordParticipant(pubkeyHex: remoteGeoID, geohash: geohash)
         if let myGeoID = try? viewModel.idBridge.deriveIdentity(forGeohash: geohash).publicKeyHex.lowercased() {
             viewModel.participantTracker.recordParticipant(pubkeyHex: myGeoID, geohash: geohash)
         }
+        await drainArchitecturePublicationQueue()
+        viewModel.teleportedGeo = Set([remoteGeoID])
 
         let peerListModel = PeerListModel(
             chatViewModel: viewModel,
