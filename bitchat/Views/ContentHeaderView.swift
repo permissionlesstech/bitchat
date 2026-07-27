@@ -47,20 +47,36 @@ struct ContentHeaderView: View {
                 // cluster at priority 3 never gives up width.
                 .layoutPriority(2)
                 .onTapGesture(count: 3) {
-                    appChromeModel.panicClearAllData()
+                    appChromeModel.requestPanicWipe()
                 }
                 .onTapGesture(count: 1) {
                     appChromeModel.presentAppInfo()
                 }
                 // This is the only entry point to App Info, but it reads as
                 // static text; surface the tap. (The triple-tap panic wipe
-                // stays undiscoverable on purpose — it's destructive.)
+                // stays undiscoverable on purpose — it's destructive — but
+                // still requires confirmation before erasing anything.)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityHint(
                     String(localized: "content.accessibility.app_info_hint", comment: "Accessibility hint on the bitchat/ logo explaining a tap opens app info")
                 )
                 .accessibilityAction {
                     appChromeModel.presentAppInfo()
+                }
+                .confirmationDialog(
+                    String(localized: "app_info.settings.danger.panic_confirm_title", defaultValue: "wipe all data?", comment: "Title of the confirmation dialog before a panic wipe"),
+                    isPresented: $appChromeModel.showPanicConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button(
+                        String(localized: "app_info.settings.danger.panic_confirm_action", defaultValue: "wipe everything", comment: "Destructive confirmation button that performs the panic wipe"),
+                        role: .destructive
+                    ) {
+                        appChromeModel.confirmPanicWipe()
+                    }
+                    Button("common.cancel", role: .cancel) {
+                        appChromeModel.cancelPanicWipe()
+                    }
                 }
 
             HStack(spacing: 0) {
