@@ -1,4 +1,5 @@
 import Combine
+import Tor
 import XCTest
 @testable import bitchat
 
@@ -242,9 +243,11 @@ private final class GateMockTorController: NetworkActivationTorControlling {
     private(set) var autoStartAllowedValues: [Bool] = []
     private(set) var startIfNeededCallCount = 0
     private(set) var shutdownCompletelyCallCount = 0
+    func configureTransport(_ configuration: TorRouteConfiguration) {}
     func setAutoStartAllowed(_ allowed: Bool) { autoStartAllowedValues.append(allowed) }
     func startIfNeeded() { startIfNeededCallCount += 1 }
     func shutdownCompletely() { shutdownCompletelyCallCount += 1 }
+    func resetTransportForPanic() {}
 }
 
 @MainActor

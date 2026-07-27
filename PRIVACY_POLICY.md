@@ -47,6 +47,10 @@ bitchat is designed for private, account-free communication. This policy describ
    - Per-geohash Nostr identities are derived locally from a device seed stored in the keychain.
    - bitchat does not persist exact latitude or longitude and does not include exact coordinates in mesh or Nostr messages.
 
+8. **Optional Tor bridge state**
+   - On physical iOS devices, obfs4 bridge lines you paste are stored in a dedicated device-only keychain item. They are limited in number, excluded from app logs and preferences, and erased by panic wipe.
+   - The last successful Tor route is stored locally so automatic mode can try an available working route first. Panic wipe erases this hint.
+
 ## Temporary Session Data
 
 While running, bitchat maintains active connections, routing state, deduplication state, and bounded in-memory conversation timelines. Closing the app clears the in-memory timelines and active connections, but it does not erase the persistent stores listed above.
@@ -82,6 +86,8 @@ Internet-backed features are optional. When enabled or used:
 Nostr relays are operated by third parties. Their retention, logging, availability, and privacy practices are outside the project's control. Public events and encrypted events may remain on relays according to each relay's policy.
 
 You can add relays yourself in settings, including `.onion` addresses. Added relays are stored locally, are limited in number, and are erased by panic wipe. Tor routing is on by default; while it is off, every relay you connect to can see your IP address, including relays carrying your private messages.
+
+On physical iOS devices, advanced Tor settings can use obfs4 or Snowflake when direct Tor is blocked. App traffic remains behind Tor during automatic route changes and never falls back directly to a relay. Obfs4 exposes a connection to the bridge you chose. Snowflake contacts third-party broker, front-domain, STUN, and WebRTC proxy infrastructure to find a path into Tor. Those parties and the access network can observe transport-level addresses, timing, volume, and participation, but the app's relay traffic still travels through Tor.
 
 ## Location and Apple Services
 
@@ -119,7 +125,7 @@ No cryptographic system can protect content after a recipient reads, copies, scr
 - **Recent public mesh gossip:** up to 6 hours.
 - **Public board posts and tombstones:** until expiry, at most seven days.
 - **Media:** seven days, or sooner by quota eviction, panic wipe, or app removal.
-- **Groups, favorites, preferences, identity keys, and bookmarks:** until removed by the feature, panic wipe, or app removal.
+- **Groups, favorites, preferences, identity keys, bookmarks, and optional obfs4 bridge lines:** until removed by the feature, panic wipe, or app removal.
 - **Nostr data:** according to the policies of the relays that receive it.
 
 ## Your Controls

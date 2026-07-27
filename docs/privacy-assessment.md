@@ -65,8 +65,10 @@ Public archives contain content already intended for public mesh/board distribut
 
 - Relays added by hand persist in local preferences (`nostr.customRelays`, at most 8, normalized on read) and are wiped on panic. An added relay names an operator someone chose to route through, so it is treated as sensitive local state rather than inert configuration. `.onion` addresses are accepted, which is the point: the four built-in relays are well-known clearnet hostnames and a filter blocking four names would otherwise end internet-delivered private messages until a new build shipped.
 - Turning the Tor preference off routes relay sockets and the relay-directory fetch directly, disclosing the device IP to every relay operator including those carrying private messages. The settings UI states this while the preference is off.
+- Physical iOS devices can opt into obfs4, Snowflake, or an automatic Tor route sequence. App payloads remain fail-closed behind Arti during route changes. User-supplied obfs4 bridge lines are capped, parsed twice, stored in a dedicated device-only Keychain service, excluded from logs and preferences, and cleared by panic wipe.
+- Obfs4 conceals the recognizable Tor protocol but exposes a connection to the chosen bridge. Snowflake creates broker, front-domain, STUN, and WebRTC proxy traffic before Tor bootstraps. Those parties and the access network can observe timing, volume, addresses, and transport participation even though app payloads remain inside Tor. The app does not fetch obfs4 bridges or send user bridge material to a project service.
 
-Residual risk: Nostr relay retention and logging are outside project control. Public events may be copied indefinitely. Timing, coarse location, and participation can be correlated even when content is encrypted or per-cell identities are used.
+Residual risk: Nostr relay retention and logging are outside project control. Public events may be copied indefinitely. Timing, coarse location, and participation can be correlated even when content is encrypted, per-cell identities are used, or Tor traffic is obfuscated.
 
 ## Location
 
@@ -80,6 +82,7 @@ Residual risk: Nostr relay retention and logging are outside project control. Pu
 
 - `SecureLogger` uses OSLog privacy markers and filters likely secrets. Release builds suppress debug verbosity.
 - No project analytics or telemetry endpoint exists.
+- Arti's own `tracing` output is discarded unless a debug build opts in. When it does, Rust forwards only each event's target, level, and the leading run of plain words; the first token that could be an address, fingerprint, URL, or bridge parameter ends the line. Bridge lines, relay identities, and peer addresses therefore stay out of the log on every build.
 - Apple system logs, Nostr relays, network providers, and nearby radios can still observe operational metadata outside the project's logging layer.
 
 ## Privacy Manifests
@@ -109,7 +112,7 @@ Not addressed, and deliberately out of scope here:
 
 ## Panic Wipe Coverage
 
-The panic action clears identity/session state, preferences, location state, groups, prekeys, outbox mail, courier mail, bridge dedup state, gossip archive, board data, managed media, hand-added relays, and active subscriptions/transports. Managed media deletion completes synchronously, after active media work has been invalidated. Keychain secrets use device-only accessibility, and an install marker detects and clears app keys that survive uninstall before a later reinstall can use them. New persistent stores must add an explicit wipe hook and a regression test.
+The panic action clears identity/session state, preferences, location state, groups, prekeys, outbox mail, courier mail, bridge dedup state, gossip archive, board data, managed media, hand-added relays, obfs4 bridge lines, the sticky successful Tor route, IPtProxy state, and active subscriptions/transports. Managed media deletion completes synchronously, after active media work has been invalidated. Keychain secrets use device-only accessibility, and an install marker detects and clears app keys that survive uninstall before a later reinstall can use them. New persistent stores must add an explicit wipe hook and a regression test.
 
 ## Release Review Checklist
 
