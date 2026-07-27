@@ -276,7 +276,8 @@ protocol Transport: AnyObject {
     func sendNdrEvent(
         to peerID: PeerID,
         eventJson: String,
-        expectedTransportState: AuthenticatedPeerTransportState
+        expectedTransportState: AuthenticatedPeerTransportState,
+        completion: @escaping @MainActor (Bool) -> Void
     )
 
     // Vouching / transitive verification (optional for transports)
@@ -370,8 +371,13 @@ extension Transport {
     func sendNdrEvent(
         to peerID: PeerID,
         eventJson: String,
-        expectedTransportState: AuthenticatedPeerTransportState
-    ) {}
+        expectedTransportState: AuthenticatedPeerTransportState,
+        completion: @escaping @MainActor (Bool) -> Void
+    ) {
+        Task { @MainActor in
+            completion(false)
+        }
+    }
     func sendGroupInvite(_ statePayload: Data, to peerID: PeerID) {}
     func sendGroupKeyUpdate(_ statePayload: Data, to peerID: PeerID) {}
     func broadcastGroupMessage(_ envelope: Data) {}

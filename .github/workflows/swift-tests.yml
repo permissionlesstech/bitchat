@@ -37,7 +37,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             .cache/ndr-ffi/apple/target
-          key: ndr-ffi-apple-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('localPackages/NdrFfi/RUST_TOOLCHAIN', 'localPackages/NdrFfi/SOURCE_REVISION', 'localPackages/NdrFfi/build-apple.sh', 'vendor/iris-chat-rs/protocol-ffi/Cargo.lock') }}
+          key: ndr-ffi-apple-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('localPackages/NdrFfi/RUST_TOOLCHAIN', 'localPackages/NdrFfi/SOURCE_REVISION', 'localPackages/NdrFfi/build-apple.sh', 'vendor/nostr-double-ratchet/rust/Cargo.lock') }}
 
       - name: Build Apple FFI from source
         run: ./localPackages/NdrFfi/build-apple.sh

@@ -82,5 +82,5 @@ build.log
 Local.xcconfig
 *.profraw
 
-# Built from the pinned iris-chat-rs submodule; never commit native crypto.
+# Built from the pinned nostr-double-ratchet submodule; never commit native crypto.
 localPackages/NdrFfi/Frameworks/NdrFfi.xcframework/

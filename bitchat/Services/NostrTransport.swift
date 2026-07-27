@@ -16,6 +16,8 @@ final class NostrTransport: Transport, @unchecked Sendable {
         case missingSenderIdentity
         case failedToEncodePacket
         case failedToBuildFallbackEvent
+        case ndrSessionFailure
+        case expiringMessageRequiresNdrSession
 
         var errorDescription: String? {
             switch self {
@@ -29,8 +31,19 @@ final class NostrTransport: Transport, @unchecked Sendable {
                 return "Failed to encode embedded private-message packet"
             case .failedToBuildFallbackEvent:
                 return "Failed to build fallback private-message event"
+            case .ndrSessionFailure:
+                return "The active double-ratchet session could not send"
+            case .expiringMessageRequiresNdrSession:
+                return "Disappearing messages require an active double-ratchet session"
             }
         }
+    }
+
+    private enum WrappedMessageOutcome {
+        case sent(OutboundPrivateMessageTransport)
+        case ndrFailed
+        case ndrRequired
+        case fallbackBuildFailed
     }
 
     struct Dependencies {
@@ -38,6 +51,8 @@ final class NostrTransport: Transport, @unchecked Sendable {
         let loadFavorites: @MainActor () -> [Data: FavoritesPersistenceService.FavoriteRelationship]
         let favoriteStatusForNoiseKey: @MainActor (Data) -> FavoritesPersistenceService.FavoriteRelationship?
         let favoriteStatusForPeerID: @MainActor (PeerID) -> FavoritesPersistenceService.FavoriteRelationship?
+        let canUseNdrBindingForPeerID: @MainActor (PeerID) -> Bool
+        let isNdrFallbackBlockedForPeerID: @MainActor (PeerID) -> Bool
         let currentIdentity: @MainActor () throws -> NostrIdentity?
         let registerPendingGiftWrap: @MainActor (String) -> Void
         let sendEvent: @MainActor (NostrEvent) -> Void
@@ -55,6 +70,8 @@ final class NostrTransport: Transport, @unchecked Sendable {
             loadFavorites: @escaping @MainActor () -> [Data: FavoritesPersistenceService.FavoriteRelationship],
             favoriteStatusForNoiseKey: @escaping @MainActor (Data) -> FavoritesPersistenceService.FavoriteRelationship?,
             favoriteStatusForPeerID: @escaping @MainActor (PeerID) -> FavoritesPersistenceService.FavoriteRelationship?,
+            canUseNdrBindingForPeerID: @escaping @MainActor (PeerID) -> Bool = { _ in true },
+            isNdrFallbackBlockedForPeerID: @escaping @MainActor (PeerID) -> Bool = { _ in false },
             currentIdentity: @escaping @MainActor () throws -> NostrIdentity?,
             registerPendingGiftWrap: @escaping @MainActor (String) -> Void,
             sendEvent: @escaping @MainActor (NostrEvent) -> Void,
@@ -66,6 +83,10 @@ final class NostrTransport: Transport, @unchecked Sendable {
             self.loadFavorites = loadFavorites
             self.favoriteStatusForNoiseKey = favoriteStatusForNoiseKey
             self.favoriteStatusForPeerID = favoriteStatusForPeerID
+            self.canUseNdrBindingForPeerID =
+                canUseNdrBindingForPeerID
+            self.isNdrFallbackBlockedForPeerID =
+                isNdrFallbackBlockedForPeerID
             self.currentIdentity = currentIdentity
             self.registerPendingGiftWrap = registerPendingGiftWrap
             self.sendEvent = sendEvent
@@ -83,6 +104,14 @@ final class NostrTransport: Transport, @unchecked Sendable {
                 loadFavorites: { FavoritesPersistenceService.shared.favorites },
                 favoriteStatusForNoiseKey: { FavoritesPersistenceService.shared.getFavoriteStatus(for: $0) },
                 favoriteStatusForPeerID: { FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: $0) },
+                canUseNdrBindingForPeerID: {
+                    FavoritesPersistenceService.shared
+                        .canUseNdrBinding(for: $0)
+                },
+                isNdrFallbackBlockedForPeerID: {
+                    FavoritesPersistenceService.shared
+                        .isNdrFallbackBlocked(for: $0)
+                },
                 currentIdentity: { try idBridge.getCurrentNostrIdentity() },
                 registerPendingGiftWrap: { NostrRelayManager.registerPendingGiftWrap(id: $0) },
                 sendEvent: { NostrRelayManager.shared.sendEvent($0) },
@@ -183,7 +212,12 @@ final class NostrTransport: Transport, @unchecked Sendable {
         // Synchronously warm the cache to avoid startup race
         let favorites = self.dependencies.loadFavorites()
         let reachable = favorites.values
-            .filter { $0.peerNostrPublicKey != nil }
+            .filter {
+                $0.peerNostrPublicKey != nil
+                    && self.dependencies.canUseNdrBindingForPeerID(
+                        PeerID(publicKey: $0.peerNoisePublicKey)
+                    )
+            }
             .map { PeerID(publicKey: $0.peerNoisePublicKey) }
             
         queue.sync(flags: .barrier) {
@@ -217,7 +251,12 @@ final class NostrTransport: Transport, @unchecked Sendable {
         Task { @MainActor in
             let favorites = dependencies.loadFavorites()
             let reachable = favorites.values
-                .filter { $0.peerNostrPublicKey != nil }
+                .filter {
+                    $0.peerNostrPublicKey != nil
+                        && dependencies.canUseNdrBindingForPeerID(
+                            PeerID(publicKey: $0.peerNoisePublicKey)
+                        )
+                }
                 .map { PeerID(publicKey: $0.peerNoisePublicKey) }
             
             self.queue.async(flags: .barrier) { [weak self] in
@@ -297,13 +336,44 @@ final class NostrTransport: Transport, @unchecked Sendable {
         }
     }
 
+    func sendPrivateMessage(
+        _ content: String,
+        to peerID: PeerID,
+        recipientNickname: String,
+        messageID: String,
+        expiresAtSeconds: UInt64
+    ) {
+        Task { @MainActor in
+            do {
+                _ = try sendPrivateMessageAndReturnTransport(
+                    content,
+                    to: peerID,
+                    recipientNickname: recipientNickname,
+                    messageID: messageID,
+                    expiresAtSeconds: expiresAtSeconds
+                )
+            } catch {
+                SecureLogger.error(
+                    "NostrTransport: failed to send disappearing PM: \(error)",
+                    category: .session
+                )
+            }
+        }
+    }
+
     @MainActor
     func sendPrivateMessageAndReturnTransport(
         _ content: String,
         to peerID: PeerID,
         recipientNickname _: String,
-        messageID: String
+        messageID: String,
+        expiresAtSeconds: UInt64? = nil
     ) throws -> OutboundPrivateMessageTransport {
+        guard dependencies.canUseNdrBindingForPeerID(peerID) else {
+            throw OutboundPrivateMessageError.ndrSessionFailure
+        }
+        let requiresNdr =
+            dependencies.isNdrFallbackBlockedForPeerID(peerID)
         guard let recipientNpub = resolveRecipientNpub(for: peerID) else {
             throw OutboundPrivateMessageError.missingRecipientNpub(peerID.id)
         }
@@ -325,14 +395,26 @@ final class NostrTransport: Transport, @unchecked Sendable {
         ) else {
             throw OutboundPrivateMessageError.failedToEncodePacket
         }
-        guard let transport = sendWrappedMessage(
+        switch sendWrappedMessage(
             content: embedded,
             recipientHex: recipientHex,
-            senderIdentity: senderIdentity
-        ) else {
+            senderIdentity: senderIdentity,
+            requiresNdr: requiresNdr,
+            expiresAtSeconds: expiresAtSeconds
+        ) {
+        case .sent(let transport):
+            return transport
+        case .ndrFailed:
+            throw OutboundPrivateMessageError.ndrSessionFailure
+        case .ndrRequired:
+            if expiresAtSeconds != nil {
+                throw OutboundPrivateMessageError
+                    .expiringMessageRequiresNdrSession
+            }
+            throw OutboundPrivateMessageError.ndrSessionFailure
+        case .fallbackBuildFailed:
             throw OutboundPrivateMessageError.failedToBuildFallbackEvent
         }
-        return transport
     }
 
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
@@ -357,7 +439,13 @@ final class NostrTransport: Transport, @unchecked Sendable {
                 SecureLogger.error("NostrTransport: failed to embed favorite notification", category: .session)
                 return
             }
-            sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: senderIdentity)
+            sendWrappedMessage(
+                content: embedded,
+                recipientHex: recipientHex,
+                senderIdentity: senderIdentity,
+                requiresNdr:
+                    dependencies.isNdrFallbackBlockedForPeerID(peerID)
+            )
         }
     }
 
@@ -424,27 +512,51 @@ extension NostrTransport {
         recipientHex: String,
         senderIdentity: NostrIdentity,
         registerPending: Bool = false,
-        allowNdr: Bool = true
-    ) -> OutboundPrivateMessageTransport? {
+        allowNdr: Bool = true,
+        requiresNdr: Bool = false,
+        expiresAtSeconds: UInt64? = nil
+    ) -> WrappedMessageOutcome {
         if allowNdr {
             // Invites/responses travel only over an authenticated BLE Noise
             // session; relay transport is used only after both clients have
             // established the same ratchet session out of band.
             ndrService.configureIfNeeded(identity: senderIdentity)
-            if ndrService.sendIfPossible(content, to: recipientHex) {
-                return .ndr
+            switch ndrService.send(
+                content,
+                to: recipientHex,
+                expiresAtSeconds: expiresAtSeconds
+            ) {
+            case .sent:
+                return .sent(.ndr)
+            case .noSession:
+                if expiresAtSeconds != nil || requiresNdr {
+                    SecureLogger.warning(
+                        "NostrTransport: refusing legacy downgrade where NDR is required",
+                        category: .security
+                    )
+                    return .ndrRequired
+                }
+                break
+            case .failed:
+                SecureLogger.error(
+                    "NostrTransport: active NDR session failed; refusing legacy downgrade",
+                    category: .security
+                )
+                return .ndrFailed
             }
+        } else if expiresAtSeconds != nil || requiresNdr {
+            return .ndrRequired
         }
 
         guard let event = try? NostrProtocol.createPrivateMessage(content: content, recipientPubkey: recipientHex, senderIdentity: senderIdentity) else {
             SecureLogger.error("NostrTransport: failed to build Nostr event", category: .session)
-            return nil
+            return .fallbackBuildFailed
         }
         if registerPending {
             dependencies.registerPendingGiftWrap(event.id)
         }
         dependencies.sendEvent(event)
-        return .legacy1059
+        return .sent(.legacy1059)
     }
 
 
@@ -461,7 +573,13 @@ extension NostrTransport {
                     SecureLogger.error("NostrTransport: failed to embed READ ack", category: .session)
                     return
                 }
-                sendWrappedMessage(content: ack, recipientHex: recipientHex, senderIdentity: senderIdentity)
+                sendWrappedMessage(
+                    content: ack,
+                    recipientHex: recipientHex,
+                    senderIdentity: senderIdentity,
+                    requiresNdr:
+                        dependencies.isNdrFallbackBlockedForPeerID(peerID)
+                )
 
             case .deliveredDirect(let messageID, let peerID):
                 guard let recipientNpub = resolveRecipientNpub(for: peerID),
@@ -472,7 +590,13 @@ extension NostrTransport {
                     SecureLogger.error("NostrTransport: failed to embed DELIVERED ack", category: .session)
                     return
                 }
-                sendWrappedMessage(content: ack, recipientHex: recipientHex, senderIdentity: senderIdentity)
+                sendWrappedMessage(
+                    content: ack,
+                    recipientHex: recipientHex,
+                    senderIdentity: senderIdentity,
+                    requiresNdr:
+                        dependencies.isNdrFallbackBlockedForPeerID(peerID)
+                )
 
             case .deliveredGeohash(let messageID, let recipientHex, let identity):
                 SecureLogger.debug("GeoDM: send DELIVERED mid=\(messageID.prefix(8))…", category: .session)
@@ -501,6 +625,9 @@ extension NostrTransport {
 
     @MainActor
     private func resolveRecipientNpub(for peerID: PeerID) -> String? {
+        guard dependencies.canUseNdrBindingForPeerID(peerID) else {
+            return nil
+        }
         if let noiseKey = Data(hexString: peerID.id),
            let fav = dependencies.favoriteStatusForNoiseKey(noiseKey),
            let npub = fav.peerNostrPublicKey {

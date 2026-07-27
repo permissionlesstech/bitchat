@@ -195,19 +195,24 @@ struct NostrTransportTests {
         let recipientStorage = try makeTempDir(label: "transport-ndr-recipient")
         let senderNdr = NdrNostrService(
             relayManager: senderRelay,
-            deviceId: "transport-ndr-sender",
             rolloutEnabled: true,
             storageDirectoryProvider: { senderStorage }
         )
         let recipientNdr = NdrNostrService(
             relayManager: recipientRelay,
-            deviceId: "transport-ndr-recipient",
             rolloutEnabled: true,
             storageDirectoryProvider: { recipientStorage }
         )
         senderNdr.configureIfNeeded(identity: sender)
         recipientNdr.configureIfNeeded(identity: recipient)
-        try establishMutualSession(senderNdr, recipientNdr, senderIdentity: sender, recipientIdentity: recipient)
+        try establishMutualSession(
+            senderNdr,
+            recipientNdr,
+            senderIdentity: sender,
+            recipientIdentity: recipient,
+            senderRelay: senderRelay,
+            recipientRelay: recipientRelay
+        )
 
         let noiseKey = Data((64..<96).map(UInt8.init))
         let fullPeerID = PeerID(hexData: noiseKey)
@@ -239,9 +244,205 @@ struct NostrTransportTests {
         #expect(senderRelay.sentEvents.contains(where: { $0.kind == 1060 }))
     }
 
-    @Test("Private message waits for an owner-verified roster before preferring NDR")
+    @Test("Disappearing-message expiry reaches the pairwise delivery")
     @MainActor
-    func sendPrivateMessageRequiresVerifiedNdrRoster() throws {
+    func disappearingMessageForwardsAbsoluteExpiryToNdr() throws {
+        let keychain = MockKeychain()
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let senderRelay = FakeRelayManager()
+        let recipientRelay = FakeRelayManager()
+        let senderStorage = try makeTempDir(
+            label: "transport-expiry-sender"
+        )
+        let recipientStorage = try makeTempDir(
+            label: "transport-expiry-recipient"
+        )
+        let senderNdr = NdrNostrService(
+            relayManager: senderRelay,
+            rolloutEnabled: true,
+            storageDirectoryProvider: { senderStorage }
+        )
+        let recipientNdr = NdrNostrService(
+            relayManager: recipientRelay,
+            rolloutEnabled: true,
+            storageDirectoryProvider: { recipientStorage }
+        )
+        senderNdr.configureIfNeeded(identity: sender)
+        recipientNdr.configureIfNeeded(identity: recipient)
+        try establishMutualSession(
+            senderNdr,
+            recipientNdr,
+            senderIdentity: sender,
+            recipientIdentity: recipient,
+            senderRelay: senderRelay,
+            recipientRelay: recipientRelay
+        )
+        senderRelay.resetSentEvents()
+
+        let noiseKey = Data((72..<104).map(UInt8.init))
+        let peerID = PeerID(hexData: noiseKey)
+        let relationship = makeRelationship(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: recipient.npub,
+            peerNickname: "Expires"
+        )
+        let transport = NostrTransport(
+            keychain: keychain,
+            idBridge: NostrIdentityBridge(keychain: keychain),
+            ndrService: senderNdr,
+            dependencies: makeDependencies(
+                favoriteStatusForNoiseKey: {
+                    $0 == noiseKey ? relationship : nil
+                },
+                favoriteStatusForPeerID: { _ in nil },
+                currentIdentity: { sender }
+            )
+        )
+        transport.senderPeerID = PeerID(str: "0123456789abcdef")
+        let expiration: UInt64 = 4_000_000_000
+
+        let used = try transport.sendPrivateMessageAndReturnTransport(
+            "vanish later",
+            to: peerID,
+            recipientNickname: "Expires",
+            messageID: "pm-expiring",
+            expiresAtSeconds: expiration
+        )
+        let outbound = try #require(
+            senderRelay.sentEvents.first { $0.kind == 1060 }
+        )
+        var deliveredExpiration: UInt64?
+        recipientNdr.onDecryptedMessage = { message, completion in
+            deliveredExpiration = message.expiresAtSeconds
+            completion(.consumed)
+        }
+        recipientNdr.processInboundRelayEvent(outbound)
+
+        #expect(used == .ndr)
+        #expect(deliveredExpiration == expiration)
+    }
+
+    @Test("A disappearing message never downgrades to kind 1059")
+    @MainActor
+    func disappearingMessageWithoutSessionFailsClosed() throws {
+        let keychain = MockKeychain()
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let relay = FakeRelayManager()
+        let ndrService = NdrNostrService(
+            relayManager: relay,
+            rolloutEnabled: true,
+            storageDirectoryProvider: {
+                try makeTempDir(label: "transport-expiry-no-session")
+            }
+        )
+        let noiseKey = Data((104..<136).map(UInt8.init))
+        let peerID = PeerID(hexData: noiseKey)
+        let relationship = makeRelationship(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: recipient.npub,
+            peerNickname: "No Session"
+        )
+        let probe = NostrTransportProbe()
+        let transport = NostrTransport(
+            keychain: keychain,
+            idBridge: NostrIdentityBridge(keychain: keychain),
+            ndrService: ndrService,
+            dependencies: makeDependencies(
+                favoriteStatusForNoiseKey: {
+                    $0 == noiseKey ? relationship : nil
+                },
+                favoriteStatusForPeerID: { _ in nil },
+                currentIdentity: { sender },
+                sendEvent: probe.record(event:)
+            )
+        )
+        transport.senderPeerID = PeerID(str: "0123456789abcdef")
+
+        do {
+            _ = try transport.sendPrivateMessageAndReturnTransport(
+                "must not become legacy",
+                to: peerID,
+                recipientNickname: "No Session",
+                messageID: "pm-expiry-no-session",
+                expiresAtSeconds: 4_000_000_000
+            )
+            Issue.record(
+                "Expected an expiring send without NDR to fail closed"
+            )
+        } catch let error as NostrTransport.OutboundPrivateMessageError {
+            guard case .expiringMessageRequiresNdrSession = error else {
+                Issue.record("Unexpected transport error: \(error)")
+                return
+            }
+        }
+
+        #expect(probe.sentEvents.isEmpty)
+        #expect(relay.sentEvents.isEmpty)
+    }
+
+    @Test("A durable NDR pin blocks legacy fallback with rollout off")
+    @MainActor
+    func durableNdrPinBlocksGateOffFallback() throws {
+        let keychain = MockKeychain()
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let relay = FakeRelayManager()
+        let ndrService = NdrNostrService(
+            relayManager: relay,
+            rolloutEnabled: false,
+            storageDirectoryProvider: {
+                try makeTempDir(label: "transport-gate-off-pin")
+            }
+        )
+        let noiseKey = Data(repeating: 0x7d, count: 32)
+        let peerID = PeerID(hexData: noiseKey)
+        let relationship = makeRelationship(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: recipient.npub,
+            peerNickname: "Pinned"
+        )
+        let probe = NostrTransportProbe()
+        let transport = NostrTransport(
+            keychain: keychain,
+            idBridge: NostrIdentityBridge(keychain: keychain),
+            ndrService: ndrService,
+            dependencies: makeDependencies(
+                favoriteStatusForNoiseKey: {
+                    $0 == noiseKey ? relationship : nil
+                },
+                canUseNdrBindingForPeerID: { _ in true },
+                isNdrFallbackBlockedForPeerID: {
+                    $0.toShort() == peerID.toShort()
+                },
+                currentIdentity: { sender },
+                sendEvent: probe.record(event:)
+            )
+        )
+
+        do {
+            _ = try transport.sendPrivateMessageAndReturnTransport(
+                "must remain pairwise",
+                to: peerID,
+                recipientNickname: "Pinned",
+                messageID: "pm-gate-off-pin"
+            )
+            Issue.record("Expected a pinned gate-off send to fail closed")
+        } catch let error as NostrTransport.OutboundPrivateMessageError {
+            guard case .ndrSessionFailure = error else {
+                Issue.record("Unexpected transport error: \(error)")
+                return
+            }
+        }
+
+        #expect(probe.sentEvents.isEmpty)
+        #expect(relay.sentEvents.isEmpty)
+    }
+
+    @Test("A pairwise session is send-ready without a device roster")
+    @MainActor
+    func sendPrivateMessageDoesNotRequireDeviceRoster() throws {
         let keychain = MockKeychain()
         let idBridge = NostrIdentityBridge(keychain: keychain)
         let sender = try NostrIdentity.generate()
@@ -252,41 +453,28 @@ struct NostrTransportTests {
         let recipientStorage = try makeTempDir(label: "transport-ndr-queued-recipient")
         let senderNdr = NdrNostrService(
             relayManager: senderRelay,
-            deviceId: "transport-ndr-queued-sender",
             rolloutEnabled: true,
             storageDirectoryProvider: { senderStorage }
         )
         let recipientNdr = NdrNostrService(
             relayManager: recipientRelay,
-            deviceId: "transport-ndr-queued-recipient",
             rolloutEnabled: true,
             storageDirectoryProvider: { recipientStorage }
         )
         senderNdr.configureIfNeeded(identity: sender)
         recipientNdr.configureIfNeeded(identity: recipient)
-
-        let senderInvite = try #require(senderNdr.currentInviteEventJson())
-        let recipientPublishes = recipientNdr.processOutOfBandEventJson(
-            senderInvite,
-            expectedPeerPubkeyHex: sender.publicKeyHex
+        try establishMutualSession(
+            senderNdr,
+            recipientNdr,
+            senderIdentity: sender,
+            recipientIdentity: recipient,
+            senderRelay: senderRelay,
+            recipientRelay: recipientRelay
         )
-        let recipientResponse = try #require(
-            recipientPublishes.first(where: { (try? extractNostrKind(json: $0)) == 1059 }),
-            "Recipient should return a response after processing sender invite"
-        )
-        let recipientBootstrap = try #require(
-            recipientRelay.sentEvents.first(where: { $0.kind == 1060 }),
-            "Recipient should publish a bootstrap message event after accepting sender invite"
-        )
-        let recipientAppKeys = try #require(
-            recipientRelay.sentEvents.first(where: { isAppKeysEvent($0) }),
-            "Recipient should publish an AppKeys roster event"
-        )
-        _ = senderNdr.processOutOfBandEventJson(
-            recipientResponse,
-            expectedPeerPubkeyHex: recipient.publicKeyHex
-        )
-        #expect(senderNdr.hasActiveSession(with: recipient.publicKeyHex))
+        #expect(!senderRelay.sentEvents.contains { $0.kind == 37368 })
+        #expect(!recipientRelay.sentEvents.contains { $0.kind == 37368 })
+        #expect(!senderRelay.subscriptions.contains { $0.filter.kinds?.contains(37368) == true })
+        #expect(!recipientRelay.subscriptions.contains { $0.filter.kinds?.contains(37368) == true })
 
         senderRelay.resetSentEvents()
         let probe = NostrTransportProbe()
@@ -310,33 +498,163 @@ struct NostrTransportTests {
         )
         transport.senderPeerID = PeerID(str: "0123456789abcdef")
 
-        let transportBeforeRoster = try transport.sendPrivateMessageAndReturnTransport(
-            "before verified roster",
+        let transportUsed = try transport.sendPrivateMessageAndReturnTransport(
+            "pairwise ndr",
             to: fullPeerID,
             recipientNickname: "Queued",
-            messageID: "pm-before-ndr-roster"
+            messageID: "pm-pairwise-ndr"
         )
 
-        #expect(transportBeforeRoster == .legacy1059)
-        #expect(probe.sentEvents.count == 1)
-        #expect(probe.sentEvents.first?.kind == 1059)
-        #expect(senderRelay.sentEvents.filter { $0.kind == 1060 }.isEmpty)
+        #expect(transportUsed == .ndr)
+        #expect(probe.sentEvents.isEmpty)
+        #expect(senderRelay.sentEvents.filter { $0.kind == 1060 }.count == 1)
+    }
 
-        senderNdr.processInboundRelayEvent(recipientBootstrap)
-        #expect(senderRelay.sentEvents.filter { $0.kind == 1060 }.isEmpty)
+    @Test("An existing ratchet session never downgrades to legacy encryption")
+    @MainActor
+    func activeButNotSendReadySessionFailsClosed() throws {
+        let keychain = MockKeychain()
+        let idBridge = NostrIdentityBridge(keychain: keychain)
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let senderRelay = FakeRelayManager()
+        let recipientRelay = FakeRelayManager()
+        let senderNdr = NdrNostrService(
+            relayManager: senderRelay,
+            rolloutEnabled: true,
+            storageDirectoryProvider: {
+                try makeTempDir(label: "fail-closed-sender")
+            }
+        )
+        let recipientNdr = NdrNostrService(
+            relayManager: recipientRelay,
+            rolloutEnabled: true,
+            storageDirectoryProvider: {
+                try makeTempDir(label: "fail-closed-recipient")
+            }
+        )
+        senderNdr.configureIfNeeded(identity: sender)
+        recipientNdr.configureIfNeeded(identity: recipient)
 
-        senderNdr.processInboundRelayEvent(recipientAppKeys)
-
-        let transportAfterRoster = try transport.sendPrivateMessageAndReturnTransport(
-            "after verified roster",
-            to: fullPeerID,
-            recipientNickname: "Queued",
-            messageID: "pm-after-ndr-roster"
+        // Processing the response installs a receive path. Until its relay
+        // bootstrap arrives, this is intentionally not a send-ready session.
+        let senderInvite = try #require(senderNdr.currentInviteEventJson())
+        let response = try #require(
+            recipientNdr.processOutOfBandEventJson(
+                senderInvite,
+                expectedPeerPubkeyHex: sender.publicKeyHex,
+                persistEstablishedBinding: { true }
+            ).first
+        )
+        recipientNdr.completeOutOfBandAction(response, succeeded: true)
+        _ = senderNdr.processOutOfBandEventJson(
+            response.eventJson,
+            expectedPeerPubkeyHex: recipient.publicKeyHex,
+            persistEstablishedBinding: { true }
+        )
+        #expect(
+            senderNdr.hasPairwiseSession(with: recipient.publicKeyHex)
         )
 
-        #expect(transportAfterRoster == .ndr)
-        #expect(probe.sentEvents.count == 1)
-        #expect(senderRelay.sentEvents.contains(where: { $0.kind == 1060 }))
+        let noiseKey = Data((88..<120).map(UInt8.init))
+        let peerID = PeerID(hexData: noiseKey)
+        let relationship = makeRelationship(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: recipient.npub,
+            peerNickname: "Fail Closed"
+        )
+        let probe = NostrTransportProbe()
+        let transport = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            ndrService: senderNdr,
+            dependencies: makeDependencies(
+                favoriteStatusForNoiseKey: {
+                    $0 == noiseKey ? relationship : nil
+                },
+                favoriteStatusForPeerID: { _ in nil },
+                currentIdentity: { sender },
+                sendEvent: probe.record(event:)
+            )
+        )
+        transport.senderPeerID = PeerID(str: "0123456789abcdef")
+
+        do {
+            _ = try transport.sendPrivateMessageAndReturnTransport(
+                "must not downgrade",
+                to: peerID,
+                recipientNickname: "Fail Closed",
+                messageID: "pm-fail-closed"
+            )
+            Issue.record("Expected the non-send-ready NDR session to fail")
+        } catch let error as NostrTransport.OutboundPrivateMessageError {
+            guard case .ndrSessionFailure = error else {
+                Issue.record("Unexpected transport error: \(error)")
+                return
+            }
+        }
+
+        #expect(probe.sentEvents.isEmpty)
+        #expect(senderRelay.sentEvents.allSatisfy { $0.kind == 1060 })
+    }
+
+    @Test("An NDR storage-open failure never falls back to legacy encryption")
+    @MainActor
+    func ndrConfigurationFailureFailsClosed() throws {
+        let keychain = MockKeychain()
+        let idBridge = NostrIdentityBridge(keychain: keychain)
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let relay = FakeRelayManager()
+        let ndrService = NdrNostrService(
+            relayManager: relay,
+            rolloutEnabled: true,
+            storageDirectoryProvider: {
+                throw NostrTransportTestError.storageUnavailable
+            }
+        )
+        let noiseKey = Data((96..<128).map(UInt8.init))
+        let peerID = PeerID(hexData: noiseKey)
+        let relationship = makeRelationship(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: recipient.npub,
+            peerNickname: "Corrupt State"
+        )
+        let probe = NostrTransportProbe()
+        let transport = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            ndrService: ndrService,
+            dependencies: makeDependencies(
+                favoriteStatusForNoiseKey: {
+                    $0 == noiseKey ? relationship : nil
+                },
+                favoriteStatusForPeerID: { _ in nil },
+                currentIdentity: { sender },
+                sendEvent: probe.record(event:)
+            )
+        )
+        transport.senderPeerID = PeerID(str: "0123456789abcdef")
+
+        for _ in 0..<2 {
+            do {
+                _ = try transport.sendPrivateMessageAndReturnTransport(
+                    "must remain failed",
+                    to: peerID,
+                    recipientNickname: "Corrupt State",
+                    messageID: UUID().uuidString
+                )
+                Issue.record("Expected NDR configuration failure")
+            } catch let error as NostrTransport.OutboundPrivateMessageError {
+                guard case .ndrSessionFailure = error else {
+                    Issue.record("Unexpected transport error: \(error)")
+                    return
+                }
+            }
+        }
+
+        #expect(probe.sentEvents.isEmpty)
+        #expect(relay.sentEvents.isEmpty)
     }
 
     @Test("Favorite notification embeds current npub")
@@ -591,6 +909,8 @@ struct NostrTransportTests {
         loadFavorites: @escaping @MainActor () -> [Data: FavoriteRelationship] = { [:] },
         favoriteStatusForNoiseKey: @escaping @MainActor (Data) -> FavoriteRelationship? = { _ in nil },
         favoriteStatusForPeerID: @escaping @MainActor (PeerID) -> FavoriteRelationship? = { _ in nil },
+        canUseNdrBindingForPeerID: @escaping @MainActor (PeerID) -> Bool = { _ in true },
+        isNdrFallbackBlockedForPeerID: @escaping @MainActor (PeerID) -> Bool = { _ in false },
         currentIdentity: @escaping @MainActor () throws -> NostrIdentity? = { nil },
         registerPendingGiftWrap: @escaping @MainActor (String) -> Void = { _ in },
         sendEvent: @escaping @MainActor (NostrEvent) -> Void = { _ in },
@@ -602,6 +922,10 @@ struct NostrTransportTests {
             loadFavorites: loadFavorites,
             favoriteStatusForNoiseKey: favoriteStatusForNoiseKey,
             favoriteStatusForPeerID: favoriteStatusForPeerID,
+            canUseNdrBindingForPeerID:
+                canUseNdrBindingForPeerID,
+            isNdrFallbackBlockedForPeerID:
+                isNdrFallbackBlockedForPeerID,
             currentIdentity: currentIdentity,
             registerPendingGiftWrap: registerPendingGiftWrap,
             sendEvent: sendEvent,
@@ -615,7 +939,6 @@ struct NostrTransportTests {
         let storage = try makeTempDir(label: label)
         return NdrNostrService(
             relayManager: FakeRelayManager(),
-            deviceId: "nostr-transport-\(label)",
             rolloutEnabled: true,
             storageDirectoryProvider: { storage }
         )
@@ -651,36 +974,76 @@ struct NostrTransportTests {
         _ senderService: NdrNostrService,
         _ recipientService: NdrNostrService,
         senderIdentity: NostrIdentity,
-        recipientIdentity: NostrIdentity
+        recipientIdentity: NostrIdentity,
+        senderRelay: FakeRelayManager,
+        recipientRelay: FakeRelayManager
     ) throws {
-        var toRecipient: [String] = [try #require(senderService.currentInviteEventJson())]
-        var toSender: [String] = [try #require(recipientService.currentInviteEventJson())]
+        let senderRelayIndex = senderRelay.sentEvents.count
+        let recipientRelayIndex = recipientRelay.sentEvents.count
+        let senderInvite = try #require(
+            senderService.currentInviteEventJson()
+        )
+        let recipientInvite = try #require(
+            recipientService.currentInviteEventJson()
+        )
+        let generatedByRecipient =
+            recipientService.processOutOfBandEventJson(
+                senderInvite,
+                expectedPeerPubkeyHex: senderIdentity.publicKeyHex,
+                persistEstablishedBinding: { true }
+            )
+        let generatedBySender =
+            senderService.processOutOfBandEventJson(
+                recipientInvite,
+                expectedPeerPubkeyHex: recipientIdentity.publicKeyHex,
+                persistEstablishedBinding: { true }
+            )
 
-        for _ in 0..<10 {
-            let nextToSender = toRecipient.flatMap {
-                recipientService.processOutOfBandEventJson(
-                    $0,
-                    expectedPeerPubkeyHex: senderIdentity.publicKeyHex
-                )
-            }
-            let nextToRecipient = toSender.flatMap {
-                senderService.processOutOfBandEventJson(
-                    $0,
-                    expectedPeerPubkeyHex: recipientIdentity.publicKeyHex
-                )
-            }
-            toRecipient = nextToRecipient
-            toSender = nextToSender
-            if senderService.hasActiveSession(with: recipientIdentity.publicKeyHex),
-               recipientService.hasActiveSession(with: senderIdentity.publicKeyHex) {
-                return
-            }
-            if toRecipient.isEmpty && toSender.isEmpty {
-                break
-            }
+        for response in generatedByRecipient {
+            recipientService.completeOutOfBandAction(
+                response,
+                succeeded: true
+            )
+            _ = senderService.processOutOfBandEventJson(
+                response.eventJson,
+                expectedPeerPubkeyHex: recipientIdentity.publicKeyHex,
+                persistEstablishedBinding: { true }
+            )
+        }
+        for response in generatedBySender {
+            senderService.completeOutOfBandAction(
+                response,
+                succeeded: true
+            )
+            _ = recipientService.processOutOfBandEventJson(
+                response.eventJson,
+                expectedPeerPubkeyHex: senderIdentity.publicKeyHex,
+                persistEstablishedBinding: { true }
+            )
         }
 
-        throw NostrTransportTestError.failedToEstablishNdrSession
+        for event in senderRelay.sentEvents
+            .dropFirst(senderRelayIndex)
+        where event.kind == 1060
+        {
+            recipientService.processInboundRelayEvent(event)
+        }
+        for event in recipientRelay.sentEvents
+            .dropFirst(recipientRelayIndex)
+        where event.kind == 1060
+        {
+            senderService.processInboundRelayEvent(event)
+        }
+
+        guard senderService.hasActiveSession(
+            with: recipientIdentity.publicKeyHex
+        ),
+            recipientService.hasActiveSession(
+                with: senderIdentity.publicKeyHex
+            )
+        else {
+            throw NostrTransportTestError.failedToEstablishNdrSession
+        }
     }
 
     private func decodeEmbeddedPayload(
@@ -711,18 +1074,6 @@ struct NostrTransportTests {
         return message
     }
 
-    private func extractNostrKind(json: String) throws -> Int {
-        let data = Data(json.utf8)
-        let obj = try JSONSerialization.jsonObject(with: data, options: [])
-        let dict = try #require(obj as? [String: Any], "Nostr event should be a JSON object")
-        return try #require(dict["kind"] as? Int, "Nostr event should include kind")
-    }
-
-    private func isAppKeysEvent(_ event: NostrEvent) -> Bool {
-        event.kind == 37368 && event.tags.contains { tag in
-            tag.count >= 2 && tag[0] == "type" && tag[1] == "app_keys_roster_snapshot"
-        }
-    }
 }
 
 private enum NostrTransportTestError: Error {
@@ -730,6 +1081,7 @@ private enum NostrTransportTestError: Error {
     case invalidPacket
     case invalidPrivateMessage
     case failedToEstablishNdrSession
+    case storageUnavailable
 }
 
 private func base64URLDecode(_ string: String) -> Data? {

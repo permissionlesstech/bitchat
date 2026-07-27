@@ -17,6 +17,7 @@ import BitFoundation
 @MainActor
 private func makeTestableViewModel(
     keychain injectedKeychain: MockKeychain? = nil,
+    ndrService: NdrNostrService? = nil,
     panicMediaWipe: (() throws -> Void)? = nil,
     panicRecoveryOperations: PanicRecoveryOperations? = nil,
     panicNetworkLifecycle: PanicNetworkLifecycle = .noop
@@ -32,6 +33,7 @@ private func makeTestableViewModel(
         idBridge: idBridge,
         identityManager: identityManager,
         transport: transport,
+        ndrService: ndrService,
         panicMediaWipe: panicMediaWipe,
         panicRecoveryOperations: panicRecoveryOperations,
         panicNetworkLifecycle: panicNetworkLifecycle
@@ -2226,6 +2228,121 @@ struct ChatViewModelPanicTests {
         #expect(transport.emergencyDisconnectCallCount == 1)
         #expect(transport.startServicesCallCount == 0)
         #expect(!viewModel.networkActivationAllowed)
+    }
+
+    @Test @MainActor
+    func failedNdrPanicWipeStaysLatchedAcrossViewModelRestart() throws {
+        enum StorageFailure: Error {
+            case unavailable
+        }
+
+        let storage = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "bitchat-tests-panic-ndr-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        var storageAvailable = true
+        var recoveryPending = false
+        var beginCount = 0
+        var completeCount = 0
+        let recoveryOperations = PanicRecoveryOperations(
+            isPending: { recoveryPending },
+            begin: {
+                recoveryPending = true
+                beginCount += 1
+                return PanicRecoveryIntent(
+                    fileMarkerEstablished: true,
+                    externalMarkerEstablished: true
+                )
+            },
+            wipeMedia: { _ in },
+            complete: {
+                recoveryPending = false
+                completeCount += 1
+            }
+        )
+        let markerStore = InMemoryNdrSessionMarkerStore()
+        let firstNdrService = NdrNostrService(
+            relayManager: FakeRelayManager(),
+            rolloutEnabled: true,
+            storageDirectoryProvider: {
+                guard storageAvailable else {
+                    throw StorageFailure.unavailable
+                }
+                return storage
+            },
+            sessionMarkerStore: markerStore
+        )
+        firstNdrService.configureIfNeeded(
+            identity: try NostrIdentity.generate()
+        )
+        #expect(
+            FileManager.default.fileExists(atPath: storage.path)
+        )
+
+        let (firstViewModel, firstTransport) =
+            makeTestableViewModel(
+                ndrService: firstNdrService,
+                panicRecoveryOperations: recoveryOperations
+            )
+        let startsBeforePanic = firstTransport.startServicesCallCount
+        storageAvailable = false
+
+        #expect(!firstViewModel.panicClearAllData())
+        #expect(recoveryPending)
+        #expect(completeCount == 0)
+        #expect(
+            firstTransport.startServicesCallCount == startsBeforePanic
+        )
+        #expect(!firstViewModel.networkActivationAllowed)
+        #expect(
+            FileManager.default.fileExists(atPath: storage.path)
+        )
+
+        let secondNdrService = NdrNostrService(
+            relayManager: FakeRelayManager(),
+            rolloutEnabled: true,
+            storageDirectoryProvider: {
+                guard storageAvailable else {
+                    throw StorageFailure.unavailable
+                }
+                return storage
+            },
+            sessionMarkerStore: markerStore
+        )
+        let (secondViewModel, secondTransport) =
+            makeTestableViewModel(
+                ndrService: secondNdrService,
+                panicRecoveryOperations: recoveryOperations
+            )
+
+        #expect(recoveryPending)
+        #expect(beginCount == 2)
+        #expect(completeCount == 0)
+        #expect(secondTransport.startServicesCallCount == 0)
+        #expect(!secondViewModel.networkActivationAllowed)
+
+        storageAvailable = true
+        let thirdNdrService = NdrNostrService(
+            relayManager: FakeRelayManager(),
+            rolloutEnabled: true,
+            storageDirectoryProvider: { storage },
+            sessionMarkerStore: markerStore
+        )
+        let (thirdViewModel, thirdTransport) =
+            makeTestableViewModel(
+                ndrService: thirdNdrService,
+                panicRecoveryOperations: recoveryOperations
+            )
+
+        #expect(!recoveryPending)
+        #expect(beginCount == 3)
+        #expect(completeCount == 1)
+        #expect(thirdTransport.startServicesCallCount == 1)
+        #expect(thirdViewModel.networkActivationAllowed)
+        #expect(
+            !FileManager.default.fileExists(atPath: storage.path)
+        )
     }
 
     @Test @MainActor

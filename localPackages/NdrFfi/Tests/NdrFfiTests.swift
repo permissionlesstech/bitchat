@@ -1,225 +1,364 @@
+import Foundation
 import XCTest
 @testable import NdrFfi
 
 final class NdrFfiTests: XCTestCase {
+    func testVersionAndKeyGeneration() throws {
+        XCTAssertFalse(NdrFfi.version().isEmpty)
 
-    // MARK: - Version Tests
-
-    func testVersion() {
-        let v = NdrFfi.version()
-        XCTAssertFalse(v.isEmpty, "Version should not be empty")
-        print("ndr-ffi version: \(v)")
+        let first = generateKeypair()
+        let second = generateKeypair()
+        XCTAssertEqual(first.publicKeyHex.count, 64)
+        XCTAssertEqual(first.privateKeyHex.count, 64)
+        XCTAssertNotNil(Data(hexString: first.publicKeyHex))
+        XCTAssertNotNil(Data(hexString: first.privateKeyHex))
+        XCTAssertNotEqual(first.publicKeyHex, second.publicKeyHex)
+        XCTAssertNotEqual(first.privateKeyHex, second.privateKeyHex)
+        XCTAssertEqual(
+            try derivePublicKey(privateKeyHex: first.privateKeyHex),
+            first.publicKeyHex
+        )
     }
 
-    // MARK: - Keypair Tests
-
-    func testKeypairGeneration() {
-        let keypair = generateKeypair()
-
-        XCTAssertEqual(keypair.publicKeyHex.count, 64, "Public key should be 64 hex characters")
-        XCTAssertEqual(keypair.privateKeyHex.count, 64, "Private key should be 64 hex characters")
-
-        // Verify they're valid hex
-        XCTAssertNotNil(Data(hexString: keypair.publicKeyHex), "Public key should be valid hex")
-        XCTAssertNotNil(Data(hexString: keypair.privateKeyHex), "Private key should be valid hex")
-
-        print("Generated keypair - pubkey: \(keypair.publicKeyHex.prefix(16))...")
-    }
-
-    func testMultipleKeypairsAreDifferent() {
-        let kp1 = generateKeypair()
-        let kp2 = generateKeypair()
-
-        XCTAssertNotEqual(kp1.publicKeyHex, kp2.publicKeyHex, "Different keypairs should have different public keys")
-        XCTAssertNotEqual(kp1.privateKeyHex, kp2.privateKeyHex, "Different keypairs should have different private keys")
-    }
-
-    // MARK: - SessionManager Tests
-
-    func testSessionManagerInitEmitsInviteEvent() throws {
+    func testCurrentInviteIsIdentityBoundKind30078() throws {
         let keys = generateKeypair()
-        let mgr = try SessionManagerHandle(
-            ourPubkeyHex: keys.publicKeyHex,
-            ourIdentityPrivkeyHex: keys.privateKeyHex,
-            deviceId: "test-device",
-            ownerPubkeyHex: nil
-        )
-        try mgr.`init`()
+        let manager = try makeManager(keys)
+        let inviteJSON = try manager.currentInviteEventJson()
+        let invite = try PairwiseInvite.fromEventJson(eventJson: inviteJSON)
 
-        let events = try mgr.drainEvents()
-        let inviteEventJson = try XCTUnwrap(
-            events.first(where: { isInvitePublish($0) })?.eventJson,
-            "Expected SessionManager to publish an invite on init"
+        XCTAssertEqual(try extractNostrKind(json: inviteJSON), 30078)
+        XCTAssertEqual(invite.getPeerPubkeyHex(), keys.publicKeyHex)
+        XCTAssertEqual(
+            try PairwiseInvite.fromUrl(
+                url: invite.toUrl(root: "https://b")
+            ).getPeerPubkeyHex(),
+            keys.publicKeyHex
         )
-        XCTAssertEqual(try extractNostrKind(json: inviteEventJson), 30078)
     }
 
-    func testSessionManagerAcceptInviteFromEventJsonEstablishesSession() throws {
-        let alice = generateKeypair()
-        let bob = generateKeypair()
+    func testAuthenticatedHandshakeBecomesBidirectionallySendReady() throws {
+        let aliceKeys = generateKeypair()
+        let bobKeys = generateKeypair()
+        let alice = try makeManager(aliceKeys)
+        let bob = try makeManager(bobKeys)
 
-        let aliceMgr = try SessionManagerHandle(
-            ourPubkeyHex: alice.publicKeyHex,
-            ourIdentityPrivkeyHex: alice.privateKeyHex,
-            deviceId: "alice-device",
-            ownerPubkeyHex: nil
+        let artifacts = try establishSession(
+            inviter: alice,
+            inviterKeys: aliceKeys,
+            acceptor: bob,
+            acceptorKeys: bobKeys
         )
-        let bobMgr = try SessionManagerHandle(
-            ourPubkeyHex: bob.publicKeyHex,
-            ourIdentityPrivkeyHex: bob.privateKeyHex,
-            deviceId: "bob-device",
-            ownerPubkeyHex: nil
+
+        XCTAssertEqual(artifacts.response.peerPubkeyHex, aliceKeys.publicKeyHex)
+        XCTAssertEqual(try extractNostrKind(json: artifacts.responseJSON), 1059)
+        XCTAssertEqual(try extractNostrKind(json: artifacts.bootstrapJSON), 1060)
+        XCTAssertEqual(
+            try alice.sessionInfo(peerPubkeyHex: bobKeys.publicKeyHex)?
+                .sendReady,
+            true
         )
-        try aliceMgr.`init`()
-        try bobMgr.`init`()
-
-        let aliceInitEvents = try aliceMgr.drainEvents()
-        _ = try bobMgr.drainEvents() // discard Bob init invite
-
-        let aliceInviteEventJson = try XCTUnwrap(
-            aliceInitEvents.first(where: { isInvitePublish($0) })?.eventJson,
-            "Expected Alice to publish an invite on init"
+        XCTAssertEqual(
+            try bob.sessionInfo(peerPubkeyHex: aliceKeys.publicKeyHex)?
+                .sendReady,
+            true
         )
-        XCTAssertEqual(try extractNostrKind(json: aliceInviteEventJson), 30078)
-
-        let accept = try bobMgr.acceptInviteFromEventJson(eventJson: aliceInviteEventJson, ownerPubkeyHintHex: nil)
-        XCTAssertTrue(accept.createdNewSession)
-
-        let bobAfterAccept = try bobMgr.drainEvents()
-        let responseEventJson = try XCTUnwrap(
-            bobAfterAccept.first(where: { $0.kind == "publish_signed" && ((try? extractNostrKind(json: $0.eventJson ?? "")) == 1059) })?.eventJson,
-            "Expected Bob to publish a giftwrap response after accepting invite"
-        )
-        XCTAssertEqual(try extractNostrKind(json: responseEventJson), 1059)
-
-        try aliceMgr.processEvent(eventJson: responseEventJson)
-        _ = try aliceMgr.drainEvents()
-
-        XCTAssertNotNil(try aliceMgr.getActiveSessionState(peerPubkeyHex: bob.publicKeyHex))
-        XCTAssertNotNil(try bobMgr.getActiveSessionState(peerPubkeyHex: alice.publicKeyHex))
     }
 
-    func testSessionManagerSendTextDecryptsOnOtherSide() throws {
-        let alice = generateKeypair()
-        let bob = generateKeypair()
-
-        let aliceMgr = try SessionManagerHandle(
-            ourPubkeyHex: alice.publicKeyHex,
-            ourIdentityPrivkeyHex: alice.privateKeyHex,
-            deviceId: "alice-device",
-            ownerPubkeyHex: nil
+    func testSendProducesDurableUnsignedDeliveryWithExpiration() throws {
+        let aliceKeys = generateKeypair()
+        let bobKeys = generateKeypair()
+        let alice = try makeManager(aliceKeys)
+        let bob = try makeManager(bobKeys)
+        _ = try establishSession(
+            inviter: alice,
+            inviterKeys: aliceKeys,
+            acceptor: bob,
+            acceptorKeys: bobKeys
         )
-        let bobMgr = try SessionManagerHandle(
-            ourPubkeyHex: bob.publicKeyHex,
-            ourIdentityPrivkeyHex: bob.privateKeyHex,
-            deviceId: "bob-device",
-            ownerPubkeyHex: nil
-        )
-        try aliceMgr.`init`()
-        try bobMgr.`init`()
 
-        let aliceInvite = try XCTUnwrap(
-            try aliceMgr.drainEvents().first(where: { isInvitePublish($0) })?.eventJson
+        let expiration = UInt64(Date().timeIntervalSince1970) + 60
+        let result = try bob.sendText(
+            peerPubkeyHex: aliceKeys.publicKeyHex,
+            text: "hello from bob",
+            expiresAtSeconds: expiration
         )
-        _ = try bobMgr.drainEvents() // discard Bob init invite
-
-        _ = try bobMgr.acceptInviteFromEventJson(eventJson: aliceInvite, ownerPubkeyHintHex: nil)
-        let bobAfterAccept = try bobMgr.drainEvents()
-        let bobResponse = try XCTUnwrap(
-            bobAfterAccept.first(where: { $0.kind == "publish_signed" && ((try? extractNostrKind(json: $0.eventJson ?? "")) == 1059) })?.eventJson
+        let publish = try requireAction(
+            in: bob,
+            kind: "publish",
+            outerEventID: result.outerEventId
         )
-        try aliceMgr.processEvent(eventJson: bobResponse)
-        _ = try aliceMgr.drainEvents()
+        let outerJSON = try XCTUnwrap(publish.eventJson)
+        try alice.processEvent(eventJson: outerJSON)
 
-        _ = try bobMgr.sendText(recipientPubkeyHex: alice.publicKeyHex, text: "hello from bob", expiresAtSeconds: nil)
-        let bobOutbound = try bobMgr.drainEvents().compactMap { e -> String? in
-            guard e.kind == "publish_signed", let json = e.eventJson else { return nil }
-            return ((try? extractNostrKind(json: json)) == 1060) ? json : nil
+        let delivery = try requireAction(
+            in: alice,
+            kind: "delivery",
+            innerEventID: result.innerEventId
+        )
+        let innerJSON = try XCTUnwrap(delivery.innerEventJson)
+        let inner = try jsonObject(innerJSON)
+        XCTAssertEqual(inner["kind"] as? Int, 14)
+        XCTAssertEqual(inner["pubkey"] as? String, bobKeys.publicKeyHex)
+        XCTAssertEqual(inner["content"] as? String, "hello from bob")
+        XCTAssertNil(inner["sig"] as? String)
+        XCTAssertEqual(delivery.peerPubkeyHex, bobKeys.publicKeyHex)
+        XCTAssertEqual(delivery.outerEventId, result.outerEventId)
+        XCTAssertEqual(delivery.expiresAtSeconds, expiration)
+
+        try bob.ackActions(actionIds: [publish.actionId])
+        try alice.ackActions(actionIds: [delivery.actionId])
+        XCTAssertFalse(
+            try bob.pendingActions().contains {
+                $0.actionId == publish.actionId
+            }
+        )
+        XCTAssertFalse(
+            try alice.pendingActions().contains {
+                $0.actionId == delivery.actionId
+            }
+        )
+    }
+
+    func testSameSecondSendsHaveDistinctIDs() throws {
+        let aliceKeys = generateKeypair()
+        let bobKeys = generateKeypair()
+        let alice = try makeManager(aliceKeys)
+        let bob = try makeManager(bobKeys)
+        _ = try establishSession(
+            inviter: alice,
+            inviterKeys: aliceKeys,
+            acceptor: bob,
+            acceptorKeys: bobKeys
+        )
+
+        let first = try bob.sendText(
+            peerPubkeyHex: aliceKeys.publicKeyHex,
+            text: "first",
+            expiresAtSeconds: nil
+        )
+        let second = try bob.sendText(
+            peerPubkeyHex: aliceKeys.publicKeyHex,
+            text: "second",
+            expiresAtSeconds: nil
+        )
+
+        XCTAssertNotEqual(first.innerEventId, second.innerEventId)
+        XCTAssertNotEqual(first.outerEventId, second.outerEventId)
+    }
+
+    func testPendingPublishAndDeliverySurviveRestart() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "ndr-ffi-restart-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let alicePath = root.appendingPathComponent("alice").path
+        let bobPath = root.appendingPathComponent("bob").path
+        let aliceKeys = generateKeypair()
+        let bobKeys = generateKeypair()
+        var outerJSON = ""
+        var result: PairwiseSendResult?
+
+        do {
+            let alice = try makeManager(aliceKeys, storagePath: alicePath)
+            let bob = try makeManager(bobKeys, storagePath: bobPath)
+            _ = try establishSession(
+                inviter: alice,
+                inviterKeys: aliceKeys,
+                acceptor: bob,
+                acceptorKeys: bobKeys
+            )
+            let sent = try bob.sendText(
+                peerPubkeyHex: aliceKeys.publicKeyHex,
+                text: "survives restart",
+                expiresAtSeconds: nil
+            )
+            result = sent
+            outerJSON = try XCTUnwrap(
+                requireAction(
+                    in: bob,
+                    kind: "publish",
+                    outerEventID: sent.outerEventId
+                ).eventJson
+            )
         }
-        XCTAssertFalse(bobOutbound.isEmpty, "Expected at least one kind 1060 message to publish")
 
-        for eventJson in bobOutbound {
-            try aliceMgr.processEvent(eventJson: eventJson)
+        let sent = try XCTUnwrap(result)
+        do {
+            let restoredBob = try makeManager(
+                bobKeys,
+                storagePath: bobPath
+            )
+            XCTAssertNotNil(
+                try restoredBob.pendingActions().first {
+                    $0.outerEventId == sent.outerEventId
+                        && $0.kind == "publish"
+                }
+            )
         }
-        let aliceEvents = try aliceMgr.drainEvents()
-        let decryptedInner = try XCTUnwrap(
-            aliceEvents.first(where: { $0.kind == "decrypted_message" })?.content,
-            "Expected a decrypted inner event to surface"
+
+        do {
+            let restoredAlice = try makeManager(
+                aliceKeys,
+                storagePath: alicePath
+            )
+            try restoredAlice.processEvent(eventJson: outerJSON)
+        }
+        let restoredAgain = try makeManager(
+            aliceKeys,
+            storagePath: alicePath
         )
-        XCTAssertEqual(try innerEventContent(json: decryptedInner), "hello from bob")
+        let delivery = try requireAction(
+            in: restoredAgain,
+            kind: "delivery",
+            innerEventID: sent.innerEventId
+        )
+        XCTAssertEqual(
+            try jsonObject(
+                XCTUnwrap(delivery.innerEventJson)
+            )["content"] as? String,
+            "survives restart"
+        )
     }
 
-    func testSessionManagerRejectsInvalidInviteEventJson() throws {
-        let keys = generateKeypair()
-        let mgr = try SessionManagerHandle(
-            ourPubkeyHex: keys.publicKeyHex,
-            ourIdentityPrivkeyHex: keys.privateKeyHex,
-            deviceId: "test-device",
-            ownerPubkeyHex: nil
-        )
-        try mgr.`init`()
+    func testInvalidInviteAndAuthenticatedPeerMismatchAreRejected() throws {
+        let aliceKeys = generateKeypair()
+        let bobKeys = generateKeypair()
+        let unexpectedKeys = generateKeypair()
+        let alice = try makeManager(aliceKeys)
+        let bob = try makeManager(bobKeys)
 
-        let notAnInvite = """
-        {"kind":1,"id":"test","pubkey":"test","created_at":0,"content":"hello","tags":[],"sig":"test"}
-        """
-        XCTAssertThrowsError(try mgr.acceptInviteFromEventJson(eventJson: notAnInvite, ownerPubkeyHintHex: nil))
+        XCTAssertThrowsError(
+            try bob.acceptInviteFromEventJson(
+                eventJson:
+                    #"{"kind":1,"id":"bad","pubkey":"bad","created_at":0,"content":"","tags":[],"sig":"bad"}"#,
+                authenticatedPeerPubkeyHex: aliceKeys.publicKeyHex
+            )
+        )
+        XCTAssertThrowsError(
+            try bob.acceptInviteFromEventJson(
+                eventJson: alice.currentInviteEventJson(),
+                authenticatedPeerPubkeyHex: unexpectedKeys.publicKeyHex
+            )
+        )
+    }
+
+    private func makeManager(
+        _ keys: FfiKeyPair,
+        storagePath: String? = nil
+    ) throws -> PairwiseManager {
+        let path: String
+        if let storagePath {
+            path = storagePath
+        } else {
+            let directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent(
+                    "ndr-ffi-test-\(UUID().uuidString)",
+                    isDirectory: true
+                )
+            path = directory.path
+            addTeardownBlock {
+                try? FileManager.default.removeItem(at: directory)
+            }
+        }
+        return try PairwiseManager.newWithStoragePath(
+            ourPubkeyHex: keys.publicKeyHex,
+            ourIdentityPrivateKeyHex: keys.privateKeyHex,
+            storagePath: path
+        )
     }
 }
 
-// MARK: - Helper Extensions
+private struct HandshakeArtifacts {
+    let response: PairwiseAction
+    let responseJSON: String
+    let bootstrapJSON: String
+}
 
-extension Data {
+private func establishSession(
+    inviter: PairwiseManager,
+    inviterKeys: FfiKeyPair,
+    acceptor: PairwiseManager,
+    acceptorKeys: FfiKeyPair
+) throws -> HandshakeArtifacts {
+    let inviteJSON = try inviter.currentInviteEventJson()
+    let accepted = try acceptor.acceptInviteFromEventJson(
+        eventJson: inviteJSON,
+        authenticatedPeerPubkeyHex: inviterKeys.publicKeyHex
+    )
+    XCTAssertTrue(accepted.createdNewSession)
+
+    let response = try requireAction(in: acceptor, kind: "out_of_band")
+    let responseJSON = try XCTUnwrap(response.eventJson)
+    let bootstrap = try requireAction(in: acceptor, kind: "publish")
+    let bootstrapJSON = try XCTUnwrap(bootstrap.eventJson)
+    try inviter.processOutOfBandResponse(
+        eventJson: responseJSON,
+        authenticatedPeerPubkeyHex: acceptorKeys.publicKeyHex
+    )
+    XCTAssertEqual(
+        try inviter.sessionInfo(
+            peerPubkeyHex: acceptorKeys.publicKeyHex
+        )?.sendReady,
+        false
+    )
+    try inviter.processEvent(eventJson: bootstrapJSON)
+    try acceptor.ackActions(
+        actionIds: [response.actionId, bootstrap.actionId]
+    )
+    return HandshakeArtifacts(
+        response: response,
+        responseJSON: responseJSON,
+        bootstrapJSON: bootstrapJSON
+    )
+}
+
+private func requireAction(
+    in manager: PairwiseManager,
+    kind: String,
+    innerEventID: String? = nil,
+    outerEventID: String? = nil
+) throws -> PairwiseAction {
+    try XCTUnwrap(
+        try manager.pendingActions().first { action in
+            action.kind == kind
+                && (innerEventID == nil || action.innerEventId == innerEventID)
+                && (outerEventID == nil || action.outerEventId == outerEventID)
+        },
+        "Expected pending \(kind) action"
+    )
+}
+
+private func extractNostrKind(json: String) throws -> Int {
+    try XCTUnwrap(
+        jsonObject(json)["kind"] as? Int,
+        "Event should have an integer kind"
+    )
+}
+
+private func jsonObject(_ json: String) throws -> [String: Any] {
+    try XCTUnwrap(
+        JSONSerialization.jsonObject(
+            with: Data(json.utf8),
+            options: []
+        ) as? [String: Any],
+        "Expected a JSON object"
+    )
+}
+
+private extension Data {
     init?(hexString: String) {
-        let len = hexString.count / 2
-        var data = Data(capacity: len)
-        var i = hexString.startIndex
-        for _ in 0..<len {
-            let j = hexString.index(i, offsetBy: 2)
-            guard let byte = UInt8(hexString[i..<j], radix: 16) else {
+        guard hexString.count.isMultiple(of: 2) else { return nil }
+        var data = Data(capacity: hexString.count / 2)
+        var index = hexString.startIndex
+        while index < hexString.endIndex {
+            let next = hexString.index(index, offsetBy: 2)
+            guard let byte = UInt8(hexString[index..<next], radix: 16) else {
                 return nil
             }
             data.append(byte)
-            i = j
+            index = next
         }
         self = data
     }
-}
-
-// MARK: - Test Helpers
-
-private func extractNostrKind(json: String) throws -> Int {
-    let data = Data(json.utf8)
-    let obj = try JSONSerialization.jsonObject(with: data, options: [])
-    guard let dict = obj as? [String: Any] else { throw NSError(domain: "NdrFfiTests", code: 1) }
-    guard let kind = dict["kind"] as? Int else { throw NSError(domain: "NdrFfiTests", code: 2) }
-    return kind
-}
-
-private func isInvitePublish(_ event: PubSubEvent) -> Bool {
-    guard event.kind == "publish_signed",
-          let json = event.eventJson,
-          (try? extractNostrKind(json: json)) == 30078,
-          let tags = try? extractNostrTags(json: json) else {
-        return false
-    }
-    return tags.contains { tag in
-        tag.count >= 2 && tag[0] == "l" && tag[1] == "double-ratchet/invites"
-    } || tags.contains { tag in
-        tag.count >= 2 && tag[0] == "d" && tag[1].hasPrefix("double-ratchet/invites/")
-    }
-}
-
-private func extractNostrTags(json: String) throws -> [[String]] {
-    let data = Data(json.utf8)
-    let obj = try JSONSerialization.jsonObject(with: data, options: [])
-    guard let dict = obj as? [String: Any] else { throw NSError(domain: "NdrFfiTests", code: 5) }
-    return dict["tags"] as? [[String]] ?? []
-}
-
-private func innerEventContent(json: String) throws -> String {
-    let data = Data(json.utf8)
-    let obj = try JSONSerialization.jsonObject(with: data, options: [])
-    guard let dict = obj as? [String: Any] else { throw NSError(domain: "NdrFfiTests", code: 3) }
-    guard let content = dict["content"] as? String else { throw NSError(domain: "NdrFfiTests", code: 4) }
-    return content
 }

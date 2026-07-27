@@ -565,49 +565,6 @@ final class ChatPrivateConversationCoordinator {
         context.notifyUIChanged()
     }
 
-    /// Ingests a message authored on another device belonging to our account.
-    /// It is a sent message in the remote peer's thread: do not acknowledge it,
-    /// mark it unread, or notify as though it came from the remote peer.
-    func handleLocalSiblingPrivateMessage(
-        _ payload: NoisePayload,
-        conversationPubkey: String,
-        convKey: PeerID,
-        messageTimestamp: Date
-    ) {
-        guard let pm = PrivateMessagePacket.decode(from: payload.data),
-              !context.isNostrBlocked(pubkeyHexLowercased: conversationPubkey),
-              !context.privateChatsContainMessage(withID: pm.messageID)
-        else {
-            return
-        }
-
-        let conversationPeerID = consolidateAccountConversationAliases(for: convKey)
-        let recipientName: String = {
-            if let noiseKey = conversationPeerID.noiseKey,
-               let favoriteNickname =
-                context.favoriteRelationship(forNoiseKey: noiseKey)?.peerNickname,
-               !favoriteNickname.isEmpty {
-                return favoriteNickname
-            }
-            return context.displayNameForNostrPubkey(conversationPubkey)
-        }()
-        let message = BitchatMessage(
-            id: pm.messageID,
-            sender: context.nickname,
-            content: pm.content,
-            timestamp: messageTimestamp,
-            isRelay: false,
-            isPrivate: true,
-            recipientNickname: recipientName,
-            senderPeerID: context.myPeerID,
-            deliveryStatus: .sent
-        )
-        guard context.appendPrivateMessage(message, to: conversationPeerID) else {
-            return
-        }
-        context.notifyUIChanged()
-    }
-
     func handleDelivered(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID) {
         guard let messageID = String(data: payload.data, encoding: .utf8) else { return }
 

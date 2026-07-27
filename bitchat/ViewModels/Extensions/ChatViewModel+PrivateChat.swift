@@ -46,21 +46,6 @@ extension ChatViewModel {
     }
 
     @MainActor
-    func handleLocalSiblingPrivateMessage(
-        _ payload: NoisePayload,
-        conversationPubkey: String,
-        convKey: PeerID,
-        messageTimestamp: Date
-    ) {
-        privateConversationCoordinator.handleLocalSiblingPrivateMessage(
-            payload,
-            conversationPubkey: conversationPubkey,
-            convKey: convKey,
-            messageTimestamp: messageTimestamp
-        )
-    }
-
-    @MainActor
     func handleDelivered(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID) {
         privateConversationCoordinator.handleDelivered(payload, senderPubkey: senderPubkey, convKey: convKey)
     }

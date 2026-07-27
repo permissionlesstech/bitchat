@@ -18,6 +18,8 @@ final class MockKeychain: KeychainManagerProtocol {
     var simulatedReadError: KeychainReadResult?
     var simulatedSaveError: KeychainSaveResult?
     var simulatedGenericReadError: KeychainReadResult?
+    var simulatedGenericSaveFailureKeys = Set<String>()
+    var simulatedGenericDeleteFailureKeys = Set<String>()
     var simulatedDeleteAllResult = true
     private(set) var deleteAllCallCount = 0
 
@@ -77,6 +79,9 @@ final class MockKeychain: KeychainManagerProtocol {
     // MARK: - Generic Data Storage (consolidated from KeychainHelper)
 
     func save(key: String, data: Data, service: String, accessible: CFString?) {
+        guard !simulatedGenericSaveFailureKeys.contains(key) else {
+            return
+        }
         if serviceStorage[service] == nil {
             serviceStorage[service] = [:]
         }
@@ -98,6 +103,9 @@ final class MockKeychain: KeychainManagerProtocol {
     }
 
     func delete(key: String, service: String) {
+        guard !simulatedGenericDeleteFailureKeys.contains(key) else {
+            return
+        }
         serviceStorage[service]?.removeValue(forKey: key)
     }
 

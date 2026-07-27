@@ -403,14 +403,22 @@ struct PrivateMediaEndToEndTests {
 
         await alice._test_drainNoiseMessagePipeline()
         let tap = PacketTap()
+        let admission = ReceiptCapabilityRecorder()
         alice._test_onOutboundPacket = tap.record
         alice.sendNdrEvent(
             to: bob.myPeerID,
             eventJson: #"{"kind":1059}"#,
-            expectedTransportState: authenticatedState
+            expectedTransportState: authenticatedState,
+            completion: admission.record
         )
         await alice._test_drainNoiseMessagePipeline()
 
+        #expect(
+            await TestHelpers.waitUntil(
+                { admission.snapshot() == [false] },
+                timeout: TestConstants.longTimeout
+            )
+        )
         #expect(
             tap.snapshot().allSatisfy {
                 $0.type != MessageType.noiseEncrypted.rawValue
@@ -453,11 +461,13 @@ struct PrivateMediaEndToEndTests {
         #expect(authenticatedState.noisePublicKey == bob.noiseStaticPublicKeyData())
 
         let tap = PacketTap()
+        let admission = ReceiptCapabilityRecorder()
         alice._test_onOutboundPacket = tap.record
         alice.sendNdrEvent(
             to: bob.myPeerID,
             eventJson: #"{"kind":1059}"#,
-            expectedTransportState: authenticatedState
+            expectedTransportState: authenticatedState,
+            completion: admission.record
         )
         let sent = await TestHelpers.waitUntil(
             {
@@ -470,6 +480,12 @@ struct PrivateMediaEndToEndTests {
         )
 
         #expect(sent)
+        #expect(
+            await TestHelpers.waitUntil(
+                { admission.snapshot().count == 1 },
+                timeout: TestConstants.longTimeout
+            )
+        )
         #expect(
             tap.snapshot().filter {
                 $0.type == MessageType.noiseEncrypted.rawValue
@@ -568,14 +584,22 @@ struct PrivateMediaEndToEndTests {
         await alice._test_drainNoiseMessagePipeline()
 
         let tap = PacketTap()
+        let admission = ReceiptCapabilityRecorder()
         alice._test_onOutboundPacket = tap.record
         alice.sendNdrEvent(
             to: bob.myPeerID,
             eventJson: #"{"kind":1059}"#,
-            expectedTransportState: oldState
+            expectedTransportState: oldState,
+            completion: admission.record
         )
         await alice._test_drainNoiseMessagePipeline()
 
+        #expect(
+            await TestHelpers.waitUntil(
+                { admission.snapshot() == [false] },
+                timeout: TestConstants.longTimeout
+            )
+        )
         #expect(
             tap.snapshot().allSatisfy {
                 $0.type != MessageType.noiseEncrypted.rawValue

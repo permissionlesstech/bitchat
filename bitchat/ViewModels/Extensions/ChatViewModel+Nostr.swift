@@ -62,11 +62,55 @@ extension ChatViewModel {
 
     @MainActor
     func setupNostrMessageHandling() {
-        if let currentIdentity = try? idBridge.getCurrentNostrIdentity() {
-            ndrService.onDecryptedMessage = { [weak self] message in
-                self?.nostrCoordinator.inbound.handleNdrDecryptedMessage(message)
+        if favoritesService.canActivateDoubleRatchetRelay,
+           let currentIdentity = try? idBridge.getCurrentNostrIdentity()
+        {
+            ndrService.configureIfNeeded(
+                identity: currentIdentity,
+                processPendingActions: false
+            )
+            if ndrService.isRolloutEnabled {
+                for relationship in favoritesService.favorites.values {
+                    guard let peerNostrPublicKey =
+                            relationship.peerNostrPublicKey,
+                          let peerPubkeyHex =
+                            Self.ndrNostrPubkeyHex(
+                                from: peerNostrPublicKey
+                            ),
+                          ndrService.hasPairwiseSession(
+                            with: peerPubkeyHex
+                          )
+                    else {
+                        continue
+                    }
+                    guard favoritesService.markNdrRequired(
+                        for: relationship.peerNoisePublicKey
+                    ) else {
+                        ndrService.onDecryptedMessage = nil
+                        nostrCoordinator.subscriptions
+                            .setupNostrMessageHandling()
+                        return
+                    }
+                }
+            }
+            guard favoritesService.canActivateDoubleRatchetRelay else {
+                ndrService.onDecryptedMessage = nil
+                nostrCoordinator.subscriptions.setupNostrMessageHandling()
+                return
+            }
+            ndrService.onDecryptedMessage = { [weak self] message, completion in
+                guard let self else {
+                    completion(.retry)
+                    return
+                }
+                self.nostrCoordinator.inbound.handleNdrDecryptedMessage(
+                    message,
+                    completion: completion
+                )
             }
             ndrService.configureIfNeeded(identity: currentIdentity)
+        } else {
+            ndrService.onDecryptedMessage = nil
         }
         nostrCoordinator.subscriptions.setupNostrMessageHandling()
     }

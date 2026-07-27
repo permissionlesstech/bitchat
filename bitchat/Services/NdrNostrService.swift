@@ -1,409 +1,1115 @@
+import BitFoundation
 import BitLogger
 import Foundation
 import NdrFfi
 
 @MainActor
 protocol NostrRelayManaging: AnyObject {
+    @discardableResult
     func subscribe(
         filter: NostrFilter,
         id: String,
         relayUrls: [String]?,
         handler: @escaping (NostrEvent) -> Void,
         onEOSE: (() -> Void)?
-    )
+    ) -> Bool
     func unsubscribe(id: String)
-    func sendEvent(_ event: NostrEvent, to relayUrls: [String]?)
+    func sendEventImmediately(
+        _ event: NostrEvent,
+        to relayUrls: [String]?,
+        completion: @escaping (Bool) -> Void
+    )
 }
 
 extension NostrRelayManager: NostrRelayManaging {}
 
-struct NdrDecryptedMessage {
-    let event: NostrEvent
-    let senderPubkeyHex: String
-    let senderDevicePubkeyHex: String?
-    let conversationOwnerPubkeyHex: String?
+enum NdrDeliveryDisposition: Equatable {
+    case consumed
+    case retry
+}
 
-    /// Iris sets `conversationOwnerPubkeyHex` on a local-sibling copy so the
-    /// receiving device can route its own authored event to the remote peer's
-    /// thread. Authentication continues to use `senderPubkeyHex`.
-    var conversationPubkeyHex: String {
-        conversationOwnerPubkeyHex ?? senderPubkeyHex
+enum NdrSendDisposition: Equatable {
+    case sent(innerEventID: String, outerEventID: String)
+    case noSession
+    case failed
+}
+
+enum NdrStorageDirectoryError: Error, Equatable {
+    case applicationSupportUnavailable
+}
+
+enum NdrSessionStateError: Error, Equatable {
+    case missingEstablishedState
+    case invalidEstablishedSessionMarker
+    case establishedSessionMarkerWriteFailed
+    case establishedSessionMarkerClearFailed
+}
+
+@MainActor
+protocol NdrSessionMarkerStoring: AnyObject {
+    func contains(identityPubkeyHex: String) throws -> Bool
+    func mark(identityPubkeyHex: String) throws
+    func clear() throws
+}
+
+@MainActor
+final class InMemoryNdrSessionMarkerStore: NdrSessionMarkerStoring {
+    private var identities = Set<String>()
+
+    func contains(identityPubkeyHex: String) throws -> Bool {
+        identities.contains(identityPubkeyHex)
     }
 
-    var isLocalSiblingCopy: Bool {
-        conversationOwnerPubkeyHex != nil
+    func mark(identityPubkeyHex: String) throws {
+        identities.insert(identityPubkeyHex)
+    }
+
+    func clear() throws {
+        identities.removeAll()
     }
 }
 
-/// Bridges the protocol-backed `NdrFfi` `SessionManagerHandle` with `NostrRelayManager`.
+@MainActor
+private final class KeychainNdrSessionMarkerStore:
+    NdrSessionMarkerStoring
+{
+    private static let service = "chat.bitchat.ndr.session-markers"
+    private static let key = "established-identities"
+    private let keychain: KeychainManagerProtocol
+
+    init(keychain: KeychainManagerProtocol = KeychainManager.makeDefault()) {
+        self.keychain = keychain
+    }
+
+    func contains(identityPubkeyHex: String) throws -> Bool {
+        try identities().contains(identityPubkeyHex)
+    }
+
+    func mark(identityPubkeyHex: String) throws {
+        var updated = try identities()
+        updated.insert(identityPubkeyHex)
+        let data = try JSONEncoder().encode(updated.sorted())
+        keychain.save(
+            key: Self.key,
+            data: data,
+            service: Self.service,
+            accessible: nil
+        )
+        guard try identities().contains(identityPubkeyHex) else {
+            throw NdrSessionStateError
+                .establishedSessionMarkerWriteFailed
+        }
+    }
+
+    func clear() throws {
+        keychain.delete(key: Self.key, service: Self.service)
+        guard keychain.load(key: Self.key, service: Self.service) == nil else {
+            throw NdrSessionStateError
+                .establishedSessionMarkerClearFailed
+        }
+    }
+
+    private func identities() throws -> Set<String> {
+        guard let data = keychain.load(
+            key: Self.key,
+            service: Self.service
+        ) else {
+            return []
+        }
+        guard let values = try? JSONDecoder().decode(
+            [String].self,
+            from: data
+        ),
+            values.allSatisfy({
+                $0.count == 64
+                    && $0.allSatisfy { character in
+                        character.isHexDigit
+                    }
+            })
+        else {
+            throw NdrSessionStateError.invalidEstablishedSessionMarker
+        }
+        return Set(values.map { $0.lowercased() })
+    }
+}
+
+struct NdrDecryptedMessage {
+    let event: NostrEvent
+    let senderPubkeyHex: String
+    let outerEventID: String
+    let expiresAtSeconds: UInt64?
+}
+
+struct NdrOutOfBandAction {
+    let eventJson: String
+    let peerPubkeyHex: String
+
+    let actionID: String
+    fileprivate let manager: PairwiseManager
+    fileprivate let managerEpoch: UInt64
+}
+
+struct NdrInviteAction {
+    let eventJson: String
+    let eventID: String
+
+    fileprivate let manager: PairwiseManager
+    fileprivate let managerEpoch: UInt64
+}
+
+typealias NdrDeliveryCompletion = @MainActor (NdrDeliveryDisposition) -> Void
+typealias NdrDecryptedMessageHandler =
+    @MainActor (NdrDecryptedMessage, @escaping NdrDeliveryCompletion) -> Void
+
+/// Bridges BitChat's authenticated BLE bootstrap and relay transport to the
+/// durable single-device pairwise NDR runtime.
 ///
-/// The ndr session manager emits a stream of pub/sub actions we must execute externally:
-/// - `subscribe` / `unsubscribe`: Nostr filter subscriptions (for invite responses, sessions, etc)
-/// - `publish_signed`: signed Nostr events to publish
-/// - `decrypted_message`: decrypted inner event JSON (kind 14) to surface to the app
-///
-/// BitChat policy: do NOT publish double-ratchet invite/response handshake events to Nostr.
-/// Those are exchanged out-of-band over the BLE Noise channel (see `Transport.sendNdrEvent`).
+/// Only kind 1060 reaches relays. Invite/response payloads remain bound to the
+/// authenticated BLE Noise generation, and every durable runtime action is
+/// acknowledged only after its host-side effect succeeds.
 @MainActor
 final class NdrNostrService {
     static let shared = NdrNostrService()
-    private static let compactInviteURLRoot = "https://b"
-    private static let maximumPendingOutOfBandInvites = 64
-    private static let maximumBufferedDecryptedMessages = 128
 
-    /// Called when an ndr message is decrypted into an inner Nostr event (kind 14).
-    var onDecryptedMessage: ((NdrDecryptedMessage) -> Void)? {
+    private static let storageVersionDirectory = "pairwise-v1"
+    private static let maximumActionsPerRetry = 128
+    private static let transientRetryDelays: [TimeInterval] = [
+        0.25, 0.5, 1, 2
+    ]
+
+    var onDecryptedMessage: NdrDecryptedMessageHandler? {
         didSet {
-            flushBufferedDecryptedMessages()
+            if oldValue == nil, onDecryptedMessage != nil {
+                retryPendingDeliveries()
+            }
         }
     }
 
     private let relayManager: NostrRelayManaging
     private let storageDirectoryProvider: @MainActor () throws -> URL
+    private let sessionMarkerStore: NdrSessionMarkerStoring
+    private let retryScheduler:
+        @MainActor (
+            TimeInterval,
+            @escaping @MainActor () -> Void
+        ) -> Void
+    private let nativeOutOfBandMutationObserver:
+        (@MainActor () -> Void)?
     private let rolloutEnabled: Bool
 
-    private var sessionManager: SessionManagerHandle?
-    private var activeSubIDs = Set<String>()
-    private var appKeysSubscriptionIDByOwner: [String: String] = [:]
-    private var appKeysOwnerBySubscriptionID: [String: String] = [:]
-    /// Owners whose live AppKeys feed must outlive any one bootstrap attempt.
-    /// Device authorization and revocation are replaceable kind-37368 state;
-    /// retaining only the snapshot that admitted an invite would keep removed
-    /// devices eligible for future outbound fanout.
-    private var durableAppKeysOwners = Set<String>()
-    private var cachedInviteEventJson: String?
-    private var bufferedDecryptedMessages: [NdrDecryptedMessage] = []
-
-    private struct PendingOutOfBandInvite {
-        let key: PendingOutOfBandInviteKey
-        let payload: String
-        let sequence: UInt64
-        let authorization: () -> Bool
-        let deferredResponseHandler: (String) -> Void
-    }
-
-    private struct PendingOutOfBandInviteKey: Hashable {
-        let ownerPubkeyHex: String
-        let inviterPubkeyHex: String
-    }
-
-    private var pendingOutOfBandInvites:
-        [PendingOutOfBandInviteKey: PendingOutOfBandInvite] = [:]
-    private var nextPendingOutOfBandInviteSequence: UInt64 = 0
-
+    private var manager: PairwiseManager?
+    private var managerEpoch: UInt64 = 0
     private var configuredForPubkeyHex: String?
-    private var deviceId: String?
-    private let deviceIdProvider: @MainActor () -> String
-    private let clearPersistedDeviceId: @MainActor () -> Void
+    private var failedConfigurationPubkeyHex: String?
+    private var activeSubIDs = Set<String>()
+    private var inFlightActionIDs = Set<String>()
+    private var deferredActionIDs = Set<String>()
+    private var transientRetryAttempts: [String: Int] = [:]
+    private var scheduledTransientRetryTokens: [String: UUID] = [:]
+    private var continuationScheduled = false
 
     private init() {
-        self.relayManager = NostrRelayManager.shared
-        self.rolloutEnabled = DoubleRatchetFeature.isEnabled
-        self.deviceId = rolloutEnabled ? Self.loadOrCreateDeviceId() : nil
-        self.deviceIdProvider = Self.loadOrCreateDeviceId
-        self.clearPersistedDeviceId = Self.clearPersistedDeviceId
-        self.storageDirectoryProvider = Self.ndrStorageDirectory
+        relayManager = NostrRelayManager.shared
+        rolloutEnabled = DoubleRatchetFeature.isEnabled
+        sessionMarkerStore = KeychainNdrSessionMarkerStore()
+        storageDirectoryProvider = {
+            try Self.ndrStorageDirectory()
+        }
+        retryScheduler = Self.scheduleLiveRetry
+        nativeOutOfBandMutationObserver = nil
     }
 
-    /// Dependency-injected initializer (primarily for tests).
+    /// Dependency-injected initializer used by the app-target integration tests.
     init(
         relayManager: NostrRelayManaging,
-        deviceId: String,
         rolloutEnabled: Bool,
         storageDirectoryProvider: @escaping @MainActor () throws -> URL,
-        clearPersistedDeviceId: @escaping @MainActor () -> Void = {}
+        sessionMarkerStore: NdrSessionMarkerStoring? = nil,
+        retryScheduler: @escaping @MainActor (
+            TimeInterval,
+            @escaping @MainActor () -> Void
+        ) -> Void = NdrNostrService.scheduleLiveRetry,
+        nativeOutOfBandMutationObserver:
+            (@MainActor () -> Void)? = nil
     ) {
         self.relayManager = relayManager
         self.rolloutEnabled = rolloutEnabled
-        self.deviceId = deviceId
-        self.deviceIdProvider = { deviceId }
         self.storageDirectoryProvider = storageDirectoryProvider
-        self.clearPersistedDeviceId = clearPersistedDeviceId
+        self.sessionMarkerStore =
+            sessionMarkerStore ?? InMemoryNdrSessionMarkerStore()
+        self.retryScheduler = retryScheduler
+        self.nativeOutOfBandMutationObserver =
+            nativeOutOfBandMutationObserver
     }
 
-    var isConfigured: Bool { rolloutEnabled && sessionManager != nil }
+    var isConfigured: Bool { rolloutEnabled && manager != nil }
     var isRolloutEnabled: Bool { rolloutEnabled }
     var configuredPubkeyHex: String? { configuredForPubkeyHex }
 
-    /// Returns our current device invite event JSON (kind 30078), if available.
-    ///
-    /// This is exchanged out-of-band with mutual favorites over BLE and is never published to Nostr.
     func currentInviteEventJson() -> String? {
-        rolloutEnabled ? cachedInviteEventJson : nil
+        currentInviteAction()?.eventJson
     }
 
-    func configureIfNeeded(identity: NostrIdentity) {
-        guard rolloutEnabled else { return }
-        let pubkey = identity.publicKeyHex.lowercased()
-        if configuredForPubkeyHex == pubkey, sessionManager != nil { return }
-
-        // Identity changed: tear down subscriptions we created (best-effort).
-        for id in activeSubIDs {
-            relayManager.unsubscribe(id: id)
+    func currentInviteAction() -> NdrInviteAction? {
+        guard rolloutEnabled, let manager else { return nil }
+        guard let eventJson = try? manager.currentInviteEventJson(),
+              let event = try? JSONDecoder().decode(
+                NostrEvent.self,
+                from: Data(eventJson.utf8)
+              )
+        else {
+            return nil
         }
-        activeSubIDs.removeAll()
-        appKeysSubscriptionIDByOwner.removeAll()
-        appKeysOwnerBySubscriptionID.removeAll()
-        durableAppKeysOwners.removeAll()
-        pendingOutOfBandInvites.removeAll()
-        bufferedDecryptedMessages.removeAll()
-        sessionManager = nil
-        cachedInviteEventJson = nil
+        return NdrInviteAction(
+            eventJson: eventJson,
+            eventID: event.id,
+            manager: manager,
+            managerEpoch: managerEpoch
+        )
+    }
+
+    func isCurrentInviteAction(_ action: NdrInviteAction) -> Bool {
+        guard isCurrent(action.manager, epoch: action.managerEpoch) else {
+            return false
+        }
+        guard let eventJson = try? action.manager.currentInviteEventJson(),
+              let event = try? JSONDecoder().decode(
+                NostrEvent.self,
+                from: Data(eventJson.utf8)
+              )
+        else {
+            return false
+        }
+        return event.id == action.eventID
+    }
+
+    @discardableResult
+    func configureIfNeeded(
+        identity: NostrIdentity,
+        processPendingActions shouldProcessPendingActions: Bool = true,
+        allowDisabledMaintenance: Bool = false
+    ) -> Bool {
+        guard rolloutEnabled || allowDisabledMaintenance else {
+            return false
+        }
+        let pubkey = identity.publicKeyHex.lowercased()
+        if failedConfigurationPubkeyHex == pubkey {
+            // A corrupt/unopenable runtime must not be reclassified as
+            // "no session" by a later send. Recovery requires an identity
+            // change or the explicit panic/storage wipe transaction.
+            return false
+        }
+        if configuredForPubkeyHex == pubkey, manager != nil {
+            if shouldProcessPendingActions && rolloutEnabled {
+                processAvailableActions()
+            }
+            return true
+        }
+
+        replaceManager(with: nil, configuredPubkeyHex: nil)
+        failedConfigurationPubkeyHex = nil
         configuredForPubkeyHex = pubkey
 
         do {
-            // The FFI's file adapter uses fixed filenames within its base
-            // directory. Namespace that directory by owner so switching the
-            // account identity can never load another owner's ratchet state.
-            let storagePath = try storageDirectoryProvider()
+            let storageURL = try storageDirectoryProvider()
+                .appendingPathComponent(
+                    Self.storageVersionDirectory,
+                    isDirectory: true
+                )
                 .appendingPathComponent(pubkey, isDirectory: true)
-                .path
-            let deviceId = deviceId ?? deviceIdProvider()
-            self.deviceId = deviceId
-            let mgr = try SessionManagerHandle.newWithStoragePath(
+            if try sessionMarkerStore.contains(
+                identityPubkeyHex: pubkey
+            ),
+                !Self.hasDurablePairwiseState(at: storageURL)
+            {
+                throw NdrSessionStateError.missingEstablishedState
+            }
+            let newManager = try PairwiseManager.newWithStoragePath(
                 ourPubkeyHex: pubkey,
-                ourIdentityPrivkeyHex: identity.privateKey.hexEncodedString(),
-                deviceId: deviceId,
-                storagePath: storagePath,
-                ownerPubkeyHex: nil
+                ourIdentityPrivateKeyHex:
+                    identity.privateKey.hexEncodedString(),
+                storagePath: storageURL.path
             )
-            try mgr.`init`()
-            sessionManager = mgr
-            restoreDurableAppKeysSubscriptions(using: mgr)
-            _ = drainAndApplyPubSubEvents()
-            SecureLogger.info("NdrNostrService configured pub=\(pubkey.prefix(8))… device=\(deviceId)", category: .session)
+            manager = newManager
+            try markEstablishedSessionIfNeeded(
+                manager: newManager,
+                identityPubkeyHex: pubkey
+            )
+            failedConfigurationPubkeyHex = nil
+            if shouldProcessPendingActions && rolloutEnabled {
+                processAvailableActions()
+            }
+            SecureLogger.info(
+                "NdrNostrService configured pairwise pub=\(pubkey.prefix(8))…",
+                category: .session
+            )
+            return true
         } catch {
-            SecureLogger.error("NdrNostrService: failed to configure: \(error)", category: .session)
-            sessionManager = nil
+            SecureLogger.error(
+                "NdrNostrService: failed to configure: \(error)",
+                category: .session
+            )
+            replaceManager(with: nil, configuredPubkeyHex: pubkey)
+            failedConfigurationPubkeyHex = pubkey
+            return false
         }
     }
 
     func hasActiveSession(with peerPubkeyHex: String) -> Bool {
-        guard rolloutEnabled, let mgr = sessionManager else { return false }
-        do {
-            return try mgr.getActiveSessionState(peerPubkeyHex: peerPubkeyHex.lowercased()) != nil
-        } catch {
+        guard rolloutEnabled,
+              let manager,
+              let peer = Self.normalizedPubkeyHex(peerPubkeyHex),
+              let info = try? manager.sessionInfo(peerPubkeyHex: peer)
+        else {
             return false
         }
+        return info.sendReady && info.receiveReady
     }
 
-    func activeSessionStateJson(with peerPubkeyHex: String) -> String? {
-        guard rolloutEnabled, let mgr = sessionManager else { return nil }
-        return try? mgr.getActiveSessionState(peerPubkeyHex: peerPubkeyHex.lowercased())
+    /// Any native session record suppresses another invite. A valid response
+    /// can create a half-ready session while its relay bootstrap is still in
+    /// flight; sending a second invite in that window creates avoidable glare.
+    func hasPairwiseSession(with peerPubkeyHex: String) -> Bool {
+        guard rolloutEnabled,
+              let manager,
+              let peer = Self.normalizedPubkeyHex(peerPubkeyHex)
+        else {
+            return false
+        }
+        return (try? manager.sessionInfo(peerPubkeyHex: peer)) != nil
     }
 
-    /// Attempt to send via ndr when a verified, send-ready session exists.
-    /// A newly established session can remain unavailable until the peer's
-    /// owner-signed AppKeys roster arrives; callers may use their legacy path
-    /// until the runtime can prepare an NDR relay event.
-    func sendIfPossible(_ text: String, to peerPubkeyHex: String) -> Bool {
-        guard rolloutEnabled, let mgr = sessionManager else { return false }
-        guard hasActiveSession(with: peerPubkeyHex) else { return false }
+    /// Removes only the selected pairwise peer. Other peer sessions and the
+    /// local invite remain intact.
+    @discardableResult
+    func retirePeer(
+        _ peerPubkeyHex: String,
+        processPendingActions shouldProcessPendingActions: Bool = true,
+        allowDisabledMaintenance: Bool = false
+    ) -> Bool {
+        guard rolloutEnabled || allowDisabledMaintenance,
+              let manager,
+              let peer = Self.normalizedPubkeyHex(peerPubkeyHex)
+        else {
+            return false
+        }
+
+        let retiredActionIDs = Set(
+            (try? manager.pendingActions())?
+                .filter { $0.peerPubkeyHex == peer }
+                .map(\.actionId)
+                ?? []
+        )
         do {
-            let outboundEventIDs = try mgr.sendText(
-                recipientPubkeyHex: peerPubkeyHex.lowercased(),
-                text: text,
-                expiresAtSeconds: nil
-            )
-            _ = drainAndApplyPubSubEvents()
-            if outboundEventIDs.isEmpty {
-                SecureLogger.debug(
-                    "NdrNostrService: send queued no relay publish for \(peerPubkeyHex.prefix(8))…",
-                    category: .session
-                )
+            guard try manager.retirePeer(peerPubkeyHex: peer) else {
+                return true
+            }
+            for actionID in retiredActionIDs {
+                inFlightActionIDs.remove(actionID)
+                deferredActionIDs.remove(actionID)
+                transientRetryAttempts.removeValue(forKey: actionID)
+                scheduledTransientRetryTokens.removeValue(forKey: actionID)
+            }
+            if shouldProcessPendingActions && rolloutEnabled {
+                processAvailableActions()
             }
             return true
         } catch {
-            SecureLogger.debug("NdrNostrService: send failed (no session yet?): \(error)", category: .session)
-            // Still drain in case the error queued any pubsub actions.
-            _ = drainAndApplyPubSubEvents()
+            SecureLogger.error(
+                "NdrNostrService: failed to retire pairwise peer: \(error)",
+                category: .session
+            )
             return false
         }
     }
 
-    /// Process a received invite/response payload (transferred out-of-band over BLE).
-    ///
-    /// Returns any outbound handshake payloads (e.g. giftwrap response JSON or compact invite URL)
-    /// that should be returned to the sender over BLE.
+    /// A legacy envelope is permitted only when no pairwise session exists.
+    /// Once any session exists, inability to ratchet is a fail-closed error.
+    func send(
+        _ text: String,
+        to peerPubkeyHex: String,
+        expiresAtSeconds: UInt64? = nil
+    ) -> NdrSendDisposition {
+        guard rolloutEnabled else {
+            return .noSession
+        }
+        guard let manager else {
+            return failedConfigurationPubkeyHex == nil
+                ? .noSession
+                : .failed
+        }
+        guard
+              let peer = Self.normalizedPubkeyHex(peerPubkeyHex)
+        else {
+            return .noSession
+        }
+
+        do {
+            guard let info = try manager.sessionInfo(peerPubkeyHex: peer) else {
+                return .noSession
+            }
+            guard info.sendReady else {
+                SecureLogger.warning(
+                    "NdrNostrService: pairwise session exists but is not send-ready",
+                    category: .security
+                )
+                return .failed
+            }
+
+            let result = try manager.sendText(
+                peerPubkeyHex: peer,
+                text: text,
+                expiresAtSeconds: expiresAtSeconds
+            )
+            processAvailableActions()
+            return .sent(
+                innerEventID: result.innerEventId,
+                outerEventID: result.outerEventId
+            )
+        } catch {
+            SecureLogger.error(
+                "NdrNostrService: active pairwise send failed: \(error)",
+                category: .session
+            )
+            processAvailableActions()
+            return .failed
+        }
+    }
+
+    /// Processes an invite or response delivered over an authenticated BLE
+    /// Noise session and returns only OOB actions for that exact peer.
     func processOutOfBandEventJson(
         _ eventJson: String,
         expectedPeerPubkeyHex: String,
         authorization: (() -> Bool)? = nil,
-        deferredResponseHandler: ((String) -> Void)? = nil
-    ) -> [String] {
+        persistEstablishedBinding: () -> Bool
+    ) -> [NdrOutOfBandAction] {
         guard rolloutEnabled,
-              let mgr = sessionManager,
-              authorization?() != false
+              let manager,
+              authorization?() != false,
+              let expectedPeer =
+                Self.normalizedPubkeyHex(expectedPeerPubkeyHex)
         else {
             return []
         }
-        let payload = eventJson.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard payload.utf8.count <= NostrProtocol.maximumPrivateEnvelopeCiphertextBytes,
-              let expectedPeer = Self.normalizedPubkeyHex(expectedPeerPubkeyHex)
+        let epoch = managerEpoch
+        let payload =
+            eventJson.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !payload.isEmpty,
+              payload.utf8.count
+                <= NostrProtocol.maximumPrivateEnvelopeCiphertextBytes
         else {
-            SecureLogger.warning("NdrNostrService: rejected invalid or oversized OOB payload", category: .security)
-            return []
-        }
-
-        let inboundInvite = parseOutOfBandInvite(payload)
-        let responseEvent = inboundInvite == nil
-            ? try? JSONDecoder().decode(NostrEvent.self, from: Data(payload.utf8))
-            : nil
-        if let inboundInvite, inboundInvite.ownerPubkeyHex != expectedPeer {
             SecureLogger.warning(
-                "NdrNostrService: rejected OOB invite whose owner does not match the authenticated peer",
+                "NdrNostrService: rejected invalid or oversized OOB payload",
                 category: .security
             )
             return []
         }
 
-        if inboundInvite == nil {
-            guard let responseEvent,
-                  responseEvent.kind == 1059,
-                  responseEvent.isValidSignature(),
-                  NostrEvent.isWithinInboundTagLimits(responseEvent.tags)
-            else {
-                SecureLogger.warning("NdrNostrService: rejected non-invite OOB payload", category: .security)
+        let mutation: ValidatedOutOfBandMutation
+        if let invite = parseOutOfBandInvite(payload) {
+            guard invite.peerPubkeyHex == expectedPeer else {
+                SecureLogger.warning(
+                    "NdrNostrService: rejected OOB invite for another authenticated peer",
+                    category: .security
+                )
                 return []
             }
+            mutation = .invite(invite.transport)
+        } else {
+            guard let response = try? JSONDecoder().decode(
+                NostrEvent.self,
+                from: Data(payload.utf8)
+            ),
+                response.kind == 1059,
+                response.isValidSignature(),
+                NostrEvent.isWithinInboundTagLimits(response.tags)
+            else {
+                SecureLogger.warning(
+                    "NdrNostrService: rejected non-invite OOB payload",
+                    category: .security
+                )
+                return []
+            }
+            mutation = .response
         }
 
-        var blockedOnOwnerRoster = false
-        var processingFailed = false
+        // A valid authenticated OOB payload can durably create native
+        // pairwise state. Persist both host-side downgrade barriers first so
+        // a crash at any later instruction cannot reopen kind-1059 fallback.
+        guard persistEstablishedBinding() else {
+            SecureLogger.error(
+                "NdrNostrService: OOB binding pin was not durable",
+                category: .security
+            )
+            return []
+        }
         do {
-            switch inboundInvite?.transport {
-            case .eventJSON:
-                _ = try mgr.acceptInviteFromEventJson(
-                    eventJson: payload,
-                    ownerPubkeyHintHex: expectedPeer
-                )
-            case .url:
-                _ = try mgr.acceptInviteFromUrl(
-                    inviteUrl: payload,
-                    ownerPubkeyHintHex: expectedPeer
-                )
-            case .none:
-                try mgr.processOutOfBandResponse(
-                    eventJson: payload,
-                    expectedOwnerPubkeyHex: expectedPeer
-                )
+            guard let identityPubkeyHex = configuredForPubkeyHex else {
+                throw NdrSessionStateError
+                    .establishedSessionMarkerWriteFailed
             }
-        } catch let error as NdrError {
-            if case .SessionNotReady = error {
-                blockedOnOwnerRoster = true
-            } else {
-                processingFailed = true
-                SecureLogger.debug(
-                    "NdrNostrService: OOB payload ignored/rejected: \(error)",
-                    category: .session
+            try sessionMarkerStore.mark(
+                identityPubkeyHex: identityPubkeyHex.lowercased()
+            )
+        } catch {
+            SecureLogger.error(
+                "NdrNostrService: failed to precommit established-session marker: \(error)",
+                category: .security
+            )
+            return []
+        }
+
+        do {
+            nativeOutOfBandMutationObserver?()
+            switch mutation {
+            case .invite(.eventJSON):
+                _ = try manager.acceptInviteFromEventJson(
+                    eventJson: payload,
+                    authenticatedPeerPubkeyHex: expectedPeer
+                )
+            case .invite(.url):
+                _ = try manager.acceptInviteFromUrl(
+                    inviteUrl: payload,
+                    authenticatedPeerPubkeyHex: expectedPeer
+                )
+            case .response:
+                try manager.processOutOfBandResponse(
+                    eventJson: payload,
+                    authenticatedPeerPubkeyHex: expectedPeer
                 )
             }
         } catch {
-            processingFailed = true
             SecureLogger.debug(
                 "NdrNostrService: OOB payload ignored/rejected: \(error)",
                 category: .session
             )
-        }
-
-        if !blockedOnOwnerRoster,
-           !processingFailed,
-           hasActiveSession(with: expectedPeer) {
-            ensureDurableAppKeysSubscription(
-                ownerPubkeyHex: expectedPeer,
-                using: mgr
-            )
-        }
-        let outOfBandPublishes = drainAndApplyPubSubEvents(collectOutOfBandPublishes: true)
-        if blockedOnOwnerRoster, let inboundInvite {
-            if let deferredResponseHandler {
-                retainPendingOutOfBandInvite(
-                    payload: payload,
-                    ownerPubkeyHex: inboundInvite.ownerPubkeyHex,
-                    inviterPubkeyHex: inboundInvite.inviterPubkeyHex,
-                    authorization: authorization ?? { true },
-                    deferredResponseHandler: deferredResponseHandler
-                )
-            } else {
-                finishPendingOutOfBandInvite(
-                    ownerPubkeyHex: inboundInvite.ownerPubkeyHex,
-                    inviterPubkeyHex: inboundInvite.inviterPubkeyHex
-                )
-            }
-            return []
-        }
-        if processingFailed {
-            if let inboundInvite {
-                finishPendingOutOfBandInvite(
-                    ownerPubkeyHex: inboundInvite.ownerPubkeyHex,
-                    inviterPubkeyHex: inboundInvite.inviterPubkeyHex
-                )
-            }
+            processAvailableActions()
             return []
         }
 
-        if let inboundInvite,
-           outOfBandPublishes.isEmpty,
-           hasActiveSession(with: inboundInvite.ownerPubkeyHex),
-           let currentInvite = preferredInviteOobPayload() {
-            finishPendingOutOfBandInvite(
-                ownerPubkeyHex: inboundInvite.ownerPubkeyHex,
-                inviterPubkeyHex: inboundInvite.inviterPubkeyHex
-            )
-            return outOfBandPublishes + [currentInvite]
-        }
-        if let inboundInvite {
-            finishPendingOutOfBandInvite(
-                ownerPubkeyHex: inboundInvite.ownerPubkeyHex,
-                inviterPubkeyHex: inboundInvite.inviterPubkeyHex
-            )
-        }
-        return outOfBandPublishes
+        guard isCurrent(manager, epoch: epoch) else { return [] }
+        return processPendingActions(collectOutOfBandFor: expectedPeer)
     }
 
-    /// Process a Nostr event received from relays (kind 1060 messages, app-keys maintenance, etc).
+    /// Completes the durable OOB action only after BLE accepted the encrypted
+    /// packet for the exact authenticated Noise generation.
+    func completeOutOfBandAction(
+        _ action: NdrOutOfBandAction,
+        succeeded: Bool
+    ) {
+        guard isCurrent(action.manager, epoch: action.managerEpoch) else {
+            return
+        }
+        inFlightActionIDs.remove(action.actionID)
+        guard succeeded else {
+            deferredActionIDs.insert(action.actionID)
+            return
+        }
+        deferredActionIDs.remove(action.actionID)
+        if !acknowledge(
+            [action.actionID],
+            manager: action.manager,
+            epoch: action.managerEpoch
+        ) {
+            deferredActionIDs.insert(action.actionID)
+        } else {
+            // A bootstrap publish for this session is deliberately held until
+            // BLE has accepted the authenticated OOB response.
+            processAvailableActions()
+        }
+    }
+
+    /// Reclaims one failed BLE action for a bounded host retry without
+    /// releasing unrelated peer-routed actions from the durable queue.
+    func prepareOutOfBandActionForRetry(
+        _ action: NdrOutOfBandAction
+    ) -> Bool {
+        guard isCurrent(action.manager, epoch: action.managerEpoch),
+              !inFlightActionIDs.contains(action.actionID),
+              let pending = try? action.manager.pendingActions(),
+              pending.contains(where: {
+                  $0.actionId == action.actionID
+                    && $0.kind == "out_of_band"
+              })
+        else {
+            return false
+        }
+        deferredActionIDs.remove(action.actionID)
+        inFlightActionIDs.insert(action.actionID)
+        return true
+    }
+
+    @discardableResult
+    func scheduleHostTransientRetry(
+        after retryAttempt: Int,
+        operation: @escaping @MainActor () -> Void
+    ) -> Bool {
+        guard retryAttempt < Self.transientRetryDelays.count else {
+            return false
+        }
+        retryScheduler(
+            Self.transientRetryDelays[retryAttempt],
+            operation
+        )
+        return true
+    }
+
     func processInboundRelayEvent(_ event: NostrEvent) {
-        guard rolloutEnabled else { return }
-        processInboundNostrEvent(event)
+        guard rolloutEnabled, let manager else { return }
+        processInboundNostrEvent(
+            event,
+            manager: manager,
+            epoch: managerEpoch
+        )
     }
 
-    /// Invalidates every in-memory callback/session and removes the persisted
-    /// ratchet database and device identifier as part of the synchronous panic
-    /// transaction. A failed directory deletion is surfaced so startup keeps
-    /// the durable recovery marker and retries before transports restart.
-    func resetForPanic() throws {
-        for id in activeSubIDs {
-            relayManager.unsubscribe(id: id)
+    func pendingOutOfBandActions(
+        forAuthenticatedPeerPubkeyHex peerPubkeyHex: String,
+        releaseDeferred: Bool = false
+    ) -> [NdrOutOfBandAction] {
+        guard rolloutEnabled,
+              let peer = Self.normalizedPubkeyHex(peerPubkeyHex)
+        else {
+            return []
         }
-        activeSubIDs.removeAll()
-        appKeysSubscriptionIDByOwner.removeAll()
-        appKeysOwnerBySubscriptionID.removeAll()
-        durableAppKeysOwners.removeAll()
-        pendingOutOfBandInvites.removeAll()
-        nextPendingOutOfBandInviteSequence = 0
-        bufferedDecryptedMessages.removeAll()
-        sessionManager = nil
-        cachedInviteEventJson = nil
-        configuredForPubkeyHex = nil
+        if releaseDeferred {
+            releaseDeferredOutOfBandActions(for: peer)
+        }
+        return processPendingActions(collectOutOfBandFor: peer)
+    }
+
+    /// A real disconnected→connected edge starts a fresh bounded relay retry
+    /// epoch without releasing consumer or BLE work.
+    func retryRelayActions() {
+        releaseDeferredActions(
+            where: { action in
+                action.kind == "publish"
+                    || action.kind == "subscribe"
+                    || action.kind == "unsubscribe"
+            }
+        )
+        processAvailableActions()
+    }
+
+    /// Consumer installation or an explicit delivery retry releases only
+    /// application delivery work.
+    func retryPendingDeliveries() {
+        releaseDeferredActions(where: { $0.kind == "delivery" })
+        processAvailableActions()
+    }
+
+    /// Invalidates callbacks first, then deletes every pairwise database as
+    /// part of the synchronous panic transaction.
+    func resetForPanic() throws {
+        replaceManager(with: nil, configuredPubkeyHex: nil)
+        failedConfigurationPubkeyHex = nil
         onDecryptedMessage = nil
-        deviceId = nil
-        clearPersistedDeviceId()
 
         let storageDirectory = try storageDirectoryProvider()
         if FileManager.default.fileExists(atPath: storageDirectory.path) {
             try FileManager.default.removeItem(at: storageDirectory)
         }
+        try sessionMarkerStore.clear()
     }
 
-    // MARK: - Internals
+    // MARK: - Durable action processing
 
-    private func processInboundNostrEvent(_ event: NostrEvent) {
-        guard let mgr = sessionManager else { return }
-        guard event.kind == 1060 || event.kind == 37368,
+    @discardableResult
+    private func processPendingActions(
+        collectOutOfBandFor expectedPeer: String?
+    ) -> [NdrOutOfBandAction] {
+        guard let manager else { return [] }
+        let epoch = managerEpoch
+        let actions: [PairwiseAction]
+        do {
+            // Inspect the bounded native queue in full so already in-flight,
+            // deferred, or peer-routed OOB actions at its head cannot starve
+            // actionable work behind them. Host-side effects remain capped
+            // below by `maximumActionsPerRetry`.
+            actions = try manager.pendingActions()
+        } catch {
+            SecureLogger.error(
+                "NdrNostrService: pendingActions failed: \(error)",
+                category: .session
+            )
+            return []
+        }
+
+        let pendingOutOfBandSessionIDs = Set(
+            actions.compactMap { action in
+                action.kind == "out_of_band" ? action.sessionId : nil
+            }
+        )
+        let hasUnscopedOutOfBandAction = actions.contains { action in
+            action.kind == "out_of_band" && action.sessionId == nil
+        }
+
+        var synchronousAcks: [String] = []
+        var outOfBand: [NdrOutOfBandAction] = []
+        var processedActionCount = 0
+        var hitBatchLimit = false
+
+        for action in actions {
+            guard isCurrent(manager, epoch: epoch),
+                  !inFlightActionIDs.contains(action.actionId),
+                  !deferredActionIDs.contains(action.actionId)
+            else {
+                continue
+            }
+
+            switch action.kind {
+            case "publish":
+                let sharesPendingOutOfBandSession =
+                    action.sessionId.map(
+                        pendingOutOfBandSessionIDs.contains
+                    )
+                    ?? !pendingOutOfBandSessionIDs.isEmpty
+                guard !hasUnscopedOutOfBandAction,
+                      !sharesPendingOutOfBandSession
+                else {
+                    // The OOB response and relay bootstrap are one ordered
+                    // handshake. Unrelated established sessions continue.
+                    continue
+                }
+                guard processedActionCount
+                        < Self.maximumActionsPerRetry
+                else {
+                    hitBatchLimit = true
+                    continue
+                }
+                processedActionCount += 1
+                guard let event = Self.validatedPublishAction(action) else {
+                    synchronousAcks.append(action.actionId)
+                    continue
+                }
+                inFlightActionIDs.insert(action.actionId)
+                relayManager.sendEventImmediately(
+                    event,
+                    to: nil,
+                    completion: { [weak self, manager] accepted in
+                        guard let self,
+                              self.isCurrent(manager, epoch: epoch)
+                        else {
+                            return
+                        }
+                        self.inFlightActionIDs.remove(action.actionId)
+                        if accepted {
+                            self.deferredActionIDs.remove(action.actionId)
+                            if !self.acknowledge(
+                                [action.actionId],
+                                manager: manager,
+                                epoch: epoch
+                            ) {
+                                self.deferForTransientRetry(
+                                    action.actionId,
+                                    manager: manager,
+                                    epoch: epoch
+                                )
+                            }
+                        } else {
+                            self.deferForTransientRetry(
+                                action.actionId,
+                                manager: manager,
+                                epoch: epoch
+                            )
+                        }
+                    }
+                )
+
+            case "out_of_band":
+                guard let eventJson = action.eventJson,
+                      let peer =
+                        action.peerPubkeyHex.flatMap(
+                            Self.normalizedPubkeyHex
+                        ),
+                      Self.isValidOutOfBandResponse(eventJson)
+                else {
+                    guard processedActionCount
+                            < Self.maximumActionsPerRetry
+                    else {
+                        hitBatchLimit = true
+                        continue
+                    }
+                    processedActionCount += 1
+                    synchronousAcks.append(action.actionId)
+                    continue
+                }
+                guard let expectedPeer, peer == expectedPeer else {
+                    // An OOB action for another peer needs that peer's current
+                    // authenticated BLE route, so it remains durable.
+                    continue
+                }
+                guard processedActionCount
+                        < Self.maximumActionsPerRetry
+                else {
+                    hitBatchLimit = true
+                    continue
+                }
+                processedActionCount += 1
+                inFlightActionIDs.insert(action.actionId)
+                outOfBand.append(
+                    NdrOutOfBandAction(
+                        eventJson: eventJson,
+                        peerPubkeyHex: peer,
+                        actionID: action.actionId,
+                        manager: manager,
+                        managerEpoch: epoch
+                    )
+                )
+
+            case "subscribe":
+                guard processedActionCount
+                        < Self.maximumActionsPerRetry
+                else {
+                    hitBatchLimit = true
+                    continue
+                }
+                processedActionCount += 1
+                guard let subscriptionID = action.subscriptionId,
+                      let filterJson = action.filterJson,
+                      let filter = try? JSONDecoder().decode(
+                        NostrFilter.self,
+                        from: Data(filterJson.utf8)
+                      ),
+                      Self.isAllowedNdrSubscription(filter)
+                else {
+                    synchronousAcks.append(action.actionId)
+                    continue
+                }
+                if !activeSubIDs.contains(subscriptionID) {
+                    let registered = relayManager.subscribe(
+                        filter: filter,
+                        id: subscriptionID,
+                        relayUrls: nil,
+                        handler: { [weak self, manager] event in
+                            self?.processInboundNostrEvent(
+                                event,
+                                manager: manager,
+                                epoch: epoch
+                            )
+                        },
+                        onEOSE: nil
+                    )
+                    guard registered else {
+                        deferForTransientRetry(
+                            action.actionId,
+                            manager: manager,
+                            epoch: epoch
+                        )
+                        continue
+                    }
+                    activeSubIDs.insert(subscriptionID)
+                }
+                synchronousAcks.append(action.actionId)
+
+            case "unsubscribe":
+                guard processedActionCount
+                        < Self.maximumActionsPerRetry
+                else {
+                    hitBatchLimit = true
+                    continue
+                }
+                processedActionCount += 1
+                guard let subscriptionID = action.subscriptionId else {
+                    synchronousAcks.append(action.actionId)
+                    continue
+                }
+                if activeSubIDs.remove(subscriptionID) != nil {
+                    relayManager.unsubscribe(id: subscriptionID)
+                }
+                synchronousAcks.append(action.actionId)
+
+            case "delivery":
+                guard processedActionCount
+                        < Self.maximumActionsPerRetry
+                else {
+                    hitBatchLimit = true
+                    continue
+                }
+                guard let message =
+                    Self.validatedDecryptedMessage(from: action)
+                else {
+                    processedActionCount += 1
+                    // Malformed or policy-disallowed plaintext is a definitive
+                    // rejection, not a transient retry.
+                    synchronousAcks.append(action.actionId)
+                    continue
+                }
+                if Self.isExpiredDelivery(action) {
+                    processedActionCount += 1
+                    // Expiration is a definitive policy drop. Recheck here,
+                    // after decrypt/validation and immediately before handing
+                    // plaintext to the app.
+                    synchronousAcks.append(action.actionId)
+                    continue
+                }
+                guard let handler = onDecryptedMessage else {
+                    // The FFI remains the durable buffer.
+                    continue
+                }
+                guard !Self.isExpiredDelivery(action) else {
+                    processedActionCount += 1
+                    synchronousAcks.append(action.actionId)
+                    continue
+                }
+                processedActionCount += 1
+                inFlightActionIDs.insert(action.actionId)
+                handler(message) { [weak self, manager] disposition in
+                    guard let self,
+                          self.isCurrent(manager, epoch: epoch)
+                    else {
+                        return
+                    }
+                    self.inFlightActionIDs.remove(action.actionId)
+                    if disposition == .consumed {
+                        self.deferredActionIDs.remove(action.actionId)
+                        if !self.acknowledge(
+                            [action.actionId],
+                            manager: manager,
+                            epoch: epoch
+                        ) {
+                            self.deferredActionIDs.insert(action.actionId)
+                        }
+                    } else {
+                        self.deferredActionIDs.insert(action.actionId)
+                    }
+                }
+
+            default:
+                guard processedActionCount
+                        < Self.maximumActionsPerRetry
+                else {
+                    hitBatchLimit = true
+                    continue
+                }
+                processedActionCount += 1
+                // Unknown actions cannot become valid after a retry.
+                synchronousAcks.append(action.actionId)
+            }
+        }
+
+        let synchronousAckSucceeded = acknowledge(
+            synchronousAcks,
+            manager: manager,
+            epoch: epoch
+        )
+        if !synchronousAcks.isEmpty, !synchronousAckSucceeded {
+            for actionID in synchronousAcks {
+                deferForTransientRetry(
+                    actionID,
+                    manager: manager,
+                    epoch: epoch
+                )
+            }
+        }
+        if hitBatchLimit,
+           synchronousAckSucceeded
+            || processedActionCount > synchronousAcks.count
+        {
+            schedulePendingActionContinuation(
+                manager: manager,
+                epoch: epoch
+            )
+        }
+        return outOfBand
+    }
+
+    @discardableResult
+    private func acknowledge(
+        _ actionIDs: [String],
+        manager: PairwiseManager,
+        epoch: UInt64
+    ) -> Bool {
+        guard !actionIDs.isEmpty, isCurrent(manager, epoch: epoch) else {
+            return false
+        }
+        do {
+            try manager.ackActions(actionIds: actionIDs)
+            for actionID in actionIDs {
+                transientRetryAttempts.removeValue(forKey: actionID)
+                scheduledTransientRetryTokens.removeValue(forKey: actionID)
+            }
+            schedulePendingActionContinuation(
+                manager: manager,
+                epoch: epoch
+            )
+            return true
+        } catch {
+            SecureLogger.error(
+                "NdrNostrService: durable action ack failed: \(error)",
+                category: .session
+            )
+            return false
+        }
+    }
+
+    private func deferForTransientRetry(
+        _ actionID: String,
+        manager: PairwiseManager,
+        epoch: UInt64
+    ) {
+        guard isCurrent(manager, epoch: epoch) else { return }
+        deferredActionIDs.insert(actionID)
+        guard scheduledTransientRetryTokens[actionID] == nil else {
+            return
+        }
+        let attempt = transientRetryAttempts[actionID, default: 0]
+        guard attempt < Self.transientRetryDelays.count else { return }
+
+        transientRetryAttempts[actionID] = attempt + 1
+        let retryToken = UUID()
+        scheduledTransientRetryTokens[actionID] = retryToken
+        retryScheduler(Self.transientRetryDelays[attempt]) {
+            [weak self, manager] in
+            guard let self,
+                  self.isCurrent(manager, epoch: epoch),
+                  self.scheduledTransientRetryTokens[actionID] == retryToken,
+                  self.deferredActionIDs.remove(actionID) != nil
+            else {
+                return
+            }
+            self.scheduledTransientRetryTokens.removeValue(
+                forKey: actionID
+            )
+            _ = self.processPendingActions(collectOutOfBandFor: nil)
+        }
+    }
+
+    private func schedulePendingActionContinuation(
+        manager: PairwiseManager,
+        epoch: UInt64
+    ) {
+        guard isCurrent(manager, epoch: epoch),
+              !continuationScheduled
+        else {
+            return
+        }
+        continuationScheduled = true
+        Task { @MainActor [weak self, manager] in
+            guard let self,
+                  self.isCurrent(manager, epoch: epoch)
+            else {
+                return
+            }
+            self.continuationScheduled = false
+            _ = self.processPendingActions(collectOutOfBandFor: nil)
+        }
+    }
+
+    private func processInboundNostrEvent(
+        _ event: NostrEvent,
+        manager: PairwiseManager,
+        epoch: UInt64
+    ) {
+        guard isCurrent(manager, epoch: epoch),
+              event.kind == 1060,
               event.isValidSignature(),
               NostrEvent.isWithinInboundTagLimits(event.tags),
+              Self.isRecipientFreeNdrEnvelope(event),
               let json = try? event.jsonString(),
-              json.utf8.count <= NostrProtocol.maximumPrivateEnvelopeCiphertextBytes
+              json.utf8.count
+                <= NostrProtocol.maximumPrivateEnvelopeCiphertextBytes
         else {
             SecureLogger.warning(
                 "NdrNostrService: rejected disallowed or malformed relay-origin event",
@@ -413,120 +1119,122 @@ final class NdrNostrService {
         }
 
         do {
-            try mgr.processEvent(eventJson: json)
+            try manager.processEvent(eventJson: json)
         } catch {
-            // ndr will reject most unrelated events; keep log noise low.
-            SecureLogger.debug("NdrNostrService: processEvent ignored/rejected: \(error)", category: .session)
+            SecureLogger.debug(
+                "NdrNostrService: relay event ignored/rejected: \(error)",
+                category: .session
+            )
         }
+        guard isCurrent(manager, epoch: epoch) else { return }
+        processAvailableActions()
+    }
 
-        _ = drainAndApplyPubSubEvents()
-        if event.kind == 37368,
-           let owner = Self.normalizedPubkeyHex(event.pubkey) {
-            retryPendingOutOfBandInvite(ownerPubkeyHex: owner)
+    private func processAvailableActions() {
+        _ = processPendingActions(collectOutOfBandFor: nil)
+    }
+
+    private func releaseDeferredOutOfBandActions(for peerPubkeyHex: String) {
+        releaseDeferredActions { action in
+            action.kind == "out_of_band"
+                && action.peerPubkeyHex.flatMap(Self.normalizedPubkeyHex)
+                    == peerPubkeyHex
         }
     }
 
-    @discardableResult
-    private func drainAndApplyPubSubEvents(collectOutOfBandPublishes: Bool = false) -> [String] {
-        guard let mgr = sessionManager else { return [] }
-        var outOfBandPublishes: [String] = []
-        do {
-            let events = try mgr.drainEvents()
-            for e in events {
-                apply(
-                    pubsub: e,
-                    collectOutOfBandPublish: collectOutOfBandPublishes ? { outOfBandPublishes.append($0) } : nil
-                )
-            }
-        } catch {
-            SecureLogger.error("NdrNostrService: drainEvents failed: \(error)", category: .session)
+    private func releaseDeferredActions(
+        where shouldRelease: (PairwiseAction) -> Bool
+    ) {
+        guard let manager,
+              let actions = try? manager.pendingActions()
+        else {
+            return
         }
-        return outOfBandPublishes
-    }
-
-    private func apply(pubsub e: PubSubEvent, collectOutOfBandPublish: ((String) -> Void)?) {
-        switch e.kind {
-        case "subscribe":
-            guard let subid = e.subid, let filterJson = e.filterJson else { return }
-
-            do {
-                let filter = try JSONDecoder().decode(NostrFilter.self, from: Data(filterJson.utf8))
-                // BitChat policy: don't do Nostr-based DR invite discovery or invite-response listening.
-                if shouldIgnoreNdrSubscription(filter) {
-                    return
-                }
-                if let owner = appKeysSubscriptionOwner(filter) {
-                    guard appKeysSubscriptionIDByOwner[owner] == nil else {
-                        return
-                    }
-                    appKeysSubscriptionIDByOwner[owner] = subid
-                    appKeysOwnerBySubscriptionID[subid] = owner
-                }
-                guard activeSubIDs.insert(subid).inserted else { return } // already subscribed
-                relayManager.subscribe(
-                    filter: filter,
-                    id: subid,
-                    relayUrls: nil,
-                    handler: { [weak self] event in
-                        self?.processInboundNostrEvent(event)
-                    },
-                    onEOSE: nil
-                )
-            } catch {
-                SecureLogger.error("NdrNostrService: failed to decode subscribe filter: \(error)", category: .session)
-            }
-
-        case "unsubscribe":
-            guard let subid = e.subid else { return }
-            if let owner = appKeysOwnerBySubscriptionID.removeValue(forKey: subid) {
-                appKeysSubscriptionIDByOwner.removeValue(forKey: owner)
-                durableAppKeysOwners.remove(owner)
-            }
-            guard activeSubIDs.remove(subid) != nil else { return }
-            relayManager.unsubscribe(id: subid)
-
-        case "publish_signed":
-            guard let eventJson = e.eventJson else { return }
-            do {
-                let event = try JSONDecoder().decode(NostrEvent.self, from: Data(eventJson.utf8))
-
-                if isDoubleRatchetInviteEvent(event) {
-                    // Cache the current device invite for out-of-band sharing; never publish to Nostr.
-                    cachedInviteEventJson = eventJson
-                    collectOutOfBandPublish?(eventJson)
-                    return
-                }
-                if event.kind == 1059 {
-                    // Giftwrap responses are part of the DR handshake; exchange OOB over BLE.
-                    collectOutOfBandPublish?(eventJson)
-                    return
-                }
-
-                relayManager.sendEvent(event, to: nil)
-            } catch {
-                SecureLogger.error("NdrNostrService: failed to decode outbound event: \(error)", category: .session)
-            }
-
-        case "decrypted_message":
-            consumeDecryptedPubSubEvent(e)
-
-        default:
-            // Other events currently ignored (e.g. app-keys maintenance).
-            break
+        for action in actions where shouldRelease(action) {
+            deferredActionIDs.remove(action.actionId)
+            transientRetryAttempts.removeValue(forKey: action.actionId)
+            scheduledTransientRetryTokens.removeValue(
+                forKey: action.actionId
+            )
         }
     }
 
-    private func isDoubleRatchetInviteEvent(_ event: NostrEvent) -> Bool {
-        guard event.kind == 30078 else { return false }
-        for tag in event.tags where tag.count >= 2 {
-            if tag[0] == "l", tag[1] == "double-ratchet/invites" {
-                return true
-            }
-            if tag[0] == "d", tag[1].hasPrefix("double-ratchet/invites/") {
-                return true
-            }
+    // MARK: - Validation
+
+    static func validatedPublishAction(
+        _ action: PairwiseAction
+    ) -> NostrEvent? {
+        guard action.kind == "publish",
+              let eventJson = action.eventJson,
+              eventJson.utf8.count
+                <= NostrProtocol.maximumPrivateEnvelopeCiphertextBytes,
+              let event = try? JSONDecoder().decode(
+                NostrEvent.self,
+                from: Data(eventJson.utf8)
+              ),
+              event.kind == 1060,
+              event.isValidSignature(),
+              NostrEvent.isWithinInboundTagLimits(event.tags),
+              isRecipientFreeNdrEnvelope(event),
+              action.outerEventId == event.id
+        else {
+            SecureLogger.warning(
+                "NdrNostrService: rejected malformed pairwise publish action",
+                category: .security
+            )
+            return nil
         }
-        return false
+        return event
+    }
+
+    static func isRecipientFreeNdrEnvelope(_ event: NostrEvent) -> Bool {
+        !event.tags.contains { $0.first == "p" }
+    }
+
+    static func validatedDecryptedMessage(
+        from action: PairwiseAction
+    ) -> NdrDecryptedMessage? {
+        guard action.kind == "delivery",
+              let sender =
+                action.peerPubkeyHex.flatMap(normalizedPubkeyHex),
+              let innerJson = action.innerEventJson,
+              !innerJson.isEmpty,
+              innerJson.utf8.count
+                <= NostrProtocol.maximumPrivateEnvelopeCiphertextBytes,
+              let innerID = action.innerEventId,
+              innerID.count == 64,
+              let outerID = action.outerEventId,
+              outerID.count == 64,
+              let inner = try? JSONDecoder().decode(
+                NostrEvent.self,
+                from: Data(innerJson.utf8)
+              ),
+              inner.kind == NostrProtocol.EventKind.dm.rawValue,
+              normalizedPubkeyHex(inner.pubkey) == sender,
+              inner.id == innerID,
+              inner.hasValidEventID(),
+              NostrEvent.isWithinInboundTagLimits(inner.tags)
+        else {
+            return nil
+        }
+        return NdrDecryptedMessage(
+            event: inner,
+            senderPubkeyHex: sender,
+            outerEventID: outerID,
+            expiresAtSeconds: action.expiresAtSeconds
+        )
+    }
+
+    static func isExpiredDelivery(
+        _ action: PairwiseAction,
+        now: Date = Date()
+    ) -> Bool {
+        guard action.kind == "delivery",
+              let expiresAtSeconds = action.expiresAtSeconds
+        else {
+            return false
+        }
+        return now.timeIntervalSince1970 >= TimeInterval(expiresAtSeconds)
     }
 
     private enum OutOfBandInviteTransport {
@@ -534,250 +1242,80 @@ final class NdrNostrService {
         case url
     }
 
+    private enum ValidatedOutOfBandMutation {
+        case invite(OutOfBandInviteTransport)
+        case response
+    }
+
     private struct ParsedOutOfBandInvite {
-        let ownerPubkeyHex: String
-        let inviterPubkeyHex: String
+        let peerPubkeyHex: String
         let transport: OutOfBandInviteTransport
     }
 
-    private func parseOutOfBandInvite(_ payload: String) -> ParsedOutOfBandInvite? {
-        guard !payload.isEmpty else { return nil }
+    private func parseOutOfBandInvite(
+        _ payload: String
+    ) -> ParsedOutOfBandInvite? {
         if payload.first == "{" {
-            guard let event = try? JSONDecoder().decode(NostrEvent.self, from: Data(payload.utf8)),
-                  isDoubleRatchetInviteEvent(event),
-                  event.isValidSignature(),
-                  NostrEvent.isWithinInboundTagLimits(event.tags),
-                  let invite = try? InviteHandle.fromEventJson(eventJson: payload),
-                  let ownerPubkeyHex = try? invite.getOwnerPubkeyHex(),
-                  let inviterPubkeyHex = Self.normalizedPubkeyHex(
-                    invite.getInviterPubkeyHex()
-                  ) else {
+            guard let event = try? JSONDecoder().decode(
+                NostrEvent.self,
+                from: Data(payload.utf8)
+            ),
+                event.kind == 30078,
+                event.isValidSignature(),
+                NostrEvent.isWithinInboundTagLimits(event.tags),
+                let invite = try? PairwiseInvite.fromEventJson(
+                    eventJson: payload
+                ),
+                let peer =
+                    Self.normalizedPubkeyHex(invite.getPeerPubkeyHex())
+            else {
                 return nil
             }
             return ParsedOutOfBandInvite(
-                ownerPubkeyHex: ownerPubkeyHex.lowercased(),
-                inviterPubkeyHex: inviterPubkeyHex,
+                peerPubkeyHex: peer,
                 transport: .eventJSON
             )
         }
 
-        guard let invite = try? InviteHandle.fromUrl(url: payload),
-              let ownerPubkeyHex = try? invite.getOwnerPubkeyHex(),
-              let inviterPubkeyHex = Self.normalizedPubkeyHex(
-                invite.getInviterPubkeyHex()
-              ) else {
+        guard let invite = try? PairwiseInvite.fromUrl(url: payload),
+              let peer =
+                Self.normalizedPubkeyHex(invite.getPeerPubkeyHex())
+        else {
             return nil
         }
         return ParsedOutOfBandInvite(
-            ownerPubkeyHex: ownerPubkeyHex.lowercased(),
-            inviterPubkeyHex: inviterPubkeyHex,
+            peerPubkeyHex: peer,
             transport: .url
         )
     }
 
-    private func preferredInviteOobPayload() -> String? {
-        guard let eventJson = cachedInviteEventJson else { return nil }
-        return compactInviteURL(from: eventJson) ?? eventJson
-    }
-
-    private func compactInviteURL(from eventJson: String) -> String? {
-        guard let invite = try? InviteHandle.fromEventJson(eventJson: eventJson) else {
-            return nil
-        }
-        return try? invite.toUrl(root: Self.compactInviteURLRoot)
-    }
-
-    private func shouldIgnoreNdrSubscription(_ filter: NostrFilter) -> Bool {
-        // Never use Nostr for invite/response exchange in BitChat.
-        if filter.kinds?.contains(1059) == true {
-            return true
-        }
-        // `setupUser` emits an author-scoped invite-discovery filter without
-        // the label selector. AppKeys setup is needed for live device
-        // revocation, but every kind-30078 discovery shape remains BLE-only.
-        if filter.kinds?.contains(30078) == true {
-            return true
-        }
-        return false
-    }
-
-    private func restoreDurableAppKeysSubscriptions(
-        using mgr: SessionManagerHandle
-    ) {
-        for owner in mgr.knownPeerOwnerPubkeys() {
-            ensureDurableAppKeysSubscription(
-                ownerPubkeyHex: owner,
-                using: mgr
-            )
-        }
-    }
-
-    private func ensureDurableAppKeysSubscription(
-        ownerPubkeyHex: String,
-        using mgr: SessionManagerHandle
-    ) {
-        guard let owner = Self.normalizedPubkeyHex(ownerPubkeyHex),
-              !durableAppKeysOwners.contains(owner)
+    private static func isAllowedNdrSubscription(
+        _ filter: NostrFilter
+    ) -> Bool {
+        guard filter.kinds == [1060],
+              let authors = filter.authors,
+              !authors.isEmpty
         else {
-            return
+            return false
         }
-        do {
-            // The FFI emits both AppKeys and invite-discovery filters. `apply`
-            // keeps the former and drops the latter under BitChat's BLE-only
-            // bootstrap policy.
-            try mgr.setupUser(userPubkeyHex: owner)
-            durableAppKeysOwners.insert(owner)
-        } catch {
-            SecureLogger.error(
-                "NdrNostrService: failed to retain AppKeys updates for \(owner.prefix(8))…: \(error)",
-                category: .session
-            )
-        }
+        return authors.allSatisfy { normalizedPubkeyHex($0) != nil }
     }
 
-    private func appKeysSubscriptionOwner(_ filter: NostrFilter) -> String? {
-        guard filter.kinds == [37368],
-              filter.authors?.count == 1,
-              let author = filter.authors?.first
+    private static func isValidOutOfBandResponse(
+        _ eventJson: String
+    ) -> Bool {
+        guard eventJson.utf8.count
+                <= NostrProtocol.maximumPrivateEnvelopeCiphertextBytes,
+              let event = try? JSONDecoder().decode(
+                NostrEvent.self,
+                from: Data(eventJson.utf8)
+              )
         else {
-            return nil
+            return false
         }
-        return Self.normalizedPubkeyHex(author)
-    }
-
-    private func retainPendingOutOfBandInvite(
-        payload: String,
-        ownerPubkeyHex: String,
-        inviterPubkeyHex: String,
-        authorization: @escaping () -> Bool,
-        deferredResponseHandler: @escaping (String) -> Void
-    ) {
-        let key = PendingOutOfBandInviteKey(
-            ownerPubkeyHex: ownerPubkeyHex,
-            inviterPubkeyHex: inviterPubkeyHex
-        )
-        nextPendingOutOfBandInviteSequence &+= 1
-        pendingOutOfBandInvites[key] = PendingOutOfBandInvite(
-            key: key,
-            payload: payload,
-            sequence: nextPendingOutOfBandInviteSequence,
-            authorization: authorization,
-            deferredResponseHandler: deferredResponseHandler
-        )
-        // Insert first so evicting an older device under this same owner
-        // cannot tear down the owner's sole AppKeys subscription.
-        if pendingOutOfBandInvites.count > Self.maximumPendingOutOfBandInvites,
-           let oldest = pendingOutOfBandInvites.min(by: { $0.value.sequence < $1.value.sequence })?.key {
-            finishPendingOutOfBandInvite(key: oldest)
-        }
-    }
-
-    private func retryPendingOutOfBandInvite(ownerPubkeyHex: String) {
-        let pendingForOwner = pendingOutOfBandInvites.values
-            .filter { $0.key.ownerPubkeyHex == ownerPubkeyHex }
-            .sorted { $0.sequence < $1.sequence }
-        for pending in pendingForOwner {
-            guard pending.authorization() else {
-                finishPendingOutOfBandInvite(key: pending.key)
-                continue
-            }
-            let responses = processOutOfBandEventJson(
-                pending.payload,
-                expectedPeerPubkeyHex: ownerPubkeyHex,
-                authorization: pending.authorization,
-                deferredResponseHandler: pending.deferredResponseHandler
-            )
-            for response in responses {
-                pending.deferredResponseHandler(response)
-            }
-        }
-    }
-
-    private func finishPendingOutOfBandInvite(
-        ownerPubkeyHex: String,
-        inviterPubkeyHex: String
-    ) {
-        finishPendingOutOfBandInvite(
-            key: PendingOutOfBandInviteKey(
-                ownerPubkeyHex: ownerPubkeyHex,
-                inviterPubkeyHex: inviterPubkeyHex
-            )
-        )
-    }
-
-    private func finishPendingOutOfBandInvite(key: PendingOutOfBandInviteKey) {
-        pendingOutOfBandInvites.removeValue(forKey: key)
-        let ownerPubkeyHex = key.ownerPubkeyHex
-        guard !pendingOutOfBandInvites.keys.contains(where: {
-            $0.ownerPubkeyHex == ownerPubkeyHex
-        }) else {
-            return
-        }
-        guard !durableAppKeysOwners.contains(ownerPubkeyHex) else {
-            return
-        }
-        guard let subid = appKeysSubscriptionIDByOwner.removeValue(forKey: ownerPubkeyHex) else {
-            return
-        }
-        appKeysOwnerBySubscriptionID.removeValue(forKey: subid)
-        if activeSubIDs.remove(subid) != nil {
-            relayManager.unsubscribe(id: subid)
-        }
-    }
-
-    func consumeDecryptedPubSubEvent(_ event: PubSubEvent) {
-        guard rolloutEnabled,
-              let inner = Self.validatedDecryptedMessage(from: event)
-        else {
-            SecureLogger.warning(
-                "NdrNostrService: rejected a malformed or misattributed decrypted rumor",
-                category: .security
-            )
-            return
-        }
-        guard let onDecryptedMessage else {
-            if bufferedDecryptedMessages.count >= Self.maximumBufferedDecryptedMessages {
-                bufferedDecryptedMessages.removeFirst()
-            }
-            bufferedDecryptedMessages.append(inner)
-            return
-        }
-        onDecryptedMessage(inner)
-    }
-
-    static func validatedDecryptedMessage(from event: PubSubEvent) -> NdrDecryptedMessage? {
-        guard event.kind == "decrypted_message",
-              let sender = event.senderPubkeyHex.flatMap(normalizedPubkeyHex),
-              event.senderDevicePubkeyHex == nil
-                || event.senderDevicePubkeyHex.flatMap(normalizedPubkeyHex) != nil,
-              event.conversationOwnerPubkeyHex == nil
-                || event.conversationOwnerPubkeyHex.flatMap(normalizedPubkeyHex) != nil,
-              event.eventId == nil || event.eventId?.count == 64,
-              let innerJson = event.content,
-              !innerJson.isEmpty,
-              innerJson.utf8.count <= NostrProtocol.maximumPrivateEnvelopeCiphertextBytes,
-              let inner = try? JSONDecoder().decode(NostrEvent.self, from: Data(innerJson.utf8)),
-              inner.kind == NostrProtocol.EventKind.dm.rawValue,
-              let innerAuthor = normalizedPubkeyHex(inner.pubkey),
-              innerAuthor == sender,
-              NostrEvent.isWithinInboundTagLimits(inner.tags),
-              inner.hasValidEventID()
-        else {
-            return nil
-        }
-        return NdrDecryptedMessage(
-            event: inner,
-            senderPubkeyHex: sender,
-            senderDevicePubkeyHex: event.senderDevicePubkeyHex.flatMap(normalizedPubkeyHex),
-            conversationOwnerPubkeyHex:
-                event.conversationOwnerPubkeyHex.flatMap(normalizedPubkeyHex)
-        )
-    }
-
-    private func flushBufferedDecryptedMessages() {
-        while let handler = onDecryptedMessage, !bufferedDecryptedMessages.isEmpty {
-            handler(bufferedDecryptedMessages.removeFirst())
-        }
+        return event.kind == 1059
+            && event.isValidSignature()
+            && NostrEvent.isWithinInboundTagLimits(event.tags)
     }
 
     private static func normalizedPubkeyHex(_ value: String) -> String? {
@@ -791,37 +1329,103 @@ final class NdrNostrService {
         return lowered
     }
 
-    private static func loadOrCreateDeviceId() -> String {
-        let defaults = UserDefaults.standard
-        if let existing = defaults.string(forKey: deviceIdKey), !existing.isEmpty {
-            return existing
+    // MARK: - Manager lifecycle
+
+    private func isCurrent(
+        _ candidate: PairwiseManager,
+        epoch: UInt64
+    ) -> Bool {
+        managerEpoch == epoch && manager === candidate
+    }
+
+    private func replaceManager(
+        with replacement: PairwiseManager?,
+        configuredPubkeyHex: String?
+    ) {
+        managerEpoch &+= 1
+        for id in activeSubIDs {
+            relayManager.unsubscribe(id: id)
         }
-        let id = UUID().uuidString
-        defaults.set(id, forKey: deviceIdKey)
-        return id
+        activeSubIDs.removeAll()
+        inFlightActionIDs.removeAll()
+        deferredActionIDs.removeAll()
+        transientRetryAttempts.removeAll()
+        scheduledTransientRetryTokens.removeAll()
+        continuationScheduled = false
+        manager = replacement
+        configuredForPubkeyHex = configuredPubkeyHex
     }
 
-    private static let deviceIdKey = "ndr.device_id"
-
-    private static func clearPersistedDeviceId() {
-        UserDefaults.standard.removeObject(forKey: deviceIdKey)
+    private func markEstablishedSessionIfNeeded(
+        manager: PairwiseManager,
+        identityPubkeyHex: String
+    ) throws {
+        guard !(try manager.knownPeerPubkeys()).isEmpty else { return }
+        try sessionMarkerStore.mark(
+            identityPubkeyHex: identityPubkeyHex.lowercased()
+        )
     }
 
-    private static func ndrStorageDirectory() throws -> URL {
-        let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.temporaryDirectory
-        let dir = root.appendingPathComponent("ndr", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
+    static func hasDurablePairwiseState(at directory: URL) -> Bool {
+        guard let names = try? FileManager.default.contentsOfDirectory(
+            atPath: directory.path
+        ) else {
+            return false
+        }
+        return names.contains { name in
+            name.hasPrefix("ndr-pairwise-state-v1-")
+                && name.hasSuffix(".json")
+        }
+    }
+
+    static func ndrStorageDirectory(
+        applicationSupportDirectory: URL? = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first,
+        fileManager: FileManager = .default
+    ) throws -> URL {
+        guard let root = applicationSupportDirectory else {
+            throw NdrStorageDirectoryError
+                .applicationSupportUnavailable
+        }
+        let directory = root.appendingPathComponent(
+            "ndr",
+            isDirectory: true
+        )
+        try fileManager.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
         var resourceValues = URLResourceValues()
         resourceValues.isExcludedFromBackup = true
-        var protectedDirectory = dir
+        var protectedDirectory = directory
         try protectedDirectory.setResourceValues(resourceValues)
 #if os(iOS)
-        try FileManager.default.setAttributes(
-            [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
-            ofItemAtPath: dir.path
+        try fileManager.setAttributes(
+            [
+                .protectionKey:
+                    FileProtectionType
+                    .completeUntilFirstUserAuthentication
+            ],
+            ofItemAtPath: directory.path
         )
 #endif
-        return dir
+        return directory
+    }
+
+    static func scheduleLiveRetry(
+        after delay: TimeInterval,
+        operation: @escaping @MainActor () -> Void
+    ) {
+        Task { @MainActor in
+            let nanoseconds = UInt64(
+                max(0, delay) * 1_000_000_000
+            )
+            try? await Task.sleep(nanoseconds: nanoseconds)
+            guard !Task.isCancelled else { return }
+            operation()
+        }
     }
 }

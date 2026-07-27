@@ -4,12 +4,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_DIR="$SCRIPT_DIR"
 REPOSITORY_DIR="$(cd "$PACKAGE_DIR/../.." && pwd)"
-SOURCE_DIR="${1:-${IRIS_CHAT_RS_DIR:-$REPOSITORY_DIR/vendor/iris-chat-rs}}"
-CRATE_DIR="$SOURCE_DIR/protocol-ffi"
+SOURCE_DIR="${1:-${NOSTR_DOUBLE_RATCHET_DIR:-$REPOSITORY_DIR/vendor/nostr-double-ratchet}}"
+CRATE_DIR="$SOURCE_DIR/rust/crates/ndr-pairwise-ffi"
 CRATE_MANIFEST="$CRATE_DIR/Cargo.toml"
-BINDGEN_MANIFEST="$SOURCE_DIR/core/uniffi-bindgen/Cargo.toml"
+BINDGEN_MANIFEST="$CRATE_MANIFEST"
 EXPECTED_REVISION="$(tr -d '[:space:]' < "$PACKAGE_DIR/SOURCE_REVISION")"
 EXPECTED_RUST="$(tr -d '[:space:]' < "$PACKAGE_DIR/RUST_TOOLCHAIN")"
+# A user-level Cargo config may point at a compiler cache unavailable to CI or
+# the current sandbox, so this reproducible build does not use an ambient wrapper.
+export RUSTC_WRAPPER=""
 
 # These are reproducibility inputs, not ambient build-machine preferences.
 # Keep them aligned with the application's documented minimum OS versions.
@@ -19,12 +22,12 @@ FRAMEWORK_NAME="ndr_ffiFFI"
 INSTALL_NAME="@rpath/$FRAMEWORK_NAME.framework/$FRAMEWORK_NAME"
 
 if [[ ! -f "$CRATE_MANIFEST" ]]; then
-    echo "error: expected iris-chat-rs protocol-ffi crate at $CRATE_MANIFEST" >&2
+    echo "error: expected nostr-double-ratchet pairwise FFI crate at $CRATE_MANIFEST" >&2
     exit 1
 fi
 
 if [[ ! -f "$BINDGEN_MANIFEST" ]]; then
-    echo "error: expected UniFFI bindgen helper at $BINDGEN_MANIFEST" >&2
+    echo "error: expected UniFFI bindgen manifest at $BINDGEN_MANIFEST" >&2
     exit 1
 fi
 
@@ -35,13 +38,25 @@ if [[ "$ACTUAL_RUST" != "$EXPECTED_RUST" ]]; then
     exit 1
 fi
 
-if [[ -d "$SOURCE_DIR/.git" ]] || git -C "$SOURCE_DIR" rev-parse --git-dir >/dev/null 2>&1; then
-    ACTUAL_REVISION="$(git -C "$SOURCE_DIR" rev-parse HEAD)"
-    if [[ "$ACTUAL_REVISION" != "$EXPECTED_REVISION" ]]; then
-        echo "error: iris-chat-rs is at $ACTUAL_REVISION; expected $EXPECTED_REVISION" >&2
-        echo "run: git submodule update --init --checkout vendor/iris-chat-rs" >&2
-        exit 1
-    fi
+if ! git -C "$SOURCE_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "error: nostr-double-ratchet source must be the pinned Git submodule at $SOURCE_DIR" >&2
+    exit 1
+fi
+SOURCE_WORKTREE="$(cd "$SOURCE_DIR" && pwd -P)"
+SOURCE_GIT_ROOT="$(git -C "$SOURCE_DIR" rev-parse --show-toplevel)"
+if [[ "$SOURCE_GIT_ROOT" != "$SOURCE_WORKTREE" ]]; then
+    echo "error: nostr-double-ratchet Git root is $SOURCE_GIT_ROOT; expected $SOURCE_WORKTREE" >&2
+    exit 1
+fi
+ACTUAL_REVISION="$(git -C "$SOURCE_DIR" rev-parse HEAD)"
+if [[ "$ACTUAL_REVISION" != "$EXPECTED_REVISION" ]]; then
+    echo "error: nostr-double-ratchet is at $ACTUAL_REVISION; expected $EXPECTED_REVISION" >&2
+    echo "run: git submodule update --init --checkout vendor/nostr-double-ratchet" >&2
+    exit 1
+fi
+if [[ -n "$(git -C "$SOURCE_DIR" status --porcelain --untracked-files=all)" ]]; then
+    echo "error: nostr-double-ratchet source has local changes; refusing an unreproducible build" >&2
+    exit 1
 fi
 
 WORK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/ndrffi-apple.XXXXXX")"
@@ -57,7 +72,7 @@ trap cleanup EXIT
 
 mkdir -p "$TARGET_DIR" "$BINDINGS_DIR" "$HEADERS_DIR"
 
-echo "==> Building ndr_ffi compatibility artifacts from $CRATE_DIR"
+echo "==> Building the pairwise ndr_ffi artifacts from $CRATE_DIR"
 echo "    macOS minimum: $MACOS_MIN"
 echo "    iOS minimum:   $IOS_MIN"
 
@@ -70,7 +85,7 @@ env \
 
 env \
     CARGO_TARGET_DIR="$TARGET_DIR" \
-    cargo run --locked --manifest-path "$BINDGEN_MANIFEST" -- \
+    cargo run --locked --manifest-path "$BINDGEN_MANIFEST" --features bindgen --bin uniffi-bindgen -- \
         generate \
         --library "$TARGET_DIR/debug/libndr_ffi.dylib" \
         --language swift \

@@ -492,48 +492,6 @@ struct ChatPrivateConversationCoordinatorContextTests {
     }
 
     @Test @MainActor
-    func localSiblingCopy_isStoredAsSentInRemoteConversation() async throws {
-        let context = MockChatPrivateConversationContext()
-        let coordinator = ChatPrivateConversationCoordinator(context: context)
-        let noiseKey = Data(repeating: 0xD1, count: 32)
-        let peerID = PeerID(hexData: noiseKey)
-        let remotePubkey = String(repeating: "b", count: 64)
-        context.favoriteRelationshipsByNoiseKey[noiseKey] = makeFavoriteRelationship(
-            noiseKey: noiseKey,
-            nostrPublicKey: remotePubkey,
-            nickname: "bob",
-            isFavorite: true,
-            theyFavoritedUs: true
-        )
-        let payload = NoisePayload(
-            type: .privateMessage,
-            data: try #require(
-                PrivateMessagePacket(
-                    messageID: "local-sibling-1",
-                    content: "sent on my other device"
-                ).encode()
-            )
-        )
-
-        coordinator.handleLocalSiblingPrivateMessage(
-            payload,
-            conversationPubkey: remotePubkey,
-            convKey: peerID,
-            messageTimestamp: Date(timeIntervalSince1970: 123)
-        )
-
-        let message = try #require(context.privateChats[peerID]?.first)
-        #expect(message.id == "local-sibling-1")
-        #expect(message.sender == context.nickname)
-        #expect(message.senderPeerID == context.myPeerID)
-        #expect(message.recipientNickname == "bob")
-        #expect(message.deliveryStatus == .sent)
-        #expect(context.sentGeoDeliveryAcks.isEmpty)
-        #expect(context.unreadPrivateMessages.isEmpty)
-        #expect(context.notifyUIChangedCount == 1)
-    }
-
-    @Test @MainActor
     func accountDM_handsOpenShortIDConversationToStableWhenOffline() async {
         let context = MockChatPrivateConversationContext()
         let coordinator = ChatPrivateConversationCoordinator(context: context)

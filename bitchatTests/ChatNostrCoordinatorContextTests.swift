@@ -213,6 +213,7 @@ private final class MockChatNostrContext: ChatNostrContext {
 
     // Favorites & notifications
     var favoriteRelationshipsByNoiseKey: [Data: FavoritesPersistenceService.FavoriteRelationship] = [:]
+    var acceptsLegacyNostrDM = true
     private(set) var geohashActivityNotifications: [(geohash: String, bodyPreview: String)] = []
 
     func favoriteRelationship(forNoiseKey noiseKey: Data) -> FavoritesPersistenceService.FavoriteRelationship? {
@@ -221,6 +222,10 @@ private final class MockChatNostrContext: ChatNostrContext {
 
     func allFavoriteRelationships() -> [FavoritesPersistenceService.FavoriteRelationship] {
         Array(favoriteRelationshipsByNoiseKey.values)
+    }
+
+    func canAcceptLegacyNostrDM(from _: String) -> Bool {
+        acceptsLegacyNostrDM
     }
 
     func notifyGeohashActivity(geohash: String, bodyPreview: String) {
@@ -444,6 +449,45 @@ struct ChatNostrCoordinatorContextTests {
 
         await coordinator.inbound.processNostrMessage(giftWrap)
         #expect(context.recordedNostrEventIDs == [giftWrap.id])
+    }
+
+    @Test @MainActor
+    func processNostrMessage_rejectsLegacyDowngradeBeforeDelivery()
+        async throws
+    {
+        let context = MockChatNostrContext()
+        let coordinator = ChatNostrCoordinator(context: context)
+        let recipient = try NostrIdentity.generate()
+        let sender = try NostrIdentity.generate()
+        context.nostrIdentity = recipient
+        context.acceptsLegacyNostrDM = false
+        let embedded = try #require(
+            NostrEmbeddedBitChat.encodePMForNostrNoRecipient(
+                content: "must not downgrade",
+                messageID: "legacy-blocked",
+                senderPeerID: PeerID(str: "aabbccddeeff0011")
+            )
+        )
+        let blockedGiftWrap = try NostrProtocol.createPrivateMessage(
+            content: embedded,
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+
+        await coordinator.inbound.processNostrMessage(blockedGiftWrap)
+
+        #expect(context.handledPrivateMessages.isEmpty)
+        #expect(context.recordedNostrEventIDs == [blockedGiftWrap.id])
+
+        context.acceptsLegacyNostrDM = true
+        let acceptedGiftWrap = try NostrProtocol.createPrivateMessage(
+            content: embedded,
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+        await coordinator.inbound.processNostrMessage(acceptedGiftWrap)
+
+        #expect(context.handledPrivateMessages.count == 1)
     }
 
     @Test @MainActor
@@ -679,6 +723,62 @@ struct GeoPresenceTrackerTests {
             context.geohashActivityNotifications.last?.bodyPreview
                 == String(repeating: "x", count: TransportConfig.uiGeoNotifySnippetMaxLen) + "…"
         )
+    }
+
+    @Test @MainActor
+    func ndrDelivery_expiredAtFinalMutationDrainsWithoutSideEffects() async throws {
+        let context = MockChatNostrContext()
+        let recipient = try NostrIdentity.generate()
+        let sender = try NostrIdentity.generate()
+        context.nostrIdentity = recipient
+        let senderPeerID = PeerID(str: "0011223344556677")
+        let embedded = try #require(
+            NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(
+                type: .delivered,
+                messageID: "expired-ndr",
+                senderPeerID: senderPeerID
+            )
+        )
+        let unsigned = NostrEvent(
+            pubkey: sender.publicKeyHex,
+            createdAt: Date(timeIntervalSince1970: 99),
+            kind: .dm,
+            tags: [],
+            content: embedded
+        )
+        var rumor = try unsigned.sign(
+            with: sender.schnorrSigningKey()
+        )
+        rumor.sig = nil
+
+        let presence = GeoPresenceTracker(context: context)
+        let pipeline = NostrInboundPipeline(
+            context: context,
+            presence: presence,
+            now: { Date(timeIntervalSince1970: 100) }
+        )
+        var disposition: NdrDeliveryDisposition?
+        pipeline.handleNdrDecryptedMessage(
+            NdrDecryptedMessage(
+                event: rumor,
+                senderPubkeyHex: sender.publicKeyHex,
+                outerEventID: String(repeating: "a", count: 64),
+                expiresAtSeconds: 100
+            ),
+            completion: { disposition = $0 }
+        )
+        let completed = await TestHelpers.waitUntil(
+            { disposition != nil },
+            timeout: TestConstants.settleTimeout
+        )
+
+        #expect(completed)
+        #expect(disposition == .consumed)
+        #expect(context.nostrKeyMapping.isEmpty)
+        #expect(context.handledDelivered.isEmpty)
+        #expect(context.handledPrivateMessages.isEmpty)
+        #expect(context.handledReadReceipts.isEmpty)
+        #expect(context.recordedNostrEventIDs == [rumor.id])
     }
 
 }

@@ -151,6 +151,117 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertTrue(connected)
     }
 
+    func test_subscribe_offlineRegistersReplayIntentAndFlushesWhenOnline() async {
+        let relayURL = "wss://offline-subscribe.example"
+        let context = makeContext(
+            permission: .denied,
+            userTorEnabled: true,
+            torEnforced: true,
+            torIsReady: false
+        )
+
+        let registered = context.manager.subscribe(
+            filter: makeFilter(),
+            id: "offline-sub",
+            relayUrls: [relayURL],
+            handler: { _ in }
+        )
+
+        XCTAssertTrue(
+            registered,
+            "offline success means the replayable request was registered"
+        )
+        XCTAssertTrue(context.sessionFactory.requestedURLs.isEmpty)
+
+        context.torWaiter.resolve(true)
+
+        let flushed = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?
+                .sentStrings.contains {
+                    $0.contains("offline-sub")
+                } == true
+        }
+        XCTAssertTrue(flushed)
+    }
+
+    func test_ndrHandshakeWhileActivationBlockedRegistersAfterConnectivityWake()
+        throws
+    {
+        let context = makeContext(
+            permission: .authorized,
+            activationAllowed: false
+        )
+        let localIdentity = try NostrIdentity.generate()
+        let remoteIdentity = try NostrIdentity.generate()
+        let localStorage = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "ndr-activation-local-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        let remoteStorage = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "ndr-activation-remote-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        try FileManager.default.createDirectory(
+            at: localStorage,
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: remoteStorage,
+            withIntermediateDirectories: true
+        )
+        defer {
+            try? FileManager.default.removeItem(at: localStorage)
+            try? FileManager.default.removeItem(at: remoteStorage)
+        }
+
+        var scheduledNdrRetries: [@MainActor () -> Void] = []
+        let service = NdrNostrService(
+            relayManager: context.manager,
+            rolloutEnabled: true,
+            storageDirectoryProvider: { localStorage },
+            retryScheduler: { _, operation in
+                scheduledNdrRetries.append(operation)
+            }
+        )
+        let remote = NdrNostrService(
+            relayManager: FakeRelayManager(),
+            rolloutEnabled: true,
+            storageDirectoryProvider: { remoteStorage }
+        )
+        service.configureIfNeeded(identity: localIdentity)
+        remote.configureIfNeeded(identity: remoteIdentity)
+
+        let responseActions = service.processOutOfBandEventJson(
+            try XCTUnwrap(remote.currentInviteEventJson()),
+            expectedPeerPubkeyHex: remoteIdentity.publicKeyHex,
+            persistEstablishedBinding: { true }
+        )
+        XCTAssertFalse(responseActions.isEmpty)
+        for action in responseActions {
+            service.completeOutOfBandAction(action, succeeded: true)
+        }
+        while !scheduledNdrRetries.isEmpty {
+            scheduledNdrRetries.removeFirst()()
+        }
+
+        XCTAssertEqual(
+            context.manager.debugSubscriptionRequestCount,
+            0,
+            "activation policy must reject registration, not falsely ack it"
+        )
+
+        context.activationAllowed.value = true
+        service.retryRelayActions()
+
+        XCTAssertGreaterThan(
+            context.manager.debugSubscriptionRequestCount,
+            0,
+            "the connectivity wake must register the durable native intent"
+        )
+    }
+
     func test_subscribe_unblocksDeferredEOSEWhenTorWaitAttemptsExhausted() async {
         let relayURL = "wss://tor-eose-unblock.example"
         let context = makeContext(permission: .denied, userTorEnabled: true, torEnforced: true, torIsReady: false)
@@ -467,6 +578,48 @@ final class NostrRelayManagerTests: XCTestCase {
         let completed = await waitUntil { results.count == 1 }
         XCTAssertTrue(completed)
         XCTAssertEqual(results, [true])
+    }
+
+    func test_sendEventImmediately_duplicateOKCountsAsDurableAcceptanceOnlyForExactPrefix() async throws {
+        let relay = "wss://confirmed-duplicate.example"
+        let context = makeContext(permission: .denied)
+        context.manager.ensureConnections(to: [relay])
+        let connected = await waitUntil {
+            context.manager.relays.first(where: { $0.url == relay })?
+                .isConnected == true
+        }
+        XCTAssertTrue(connected)
+
+        let duplicate = try makeSignedEvent(content: "duplicate")
+        var results: [Bool] = []
+        context.manager.sendEventImmediately(
+            duplicate,
+            to: [relay]
+        ) { results.append($0) }
+        try context.sessionFactory.latestConnection(for: relay)?.emitOK(
+            eventID: duplicate.id,
+            success: false,
+            reason: "duplicate: already stored"
+        )
+        let duplicateSettled = await waitUntil { results.count == 1 }
+        XCTAssertTrue(duplicateSettled)
+        XCTAssertEqual(results, [true])
+
+        let notMachineReadable = try makeSignedEvent(
+            content: "not an exact duplicate prefix"
+        )
+        context.manager.sendEventImmediately(
+            notMachineReadable,
+            to: [relay]
+        ) { results.append($0) }
+        try context.sessionFactory.latestConnection(for: relay)?.emitOK(
+            eventID: notMachineReadable.id,
+            success: false,
+            reason: " duplicate: leading whitespace"
+        )
+        let rejectionSettled = await waitUntil { results.count == 2 }
+        XCTAssertTrue(rejectionSettled)
+        XCTAssertEqual(results, [true, false])
     }
 
     func test_sendEventImmediately_timeoutFailsAndIgnoresLateWriteAndOK() async throws {

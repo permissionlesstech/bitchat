@@ -1,20 +1,21 @@
 # NdrFfi
 
-Generated Swift bindings and an ignored dynamic Apple XCFramework for the upstream
-`iris-chat-rs` `protocol-ffi` crate. Its locked dependency graph uses
-`nostr-double-ratchet` and `nostr-double-ratchet-pairwise-codec` `0.0.164`.
+Generated Swift bindings and an ignored dynamic Apple XCFramework for the
+single-device pairwise UniFFI crate in `nostr-double-ratchet`. The binary does
+not include AppKeys, linked-device, sibling-sync, or group runtime code.
 
 ## Source Of Truth
 
 The generated files in this package come from the upstream
-`iris-chat-rs` checkout, specifically the Rust `protocol-ffi` crate and its
-UniFFI-generated Swift bindings. The built library keeps the compatibility
-name `ndr_ffi`.
+`nostr-double-ratchet` checkout, specifically the Rust `ndr-pairwise-ffi`
+crate and its UniFFI-generated Swift bindings. The built library keeps the
+module name `ndr_ffi`.
 
-The exact upstream revision is pinned by the `vendor/iris-chat-rs` submodule
-and repeated in `SOURCE_REVISION`. Native libraries are deliberately not
-tracked in this repository. Apple deployment targets are fixed in the build
-script, so ambient shell settings cannot change the output.
+The exact upstream revision is pinned by the
+`vendor/nostr-double-ratchet` submodule and repeated in `SOURCE_REVISION`.
+Native libraries are deliberately not tracked in this repository. Apple
+deployment targets are fixed in the build script, so ambient shell settings
+cannot change the output.
 
 ## Rebuild From Source
 
@@ -38,7 +39,7 @@ rustup target add \
   aarch64-apple-ios \
   aarch64-apple-ios-sim \
   x86_64-apple-ios
-git submodule update --init --checkout vendor/iris-chat-rs
+git submodule update --init --checkout vendor/nostr-double-ratchet
 ./localPackages/NdrFfi/build-apple.sh
 ```
 
@@ -46,12 +47,12 @@ Or:
 
 ```bash
 cd localPackages/NdrFfi
-IRIS_CHAT_RS_DIR=/path/to/iris-chat-rs ./build-apple.sh
+NOSTR_DOUBLE_RATCHET_DIR=/path/to/nostr-double-ratchet ./build-apple.sh
 ```
 
 The script:
 
-- builds the upstream `protocol-ffi` crate
+- builds the upstream `ndr-pairwise-ffi` crate
 - reuses an ignored Cargo target cache under `.cache/ndr-ffi/apple`
 - regenerates `Sources/NdrFfi/NdrFfi.swift` via UniFFI
 - rebuilds the ignored dynamic Apple XCFramework at `Frameworks/NdrFfi.xcframework`

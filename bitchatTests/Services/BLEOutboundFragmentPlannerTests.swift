@@ -5,6 +5,24 @@ import Testing
 
 @Suite("BLE outbound fragment planner tests")
 struct BLEOutboundFragmentPlannerTests {
+    @Test("exact-generation admission promotes fragments to FIFO-high priority")
+    func exactGenerationAdmissionUsesHighPriority() {
+        let ordinary = BLEOutboundWritePriority.fragment(totalFragments: 4)
+
+        #expect(
+            BLEAuthenticatedTransportAdmission.writePriority(
+                ordinaryPriority: ordinary,
+                requiresExactGeneration: true
+            ) == .high
+        )
+        #expect(
+            BLEAuthenticatedTransportAdmission.writePriority(
+                ordinaryPriority: ordinary,
+                requiresExactGeneration: false
+            ) == ordinary
+        )
+    }
+
     @Test("planner splits packets and preserves reassembled payload")
     func plannerSplitsAndReassemblesPacket() throws {
         let packet = makePacket(payload: makePayload(count: 384))
@@ -158,6 +176,68 @@ struct BLEOutboundFragmentPlannerTests {
         #expect(BLEOutboundFragmentPlanner.isPrivateMediaV1Compatible(at256))
         #expect(at257.totalFragments == 257)
         #expect(!BLEOutboundFragmentPlanner.isPrivateMediaV1Compatible(at257))
+    }
+
+    @Test("Noise rotation stops exact-generation fragment admission")
+    func noiseRotationStopsStrictNdrFragmentTrain() {
+        let peer = PeerID(str: "8877665544332211")
+        let expected = AuthenticatedPeerTransportState(
+            capabilities: [.doubleRatchet],
+            sessionGeneration: UUID(),
+            noisePublicKey: Data(repeating: 0x42, count: 32)
+        )
+        let rotated = AuthenticatedPeerTransportState(
+            capabilities: [.doubleRatchet],
+            sessionGeneration: UUID(),
+            noisePublicKey: expected.noisePublicKey
+        )
+        let request = BLEOutboundFragmentTransferRequest(
+            packet: BitchatPacket(
+                type: MessageType.noiseEncrypted.rawValue,
+                senderID: Data(hexString: "0011223344556677")
+                    ?? Data(),
+                recipientID: Data(hexString: peer.id),
+                timestamp: 0x0102030405,
+                payload: Data(repeating: 0x55, count: 384),
+                signature: nil,
+                ttl: 3
+            ),
+            pad: false,
+            maxChunk: 128,
+            directedPeer: peer,
+            transferId: nil,
+            requireDirectPeerLink: true,
+            requireNoiseAuthenticatedPeerLink: true,
+            requiredAuthenticatedTransportState: expected
+        )
+        var current: AuthenticatedPeerTransportState? = expected
+        var admitted: [Int] = []
+
+        let fullyAdmitted = BLEStrictFragmentAdmission.admitAll(
+            [0, 1, 2]
+        ) { index in
+            guard let carried =
+                    request.requiredAuthenticatedTransportState,
+                  BLEAuthenticatedTransportAdmission.isCurrent(
+                    expected: carried,
+                    current: current
+                  )
+            else {
+                return false
+            }
+            admitted.append(index)
+            current = rotated
+            return true
+        }
+
+        #expect(!fullyAdmitted)
+        #expect(admitted == [0])
+        #expect(
+            !BLEAuthenticatedTransportAdmission.isCurrent(
+                expected: expected,
+                current: rotated
+            )
+        )
     }
 
     private func makePacket(

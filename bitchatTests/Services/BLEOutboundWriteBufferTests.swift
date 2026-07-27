@@ -96,6 +96,46 @@ struct BLEOutboundWriteBufferTests {
     }
 
     @Test
+    func admittedStrictFramesSurviveLaterHighPriorityTraffic() {
+        var buffer = BLEOutboundWriteBuffer()
+        let peerID = "peer-1"
+
+        let first = buffer.enqueueReportingAcceptance(
+            data: Data(repeating: 0x01, count: 8),
+            for: peerID,
+            priority: .high,
+            capBytes: 16
+        )
+        let second = buffer.enqueueReportingAcceptance(
+            data: Data(repeating: 0x02, count: 8),
+            for: peerID,
+            priority: .high,
+            capBytes: 16
+        )
+        let laterNormal = buffer.enqueueReportingAcceptance(
+            data: Data(repeating: 0x03, count: 8),
+            for: peerID,
+            priority: .fragment(totalFragments: 2),
+            capBytes: 16
+        )
+        let laterHigh = buffer.enqueueReportingAcceptance(
+            data: Data(repeating: 0x04, count: 8),
+            for: peerID,
+            priority: .high,
+            capBytes: 16
+        )
+
+        #expect(first.accepted)
+        #expect(second.accepted)
+        #expect(!laterNormal.accepted)
+        #expect(!laterHigh.accepted)
+        #expect(
+            buffer.takeAll(for: peerID).compactMap(\.data.first)
+                == [0x01, 0x02]
+        )
+    }
+
+    @Test
     func disconnectDiscardRemovesOnlyThatPeripheralQueue() {
         var buffer = BLEOutboundWriteBuffer()
         _ = buffer.enqueue(data: Data([1]), for: "gone", priority: .high, capBytes: 100)

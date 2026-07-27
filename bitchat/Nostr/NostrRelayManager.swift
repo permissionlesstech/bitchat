@@ -221,9 +221,6 @@ final class NostrRelayManager: ObservableObject {
     private var duplicateInboundEventDropCount = 0
     private var duplicateInboundEventDropCountBySubscription: [String: Int] = [:]
     private var inboundEventLogCount = 0
-    // Coalesce duplicate subscribe requests for the same id within a short window.
-    private let subscribeCoalesceInterval: TimeInterval = 1.0
-    private var subscribeCoalesce: [String: Date] = [:]
     private var pendingTorConnectionURLs = Set<String>()
     private var awaitingTorForConnections = false
     private var torReadyWaitAttempts = 0
@@ -489,7 +486,6 @@ final class NostrRelayManager: ObservableObject {
         pendingSubscriptions.removeAll()
         messageHandlers.removeAll()
         subscriptionRequestState.removeAll()
-        subscribeCoalesce.removeAll()
         eoseTrackers.removeAll()
         pendingEOSECallbacks.removeAll()
         pendingTorConnectionURLs.removeAll()
@@ -735,23 +731,19 @@ final class NostrRelayManager: ObservableObject {
         return connection
     }
     
-    /// Subscribe to events matching a filter. If `relayUrls` provided, targets only those relays.
+    /// Subscribe to events matching a filter. If `relayUrls` provided, targets
+    /// only those relays. Returns true only after the replayable subscription
+    /// intent has been registered, even when every target is still offline.
+    @discardableResult
     func subscribe(
         filter: NostrFilter,
         id: String = UUID().uuidString,
         relayUrls: [String]? = nil,
         handler: @escaping (NostrEvent) -> Void,
         onEOSE: (() -> Void)? = nil
-    ) {
+    ) -> Bool {
         // Global network policy gate
-        guard dependencies.activationAllowed() else { return }
-        // Coalesce rapid duplicate subscribe requests even while Tor readiness is pending.
-        let now = dependencies.now()
-        if let last = subscribeCoalesce[id], now.timeIntervalSince(last) < subscribeCoalesceInterval {
-            return
-        }
-        subscribeCoalesce[id] = now
-        messageHandlers[id] = handler
+        guard dependencies.activationAllowed() else { return false }
         
         let req = NostrRequest.subscribe(id: id, filters: [filter])
         
@@ -759,7 +751,7 @@ final class NostrRelayManager: ObservableObject {
             let message = try encoder.encode(req)
             guard let messageString = String(data: message, encoding: .utf8) else { 
                 SecureLogger.error("❌ Failed to encode subscription request", category: .session)
-                return 
+                return false
             }
             
             // SecureLogger.debug("📋 Subscription filter JSON: \(messageString.prefix(200))...", category: .session)
@@ -767,10 +759,16 @@ final class NostrRelayManager: ObservableObject {
             // Target specific relays if provided; else default. Filter permanently failed relays.
             let baseUrls = relayUrls ?? defaultRelays
             let urls = allowedRelayList(from: baseUrls).filter { !isPermanentlyFailed($0) }
-            let requestState = SubscriptionRequestState(messageString: messageString, relayURLs: Set(urls))
-            if subscriptionRequestState[id] == requestState, subscriptionStateExists(id: id, requestState: requestState) {
-                return
+            guard !urls.isEmpty else {
+                onEOSE?()
+                return false
             }
+            let requestState = SubscriptionRequestState(messageString: messageString, relayURLs: Set(urls))
+            messageHandlers[id] = handler
+            if subscriptionRequestState[id] == requestState, subscriptionStateExists(id: id, requestState: requestState) {
+                return true
+            }
+
             subscriptionRequestState[id] = requestState
 
             // Always queue subscriptions; sending happens when a relay reports connected
@@ -801,8 +799,13 @@ final class NostrRelayManager: ObservableObject {
                     flushPendingSubscriptions(for: url)
                 }
             }
+            // `subscriptionRequestState` is the canonical replay intent.
+            // Pending REQs are bounded/expiring accelerators and may be
+            // evicted; reconnect rehydrates them from this exact state.
+            return subscriptionRequestState[id] == requestState
         } catch {
             SecureLogger.error("❌ Failed to encode subscription request: \(error)", category: .session)
+            return false
         }
     }
 
@@ -873,8 +876,6 @@ final class NostrRelayManager: ObservableObject {
         messageHandlers.removeValue(forKey: id)
         removeRecentInboundEvents(forSubscriptionID: id)
         duplicateInboundEventDropCountBySubscription.removeValue(forKey: id)
-        // Allow immediate re-subscription by clearing coalescer timestamp
-        subscribeCoalesce.removeValue(forKey: id)
         subscriptionRequestState.removeValue(forKey: id)
         pendingEOSECallbacks.removeValue(forKey: id)
         eoseTrackers.removeValue(forKey: id)
@@ -1344,10 +1345,20 @@ final class NostrRelayManager: ObservableObject {
                 }
             }
         case .ok(let eventId, let success, let reason):
-            resolveConfirmedSend(eventID: eventId, relayURL: relayUrl, accepted: success)
-            if success {
+            let durablyAccepted =
+                success
+                || (!success && reason.hasPrefix("duplicate:"))
+            resolveConfirmedSend(
+                eventID: eventId,
+                relayURL: relayUrl,
+                accepted: durablyAccepted
+            )
+            if durablyAccepted {
                 _ = Self.pendingGiftWrapIDs.remove(eventId)
-                SecureLogger.debug("✅ Accepted id=\(eventId.prefix(16))… relay=\(relayUrl)", category: .session)
+                SecureLogger.debug(
+                    "✅ Accepted id=\(eventId.prefix(16))… relay=\(relayUrl)",
+                    category: .session
+                )
             } else {
                 let isGiftWrap = Self.pendingGiftWrapIDs.remove(eventId) != nil
                 if isGiftWrap {
