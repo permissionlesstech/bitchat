@@ -76,7 +76,8 @@ struct ContentComposerView: View {
                 .bitchatFont(size: 15)
                 .foregroundColor(palette.primary)
                 .focused(isTextFieldFocused)
-                .autocorrectionDisabled(true)
+                // Autocorrect left enabled for chat typing (#969). Nicknames
+                // and geohashes keep `.autocorrectionDisabled(true)` elsewhere.
                 #if os(iOS)
                 .textInputAutocapitalization(.sentences)
                 #endif
