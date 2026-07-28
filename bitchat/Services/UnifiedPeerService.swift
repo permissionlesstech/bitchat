@@ -279,7 +279,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             // Purge while the fingerprint↔peerID mapping is still known: the
             // archived-echo seed filter can't resolve offline strangers, so
             // scrub their carried messages now rather than at relaunch.
-            meshService.purgeArchivedPublicMessages(from: peerID)
+            (meshService as? MeshPublicArchiving)?.purgeArchivedPublicMessages(from: peerID)
         }
         updatePeers()
         return fingerprint

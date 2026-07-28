@@ -1069,7 +1069,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     }
 
     func purgeArchivedPublicMessages() {
-        meshService.purgeAllArchivedPublicMessages()
+        (meshService as? MeshPublicArchiving)?.purgeAllArchivedPublicMessages()
     }
 
     /// Queues a system message for the next geohash channel visit. (Tiny

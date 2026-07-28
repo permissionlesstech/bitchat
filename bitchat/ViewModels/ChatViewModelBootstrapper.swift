@@ -218,8 +218,9 @@ private extension ChatViewModelBootstrapper {
     /// right after transport start, so give it a beat before asking.
     private func loadArchivedEchoes() {
         DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiArchivedEchoLoadDelaySeconds) { [weak viewModel] in
-            guard let viewModel else { return }
-            viewModel.meshService.collectArchivedPublicMessages { [weak viewModel] allArchived in
+            guard let viewModel,
+                  let archive = viewModel.meshService as? MeshPublicArchiving else { return }
+            archive.collectArchivedPublicMessages { [weak viewModel] allArchived in
                 guard let viewModel else { return }
                 // A previous /clear dismissed everything heard up to its
                 // watermark; only newer archive entries come back. Blocking a
