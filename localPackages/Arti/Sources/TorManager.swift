@@ -412,8 +412,72 @@ public final class TorManager: ObservableObject {
         guard let dir = dataDirectoryURL() else { return }
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            // Direct Tor's guard sample lives here, and a bridged route caches
+            // its bridge lines beside the directory it downloads. `pt_state` is
+            // already kept out of backups; this is the directory holding the
+            // more sensitive of the two, so it does not belong in one either.
+            //
+            // No file protection class is set on purpose. Tor has to read this
+            // while the device is locked, so anything stricter than the default
+            // would break the app in the background.
+            var excludedFromBackup = URLResourceValues()
+            excludedFromBackup.isExcludedFromBackup = true
+            var mutableDirectory = dir
+            try? mutableDirectory.setResourceValues(excludedFromBackup)
         } catch {
             // Non-fatal; Arti will surface errors during start if paths are missing
+        }
+    }
+
+    /// Give a pluggable-transport route the directory Tor has already downloaded.
+    ///
+    /// Every transport gets its own Arti directory, so a route that has never
+    /// run starts with no consensus and has to fetch one through the transport
+    /// itself. On device that is the whole difference between working and not:
+    /// direct Tor loads a cached directory and reaches SOCKS in about three
+    /// seconds, while Snowflake starting cold never got there at all across
+    /// runs of 132s, 92s and 82s, because volunteer proxies drop mid-download
+    /// and each attempt dies as `Retiring circuit because of directory failure`.
+    ///
+    /// What gets copied is the public Tor directory: the consensus, authority
+    /// certificates and microdescriptors that every Tor client on the planet
+    /// downloads identically. Arti checks the authority signatures when it
+    /// loads them, so handing them to another route reveals nothing about this
+    /// device and cannot be used to steer it.
+    ///
+    /// Copied rather than shared, deliberately. A shared directory would put
+    /// two Arti instances on one SQLite lock, turning three independent routes
+    /// into a single failure domain, and would write the bridge lines a bridged
+    /// route caches into the directory a plain Tor user owns.
+    func seedDirectoryCacheIfNeeded(for transport: TorTransport, into dataDirectory: URL) {
+        // Only ever fills a bridged route's directory from the direct one.
+        // Seeding in the other direction would move descriptors fetched through
+        // a bridge into the route that has no bridges.
+        guard transport != .direct, let directDirectory = dataDirectoryURL(for: .direct) else { return }
+        let fileManager = FileManager.default
+        let source = directDirectory.appendingPathComponent("cache", isDirectory: true)
+        let destination = dataDirectory.appendingPathComponent("cache", isDirectory: true)
+        // A route that already has a directory keeps it, including one further
+        // along than direct's. This closes a gap, it does not overwrite.
+        guard fileManager.fileExists(atPath: source.path),
+              !fileManager.fileExists(atPath: destination.path) else { return }
+
+        // Staged, then moved, so an interrupted copy cannot leave a half-written
+        // directory in the place Arti is about to open.
+        let staging = dataDirectory.appendingPathComponent("cache.seeding", isDirectory: true)
+        do {
+            try fileManager.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
+            try? fileManager.removeItem(at: staging)
+            try fileManager.copyItem(at: source, to: staging)
+            try fileManager.moveItem(at: staging, to: destination)
+            SecureLogger.info(
+                "TorManager: seeded \(transport.rawValue) directory cache from the direct route",
+                category: .session
+            )
+        } catch {
+            // Leaving this undone puts the route back in the state it would have
+            // started in anyway, so a failure here is not worth failing over.
+            try? fileManager.removeItem(at: staging)
         }
     }
 
@@ -450,13 +514,14 @@ public final class TorManager: ObservableObject {
             )
             return
         }
-        guard let dir = dataDirectoryURL(for: transport)?.path else {
+        guard let dataDirectory = dataDirectoryURL(for: transport) else {
             failCurrentTransport(
                 NSError(domain: "TorManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "No data directory"]),
                 stalled: false
             )
             return
         }
+        let dir = dataDirectory.path
 
         // Check if already running
         if arti_is_running() != 0 {
@@ -464,6 +529,10 @@ public final class TorManager: ObservableObject {
             beginBootstrapObservation(for: transport)
             return
         }
+
+        // Past the running check so the directory being copied has no live
+        // writer: Arti is the only thing that writes it, and it is stopped.
+        seedDirectoryCacheIfNeeded(for: transport, into: dataDirectory)
 
         let result: Int32
         switch transport {
