@@ -67,8 +67,14 @@ final class TorManagerPanicTests: XCTestCase {
         // The panic boundary is synchronous and unconditional, so it also runs
         // on a cold app. `arti_stop()` reports -1 there rather than failing,
         // and the wipe still has to complete.
+        let started = Date()
         manager.resetTransportForPanic()
+        let elapsed = Date().timeIntervalSince(started)
 
         XCTAssertEqual(manager.transportStatus, .idle)
+        // The wipe waits for Arti to finish stopping before unlinking its
+        // files. With no Arti running there is nothing to wait for, and the
+        // panic button must not stall on the main actor for the full budget.
+        XCTAssertLessThan(elapsed, 1.0)
     }
 }

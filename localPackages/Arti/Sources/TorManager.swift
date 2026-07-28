@@ -153,6 +153,8 @@ public final class TorManager: ObservableObject {
     // loud, distinctive pattern. Failures back off; success clears it.
     private var consecutiveRouteFailures = 0
     private var routeRetryNotBefore: Date? = nil
+    /// How long the panic wipe waits for Arti to stop before deleting anyway.
+    private static let panicShutdownWait: TimeInterval = 2
     private static let baseRouteRetryDelay: TimeInterval = 5
     private static let maximumRouteRetryDelay: TimeInterval = 120
     private(set) var allowAutoStart: Bool = false
@@ -232,9 +234,39 @@ public final class TorManager: ObservableObject {
         // as they go. A shutdown already in flight owns the stop, so this
         // narrows that window rather than closing it.
         _ = arti_stop()
+        waitForArtiToStop()
         for directory in [dataDirectoryURL(), pluggableTransportStateDirectoryURL()] {
             guard let directory else { continue }
             try? FileManager.default.removeItem(at: directory)
+        }
+    }
+
+    /// Block until Arti's owning task has actually exited.
+    ///
+    /// `arti_stop()` does wait for that task, but only for whichever caller
+    /// holds the handle. A shutdown already in flight takes it first, so the
+    /// panic path's own call returns immediately with the runtime still
+    /// tearing down. On device that unlinked `dir.sqlite3` underneath a live
+    /// Arti, which iOS reported as an integrity violation, and Arti then tried
+    /// to flush. That flush failing is the only reason pre-panic guard state
+    /// was not written back into the directory the wipe had just destroyed:
+    /// the guard sample is a linkable record of this device, and removing it
+    /// is the whole point of the wipe.
+    ///
+    /// Bounded, and the delete proceeds either way. Blocking the panic button
+    /// indefinitely is worse than a rare unclean delete, and an undeleted
+    /// directory is worse than both.
+    private func waitForArtiToStop() {
+        guard arti_is_running() != 0 else { return }
+        let limit = Date().addingTimeInterval(Self.panicShutdownWait)
+        while arti_is_running() != 0 && Date() < limit {
+            Thread.sleep(forTimeInterval: 0.01)
+        }
+        if arti_is_running() != 0 {
+            SecureLogger.error(
+                "TorManager: wiping tor state while Arti is still stopping after \(Int(Self.panicShutdownWait))s",
+                category: .session
+            )
         }
     }
 
