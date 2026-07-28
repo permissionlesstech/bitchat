@@ -285,6 +285,14 @@ public final class TorManager: ObservableObject {
             )
             return
         }
+        // The route the app actually took is otherwise only inferable from
+        // which listener logged, which made a direct start in obfs4 mode look
+        // identical to a missing log line. Naming the mode and the plan here
+        // is what identifies whoever rewrites the configuration.
+        SecureLogger.info(
+            "TorManager: starting mode=\(routeConfiguration.mode.rawValue) plan=\(routeCandidates.map(\.rawValue).joined(separator: ",")) index=\(routeIndex) bridges=\(routeConfiguration.obfs4BridgeLines.count)",
+            category: .session
+        )
         didStart = true
         isStarting = true
         bootstrapDidStall = false
