@@ -146,6 +146,15 @@ public final class TorManager: ObservableObject {
     private var isAppForeground: Bool = true
     private var lastRestartAt: Date? = nil
     private var startedAt: Date? = nil  // Tracks initial startup time for grace period
+    // A route that has run out of transports stops on its own, but every
+    // observer of "tor is not ready" calls startIfNeeded() again, so the app
+    // restarted a failing obfs4 route 15 times in 105 seconds, twice within
+    // 149ms. On a censored network that hammers the user's bridge and is a
+    // loud, distinctive pattern. Failures back off; success clears it.
+    private var consecutiveRouteFailures = 0
+    private var routeRetryNotBefore: Date? = nil
+    private static let baseRouteRetryDelay: TimeInterval = 5
+    private static let maximumRouteRetryDelay: TimeInterval = 120
     private(set) var allowAutoStart: Bool = false
 
     private init() {
@@ -186,6 +195,8 @@ public final class TorManager: ObservableObject {
 
     public func configureTransport(_ configuration: TorRouteConfiguration) {
         guard configuration != routeConfiguration else { return }
+        // A deliberate change of route is not the failing route retrying.
+        clearRouteBackoff()
         routeConfiguration = configuration
         routeCandidates.removeAll()
         routeIndex = 0
@@ -203,6 +214,7 @@ public final class TorManager: ObservableObject {
     }
 
     public func resetTransportForPanic() {
+        clearRouteBackoff()
         routeConfiguration = TorRouteConfiguration()
         routeCandidates.removeAll()
         routeIndex = 0
@@ -228,6 +240,9 @@ public final class TorManager: ObservableObject {
 
     public func retryTransportSequence() {
         guard allowAutoStart, isAppForeground else { return }
+        // The user asked for this one, so it is never subject to the backoff
+        // that automatic restarts are.
+        clearRouteBackoff()
         routeCandidates.removeAll()
         routeIndex = 0
         attemptedTransports.removeAll()
@@ -243,6 +258,13 @@ public final class TorManager: ObservableObject {
     public func startIfNeeded() {
         guard allowAutoStart else { return }
         guard isAppForeground else { return }
+        if let notBefore = routeRetryNotBefore, Date() < notBefore {
+            SecureLogger.debug(
+                "TorManager: startIfNeeded() suppressed - route backoff for \(Int(notBefore.timeIntervalSinceNow))s after \(consecutiveRouteFailures) failures",
+                category: .session
+            )
+            return
+        }
         if shutdownsInFlight > 0 {
             SecureLogger.debug("TorManager: startIfNeeded() deferred - shutdown in flight", category: .session)
             startPendingAfterShutdown = true
@@ -366,6 +388,28 @@ public final class TorManager: ObservableObject {
             return
         }
         let transport = routeCandidates[routeIndex]
+        // Fail closed on a route the user did not choose. A device run in
+        // obfs4 mode started Arti with no pluggable transport at all, which is
+        // plain Tor on a network the user had already told us to hide from.
+        // The planner cannot produce that (`TorRoutePlanner.candidates`), so
+        // something else rewrote the route; until that writer is identified,
+        // refusing here is what keeps the promise the mode makes.
+        guard TorRoutePlanner.candidates(for: routeConfiguration).contains(transport) else {
+            SecureLogger.error(
+                "TorManager: refusing to start \(transport.rawValue) - not permitted by \(routeConfiguration.mode.rawValue) mode",
+                category: .session
+            )
+            transportDiagnostic = "internal route mismatch; tor was not started"
+            failCurrentTransport(
+                NSError(
+                    domain: "TorManager",
+                    code: -19,
+                    userInfo: [NSLocalizedDescriptionKey: "Route not permitted by selected transport mode"]
+                ),
+                stalled: false
+            )
+            return
+        }
         guard let dir = dataDirectoryURL(for: transport)?.path else {
             failCurrentTransport(
                 NSError(domain: "TorManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "No data directory"]),
@@ -759,6 +803,11 @@ public final class TorManager: ObservableObject {
         #endif
     }
 
+    private func clearRouteBackoff() {
+        consecutiveRouteFailures = 0
+        routeRetryNotBefore = nil
+    }
+
     private func getBootstrapSummary() -> String {
         var buf = [CChar](repeating: 0, count: 256)
         let len = arti_bootstrap_summary(&buf, Int32(buf.count))
@@ -885,6 +934,22 @@ public final class TorManager: ObservableObject {
 
         let canAdvance = routeConfiguration.mode == .auto
             && routeCandidates.indices.contains(routeIndex + 1)
+        if !canAdvance {
+            // The sequence is exhausted, so the next start would repeat the
+            // attempt that just failed. Doubling, capped, keeps a transient
+            // outage recovering quickly while a genuinely blocked network
+            // settles into an occasional retry instead of a hot loop.
+            consecutiveRouteFailures += 1
+            let delay = min(
+                Self.maximumRouteRetryDelay,
+                Self.baseRouteRetryDelay * pow(2, Double(consecutiveRouteFailures - 1))
+            )
+            routeRetryNotBefore = Date().addingTimeInterval(delay)
+            SecureLogger.warning(
+                "TorManager: route failed \(consecutiveRouteFailures)x; next attempt in \(Int(delay))s",
+                category: .session
+            )
+        }
         if canAdvance {
             routeIndex += 1
             let next = routeCandidates[routeIndex]
@@ -1061,6 +1126,7 @@ public final class TorManager: ObservableObject {
             }
             isReady = ready
             if ready {
+                clearRouteBackoff()
                 transportDiagnostic = nil
                 if routeCandidates.indices.contains(routeIndex) {
                     let transport = routeCandidates[routeIndex]

@@ -116,6 +116,42 @@ final class TorTransportSettingsTests: XCTestCase {
         )
     }
 
+    func test_explicitModeNeverPlansAnyOtherTransport() {
+        // `startArti` refuses any transport outside this set, so this is the
+        // invariant that keeps a censorship mode from silently becoming plain
+        // Tor. A device run in obfs4 mode did start Arti with no pluggable
+        // transport at all, which is the exposure that guard now blocks.
+        let bridges = ["Bridge obfs4 example"]
+
+        for mode in [TorTransportMode.direct, .obfs4, .snowflake] {
+            let configuration = TorRouteConfiguration(
+                mode: mode,
+                obfs4BridgeLines: bridges,
+                // A previous success on another transport must not leak into
+                // an explicitly chosen mode; only auto is allowed to reorder.
+                lastSuccessfulTransport: .snowflake
+            )
+            let candidates = TorRoutePlanner.candidates(for: configuration)
+            XCTAssertFalse(
+                candidates.contains(where: { $0.rawValue != mode.rawValue }),
+                "\(mode.rawValue) mode planned \(candidates.map(\.rawValue))"
+            )
+        }
+
+        // obfs4 without bridge material has nothing to plan, and must not fall
+        // back to a transport the user did not pick.
+        XCTAssertEqual(
+            TorRoutePlanner.candidates(
+                for: TorRouteConfiguration(
+                    mode: .obfs4,
+                    obfs4BridgeLines: [],
+                    lastSuccessfulTransport: .direct
+                )
+            ),
+            []
+        )
+    }
+
     func test_snowflakeDefaultsMatchPinnedRecommendedTorrc() {
         XCTAssertEqual(SnowflakeDefaults.maxPeers, 1)
         XCTAssertEqual(SnowflakeDefaults.bridgeLines.count, 2)
