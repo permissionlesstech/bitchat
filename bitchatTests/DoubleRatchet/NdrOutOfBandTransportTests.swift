@@ -32,7 +32,9 @@ final class FakeRelayManager: NostrRelayManaging {
     var subscriptionRegistrationSucceeds = true
 
     var activeSubscriptions: [Subscription] {
-        subscriptions.filter { activeSubscriptionIDs.contains($0.id) }
+        activeSubscriptionIDs.compactMap { id in
+            subscriptions.last(where: { $0.id == id })
+        }
     }
 
     func resetSentEvents() {
@@ -88,6 +90,18 @@ final class FakeRelayManager: NostrRelayManaging {
             return
         }
         subscription.handler(event)
+    }
+
+    @discardableResult
+    func deliverMatching(_ event: NostrEvent) -> Bool {
+        guard let subscription = activeSubscriptions.first(where: {
+            ($0.filter.kinds?.contains(event.kind) ?? true)
+                && ($0.filter.authors?.contains(event.pubkey) ?? true)
+        }) else {
+            return false
+        }
+        subscription.handler(event)
+        return true
     }
 }
 
@@ -2569,6 +2583,96 @@ struct NdrOutOfBandTransportTests {
         )
         restored.configureIfNeeded(identity: bob)
         #expect(restored.hasActiveSession(with: alice.publicKeyHex))
+    }
+
+    @Test("Rotated NDR filters stay live across bidirectional relay turns")
+    @MainActor
+    func rotatedSubscriptionFiltersReplaceTheLiveRelayRequest() throws {
+        let alice = try NostrIdentity.generate()
+        let bob = try NostrIdentity.generate()
+        let aliceRelay = FakeRelayManager()
+        let bobRelay = FakeRelayManager()
+        let aliceService = try makeService(
+            label: "subscription-rotation-alice",
+            relay: aliceRelay
+        )
+        let bobService = try makeService(
+            label: "subscription-rotation-bob",
+            relay: bobRelay
+        )
+        aliceService.configureIfNeeded(identity: alice)
+        bobService.configureIfNeeded(identity: bob)
+        try establishPairwiseSessions(
+            aliceService,
+            bobService,
+            firstIdentity: alice,
+            secondIdentity: bob,
+            firstRelay: aliceRelay,
+            secondRelay: bobRelay
+        )
+
+        var receivedByAlice: [String] = []
+        var receivedByBob: [String] = []
+        aliceService.onDecryptedMessage = { message, completion in
+            receivedByAlice.append(message.event.content)
+            completion(.consumed)
+        }
+        bobService.onDecryptedMessage = { message, completion in
+            receivedByBob.append(message.event.content)
+            completion(.consumed)
+        }
+        aliceRelay.resetSentEvents()
+        bobRelay.resetSentEvents()
+
+        guard case let .sent(_, firstOuterID) = aliceService.send(
+            "bitchat1:first-turn",
+            to: bob.publicKeyHex
+        ),
+            let firstOuter = aliceRelay.sentEvents.first(where: {
+                $0.id == firstOuterID
+            })
+        else {
+            Issue.record("Expected Alice's first pairwise send")
+            return
+        }
+        #expect(bobRelay.deliverMatching(firstOuter))
+        #expect(receivedByBob == ["bitchat1:first-turn"])
+
+        guard case let .sent(_, replyOuterID) = bobService.send(
+            "bitchat1:reply-turn",
+            to: alice.publicKeyHex
+        ),
+            let replyOuter = bobRelay.sentEvents.first(where: {
+                $0.id == replyOuterID
+            })
+        else {
+            Issue.record("Expected Bob's pairwise reply")
+            return
+        }
+        #expect(aliceRelay.deliverMatching(replyOuter))
+        #expect(receivedByAlice == ["bitchat1:reply-turn"])
+
+        guard case let .sent(_, secondOuterID) = aliceService.send(
+            "bitchat1:second-turn",
+            to: bob.publicKeyHex
+        ),
+            let secondOuter = aliceRelay.sentEvents.first(where: {
+                $0.id == secondOuterID
+            })
+        else {
+            Issue.record("Expected Alice's second pairwise send")
+            return
+        }
+        #expect(
+            bobRelay.deliverMatching(secondOuter),
+            "the live relay filter must follow the rotated sender key"
+        )
+        #expect(
+            receivedByBob
+                == ["bitchat1:first-turn", "bitchat1:second-turn"]
+        )
+        #expect(aliceRelay.unsubscribedIDs.isEmpty)
+        #expect(bobRelay.unsubscribedIDs.isEmpty)
     }
 
     @Test("Absolute message expiry survives the pairwise round trip")

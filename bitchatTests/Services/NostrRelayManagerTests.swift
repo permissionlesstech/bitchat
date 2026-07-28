@@ -798,6 +798,195 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertEqual(context.manager.debugPendingSubscriptionCount(for: relayURL), 0)
     }
 
+    func test_subscribe_changedActiveRequestReplacesSameID() async {
+        let relayURL = "wss://rotating-subscribe.example"
+        let context = makeContext(permission: .denied)
+        let initialFilter = makeFilter()
+
+        context.manager.subscribe(
+            filter: initialFilter,
+            id: "rotating-sub",
+            relayUrls: [relayURL],
+            handler: { _ in }
+        )
+        let firstSent = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?
+                .sentStrings.count == 1
+        }
+        XCTAssertTrue(firstSent)
+
+        var rotatedFilter = initialFilter
+        rotatedFilter.authors = [String(repeating: "a", count: 64)]
+        context.manager.subscribe(
+            filter: rotatedFilter,
+            id: "rotating-sub",
+            relayUrls: [relayURL],
+            handler: { _ in }
+        )
+
+        let replacementSent = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?
+                .sentStrings.count == 2
+        }
+        XCTAssertTrue(
+            replacementSent,
+            "NIP-01 replaces a live subscription atomically when a new REQ reuses its ID"
+        )
+        let messages = context.sessionFactory
+            .latestConnection(for: relayURL)?.sentStrings ?? []
+        XCTAssertTrue(messages.allSatisfy { $0.contains("\"REQ\"") })
+        XCTAssertNotEqual(messages.first, messages.last)
+        let replacementCommitted = await waitUntil {
+            context.manager.debugPendingSubscriptionCount(
+                for: relayURL
+            ) == 0
+        }
+        XCTAssertTrue(replacementCommitted)
+    }
+
+    func test_subscribe_staleCompletionCannotRegressReplacement() async {
+        let relayURL = "wss://subscription-completion-order.example"
+        let context = makeContext(permission: .denied)
+        context.sessionFactory.deferSendCompletions = true
+        let initialFilter = makeFilter()
+
+        context.manager.subscribe(
+            filter: initialFilter,
+            id: "ordered-sub",
+            relayUrls: [relayURL],
+            handler: { _ in }
+        )
+        let firstSent = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?
+                .sentStrings.count == 1
+        }
+        XCTAssertTrue(firstSent)
+
+        var replacementFilter = initialFilter
+        replacementFilter.authors = [String(repeating: "b", count: 64)]
+        context.manager.subscribe(
+            filter: replacementFilter,
+            id: "ordered-sub",
+            relayUrls: [relayURL],
+            handler: { _ in }
+        )
+        let replacementSent = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?
+                .sentStrings.count == 2
+        }
+        XCTAssertTrue(replacementSent)
+
+        let connection = context.sessionFactory.latestConnection(
+            for: relayURL
+        )
+        connection?.flushDeferredSendCompletion(at: 1)
+        let replacementCommitted = await waitUntil {
+            context.manager.debugPendingSubscriptionCount(
+                for: relayURL
+            ) == 0
+        }
+        XCTAssertTrue(replacementCommitted)
+
+        // The first REQ completes last. It must not restore the old logical
+        // generation or make the same replacement look absent.
+        connection?.flushDeferredSendCompletion(at: 0)
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        context.manager.subscribe(
+            filter: replacementFilter,
+            id: "ordered-sub",
+            relayUrls: [relayURL],
+            handler: { _ in }
+        )
+        try? await Task.sleep(nanoseconds: 20_000_000)
+
+        XCTAssertEqual(connection?.sentStrings.count, 2)
+        XCTAssertEqual(
+            context.manager.debugPendingSubscriptionCount(for: relayURL),
+            0
+        )
+    }
+
+    func test_subscribe_reconnectReplaysOnlyLatestReplacement() async {
+        let relayURL = "wss://subscription-reconnect.example"
+        let context = makeContext(permission: .denied)
+        let initialFilter = makeFilter()
+
+        context.manager.subscribe(
+            filter: initialFilter,
+            id: "reconnecting-sub",
+            relayUrls: [relayURL],
+            handler: { _ in }
+        )
+        let oldConnection = context.sessionFactory.latestConnection(
+            for: relayURL
+        )
+        oldConnection?.deferSendCompletions = true
+        let initialSent = await waitUntil {
+            oldConnection?.sentStrings.count == 1
+        }
+        XCTAssertTrue(initialSent)
+
+        var replacementFilter = initialFilter
+        replacementFilter.authors = [String(repeating: "c", count: 64)]
+        context.manager.subscribe(
+            filter: replacementFilter,
+            id: "reconnecting-sub",
+            relayUrls: [relayURL],
+            handler: { _ in }
+        )
+        let replacementSent = await waitUntil {
+            oldConnection?.sentStrings.count == 2
+        }
+        XCTAssertTrue(replacementSent)
+
+        oldConnection?.fail(
+            error: NSError(
+                domain: NSURLErrorDomain,
+                code: NSURLErrorNetworkConnectionLost
+            )
+        )
+        let retryScheduled = await waitUntil {
+            !context.scheduler.scheduled.isEmpty
+        }
+        XCTAssertTrue(retryScheduled)
+        context.scheduler.runNext()
+
+        let replayed = await waitUntil {
+            let connections =
+                context.sessionFactory.connectionsByURL[relayURL] ?? []
+            return connections.count == 2
+                && connections.last?.sentStrings.count == 1
+        }
+        XCTAssertTrue(replayed)
+
+        let connections =
+            context.sessionFactory.connectionsByURL[relayURL] ?? []
+        XCTAssertEqual(
+            connections.last?.sentStrings.first,
+            oldConnection?.sentStrings.last
+        )
+        XCTAssertNotEqual(
+            oldConnection?.sentStrings.first,
+            oldConnection?.sentStrings.last
+        )
+
+        oldConnection?.flushDeferredSendCompletions()
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        context.manager.subscribe(
+            filter: replacementFilter,
+            id: "reconnecting-sub",
+            relayUrls: [relayURL],
+            handler: { _ in }
+        )
+        try? await Task.sleep(nanoseconds: 20_000_000)
+
+        XCTAssertEqual(connections.last?.sentStrings.count, 1)
+        XCTAssertEqual(
+            context.manager.debugPendingSubscriptionCount(for: relayURL),
+            0
+        )
+    }
+
     func test_subscribe_waitsForTorReadinessAndPreservesEOSECallback() async throws {
         let relayURL = "wss://tor-subscribe.example"
         let context = makeContext(permission: .denied, userTorEnabled: true, torEnforced: true, torIsReady: false)
@@ -2374,6 +2563,7 @@ private final class MockRelaySessionFactory: NostrRelaySessionProtocol {
     private(set) var connectionsByURL: [String: [MockRelayConnection]] = [:]
     var pingErrorByURL: [String: Error?] = [:]
     var sendErrorByURL: [String: Error?] = [:]
+    var deferSendCompletions = false
 
     var allConnections: [MockRelayConnection] {
         connectionsByURL.values.flatMap { $0 }
@@ -2386,6 +2576,7 @@ private final class MockRelaySessionFactory: NostrRelaySessionProtocol {
             pingError: pingErrorByURL[url.absoluteString] ?? nil,
             sendError: sendErrorByURL[url.absoluteString] ?? nil
         )
+        connection.deferSendCompletions = deferSendCompletions
         connectionsByURL[url.absoluteString, default: []].append(connection)
         return connection
     }
@@ -2444,6 +2635,13 @@ private final class MockRelayConnection: NostrRelayConnectionProtocol {
         pending.forEach {
             $0(sendError)
         }
+    }
+
+    func flushDeferredSendCompletion(at index: Int) {
+        guard deferredSendCompletions.indices.contains(index) else {
+            return
+        }
+        deferredSendCompletions.remove(at: index)(sendError)
     }
 
     func receive(completionHandler: @escaping (Result<URLSessionWebSocketTask.Message, Error>) -> Void) {

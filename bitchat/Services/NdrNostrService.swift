@@ -880,30 +880,32 @@ final class NdrNostrService {
                     synchronousAcks.append(action.actionId)
                     continue
                 }
-                if !activeSubIDs.contains(subscriptionID) {
-                    let registered = relayManager.subscribe(
-                        filter: filter,
-                        id: subscriptionID,
-                        relayUrls: nil,
-                        handler: { [weak self, manager] event in
-                            self?.processInboundNostrEvent(
-                                event,
-                                manager: manager,
-                                epoch: epoch
-                            )
-                        },
-                        onEOSE: nil
-                    )
-                    guard registered else {
-                        deferForTransientRetry(
-                            action.actionId,
+                // The native runtime deliberately reuses its account-scoped
+                // subscription ID while rotating ephemeral sender authors.
+                // Register every durable replacement before acknowledging it;
+                // NIP-01 replaces the relay's live REQ atomically by ID.
+                let registered = relayManager.subscribe(
+                    filter: filter,
+                    id: subscriptionID,
+                    relayUrls: nil,
+                    handler: { [weak self, manager] event in
+                        self?.processInboundNostrEvent(
+                            event,
                             manager: manager,
                             epoch: epoch
                         )
-                        continue
-                    }
-                    activeSubIDs.insert(subscriptionID)
+                    },
+                    onEOSE: nil
+                )
+                guard registered else {
+                    deferForTransientRetry(
+                        action.actionId,
+                        manager: manager,
+                        epoch: epoch
+                    )
+                    continue
                 }
+                activeSubIDs.insert(subscriptionID)
                 synchronousAcks.append(action.actionId)
 
             case "unsubscribe":

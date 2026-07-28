@@ -200,7 +200,10 @@ final class NostrRelayManager: ObservableObject {
     private var hasMutualFavorites: Bool = false
     private var hasLocationPermission: Bool = false
     private var connections: [String: NostrRelayConnectionProtocol] = [:]
-    private var subscriptions: [String: Set<String>] = [:] // relay URL -> active subscription IDs
+    // Relay URL -> subscription ID -> logical request generation currently
+    // installed on that socket. A same-ID REQ with a newer generation
+    // atomically replaces its filter under NIP-01.
+    private var subscriptions: [String: [String: UInt64]] = [:]
     // Not-yet-flushed REQs per relay, bounded by a per-relay cap (oldest by
     // insertion order evicted) and an age sweep on connect attempts. Dicts are
     // unordered, so each entry carries an insertion sequence and queue time.
@@ -788,6 +791,14 @@ final class NostrRelayManager: ObservableObject {
                     forKey: id
                 )
             }
+            if let previousRequestState {
+                let removedRelayURLs = previousRequestState.relayURLs
+                    .subtracting(requestState.relayURLs)
+                closeSubscription(
+                    id: id,
+                    on: removedRelayURLs
+                )
+            }
             messageHandlers[id] = handler
             if previousRequestState == requestState,
                subscriptionStateExists(id: id, requestState: requestState)
@@ -899,6 +910,15 @@ final class NostrRelayManager: ObservableObject {
     
     /// Unsubscribe from a subscription
     func unsubscribe(id: String) {
+        var relayURLs = subscriptionRequestState[id]?.relayURLs ?? []
+        for (relayURL, active) in subscriptions where active[id] != nil {
+            relayURLs.insert(relayURL)
+        }
+        for (relayURL, pending) in pendingSubscriptions
+        where pending[id] != nil {
+            relayURLs.insert(relayURL)
+        }
+
         messageHandlers.removeValue(forKey: id)
         subscriptionGenerations.removeValue(forKey: id)
         removeRecentInboundEvents(forSubscriptionID: id)
@@ -906,22 +926,29 @@ final class NostrRelayManager: ObservableObject {
         subscriptionRequestState.removeValue(forKey: id)
         pendingEOSECallbacks.removeValue(forKey: id)
         eoseTrackers.removeValue(forKey: id)
-        for url in Array(pendingSubscriptions.keys) {
-            pendingSubscriptions[url]?.removeValue(forKey: id)
+        closeSubscription(id: id, on: relayURLs)
+    }
+
+    private func closeSubscription(
+        id: String,
+        on relayURLs: Set<String>
+    ) {
+        guard !relayURLs.isEmpty else { return }
+        for relayURL in relayURLs {
+            subscriptions[relayURL]?.removeValue(forKey: id)
+            pendingSubscriptions[relayURL]?.removeValue(forKey: id)
         }
-        
+
         let req = NostrRequest.close(id: id)
         let message = try? encoder.encode(req)
-        
         guard let messageData = message,
               let messageString = String(data: messageData, encoding: .utf8) else { return }
-        
-        // Send unsubscribe to all relays
-        for (relayUrl, connection) in connections {
-            if subscriptions[relayUrl]?.contains(id) == true {
-                subscriptions[relayUrl]?.remove(id)
+
+        for relayURL in relayURLs {
+            if let connection = connections[relayURL] {
                 connection.send(.string(messageString)) { _ in
-                    // Local state is cleared before sending so callers can re-subscribe immediately.
+                    // Local state is cleared first so a later same-ID REQ can
+                    // register immediately and stale callbacks remain inert.
                 }
             }
         }
@@ -1036,10 +1063,14 @@ final class NostrRelayManager: ObservableObject {
     }
 
     private func subscriptionStateExists(id: String, requestState: SubscriptionRequestState) -> Bool {
-        guard !requestState.relayURLs.isEmpty else { return true }
+        guard !requestState.relayURLs.isEmpty,
+              let generation = subscriptionGenerations[id]
+        else {
+            return requestState.relayURLs.isEmpty
+        }
         return requestState.relayURLs.allSatisfy { url in
             pendingSubscriptions[url]?[id]?.messageString == requestState.messageString ||
-                subscriptions[url]?.contains(id) == true
+                subscriptions[url]?[id] == generation
         }
     }
 
@@ -1239,12 +1270,32 @@ final class NostrRelayManager: ObservableObject {
     /// active subscription targeting this relay must be re-sent.
     private func flushPendingSubscriptions(for relayUrl: String) {
         guard let connection = connections[relayUrl] else { return }
-        var toSend = (pendingSubscriptions[relayUrl] ?? [:]).mapValues(\.messageString)
-        for (id, state) in subscriptionRequestState where state.relayURLs.contains(relayUrl) && toSend[id] == nil {
-            toSend[id] = state.messageString
+        var toSend: [
+            String: (messageString: String, generation: UInt64)
+        ] = [:]
+        for (id, pending) in pendingSubscriptions[relayUrl] ?? [:] {
+            guard let state = subscriptionRequestState[id],
+                  state.relayURLs.contains(relayUrl),
+                  state.messageString == pending.messageString,
+                  let generation = subscriptionGenerations[id]
+            else {
+                pendingSubscriptions[relayUrl]?.removeValue(forKey: id)
+                continue
+            }
+            toSend[id] = (pending.messageString, generation)
         }
-        for (id, messageString) in toSend {
-            if self.subscriptions[relayUrl]?.contains(id) == true {
+        for (id, state) in subscriptionRequestState
+        where state.relayURLs.contains(relayUrl)
+        {
+            guard let generation = subscriptionGenerations[id] else {
+                continue
+            }
+            toSend[id] = (state.messageString, generation)
+        }
+        for (id, request) in toSend {
+            let messageString = request.messageString
+            let generation = request.generation
+            if subscriptions[relayUrl]?[id] == generation {
                 // Already subscribed on this relay (e.g. a tracker promoted
                 // after an earlier flush): its EOSE is coming, count it.
                 markEOSESubscribed(id: id, relayUrl: relayUrl)
@@ -1264,12 +1315,26 @@ final class NostrRelayManager: ObservableObject {
                         // Keep the pending entry; the next (re)connect retries it.
                         SecureLogger.error("❌ Failed to send pending subscription to \(relayUrl): \(error)", category: .session)
                     } else {
-                        // A stale completion from a socket that has since been
-                        // replaced must not mark the subscription active, or
-                        // the next connection would skip replaying it.
-                        guard let connection, self.connections[relayUrl] === connection else { return }
-                        self.subscriptions[relayUrl, default: []].insert(id)
-                        self.pendingSubscriptions[relayUrl]?.removeValue(forKey: id)
+                        // Old sockets and old same-ID filters can complete
+                        // after a replacement has already become canonical.
+                        guard let connection,
+                              self.connections[relayUrl] === connection,
+                              self.subscriptionGenerations[id] == generation,
+                              let desired =
+                                self.subscriptionRequestState[id],
+                              desired.relayURLs.contains(relayUrl),
+                              desired.messageString == messageString
+                        else {
+                            return
+                        }
+                        self.subscriptions[relayUrl, default: [:]][id] =
+                            generation
+                        if self.pendingSubscriptions[relayUrl]?[id]?
+                            .messageString == messageString
+                        {
+                            self.pendingSubscriptions[relayUrl]?
+                                .removeValue(forKey: id)
+                        }
                     }
                 }
             }
