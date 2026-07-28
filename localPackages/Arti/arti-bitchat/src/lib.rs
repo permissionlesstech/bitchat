@@ -36,6 +36,14 @@ const BOOTSTRAP_PROGRESS_INTERVAL: std::time::Duration = std::time::Duration::fr
 /// what an outside caller can pin.
 const MAX_CONCURRENT_SOCKS_SESSIONS: usize = 64;
 
+/// Ceiling on how long a stop waits for an attempt's runtime to wind down.
+///
+/// A ceiling, not a delay: tasks abort at their next await, so a healthy stop
+/// returns in milliseconds. It exists so a wedged task cannot block the caller
+/// forever, and is kept short because the panic path waits on this before it
+/// deletes the directory these tasks are writing to.
+const RUNTIME_SHUTDOWN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
 enum TransportKind {
@@ -123,8 +131,17 @@ impl TransportConfig {
 
 /// Global state for the Arti instance
 struct ArtiState {
-    /// Tokio runtime (owned, single instance)
-    runtime: Runtime,
+    /// Tokio runtime owning the current attempt.
+    ///
+    /// One runtime per attempt rather than one for the process. `TorClient`
+    /// spawns its directory, circuit and guard managers onto whichever runtime
+    /// created it, and dropping the client handle does not abort them. Those
+    /// tasks hold the Arc that owns `dir.sqlite3`, so on a shared runtime they
+    /// kept the state directory locked after the attempt that started them had
+    /// exited, and the next attempt on the same directory waited on a lock
+    /// nothing would release. Shutting the runtime down is what actually ends
+    /// them.
+    runtime: Option<Runtime>,
     /// Shutdown signal sender
     shutdown_tx: Option<oneshot::Sender<()>>,
     /// Handle for the currently owned attempt. Stop joins this before a new
@@ -149,9 +166,8 @@ fn init_state() -> Result<(), &'static str> {
     // until the host opts in.
     diagnostics::install();
     ARTI_STATE.get_or_try_init(|| -> Result<Mutex<ArtiState>, &'static str> {
-        let runtime = Runtime::new().map_err(|_| "Failed to create tokio runtime")?;
         Ok(Mutex::new(ArtiState {
-            runtime,
+            runtime: None,
             shutdown_tx: None,
             task: None,
             client: None,
@@ -287,10 +303,24 @@ fn start_arti(data_dir: *const c_char, socks_port: u16, transport: PreparedTrans
     TRANSPORT_STAGE.store(0, Ordering::SeqCst);
     update_summary("Starting...");
 
+    // A stop always takes the runtime with it, so anything still here belongs
+    // to an attempt that never stopped. Shut it down rather than leak it.
+    if let Some(previous) = guard.runtime.take() {
+        previous.shutdown_timeout(RUNTIME_SHUTDOWN_TIMEOUT);
+    }
+    let runtime = match Runtime::new() {
+        Ok(runtime) => runtime,
+        Err(_) => {
+            guard.shutdown_tx.take();
+            IS_RUNNING.store(false, Ordering::SeqCst);
+            return -3;
+        }
+    };
+
     // Spawn the main Arti task. Only the active generation may clear global
     // status, so a late completion can never overwrite a newer attempt.
     let data_path_clone = data_path.clone();
-    let task = guard.runtime.spawn(async move {
+    let task = runtime.spawn(async move {
         match run_arti(data_path_clone, socks_addr, transport, shutdown_rx).await {
             Ok(_) => {
                 tracing::info!("Arti shutdown cleanly");
@@ -303,6 +333,7 @@ fn start_arti(data_dir: *const c_char, socks_port: u16, transport: PreparedTrans
         finish_attempt_if_current(generation);
     });
     guard.task = Some(task);
+    guard.runtime = Some(runtime);
 
     0
 }
@@ -319,7 +350,7 @@ pub extern "C" fn arti_stop() -> c_int {
         None => return -1,
     };
 
-    let (shutdown_tx, task, runtime_handle, generation) = {
+    let (shutdown_tx, task, runtime, generation) = {
         let mut guard = match state.lock() {
             Ok(g) => g,
             Err(_) => return -1,
@@ -328,13 +359,12 @@ pub extern "C" fn arti_stop() -> c_int {
         if !has_attempt {
             return -1;
         }
-        let runtime_handle = guard.runtime.handle().clone();
         let generation = ACTIVE_GENERATION.load(Ordering::SeqCst);
         guard.client = None;
         (
             guard.shutdown_tx.take(),
             guard.task.take(),
-            runtime_handle,
+            guard.runtime.take(),
             generation,
         )
     };
@@ -348,8 +378,15 @@ pub extern "C" fn arti_stop() -> c_int {
     // Do not report stopped until the owning task has actually exited. This is
     // what prevents the next Swift start from overlapping the previous Arti
     // bootstrap.
-    if let Some(task) = task {
-        let _ = runtime_handle.block_on(task);
+    if let Some(runtime) = runtime {
+        if let Some(task) = task {
+            let _ = runtime.block_on(task);
+        }
+        // That task exiting is not enough. TorClient's directory, circuit and
+        // guard tasks outlive it and keep holding the state directory's lock,
+        // so a later attempt on the same directory sat waiting for a process
+        // that had already finished. Ending the runtime ends them too.
+        runtime.shutdown_timeout(RUNTIME_SHUTDOWN_TIMEOUT);
     }
     finish_attempt_if_current(generation);
     update_summary("");
