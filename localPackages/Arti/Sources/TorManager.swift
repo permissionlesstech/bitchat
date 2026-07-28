@@ -642,7 +642,15 @@ public final class TorManager: ObservableObject {
 
             self.bootstrapProgress = progress
             self.bootstrapSummary = summary
+            // Stage text describes a bootstrap still in progress, so publishing
+            // it after readiness is always wrong. The SOCKS probe can flip
+            // `isReady` between two ticks of this loop, and `recomputeReady`
+            // clears the diagnostic only on that transition; without this
+            // guard the next tick wrote a stale stage back over the cleared
+            // value and then broke out, leaving the UI reporting "finding a
+            // proxy" for the whole life of a working route.
             if summaryChanged,
+               !isReady,
                let diagnostic = transportStageDiagnostic(summary) {
                 self.transportDiagnostic = diagnostic
                 SecureLogger.info(
