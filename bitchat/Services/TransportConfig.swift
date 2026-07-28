@@ -274,9 +274,11 @@ enum TransportConfig {
     // A dial resolves only when its ping callback fires, and URLSession can
     // withhold that indefinitely when the proxy accepts the socket but the
     // connect behind it never completes. Past this the dial counts as failed so
-    // it stops holding the relay's slot. Well clear of the slowest handshake a
-    // pluggable transport produces.
-    static let nostrRelayHandshakeTimeoutSeconds: TimeInterval = 30.0
+    // it stops holding the relay's slot. The clock starts when the SOCKS port
+    // begins listening, which on a cold start is well before Arti has a circuit,
+    // so the budget has to cover both: about 25s of bootstrap plus the ~9s a
+    // healthy relay takes to handshake over a pluggable transport.
+    static let nostrRelayHandshakeTimeoutSeconds: TimeInterval = 45.0
 
     // Geo relay directory
     static let geoRelayFetchIntervalSeconds: TimeInterval = 60 * 60 * 24
