@@ -816,6 +816,8 @@ struct BLEServiceCoreTests {
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
         let reconciled = SessionReconcileCounter()
         ble._test_onPrivateMediaSessionReconciled = reconciled.record
+        let outbound = OutboundPacketTap()
+        ble._test_onOutboundPacket = outbound.record
 
         // Establish BLE as responder so the inbound reconnect below is not
         // coalesced by the initiator-completion grace path.
@@ -838,12 +840,23 @@ struct BLEServiceCoreTests {
         )
         await ble._test_drainNoiseMessagePipeline()
         #expect(ble.canDeliverSecurely(to: alicePeerID))
+        let initialEncryptedFrameSent = await TestHelpers.waitUntil(
+            { outbound.count(ofType: .noiseEncrypted) >= 1 },
+            timeout: TestConstants.longTimeout
+        )
+        try #require(initialEncryptedFrameSent)
+        #expect(outbound.count(ofType: .noiseEncrypted) == 1)
         let initialReconcileRan = await TestHelpers.waitUntil(
             { reconciled.count(for: alicePeerID) == 1 },
             timeout: TestConstants.longTimeout
         )
         try #require(initialReconcileRan)
         await ble._test_drainNoiseMessagePipeline()
+        // Keep one tap installed for the service's whole lifetime. After the
+        // explicit initial-frame observation and queue fence, start a fresh,
+        // lock-protected capture epoch so every assertion below measures only
+        // rollback/convergence output under a saturated concurrent suite.
+        outbound.removeAll()
 
         // The convergence retry only prepares for reachable peers.
         ble._test_seedConnectedPeer(alicePeerID, nickname: "Alice")
@@ -854,8 +867,6 @@ struct BLEServiceCoreTests {
         let recoveryGate = HandshakeRecoveryEnqueueGate()
         defer { recoveryGate.release() }
         ble._test_beforeHandshakeRecoveryEnqueued = { _ in recoveryGate.pause() }
-        let outbound = OutboundPacketTap()
-        ble._test_onOutboundPacket = outbound.record
 
         // Park the traffic the race would lose directly in the pending
         // queues — the same place live sends land during quarantine — so no
@@ -1370,6 +1381,10 @@ private final class OutboundPacketTap {
     func snapshot() -> [BitchatPacket] {
         lock.lock(); defer { lock.unlock() }
         return packets
+    }
+
+    func removeAll() {
+        lock.lock(); packets.removeAll(); lock.unlock()
     }
 }
 
