@@ -1393,6 +1393,78 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertTrue(retried)
     }
 
+    /// A dial that fails while nothing else is connected says the transport is
+    /// down, not that the relay is bad. Tor that never finishes its directory
+    /// fails every relay identically, and giving up on the pool for that would
+    /// leave the app silent for the whole cooldown after Tor recovers.
+    func test_poolWideOutage_doesNotGiveUpOnRelays() async {
+        let relayA = "wss://outage-a.example"
+        let relayB = "wss://outage-b.example"
+        let context = makeContext(permission: .denied)
+        context.sessionFactory.pingErrorByURL[relayA] = NSError(domain: NSURLErrorDomain, code: NSURLErrorTimedOut)
+        context.sessionFactory.pingErrorByURL[relayB] = NSError(domain: NSURLErrorDomain, code: NSURLErrorTimedOut)
+
+        context.manager.ensureConnections(to: [relayA, relayB])
+
+        // Well past the point where a relay is normally given up on.
+        let rounds = TransportConfig.nostrRelayMaxReconnectAttempts + 2
+        for round in 1...rounds {
+            let scheduled = await waitUntil { context.scheduler.scheduled.count == 2 }
+            XCTAssertTrue(scheduled, "round \(round) scheduled no reconnect")
+            context.scheduler.runNext()
+            context.scheduler.runNext()
+        }
+
+        let keptDialing = await waitUntil {
+            context.sessionFactory.requestedURLs.count == 2 * (rounds + 1)
+        }
+        XCTAssertTrue(keptDialing, "an outage must not stop the relays being retried")
+        for url in [relayA, relayB] {
+            XCTAssertEqual(
+                context.manager.relays.first(where: { $0.url == url })?.attributedFailures,
+                0,
+                "\(url) was blamed for a transport-wide outage"
+            )
+        }
+    }
+
+    /// The rest of the pool working is what makes a failure the relay's own
+    /// fault, so a relay that keeps failing beside healthy neighbours is still
+    /// given up on.
+    func test_relayFailingBesideAHealthyPoolIsStillGivenUpOn() async {
+        let healthy = "wss://healthy.example"
+        let broken = "wss://broken.example"
+        let context = makeContext(permission: .denied)
+        context.sessionFactory.pingErrorByURL[broken] = NSError(domain: NSURLErrorDomain, code: NSURLErrorTimedOut)
+
+        context.manager.ensureConnections(to: [healthy, broken])
+        let healthyUp = await waitUntil {
+            context.manager.relays.first(where: { $0.url == healthy })?.isConnected == true
+        }
+        XCTAssertTrue(healthyUp)
+
+        // The dial that fails on entry is strike one, so one fewer reconnect
+        // takes it to the limit.
+        for round in 1...(TransportConfig.nostrRelayMaxReconnectAttempts - 1) {
+            let scheduled = await waitUntil { !context.scheduler.scheduled.isEmpty }
+            XCTAssertTrue(scheduled, "round \(round) scheduled no reconnect")
+            context.scheduler.runNext()
+        }
+
+        let gaveUp = await waitUntil {
+            context.manager.relays.first(where: { $0.url == broken })?.attributedFailures
+                == TransportConfig.nostrRelayMaxReconnectAttempts
+        }
+        XCTAssertTrue(gaveUp, "a relay failing against a healthy pool must still be dropped")
+
+        let countBefore = context.sessionFactory.requestedURLs.count
+        context.manager.ensureConnections(to: [broken])
+        let redialed = await waitUntil(timeout: TestConstants.negativeWaitWindow) {
+            context.sessionFactory.requestedURLs.count > countBefore
+        }
+        XCTAssertFalse(redialed, "a relay we gave up on must not be dialed again")
+    }
+
     func test_receiveFailure_schedulesReconnectWithBackoff() async {
         let relayURL = "wss://retry.example"
         let context = makeContext(permission: .denied)

@@ -153,6 +153,10 @@ final class NostrRelayManager: ObservableObject {
         var messagesSent: Int = 0
         var messagesReceived: Int = 0
         var reconnectAttempts: Int = 0
+        /// Failures this relay can actually be blamed for, as opposed to the
+        /// ones it shared with every other relay because the transport was
+        /// down. Only these count toward giving up on it.
+        var attributedFailures: Int = 0
         var lastDisconnectedAt: Date?
         var nextReconnectTime: Date?
     }
@@ -558,6 +562,7 @@ final class NostrRelayManager: ObservableObject {
                 relays[index].messagesSent = 0
                 relays[index].messagesReceived = 0
                 relays[index].reconnectAttempts = 0
+                relays[index].attributedFailures = 0
             } else {
                 relays[index].lastDisconnectedAt = now
             }
@@ -1516,6 +1521,7 @@ final class NostrRelayManager: ObservableObject {
             relays[index].lastError = error
             if isConnected {
                 relays[index].reconnectAttempts = 0  // Reset on successful connection
+                relays[index].attributedFailures = 0
                 relays[index].nextReconnectTime = nil
             } else {
                 relays[index].lastDisconnectedAt = dependencies.now()
@@ -1604,6 +1610,7 @@ final class NostrRelayManager: ObservableObject {
             if let index = relays.firstIndex(where: { $0.url == relayUrl }) {
                 relays[index].lastError = error
                 relays[index].reconnectAttempts = maxReconnectAttempts
+                relays[index].attributedFailures = maxReconnectAttempts
                 relays[index].nextReconnectTime = nil
             }
             pendingSubscriptions[relayUrl] = nil
@@ -1614,9 +1621,18 @@ final class NostrRelayManager: ObservableObject {
         guard let index = relays.firstIndex(where: { $0.url == relayUrl }) else { return }
         
         relays[index].reconnectAttempts += 1
-        
+        // A failure only says something about this relay when the rest of the
+        // pool is working. With nothing connected the transport is what failed:
+        // Tor that never finishes its directory fails every dial identically,
+        // and counting those would blacklist the whole pool for an outage it is
+        // about to recover from. `updateRelayStatus` above already cleared this
+        // relay's own flag, so this asks about the others.
+        if relays.contains(where: { $0.isConnected }) {
+            relays[index].attributedFailures += 1
+        }
+
         // Stop attempting after max attempts
-        if relays[index].reconnectAttempts >= maxReconnectAttempts {
+        if relays[index].attributedFailures >= maxReconnectAttempts {
             SecureLogger.warning("Max reconnection attempts (\(maxReconnectAttempts)) reached for \(relayUrl)", category: .session)
             return
         }
@@ -1665,6 +1681,7 @@ final class NostrRelayManager: ObservableObject {
         
         // Reset reconnection attempts
         relays[index].reconnectAttempts = 0
+        relays[index].attributedFailures = 0
         relays[index].nextReconnectTime = nil
         relays[index].lastError = nil
         
@@ -1745,6 +1762,7 @@ final class NostrRelayManager: ObservableObject {
         // Reset all relay states
         for index in relays.indices {
             relays[index].reconnectAttempts = 0
+            relays[index].attributedFailures = 0
             relays[index].nextReconnectTime = nil
             relays[index].lastError = nil
         }
@@ -1763,7 +1781,7 @@ final class NostrRelayManager: ObservableObject {
            dependencies.now().timeIntervalSince(lastDisconnect) >= TransportConfig.nostrRelayFailureCooldownSeconds {
             return false
         }
-        if r.reconnectAttempts >= maxReconnectAttempts { return true }
+        if r.attributedFailures >= maxReconnectAttempts { return true }
         if let ns = r.lastError as NSError?, ns.domain == NSURLErrorDomain {
             if ns.code == NSURLErrorBadServerResponse || ns.code == NSURLErrorCannotFindHost {
                 return true
