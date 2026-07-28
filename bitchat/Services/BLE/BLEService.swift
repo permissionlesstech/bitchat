@@ -1513,15 +1513,6 @@ final class BLEService: NSObject {
         }
     }
 
-    func sendFilePrivate(_ filePacket: BitchatFilePacket, to peerID: PeerID, transferId: String) {
-        sendFilePrivate(
-            filePacket,
-            to: peerID,
-            transferId: transferId,
-            allowLegacyFallback: false
-        )
-    }
-
     func sendFilePrivate(
         _ filePacket: BitchatFilePacket,
         to peerID: PeerID,

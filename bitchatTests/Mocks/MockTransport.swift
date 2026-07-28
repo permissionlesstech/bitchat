@@ -208,11 +208,6 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting,
         sentBroadcastFiles.append((packet, transferId))
     }
 
-    func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String) {
-        sentPrivateFiles.append((packet, peerID, transferId))
-        sentPrivateFileLegacyAllowances.append(false)
-    }
-
     func sendFilePrivate(
         _ packet: BitchatFilePacket,
         to peerID: PeerID,

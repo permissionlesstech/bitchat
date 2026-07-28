@@ -31,7 +31,6 @@ protocol PanicResettingTransport: AnyObject {
 /// capability-proof policy that gates encrypted private media.
 protocol MeshFileTransferring: AnyObject {
     func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String)
-    func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String)
     func sendFilePrivate(
         _ packet: BitchatFilePacket,
         to peerID: PeerID,
