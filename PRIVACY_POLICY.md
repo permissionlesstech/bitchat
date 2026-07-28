@@ -50,6 +50,7 @@ bitchat is designed for private, account-free communication. This policy describ
 8. **Optional Tor bridge state**
    - On physical iOS devices, obfs4 bridge lines you paste are stored in a dedicated device-only keychain item. They are limited in number, excluded from app logs and preferences, and erased by panic wipe.
    - The last successful Tor route is stored locally so automatic mode can try an available working route first. Panic wipe erases this hint.
+   - Tor keeps its own working files on your device: the public directory of Tor relays, which every Tor user downloads identically, and the entry points it has chosen to use. Each route keeps a separate copy, and a route using a bridge is started from the copy the ordinary Tor route already downloaded so it does not have to fetch one over a slow connection. None of this is sent anywhere, it is excluded from device backups, and panic wipe deletes all of it.
 
 ## Temporary Session Data
 
