@@ -251,6 +251,13 @@ enum TransportConfig {
     // Sample interval for the send-queue overflow warning (first + every Nth
     // dropped event). Drops are ephemeral presence/geo traffic — log-only.
     static let nostrPendingSendDropLogInterval: Int = 10
+    // How stale a queued ephemeral event may be before the flush drops it
+    // instead of sending it. Ephemeral kinds describe a moment (presence,
+    // geohash chatter), so after a long Tor outage they are worthless: relays
+    // answer them with "invalid: ephemeral event expired", and sending a burst
+    // of provably-old events is a distinguishable pattern for no benefit.
+    // Durable kinds are never dropped by age.
+    static let nostrEphemeralSendMaxAgeSeconds: TimeInterval = 120.0
     // Pending (not-yet-flushed) REQs are bounded per relay: oldest-by-insertion
     // eviction at the cap, plus an age sweep on connect attempts. Durable
     // subscription intent survives in subscriptionRequestState either way.

@@ -693,10 +693,32 @@ final class NostrRelayManager: ObservableObject {
         }
     }
 
+    /// True for an event whose moment has passed while it sat in the queue.
+    ///
+    /// Ephemeral kinds (20000-29999) describe a point in time. After a long Tor
+    /// outage a queued one is worthless: relays reject it as "ephemeral event
+    /// expired", so the only thing sending it achieves is a burst of
+    /// provably-stale events on reconnect, which is a pattern worth not
+    /// emitting. Durable kinds carry real messages and are never aged out here.
+    private func isStaleEphemeral(_ event: NostrEvent) -> Bool {
+        guard (20000..<30000).contains(event.kind) else { return false }
+        let age = Date().timeIntervalSince1970 - TimeInterval(event.created_at)
+        return age > TransportConfig.nostrEphemeralSendMaxAgeSeconds
+    }
+
     /// Try to flush any queued messages for relays that are now connected.
     private func flushMessageQueue(for relayUrl: String? = nil) {
         messageQueueLock.lock()
         defer { messageQueueLock.unlock() }
+        guard !messageQueue.isEmpty else { return }
+        let staleCount = messageQueue.filter { isStaleEphemeral($0.event) }.count
+        if staleCount > 0 {
+            messageQueue.removeAll { isStaleEphemeral($0.event) }
+            SecureLogger.debug(
+                "📤 Dropped \(staleCount) expired ephemeral event(s) instead of sending them",
+                category: .session
+            )
+        }
         guard !messageQueue.isEmpty else { return }
         if let target = relayUrl {
             // Flush only for a specific relay
