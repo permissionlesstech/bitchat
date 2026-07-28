@@ -124,3 +124,45 @@ struct BLEIngressLinkRegistry {
         packet.isRSR && packet.ttl == 0
     }
 }
+
+/// Lock-backed shared ownership of the ingress-link registry. Ingress is
+/// recorded on bleQueue the moment a frame decodes (the link identity is
+/// only known there, and the duplicate-ingress gate must answer before
+/// the packet is handed to the engine), while relay and routing decisions
+/// read it from the engine. Every registry mutation is a single
+/// whole-transition method, so readers never observe a torn state.
+final class BLEIngressLinkStore: @unchecked Sendable {
+    private let lock = NSLock()
+    private var registry = BLEIngressLinkRegistry()
+
+    var isEmpty: Bool {
+        lock.withLock { registry.isEmpty }
+    }
+
+    func removeAll() {
+        lock.withLock { registry.removeAll() }
+    }
+
+    func record(for packet: BitchatPacket) -> BLEIngressLinkRecord? {
+        lock.withLock { registry.record(for: packet) }
+    }
+
+    func link(for packet: BitchatPacket) -> BLEIngressLinkID? {
+        lock.withLock { registry.link(for: packet) }
+    }
+
+    func recordIfNew(
+        _ packet: BitchatPacket,
+        link: BLEIngressLinkID,
+        peerID: PeerID,
+        lifetime: TimeInterval
+    ) -> Bool {
+        lock.withLock {
+            registry.recordIfNew(packet, link: link, peerID: peerID, lifetime: lifetime)
+        }
+    }
+
+    func prune(before cutoff: Date) {
+        lock.withLock { registry.prune(before: cutoff) }
+    }
+}

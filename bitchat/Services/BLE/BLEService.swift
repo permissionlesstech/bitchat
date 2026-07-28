@@ -408,7 +408,9 @@ final class BLEService: NSObject {
     private let recentTrafficTracker = BLERecentTrafficMonitor()
 
     // Ingress link tracking for duplicate and last-hop suppression
-    private var ingressLinks = BLEIngressLinkRegistry()
+    // (lock-backed: recorded on bleQueue the moment a frame decodes, read
+    // by engine relay/routing decisions)
+    private let ingressLinks = BLEIngressLinkStore()
     // Inner message IDs of recently opened courier envelopes. Redundant
     // copies of one message ride different envelopes (each seal uses a fresh
     // ephemeral key, and bridge drops multiply across relays/couriers), so
@@ -1931,14 +1933,12 @@ final class BLEService: NSObject {
     }
 
     private func recordIngressIfNew(_ packet: BitchatPacket, link: BLEIngressLinkID, peerID: PeerID) -> Bool {
-        return onEngine {
-            ingressLinks.recordIfNew(
-                packet,
-                link: link,
-                peerID: peerID,
-                lifetime: TransportConfig.bleIngressRecordLifetimeSeconds
-            )
-        }
+        ingressLinks.recordIfNew(
+            packet,
+            link: link,
+            peerID: peerID,
+            lifetime: TransportConfig.bleIngressRecordLifetimeSeconds
+        )
     }
 
     // MARK: - Packet Broadcasting
@@ -2246,7 +2246,7 @@ final class BLEService: NSObject {
         requireNoiseAuthenticatedPeerLink: Bool = false
     ) -> Bool {
         guard !isPanicSuspended else { return false }
-        let ingressRecord = onEngine { ingressLinks.record(for: packet) }
+        let ingressRecord = ingressLinks.record(for: packet)
         var excludedPeerLinks = links(to: ingressRecord?.peerID)
         if requireNoiseAuthenticatedPeerLink {
             guard let directedOnlyPeer else { return false }
@@ -2397,16 +2397,18 @@ final class BLEService: NSObject {
 
     private func flushDirectedSpool() {
         guard !isPanicSuspended else { return }
-        // Move items out and attempt broadcast; if still no links, they'll be re-spooled
-        let toSend = onEngine {
-            pendingDirectedRelays.drainUnexpired(
+        // Runs from bleQueue maintenance: hop to the engine asynchronously
+        // (bleQueue must never sync-wait on the engine). Move items out and
+        // attempt broadcast; if still no links, they'll be re-spooled.
+        messageQueue.async { [weak self] in
+            guard let self, !self.isPanicSuspended else { return }
+            let toSend = self.pendingDirectedRelays.drainUnexpired(
                 now: Date(),
                 window: TransportConfig.bleDirectedSpoolWindowSeconds
             )
-        }
-        guard !toSend.isEmpty else { return }
-        for entry in toSend {
-            messageQueue.async { [weak self] in self?.broadcastPacket(entry.packet) }
+            for entry in toSend {
+                self.broadcastPacket(entry.packet)
+            }
         }
     }
 
@@ -4846,7 +4848,7 @@ extension BLEService {
     /// handshake. An old session keyed only by peer ID is insufficient: a
     /// replayed announce can rebind an attacker's link to that ID.
     private func markNoiseAuthenticatedIngressLink(for packet: BitchatPacket, peerID: PeerID) {
-        guard let link = onEngine({ ingressLinks.link(for: packet) }) else { return }
+        guard let link = ingressLinks.link(for: packet) else { return }
         readLinkState { store in
             guard boundPeerID(for: link, in: store) == peerID else { return }
             noiseAuthenticatedLinkOwners[link] = peerID
@@ -4854,7 +4856,7 @@ extension BLEService {
     }
 
     private func isNoiseAuthenticatedIngressLink(for packet: BitchatPacket, peerID: PeerID) -> Bool {
-        guard let link = onEngine({ ingressLinks.link(for: packet) }) else { return false }
+        guard let link = ingressLinks.link(for: packet) else { return false }
         return readLinkState { store in
             noiseAuthenticatedLinkOwners[link] == peerID && boundPeerID(for: link, in: store) == peerID
         }
@@ -6962,7 +6964,7 @@ extension BLEService {
     /// sender owns the link it arrived on, so rebind the link to the new ID
     /// and retire the old identity.
     private func rebindLinkAfterVerifiedDirectAnnounce(_ packet: BitchatPacket, to peerID: PeerID) {
-        guard let link = (onEngine { ingressLinks.link(for: packet) }) else { return }
+        guard let link = ingressLinks.link(for: packet) else { return }
         bleQueue.async { [weak self] in
             guard let self else { return }
             let linkUUID: String
@@ -7068,7 +7070,7 @@ extension BLEService {
     /// retirement per peer per cooldown window, and the peer keeps a live
     /// link either way.
     private func retireRedundantPeripheralLinks(_ packet: BitchatPacket, to peerID: PeerID) {
-        let ingressLink = onEngine { ingressLinks.link(for: packet) }
+        let ingressLink = ingressLinks.link(for: packet)
         bleQueue.async { [weak self] in
             guard let self else { return }
             let now = Date()
@@ -7211,7 +7213,7 @@ extension BLEService {
                 // connected. See the caller in BLEAnnounceHandler for why the
                 // residual forged-presence window this leaves is accepted.
                 guard let self else { return false }
-                guard let link = (onEngine { self.ingressLinks.link(for: packet) }) else { return false }
+                guard let link = self.ingressLinks.link(for: packet) else { return false }
                 let boundPeerID: PeerID? = self.readLinkState { store in
                     switch link {
                     case .peripheral(let peripheralUUID):
