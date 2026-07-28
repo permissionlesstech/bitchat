@@ -176,36 +176,6 @@ private final class BLEPrivateMediaTransferAdmissionRegistry {
     }
 }
 
-private struct BLEAuthenticatedPeerStateObservation {
-    let fingerprint: String
-    let sessionGeneration: UUID
-    let capabilities: PeerCapabilities
-}
-
-private struct BLEPrivateMediaProofTimeoutMarker {
-    let fingerprint: String
-    let sessionGeneration: UUID?
-}
-
-private struct BLEPrivateMediaProofWatchdog {
-    let fingerprint: String
-    let sessionGeneration: UUID
-    let timeoutNonce: UUID
-}
-
-private struct BLEPendingPrivateMediaPolicyResolution {
-    let fingerprint: String
-    var sessionGeneration: UUID?
-    var timeoutNonce: UUID
-    var completions: [UUID: @MainActor (PrivateMediaSendPolicy) -> Void]
-}
-
-private struct BLEAuthenticatedPeerStateSendProgress {
-    let sessionGeneration: UUID
-    var sentInitial = false
-    var sentEcho = false
-}
-
 /// BLEService — Bluetooth Mesh Transport
 /// - Emits events exclusively via `BitchatDelegate` for UI.
 /// - ChatViewModel must consume delegate callbacks (`didReceivePublicMessage`, `didReceiveNoisePayload`).
@@ -337,23 +307,10 @@ final class BLEService: NSObject {
     private lazy var privateMediaTransferAdmissions = BLEPrivateMediaTransferAdmissionRegistry { [weak self] transferId in
         self?.handlePrivateMediaAdmissionExpiry(transferId)
     }
-    // Peers whose parked outbound queues must stay parked until the
-    // convergence retry re-authenticates: a timeout-restore brings back
-    // keys the counterpart may have already discarded, so nothing — not
-    // even the capability-proof watchdog — may drain the queues under
-    // them. Set on the deferred restore transition, cleared by any
-    // transition that is allowed to drain. Engine-confined.
-    private var outboundConvergenceDeferred: Set<PeerID> = []
-
-    // All six maps below are engine-confined. A fresh Noise
-    // authentication rotates the generation UUID, so stale proof timers and
-    // proof packets cannot classify a replacement session.
-    private var privateMediaSessionGenerations: [PeerID: UUID] = [:]
-    private var authenticatedPeerStates: [PeerID: BLEAuthenticatedPeerStateObservation] = [:]
-    private var privateMediaProofTimeoutMarkers: [PeerID: BLEPrivateMediaProofTimeoutMarker] = [:]
-    private var privateMediaProofWatchdogs: [PeerID: BLEPrivateMediaProofWatchdog] = [:]
-    private var pendingPrivateMediaPolicyResolutions: [PeerID: BLEPendingPrivateMediaPolicyResolution] = [:]
-    private var authenticatedPeerStateSendProgress: [PeerID: BLEAuthenticatedPeerStateSendProgress] = [:]
+    // Generation-bound private-media session state (lock-backed store: the
+    // main actor answers the send policy from it synchronously, and noise
+    // critical sections mutate it without re-entering the engine).
+    private let privateMediaSessions = BLEPrivateMediaSessionStore()
     private let incomingFileStore: BLEIncomingFileStore
     
     // Simple announce throttling
@@ -804,13 +761,7 @@ final class BLEService: NSObject {
             scheduledRelays.cancelAll()
             // These callbacks belong to pre-panic transfer state. Invoking
             // them would let queued UI work recreate or resend wiped media.
-            pendingPrivateMediaPolicyResolutions.removeAll()
-            privateMediaSessionGenerations.removeAll()
-            authenticatedPeerStates.removeAll()
-            privateMediaProofTimeoutMarkers.removeAll()
-            privateMediaProofWatchdogs.removeAll()
-            outboundConvergenceDeferred.removeAll()
-            authenticatedPeerStateSendProgress.removeAll()
+            privateMediaSessions.panicReset()
             // Let the post-panic identity publish its fresh bundle promptly.
             lastPrekeyBundleSentAt = nil
             return transfers
@@ -1168,21 +1119,10 @@ final class BLEService: NSObject {
         let normalizedPeerID = peerID.toShort()
         let currentNoiseGeneration =
             noiseService.sessionGeneration(for: normalizedPeerID)
-        return onEngine {
-            guard let generation =
-                    privateMediaSessionGenerations[normalizedPeerID],
-                  generation == currentNoiseGeneration,
-                  let authenticated =
-                    authenticatedPeerStates[normalizedPeerID],
-                  authenticated.sessionGeneration == generation,
-                  authenticated.capabilities.contains(.privateMedia),
-                  authenticated.capabilities.contains(
-                    .privateMediaReceipts
-                  ) else {
-                return nil
-            }
-            return generation
-        }
+        return privateMediaSessions.receiptSessionGeneration(
+            for: normalizedPeerID,
+            currentNoiseGeneration: currentNoiseGeneration
+        )
     }
 
     private func privateMediaPolicyFingerprint(
@@ -1213,16 +1153,17 @@ final class BLEService: NSObject {
             sessionGeneration: UUID?,
             authenticatedState: BLEAuthenticatedPeerStateObservation?,
             timedOut: BLEPrivateMediaProofTimeoutMarker?
-        ) = onEngine {
+        ) = {
             let info = peerRegistry.info(for: normalizedPeerID)
+            let session = privateMediaSessions.policyInputs(for: normalizedPeerID)
             return (
                 info?.capabilities ?? [],
                 info?.noisePublicKey?.sha256Fingerprint(),
-                privateMediaSessionGenerations[normalizedPeerID],
-                authenticatedPeerStates[normalizedPeerID],
-                privateMediaProofTimeoutMarkers[normalizedPeerID]
+                session.sessionGeneration,
+                session.authenticatedState,
+                session.timedOut
             )
-        }
+        }()
         let currentNoiseGeneration = noiseService.sessionGeneration(for: normalizedPeerID)
 
         // A session replacement can happen before its authentication callback
@@ -1289,9 +1230,7 @@ final class BLEService: NSObject {
                 return
             }
 
-            let generation = onEngine {
-                self.privateMediaSessionGenerations[normalizedPeerID]
-            }
+            let generation = self.privateMediaSessions.currentGeneration(for: normalizedPeerID)
             let fingerprint = self.privateMediaPolicyFingerprint(
                 for: normalizedPeerID,
                 expectedSessionGeneration: generation
@@ -1302,43 +1241,12 @@ final class BLEService: NSObject {
             }
 
             let requestID = UUID()
-            let registration = onEngine {
-                () -> (registered: Bool, shouldSchedule: Bool, nonce: UUID, generation: UUID?) in
-                let generation = self.privateMediaSessionGenerations[normalizedPeerID]
-                if var pending = self.pendingPrivateMediaPolicyResolutions[normalizedPeerID] {
-                    guard pending.fingerprint.caseInsensitiveCompare(fingerprint) == .orderedSame,
-                          pending.completions.count
-                            < TransportConfig.privateMediaCapabilityProofWaitersPerPeerCap else {
-                        return (false, false, UUID(), generation)
-                    }
-                    pending.completions[requestID] = completion
-                    self.pendingPrivateMediaPolicyResolutions[normalizedPeerID] = pending
-                    return (true, false, pending.timeoutNonce, pending.sessionGeneration)
-                }
-
-                guard self.pendingPrivateMediaPolicyResolutions.count
-                        < TransportConfig.privateMediaCapabilityProofPendingPeerCap else {
-                    return (false, false, UUID(), generation)
-                }
-                let currentWatchdog = self.privateMediaProofWatchdogs[normalizedPeerID]
-                let reusesWatchdog = currentWatchdog?.fingerprint
-                    .caseInsensitiveCompare(fingerprint) == .orderedSame
-                    && currentWatchdog?.sessionGeneration == generation
-                let nonce: UUID
-                if reusesWatchdog, let currentWatchdog {
-                    nonce = currentWatchdog.timeoutNonce
-                } else {
-                    nonce = UUID()
-                }
-                self.pendingPrivateMediaPolicyResolutions[normalizedPeerID] =
-                    BLEPendingPrivateMediaPolicyResolution(
-                        fingerprint: fingerprint,
-                        sessionGeneration: generation,
-                        timeoutNonce: nonce,
-                        completions: [requestID: completion]
-                    )
-                return (true, !reusesWatchdog, nonce, generation)
-            }
+            let registration = self.privateMediaSessions.registerPolicyResolution(
+                for: normalizedPeerID,
+                fingerprint: fingerprint,
+                requestID: requestID,
+                completion: completion
+            )
 
             guard registration.registered else {
                 self.completePrivateMediaPolicyResolution([completion], with: .blockedDowngrade)
@@ -1393,36 +1301,12 @@ final class BLEService: NSObject {
         sessionGeneration: UUID?,
         nonce: UUID
     ) {
-        let expiration = onEngine {
-            () -> (expired: Bool, deferredOutbound: Bool, completions: [@MainActor (PrivateMediaSendPolicy) -> Void]) in
-            let pending = pendingPrivateMediaPolicyResolutions[peerID]
-            let pendingMatches = pending?.timeoutNonce == nonce
-                && pending?.sessionGeneration == sessionGeneration
-                && pending?.fingerprint.caseInsensitiveCompare(fingerprint) == .orderedSame
-            let watchdog = privateMediaProofWatchdogs[peerID]
-            let watchdogMatches = sessionGeneration != nil
-                && watchdog?.timeoutNonce == nonce
-                && watchdog?.sessionGeneration == sessionGeneration
-                && watchdog?.fingerprint.caseInsensitiveCompare(fingerprint) == .orderedSame
-            guard pendingMatches || watchdogMatches else {
-                return (false, false, [])
-            }
-            var completions: [@MainActor (PrivateMediaSendPolicy) -> Void] = []
-            if pendingMatches, let pending {
-                completions = Array(pending.completions.values)
-            }
-            if pendingMatches {
-                pendingPrivateMediaPolicyResolutions.removeValue(forKey: peerID)
-            }
-            if watchdogMatches {
-                privateMediaProofWatchdogs.removeValue(forKey: peerID)
-            }
-            privateMediaProofTimeoutMarkers[peerID] = BLEPrivateMediaProofTimeoutMarker(
-                fingerprint: fingerprint,
-                sessionGeneration: sessionGeneration
-            )
-            return (true, outboundConvergenceDeferred.contains(peerID), completions)
-        }
+        let expiration = privateMediaSessions.expireProofDeadline(
+            for: peerID,
+            fingerprint: fingerprint,
+            sessionGeneration: sessionGeneration,
+            nonce: nonce
+        )
         guard expiration.expired else { return }
         let policy = privateMediaSendPolicy(to: peerID)
         if !expiration.deferredOutbound {
@@ -3688,31 +3572,12 @@ extension BLEService {
     }
 
     func _test_hasPendingPrivateMediaPolicyResolution(for peerID: PeerID) -> Bool {
-        onEngine {
-            pendingPrivateMediaPolicyResolutions[peerID.toShort()] != nil
-        }
+        privateMediaSessions.hasPendingPolicyResolution(for: peerID.toShort())
     }
 
     func _test_forcePrivateMediaProofTimeout(for peerID: PeerID) {
         let normalizedPeerID = peerID.toShort()
-        let target = onEngine {
-            () -> (fingerprint: String, generation: UUID?, nonce: UUID)? in
-            if let watchdog = privateMediaProofWatchdogs[normalizedPeerID] {
-                return (
-                    watchdog.fingerprint,
-                    watchdog.sessionGeneration,
-                    watchdog.timeoutNonce
-                )
-            }
-            if let pending = pendingPrivateMediaPolicyResolutions[normalizedPeerID] {
-                return (
-                    pending.fingerprint,
-                    pending.sessionGeneration,
-                    pending.timeoutNonce
-                )
-            }
-            return nil
-        }
+        let target = privateMediaSessions.proofTimeoutTarget(for: normalizedPeerID)
         guard let target else { return }
         handlePrivateMediaProofTimeout(
             for: normalizedPeerID,
@@ -5172,55 +5037,30 @@ extension BLEService {
         sessionGeneration generation: UUID,
         deferOutboundUntilConvergence: Bool = false
     ) {
-        // Every caller enqueues this on the engine queue, and that matters
-        // below: the closure handed to `withCurrentSessionGeneration` runs
-        // on the noise manager's queue while this engine slot stays blocked,
-        // so it may touch engine-owned state directly — the engine cannot
-        // run anything else concurrently. It must NOT go through `onEngine`
-        // (a sync back onto the engine from inside a queue the engine is
-        // sync-waiting on is a self-deadlock).
+        // Engine-only: the store transition below runs inside the noise
+        // manager's critical section while this engine slot stays blocked.
+        // The store is a leaf lock, so that nesting is safe — but nothing in
+        // that closure may sync-re-enter the engine (self-deadlock).
         #if DEBUG
         dispatchPrecondition(condition: .onQueue(messageQueue))
         #endif
         let normalizedPeerID = peerID.toShort()
-        guard let transition = noiseService.withCurrentSessionGeneration(
+        // The generation lease serializes this transition against session
+        // replacement; nil-inside-nil distinguishes a lost lease (outer)
+        // from the same-generation reconciliation path (inner).
+        guard let leased = noiseService.withCurrentSessionGeneration(
             for: normalizedPeerID,
             expected: generation,
             {
-                () -> (
-                    watchdog: (fingerprint: String, nonce: UUID)?,
-                    rejected: [@MainActor (PrivateMediaSendPolicy) -> Void]
-                ) in
-                guard privateMediaSessionGenerations[normalizedPeerID] != generation else {
-                    return (nil, [])
-                }
-                let watchdogNonce = UUID()
-                privateMediaSessionGenerations[normalizedPeerID] = generation
-                authenticatedPeerStates.removeValue(forKey: normalizedPeerID)
-                privateMediaProofTimeoutMarkers.removeValue(forKey: normalizedPeerID)
-                privateMediaProofWatchdogs[normalizedPeerID] = BLEPrivateMediaProofWatchdog(
+                privateMediaSessions.beginAuthenticatedGeneration(
+                    for: normalizedPeerID,
                     fingerprint: fingerprint,
-                    sessionGeneration: generation,
-                    timeoutNonce: watchdogNonce
+                    generation: generation
                 )
-                authenticatedPeerStateSendProgress[normalizedPeerID] =
-                    BLEAuthenticatedPeerStateSendProgress(sessionGeneration: generation)
-
-                guard var pending = pendingPrivateMediaPolicyResolutions[normalizedPeerID] else {
-                    return ((fingerprint, watchdogNonce), [])
-                }
-                guard pending.fingerprint.caseInsensitiveCompare(fingerprint) == .orderedSame else {
-                    pendingPrivateMediaPolicyResolutions.removeValue(forKey: normalizedPeerID)
-                    return ((fingerprint, watchdogNonce), Array(pending.completions.values))
-                }
-                pending.sessionGeneration = generation
-                pending.timeoutNonce = watchdogNonce
-                pendingPrivateMediaPolicyResolutions[normalizedPeerID] = pending
-                return ((pending.fingerprint, watchdogNonce), [])
             }
         ) else { return }
 
-        guard let watchdog = transition.watchdog else {
+        guard let fresh = leased else {
             // A quarantined transport restored the same cryptographic
             // generation. Its capability proof and announce state never
             // became stale; only work queued while outbound keys were paused
@@ -5240,21 +5080,21 @@ extension BLEService {
                 // transition with a fresh generation and drains them under
                 // keys both sides hold. The flag also holds the proof
                 // watchdog's drain to the same rule.
-                outboundConvergenceDeferred.insert(normalizedPeerID)
+                privateMediaSessions.setOutboundDeferredUntilConvergence(normalizedPeerID)
                 return
             }
-            outboundConvergenceDeferred.remove(normalizedPeerID)
+            privateMediaSessions.clearOutboundDeferredUntilConvergence(normalizedPeerID)
             sendPendingMessagesAfterHandshake(for: normalizedPeerID)
             sendPendingNoisePayloadsAfterHandshake(for: normalizedPeerID)
             return
         }
 
-        completePrivateMediaPolicyResolution(transition.rejected, with: .blockedDowngrade)
+        completePrivateMediaPolicyResolution(fresh.rejected, with: .blockedDowngrade)
         schedulePrivateMediaProofTimeout(
             for: normalizedPeerID,
-            fingerprint: watchdog.fingerprint,
+            fingerprint: fingerprint,
             sessionGeneration: generation,
-            nonce: watchdog.nonce
+            nonce: fresh.watchdogNonce
         )
         // Cross-link delivery can put ciphertext sent immediately after
         // message 3 ahead of message 3 itself. Retry the bounded queue only
@@ -5272,13 +5112,13 @@ extension BLEService {
             // fresh generation and drains them under keys both sides hold.
             // The flag also holds the proof watchdog's drain to the same
             // rule — its timeout can fire while this restore is current.
-            outboundConvergenceDeferred.insert(normalizedPeerID)
+            privateMediaSessions.setOutboundDeferredUntilConvergence(normalizedPeerID)
             #if DEBUG
             _test_onPrivateMediaSessionReconciled?(normalizedPeerID)
             #endif
             return
         }
-        outboundConvergenceDeferred.remove(normalizedPeerID)
+        privateMediaSessions.clearOutboundDeferredUntilConvergence(normalizedPeerID)
 
         // `onPeerAuthenticated` can fire while the initiator is returning XX
         // message 3. This callback is queued behind the handshake handler, so
@@ -5295,21 +5135,7 @@ extension BLEService {
 
     private func sendAuthenticatedPeerState(to peerID: PeerID, echo: Bool) {
         let normalizedPeerID = peerID.toShort()
-        let shouldSend = onEngine {
-            guard let generation = privateMediaSessionGenerations[normalizedPeerID],
-                  var progress = authenticatedPeerStateSendProgress[normalizedPeerID],
-                  progress.sessionGeneration == generation else { return false }
-            if echo {
-                guard !progress.sentEcho else { return false }
-                progress.sentEcho = true
-            } else {
-                guard !progress.sentInitial else { return false }
-                progress.sentInitial = true
-            }
-            authenticatedPeerStateSendProgress[normalizedPeerID] = progress
-            return true
-        }
-        guard shouldSend else { return }
+        guard privateMediaSessions.markPeerStateSend(for: normalizedPeerID, echo: echo) else { return }
 
         let capabilities = localIdentityState.snapshot().advertisedCapabilities
         let state = AuthenticatedPeerStatePacket(
@@ -5357,12 +5183,13 @@ extension BLEService {
             expected: generation,
             {
                 () -> (accepted: Bool, completions: [@MainActor (PrivateMediaSendPolicy) -> Void]) in
-                guard privateMediaSessionGenerations[normalizedPeerID] == generation else {
+                guard privateMediaSessions.currentGeneration(for: normalizedPeerID) == generation else {
                     return (false, [])
                 }
 
-                // The generation lease prevents rekey/session promotion from
-                // interleaving between validation and these durable mutations.
+                // The generation lease (plus the engine slot this section
+                // holds) prevents rekey/session promotion from interleaving
+                // between validation and these durable mutations.
                 identityManager.bindAuthenticatedSigningPublicKey(
                     state.signingPublicKey,
                     fingerprint: fingerprint
@@ -5383,20 +5210,15 @@ extension BLEService {
                         for: normalizedPeerID
                     )
                 }
-                authenticatedPeerStates[normalizedPeerID] = BLEAuthenticatedPeerStateObservation(
+                guard let completions = privateMediaSessions.applyAuthenticatedPeerState(
+                    for: normalizedPeerID,
                     fingerprint: fingerprint,
-                    sessionGeneration: generation,
+                    generation: generation,
                     capabilities: state.capabilities
-                )
-                privateMediaProofTimeoutMarkers.removeValue(forKey: normalizedPeerID)
-                privateMediaProofWatchdogs.removeValue(forKey: normalizedPeerID)
-                guard let pending = pendingPrivateMediaPolicyResolutions.removeValue(
-                    forKey: normalizedPeerID
-                ), pending.fingerprint.caseInsensitiveCompare(fingerprint) == .orderedSame,
-                   pending.sessionGeneration == generation else {
-                    return (true, [])
+                ) else {
+                    return (false, [])
                 }
-                return (true, Array(pending.completions.values))
+                return (true, completions)
             }
         ), application.accepted else { return }
 
@@ -5410,23 +5232,7 @@ extension BLEService {
 
     private func noteNoiseSessionCleared(for peerID: PeerID) {
         let normalizedPeerID = peerID.toShort()
-        let reset = onEngine {
-            () -> (fingerprint: String, nonce: UUID)? in
-            privateMediaSessionGenerations.removeValue(forKey: normalizedPeerID)
-            authenticatedPeerStates.removeValue(forKey: normalizedPeerID)
-            privateMediaProofTimeoutMarkers.removeValue(forKey: normalizedPeerID)
-            privateMediaProofWatchdogs.removeValue(forKey: normalizedPeerID)
-            authenticatedPeerStateSendProgress.removeValue(forKey: normalizedPeerID)
-            outboundConvergenceDeferred.remove(normalizedPeerID)
-            guard var pending = pendingPrivateMediaPolicyResolutions[normalizedPeerID] else {
-                return nil
-            }
-            let nonce = UUID()
-            pending.sessionGeneration = nil
-            pending.timeoutNonce = nonce
-            pendingPrivateMediaPolicyResolutions[normalizedPeerID] = pending
-            return (pending.fingerprint, nonce)
-        }
+        let reset = privateMediaSessions.clearSession(for: normalizedPeerID)
         if let reset {
             schedulePrivateMediaProofTimeout(
                 for: normalizedPeerID,
@@ -5497,21 +5303,10 @@ extension BLEService {
         let encrypted: Data
         let isPrivateFile = NoisePayloadType.isPrivateFile(rawValue: typedPayload.first)
         if isPrivateFile {
-            let provenGeneration: UUID? = onEngine {
-                () -> UUID? in
-                guard let generation = privateMediaSessionGenerations[peerID],
-                      let authenticated = authenticatedPeerStates[peerID],
-                      authenticated.sessionGeneration == generation,
-                      authenticated.capabilities.contains(.privateMedia) else { return nil }
-                if requiresAuthenticatedPrivateMediaReceipts {
-                    guard authenticated.capabilities.contains(
-                        .privateMediaReceipts
-                    ) else {
-                        return nil
-                    }
-                }
-                return generation
-            }
+            let provenGeneration = privateMediaSessions.provenGeneration(
+                for: peerID,
+                requireReceipts: requiresAuthenticatedPrivateMediaReceipts
+            )
             guard let provenGeneration else {
                 throw NoiseEncryptionError.sessionNotEstablished
             }
@@ -7791,19 +7586,15 @@ extension BLEService {
             decrypt: { [weak self] payload, peerID in
                 guard let self = self else { throw NoiseEncryptionError.sessionNotEstablished }
                 // Decrypt runs on the engine queue; the readiness callback
-                // fires on the noise manager's queue while this engine slot
-                // stays blocked, so it reads engine-owned state directly
-                // (sync-re-entering the engine there would self-deadlock).
-                #if DEBUG
-                dispatchPrecondition(condition: .onQueue(self.messageQueue))
-                #endif
+                // fires on the noise manager's queue; the session store is
+                // a leaf lock, so the read is safe from there.
                 let result = try self.noiseService.decryptWithSessionGeneration(
                     payload,
                     from: peerID,
                     establishedGenerationIsReady: { generation in
-                        self.privateMediaSessionGenerations[
-                            peerID.toShort()
-                        ] == generation
+                        self.privateMediaSessions.currentGeneration(
+                            for: peerID.toShort()
+                        ) == generation
                     }
                 )
                 return BLENoiseDecryptionResult(
