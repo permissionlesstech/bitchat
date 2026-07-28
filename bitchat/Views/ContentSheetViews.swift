@@ -27,6 +27,10 @@ struct ContentPeopleSheetView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var verificationModel: VerificationModel
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
+    @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
+    @EnvironmentObject private var peerListModel: PeerListModel
+    @EnvironmentObject private var publicChatModel: PublicChatModel
+    @EnvironmentObject private var privateInboxModel: PrivateInboxModel
     @Environment(\.scenePhase) private var scenePhase
 
     @Binding var showSidebar: Bool
@@ -184,6 +188,14 @@ struct ContentPeopleSheetView: View {
                 }
             }
         }
+        .environmentObject(appChromeModel)
+        .environmentObject(privateConversationModel)
+        .environmentObject(verificationModel)
+        .environmentObject(conversationUIModel)
+        .environmentObject(locationChannelsModel)
+        .environmentObject(peerListModel)
+        .environmentObject(publicChatModel)
+        .environmentObject(privateInboxModel)
         .themedSheetBackground()
         .foregroundColor(palette.primary)
         .confirmationDialog(
