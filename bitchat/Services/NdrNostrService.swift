@@ -179,7 +179,10 @@ final class NdrNostrService {
 
     var onDecryptedMessage: NdrDecryptedMessageHandler? {
         didSet {
-            if oldValue == nil, onDecryptedMessage != nil {
+            // A retired lifecycle owner can leave a delivery deferred after
+            // returning `.retry`. Replacing that non-nil handler is the host's
+            // recovery boundary just as much as installing the first handler.
+            if onDecryptedMessage != nil {
                 retryPendingDeliveries()
             }
         }

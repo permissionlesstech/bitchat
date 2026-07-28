@@ -71,6 +71,7 @@ struct NostrRelayManagerDependencies {
     var torIsForeground: () -> Bool
     var awaitTorReady: (@escaping (Bool) -> Void) -> Void
     var makeSession: () -> NostrRelaySessionProtocol
+    var verifyEventSignature: @Sendable (NostrEvent) -> Bool
     var scheduleAfter: @Sendable (TimeInterval, @escaping @Sendable () -> Void) -> Void
     var now: () -> Date
     /// Uniform random value in [0, 1) used to jitter reconnect backoff.
@@ -112,6 +113,7 @@ private extension NostrRelayManagerDependencies {
                 }
             },
             makeSession: { URLSessionAdapter(base: TorURLSession.shared.session) },
+            verifyEventSignature: { $0.isValidSignature() },
             scheduleAfter: { delay, action in
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: action)
             },
@@ -210,6 +212,12 @@ final class NostrRelayManager: ObservableObject {
     private var pendingSubscriptions: [String: [String: PendingSubscription]] = [:] // relay URL -> (subscription id -> pending REQ)
     private var pendingSubscriptionSequence: UInt64 = 0
     private var messageHandlers: [String: (NostrEvent) -> Void] = [:]
+    // An EVENT is admitted before off-main signature verification and
+    // delivered later. The generation binds those two phases to the same
+    // logical subscription so unsubscribe/re-subscribe cannot retarget stale
+    // work to a replacement handler or poison its dedup state.
+    private var subscriptionGenerations: [String: UInt64] = [:]
+    private var nextSubscriptionGeneration: UInt64 = 0
     private struct InboundEventKey: Hashable {
         let subscriptionID: String
         let eventID: String
@@ -388,6 +396,7 @@ final class NostrRelayManager: ObservableObject {
     ///    verification means a forged-signature copy can never poison the
     ///    dedup cache and suppress the genuine event.
     private func ensureRelayInboundPipeline(for relayUrl: String) {
+        let verifyEventSignature = dependencies.verifyEventSignature
         let started = inboundRouter.startPipeline(for: relayUrl) { [weak self] stream in
             Task.detached(priority: .userInitiated) {
                 for await frame in stream {
@@ -395,21 +404,24 @@ final class NostrRelayManager: ObservableObject {
                     guard let self else { return }
                     switch parsed {
                     case .event(let subId, let event):
-                        guard await self.precheckInboundEvent(
+                        guard let generation = await self.precheckInboundEvent(
                             subscriptionID: subId,
                             eventID: event.id,
                             relayUrl: relayUrl
-                        ) else {
-                            continue
-                        }
-                        guard event.isValidSignature() else {
+                        ) else { continue }
+                        guard verifyEventSignature(event) else {
                             SecureLogger.warning(
                                 "⚠️ Dropped invalid Nostr event id=\(event.id.prefix(16))… sub=\(subId) relay=\(relayUrl)",
                                 category: .session
                             )
                             continue
                         }
-                        await self.deliverVerifiedInboundEvent(subscriptionID: subId, event: event, from: relayUrl)
+                        await self.deliverVerifiedInboundEvent(
+                            subscriptionID: subId,
+                            subscriptionGeneration: generation,
+                            event: event,
+                            from: relayUrl
+                        )
                     case .eose, .ok, .notice:
                         await self.handleParsedMessage(parsed, from: relayUrl)
                     }
@@ -485,6 +497,7 @@ final class NostrRelayManager: ObservableObject {
         subscriptions.removeAll()
         pendingSubscriptions.removeAll()
         messageHandlers.removeAll()
+        subscriptionGenerations.removeAll()
         subscriptionRequestState.removeAll()
         eoseTrackers.removeAll()
         pendingEOSECallbacks.removeAll()
@@ -764,8 +777,21 @@ final class NostrRelayManager: ObservableObject {
                 return false
             }
             let requestState = SubscriptionRequestState(messageString: messageString, relayURLs: Set(urls))
+            let previousRequestState = subscriptionRequestState[id]
+            if subscriptionGenerations[id] == nil
+                || previousRequestState != requestState
+            {
+                nextSubscriptionGeneration &+= 1
+                subscriptionGenerations[id] = nextSubscriptionGeneration
+                removeRecentInboundEvents(forSubscriptionID: id)
+                duplicateInboundEventDropCountBySubscription.removeValue(
+                    forKey: id
+                )
+            }
             messageHandlers[id] = handler
-            if subscriptionRequestState[id] == requestState, subscriptionStateExists(id: id, requestState: requestState) {
+            if previousRequestState == requestState,
+               subscriptionStateExists(id: id, requestState: requestState)
+            {
                 return true
             }
 
@@ -874,6 +900,7 @@ final class NostrRelayManager: ObservableObject {
     /// Unsubscribe from a subscription
     func unsubscribe(id: String) {
         messageHandlers.removeValue(forKey: id)
+        subscriptionGenerations.removeValue(forKey: id)
         removeRecentInboundEvents(forSubscriptionID: id)
         duplicateInboundEventDropCountBySubscription.removeValue(forKey: id)
         subscriptionRequestState.removeValue(forKey: id)
@@ -1287,24 +1314,49 @@ final class NostrRelayManager: ObservableObject {
     /// after the signature verifies (`deliverVerifiedInboundEvent`), so a
     /// forged-signature copy can never poison the dedup cache and suppress
     /// the genuine event.
-    private func precheckInboundEvent(subscriptionID: String, eventID: String, relayUrl: String) -> Bool {
+    private func precheckInboundEvent(
+        subscriptionID: String,
+        eventID: String,
+        relayUrl: String
+    ) -> UInt64? {
         if let index = relays.firstIndex(where: { $0.url == relayUrl }) {
             relays[index].messagesReceived += 1
         }
-        guard !eventID.isEmpty else { return true }
+        guard messageHandlers[subscriptionID] != nil,
+              let generation = subscriptionGenerations[subscriptionID]
+        else {
+            // Relays are untrusted and can invent subscription IDs. Do not
+            // spend signature work or mutate dedup state for unsolicited
+            // events.
+            return nil
+        }
+        guard !eventID.isEmpty else { return generation }
         let key = InboundEventKey(subscriptionID: subscriptionID, eventID: eventID)
         if recentInboundEventKeys.contains(key) {
             recordDuplicateInboundEventDrop(subscriptionID: subscriptionID)
-            return false
+            return nil
         }
-        return true
+        return generation
     }
 
     /// Second main-actor hop, after off-main signature verification:
     /// authoritative check-and-record (the serial pipeline means the same
     /// event is never in flight twice, but the record must stay atomic with
     /// delivery) and handler dispatch.
-    private func deliverVerifiedInboundEvent(subscriptionID subId: String, event: NostrEvent, from relayUrl: String) {
+    private func deliverVerifiedInboundEvent(
+        subscriptionID subId: String,
+        subscriptionGeneration: UInt64,
+        event: NostrEvent,
+        from relayUrl: String
+    ) {
+        guard subscriptionGenerations[subId] == subscriptionGeneration,
+              let handler = messageHandlers[subId]
+        else {
+            // The event was admitted by a subscription that has since been
+            // retired. A replacement reusing the same wire ID is a different
+            // lifecycle and must neither receive nor dedup against this event.
+            return
+        }
         guard shouldDeliverInboundEvent(subscriptionID: subId, eventID: event.id) else {
             return
         }
@@ -1315,11 +1367,7 @@ final class NostrRelayManager: ObservableObject {
                 SecureLogger.debug("📥 Event #\(inboundEventLogCount) kind=\(event.kind) id=\(event.id.prefix(16))… relay=\(relayUrl)", category: .session)
             }
         }
-        if let handler = self.messageHandlers[subId] {
-            handler(event)
-        } else {
-            SecureLogger.warning("⚠️ No handler for subscription \(subId)", category: .session)
-        }
+        handler(event)
     }
 
     // Handle parsed non-EVENT messages on MainActor (state updates and handlers)

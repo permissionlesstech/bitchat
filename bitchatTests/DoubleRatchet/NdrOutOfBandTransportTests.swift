@@ -145,6 +145,8 @@ private final class ControllableNdrSessionMarkerStore:
     }
 }
 
+private final class NdrDeliveryLifecycleOwner {}
+
 @Suite(.serialized)
 struct NdrOutOfBandTransportTests {
     @Test("Double-ratchet bootstrap uses the coordinated wire value")
@@ -1823,6 +1825,91 @@ struct NdrOutOfBandTransportTests {
         bobService.retryPendingDeliveries()
         bobService.processInboundRelayEvent(outer)
         #expect(deliveries.count == 2)
+    }
+
+    @Test("Replacing a retired delivery owner drains once across restart")
+    @MainActor
+    func replacingDeliveryOwnerWakesDeferredActionExactlyOnce() throws {
+        let alice = try NostrIdentity.generate()
+        let bob = try NostrIdentity.generate()
+        let aliceRelay = FakeRelayManager()
+        let aliceService = try makeService(
+            label: "delivery-owner-alice",
+            relay: aliceRelay
+        )
+        let bobStorage = try makeTempDir(label: "delivery-owner-bob")
+        defer { try? FileManager.default.removeItem(at: bobStorage) }
+        var outer: NostrEvent?
+
+        do {
+            let bobRelay = FakeRelayManager()
+            let bobService = NdrNostrService(
+                relayManager: bobRelay,
+                rolloutEnabled: true,
+                storageDirectoryProvider: { bobStorage }
+            )
+            aliceService.configureIfNeeded(identity: alice)
+            bobService.configureIfNeeded(identity: bob)
+            try establishPairwiseSessions(
+                aliceService,
+                bobService,
+                firstIdentity: alice,
+                secondIdentity: bob,
+                firstRelay: aliceRelay,
+                secondRelay: bobRelay
+            )
+
+            var retiredOwner: NdrDeliveryLifecycleOwner? =
+                NdrDeliveryLifecycleOwner()
+            var retiredHandlerCalls = 0
+            bobService.onDecryptedMessage = { [weak retiredOwner] _, completion in
+                retiredHandlerCalls += 1
+                completion(retiredOwner == nil ? .retry : .consumed)
+            }
+            retiredOwner = nil
+
+            aliceRelay.resetSentEvents()
+            guard case .sent = aliceService.send(
+                "bitchat1:lifecycle-owner",
+                to: bob.publicKeyHex
+            ) else {
+                Issue.record("Expected a pairwise send")
+                return
+            }
+            let sent = try #require(
+                aliceRelay.sentEvents.first(where: { $0.kind == 1060 })
+            )
+            outer = sent
+            bobService.processInboundRelayEvent(sent)
+            #expect(retiredHandlerCalls == 1)
+
+            var replacementDeliveries = 0
+            bobService.onDecryptedMessage = { message, completion in
+                #expect(
+                    message.event.content == "bitchat1:lifecycle-owner"
+                )
+                replacementDeliveries += 1
+                completion(.consumed)
+            }
+            #expect(replacementDeliveries == 1)
+        }
+
+        let restartedRelay = FakeRelayManager()
+        let restarted = NdrNostrService(
+            relayManager: restartedRelay,
+            rolloutEnabled: true,
+            storageDirectoryProvider: { bobStorage }
+        )
+        var deliveriesAfterRestart = 0
+        restarted.onDecryptedMessage = { _, completion in
+            deliveriesAfterRestart += 1
+            completion(.consumed)
+        }
+        restarted.configureIfNeeded(identity: bob)
+        if let outer {
+            restarted.processInboundRelayEvent(outer)
+        }
+        #expect(deliveriesAfterRestart == 0)
     }
 
     @Test("Switching identities isolates invites and persisted ratchet state")

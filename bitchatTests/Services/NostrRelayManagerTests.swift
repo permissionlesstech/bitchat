@@ -1198,6 +1198,165 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertTrue(counted)
     }
 
+    func test_receiveEvent_withoutHandlerDoesNotPoisonFutureSubscriptionReplay() async throws {
+        let relayURL = "wss://future-subscription.example"
+        let context = makeContext(permission: .denied)
+        let event = try makeSignedEvent(content: "future subscription")
+        var barrierEOSECount = 0
+
+        context.manager.subscribe(
+            filter: makeFilter(),
+            id: "barrier",
+            relayUrls: [relayURL],
+            handler: { _ in },
+            onEOSE: { barrierEOSECount += 1 }
+        )
+        let barrierSubscribed = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?
+                .sentStrings.count == 1
+        }
+        XCTAssertTrue(barrierSubscribed)
+
+        let connection = try XCTUnwrap(
+            context.sessionFactory.latestConnection(for: relayURL)
+        )
+        try connection.emitEventMessage(
+            subscriptionID: "future",
+            event: event
+        )
+        // The relay pipeline is serial. Observing this EOSE proves the
+        // unsolicited event ahead of it has finished verification and its
+        // delivery-side bookkeeping before the real subscription is created.
+        try connection.emitEOSE(subscriptionID: "barrier")
+        let unsolicitedSettled = await waitUntil {
+            barrierEOSECount == 1
+                && context.manager.relays.first(where: {
+                    $0.url == relayURL
+                })?.messagesReceived == 1
+        }
+        XCTAssertTrue(unsolicitedSettled)
+
+        var receivedIDs: [String] = []
+        context.manager.subscribe(
+            filter: makeFilter(),
+            id: "future",
+            relayUrls: [relayURL]
+        ) { replayed in
+            receivedIDs.append(replayed.id)
+        }
+        let futureSubscribed = await waitUntil {
+            connection.sentStrings.count == 2
+        }
+        XCTAssertTrue(futureSubscribed)
+
+        try connection.emitEventMessage(
+            subscriptionID: "future",
+            event: event
+        )
+        let replaySettled = await waitUntil {
+            receivedIDs == [event.id]
+                || context.manager
+                    .debugDuplicateInboundEventDropCount(
+                        forSubscriptionID: "future"
+                    ) == 1
+        }
+        XCTAssertTrue(replaySettled)
+        XCTAssertEqual(receivedIDs, [event.id])
+        XCTAssertEqual(
+            context.manager.debugDuplicateInboundEventDropCount(
+                forSubscriptionID: "future"
+            ),
+            0
+        )
+    }
+
+    func test_receiveEvent_fromRetiredSubscriptionCannotReachReplacement() async throws {
+        let relayURL = "wss://retired-subscription.example"
+        let verifier = ControllableEventSignatureVerifier()
+        let context = makeContext(
+            permission: .denied,
+            verifyEventSignature: { verifier.verify($0) }
+        )
+        let event = try makeSignedEvent(content: "retired generation")
+        var retiredReceivedIDs: [String] = []
+
+        context.manager.subscribe(
+            filter: makeFilter(),
+            id: "replaceable",
+            relayUrls: [relayURL]
+        ) { received in
+            retiredReceivedIDs.append(received.id)
+        }
+        let initialSubscriptionSent = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?
+                .sentStrings.count == 1
+        }
+        XCTAssertTrue(initialSubscriptionSent)
+
+        let connection = try XCTUnwrap(
+            context.sessionFactory.latestConnection(for: relayURL)
+        )
+        verifier.blockNextVerification()
+        try connection.emitEventMessage(
+            subscriptionID: "replaceable",
+            event: event
+        )
+        let verificationBlocked = await waitUntil {
+            verifier.isVerificationBlocked
+        }
+        guard verificationBlocked else {
+            verifier.releaseBlockedVerification()
+            XCTFail("Event never reached signature verification")
+            return
+        }
+
+        context.manager.unsubscribe(id: "replaceable")
+        var replacementReceivedIDs: [String] = []
+        var replacementEOSECount = 0
+        context.manager.subscribe(
+            filter: makeFilter(),
+            id: "replaceable",
+            relayUrls: [relayURL],
+            handler: { received in
+                replacementReceivedIDs.append(received.id)
+            },
+            onEOSE: { replacementEOSECount += 1 }
+        )
+        let replacementSubscriptionSent = await waitUntil {
+            connection.sentStrings.count == 3
+        }
+        XCTAssertTrue(replacementSubscriptionSent)
+
+        // The EOSE is queued behind the blocked event on the same serial relay
+        // pipeline, so its callback proves the stale event's delivery phase
+        // completed before assertions or replay.
+        try connection.emitEOSE(subscriptionID: "replaceable")
+        verifier.releaseBlockedVerification()
+        let staleEventSettled = await waitUntil {
+            replacementEOSECount == 1
+        }
+        XCTAssertTrue(staleEventSettled)
+        XCTAssertTrue(retiredReceivedIDs.isEmpty)
+        XCTAssertTrue(
+            replacementReceivedIDs.isEmpty,
+            "An event admitted by the retired subscription reached its replacement"
+        )
+
+        try connection.emitEventMessage(
+            subscriptionID: "replaceable",
+            event: event
+        )
+        let replaySettled = await waitUntil {
+            replacementReceivedIDs == [event.id]
+                || context.manager
+                    .debugDuplicateInboundEventDropCount(
+                        forSubscriptionID: "replaceable"
+                    ) == 1
+        }
+        XCTAssertTrue(replaySettled)
+        XCTAssertEqual(replacementReceivedIDs, [event.id])
+    }
+
     func test_noticeAndMalformedMessages_keepReceiveLoopAliveForLaterEvents() async throws {
         let relayURL = "wss://parser.example"
         let context = makeContext(permission: .denied)
@@ -1990,6 +2149,9 @@ final class NostrRelayManagerTests: XCTestCase {
         torIsForeground: Bool = true,
         notificationCenter: NotificationCenter = NotificationCenter(),
         customRelays: MutableRelayList = MutableRelayList(urls: []),
+        verifyEventSignature: @escaping @Sendable (NostrEvent) -> Bool = {
+            $0.isValidSignature()
+        },
         jitterUnit: @escaping () -> Double = { 0.5 } // 0.5 -> jitter factor 1.0 (no jitter)
     ) -> RelayManagerTestContext {
         let permissionSubject = CurrentValueSubject<LocationChannelManager.PermissionState, Never>(permission)
@@ -2013,6 +2175,7 @@ final class NostrRelayManagerTests: XCTestCase {
                 torIsForeground: { torForeground.value },
                 awaitTorReady: torWaiter.await(completion:),
                 makeSession: { sessionFactory },
+                verifyEventSignature: verifyEventSignature,
                 scheduleAfter: { delay, action in
                     scheduler.schedule(delay: delay, action: action)
                 },
@@ -2071,6 +2234,45 @@ final class NostrRelayManagerTests: XCTestCase {
             try? await Task.sleep(nanoseconds: 10_000_000)
         }
         return condition()
+    }
+}
+
+private final class ControllableEventSignatureVerifier: @unchecked Sendable {
+    private let lock = NSLock()
+    private let verificationRelease = DispatchSemaphore(value: 0)
+    private var shouldBlockNext = false
+    private var blocked = false
+
+    var isVerificationBlocked: Bool {
+        lock.withLock { blocked }
+    }
+
+    func blockNextVerification() {
+        lock.withLock {
+            shouldBlockNext = true
+        }
+    }
+
+    func releaseBlockedVerification() {
+        verificationRelease.signal()
+    }
+
+    func verify(_ event: NostrEvent) -> Bool {
+        let shouldBlock = lock.withLock {
+            guard shouldBlockNext else { return false }
+            shouldBlockNext = false
+            return true
+        }
+        if shouldBlock {
+            lock.withLock {
+                blocked = true
+            }
+            verificationRelease.wait()
+            lock.withLock {
+                blocked = false
+            }
+        }
+        return event.isValidSignature()
     }
 }
 
