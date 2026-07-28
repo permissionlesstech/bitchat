@@ -255,8 +255,11 @@ final class BLEService: NSObject {
     private var subscriptionAnnounceLimiter = BLESubscriptionAnnounceLimiter()
     
     // 3. Peer Information (single source of truth). Lock-backed so the main
-    // actor reads it directly instead of blocking on the engine queue;
-    // mutations still only run on the engine.
+    // actor reads it directly instead of blocking on the engine queue.
+    // Mutations come only from the transport's own serial queues — the
+    // engine, plus the two bleQueue link-drop paths (didDisconnectPeripheral
+    // / didUnsubscribeFrom) that mark a peer disconnected the moment its
+    // last physical link goes; the store's lock serializes them.
     private let peerRegistry = BLEPeerRegistryStore()
     
     // 4. Efficient Message Deduplication
@@ -334,6 +337,14 @@ final class BLEService: NSObject {
     private lazy var privateMediaTransferAdmissions = BLEPrivateMediaTransferAdmissionRegistry { [weak self] transferId in
         self?.handlePrivateMediaAdmissionExpiry(transferId)
     }
+    // Peers whose parked outbound queues must stay parked until the
+    // convergence retry re-authenticates: a timeout-restore brings back
+    // keys the counterpart may have already discarded, so nothing — not
+    // even the capability-proof watchdog — may drain the queues under
+    // them. Set on the deferred restore transition, cleared by any
+    // transition that is allowed to drain. Engine-confined.
+    private var outboundConvergenceDeferred: Set<PeerID> = []
+
     // All six maps below are engine-confined. A fresh Noise
     // authentication rotates the generation UUID, so stale proof timers and
     // proof packets cannot classify a replacement session.
@@ -415,6 +426,8 @@ final class BLEService: NSObject {
         if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
             return body()
         }
+        // queue-contract-ok: this is the single sanctioned sync entry — the
+        // trap above is exactly what BLEQueueContractTests exists to protect.
         return messageQueue.sync(execute: body)
     }
     
@@ -556,6 +569,10 @@ final class BLEService: NSObject {
             isAppActive = UIApplication.shared.applicationState == .active
             refreshCachedBackgroundTimeRemaining()
         } else {
+            // queue-contract-ok: init-time only — no engine or bleQueue work
+            // exists yet that main could be sync-waiting on, so this cannot
+            // pair into a cycle. Everything after init caches main-actor
+            // state instead (see scheduleBluetoothStatusSample).
             DispatchQueue.main.sync {
                 isAppActive = UIApplication.shared.applicationState == .active
                 refreshCachedBackgroundTimeRemaining()
@@ -743,7 +760,7 @@ final class BLEService: NSObject {
         // generation-bound handoffs that raced this barrier reject themselves.
         // Clear the old identity's bounded early-ciphertext queue again after
         // those callbacks drain so none can repopulate it after the first wipe.
-        messageQueue.sync {
+        onEngine {
             noisePacketHandler.resetForPanic()
         }
         clearEmergencySessionState()
@@ -771,7 +788,7 @@ final class BLEService: NSObject {
         gossipSyncManager = nil
         // Discard deferred pre-panic ciphertext behind any in-flight receive
         // handlers so none can repopulate the handler's bounded queue.
-        messageQueue.sync {
+        onEngine {
             noisePacketHandler.resetForPanic()
         }
         onEngine {
@@ -792,6 +809,7 @@ final class BLEService: NSObject {
             authenticatedPeerStates.removeAll()
             privateMediaProofTimeoutMarkers.removeAll()
             privateMediaProofWatchdogs.removeAll()
+            outboundConvergenceDeferred.removeAll()
             authenticatedPeerStateSendProgress.removeAll()
             // Let the post-panic identity publish its fresh bundle promptly.
             lastPrekeyBundleSentAt = nil
@@ -818,7 +836,7 @@ final class BLEService: NSObject {
         // must never observe the new Noise service alongside the old peer ID
         // (it would sign with the new identity while carrying the old sender).
         // refreshPeerIdentity() executes inline here via its re-entrancy check.
-        messageQueue.sync {
+        onEngine {
             noiseService.clearEphemeralStateForPanic()
             noiseService.clearPersistentIdentity()
 
@@ -1376,7 +1394,7 @@ final class BLEService: NSObject {
         nonce: UUID
     ) {
         let expiration = onEngine {
-            () -> (expired: Bool, completions: [@MainActor (PrivateMediaSendPolicy) -> Void]) in
+            () -> (expired: Bool, deferredOutbound: Bool, completions: [@MainActor (PrivateMediaSendPolicy) -> Void]) in
             let pending = pendingPrivateMediaPolicyResolutions[peerID]
             let pendingMatches = pending?.timeoutNonce == nonce
                 && pending?.sessionGeneration == sessionGeneration
@@ -1387,7 +1405,7 @@ final class BLEService: NSObject {
                 && watchdog?.sessionGeneration == sessionGeneration
                 && watchdog?.fingerprint.caseInsensitiveCompare(fingerprint) == .orderedSame
             guard pendingMatches || watchdogMatches else {
-                return (false, [])
+                return (false, false, [])
             }
             var completions: [@MainActor (PrivateMediaSendPolicy) -> Void] = []
             if pendingMatches, let pending {
@@ -1403,11 +1421,13 @@ final class BLEService: NSObject {
                 fingerprint: fingerprint,
                 sessionGeneration: sessionGeneration
             )
-            return (true, completions)
+            return (true, outboundConvergenceDeferred.contains(peerID), completions)
         }
         guard expiration.expired else { return }
         let policy = privateMediaSendPolicy(to: peerID)
-        sendPendingNoisePayloadsAfterHandshake(for: peerID)
+        if !expiration.deferredOutbound {
+            sendPendingNoisePayloadsAfterHandshake(for: peerID)
+        }
         completePrivateMediaPolicyResolution(expiration.completions, with: policy)
     }
 
@@ -4661,11 +4681,13 @@ extension BLEService {
         let peripheralState = peripheralManager?.state ?? .unknown
         let isAdvertising = peripheralManager?.isAdvertising ?? false
 
-        let peerSummary = (
-            connected: peerRegistry.connectedCount,
-            known: peerRegistry.count,
-            candidates: connectionScheduler.candidateCount
-        )
+        let peerSummary = peerRegistry.read {
+            (
+                connected: $0.connectedCount,
+                known: $0.count,
+                candidates: connectionScheduler.candidateCount
+            )
+        }
 
         #if os(iOS)
         // INVARIANT: bleQueue must NEVER sync-dispatch to the main thread.
@@ -5216,9 +5238,12 @@ extension BLEService {
                 // The restore's mandatory convergence retry — or any later
                 // handshake the reconnect policy initiates — re-enters this
                 // transition with a fresh generation and drains them under
-                // keys both sides hold.
+                // keys both sides hold. The flag also holds the proof
+                // watchdog's drain to the same rule.
+                outboundConvergenceDeferred.insert(normalizedPeerID)
                 return
             }
+            outboundConvergenceDeferred.remove(normalizedPeerID)
             sendPendingMessagesAfterHandshake(for: normalizedPeerID)
             sendPendingNoisePayloadsAfterHandshake(for: normalizedPeerID)
             return
@@ -5245,11 +5270,15 @@ extension BLEService {
             // mandatory convergence retry — or any later handshake the
             // reconnect policy initiates — re-enters this transition with a
             // fresh generation and drains them under keys both sides hold.
+            // The flag also holds the proof watchdog's drain to the same
+            // rule — its timeout can fire while this restore is current.
+            outboundConvergenceDeferred.insert(normalizedPeerID)
             #if DEBUG
             _test_onPrivateMediaSessionReconciled?(normalizedPeerID)
             #endif
             return
         }
+        outboundConvergenceDeferred.remove(normalizedPeerID)
 
         // `onPeerAuthenticated` can fire while the initiator is returning XX
         // message 3. This callback is queued behind the handshake handler, so
@@ -5388,6 +5417,7 @@ extension BLEService {
             privateMediaProofTimeoutMarkers.removeValue(forKey: normalizedPeerID)
             privateMediaProofWatchdogs.removeValue(forKey: normalizedPeerID)
             authenticatedPeerStateSendProgress.removeValue(forKey: normalizedPeerID)
+            outboundConvergenceDeferred.remove(normalizedPeerID)
             guard var pending = pendingPrivateMediaPolicyResolutions[normalizedPeerID] else {
                 return nil
             }
@@ -5420,17 +5450,12 @@ extension BLEService {
     /// `messageQueue`; the re-entrancy check keeps any future on-queue caller
     /// from deadlocking.
     private func refreshPeerIdentity() {
-        let swap = {
-            let fingerprint = self.noiseService.getIdentityFingerprint()
-            self.localIdentityState.replacePeerIdentity(
+        onEngine {
+            let fingerprint = noiseService.getIdentityFingerprint()
+            localIdentityState.replacePeerIdentity(
                 with: PeerID(str: fingerprint.prefix(16))
             )
-            self.meshTopology.reset()
-        }
-        if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
-            swap()
-        } else {
-            messageQueue.sync(execute: swap)
+            meshTopology.reset()
         }
     }
 
@@ -5629,18 +5654,14 @@ extension BLEService {
         guard hasCurrentNoiseAuthenticatedLink(to: peerID) else { return false }
         guard let payload = envelope.encode() else { return false }
         let packet = makeCourierPacket(payload, to: peerID)
-        let send = { [weak self] in
-            self?.sendPacketDirected(
+        return onEngine {
+            sendPacketDirected(
                 packet,
                 to: peerID,
                 requireDirectPeerLink: true,
                 requireNoiseAuthenticatedPeerLink: true
-            ) ?? false
+            )
         }
-        if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
-            return send()
-        }
-        return messageQueue.sync(execute: send)
     }
 
     /// Our own Noise static public key (for computing our courier tags).

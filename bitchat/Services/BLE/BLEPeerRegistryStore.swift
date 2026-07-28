@@ -4,12 +4,14 @@ import Foundation
 /// Lock-backed shared ownership of the peer registry, readable from any
 /// queue or the main actor without hopping onto a transport queue.
 ///
-/// Mutations stay serialized by the transport (they only run on its
-/// queues), so the lock's job is to let the main actor answer questions
-/// like `isPeerConnected` without blocking behind in-flight transport
-/// work. Every `BLEPeerRegistry` mutation is a single whole-transition
-/// method, so a reader between two mutations always observes a valid
-/// pre- or post-state, never a torn one.
+/// Mutations come only from the transport's own serial queues — the
+/// engine, plus the bleQueue link-drop paths that mark a peer
+/// disconnected — and the lock serializes them against each other and
+/// against readers, so the main actor answers questions like
+/// `isPeerConnected` without blocking behind in-flight transport work.
+/// Every `BLEPeerRegistry` mutation is a single whole-transition method,
+/// so a reader between two mutations always observes a valid pre- or
+/// post-state, never a torn one.
 ///
 /// Closures passed to `read`/`mutate` run under the (non-recursive) lock
 /// and must not call back into the store.
@@ -29,7 +31,6 @@ final class BLEPeerRegistryStore: @unchecked Sendable {
     // MARK: - Single-question reads
 
     var isEmpty: Bool { read { $0.isEmpty } }
-    var count: Int { read { $0.count } }
     var peerIDs: [PeerID] { read { $0.peerIDs } }
     var connectedCount: Int { read { $0.connectedCount } }
     var connectedPeerIDs: [PeerID] { read { $0.connectedPeerIDs } }
@@ -58,10 +59,6 @@ final class BLEPeerRegistryStore: @unchecked Sendable {
 
     func capabilities(for peerID: PeerID) -> PeerCapabilities {
         read { $0.capabilities(for: peerID) }
-    }
-
-    func capabilitiesWereExplicitlyAdvertised(for peerID: PeerID) -> Bool {
-        read { $0.capabilitiesWereExplicitlyAdvertised(for: peerID) }
     }
 
     func advertisedBridgeGeohash() -> String? {

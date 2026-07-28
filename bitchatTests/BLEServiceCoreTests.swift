@@ -908,6 +908,17 @@ struct BLEServiceCoreTests {
         // old generation the remote may no longer be able to read.
         #expect(outbound.count(ofType: .noiseEncrypted) == 0)
 
+        // The capability-proof watchdog armed at the original authentication
+        // is still live and can genuinely reach its real 5s deadline here on
+        // a stalled CI runner. Fire it deterministically: its drain must
+        // respect the deferred-until-convergence state instead of encrypting
+        // the parked queues under the restored keys (the exact silent loss
+        // the defer path exists to prevent). The retry below then still
+        // finds the queues parked.
+        ble._test_forcePrivateMediaProofTimeout(for: alicePeerID)
+        await ble._test_drainNoiseMessagePipeline()
+        #expect(outbound.count(ofType: .noiseEncrypted) == 0)
+
         // Release the mandatory convergence retry: it retires the restored
         // session and starts a fresh XX exchange with the live peer.
         recoveryGate.release()
