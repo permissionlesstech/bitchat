@@ -392,8 +392,9 @@ final class BLEService: NSObject {
     // MARK: - Identity
     
     private var noiseService: NoiseEncryptionService
-    /// Injected so tests can compress the quarantine/rollback window;
-    /// production always passes the security-constant default.
+    /// Injected so tests can isolate bounded handshake windows under load;
+    /// production uses the security-constant defaults.
+    private let noiseHandshakeTimeout: TimeInterval
     private let noiseResponderHandshakeTimeout: TimeInterval
     private let identityManager: SecureIdentityStateManagerProtocol
     private let keychain: KeychainManagerProtocol
@@ -513,6 +514,8 @@ final class BLEService: NSObject {
         incomingFileStore: BLEIncomingFileStore = BLEIncomingFileStore(),
         startSuspendedForPanicRecovery: Bool = false,
         doubleRatchetEnabled: Bool = DoubleRatchetFeature.isEnabled,
+        noiseHandshakeTimeout: TimeInterval =
+            NoiseSecurityConstants.ordinaryHandshakeTimeout,
         noiseResponderHandshakeTimeout: TimeInterval =
             NoiseSecurityConstants.ordinaryResponderHandshakeTimeout
     ) {
@@ -522,9 +525,11 @@ final class BLEService: NSObject {
         self.shouldInitializeBluetoothManagers = initializeBluetoothManagers
         self._isPanicSuspended = startSuspendedForPanicRecovery
         self.doubleRatchetEnabled = doubleRatchetEnabled
+        self.noiseHandshakeTimeout = noiseHandshakeTimeout
         self.noiseResponderHandshakeTimeout = noiseResponderHandshakeTimeout
         noiseService = NoiseEncryptionService(
             keychain: keychain,
+            ordinaryHandshakeTimeout: noiseHandshakeTimeout,
             ordinaryResponderHandshakeTimeout: noiseResponderHandshakeTimeout
         )
         self.identityManager = identityManager
@@ -817,6 +822,7 @@ final class BLEService: NSObject {
 
             let newNoise = NoiseEncryptionService(
                 keychain: keychain,
+                ordinaryHandshakeTimeout: noiseHandshakeTimeout,
                 ordinaryResponderHandshakeTimeout: noiseResponderHandshakeTimeout
             )
             noiseService = newNoise
