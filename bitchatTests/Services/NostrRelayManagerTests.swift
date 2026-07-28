@@ -854,6 +854,44 @@ final class NostrRelayManagerTests: XCTestCase {
         )
     }
 
+    func test_receiveEvent_afterUnsubscribeCountsInsteadOfLoggingEachEvent() async throws {
+        // A channel switch unsubscribes before the relay's CLOSE takes effect,
+        // so the relay's in-flight tail arrives with no handler. Those events
+        // must be counted, not delivered, and must not log once apiece.
+        let relayURL = "wss://unhandled-tail.example"
+        let context = makeContext(permission: .denied)
+        var receivedIDs: [String] = []
+
+        context.manager.subscribe(
+            filter: makeFilter(),
+            id: "geo",
+            relayUrls: [relayURL]
+        ) { event in
+            receivedIDs.append(event.id)
+        }
+        let subscriptionSent = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?.sentStrings.count == 1
+        }
+        XCTAssertTrue(subscriptionSent)
+
+        context.manager.unsubscribe(id: "geo")
+
+        let tail = try (0..<3).map { try makeSignedEvent(content: "tail-\($0)") }
+        for event in tail {
+            try context.sessionFactory.latestConnection(for: relayURL)?.emitEventMessage(
+                subscriptionID: "geo",
+                event: event
+            )
+        }
+
+        let counted = await waitUntil {
+            context.manager.debugUnhandledInboundEventCount == tail.count
+        }
+        XCTAssertTrue(counted)
+        XCTAssertEqual(receivedIDs, [])
+        XCTAssertEqual(context.manager.debugUnhandledInboundEventCount(forSubscriptionID: "geo"), tail.count)
+    }
+
     func test_receiveEvent_invalidSignatureDoesNotPoisonDuplicateCache() async throws {
         let firstRelayURL = "wss://invalid-first-one.example"
         let secondRelayURL = "wss://invalid-first-two.example"

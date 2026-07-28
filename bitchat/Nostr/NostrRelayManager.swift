@@ -220,6 +220,8 @@ final class NostrRelayManager: ObservableObject {
     private var recentInboundEventKeyOrder: [InboundEventKey] = []
     private var duplicateInboundEventDropCount = 0
     private var duplicateInboundEventDropCountBySubscription: [String: Int] = [:]
+    private var unhandledInboundEventCount = 0
+    private var unhandledInboundEventCountBySubscription: [String: Int] = [:]
     private var inboundEventLogCount = 0
     // Coalesce duplicate subscribe requests for the same id within a short window.
     private let subscribeCoalesceInterval: TimeInterval = 1.0
@@ -499,6 +501,8 @@ final class NostrRelayManager: ObservableObject {
         recentInboundEventKeyOrder.removeAll()
         duplicateInboundEventDropCount = 0
         duplicateInboundEventDropCountBySubscription.removeAll()
+        unhandledInboundEventCount = 0
+        unhandledInboundEventCountBySubscription.removeAll()
         inboundEventLogCount = 0
         Self.pendingGiftWrapIDs.removeAll()
         confirmedSends.removeAll()
@@ -873,6 +877,7 @@ final class NostrRelayManager: ObservableObject {
         messageHandlers.removeValue(forKey: id)
         removeRecentInboundEvents(forSubscriptionID: id)
         duplicateInboundEventDropCountBySubscription.removeValue(forKey: id)
+        unhandledInboundEventCountBySubscription.removeValue(forKey: id)
         // Allow immediate re-subscription by clearing coalescer timestamp
         subscribeCoalesce.removeValue(forKey: id)
         subscriptionRequestState.removeValue(forKey: id)
@@ -1113,6 +1118,28 @@ final class NostrRelayManager: ObservableObject {
         return true
     }
 
+    /// Counts events that arrived for a subscription with no handler.
+    ///
+    /// The common cause is benign: `unsubscribe(id:)` drops the handler before
+    /// the CLOSE reaches the relay, so the relay's in-flight tail lands here.
+    /// Logging each one put a warning per event on the main actor, which turned
+    /// a channel switch in a busy geohash into roughly 150 lines in a second.
+    /// Sampled like the duplicate-drop path, with totals so a subscription that
+    /// never registers a handler at all is still visible.
+    private func recordUnhandledInboundEvent(subscriptionID: String) {
+        unhandledInboundEventCount += 1
+        let subscriptionCount = (unhandledInboundEventCountBySubscription[subscriptionID] ?? 0) + 1
+        unhandledInboundEventCountBySubscription[subscriptionID] = subscriptionCount
+
+        if unhandledInboundEventCount == 1 ||
+            unhandledInboundEventCount.isMultiple(of: TransportConfig.nostrDuplicateEventLogInterval) {
+            SecureLogger.warning(
+                "⚠️ No handler for inbound Nostr events total=\(unhandledInboundEventCount) sub=\(subscriptionID) sub_total=\(subscriptionCount)",
+                category: .session
+            )
+        }
+    }
+
     private func recordDuplicateInboundEventDrop(subscriptionID: String) {
         duplicateInboundEventDropCount += 1
         let subscriptionCount = (duplicateInboundEventDropCountBySubscription[subscriptionID] ?? 0) + 1
@@ -1317,7 +1344,7 @@ final class NostrRelayManager: ObservableObject {
         if let handler = self.messageHandlers[subId] {
             handler(event)
         } else {
-            SecureLogger.warning("⚠️ No handler for subscription \(subId)", category: .session)
+            recordUnhandledInboundEvent(subscriptionID: subId)
         }
     }
 
@@ -1608,6 +1635,14 @@ final class NostrRelayManager: ObservableObject {
 
     func debugDuplicateInboundEventDropCount(forSubscriptionID subscriptionID: String) -> Int {
         duplicateInboundEventDropCountBySubscription[subscriptionID] ?? 0
+    }
+
+    var debugUnhandledInboundEventCount: Int {
+        unhandledInboundEventCount
+    }
+
+    func debugUnhandledInboundEventCount(forSubscriptionID subscriptionID: String) -> Int {
+        unhandledInboundEventCountBySubscription[subscriptionID] ?? 0
     }
 
     func debugFlushMessageQueue() {
