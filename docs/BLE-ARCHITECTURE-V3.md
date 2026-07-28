@@ -133,15 +133,31 @@ throughput is nowhere near what one serial queue sustains.
 ## Remaining roadmap (in order)
 
 1. **Link-layer extraction.** Move the CB delegates, scheduling, duty
-   cycle, and buffers behind `LinkEvent`/`LinkCommand` ports. The gating
-   design decision is the link-auth boundary:
-   `noiseAuthenticatedLinkOwners` and the rebind containment rules are
-   mesh security state that lives on bleQueue for atomicity with link
-   bindings, and the outbound accept path (`notifyOrEnqueueIfAccepted`)
-   checks auth + binding + backpressure admission in one bleQueue
-   critical section. The port design must either keep "binding + auth
-   check" one critical section on the link side or make bindings
-   engine-owned — decide first, then move code.
+   cycle, and buffers behind `LinkEvent`/`LinkCommand` ports.
+
+   **Link-auth boundary (decided): bindings become engine-owned.**
+   Today `noiseAuthenticatedLinkOwners`, the rebind containment rules,
+   and the peer↔link binding maps live on bleQueue so that "check
+   binding + auth, then act" is one critical section (the rebind path
+   and the authenticated-send commit point in
+   `notifyOrEnqueueIfAccepted`). That atomicity exists to stop a
+   binding from changing between a security check and its action — and
+   the engine's serial slot provides exactly the same guarantee once
+   every rebind is an engine operation. The residual stolen-link risk
+   is unchanged: directed payloads are Noise ciphertext, useless on a
+   link that changed hands after the decision. Making bindings engine
+   state also puts the receive path in its sans-I/O shape: the link
+   layer reports `received(bytes, linkID)` and the engine resolves the
+   sender binding, instead of the CB delegate resolving peers before
+   handoff. The link layer keeps only physical link state (CB objects,
+   connect/subscribe lifecycles, backpressure buffers) keyed by opaque
+   link IDs.
+
+   Extraction order: (a) the binding-free radio half — scanning,
+   advertising, duty cycle, connection budget/scheduling — moves first
+   (it makes no peer decisions); (b) bindings + link-auth migrate to
+   the engine, converting `readLinkState` callers; (c) the delegates
+   shrink to event emission and move behind the port.
 2. **Sans-I/O engine core + simulator.** Make the engine formally
    `handle(event) -> [Effect]`, feed it from a `SimulatedLinkLayer`, and
    move the multi-node E2E suite onto deterministic simulation (no
