@@ -218,6 +218,7 @@ LC_ALL=C sed -E 's/[[:blank:]]+$//' \
     > "$BINDINGS_DIR/ndr_ffi.swift.normalized"
 mv "$BINDINGS_DIR/ndr_ffi.swift.normalized" "$BINDINGS_DIR/ndr_ffi.swift"
 cp "$BINDINGS_DIR/ndr_ffi.swift" "$PACKAGE_DIR/Sources/NdrFfi/NdrFfi.swift"
+mkdir -p "$PACKAGE_DIR/Frameworks"
 rm -rf "$PACKAGE_DIR/Frameworks/NdrFfi.xcframework"
 cp -R "$OUT_DIR/NdrFfi.xcframework" "$PACKAGE_DIR/Frameworks/NdrFfi.xcframework"
 
