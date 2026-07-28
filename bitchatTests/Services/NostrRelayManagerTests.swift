@@ -1,4 +1,5 @@
 import Combine
+import Tor
 import XCTest
 @testable import bitchat
 
@@ -1863,6 +1864,57 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertTrue(dropped)
         // The built-in relays are untouched by a custom-relay removal.
         XCTAssertTrue(context.manager.relays.contains { $0.url == "wss://nos.lol" })
+    }
+
+    // MARK: - Tor readiness
+
+    /// Switching transport stops the SOCKS listener before Tor reports itself
+    /// not-ready, so the reconnect the dropped sockets trigger dials a proxy
+    /// that is already gone and every relay fails. App foreground used to be
+    /// the only thing that tried again, which left someone who changed route
+    /// and then waited connected to no relays at all.
+    func test_torDidBecomeReady_connectsRelaysWithoutWaitingForForeground() async {
+        let center = NotificationCenter()
+        let context = makeContext(
+            permission: .authorized,
+            activationAllowed: false,
+            notificationCenter: center
+        )
+
+        XCTAssertTrue(context.sessionFactory.requestedURLs.isEmpty)
+        context.activationAllowed.value = true
+
+        center.post(name: .TorDidBecomeReady, object: nil)
+
+        let connected = await waitUntil {
+            context.sessionFactory.requestedURLs.count == self.expectedDefaultRelayCount
+        }
+        XCTAssertTrue(connected)
+    }
+
+    /// A route that becomes ready while relays are already up must not churn
+    /// them: reconnecting a live socket would drop its subscriptions.
+    func test_torDidBecomeReady_doesNotReconnectHealthyRelays() async {
+        let center = NotificationCenter()
+        let context = makeContext(
+            permission: .authorized,
+            notificationCenter: center
+        )
+        context.manager.connect()
+
+        let connected = await waitUntil {
+            context.sessionFactory.requestedURLs.count == self.expectedDefaultRelayCount
+        }
+        XCTAssertTrue(connected)
+
+        center.post(name: .TorDidBecomeReady, object: nil)
+
+        // Short window on purpose: a redial would be dispatched immediately, so
+        // waiting out the full settle timeout only slows the suite down.
+        let redialed = await waitUntil(timeout: 1) {
+            context.sessionFactory.requestedURLs.count > self.expectedDefaultRelayCount
+        }
+        XCTAssertFalse(redialed, "ready must not redial relays that already hold a connection")
     }
 
     private func makeContext(

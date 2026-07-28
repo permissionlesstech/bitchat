@@ -372,6 +372,22 @@ final class NostrRelayManager: ObservableObject {
                 self.applyDefaultRelayPolicy(force: true)
             }
             .store(in: &cancellables)
+        // Reconnect once a route is actually usable, not only when the app is
+        // foregrounded. Switching transport stops Arti's SOCKS listener before
+        // `isReady` turns false, so the reconnect that the dropped sockets
+        // trigger still reads Tor as ready and dials a proxy that is already
+        // gone; every relay fails closed. Foreground used to be the only thing
+        // that tried again, so changing route and then leaving the app alone
+        // left it connected to nothing. Relays that already hold a connection
+        // are filtered out downstream, so a redundant ready cannot churn a
+        // healthy socket.
+        dependencies.notificationCenter
+            .publisher(for: .TorDidBecomeReady)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.connect()
+            }
+            .store(in: &cancellables)
     }
 
     deinit {
