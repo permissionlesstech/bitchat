@@ -130,9 +130,9 @@ find localPackages/Arti/Frameworks/arti.xcframework -maxdepth 3 -type f \
 ```text
 cac99db408280bbef15cae8ce64c8ccdbf2e8863c205168d59f83fe8ab680f94  localPackages/Arti/Frameworks/arti.xcframework/Info.plist
 fa289d4f1c9a0a0665cfd4412c9713b27774d86b8391234934829caa2b183766  localPackages/Arti/Frameworks/arti.xcframework/ios-arm64/Headers/arti.h
-6a7ad09cb8123ede7b18b1420e6dd5411d899a86ed5e138023364634253dd5d0  localPackages/Arti/Frameworks/arti.xcframework/ios-arm64/libarti_bitchat.a
+9bd4596d680ac114c3b2a9a618b79e5cc51a9d88d2c156b040bf6286a7d9d042  localPackages/Arti/Frameworks/arti.xcframework/ios-arm64/libarti_bitchat.a
 fa289d4f1c9a0a0665cfd4412c9713b27774d86b8391234934829caa2b183766  localPackages/Arti/Frameworks/arti.xcframework/ios-arm64_x86_64-simulator/Headers/arti.h
-f344960953436b5553f5d568df1b5c2ef950e9f56049467c36397cfff2ee125c  localPackages/Arti/Frameworks/arti.xcframework/ios-arm64_x86_64-simulator/libarti_bitchat.a
+b2e985e4899cbfe4e80560a7e3fa0478045b687f898fc623c64cd4de21020168  localPackages/Arti/Frameworks/arti.xcframework/ios-arm64_x86_64-simulator/libarti_bitchat.a
 551655904834748c9dc36034fdbc9465e7533aef1e4a6514b4fcc75875b93058  localPackages/Arti/Frameworks/arti.xcframework/macos-arm64_x86_64/Headers/arti.h
 7c9afe98227f1767567ddcd4e35d9dfffe70309c302c4dbc9a6c9d6aeefab007  localPackages/Arti/Frameworks/arti.xcframework/macos-arm64_x86_64/libarti_bitchat.a
 ```

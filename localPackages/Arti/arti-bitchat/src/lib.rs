@@ -27,6 +27,14 @@ mod transport_monitor;
 const TRANSPORT_CONFIG_VERSION: u8 = 1;
 const MAX_TRANSPORT_CONFIG_BYTES: usize = 32 * 1024;
 const MAX_BRIDGES: usize = 8;
+const BOOTSTRAP_PROGRESS_INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
+/// Ceiling on SOCKS sessions the local listener will carry at once.
+///
+/// Loopback on iOS is not sandboxed per app, so this listener is reachable by
+/// anything else on the device. The app itself needs a relay socket per relay
+/// plus the directory fetch, so this is far above normal use and only bounds
+/// what an outside caller can pin.
+const MAX_CONCURRENT_SOCKS_SESSIONS: usize = 64;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -563,27 +571,13 @@ async fn run_arti_lifecycle(
     // led the host to blame the network for a bootstrap that was still
     // advancing.
     let client = Arc::new(TorClient::builder().config(config).create_unbootstrapped()?);
-    let progress_reporter = tokio::spawn({
-        let client = client.clone();
-        async move {
-            loop {
-                let percent = (client.bootstrap_status().as_frac() * 100.0).round() as i32;
-                // Held below 100 because the host treats 100 as "ready", and
-                // the fraction can reach 1.0 before `bootstrap` returns.
-                BOOTSTRAP_PROGRESS.store(percent.clamp(0, 99), Ordering::SeqCst);
-                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-            }
-        }
-    });
-    let bootstrapped = client.bootstrap().await;
-    progress_reporter.abort();
-    // `abort` only requests cancellation at the next await point, so the
-    // reporter can still be mid-iteration on another worker and overwrite the
-    // completion value stored below with a clamped one. Waiting for it to
-    // actually finish is what makes 100 stick; without this the host sees a
-    // bootstrap that never completes and tears down a working Tor.
-    let _ = progress_reporter.await;
-    bootstrapped?;
+    let progress_source = client.clone();
+    tokio::select! {
+        result = client.bootstrap() => result,
+        never = report_bootstrap_progress(move || {
+            (progress_source.bootstrap_status().as_frac() * 100.0).round() as i32
+        }) => match never {},
+    }?;
     let _transport_monitor = transport_monitor;
 
     // Store client reference for status queries
@@ -602,21 +596,49 @@ async fn run_arti_lifecycle(
     tracing::info!("SOCKS5 proxy listening on {}", socks_addr);
 
     // Accept connections until the outer lifecycle future is cancelled.
+    let session_slots = Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_SOCKS_SESSIONS));
     loop {
         match listener.accept().await {
             Ok((stream, peer_addr)) => {
+                // Refusing loudly at the ceiling beats queueing: a caller that
+                // holds this many sessions open is not the app doing its work.
+                let Ok(slot) = session_slots.clone().try_acquire_owned() else {
+                    tracing::warn!("Refused SOCKS connection: session limit reached");
+                    drop(stream);
+                    continue;
+                };
                 let client = client.clone();
                 tokio::spawn(async move {
                     if let Err(e) = socks::handle_socks_connection(stream, peer_addr, client).await
                     {
                         tracing::debug!("SOCKS connection error from {}: {}", peer_addr, e);
                     }
+                    drop(slot);
                 });
             }
             Err(e) => {
                 tracing::warn!("Accept error: {}", e);
             }
         }
+    }
+}
+
+/// Publish bootstrap progress until whatever is racing this stops polling it.
+///
+/// Deliberately not a spawned task. Cancelling the lifecycle future has to stop
+/// this too: a detached reporter outlived the bootstrap it was reporting on,
+/// held the abandoned client alive, and went on overwriting the progress the
+/// next route was publishing. Every auto-fallback hop cancels a bootstrap, so
+/// that leak landed on exactly the path that needs progress to be trustworthy.
+async fn report_bootstrap_progress<F>(read_percent: F) -> std::convert::Infallible
+where
+    F: Fn() -> i32,
+{
+    loop {
+        // Held below 100 because the host treats 100 as "ready", and the
+        // fraction reaches 1.0 before `bootstrap` returns.
+        BOOTSTRAP_PROGRESS.store(read_percent().clamp(0, 99), Ordering::SeqCst);
+        tokio::time::sleep(BOOTSTRAP_PROGRESS_INTERVAL).await;
     }
 }
 
@@ -913,6 +935,35 @@ mod transport_config_tests {
                 .expect("monitor never forwarded the dial upstream within 30s")
                 .expect("upstream accept failed");
             assert_eq!(TRANSPORT_STAGE.load(Ordering::SeqCst), 3);
+        });
+    }
+
+    // The reporter used to be a detached `tokio::spawn`, so cancelling a
+    // bootstrap left it running: it held the abandoned client alive and kept
+    // writing progress that the next route then read as its own. Every
+    // auto-fallback hop cancels a bootstrap, so it has to stop with one.
+    #[test]
+    fn cancelling_the_bootstrap_stops_the_progress_reporter() {
+        let runtime = Runtime::new().expect("test runtime");
+        runtime.block_on(async {
+            let ticks = Arc::new(AtomicI32::new(0));
+            let counted = ticks.clone();
+            tokio::select! {
+                _ = tokio::time::sleep(std::time::Duration::from_millis(50)) => {}
+                never = report_bootstrap_progress(move || {
+                    counted.fetch_add(1, Ordering::SeqCst);
+                    50
+                }) => match never {},
+            }
+
+            let ticked_while_bootstrapping = ticks.load(Ordering::SeqCst);
+            assert!(ticked_while_bootstrapping > 0, "reporter never ran");
+            tokio::time::sleep(BOOTSTRAP_PROGRESS_INTERVAL * 3).await;
+            assert_eq!(
+                ticks.load(Ordering::SeqCst),
+                ticked_while_bootstrapping,
+                "reporter outlived the bootstrap it was reporting on"
+            );
         });
     }
 

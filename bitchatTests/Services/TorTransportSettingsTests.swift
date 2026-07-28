@@ -367,4 +367,79 @@ final class TorTransportSettingsTests: XCTestCase {
             .ready
         )
     }
+
+    /// The wait callers get by default has to outlast the sequence the manager
+    /// runs, or auto mode abandons Snowflake — the route most likely to be the
+    /// one that gets through — while it is still bootstrapping. The literals
+    /// are the second reading of the ceilings on purpose: raising one has to be
+    /// acknowledged here rather than silently shortening that wait.
+    func test_theDefaultReadyWaitOutlastsAFullAutoSequence() {
+        XCTAssertEqual(TorTransport.direct.bootstrapDeadline, 45)
+        XCTAssertEqual(TorTransport.obfs4.bootstrapDeadline, 120)
+        XCTAssertEqual(TorTransport.snowflake.bootstrapDeadline, 300)
+        XCTAssertGreaterThan(TorTransport.fullSequenceDeadline, 45 + 120 + 300)
+    }
+
+    // MARK: - Readiness resolution
+
+    /// The defect this policy exists to fix. Readiness had two writers a
+    /// second apart: the bootstrap poll published the percentage, and the SOCKS
+    /// probe published reachability. When the probe landed first, readiness was
+    /// judged against a percentage that nothing would ever refresh, so a fully
+    /// bootstrapped Tor with a live listener stayed fail-closed for good.
+    func test_aStaleProgressCopyDoesNotHoldBackAReachableRoute() {
+        let resolved = TorReadinessPolicy.resolve(
+            socksReady: true,
+            publishedProgress: 83,
+            liveProgress: { 100 }
+        )
+
+        XCTAssertTrue(resolved.isReady)
+        XCTAssertEqual(resolved.progress, 100, "the stale copy has to be corrected, not just overridden")
+    }
+
+    func test_aReachableListenerStillNeedsACompletedBootstrap() {
+        let resolved = TorReadinessPolicy.resolve(
+            socksReady: true,
+            publishedProgress: 40,
+            liveProgress: { 62 }
+        )
+
+        XCTAssertFalse(resolved.isReady)
+        XCTAssertEqual(resolved.progress, 62)
+    }
+
+    func test_readinessAlwaysRequiresTheSocksListener() {
+        var consultedLiveProgress = false
+        let resolved = TorReadinessPolicy.resolve(
+            socksReady: false,
+            publishedProgress: 100,
+            liveProgress: {
+                consultedLiveProgress = true
+                return 100
+            }
+        )
+
+        XCTAssertFalse(resolved.isReady, "a completed bootstrap without a listener carries no traffic")
+        XCTAssertEqual(resolved.progress, 100)
+        XCTAssertFalse(consultedLiveProgress, "nothing to re-read when the route cannot be ready either way")
+    }
+
+    func test_anAlreadyCompleteCopyIsTrustedWithoutReReadingIt() {
+        var consultedLiveProgress = false
+        let resolved = TorReadinessPolicy.resolve(
+            socksReady: true,
+            publishedProgress: 100,
+            liveProgress: {
+                consultedLiveProgress = true
+                return 0
+            }
+        )
+
+        XCTAssertTrue(resolved.isReady)
+        XCTAssertFalse(
+            consultedLiveProgress,
+            "Arti zeroes its counter when an attempt ends, so re-reading a settled route can only unset it"
+        )
+    }
 }

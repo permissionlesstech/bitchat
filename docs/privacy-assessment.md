@@ -112,7 +112,7 @@ Not addressed, and deliberately out of scope here:
 
 ## Panic Wipe Coverage
 
-The panic action clears identity/session state, preferences, location state, groups, prekeys, outbox mail, courier mail, bridge dedup state, gossip archive, board data, managed media, hand-added relays, obfs4 bridge lines, the sticky successful Tor route, IPtProxy state, and active subscriptions/transports. Managed media deletion completes synchronously, after active media work has been invalidated. Keychain secrets use device-only accessibility, and an install marker detects and clears app keys that survive uninstall before a later reinstall can use them. New persistent stores must add an explicit wipe hook and a regression test.
+The panic action clears identity/session state, preferences, location state, groups, prekeys, outbox mail, courier mail, bridge dedup state, gossip archive, board data, managed media, hand-added relays, obfs4 bridge lines, the sticky successful Tor route, IPtProxy state, Arti's own directory tree, and active subscriptions/transports. Arti's tree is included because a bridged route caches the bridge descriptors it fetched keyed by the bridge line that produced them: clearing the Keychain copy alone left user-supplied obfs4 bridges recoverable from disk, and the same tree holds direct Tor's guard state. Managed media deletion completes synchronously, after active media work has been invalidated. Keychain secrets use device-only accessibility, and an install marker detects and clears app keys that survive uninstall before a later reinstall can use them. New persistent stores must add an explicit wipe hook and a regression test.
 
 ## Release Review Checklist
 

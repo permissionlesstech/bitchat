@@ -47,6 +47,15 @@ public enum TorTransport: String, Codable, CaseIterable, Sendable {
         case .snowflake: 120
         }
     }
+
+    /// Wall time a full auto sequence can take before every route has been
+    /// tried, including the bounded stop/start between them.
+    ///
+    /// Derived rather than written down. The ceilings moved once already and
+    /// left a hardcoded caller-side wait behind that expired mid-sequence,
+    /// which abandons the route most likely to get through a block.
+    public static let fullSequenceDeadline: TimeInterval = allCases
+        .reduce(0) { $0 + $1.bootstrapDeadline } + TimeInterval(allCases.count) * 10
 }
 
 public enum TorTransportLifecycle: String, Codable, Sendable {
@@ -134,6 +143,28 @@ enum TorBootstrapWaitPolicy {
         if progress > highWaterProgress { return .keepWaiting }
         if secondsSinceProgress >= stallWindow { return .stalled }
         return remainingSeconds > 0 ? .keepWaiting : .ceilingReached
+    }
+}
+
+enum TorReadinessPolicy {
+    /// Resolves readiness from the two writers that can land in either order:
+    /// the once-a-second bootstrap poll and the SOCKS probe.
+    ///
+    /// Deciding on the published percentage alone left a working route
+    /// permanently not-ready whenever the probe won the race, because nothing
+    /// refreshed that copy afterwards and the app fails closed.
+    static func resolve(
+        socksReady: Bool,
+        publishedProgress: Int,
+        liveProgress: () -> Int
+    ) -> (isReady: Bool, progress: Int) {
+        guard socksReady else { return (false, publishedProgress) }
+        guard publishedProgress < 100 else { return (true, publishedProgress) }
+        // Arti binds the SOCKS listener only after bootstrap returns, so a
+        // listener that answers means the published number is behind rather
+        // than that the route is unfinished.
+        let progress = liveProgress()
+        return (progress >= 100, progress)
     }
 }
 

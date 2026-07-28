@@ -53,6 +53,29 @@ private func arti_bootstrap_progress() -> Int32
 @_silgen_name("arti_bootstrap_summary")
 private func arti_bootstrap_summary(_ buf: UnsafeMutablePointer<CChar>, _ len: Int32) -> Int32
 
+/// One-shot gate for the SOCKS probe's continuation.
+///
+/// The connection's state handler and the probe's own timeout both run on the
+/// global concurrent queue, so the plain flag they used to share could let both
+/// of them resume the same continuation. Resuming a checked continuation twice
+/// traps, which turns a probe answering at the wrong moment into a crash.
+private final class ProbeContinuationGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Bool, Never>?
+
+    init(_ continuation: CheckedContinuation<Bool, Never>) {
+        self.continuation = continuation
+    }
+
+    func resume(_ value: Bool) {
+        lock.lock()
+        let pending = continuation
+        continuation = nil
+        lock.unlock()
+        pending?.resume(returning: value)
+    }
+}
+
 /// Arti-based Tor integration for BitChat.
 /// - Boots a local Arti client and exposes a SOCKS5 proxy
 ///   on 127.0.0.1:socksPort. All app networking should await readiness and
@@ -186,7 +209,19 @@ public final class TorManager: ObservableObject {
         attemptedTransports.removeAll()
         transportStatus = .idle
         pluggableTransportController.stop()
-        if let directory = pluggableTransportStateDirectoryURL() {
+        // Arti's own directories go too, not just IPtProxy's. A bridged route
+        // caches the bridge descriptors it fetched keyed by the bridge line
+        // that produced them, so leaving those behind left the user's private
+        // obfs4 bridges recoverable from disk after a wipe meant to remove
+        // them. Removing the parent covers direct Tor's guard state as well,
+        // which is its own linkable record of who this device is.
+        //
+        // Arti is asked to stop first so it is not writing the files back out
+        // as they go. A shutdown already in flight owns the stop, so this
+        // narrows that window rather than closing it.
+        _ = arti_stop()
+        for directory in [dataDirectoryURL(), pluggableTransportStateDirectoryURL()] {
+            guard let directory else { continue }
             try? FileManager.default.removeItem(at: directory)
         }
     }
@@ -255,10 +290,12 @@ public final class TorManager: ObservableObject {
     public func isForeground() -> Bool { isAppForeground }
 
     nonisolated
-    // The default covers one complete Auto sequence (45 + 60 + 90 seconds)
-    // plus bounded stop/start transitions between routes.
-    // Callers remain fail-closed while the manager changes transports.
-    public func awaitReady(timeout: TimeInterval = 210.0) async -> Bool {
+    // The default covers one complete Auto sequence plus the bounded
+    // stop/start transitions between its routes, and is derived from the same
+    // ceilings the manager enforces so the two cannot drift apart. Callers
+    // remain fail-closed while the manager changes transports, so expiring
+    // early buys nothing and abandons a bootstrap that is still working.
+    public func awaitReady(timeout: TimeInterval = TorTransport.fullSequenceDeadline) async -> Bool {
         await MainActor.run {
             if self.isAppForeground { self.startIfNeeded() }
         }
@@ -340,7 +377,7 @@ public final class TorManager: ObservableObject {
         // Check if already running
         if arti_is_running() != 0 {
             SecureLogger.info("TorManager: Arti already running", category: .session)
-            startBootstrapMonitor()
+            beginBootstrapObservation(for: transport)
             return
         }
 
@@ -419,11 +456,24 @@ public final class TorManager: ObservableObject {
             "TorManager: Arti task launched; waiting for SOCKS \(socksHost):\(socksPort)",
             category: .session
         )
+        beginBootstrapObservation(for: transport)
+    }
+
+    /// Watch the attempt that was just launched.
+    ///
+    /// Both halves belong together: the poll loop reports progress and decides
+    /// whether a route is blocked, and the probe decides when the SOCKS
+    /// listener is actually carrying traffic. Starting the monitor without the
+    /// probe leaves readiness with no writer at all.
+    private func beginBootstrapObservation(for transport: TorTransport) {
         startBootstrapMonitor()
 
         // Start SOCKS readiness probe
         let generation = bootstrapGeneration
-        let probeTimeout = transport.bootstrapDeadline
+        // Deliberately past the poll loop's ceiling so that loop is the one
+        // that reports the outcome: it can tell a route that stopped advancing
+        // from one that is merely slow, and a bare probe timeout cannot.
+        let probeTimeout = transport.bootstrapDeadline + 5
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             let ready = await self.waitForSocksReady(
@@ -457,7 +507,13 @@ public final class TorManager: ObservableObject {
         timeout: TimeInterval,
         generation: Int
     ) async -> Bool {
-        let pollInterval: TimeInterval = 2
+        // Arti binds the listener only once bootstrap has returned, so every
+        // probe before that is a guaranteed refusal. Skipping them removes a
+        // rejected loopback connection every couple of seconds for the whole
+        // bootstrap and leaves room to poll four times as often once the
+        // listener can exist, which is what turns readiness around in half a
+        // second rather than up to three.
+        let pollInterval: TimeInterval = 0.5
         var remainingForegroundTime = timeout
         while remainingForegroundTime > 0 {
             let state = await MainActor.run {
@@ -475,7 +531,7 @@ public final class TorManager: ObservableObject {
                 }
                 continue
             }
-            if await probeSocksOnce() { return true }
+            if arti_bootstrap_progress() >= 100, await probeSocksOnce() { return true }
             remainingForegroundTime -= pollInterval
             do {
                 try await Task.sleep(
@@ -500,13 +556,8 @@ public final class TorManager: ObservableObject {
             let endpoint = NWEndpoint.hostPort(host: host, port: port)
             let conn = NWConnection(to: endpoint, using: params)
 
-            var resumed = false
-            let resumeOnce: (Bool) -> Void = { value in
-                if !resumed {
-                    resumed = true
-                    cont.resume(returning: value)
-                }
-            }
+            let gate = ProbeContinuationGate(cont)
+            let resumeOnce: (Bool) -> Void = { gate.resume($0) }
 
             conn.stateUpdateHandler = { state in
                 switch state {
@@ -567,14 +618,6 @@ public final class TorManager: ObservableObject {
                 continue
             }
             drainArtiDiagnostics()
-            // A route that is already carrying traffic is finished, whatever
-            // the reported percentage says. Without this, any failure to
-            // observe completion tears down a working Tor, which is a far
-            // worse outcome than a stall that goes unreported.
-            if socksReady {
-                didComplete = true
-                break
-            }
             let summary = getBootstrapSummary()
             if arti_is_running() == 0 {
                 self.bootstrapSummary = summary
@@ -609,6 +652,18 @@ public final class TorManager: ObservableObject {
             }
             if progress >= 100 { self.isStarting = false }
             self.recomputeReady()
+
+            // A route that is already carrying traffic is finished, whatever
+            // the reported percentage says. Without this, any failure to
+            // observe completion tears down a working Tor, which is a far
+            // worse outcome than a stall that goes unreported. Reading Arti's
+            // counter first is what makes this exit publish a completed
+            // bootstrap instead of leaving the last stale percentage behind,
+            // which held the app fail-closed over a live SOCKS listener.
+            if socksReady {
+                didComplete = true
+                break
+            }
 
             switch TorBootstrapWaitPolicy.outcome(
                 progress: progress,
@@ -956,7 +1011,15 @@ public final class TorManager: ObservableObject {
     }
 
     private func recomputeReady() {
-        let ready = socksReady && bootstrapProgress >= 100
+        let resolved = TorReadinessPolicy.resolve(
+            socksReady: socksReady,
+            publishedProgress: bootstrapProgress,
+            liveProgress: { Int(arti_bootstrap_progress()) }
+        )
+        if bootstrapProgress != resolved.progress {
+            bootstrapProgress = resolved.progress
+        }
+        let ready = resolved.isReady
         if ready != isReady {
             if !ready {
                 SecureLogger.debug("TorManager: isReady -> false (socksReady=\(socksReady), bootstrap=\(bootstrapProgress))", category: .session)

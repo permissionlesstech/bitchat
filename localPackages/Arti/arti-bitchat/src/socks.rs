@@ -5,6 +5,7 @@
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use arti_client::{IntoTorAddr, TorClient};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -22,109 +23,34 @@ const SOCKS5_REP_SUCCESS: u8 = 0x00;
 const SOCKS5_REP_FAILURE: u8 = 0x01;
 const SOCKS5_REP_CONN_REFUSED: u8 = 0x05;
 
+/// How long a caller may take to finish the handshake before it is dropped.
+///
+/// Without this, a connection that opens and then says nothing pins a task and
+/// a socket for as long as the process lives. Loopback on iOS is reachable by
+/// any other app on the device, so that is a hold anyone can take. It bounds
+/// only the handshake: building the circuit afterwards is allowed to be slow.
+const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Handle a single SOCKS5 connection
 pub async fn handle_socks_connection(
     mut stream: TcpStream,
     peer_addr: SocketAddr,
     client: Arc<TorClient<PreferredRuntime>>,
 ) -> io::Result<()> {
-    // --- Greeting ---
-    // Client sends: VER | NMETHODS | METHODS
-    let mut greeting = [0u8; 2];
-    stream.read_exact(&mut greeting).await?;
+    // Relay frames and directory requests are small and latency-sensitive, and
+    // waiting on Nagle to coalesce them buys nothing over loopback.
+    let _ = stream.set_nodelay(true);
 
-    if greeting[0] != SOCKS5_VERSION {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "Not SOCKS5"));
-    }
-
-    let nmethods = greeting[1] as usize;
-    let mut methods = vec![0u8; nmethods];
-    stream.read_exact(&mut methods).await?;
-
-    // We only support no-auth
-    if !methods.contains(&SOCKS5_AUTH_NONE) {
-        // Send failure: no acceptable methods
-        stream.write_all(&[SOCKS5_VERSION, 0xFF]).await?;
-        return Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "No acceptable auth methods",
-        ));
-    }
-
-    // Accept no-auth
-    stream
-        .write_all(&[SOCKS5_VERSION, SOCKS5_AUTH_NONE])
-        .await?;
-
-    // --- Request ---
-    // Client sends: VER | CMD | RSV | ATYP | DST.ADDR | DST.PORT
-    let mut request_header = [0u8; 4];
-    stream.read_exact(&mut request_header).await?;
-
-    if request_header[0] != SOCKS5_VERSION {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "Invalid SOCKS5 request version",
-        ));
-    }
-
-    let cmd = request_header[1];
-    let atyp = request_header[3];
-
-    if cmd != SOCKS5_CMD_CONNECT {
-        // We only support CONNECT
-        send_reply(&mut stream, SOCKS5_REP_FAILURE).await?;
-        return Err(io::Error::new(
-            io::ErrorKind::Unsupported,
-            "Only CONNECT supported",
-        ));
-    }
-
-    // Parse destination address
-    let (dest_host, dest_port) = match atyp {
-        SOCKS5_ATYP_IPV4 => {
-            let mut addr = [0u8; 4];
-            stream.read_exact(&mut addr).await?;
-            let mut port_buf = [0u8; 2];
-            stream.read_exact(&mut port_buf).await?;
-            let port = u16::from_be_bytes(port_buf);
-            let host = format!("{}.{}.{}.{}", addr[0], addr[1], addr[2], addr[3]);
-            (host, port)
-        }
-        SOCKS5_ATYP_DOMAIN => {
-            let mut len_buf = [0u8; 1];
-            stream.read_exact(&mut len_buf).await?;
-            let len = len_buf[0] as usize;
-            let mut domain = vec![0u8; len];
-            stream.read_exact(&mut domain).await?;
-            let mut port_buf = [0u8; 2];
-            stream.read_exact(&mut port_buf).await?;
-            let port = u16::from_be_bytes(port_buf);
-            let host = String::from_utf8_lossy(&domain).to_string();
-            (host, port)
-        }
-        SOCKS5_ATYP_IPV6 => {
-            let mut addr = [0u8; 16];
-            stream.read_exact(&mut addr).await?;
-            let mut port_buf = [0u8; 2];
-            stream.read_exact(&mut port_buf).await?;
-            let port = u16::from_be_bytes(port_buf);
-            // Format IPv6 address
-            let segments: Vec<String> = addr
-                .chunks(2)
-                .map(|c| format!("{:02x}{:02x}", c[0], c[1]))
-                .collect();
-            let host = format!("[{}]", segments.join(":"));
-            (host, port)
-        }
-        _ => {
-            send_reply(&mut stream, SOCKS5_REP_FAILURE).await?;
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Unsupported address type",
-            ));
-        }
-    };
+    let (dest_host, dest_port) =
+        match tokio::time::timeout(HANDSHAKE_TIMEOUT, negotiate(&mut stream)).await {
+            Ok(request) => request?,
+            Err(_) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "SOCKS5 handshake timed out",
+                ))
+            }
+        };
 
     tracing::debug!(
         "SOCKS5 CONNECT from {} to {}:{}",
@@ -197,6 +123,107 @@ pub async fn handle_socks_connection(
     }
 
     Ok(())
+}
+
+/// Read the greeting and the CONNECT request, returning the requested address.
+async fn negotiate(stream: &mut TcpStream) -> io::Result<(String, u16)> {
+    // --- Greeting ---
+    // Client sends: VER | NMETHODS | METHODS
+    let mut greeting = [0u8; 2];
+    stream.read_exact(&mut greeting).await?;
+
+    if greeting[0] != SOCKS5_VERSION {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "Not SOCKS5"));
+    }
+
+    let nmethods = greeting[1] as usize;
+    let mut methods = vec![0u8; nmethods];
+    stream.read_exact(&mut methods).await?;
+
+    // We only support no-auth
+    if !methods.contains(&SOCKS5_AUTH_NONE) {
+        // Send failure: no acceptable methods
+        stream.write_all(&[SOCKS5_VERSION, 0xFF]).await?;
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "No acceptable auth methods",
+        ));
+    }
+
+    // Accept no-auth
+    stream
+        .write_all(&[SOCKS5_VERSION, SOCKS5_AUTH_NONE])
+        .await?;
+
+    // --- Request ---
+    // Client sends: VER | CMD | RSV | ATYP | DST.ADDR | DST.PORT
+    let mut request_header = [0u8; 4];
+    stream.read_exact(&mut request_header).await?;
+
+    if request_header[0] != SOCKS5_VERSION {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Invalid SOCKS5 request version",
+        ));
+    }
+
+    let cmd = request_header[1];
+    let atyp = request_header[3];
+
+    if cmd != SOCKS5_CMD_CONNECT {
+        // We only support CONNECT
+        send_reply(stream, SOCKS5_REP_FAILURE).await?;
+        return Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "Only CONNECT supported",
+        ));
+    }
+
+    // Parse destination address
+    Ok(match atyp {
+        SOCKS5_ATYP_IPV4 => {
+            let mut addr = [0u8; 4];
+            stream.read_exact(&mut addr).await?;
+            let mut port_buf = [0u8; 2];
+            stream.read_exact(&mut port_buf).await?;
+            let port = u16::from_be_bytes(port_buf);
+            let host = format!("{}.{}.{}.{}", addr[0], addr[1], addr[2], addr[3]);
+            (host, port)
+        }
+        SOCKS5_ATYP_DOMAIN => {
+            let mut len_buf = [0u8; 1];
+            stream.read_exact(&mut len_buf).await?;
+            let len = len_buf[0] as usize;
+            let mut domain = vec![0u8; len];
+            stream.read_exact(&mut domain).await?;
+            let mut port_buf = [0u8; 2];
+            stream.read_exact(&mut port_buf).await?;
+            let port = u16::from_be_bytes(port_buf);
+            let host = String::from_utf8_lossy(&domain).to_string();
+            (host, port)
+        }
+        SOCKS5_ATYP_IPV6 => {
+            let mut addr = [0u8; 16];
+            stream.read_exact(&mut addr).await?;
+            let mut port_buf = [0u8; 2];
+            stream.read_exact(&mut port_buf).await?;
+            let port = u16::from_be_bytes(port_buf);
+            // Format IPv6 address
+            let segments: Vec<String> = addr
+                .chunks(2)
+                .map(|c| format!("{:02x}{:02x}", c[0], c[1]))
+                .collect();
+            let host = format!("[{}]", segments.join(":"));
+            (host, port)
+        }
+        _ => {
+            send_reply(stream, SOCKS5_REP_FAILURE).await?;
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Unsupported address type",
+            ));
+        }
+    })
 }
 
 async fn send_reply(stream: &mut TcpStream, rep: u8) -> io::Result<()> {
