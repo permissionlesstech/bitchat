@@ -116,6 +116,64 @@ final class TorTransportSettingsTests: XCTestCase {
         )
     }
 
+    func test_panicRequiresAFreshTransportChoiceAndSurvivesRelaunch() throws {
+        let suite = "TorTransportSettingsTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        let keychain = PreviewKeychainManager()
+        let settings = TorTransportSettings(
+            defaults: defaults,
+            keychain: keychain,
+            notificationCenter: NotificationCenter()
+        )
+        XCTAssertFalse(settings.requiresTransportSelection)
+
+        settings.resetForPanic()
+        XCTAssertTrue(settings.requiresTransportSelection)
+
+        // Relaunching must not undo a wipe, so the gate is persisted.
+        let relaunched = TorTransportSettings(
+            defaults: defaults,
+            keychain: keychain,
+            notificationCenter: NotificationCenter()
+        )
+        XCTAssertTrue(relaunched.requiresTransportSelection)
+
+        // The wipe already left the mode at .direct, so re-picking direct is a
+        // no-op on mode and must still count as the user's choice.
+        relaunched.setMode(.direct)
+        XCTAssertFalse(relaunched.requiresTransportSelection)
+        XCTAssertFalse(
+            defaults.bool(forKey: TorTransportStorageKeys.transportSelectionRequired)
+        )
+    }
+
+    func test_clearingBridgesKeepsObfs4ModeAndPlansNothing() throws {
+        let suite = "TorTransportSettingsTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        let settings = TorTransportSettings(
+            defaults: defaults,
+            keychain: PreviewKeychainManager(),
+            notificationCenter: NotificationCenter()
+        )
+        XCTAssertEqual(
+            settings.saveObfs4BridgeInput(
+                "obfs4 192.0.2.10:443 \(fingerprint) cert=YWJjZA iat-mode=0"
+            ),
+            .success(1)
+        )
+        settings.setMode(.obfs4)
+
+        settings.clearObfs4Bridges()
+
+        // Dropping to direct here would put someone who cleared their bridges
+        // onto plain Tor on the network they chose obfs4 to hide from.
+        XCTAssertEqual(settings.mode, .obfs4)
+        XCTAssertTrue(settings.obfs4BridgeLines.isEmpty)
+        XCTAssertEqual(TorRoutePlanner.candidates(for: settings.routeConfiguration), [])
+    }
+
     func test_explicitModeNeverPlansAnyOtherTransport() {
         // `startArti` refuses any transport outside this set, so this is the
         // invariant that keeps a censorship mode from silently becoming plain

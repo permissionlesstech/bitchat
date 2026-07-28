@@ -14,6 +14,8 @@ public enum TorTransportMode: String, Codable, CaseIterable, Sendable {
 public enum TorTransportStorageKeys {
     public static let mode = "tor.transport.mode"
     public static let lastSuccessfulTransport = "tor.transport.lastSuccessful"
+    /// Survives relaunch: a panic wipe must not be undone by restarting.
+    public static let transportSelectionRequired = "tor.transport.selectionRequired"
 }
 
 public enum TorTransport: String, Codable, CaseIterable, Sendable {

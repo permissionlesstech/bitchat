@@ -133,6 +133,36 @@ final class NetworkActivationServiceTests: XCTestCase {
         XCTAssertEqual(context.transportResetRecorder.callCount, 1)
     }
 
+    func test_transportSelectionRequiredBlocksAllNetworkActivation() async {
+        let selectionRequired = TransportResetRecorder()
+        selectionRequired.callCount = 1
+        let context = makeService(
+            permission: .authorized,
+            favorites: [],
+            transportSelectionRequired: { selectionRequired.callCount > 0 }
+        )
+
+        context.service.start()
+
+        // A wipe destroys the bridges the chosen transport needed, so nothing
+        // is allowed out until the user picks a route. Gating only Tor would
+        // leave activation on with Tor off, which is a clearnet path.
+        XCTAssertFalse(context.service.activationAllowed)
+        XCTAssertEqual(context.relayController.connectCallCount, 0)
+        XCTAssertEqual(context.torController.startIfNeededCallCount, 0)
+        // Tor is down, but the session stays pointed at the proxy so a stray
+        // request fails closed instead of leaving in the open.
+        XCTAssertNotEqual(context.proxyController.proxyModes.last, false)
+        XCTAssertGreaterThanOrEqual(context.torController.shutdownCompletelyCallCount, 1)
+
+        selectionRequired.callCount = 0
+        context.reachability.set(true)
+        let recovered = await waitUntil { context.service.activationAllowed }
+
+        XCTAssertTrue(recovered)
+        XCTAssertGreaterThan(context.relayController.connectCallCount, 0)
+    }
+
     func test_transportChangeReconfiguresTorAndCyclesRelaySockets() async {
         var configuration = TorRouteConfiguration(mode: .direct)
         let context = makeService(
@@ -244,7 +274,8 @@ final class NetworkActivationServiceTests: XCTestCase {
         selectedChannelSubject: CurrentValueSubject<ChannelID, Never>? = nil,
         transportConfigurationProvider: @escaping () -> TorRouteConfiguration = {
             TorRouteConfiguration()
-        }
+        },
+        transportSelectionRequired: @escaping () -> Bool = { false }
     ) -> NetworkActivationTestContext {
         let suiteName = "NetworkActivationServiceTests-\(UUID().uuidString)"
         let storage = UserDefaults(suiteName: suiteName)!
@@ -279,6 +310,7 @@ final class NetworkActivationServiceTests: XCTestCase {
             transportSettingsReset: {
                 transportResetRecorder.callCount += 1
             },
+            transportSelectionRequiredProvider: transportSelectionRequired,
             notificationCenter: notificationCenter
         )
         return NetworkActivationTestContext(

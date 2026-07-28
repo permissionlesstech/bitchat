@@ -60,6 +60,7 @@ final class NetworkActivationService: ObservableObject {
     private let torController: NetworkActivationTorControlling
     private let transportConfigurationProvider: () -> TorRouteConfiguration
     private let transportSettingsReset: () -> Void
+    private let transportSelectionRequiredProvider: () -> Bool
     // Resolved lazily: NostrRelayManager.init() reads NetworkActivationService.shared
     // (via its live dependencies), so capturing NostrRelayManager.shared here would
     // re-enter whichever singleton's dispatch_once started first and trap at launch.
@@ -87,6 +88,9 @@ final class NetworkActivationService: ObservableObject {
         transportSettingsReset = {
             TorTransportSettings.shared.resetForPanic()
         }
+        transportSelectionRequiredProvider = {
+            TorTransportSettings.shared.requiresTransportSelection
+        }
         relayControllerProvider = { NostrRelayManager.shared }
         proxyController = TorURLSession.shared
         notificationCenter = .default
@@ -108,6 +112,7 @@ final class NetworkActivationService: ObservableObject {
             TorRouteConfiguration()
         },
         transportSettingsReset: @escaping () -> Void = {},
+        transportSelectionRequiredProvider: @escaping () -> Bool = { false },
         notificationCenter: NotificationCenter = .default
     ) {
         self.storage = storage
@@ -121,6 +126,7 @@ final class NetworkActivationService: ObservableObject {
         self.torController = torController
         self.transportConfigurationProvider = transportConfigurationProvider
         self.transportSettingsReset = transportSettingsReset
+        self.transportSelectionRequiredProvider = transportSelectionRequiredProvider
         self.relayControllerProvider = { relayController }
         self.proxyController = proxyController
         self.notificationCenter = notificationCenter
@@ -297,11 +303,25 @@ final class NetworkActivationService: ObservableObject {
     /// Effective gate: base policy AND a usable network path. When there is
     /// provably no network, Tor bootstrap and relay reconnects are suppressed.
     private func effectiveAllowed() -> Bool {
-        basePolicyAllowed() && reachabilityMonitor.isReachable
+        // A panic wipe destroys the user's bridges, so whatever transport they
+        // had chosen no longer exists. Coming back up on whatever remains put
+        // the app on plain Tor eighteen seconds after a wipe, on the network
+        // the wiped transport existed to hide from. Nothing is allowed out
+        // until the user picks a route again; gating the whole activation
+        // rather than just Tor is deliberate, because leaving activation on
+        // with Tor off is a clearnet path.
+        guard !transportSelectionRequiredProvider() else { return false }
+        return basePolicyAllowed() && reachabilityMonitor.isReachable
     }
 
     private func applyTorState(torDesired: Bool) {
-        proxyController.setProxyMode(useTor: torDesired)
+        // Tor is being shut down here, but the session must not be left
+        // pointing at the clearnet while a wipe waits for the user to choose a
+        // transport. Nothing is supposed to send in that state; if something
+        // does, it should fail against a dead proxy rather than succeed in the
+        // open.
+        let selectionPending = transportSelectionRequiredProvider()
+        proxyController.setProxyMode(useTor: torDesired || selectionPending)
         if torDesired {
             torController.startIfNeeded()
         } else {

@@ -23,6 +23,12 @@ final class TorTransportSettings: ObservableObject {
     @Published private(set) var mode: TorTransportMode
     @Published private(set) var obfs4BridgeLines: [String]
     @Published private(set) var bridgeStorageAvailable: Bool
+    /// Set by a panic wipe and cleared only by the user choosing a mode.
+    ///
+    /// The wipe destroys the bridges the chosen transport depended on, so
+    /// there is no route left that the user actually consented to. Until they
+    /// pick one, `NetworkActivationService` allows nothing out at all.
+    @Published private(set) var requiresTransportSelection: Bool
 
     private let defaults: UserDefaults
     private let keychain: KeychainManagerProtocol
@@ -39,6 +45,9 @@ final class TorTransportSettings: ObservableObject {
         mode = defaults
             .string(forKey: TorTransportStorageKeys.mode)
             .flatMap(TorTransportMode.init(rawValue:)) ?? .direct
+        requiresTransportSelection = defaults.bool(
+            forKey: TorTransportStorageKeys.transportSelectionRequired
+        )
 
         switch keychain.loadWithResult(
             key: Self.keychainAccount,
@@ -69,10 +78,28 @@ final class TorTransportSettings: ObservableObject {
     }
 
     func setMode(_ newMode: TorTransportMode) {
-        guard newMode != mode else { return }
+        // Choosing a mode is the consent a post-panic app is waiting for, so
+        // it clears the gate even when the mode itself did not change: after a
+        // wipe the stored mode is already the default, and re-picking it must
+        // still be a way back onto the network.
+        let clearedSelectionGate = clearTransportSelectionRequirement()
+        guard newMode != mode else {
+            if clearedSelectionGate { notifyChanged() }
+            return
+        }
         mode = newMode
         defaults.set(newMode.rawValue, forKey: TorTransportStorageKeys.mode)
         notifyChanged()
+    }
+
+    @discardableResult
+    private func clearTransportSelectionRequirement() -> Bool {
+        guard requiresTransportSelection else { return false }
+        requiresTransportSelection = false
+        defaults.removeObject(
+            forKey: TorTransportStorageKeys.transportSelectionRequired
+        )
+        return true
     }
 
     @discardableResult
@@ -112,11 +139,13 @@ final class TorTransportSettings: ObservableObject {
             service: Self.keychainService
         )
         obfs4BridgeLines = []
-        if mode == .obfs4 {
-            setMode(.direct)
-        } else {
-            notifyChanged()
-        }
+        // Removing bridges must not move the user to a weaker route. Switching
+        // to direct here put anyone who cleared or replaced their bridges onto
+        // plain Tor without being asked, on the network they had chosen obfs4
+        // to hide from. obfs4 with no bridges plans nothing, so tor simply
+        // stops until bridges are supplied or another mode is picked, which is
+        // the failure the mode promises.
+        notifyChanged()
     }
 
     func resetForPanic() {
@@ -128,6 +157,11 @@ final class TorTransportSettings: ObservableObject {
         mode = .direct
         obfs4BridgeLines = []
         bridgeStorageAvailable = true
+        requiresTransportSelection = true
+        defaults.set(
+            true,
+            forKey: TorTransportStorageKeys.transportSelectionRequired
+        )
         notifyChanged()
     }
 
