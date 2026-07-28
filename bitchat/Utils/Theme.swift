@@ -140,7 +140,7 @@ struct ThemePalette {
         return ThemePalette(
             background: isDark ? Color(red: 0.18, green: 0.20, blue: 0.25) : Color(red: 0.93, green: 0.94, blue: 0.96),
             primary: isDark ? Color(red: 0.93, green: 0.94, blue: 0.96) : Color(red: 0.18, green: 0.20, blue: 0.25),
-            secondary: isDark ? Color(red: 0.85, green: 0.87, blue: 0.91) : Color(red: 0.30, green: 0.34, blue: 0.40),
+            secondary: isDark ? Color(red: 0.61, green: 0.66, blue: 0.74) : Color(red: 0.30, green: 0.34, blue: 0.40),
             accent: isDark ? Color(red: 0.53, green: 0.75, blue: 0.82) : Color(red: 0.37, green: 0.51, blue: 0.67),
             locationAccent: isDark ? Color(red: 0.64, green: 0.75, blue: 0.55) : Color(red: 0.40, green: 0.55, blue: 0.31),
             accentBlue: isDark ? Color(red: 0.51, green: 0.63, blue: 0.76) : Color(red: 0.51, green: 0.63, blue: 0.76),
@@ -200,7 +200,7 @@ struct ThemePalette {
             accent: isDark ? .white : .black,
             locationAccent: isDark ? Color(white: 0.75) : Color(white: 0.25),
             accentBlue: isDark ? Color(white: 0.75) : Color(white: 0.25),
-            alertRed: isDark ? Color(white: 0.55) : Color(white: 0.55),
+            alertRed: isDark ? Color(red: 0.82, green: 0.32, blue: 0.32) : Color(red: 0.72, green: 0.18, blue: 0.18),
             divider: isDark ? Color(white: 0.25) : Color(white: 0.80)
         )
     }
