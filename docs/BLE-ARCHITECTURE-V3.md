@@ -106,41 +106,51 @@ main. Two subtleties worth knowing:
   lifecycle, and radio-state reads go through `MeshBridgingTransport`,
   `PanicResettingTransport`, and `BluetoothStateReporting`; no app code
   casts to `BLEService` anymore.
-- **First feature-owned state**: `BLEMeshPingTracker` holds the /ping
-  probe map and per-link response budget as pure state with unit tests —
-  the template for peeling the remaining features.
+- **Feature-owned state**: `BLEMeshPingTracker` (the /ping probe map and
+  per-link response budget) and `BLEPrivateMediaSessionStore` (the six
+  generation-keyed private-media maps plus the convergence-deferral set,
+  as whole-transition methods under a leaf lock), both with direct unit
+  tests. The private-media store also took the last routine main-actor
+  sync reads off the engine and turned the noise-critical-section
+  transitions into ordinary leaf-lock calls. Remaining feature state
+  (courier, board, prekeys) already lives in injected stores.
+- **Transport split**: the mesh-only surface left the god-protocol.
+  `Transport` is core only (lifecycle, identity, snapshots, basic
+  messaging, noise wrappers); files/private media, voice, courier,
+  groups, board, diagnostics, verification, and the public archive are
+  eight capability protocols discovered with `as?`, alongside the
+  bridging/panic/radio-state ports. The inert-defaults extension is
+  gone; consumers that relied on a default keep its safe floor
+  explicitly at the call site.
+- **Contract pinning**: `BLEQueueContractTests` greps the transport
+  sources — only `onEngine` may sync-enter the engine, transport code
+  never sync-dispatches to main, and the collections queue stays
+  deleted (waivable per line with `queue-contract-ok:` plus a reason).
 
-Full suite green throughout (1,953 tests), identical wall-clock — BLE
+Full suite green throughout (1,964 tests), identical wall-clock — BLE
 throughput is nowhere near what one serial queue sustains.
 
 ## Remaining roadmap (in order)
 
-1. **Feature peeling.** Move each feature's state maps and handlers into
-   a module in the `BLEMeshPingTracker` mold: private media (six
-   generation-keyed maps + policy resolution — its main-actor reads
-   become a lock-backed store inside the module), courier, prekeys,
-   board, voice, file transfer, groups. The engine keeps a registry of
-   handled message types instead of a giant switch. Each module lands as
-   its own PR with its state's invariants unit-tested.
-2. **Transport protocol split.** Continue what the capability ports
-   started: `Transport` shrinks to lifecycle + identity + snapshots +
-   basic messaging; files/voice/courier/board/diagnostics/verification
-   become capability protocols; `NostrTransport` drops its inert stubs;
-   coordinators declare the capability they need instead of receiving
-   the whole god-protocol (~48 call sites across 14 files).
-3. **Link-layer extraction.** With the file slimmed, move the CB
-   delegates, scheduling, duty cycle, and buffers behind
-   `LinkEvent`/`LinkCommand` ports. Decide the link-auth boundary here:
+1. **Link-layer extraction.** Move the CB delegates, scheduling, duty
+   cycle, and buffers behind `LinkEvent`/`LinkCommand` ports. The gating
+   design decision is the link-auth boundary:
    `noiseAuthenticatedLinkOwners` and the rebind containment rules are
-   mesh security state that currently lives on bleQueue for atomicity
-   with bindings — the port design must keep "binding + auth check" one
-   critical section or make bindings engine-owned.
-4. **Sans-I/O engine core + simulator.** Make the engine formally
+   mesh security state that lives on bleQueue for atomicity with link
+   bindings, and the outbound accept path (`notifyOrEnqueueIfAccepted`)
+   checks auth + binding + backpressure admission in one bleQueue
+   critical section. The port design must either keep "binding + auth
+   check" one critical section on the link side or make bindings
+   engine-owned — decide first, then move code.
+2. **Sans-I/O engine core + simulator.** Make the engine formally
    `handle(event) -> [Effect]`, feed it from a `SimulatedLinkLayer`, and
    move the multi-node E2E suite onto deterministic simulation (no
    `waitUntil`, no timing hygiene battles). Property tests become
    possible: relay-storm bounds, partition-heal convergence, dedup
-   soundness under duplicate floods.
+   soundness under duplicate floods. The remaining feature *code* moves
+   (courier, board, prekey, voice, file, group handlers out of the
+   packet switch) ride this seam as handler-registered modules instead
+   of getting closure-environment extractions now.
 
 ## What this is not
 
