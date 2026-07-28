@@ -814,6 +814,8 @@ struct BLEServiceCoreTests {
         let alice = NoiseEncryptionService(keychain: MockKeychain())
         let mallory = NoiseEncryptionService(keychain: MockKeychain())
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let reconciled = SessionReconcileCounter()
+        ble._test_onPrivateMediaSessionReconciled = reconciled.record
 
         // Establish BLE as responder so the inbound reconnect below is not
         // coalesced by the initiator-completion grace path.
@@ -836,12 +838,16 @@ struct BLEServiceCoreTests {
         )
         await ble._test_drainNoiseMessagePipeline()
         #expect(ble.canDeliverSecurely(to: alicePeerID))
+        let initialReconcileRan = await TestHelpers.waitUntil(
+            { reconciled.count(for: alicePeerID) == 1 },
+            timeout: TestConstants.longTimeout
+        )
+        try #require(initialReconcileRan)
+        await ble._test_drainNoiseMessagePipeline()
 
         // The convergence retry only prepares for reachable peers.
         ble._test_seedConnectedPeer(alicePeerID, nickname: "Alice")
 
-        let reconciled = SessionReconcileCounter()
-        ble._test_onPrivateMediaSessionReconciled = reconciled.record
         // Park the convergence-recovery callback on its global-queue thread
         // before it can enqueue onto messageQueue: the restore handler
         // deterministically wins the dispatch race this test exercises.
@@ -898,7 +904,7 @@ struct BLEServiceCoreTests {
         // The responder timeout restores the quarantined generation; the
         // gate guarantees its handler runs before the convergence retry.
         let restoreRan = await TestHelpers.waitUntil(
-            { reconciled.count(for: alicePeerID) == 1 },
+            { reconciled.count(for: alicePeerID) == 2 },
             timeout: TestConstants.longTimeout
         )
         try #require(restoreRan)
