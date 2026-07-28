@@ -72,6 +72,12 @@ struct NostrRelayManagerDependencies {
     var awaitTorReady: (@escaping (Bool) -> Void) -> Void
     var makeSession: () -> NostrRelaySessionProtocol
     var scheduleAfter: @Sendable (TimeInterval, @escaping @Sendable () -> Void) -> Void
+    /// Where a dial's handshake deadline is scheduled. Its own knob rather than
+    /// `scheduleAfter` because one of these is armed per dial, and a test that
+    /// steps through relay backoff should not have to walk past them first.
+    var scheduleHandshakeDeadline: @Sendable (TimeInterval, @escaping @Sendable () -> Void) -> Void = { delay, action in
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: action)
+    }
     var now: () -> Date
     /// Uniform random value in [0, 1) used to jitter reconnect backoff.
     /// Injectable so tests can pin or sweep the jitter deterministically.
@@ -1277,6 +1283,39 @@ final class NostrRelayManager: ObservableObject {
                         connection: task
                     )
                 }
+            }
+        }
+
+        // That callback is the only thing that resolves a dial, and URLSession
+        // does not always deliver it. When Arti accepts the SOCKS connection but
+        // the connect behind it fails — a relay whose exit never answers — the
+        // task waits with no error and no pong, so the socket sits in
+        // `connections` indefinitely and every later attempt filters this relay
+        // out as one that already holds a connection. Bound the wait: a
+        // handshake that has not landed by the deadline is not going to, and
+        // failing it by hand puts the relay back on the normal backoff path.
+        let dialGeneration = connectionGeneration
+        let dialID = ObjectIdentifier(task)
+        dependencies.scheduleHandshakeDeadline(TransportConfig.nostrRelayHandshakeTimeoutSeconds) { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                guard dialGeneration == self.connectionGeneration else { return }
+                // Only this dial's own socket, and only while it is still
+                // unresolved: a relay that connected or was already replaced has
+                // nothing to time out.
+                guard let current = self.connections[urlString],
+                      ObjectIdentifier(current) == dialID,
+                      self.relays.first(where: { $0.url == urlString })?.isConnected != true else { return }
+                SecureLogger.warning(
+                    "⌛️ Nostr relay \(urlString) never finished its handshake - dropping the socket",
+                    category: .session
+                )
+                current.cancel(with: .goingAway, reason: nil)
+                self.handleDisconnection(
+                    relayUrl: urlString,
+                    error: URLError(.timedOut),
+                    connection: current
+                )
             }
         }
     }

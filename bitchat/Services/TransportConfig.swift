@@ -271,6 +271,12 @@ enum TransportConfig {
     static let nostrConfirmedSendAckTimeoutSeconds: TimeInterval = 10.0
     // After this long, a relay marked permanently failed gets another chance.
     static let nostrRelayFailureCooldownSeconds: TimeInterval = 600.0
+    // A dial resolves only when its ping callback fires, and URLSession can
+    // withhold that indefinitely when the proxy accepts the socket but the
+    // connect behind it never completes. Past this the dial counts as failed so
+    // it stops holding the relay's slot. Well clear of the slowest handshake a
+    // pluggable transport produces.
+    static let nostrRelayHandshakeTimeoutSeconds: TimeInterval = 30.0
 
     // Geo relay directory
     static let geoRelayFetchIntervalSeconds: TimeInterval = 60 * 60 * 24

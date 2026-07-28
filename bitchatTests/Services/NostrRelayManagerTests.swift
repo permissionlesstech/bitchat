@@ -1943,6 +1943,44 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertFalse(churned, "a non-Tor socket survives the route change")
     }
 
+    /// A dial is resolved only by its ping callback, and URLSession can withhold
+    /// that indefinitely when the proxy accepts the socket but the connect
+    /// behind it fails. Such a socket would hold the relay's slot for the life
+    /// of the process, and every later attempt would skip that relay as one that
+    /// already has a connection.
+    func test_dialThatNeverAnswersIsDroppedSoTheRelayCanBeRetried() async {
+        let context = makeContext(permission: .authorized, deferPingCompletions: true)
+        context.manager.connect()
+
+        let dialed = await waitUntil {
+            context.sessionFactory.requestedURLs.count == self.expectedDefaultRelayCount
+        }
+        XCTAssertTrue(dialed)
+
+        // While the dials hang, the relays are unreachable and unretryable.
+        context.manager.connect()
+        let retriedWhileStalled = await waitUntil(timeout: TestConstants.negativeWaitWindow) {
+            context.sessionFactory.requestedURLs.count > self.expectedDefaultRelayCount
+        }
+        XCTAssertFalse(retriedWhileStalled)
+
+        // One handshake deadline was armed per dial.
+        XCTAssertEqual(context.handshakeScheduler.scheduled.count, expectedDefaultRelayCount)
+        for _ in 0..<expectedDefaultRelayCount {
+            context.handshakeScheduler.runNext()
+        }
+        let droppedSockets = await waitUntil {
+            context.sessionFactory.allConnections.allSatisfy { $0.cancelCallCount == 1 }
+        }
+        XCTAssertTrue(droppedSockets, "an unanswered dial must give up its socket")
+
+        context.manager.connect()
+        let redialed = await waitUntil {
+            context.sessionFactory.requestedURLs.count == self.expectedDefaultRelayCount * 2
+        }
+        XCTAssertTrue(redialed, "a timed-out dial must leave the relay retryable")
+    }
+
     private func makeContext(
         permission: LocationChannelManager.PermissionState,
         favorites: Set<Data> = [],
@@ -1953,12 +1991,17 @@ final class NostrRelayManagerTests: XCTestCase {
         torIsForeground: Bool = true,
         notificationCenter: NotificationCenter = NotificationCenter(),
         customRelays: MutableRelayList = MutableRelayList(urls: []),
-        jitterUnit: @escaping () -> Double = { 0.5 } // 0.5 -> jitter factor 1.0 (no jitter)
+        jitterUnit: @escaping () -> Double = { 0.5 }, // 0.5 -> jitter factor 1.0 (no jitter)
+        // Applied before the manager is built: it dials the default relays from
+        // its own initializer, so a flag set afterwards would miss them.
+        deferPingCompletions: Bool = false
     ) -> RelayManagerTestContext {
         let permissionSubject = CurrentValueSubject<LocationChannelManager.PermissionState, Never>(permission)
         let favoritesSubject = CurrentValueSubject<Set<Data>, Never>(favorites)
         let sessionFactory = MockRelaySessionFactory()
+        sessionFactory.deferPingCompletions = deferPingCompletions
         let scheduler = MockRelayScheduler()
+        let handshakeScheduler = MockRelayScheduler()
         let clock = MutableClock(now: Date(timeIntervalSince1970: 1_700_000_000))
         let torWaiter = MockTorWaiter(isReady: torIsReady)
         let torForeground = MutableBool(value: torIsForeground)
@@ -1979,6 +2022,9 @@ final class NostrRelayManagerTests: XCTestCase {
                 scheduleAfter: { delay, action in
                     scheduler.schedule(delay: delay, action: action)
                 },
+                scheduleHandshakeDeadline: { delay, action in
+                    handshakeScheduler.schedule(delay: delay, action: action)
+                },
                 now: { clock.now },
                 jitterUnit: jitterUnit,
                 notificationCenter: notificationCenter,
@@ -1990,6 +2036,7 @@ final class NostrRelayManagerTests: XCTestCase {
             permissionSubject: permissionSubject,
             sessionFactory: sessionFactory,
             scheduler: scheduler,
+            handshakeScheduler: handshakeScheduler,
             clock: clock,
             activationAllowed: activationFlag,
             torWaiter: torWaiter,
@@ -2043,6 +2090,7 @@ private struct RelayManagerTestContext {
     let permissionSubject: CurrentValueSubject<LocationChannelManager.PermissionState, Never>
     let sessionFactory: MockRelaySessionFactory
     let scheduler: MockRelayScheduler
+    let handshakeScheduler: MockRelayScheduler
     let clock: MutableClock
     let activationAllowed: MutableBool
     let torWaiter: MockTorWaiter
@@ -2135,6 +2183,9 @@ private final class MockRelaySessionFactory: NostrRelaySessionProtocol {
     private(set) var connectionsByURL: [String: [MockRelayConnection]] = [:]
     var pingErrorByURL: [String: Error?] = [:]
     var sendErrorByURL: [String: Error?] = [:]
+    /// Models a socket the proxy accepted but whose connect never completed:
+    /// URLSession delivers neither a pong nor an error.
+    var deferPingCompletions = false
 
     var allConnections: [MockRelayConnection] {
         connectionsByURL.values.flatMap { $0 }
@@ -2145,7 +2196,8 @@ private final class MockRelaySessionFactory: NostrRelaySessionProtocol {
         let connection = MockRelayConnection(
             url: url.absoluteString,
             pingError: pingErrorByURL[url.absoluteString] ?? nil,
-            sendError: sendErrorByURL[url.absoluteString] ?? nil
+            sendError: sendErrorByURL[url.absoluteString] ?? nil,
+            deferPing: deferPingCompletions
         )
         connectionsByURL[url.absoluteString, default: []].append(connection)
         return connection
@@ -2174,9 +2226,12 @@ private final class MockRelayConnection: NostrRelayConnectionProtocol {
         }
     }
 
-    init(url _: String, pingError: Error? = nil, sendError: Error? = nil) {
+    private let deferPing: Bool
+
+    init(url _: String, pingError: Error? = nil, sendError: Error? = nil, deferPing: Bool = false) {
         self.pingError = pingError
         self.sendError = sendError
+        self.deferPing = deferPing
     }
 
     func resume() {
@@ -2216,6 +2271,7 @@ private final class MockRelayConnection: NostrRelayConnectionProtocol {
     }
 
     func sendPing(pongReceiveHandler: @escaping (Error?) -> Void) {
+        guard !deferPing else { return }
         pongReceiveHandler(pingError)
     }
 
