@@ -721,7 +721,34 @@ public final class TorManager: ObservableObject {
                 ),
                 stalled: true
             )
+            return
         }
+
+        await steadyStateDiagnosticsLoop(generation: generation)
+    }
+
+    /// Keep draining Arti's log after readiness, at a lower rate.
+    ///
+    /// The bootstrap loop breaks the moment SOCKS is up, which is exactly when
+    /// stream failures start to matter: a `SOCKS connect status 5` seen by the
+    /// client is Arti refusing to open a stream, and the reason is only ever
+    /// written to the diagnostic ring. With the drain stopped, the ring
+    /// overwrote every one of those reasons unread, so a run could show failed
+    /// relay connections with nothing at all to explain them.
+    ///
+    /// Slower than the bootstrap tick because a ready Tor is quiet, and the
+    /// ring drops its oldest line rather than blocking, so falling behind
+    /// costs old context and never Arti's progress.
+    private func steadyStateDiagnosticsLoop(generation: Int) async {
+        #if os(iOS) && DEBUG
+        while true {
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            guard generation == bootstrapGeneration else { return }
+            guard arti_is_running() != 0 else { return }
+            guard isAppForeground else { continue }
+            drainArtiDiagnostics()
+        }
+        #endif
     }
 
     private func getBootstrapSummary() -> String {
