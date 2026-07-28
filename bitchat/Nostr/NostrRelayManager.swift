@@ -376,16 +376,26 @@ final class NostrRelayManager: ObservableObject {
         // foregrounded. Switching transport stops Arti's SOCKS listener before
         // `isReady` turns false, so the reconnect that the dropped sockets
         // trigger still reads Tor as ready and dials a proxy that is already
-        // gone; every relay fails closed. Foreground used to be the only thing
-        // that tried again, so changing route and then leaving the app alone
-        // left it connected to nothing. Relays that already hold a connection
-        // are filtered out downstream, so a redundant ready cannot churn a
-        // healthy socket.
+        // gone. Those doomed dials register in `connections` before their
+        // handshake resolves, and the failure can take a minute to surface, so
+        // they linger as zombies that make the reconnect below find no targets
+        // and return silently. Tor cannot become ready without its listener
+        // having been down, so every proxied socket is already dead here: drop
+        // them first, then redial. Subscriptions replay from
+        // `subscriptionRequestState`, which `disconnect()` keeps.
         dependencies.notificationCenter
             .publisher(for: .TorDidBecomeReady)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.connect()
+                guard let self else { return }
+                // Only when routing over Tor, and only when there is something
+                // stale: an empty pool means a first bootstrap, where
+                // `disconnect()` would fire parked EOSE callbacks for
+                // subscriptions that are about to be sent.
+                if self.shouldUseTor && !self.connections.isEmpty {
+                    self.disconnect()
+                }
+                self.connect()
             }
             .store(in: &cancellables)
     }

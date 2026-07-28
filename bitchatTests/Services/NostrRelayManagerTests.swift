@@ -1892,9 +1892,37 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertTrue(connected)
     }
 
-    /// A route that becomes ready while relays are already up must not churn
-    /// them: reconnecting a live socket would drop its subscriptions.
-    func test_torDidBecomeReady_doesNotReconnectHealthyRelays() async {
+    /// Sockets dialed at a listener that was going down register before their
+    /// handshake resolves and can take a minute to report failure. While they
+    /// sit there the reconnect finds no targets and returns silently, so the
+    /// app ends up on a working route with no relays. Tor cannot become ready
+    /// without its listener having been down, so these must be replaced.
+    func test_torDidBecomeReady_replacesSocketsStrandedByTheRouteChange() async {
+        let center = NotificationCenter()
+        let context = makeContext(
+            permission: .authorized,
+            userTorEnabled: true,
+            notificationCenter: center
+        )
+        context.manager.connect()
+
+        let dialed = await waitUntil {
+            context.sessionFactory.requestedURLs.count == self.expectedDefaultRelayCount
+        }
+        XCTAssertTrue(dialed)
+
+        center.post(name: .TorDidBecomeReady, object: nil)
+
+        let redialed = await waitUntil {
+            context.sessionFactory.requestedURLs.count == self.expectedDefaultRelayCount * 2
+        }
+        XCTAssertTrue(redialed, "ready must replace sockets the route change stranded")
+    }
+
+    /// The teardown above is only sound because Tor owns the socket. A relay
+    /// reached without Tor survives the route change, so redialing it would
+    /// drop its subscriptions for nothing.
+    func test_torDidBecomeReady_leavesNonTorConnectionsAlone() async {
         let center = NotificationCenter()
         let context = makeContext(
             permission: .authorized,
@@ -1902,19 +1930,17 @@ final class NostrRelayManagerTests: XCTestCase {
         )
         context.manager.connect()
 
-        let connected = await waitUntil {
+        let dialed = await waitUntil {
             context.sessionFactory.requestedURLs.count == self.expectedDefaultRelayCount
         }
-        XCTAssertTrue(connected)
+        XCTAssertTrue(dialed)
 
         center.post(name: .TorDidBecomeReady, object: nil)
 
-        // Short window on purpose: a redial would be dispatched immediately, so
-        // waiting out the full settle timeout only slows the suite down.
-        let redialed = await waitUntil(timeout: 1) {
+        let churned = await waitUntil(timeout: TestConstants.negativeWaitWindow) {
             context.sessionFactory.requestedURLs.count > self.expectedDefaultRelayCount
         }
-        XCTAssertFalse(redialed, "ready must not redial relays that already hold a connection")
+        XCTAssertFalse(churned, "a non-Tor socket survives the route change")
     }
 
     private func makeContext(
