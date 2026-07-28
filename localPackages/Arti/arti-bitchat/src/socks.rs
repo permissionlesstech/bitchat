@@ -102,27 +102,65 @@ pub async fn handle_socks_connection(
     ];
     stream.write_all(&reply).await?;
 
-    // Bidirectional copy
-    let (mut client_read, mut client_write) = stream.into_split();
-    let (mut tor_read, mut tor_write) = tor_stream.split();
+    relay(stream, tor_stream).await
+}
 
-    let client_to_tor = async { tokio::io::copy(&mut client_read, &mut tor_write).await };
-    let tor_to_client = async { tokio::io::copy(&mut tor_read, &mut client_write).await };
+/// Shuttle bytes between the client and its Tor stream until the Tor side is
+/// finished.
+///
+/// The two directions are deliberately not symmetric.
+///
+/// A client that half-closes after sending its request is ordinary: plenty of
+/// HTTP clients do it. Ending the whole relay at that first EOF cancelled the
+/// still-pending Tor-to-client copy and truncated the response, so this waits
+/// for the Tor side before finishing.
+///
+/// It is equally wrong to answer that EOF by shutting the Tor writer down.
+/// Tor streams cannot be half-closed: `DataWriter::poll_shutdown` flushes and
+/// closes the stream target with `sent_end`, which puts a RELAY_END on the
+/// wire, and an exit that receives END drops its connection to the
+/// destination. Propagating the client's FIN that way would kill the response
+/// at the exit instead of locally, which is worse, not better. C-tor's SOCKS
+/// edge defers END until both directions are done, and so does this: the END
+/// is emitted when the stream is dropped after the relay returns.
+///
+/// The client's write half *is* half-closeable, so a finished Tor side is
+/// passed on as a FIN before returning.
+async fn relay<C, T>(client: C, tor: T) -> io::Result<()>
+where
+    C: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+    T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    let (mut client_read, mut client_write) = tokio::io::split(client);
+    let (mut tor_read, mut tor_write) = tokio::io::split(tor);
 
-    tokio::select! {
-        result = client_to_tor => {
-            if let Err(e) = result {
-                tracing::debug!("Client to Tor copy error: {}", e);
+    let upload = async {
+        tokio::io::copy(&mut client_read, &mut tor_write).await?;
+        // Flush, never shutdown: see above.
+        tor_write.flush().await
+    };
+    let download = async {
+        tokio::io::copy(&mut tor_read, &mut client_write).await?;
+        client_write.shutdown().await
+    };
+
+    tokio::pin!(upload);
+    tokio::pin!(download);
+
+    let mut upload_finished = false;
+    loop {
+        tokio::select! {
+            result = &mut upload, if !upload_finished => {
+                // A failed upload has nothing left to send, but the response
+                // to what did arrive may still be coming.
+                if let Err(e) = result {
+                    tracing::debug!("Client to Tor copy error: {}", e);
+                }
+                upload_finished = true;
             }
-        }
-        result = tor_to_client => {
-            if let Err(e) = result {
-                tracing::debug!("Tor to client copy error: {}", e);
-            }
+            result = &mut download => return result,
         }
     }
-
-    Ok(())
 }
 
 /// Read the greeting and the CONNECT request, returning the requested address.
@@ -240,4 +278,145 @@ async fn send_reply(stream: &mut TcpStream, rep: u8) -> io::Result<()> {
         0, // BND.PORT
     ];
     stream.write_all(&reply).await
+}
+
+#[cfg(test)]
+mod relay_tests {
+    use super::relay;
+    use std::pin::Pin;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    use std::task::{Context, Poll};
+    use std::time::Duration;
+    use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DuplexStream, ReadBuf};
+
+    const REQUEST: &[u8] = b"GET / HTTP/1.0\r\n\r\n";
+    const RESPONSE: &[u8] = b"HTTP/1.0 200 OK\r\n\r\nbody";
+
+    /// Stands in for the Tor stream and records a shutdown that arrives before
+    /// this side has itself reached EOF.
+    ///
+    /// A duplex genuinely supports half-close, so a relay that shuts the Tor
+    /// writer down on the client's FIN still looks correct over one. Only on a
+    /// real Tor stream does that shutdown become a RELAY_END that kills the
+    /// response at the exit, which is why the property is asserted directly
+    /// rather than inferred from the bytes that arrive.
+    struct TorSideProbe {
+        inner: DuplexStream,
+        reached_eof: Arc<AtomicBool>,
+        shutdown_before_eof: Arc<AtomicBool>,
+    }
+
+    impl AsyncRead for TorSideProbe {
+        fn poll_read(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+            buf: &mut ReadBuf<'_>,
+        ) -> Poll<std::io::Result<()>> {
+            let before = buf.filled().len();
+            let polled = Pin::new(&mut self.inner).poll_read(cx, buf);
+            if let Poll::Ready(Ok(())) = &polled {
+                if buf.filled().len() == before {
+                    self.reached_eof.store(true, Ordering::SeqCst);
+                }
+            }
+            polled
+        }
+    }
+
+    impl AsyncWrite for TorSideProbe {
+        fn poll_write(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<std::io::Result<usize>> {
+            Pin::new(&mut self.inner).poll_write(cx, buf)
+        }
+
+        fn poll_flush(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<std::io::Result<()>> {
+            Pin::new(&mut self.inner).poll_flush(cx)
+        }
+
+        fn poll_shutdown(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<std::io::Result<()>> {
+            if !self.reached_eof.load(Ordering::SeqCst) {
+                self.shutdown_before_eof.store(true, Ordering::SeqCst);
+            }
+            Pin::new(&mut self.inner).poll_shutdown(cx)
+        }
+    }
+
+    #[tokio::test]
+    async fn a_client_that_half_closes_still_receives_the_whole_response() {
+        let (client, mut client_peer) = tokio::io::duplex(4096);
+        let (tor, mut exit) = tokio::io::duplex(4096);
+        let reached_eof = Arc::new(AtomicBool::new(false));
+        let shutdown_before_eof = Arc::new(AtomicBool::new(false));
+        let probe = TorSideProbe {
+            inner: tor,
+            reached_eof: Arc::clone(&reached_eof),
+            shutdown_before_eof: Arc::clone(&shutdown_before_eof),
+        };
+
+        let relaying = tokio::spawn(async move { relay(client, probe).await });
+
+        // The shape this exists for: request, FIN, and only then a response.
+        client_peer.write_all(REQUEST).await.unwrap();
+        client_peer.shutdown().await.unwrap();
+
+        let mut seen = vec![0u8; REQUEST.len()];
+        exit.read_exact(&mut seen).await.unwrap();
+        assert_eq!(seen, REQUEST);
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        exit.write_all(RESPONSE).await.unwrap();
+        exit.shutdown().await.unwrap();
+
+        let mut response = Vec::new();
+        client_peer.read_to_end(&mut response).await.unwrap();
+
+        assert_eq!(response, RESPONSE);
+        relaying.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
+    async fn the_tor_writer_is_never_shut_down_before_the_tor_side_is_done() {
+        let (client, mut client_peer) = tokio::io::duplex(4096);
+        let (tor, mut exit) = tokio::io::duplex(4096);
+        let reached_eof = Arc::new(AtomicBool::new(false));
+        let shutdown_before_eof = Arc::new(AtomicBool::new(false));
+        let probe = TorSideProbe {
+            inner: tor,
+            reached_eof: Arc::clone(&reached_eof),
+            shutdown_before_eof: Arc::clone(&shutdown_before_eof),
+        };
+
+        let relaying = tokio::spawn(async move { relay(client, probe).await });
+
+        client_peer.write_all(REQUEST).await.unwrap();
+        client_peer.shutdown().await.unwrap();
+
+        let mut seen = vec![0u8; REQUEST.len()];
+        exit.read_exact(&mut seen).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // On a real Tor stream this shutdown is a RELAY_END, and the exit drops
+        // its connection to the destination while the response is still in
+        // flight.
+        assert!(
+            !shutdown_before_eof.load(Ordering::SeqCst),
+            "relay closed the tor stream while the exit was still answering"
+        );
+
+        exit.write_all(RESPONSE).await.unwrap();
+        exit.shutdown().await.unwrap();
+        let mut response = Vec::new();
+        client_peer.read_to_end(&mut response).await.unwrap();
+        assert_eq!(response, RESPONSE);
+        relaying.await.unwrap().unwrap();
+    }
 }
