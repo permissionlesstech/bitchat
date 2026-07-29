@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+@testable import bitchat
 
 struct PanicWipeSettingsTests {
     private func isolatedDefaults() -> UserDefaults {
