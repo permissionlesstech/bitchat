@@ -31,7 +31,7 @@ struct ShareActivityView: View {
                         systemImage: "square.and.arrow.up"
                     )
                 }
-                Button(String(localized: "common.done", defaultValue: "Done", comment: "Dismisses a sheet")) {
+                Button(String(localized: "common.done", defaultValue: "done", comment: "Dismisses a sheet")) {
                     dismiss()
                 }
                 .keyboardShortcut(.cancelAction)

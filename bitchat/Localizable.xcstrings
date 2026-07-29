@@ -16925,6 +16925,936 @@
         }
       }
     },
+    "channel.share.action" : {
+      "comment" : "Context-menu / accessibility / button label that shares a location-channel invite",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مشاركة القناة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "চ্যানেল শেয়ার করুন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kanal teilen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "share channel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "compartir canal"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اشتراک‌گذاری کانال"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "i-share ang channel"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "partager le canal"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שתף ערוץ"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "चैनल साझा करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bagikan kanal"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "condividi canale"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "チャンネルを共有"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "채널 공유"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kongsi saluran"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "च्यानल सेयर गर्नुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kanaal delen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "udostępnij kanał"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "partilhar canal"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "compartilhar canal"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "поделиться каналом"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dela kanal"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "சேனலைப் பகிர்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "แชร์ช่อง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kanalı paylaş"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "поділитися каналом"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "چینل شیئر کریں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chia sẻ kênh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享频道"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享頻道"
+          }
+        }
+      }
+    },
+    "channel.share.payload" : {
+      "comment" : "Plain-text share payload for a location channel; %1$@ is the geohash, %2$@ is the App Store URL",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انضم إلى قناة #%1$@ على bitchat: bitchat://geohash/%1$@ — جديد على bitchat؟ حمّله من %2$@ ثم اكتب #%1$@ ضمن قنوات الموقع."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat-এ #%1$@ চ্যানেলে যোগ দিন: bitchat://geohash/%1$@ — bitchat-এ নতুন? %2$@ থেকে নিন, তারপর লোকেশন চ্যানেলে #%1$@ টাইপ করুন।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tritt dem #%1$@-kanal auf bitchat bei: bitchat://geohash/%1$@ — neu bei bitchat? hole es unter %2$@ und tippe dann #%1$@ unter standort-kanäle."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "join the #%1$@ channel on bitchat: bitchat://geohash/%1$@ — new to bitchat? get it at %2$@ then type #%1$@ under location channels."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "únete al canal #%1$@ en bitchat: bitchat://geohash/%1$@ — ¿nuevo en bitchat? consíguelo en %2$@ y luego escribe #%1$@ en canales de ubicación."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "به کانال #%1$@ در bitchat بپیوندید: bitchat://geohash/%1$@ — تازه‌واردید؟ از %2$@ بگیرید و سپس #%1$@ را در کانال‌های موقعیت وارد کنید."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sumali sa #%1$@ channel sa bitchat: bitchat://geohash/%1$@ — bago sa bitchat? kunin ito sa %2$@ tapos i-type ang #%1$@ sa mga channel ng lokasyon."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "rejoins le canal #%1$@ sur bitchat : bitchat://geohash/%1$@ — nouveau sur bitchat ? télécharge-le sur %2$@ puis saisis #%1$@ dans les canaux localisation."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הצטרף לערוץ #%1$@ ב-bitchat: bitchat://geohash/%1$@ — חדש ב-bitchat? הורד מ-%2$@ ואז הקלד #%1$@ תחת ערוצי מיקום."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat पर #%1$@ चैनल से जुड़ें: bitchat://geohash/%1$@ — bitchat नए हैं? %2$@ से पाएँ, फिर लोकेशन चैनल में #%1$@ टाइप करें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gabung ke kanal #%1$@ di bitchat: bitchat://geohash/%1$@ — baru di bitchat? unduh di %2$@ lalu ketik #%1$@ di kanal lokasi."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "entra nel canale #%1$@ su bitchat: bitchat://geohash/%1$@ — nuovo su bitchat? scaricalo da %2$@ e poi digita #%1$@ nei canali posizione."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchatの#%1$@チャンネルに参加: bitchat://geohash/%1$@ — はじめてですか？ %2$@ から入手し、ロケーションチャンネルで #%1$@ と入力してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat의 #%1$@ 채널에 참여하세요: bitchat://geohash/%1$@ — bitchat이 처음이신가요? %2$@에서 받은 뒤 위치 채널에서 #%1$@을(를) 입력하세요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sertai saluran #%1$@ di bitchat: bitchat://geohash/%1$@ — baharu di bitchat? dapatkannya di %2$@ kemudian taip #%1$@ di bawah kanal lokasi."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat मा #%1$@ च्यानलमा सामेल हुनुहोस्: bitchat://geohash/%1$@ — bitchat मा नयाँ? %2$@ बाट लिनुहोस्, त्यसपछि स्थान च्यानलमा #%1$@ टाइप गर्नुहोस्।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "doe mee met het #%1$@-kanaal op bitchat: bitchat://geohash/%1$@ — nieuw bij bitchat? haal het op %2$@ en typ daarna #%1$@ onder locatiekanalen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dołącz do kanału #%1$@ w bitchat: bitchat://geohash/%1$@ — nowość w bitchat? pobierz z %2$@, a potem wpisz #%1$@ w kanałach lokalizacji."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "junta-te ao canal #%1$@ no bitchat: bitchat://geohash/%1$@ — novo no bitchat? obtém-no em %2$@ e depois escreve #%1$@ em canais de localização."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "entre no canal #%1$@ no bitchat: bitchat://geohash/%1$@ — novo no bitchat? baixe em %2$@ e depois digite #%1$@ em canais de localização."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "присоединяйся к каналу #%1$@ в bitchat: bitchat://geohash/%1$@ — впервые в bitchat? скачай на %2$@, затем введи #%1$@ в каналах локации."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gå med i #%1$@-kanalen på bitchat: bitchat://geohash/%1$@ — ny på bitchat? hämta den på %2$@ och skriv sedan #%1$@ under platskanaler."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat-இல் #%1$@ சேனலில் சேரவும்: bitchat://geohash/%1$@ — bitchat புதியவரா? %2$@ இல் பெற்று, பின்னர் இட சேனல்களில் #%1$@ என தட்டச்சு செய்யவும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เข้าร่วมช่อง #%1$@ บน bitchat: bitchat://geohash/%1$@ — ใหม่กับ bitchat? ดาวน์โหลดที่ %2$@ แล้วพิมพ์ #%1$@ ในช่องตามตำแหน่ง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat'te #%1$@ kanalına katıl: bitchat://geohash/%1$@ — bitchat'te yeni misin? %2$@ adresinden indir, sonra konum kanallarında #%1$@ yaz."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "приєднуйся до каналу #%1$@ у bitchat: bitchat://geohash/%1$@ — вперше в bitchat? завантаж на %2$@, потім введи #%1$@ у каналах локації."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat پر #%1$@ چینل میں شامل ہوں: bitchat://geohash/%1$@ — bitchat نئے ہیں؟ %2$@ سے حاصل کریں، پھر لوکیشن چینلز میں #%1$@ ٹائپ کریں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tham gia kênh #%1$@ trên bitchat: bitchat://geohash/%1$@ — mới dùng bitchat? tải tại %2$@ rồi nhập #%1$@ trong kênh vị trí."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加入 bitchat 上的 #%1$@ 频道：bitchat://geohash/%1$@ — 初次使用 bitchat？前往 %2$@ 获取，然后在位置频道中输入 #%1$@。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加入 bitchat 上的 #%1$@ 頻道：bitchat://geohash/%1$@ — 初次使用 bitchat？前往 %2$@ 取得，然後在位置頻道中輸入 #%1$@。"
+          }
+        }
+      }
+    },
+    "channel.share.precision_warning.confirm" : {
+      "comment" : "Confirms sharing a fine-precision location channel after the OpSec warning",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المشاركة على أي حال"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "তবুও শেয়ার করুন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "trotzdem teilen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "share anyway"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "compartir de todos modos"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "باز هم اشتراک‌گذاری"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "i-share pa rin"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "partager quand même"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שתף בכל זאת"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "फिर भी साझा करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bagikan saja"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "condividi comunque"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "それでも共有"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "그래도 공유"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kongsi juga"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "तैपनि सेयर गर्नुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "toch delen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "udostępnij mimo to"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "partilhar na mesma"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "compartilhar mesmo assim"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "всё равно поделиться"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dela ändå"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இருந்தாலும் பகிர்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "แชร์อยู่ดี"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yine de paylaş"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "все одно поділитися"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پھر بھی شیئر کریں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vẫn chia sẻ"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仍然分享"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仍然分享"
+          }
+        }
+      }
+    },
+    "channel.share.precision_warning.message" : {
+      "comment" : "Body of the confirmation before sharing a fine-precision geohash invite",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تغطي هذه القناة منطقة صغيرة. الدعوة عبر الرسائل أو imessage تظهر لمشغّل الشبكة والجهازين — وتكشف الاهتمام بذلك المكان، وليس فقط أن شخصًا يستخدم bitchat."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "এই চ্যানেলটি ছোট এলাকা জুড়ে। sms বা imessage-এ পাঠানো আমন্ত্রণ ক্যারিয়ার ও দুই হ্যান্ডসেটে দেখা যায় — এতে bitchat ব্যবহারের পাশাপাশি সেই জায়গায় আগ্রহও প্রকাশ পায়।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dieser kanal deckt ein kleines gebiet ab. eine einladung per sms oder imessage ist für den netzanbieter und beide geräte sichtbar — sie verrät interesse an diesem ort, nicht nur dass jemand bitchat nutzt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "this channel covers a small area. an invite sent over sms or imessage is visible to the carrier and both handsets — it discloses interest in that place, not only that someone uses bitchat."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "este canal cubre un área pequeña. una invitación enviada por sms o imessage es visible para el operador y ambos teléfonos — revela interés en ese lugar, no solo que alguien usa bitchat."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "این کانال ناحیه کوچکی را پوشش می‌دهد. دعوت‌نامهٔ sms یا imessage برای اپراتور و هر دو دستگاه دیده می‌شود — علاقه به آن مکان را فاش می‌کند، نه فقط اینکه کسی از bitchat استفاده می‌کند."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "maliit na lugar ang saklaw ng channel na ito. ang invite sa sms o imessage ay makikita ng carrier at ng parehong device — inilalantad nito ang interes sa lugar na iyon, hindi lang na may gumagamit ng bitchat."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ce canal couvre une petite zone. une invitation envoyée par sms ou imessage est visible par l’opérateur et les deux appareils — elle révèle un intérêt pour ce lieu, pas seulement que quelqu’un utilise bitchat."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הערוץ הזה מכסה אזור קטן. הזמנה ב-sms או imessage גלויה לספק ולשני המכשירים — היא חושפת עניין במקום, לא רק שמישהו משתמש ב-bitchat."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "यह चैनल छोटे क्षेत्र को कवर करता है। sms या imessage से भेजा निमंत्रण कैरियर और दोनों हैंडसेट को दिखता है — इससे bitchat इस्तेमाल करने के अलावा उस जगह में रुचि भी ज़ाहिर होती है।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kanal ini mencakup area kecil. undangan lewat sms atau imessage terlihat oleh operator dan kedua perangkat — itu mengungkapkan minat pada tempat itu, bukan hanya bahwa seseorang memakai bitchat."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "questo canale copre un’area piccola. un invito inviato via sms o imessage è visibile all’operatore e a entrambi i telefoni — rivela interesse per quel luogo, non solo che qualcuno usa bitchat."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このチャンネルは狭い範囲をカバーします。smsやimessageで送った招待は通信事業者と双方の端末に見えます — bitchatを使っていることだけでなく、その場所への関心も伝わります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 채널은 좁은 영역을 다룹니다. sms나 imessage로 보낸 초대는 통신사와 양쪽 기기에 보입니다 — bitchat을 쓴다는 사실뿐 아니라 그 장소에 대한 관심도 드러납니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "saluran ini meliputi kawasan kecil. jemputan melalui sms atau imessage kelihatan kepada operator dan kedua-dua peranti — ia mendedahkan minat terhadap tempat itu, bukan hanya bahawa seseorang menggunakan bitchat."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "यो च्यानल सानो क्षेत्र समेट्छ। sms वा imessage मार्फत पठाइएको निमन्त्रणा क्यारियर र दुवै ह्यान्डसेटमा देखिन्छ — यसले bitchat प्रयोग मात्र होइन, त्यो ठाउँप्रति चासो पनि खुलाउँछ।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dit kanaal dekt een klein gebied. een uitnodiging via sms of imessage is zichtbaar voor de provider en beide toestellen — het onthult interesse in die plek, niet alleen dat iemand bitchat gebruikt."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ten kanał obejmuje mały obszar. zaproszenie wysłane sms-em lub imessage jest widoczne dla operatora i obu telefonów — ujawnia zainteresowanie tym miejscem, nie tylko to, że ktoś używa bitchat."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "este canal cobre uma área pequena. um convite enviado por sms ou imessage fica visível para a operadora e ambos os telemóveis — revela interesse nesse local, não só que alguém usa bitchat."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "este canal cobre uma área pequena. um convite enviado por sms ou imessage fica visível para a operadora e ambos os celulares — revela interesse naquele lugar, não só que alguém usa bitchat."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "этот канал покрывает небольшую область. приглашение по sms или imessage видно оператору и обоим устройствам — оно раскрывает интерес к этому месту, а не только то, что кто-то пользуется bitchat."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "denna kanal täcker ett litet område. en inbjudan via sms eller imessage syns för operatören och båda enheterna — den avslöjar intresse för platsen, inte bara att någon använder bitchat."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இந்த சேனல் சிறிய பகுதியை உள்ளடக்குகிறது. sms அல்லது imessage அழைப்பு கேரியருக்கும் இரு சாதனங்களுக்கும் தெரியும் — bitchat பயன்படுத்துவது மட்டுமல்ல, அந்த இடத்தில் ஆர்வமும் வெளிப்படும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ช่องนี้ครอบคลุมพื้นที่เล็ก คำเชิญทาง sms หรือ imessage เปิดเผยต่อผู้ให้บริการและทั้งสองเครื่อง — มันเผยความสนใจในสถานที่นั้น ไม่ใช่แค่การใช้ bitchat"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bu kanal küçük bir alanı kapsar. sms veya imessage ile gönderilen davet operatör ve her iki cihazda görünür — yalnızca birinin bitchat kullandığını değil, o yere ilgiyi de açığa çıkarır."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "цей канал покриває невелику ділянку. запрошення через sms або imessage бачать оператор і обидва пристрої — воно розкриває інтерес до цього місця, а не лише те, що хтось користується bitchat."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "یہ چینل چھوٹے علاقے کا احاطہ کرتا ہے۔ sms یا imessage پر بھیجی گئی دعوت کیریئر اور دونوں ہینڈسیٹس کو نظر آتی ہے — اس سے صرف bitchat کا استعمال نہیں بلکہ اس جگہ میں دلچسپی بھی ظاہر ہوتی ہے۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kênh này phủ một khu vực nhỏ. lời mời gửi qua sms hoặc imessage hiện với nhà mạng và cả hai máy — nó tiết lộ sự quan tâm đến nơi đó, không chỉ việc ai đó dùng bitchat."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此频道覆盖范围很小。通过短信或 iMessage 发送的邀请对运营商和双方设备可见——它会暴露对该地点的兴趣，而不仅是有人在使用 bitchat。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此頻道覆蓋範圍很小。透過簡訊或 iMessage 傳送的邀請對電信商與雙方裝置可見——它會揭露對該地點的興趣，而不只是有人在使用 bitchat。"
+          }
+        }
+      }
+    },
+    "channel.share.precision_warning.title" : {
+      "comment" : "Title of the confirmation before sharing a neighborhood-or-finer geohash invite",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مشاركة قناة موقع دقيقة؟"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "সঠিক লোকেশন চ্যানেল শেয়ার করবেন?"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "präzisen standort-kanal teilen?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "share a precise location channel?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿compartir un canal de ubicación precisa?"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "کانال موقعیت دقیق به اشتراک گذاشته شود؟"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "i-share ang isang precise na location channel?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "partager un canal de localisation précis ?"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לשתף ערוץ מיקום מדויק?"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सटीक लोकेशन चैनल साझा करें?"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bagikan kanal lokasi yang tepat?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "condividere un canale di posizione precisa?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "精密なロケーションチャンネルを共有しますか？"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "정밀한 위치 채널을 공유할까요?"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kongsi saluran lokasi yang tepat?"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सटीक स्थान च्यानल सेयर गर्ने?"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "een precies locatiekanaal delen?"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "udostępnić precyzyjny kanał lokalizacji?"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "partilhar um canal de localização precisa?"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "compartilhar um canal de localização precisa?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "поделиться точным каналом локации?"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dela en precis platskanal?"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "துல்லியமான இட சேனலைப் பகிரவா?"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "แชร์ช่องตำแหน่งที่แม่นยำ?"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hassas bir konum kanalı paylaşılsın mı?"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "поділитися точним каналом локації?"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "درست لوکیشن چینل شیئر کریں؟"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chia sẻ kênh vị trí chính xác?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享精确的位置频道？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享精確的位置頻道？"
+          }
+        }
+      }
+    },
     "close" : {
       "comment" : "Button to dismiss fullscreen media viewer",
       "localizations" : {
@@ -17661,6 +18591,192 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "複製"
+          }
+        }
+      }
+    },
+    "common.done" : {
+      "comment" : "Dismisses a sheet",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "সম্পন্ন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "fertig"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "done"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "listo"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تمام"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tapos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "terminé"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בוצע"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "हो गया"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "selesai"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "fatto"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完了"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "완료"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "selesai"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सम्पन्न"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "klaar"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gotowe"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "concluído"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "concluído"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "готово"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "klart"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "முடிந்தது"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เสร็จสิ้น"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitti"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "готово"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مکمل"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "xong"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完成"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完成"
           }
         }
       }
