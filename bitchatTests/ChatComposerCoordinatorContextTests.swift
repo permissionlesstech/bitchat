@@ -52,8 +52,18 @@ private final class MockChatComposerContext: ChatComposerContext {
     var activeChannel: ChannelID = .mesh
     var meshNickname = "me"
     var meshNicknamesByPeerID: [PeerID: String] = [:]
+    var blockedMeshNicknames: Set<String> = []
+    var blockedNostrPubkeys: Set<String> = []
 
     func meshPeerNicknames() -> [PeerID: String] { meshNicknamesByPeerID }
+
+    func isMeshNicknameBlocked(_ nickname: String) -> Bool {
+        blockedMeshNicknames.contains(nickname)
+    }
+
+    func isNostrBlocked(pubkeyHexLowercased: String) -> Bool {
+        blockedNostrPubkeys.contains(pubkeyHexLowercased.lowercased())
+    }
 
     // Geohash identity
     var geoNicknames: [String: String] = [:]
@@ -117,6 +127,33 @@ struct ChatComposerCoordinatorContextTests {
         ]
 
         coordinator.updateAutocomplete(for: "@ca", cursorPosition: 3)
+        #expect(context.queriedPeerCandidates == [["carol#dddd"]])
+    }
+
+    @Test @MainActor
+    func updateAutocomplete_excludesBlockedMeshAndGeohashPeers() {
+        let context = MockChatComposerContext()
+        let coordinator = ChatComposerCoordinator(context: context)
+        context.meshNicknamesByPeerID = [
+            PeerID(str: "1111111111111111"): "alice",
+            PeerID(str: "2222222222222222"): "eve",
+            PeerID(str: "3333333333333333"): "me"
+        ]
+        context.blockedMeshNicknames = ["eve"]
+        context.queryResult = (["@alice"], NSRange(location: 0, length: 3))
+
+        coordinator.updateAutocomplete(for: "@a", cursorPosition: 2)
+        #expect(context.queriedPeerCandidates == [["alice"]])
+
+        context.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pruydq"))
+        context.geoNicknames = [
+            "aaaabbbbccccdddd": "carol",
+            "bbbbccccddddeeee": "blocked"
+        ]
+        context.blockedNostrPubkeys = ["bbbbccccddddeeee"]
+        context.queriedPeerCandidates = []
+
+        coordinator.updateAutocomplete(for: "@", cursorPosition: 1)
         #expect(context.queriedPeerCandidates == [["carol#dddd"]])
     }
 
