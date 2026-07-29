@@ -113,9 +113,14 @@ final class AppChromeModel: ObservableObject {
         prepareForPanic = preparation
     }
 
-    /// Triple-tap (and any other undiscoverable shortcut) must confirm first.
+    /// Triple-tap entry point. Instant by default (seizure path); confirms
+    /// only when `PanicWipeSettings.confirmLogoShortcut` is on.
     func requestPanicWipe() {
-        showPanicConfirmation = true
+        if PanicWipeSettings.confirmLogoShortcut {
+            showPanicConfirmation = true
+        } else {
+            panicClearAllData()
+        }
     }
 
     func confirmPanicWipe() {

@@ -22,6 +22,7 @@ struct AppInfoView: View {
     @State private var liveVoiceEnabled = PTTSettings.liveVoiceEnabled
     @State private var locationNotesEnabled = LocationNotesSettings.enabled
     @State private var hideMessagePreviews = NotificationPrivacySettings.hideMessagePreviews
+    @State private var confirmLogoPanic = PanicWipeSettings.confirmLogoShortcut
     @State private var customRelays = NostrRelaySettings.customRelays()
     @State private var relayInput = ""
     @State private var relayError: String?
@@ -120,7 +121,10 @@ struct AppInfoView: View {
 
             static let dangerTitle = String(localized: "app_info.settings.danger.title", defaultValue: "DANGER ZONE", comment: "Section header (uppercase) for destructive actions in settings")
             static let panicButton = String(localized: "app_info.settings.danger.panic_button", defaultValue: "panic wipe", comment: "Button in the settings danger zone that erases all local data after confirmation")
-            static let panicNote = String(localized: "app_info.settings.danger.panic_note", defaultValue: "erases all messages, keys, and identity. triple-tapping the bitchat/ logo asks for the same confirmation.", comment: "Caption under the panic wipe button explaining what it does and the triple-tap shortcut")
+            static let panicNote = String(localized: "app_info.settings.danger.panic_note", defaultValue: "erases all messages, keys, and identity. triple-tapping the bitchat/ logo does the same, instantly.", comment: "Caption under the panic wipe button when logo confirmation is off (default)")
+            static let panicNoteConfirm = String(localized: "app_info.settings.danger.panic_note_confirm", defaultValue: "erases all messages, keys, and identity. triple-tapping the bitchat/ logo asks for the same confirmation.", comment: "Caption under the panic wipe button when confirm-before-logo-wipe is on")
+            static let confirmLogoTitle = String(localized: "app_info.settings.danger.confirm_logo.title", defaultValue: "confirm before logo wipe", comment: "Title of the setting that requires confirmation before the triple-tap logo panic wipe")
+            static let confirmLogoSubtitle = String(localized: "app_info.settings.danger.confirm_logo.subtitle", defaultValue: "off by default: triple-tap wipes instantly so it still works if someone grabs the phone. turn on only if accidental taps worry you more than losing those seconds.", comment: "Subtitle explaining the seizure-path trade-off of confirming before the logo panic wipe")
             static let panicConfirmTitle = String(localized: "app_info.settings.danger.panic_confirm_title", defaultValue: "wipe all data?", comment: "Title of the confirmation dialog before a panic wipe")
             static let panicConfirmAction = String(localized: "app_info.settings.danger.panic_confirm_action", defaultValue: "wipe everything", comment: "Destructive confirmation button that performs the panic wipe")
         }
@@ -569,10 +573,24 @@ struct AppInfoView: View {
                         Button("common.cancel", role: .cancel) {}
                     }
 
-                    Text(Strings.Settings.panicNote)
+                    Text(confirmLogoPanic ? Strings.Settings.panicNoteConfirm : Strings.Settings.panicNote)
                         .bitchatFont(size: 11)
                         .foregroundColor(secondaryTextColor)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    settingsCard {
+                        settingToggle(
+                            title: Text(verbatim: Strings.Settings.confirmLogoTitle),
+                            subtitle: Text(verbatim: Strings.Settings.confirmLogoSubtitle),
+                            isOn: Binding(
+                                get: { confirmLogoPanic },
+                                set: { newValue in
+                                    confirmLogoPanic = newValue
+                                    PanicWipeSettings.confirmLogoShortcut = newValue
+                                }
+                            )
+                        )
+                    }
                 }
             }
         }
