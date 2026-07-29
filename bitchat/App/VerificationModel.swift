@@ -84,7 +84,7 @@ final class VerificationModel: ObservableObject {
     }
 
     /// Persist a local alias for this peer. Empty/whitespace clears it so the
-    /// claimed nickname shows again. Read paths already prefer `localPetname`
+    /// claimed nickname shows again. Display paths prefer `localPetname`
     /// when set (#1439).
     func setLocalPetname(_ petname: String?, for peerID: PeerID) {
         let statusPeerID = chatViewModel.getShortIDForNoiseKey(peerID)
@@ -95,6 +95,7 @@ final class VerificationModel: ObservableObject {
 
         let existing = chatViewModel.identityManager.getSocialIdentity(for: fingerprint)
         let claimed = existing?.claimedNickname
+            ?? chatViewModel.meshService.peerNickname(peerID: statusPeerID)
             ?? chatViewModel.resolveNickname(for: statusPeerID)
         var identity = existing ?? SocialIdentity(
             fingerprint: fingerprint,
@@ -106,10 +107,19 @@ final class VerificationModel: ObservableObject {
             notes: nil
         )
         identity.localPetname = normalized
-        if identity.claimedNickname.isEmpty {
+        // Prefer the mesh-announced name for claimedNickname so we don't
+        // persist a previous alias as the "claimed" identity.
+        if let announced = chatViewModel.meshService.peerNickname(peerID: statusPeerID),
+           !announced.isEmpty {
+            identity.claimedNickname = announced
+        } else if identity.claimedNickname.isEmpty {
             identity.claimedNickname = claimed
         }
         chatViewModel.identityManager.updateSocialIdentity(identity)
+        // Rebuild peer rows so PeerList / DM header pick up the new display name
+        // without waiting for an unrelated mesh event.
+        chatViewModel.unifiedPeerService.refreshPeers()
+        NotificationCenter.default.post(name: Notification.Name("peerStatusUpdated"), object: nil)
         objectWillChange.send()
     }
 
@@ -199,6 +209,15 @@ final class VerificationModel: ObservableObject {
     }
 
     private func resolveDisplayName(for peerID: PeerID, statusPeerID: PeerID) -> String {
+        // Prefer an explicit local alias even when a live peer row exists —
+        // peer.displayName already does this once UnifiedPeerService rebuilds,
+        // but read social identity directly so the fingerprint sheet header
+        // updates before that rebuild lands.
+        if let fingerprint = chatViewModel.getFingerprint(for: statusPeerID),
+           let pet = chatViewModel.identityManager.getSocialIdentity(for: fingerprint)?.localPetname,
+           !pet.isEmpty {
+            return pet
+        }
         if let peer = chatViewModel.getPeer(byID: statusPeerID) {
             return peer.displayName
         }
@@ -212,9 +231,6 @@ final class VerificationModel: ObservableObject {
             }
             let fingerprint = data.sha256Fingerprint()
             if let social = chatViewModel.identityManager.getSocialIdentity(for: fingerprint) {
-                if let pet = social.localPetname, !pet.isEmpty {
-                    return pet
-                }
                 if !social.claimedNickname.isEmpty {
                     return social.claimedNickname
                 }

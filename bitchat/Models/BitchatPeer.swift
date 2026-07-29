@@ -15,6 +15,10 @@ struct BitchatPeer: Equatable {
     
     // Nostr identity (if known)
     var nostrPublicKey: String?
+
+    /// Device-local alias (petname). Never sent over the wire; when set it
+    /// outranks the peer-claimed `nickname` for display only.
+    var localPetname: String?
     
     // Connection state
     enum ConnectionState {
@@ -51,7 +55,10 @@ struct BitchatPeer: Equatable {
     
     // Display helpers
     var displayName: String {
-        nickname.isEmpty ? String(peerID.id.prefix(8)) : nickname
+        if let localPetname, !localPetname.isEmpty {
+            return localPetname
+        }
+        return nickname.isEmpty ? String(peerID.id.prefix(8)) : nickname
     }
     
     var statusIcon: String {
@@ -78,13 +85,15 @@ struct BitchatPeer: Equatable {
         nickname: String,
         lastSeen _: Date = Date(),
         isConnected: Bool = false,
-        isReachable: Bool = false
+        isReachable: Bool = false,
+        localPetname: String? = nil
     ) {
         self.peerID = peerID
         self.noisePublicKey = noisePublicKey
         self.nickname = nickname
         self.isConnected = isConnected
         self.isReachable = isReachable
+        self.localPetname = localPetname
         
         // Load favorite status - will be set later by the manager
         self.favoriteStatus = nil
