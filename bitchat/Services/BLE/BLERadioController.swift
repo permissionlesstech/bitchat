@@ -337,7 +337,6 @@ final class BLERadioController {
                     BLEPeripheralLinkState(
                         peripheral: target.peripheral,
                         characteristic: nil,
-                        peerID: nil,
                         isConnecting: true,
                         isConnected: false,
                         lastConnectionAttempt: nil,

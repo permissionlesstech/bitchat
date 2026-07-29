@@ -56,11 +56,15 @@ struct BLELinkAuthState {
         return departed
     }
 
+    /// Drops every link proof and revalidation epoch. The containment
+    /// cooldowns deliberately SURVIVE this: panic and emergency resets can
+    /// restart services well inside `bleLinkRebindCooldownSeconds`, and a
+    /// stable CoreBluetooth UUID must not get a fresh rebind/retirement
+    /// allowance just because the session state around it was wiped. The
+    /// maps stay time-pruned on each permit check.
     mutating func removeAll() {
         authenticatedOwners.removeAll()
         reconnectPolicy.removeAll()
-        lastRebindAt.removeAll()
-        lastRedundantRetirementAt.removeAll()
     }
 
     // MARK: - Session revalidation

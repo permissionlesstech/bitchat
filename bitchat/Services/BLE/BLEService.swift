@@ -2950,14 +2950,12 @@ extension BLEService: CBCentralManagerDelegate {
             let existing = linkStateStore.state(forPeripheralID: identifier)
             let assembler = existing?.assembler ?? NotificationStreamAssembler()
             let characteristic = existing?.characteristic
-            let peerID = existing?.peerID
             let wasConnecting = existing?.isConnecting ?? false
             let wasConnected = existing?.isConnected ?? false
 
             let restoredState = BLEPeripheralLinkState(
                 peripheral: peripheral,
                 characteristic: characteristic,
-                peerID: peerID,
                 isConnecting: wasConnecting || peripheral.state == .connecting,
                 isConnected: wasConnected || peripheral.state == .connected,
                 lastConnectionAttempt: existing?.lastConnectionAttempt,
