@@ -13589,6 +13589,378 @@
         }
       }
     },
+    "app_info.settings.danger.confirm_logo.subtitle" : {
+      "comment" : "Subtitle explaining the seizure-path trade-off of confirming before the logo panic wipe",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "معطّل افتراضيًا: النقر الثلاثي يمسح فورًا ليعمل إن سُحب الهاتف من يدك. فعّله فقط إن كانت النقرات العرضية تقلقك أكثر من فقدان تلك الثواني."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ডিফল্টে বন্ধ: তিনবার ট্যাপ তাৎক্ষণিক মুছে দেয় যাতে কেউ ফোন কেড়ে নিলেও কাজ করে। শুধু তখন চালু করুন যখন দুর্ঘটনাবশত ট্যাপ সেই কয়েক সেকেন্ড হারানোর চেয়ে বেশি ভাবায়।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "standardmäßig aus: dreifachtipp löscht sofort, damit es noch greift, wenn jemand das telefon greift. nur einschalten, wenn versehentliche tipps dir wichtiger sind als diese sekunden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "off by default: triple-tap wipes instantly so it still works if someone grabs the phone. turn on only if accidental taps worry you more than losing those seconds."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "desactivado por defecto: un triple toque borra al instante para que siga sirviendo si alguien te quita el teléfono. actívalo solo si te preocupan más los toques accidentales que perder esos segundos."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "به‌طور پیش‌فرض خاموش: ضربهٔ سه‌تایی فوراً پاک می‌کند تا اگر کسی گوشی را بگیرد هنوز کار کند. فقط اگر ضربه‌های تصادفی بیش از از دست دادن آن چند ثانیه نگران‌تان می‌کند روشن کنید."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "naka-off bilang default: ang triple-tap ay agad na magwi-wipe para gumana pa rin kung may kumuha ng telepono. i-on lang kung mas ikinababahala mo ang aksidenteng tap kaysa mawala ang ilang segundo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "désactivé par défaut : un triple appui efface immédiatement pour que ça marche encore si quelqu’un saisit le téléphone. active seulement si les appuis accidentels t’inquiètent plus que ces secondes perdues."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כבוי כברירת מחדל: לחיצה משולשת מוחקת מיד כדי שעדיין יעבוד אם מישהו חוטף את הטלפון. הפעל רק אם לחיצות בטעות מדאיגות יותר מאובדן השניות האלה."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "डिफ़ॉल्ट रूप से बंद: तिहरा टैप तुरंत मिटाता है ताकि कोई फ़ोन छीन ले तो भी काम करे। केवल तभी चालू करें जब आकस्मिक टैप उन सेकंड खोने से ज़्यादा चिंतित करें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mati secara bawaan: ketuk tiga kali menghapus seketika agar tetap berguna jika seseorang merebut ponsel. nyalakan hanya jika ketukan tak sengaja lebih mengkhawatirkan daripada kehilangan hitungan detik itu."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "disattivo di default: il triplo tap cancella subito, così funziona ancora se qualcuno ti prende il telefono. attiva solo se i tap accidentali ti preoccupano più di quei secondi."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "既定はオフ: トリプルタップですぐ消去するので、誰かに端末を掴まれても間に合います。誤タップの方がその数秒より心配なときだけオンにしてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "기본 꺼짐: 세 번 탭하면 즉시 삭제되어 누가 폰을 낚아채도 동작합니다. 실수 탭이 그 몇 초보다 더 걱정될 때만 켜세요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mati secara lalai: ketik tiga kali memadam serta-merta supaya masih berguna jika seseorang merampas telefon. hidupkan hanya jika ketikan tidak sengaja lebih membimbangkan daripada kehilangan saat-saat itu."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पूर्वनिर्धारित रूपमा बन्द: तीनपटक ट्यापले तुरुन्त मेटाउँछ ताकि कसैले फोन खोसे पनि काम होस्। मात्र अन गर्नुहोस् यदि आकस्मिक ट्याप ती सेकेन्ड गुमाउनुभन्दा बढी चिन्ताको विषय हो।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "standaard uit: driedubbeltik wist meteen zodat het nog werkt als iemand de telefoon pakt. zet alleen aan als per ongeluk tikken je meer zorgen baart dan die seconden."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "domyślnie wyłączone: potrójne stuknięcie kasuje natychmiast, żeby zadziałało, gdy ktoś chwyci telefon. włącz tylko jeśli przypadkowe stuknięcia martwią cię bardziej niż te sekundy."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "desligado por predefinição: um toque triplo apaga de imediato para continuar a servir se alguém agarrar o telefone. liga só se toques acidentais te preocuparem mais do que esses segundos."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "desligado por padrão: um toque triplo apaga na hora para ainda funcionar se alguém agarrar o telefone. ligue só se toques acidentais preocuparem mais do que esses segundos."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "по умолчанию выкл.: тройной тап стирает сразу, чтобы сработало, если телефон выхватят. включай только если случайные нажатия пугают больше, чем эти секунды."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "av som standard: trippelklick raderar direkt så det fortfarande fungerar om någon tar telefonen. slå på bara om oavsiktliga tryck oroar dig mer än de sekunderna."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இயல்பாக அணைக்கப்பட்டுள்ளது: மும்முறை தட்டுதல் உடனே அழிக்கும், யாராவது தொலைபேசியைப் பிடித்தாலும் வேலை செய்யும். தவறுதலான தட்டுதல்கள் அந்த விநாடிகளை இழப்பதை விட அதிகம் கவலைப்படுத்தினால் மட்டும் இயக்கவும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ปิดเป็นค่าเริ่มต้น: แตะสามครั้งล้างทันทีเพื่อให้ยังทันหากมีคนคว้าโทรศัพท์ เปิดเฉพาะเมื่อกังวลการแตะพลาดมากกว่าการเสียไม่กี่วินาทีนั้น"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "varsayılan kapalı: üç kez dokunuş anında siler, böylece biri telefonu kaparsa hâlâ işe yarar. yalnızca yanlışlıkla dokunuşlar o saniyeleri kaybetmekten daha çok kaygılandırıyorsa aç."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "типово вимкнено: потрійне торкання стирає миттєво, щоб спрацювало, якщо хтось вихопить телефон. вмикай лише якщо випадкові торкання турбують більше за ці секунди."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بطورِ اصل بند: تین بار ٹیپ فوراً مٹا دیتا ہے تاکہ کوئی فون چھینے تو بھی کام کرے۔ صرف تب آن کریں جب غلطی سے ٹیپ ان سیکنڈز کے ضیاع سے زیادہ پریشان کرے۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tắt mặc định: chạm ba lần xóa ngay để vẫn kịp nếu ai đó giật điện thoại. chỉ bật nếu lo chạm nhầm hơn là mất vài giây đó."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "默认关闭：三击立即清除，以便有人抢手机时仍来得及。仅在更担心误触、而不是那几秒时再打开。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "預設關閉：三擊立即清除，以便有人搶手機時仍來得及。僅在更擔心誤觸、而不是那幾秒時再打開。"
+          }
+        }
+      }
+    },
+    "app_info.settings.danger.confirm_logo.title" : {
+      "comment" : "Title of the setting that requires confirmation before the triple-tap logo panic wipe",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تأكيد قبل المسح عبر الشعار"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "লোগো দিয়ে মুছার আগে নিশ্চিত করুন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vor logo-löschung bestätigen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "confirm before logo wipe"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "confirmar antes de borrar con el logo"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تأیید پیش از پاک‌سازی با لوگو"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kumpirmahin bago mag-wipe sa logo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "confirmer avant l’effacement via le logo"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אשר לפני מחיקה דרך הלוגו"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "लोगो से मिटाने से पहले पुष्टि करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "konfirmasi sebelum hapus lewat logo"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "conferma prima della cancellazione dal logo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ロゴ消去の前に確認する"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "로고 삭제 전에 확인"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sahkan sebelum padam melalui logo"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "लोगो मार्फत मेटाउनु अघि पुष्टि गर्नुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bevestigen vóór logo-wissen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "potwierdź przed wymazaniem przez logo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "confirmar antes de apagar pelo logo"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "confirmar antes de apagar pelo logo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "подтверждать перед очисткой через логотип"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bekräfta före logotyp-radering"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "லோகோ அழிப்புக்கு முன் உறுதிப்படுத்து"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ยืนยันก่อนล้างด้วยโลโก้"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "logo silmeden önce onayla"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "підтверджувати перед очищенням через логотип"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لوگو سے مٹانے سے پہلے تصدیق کریں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "xác nhận trước khi xóa bằng logo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通过标志清除前先确认"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "透過標誌清除前先確認"
+          }
+        }
+      }
+    },
     "app_info.settings.danger.panic_button" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -14325,6 +14697,192 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "抹除所有訊息、金鑰和身分。三擊 bitchat/ 標誌也會立即執行相同操作。"
+          }
+        }
+      }
+    },
+    "app_info.settings.danger.panic_note_confirm" : {
+      "comment" : "Caption under the panic wipe button when confirm-before-logo-wipe is on",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يمسح كل الرسائل والمفاتيح والهوية. النقر الثلاثي على شعار bitchat/ يطلب نفس التأكيد."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "সব বার্তা, কী এবং পরিচয় মুছে দেয়। bitchat/ লোগোতে তিনবার ট্যাপ একই নিশ্চিতকরণ চায়।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "löscht alle nachrichten, schlüssel und identität. dreimaliges tippen auf das bitchat/-logo fragt nach derselben bestätigung."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "erases all messages, keys, and identity. triple-tapping the bitchat/ logo asks for the same confirmation."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "borra todos los mensajes, claves e identidad. un triple toque en el logo bitchat/ pide la misma confirmación."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "همهٔ پیام‌ها، کلیدها و هویت را پاک می‌کند. ضربهٔ سه‌تایی روی لوگوی bitchat/ همان تأیید را می‌پرسد."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "binubura ang lahat ng mensahe, key, at identity. ang triple-tap sa bitchat/ logo ay humihingi ng parehong kumpirmasyon."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "efface tous les messages, clés et l’identité. un triple appui sur le logo bitchat/ demande la même confirmation."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מוחק את כל ההודעות, המפתחות והזהות. לחיצה משולשת על לוגו bitchat/ מבקשת את אותו אישור."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सभी संदेश, कुंजियाँ और पहचान मिटाता है। bitchat/ लोगो पर तिहरा टैप भी वही पुष्टि माँगता है।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "menghapus semua pesan, kunci, dan identitas. ketuk tiga kali logo bitchat/ meminta konfirmasi yang sama."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cancella tutti i messaggi, le chiavi e l’identità. un triplo tap sul logo bitchat/ chiede la stessa conferma."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべてのメッセージ、鍵、アイデンティティを消去します。bitchat/ ロゴのトリプルタップでも同じ確認を求めます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "모든 메시지, 키, 신원을 지웁니다. bitchat/ 로고를 세 번 탭해도 같은 확인을 묻습니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "memadam semua mesej, kunci dan identiti. ketik tiga kali logo bitchat/ meminta pengesahan yang sama."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सबै सन्देश, कुञ्जी र पहिचान मेटाउँछ। bitchat/ लोगोमा तीनपटक ट्यापले पनि उही पुष्टि माग्छ।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wist alle berichten, sleutels en identiteit. driedubbeltikken op het bitchat/-logo vraagt dezelfde bevestiging."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kasuje wszystkie wiadomości, klucze i tożsamość. potrójne stuknięcie logo bitchat/ prosi o to samo potwierdzenie."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apaga todas as mensagens, chaves e identidade. um toque triplo no logo bitchat/ pede a mesma confirmação."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apaga todas as mensagens, chaves e identidade. um toque triplo no logo bitchat/ pede a mesma confirmação."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "стирает все сообщения, ключи и личность. тройной тап по логотипу bitchat/ запрашивает то же подтверждение."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "raderar alla meddelanden, nycklar och identitet. trippelklick på bitchat/-logotypen ber om samma bekräftelse."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "அனைத்து செய்திகள், சாவிகள் மற்றும் அடையாளத்தையும் அழிக்கும். bitchat/ லோகோவை மும்முறை தட்டினாலும் அதே உறுதிப்படுத்தலைக் கேட்கும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ลบข้อความ กุญแจ และตัวตนทั้งหมด การแตะโลโก้ bitchat/ สามครั้งจะขอการยืนยันเดียวกัน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tüm mesajları, anahtarları ve kimliği siler. bitchat/ logosuna üç kez dokunmak aynı onayı ister."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "стирає всі повідомлення, ключі та ідентичність. потрійне торкання логотипу bitchat/ просить те саме підтвердження."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تمام پیغامات، کلیدیں اور شناخت مٹا دیتا ہے۔ bitchat/ لوگو پر تین بار ٹیپ بھی وہی تصدیق مانگتا ہے۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "xóa mọi tin nhắn, khóa và danh tính. chạm ba lần vào logo bitchat/ sẽ hỏi xác nhận tương tự."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除所有消息、密钥和身份。三击 bitchat/ 标志也会要求同样的确认。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除所有訊息、金鑰與身分。三擊 bitchat/ 標誌也會要求同樣的確認。"
           }
         }
       }
