@@ -288,7 +288,7 @@ struct FingerprintView: View {
         .onAppear {
             syncAliasDraft(from: fingerprintState, force: true)
         }
-        .onChange(of: fingerprintState.theirFingerprint) { _, _ in
+        .onChange(of: fingerprintState.theirFingerprint) { _ in
             // Fingerprint can arrive after the sheet opens; load (or reload)
             // the saved alias then, otherwise an empty draft looks like a clear.
             syncAliasDraft(from: fingerprintState, force: false)
