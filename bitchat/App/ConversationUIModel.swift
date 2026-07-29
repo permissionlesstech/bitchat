@@ -9,6 +9,7 @@ import UIKit
 final class ConversationUIModel: ObservableObject {
     @Published private(set) var showAutocomplete = false
     @Published private(set) var autocompleteSuggestions: [String] = []
+    @Published private(set) var selectedAutocompleteIndex = 0
     @Published private(set) var currentNickname: String
     @Published private(set) var isBatchingPublic = false
     @Published private(set) var canSendMediaInCurrentContext = true
@@ -36,6 +37,7 @@ final class ConversationUIModel: ObservableObject {
         self.isBatchingPublic = chatViewModel.isBatchingPublic
         self.showAutocomplete = chatViewModel.showAutocomplete
         self.autocompleteSuggestions = chatViewModel.autocompleteSuggestions
+        self.selectedAutocompleteIndex = chatViewModel.selectedAutocompleteIndex
         self.canSendMediaInCurrentContext = chatViewModel.canSendMediaInCurrentContext
 
         bind()
@@ -102,6 +104,22 @@ final class ConversationUIModel: ObservableObject {
 
     func completeNickname(_ nickname: String, in text: inout String) -> Int {
         chatViewModel.completeNickname(nickname, in: &text)
+    }
+
+    /// Accept the currently highlighted mention suggestion, if any.
+    func completeSelectedSuggestion(in text: inout String) -> Bool {
+        guard showAutocomplete,
+              autocompleteSuggestions.indices.contains(selectedAutocompleteIndex)
+        else { return false }
+        _ = completeNickname(autocompleteSuggestions[selectedAutocompleteIndex], in: &text)
+        return true
+    }
+
+    func moveAutocompleteSelection(by delta: Int) {
+        guard showAutocomplete, !autocompleteSuggestions.isEmpty else { return }
+        let count = min(4, autocompleteSuggestions.count)
+        let next = (selectedAutocompleteIndex + delta + count) % count
+        chatViewModel.selectedAutocompleteIndex = next
     }
 
     func formatMessage(_ message: BitchatMessage, colorScheme: ColorScheme, theme: AppTheme? = nil) -> AttributedString {
@@ -192,6 +210,10 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.$autocompleteSuggestions
             .receive(on: DispatchQueue.main)
             .assign(to: &$autocompleteSuggestions)
+
+        chatViewModel.$selectedAutocompleteIndex
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$selectedAutocompleteIndex)
 
         chatViewModel.$isBatchingPublic
             .receive(on: DispatchQueue.main)

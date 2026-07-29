@@ -29,7 +29,7 @@ struct ContentComposerView: View {
         VStack(alignment: .leading, spacing: 6) {
             if conversationUIModel.showAutocomplete && !conversationUIModel.autocompleteSuggestions.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(conversationUIModel.autocompleteSuggestions.prefix(4)), id: \.self) { suggestion in
+                    ForEach(Array(conversationUIModel.autocompleteSuggestions.prefix(4).enumerated()), id: \.element) { index, suggestion in
                         Button(action: {
                             _ = conversationUIModel.completeNickname(suggestion, in: &messageText)
                         }) {
@@ -43,6 +43,11 @@ struct ContentComposerView: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 3)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                index == conversationUIModel.selectedAutocompleteIndex
+                                    ? palette.secondary.opacity(0.18)
+                                    : Color.clear
+                            )
                         }
                         .buttonStyle(.plain)
                     }
@@ -81,6 +86,16 @@ struct ContentComposerView: View {
                     // dismissed keyboard, so it stays out of this.
                     isTextFieldFocused.wrappedValue = true
                 }
+                .modifier(AutocompleteKeyboardNavigationModifier(
+                    isActive: conversationUIModel.showAutocomplete
+                        && !conversationUIModel.autocompleteSuggestions.isEmpty,
+                    onMove: { delta in
+                        conversationUIModel.moveAutocompleteSelection(by: delta)
+                    },
+                    onAccept: {
+                        conversationUIModel.completeSelectedSuggestion(in: &messageText)
+                    }
+                ))
                 .padding(.vertical, theme.usesGlassChrome ? 8 : 4)
                 .padding(.horizontal, 6)
                 .themedInputBackground()
@@ -372,5 +387,35 @@ private extension ContentComposerView {
             ? String(localized: "content.accessibility.send_hint_ready", comment: "Hint prompting the user to send the message")
             : String(localized: "content.accessibility.send_hint_empty", comment: "Hint prompting the user to enter a message")
         )
+    }
+}
+
+/// Arrow/Tab navigation for the mention suggestion list. Inactive when the
+/// panel is hidden so Tab keeps its normal focus-cycle behavior.
+private struct AutocompleteKeyboardNavigationModifier: ViewModifier {
+    let isActive: Bool
+    let onMove: (Int) -> Void
+    let onAccept: () -> Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, macOS 14.0, *) {
+            content
+                .onKeyPress(.upArrow) {
+                    guard isActive else { return .ignored }
+                    onMove(-1)
+                    return .handled
+                }
+                .onKeyPress(.downArrow) {
+                    guard isActive else { return .ignored }
+                    onMove(1)
+                    return .handled
+                }
+                .onKeyPress(.tab) {
+                    guard isActive else { return .ignored }
+                    return onAccept() ? .handled : .ignored
+                }
+        } else {
+            content
+        }
     }
 }
