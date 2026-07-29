@@ -782,6 +782,11 @@ final class BLEService: NSObject {
             // rebind/retirement cooldowns deliberately survive (see
             // BLELinkAuthState.removeAll).
             linkAuth.removeAll()
+            // The new identity owes no announce-throttle debt: without this,
+            // a panic within the forced minimum interval of the last
+            // announce swallows the rotation announce and the new identity
+            // stays invisible until the next maintenance cycle.
+            announceThrottle.reset()
             // These callbacks belong to pre-panic transfer state. Invoking
             // them would let queued UI work recreate or resend wiped media.
             privateMediaSessions.panicReset()
@@ -3351,6 +3356,27 @@ extension BLEService {
         bleQueue.async { [weak self] in
             self?.handleReceivedPacket(packet, from: fromPeerID)
         }
+    }
+
+    /// Simulated-link ingress: the full production attribution path —
+    /// binding lookup, spoof rejection, raw-announce binding, ingress
+    /// recording — for a frame arriving on a synthetic link. The
+    /// SimulatedMesh harness feeds every node through this, so multi-node
+    /// tests exercise the same engine code as CoreBluetooth ingress.
+    func _test_ingestFrame(_ packet: BitchatPacket, link: BLEIngressLinkID) {
+        ingestDecodedPacket(packet, link: link, linkDescription: "Simulated \(link)")
+    }
+
+    /// Sends an unthrottled announce, exactly like the maintenance forced
+    /// path. SimulatedMesh uses this as the deterministic discovery step.
+    func _test_forceAnnounce() {
+        onEngine { sendAnnounceNow(forceSend: true) }
+    }
+
+    /// Blocks until every engine slot enqueued so far has run — the
+    /// deterministic settling fence for simulated-mesh pumping.
+    func _test_fenceEngine() {
+        onEngine {}
     }
 
     func _test_emitTransportEvent(

@@ -201,6 +201,27 @@ throughput is nowhere near what one serial queue sustains.
    packet switch) ride this seam as handler-registered modules instead
    of getting closure-environment extractions now.
 
+   **The simulator half is done — simulator-first.** Because the B2
+   receive path already hands `(packet, linkID)` up through one choke
+   point, `SimulatedMesh` (bitchatTests/Simulation/) wires real
+   CB-free `BLEService` engines edge-to-edge through the outbound tap
+   and `_test_ingestFrame` (the production attribution path), with
+   per-edge synthetic link IDs and manual-scheduler time. Five
+   deterministic multi-node tests run in ~40ms: announce/bind
+   convergence, end-to-end Noise establishment, line-topology relay
+   within a TTL/frame budget, duplicate-flood dedup, and the panic
+   rotation single-slot rebind + containment — the scenario that
+   previously required two phones. Fidelity boundary: no physical
+   links, so fanout planning/backpressure is not exercised; protocol
+   behavior is. On its first day the simulator found a real bug: the
+   forced-announce throttle survived panic, so a rotation within
+   `bleForceAnnounceMinIntervalSeconds` of the last announce left the
+   new identity invisible until the next maintenance cycle
+   (`BLEAnnounceThrottle.reset()` now runs in the panic slot).
+   Remaining from the original slice-C scope: the mechanical delegate
+   extraction behind explicit LinkEvent/LinkCommand types, and the
+   formal `handle(event) -> [Effect]` engine shape.
+
 ## What this is not
 
 No wire changes: packet formats, signing (padding is signed), the
