@@ -14,6 +14,7 @@ default:
     @echo "  just build              Build the macOS app without signing"
     @echo "  just test               Run the SwiftPM test suite"
     @echo "  just test-ios           Run tests on the iPhone 17 simulator"
+    @echo "  just develop            Enter the Nix dev shell (swiftlint, xcbeautify, jq)"
     @echo "  just clean              Remove repo-local build artifacts only"
     @echo "  just nuke               Also remove nested package build caches"
     @echo "  just check              Validate the development environment"
@@ -59,6 +60,11 @@ nuke: clean
     @find localPackages -type d -name .build -prune -exec rm -rf -- {} +
     @rm -rf -- ".cache"
     @echo "✅ Removed repository build caches; tracked files were untouched"
+
+# Enter a Nix dev shell with project tooling (swiftlint, xcbeautify, jq).
+# Requires Nix with flakes enabled. See flake.nix for the package list.
+develop:
+    @nix develop --command $SHELL
 
 info:
     @echo "BitChat - decentralized mesh messaging"
