@@ -42,6 +42,7 @@ struct BLEServiceCoreTests {
         // The probe registers and its deadline schedules on the engine;
         // fence that submission before touching the clock.
         await ble._test_drainNoiseMessagePipeline()
+        #expect(scheduler.pendingCount == 1)
 
         // A hair before the deadline nothing may fire.
         scheduler.advance(by: TransportConfig.meshPingTimeoutSeconds - 0.01)
