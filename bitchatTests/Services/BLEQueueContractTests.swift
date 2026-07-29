@@ -77,4 +77,9 @@ struct BLEQueueContractTests {
         let hits = try offenders(matching: "collectionsQueue")
         #expect(hits.isEmpty, "Engine state has exactly one serial domain; do not reintroduce a side queue: \(hits)")
     }
+
+    @Test func deferredEngineWorkGoesThroughTheScheduler() throws {
+        let hits = try offenders(matching: "messageQueue.asyncAfter")
+        #expect(hits.isEmpty, "Engine delays must use BLEEngineScheduling so tests can drive protocol deadlines with a manual clock: \(hits)")
+    }
 }

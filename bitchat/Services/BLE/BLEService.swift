@@ -363,6 +363,9 @@ final class BLEService: NSObject {
     /// old per-field ownership comments and barrier discipline structural.
     private let messageQueue = DispatchQueue(label: "mesh.message")
     private let messageQueueKey = DispatchSpecificKey<Void>()
+    /// The only source of deferred engine work (see BLEEngineScheduling);
+    /// injectable so tests drive protocol deadlines with a manual clock.
+    private let engineScheduler: BLEEngineScheduling
     private let bleQueue = DispatchQueue(label: "mesh.bluetooth", qos: .userInitiated)
     private let bleQueueKey = DispatchSpecificKey<Void>()
 
@@ -476,7 +479,7 @@ final class BLEService: NSObject {
         case .publishNow:
             publishFullPeerData()
         case .schedule(let delay):
-            messageQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
+            engineScheduler.schedule(after: delay) { [weak self] in
                 guard let self = self else { return }
                 self.peerPublishCoalescer.scheduledPublishFired(now: Date())
                 self.publishFullPeerData()
@@ -496,8 +499,10 @@ final class BLEService: NSObject {
         incomingFileStore: BLEIncomingFileStore = BLEIncomingFileStore(),
         startSuspendedForPanicRecovery: Bool = false,
         noiseResponderHandshakeTimeout: TimeInterval =
-            NoiseSecurityConstants.ordinaryResponderHandshakeTimeout
+            NoiseSecurityConstants.ordinaryResponderHandshakeTimeout,
+        engineScheduler: BLEEngineScheduling = BLEEngineDispatchScheduler()
     ) {
+        self.engineScheduler = engineScheduler
         self.keychain = keychain
         self.idBridge = idBridge
         self.incomingFileStore = incomingFileStore
@@ -516,6 +521,7 @@ final class BLEService: NSObject {
         
         // Set queue key for identification
         messageQueue.setSpecific(key: messageQueueKey, value: ())
+        engineScheduler.activate(engineQueue: messageQueue)
         
         // Set up application state tracking (iOS only)
         #if os(iOS)
@@ -940,7 +946,7 @@ final class BLEService: NSObject {
         
         // Send initial announce after services are ready
         // Use longer delay to avoid conflicts with other announces
-        messageQueue.asyncAfter(deadline: .now() + TransportConfig.bleInitialAnnounceDelaySeconds) { [weak self] in
+        engineScheduler.schedule(after: TransportConfig.bleInitialAnnounceDelaySeconds) { [weak self] in
             guard let self,
                   self.isCurrentPanicLifecycleGeneration(
                     lifecycleGeneration
@@ -1285,9 +1291,7 @@ final class BLEService: NSObject {
         sessionGeneration: UUID?,
         nonce: UUID
     ) {
-        messageQueue.asyncAfter(
-            deadline: .now() + TransportConfig.privateMediaCapabilityProofTimeoutSeconds
-        ) { [weak self] in
+        engineScheduler.schedule(after: TransportConfig.privateMediaCapabilityProofTimeoutSeconds) { [weak self] in
             self?.handlePrivateMediaProofTimeout(
                 for: peerID,
                 fingerprint: fingerprint,
@@ -2163,8 +2167,7 @@ final class BLEService: NSObject {
             }
 
             let backoff = TransportConfig.bleNotificationRetryDelayMs * max(1, attempt + 1)
-            let deadline = DispatchTime.now() + .milliseconds(backoff)
-            self.messageQueue.asyncAfter(deadline: deadline) { [weak self] in
+            self.engineScheduler.schedule(after: Double(backoff) / 1_000) { [weak self] in
                 self?.enqueuePendingNotification(data: data, centrals: centrals, context: context, attempt: attempt + 1)
             }
         }
@@ -3756,7 +3759,7 @@ extension BLEService: CBPeripheralDelegate {
             SecureLogger.debug("🔔 Subscribed to notifications from \(peripheral.name ?? "Unknown")", category: .session)
             
             // Send announce after subscription is confirmed (force send for new connection)
-            messageQueue.asyncAfter(deadline: .now() + TransportConfig.blePostSubscribeAnnounceDelaySeconds) { [weak self] in
+            engineScheduler.schedule(after: TransportConfig.blePostSubscribeAnnounceDelaySeconds) { [weak self] in
                 self?.sendAnnounce(forceSend: true)
                 // Try flushing any spooled directed packets now that we have a link
                 self?.flushDirectedSpool()
@@ -4082,14 +4085,14 @@ extension BLEService: CBPeripheralManagerDelegate {
             }
 
             // Still flush directed packets for legitimate mesh operation
-            messageQueue.asyncAfter(deadline: .now() + TransportConfig.blePostAnnounceDelaySeconds) { [weak self] in
+            engineScheduler.schedule(after: TransportConfig.blePostAnnounceDelaySeconds) { [weak self] in
                 self?.flushDirectedSpool()
             }
             return
         }
 
         // Send announce to the newly subscribed central after a small delay
-        messageQueue.asyncAfter(deadline: .now() + TransportConfig.blePostAnnounceDelaySeconds) { [weak self] in
+        engineScheduler.schedule(after: TransportConfig.blePostAnnounceDelaySeconds) { [weak self] in
             self?.sendAnnounce(forceSend: true)
             // Flush any spooled directed packets now that we have a central subscribed
             self?.flushDirectedSpool()
@@ -4699,8 +4702,8 @@ extension BLEService {
                     nonce: nonce
                 )
             }
-            self.messageQueue.asyncAfter(
-                deadline: .now() + TransportConfig.meshPingTimeoutSeconds,
+            self.engineScheduler.schedule(
+                after: TransportConfig.meshPingTimeoutSeconds,
                 execute: timeout
             )
             self.broadcastPacket(packet)
@@ -6592,7 +6595,7 @@ extension BLEService {
 
         for (workItem, index) in scheduledItems {
             let delayMs = index * plan.spacingMs
-            messageQueue.asyncAfter(deadline: .now() + .milliseconds(delayMs), execute: workItem)
+            engineScheduler.schedule(after: Double(delayMs) / 1_000, execute: workItem)
         }
         return true
     }
@@ -6880,7 +6883,7 @@ extension BLEService {
         messageQueue.async { [weak self] in
             self?.scheduledRelays.schedule(work, messageID: messageID)
         }
-        messageQueue.asyncAfter(deadline: .now() + .milliseconds(decision.delayMs), execute: work)
+        engineScheduler.schedule(after: Double(decision.delayMs) / 1_000, execute: work)
     }
     
     private func handleAnnounce(_ packet: BitchatPacket, from peerID: PeerID) {
@@ -7300,7 +7303,7 @@ extension BLEService {
                 self?.sendAnnounce(forceSend: true)
             },
             scheduleAfterglow: { [weak self] delay in
-                self?.messageQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.engineScheduler.schedule(after: delay) { [weak self] in
                     self?.sendAnnounce(forceSend: true)
                 }
             }
