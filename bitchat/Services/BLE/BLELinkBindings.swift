@@ -5,15 +5,18 @@ import Foundation
 /// belongs to, in both roles, plus each peer's preferred peripheral link
 /// for directed sends and fanout collapse.
 ///
-/// Split from the physical link-state store so the option-B boundary flip
-/// (docs/BLE-ARCHITECTURE-V3.md) can move ownership of *who owns a link*
-/// to the engine without touching *what links exist*. bleQueue-confined
-/// today, alongside the physical store and `BLELinkAuthState`.
+/// Engine-owned (option-B boundary, docs/BLE-ARCHITECTURE-V3.md),
+/// alongside `BLELinkAuthState`: *who owns a link* lives on the engine,
+/// *what links exist* stays on bleQueue in the physical store. BLEService
+/// debug-traps any access off the engine queue.
 ///
 /// Lifecycle contract: bindings are only created for live physical links
-/// (callers guard existence) and are retired through
-/// `peripheralRemoved`/`centralRemoved`/`clear*` when the physical link
-/// goes, so binding queries never see departed links.
+/// (callers check liveness through `readLinkState`) and are retired
+/// through `peripheralRemoved`/`centralRemoved`/`clear*` on an engine hop
+/// queued by the physical teardown. A binding can therefore briefly
+/// outlive its departed link; queries that need liveness join against the
+/// physical store, and everything converges once the queued retirement
+/// runs.
 struct BLELinkBindings {
     private var peripheralPeers: [String: PeerID] = [:]
     private var centralPeers: [String: PeerID] = [:]

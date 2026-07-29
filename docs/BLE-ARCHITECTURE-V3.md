@@ -158,6 +158,39 @@ throughput is nowhere near what one serial queue sustains.
    (it makes no peer decisions); (b) bindings + link-auth migrate to
    the engine, converting `readLinkState` callers; (c) the delegates
    shrink to event emission and move behind the port.
+
+   **(a) and (b) are done.** (a) landed as `BLERadioController`
+   (#1539). (b) landed in two steps: #1540 cohered the loose maps into
+   `BLELinkAuthState` + `BLELinkBindings` (still bleQueue-owned,
+   behavior-identical), and the option-B flip then moved ownership to
+   the engine. Since the flip:
+
+   - `linkAuth`/`linkBindings` are engine-owned behind a DEBUG
+     `dispatchPrecondition` trap; bleQueue code cannot touch them.
+   - The receive path is in its sans-I/O shape: bleQueue decodes
+     frames and hands `(packet, linkID)` up through
+     `ingestDecodedPacket` (which captures the panic lifecycle at the
+     handoff); `attributeAndHandlePacket` resolves the sender binding,
+     admits or rejects the claimed sender, applies raw-announce
+     binding, and records ingress — all on the engine. Per-link frame
+     order is preserved end to end (both queues are serial), which
+     supersedes the old batch-local TOCTOU binding.
+   - The rotation rebind is one engine slot
+     (`rebindLinkAfterVerifiedDirectAnnounce`): containment checks,
+     proof retirement, binding flip, reconnect decision, and
+     rotated-identity retirement, with only CoreBluetooth cancels
+     hopping to bleQueue.
+   - Authenticated-send eligibility (`notifyOrEnqueueIfAccepted`,
+     `writeOrEnqueueIfAccepted`) is checked on the engine — serialized
+     against rebinds by construction — and only the physical admission
+     (updateValue / write / backpressure queues) runs on bleQueue.
+   - Teardown splits: bleQueue delegates do physical work inline
+     (`discardPeripheralLinkPhysical`) and queue the identity half
+     (`retirePeripheralLinkIdentity`, binding survivor repair) to the
+     engine. A binding can briefly outlive its physical link; queries
+     that need liveness join against the physical store via
+     `readLinkState` (the engine→bleQueue sync direction), and the
+     queued retirement converges the two.
 2. **Sans-I/O engine core + simulator.** Make the engine formally
    `handle(event) -> [Effect]`, feed it from a `SimulatedLinkLayer`, and
    move the multi-node E2E suite onto deterministic simulation (no

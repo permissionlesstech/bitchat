@@ -554,26 +554,19 @@ struct BLEServiceCoreTests {
         )
         let replay = try #require(victim.signPacket(unsigned), "Failed to sign replayed announce")
         #expect(ble._test_recordIngressIfNew(packet: replay, linkID: attackerLink))
-        let rebindGate = VerifiedDirectRebindGate()
-        ble._test_afterVerifiedDirectRebindEnqueued = rebindGate.pause
-        defer {
-            rebindGate.release()
-            ble._test_afterVerifiedDirectRebindEnqueued = nil
-        }
         ble._test_handlePacket(replay, fromPeerID: victimPeerID, preseedPeer: false)
 
-        let announcePaused = await TestHelpers.waitUntil(
-            { rebindGate.hasPaused },
+        // The rebind, its Noise-proof retirement, and the ordinary
+        // reconnect preparation are one engine slot: no observer can see
+        // the new binding while the victim's stale sending keys are still
+        // available. Once the binding is visible, the keys must already be
+        // gone.
+        let rebound = await TestHelpers.waitUntil(
+            { ble._test_centralBinding(attackerLink) == victimPeerID },
             timeout: TestConstants.longTimeout
         )
-        try #require(announcePaused)
-
-        // Rebind and ordinary reconnect preparation are one bleQueue
-        // critical section. Once the binding is visible, stale sending keys
-        // must already be unavailable.
-        #expect(ble._test_centralBinding(attackerLink) == victimPeerID)
+        try #require(rebound)
         #expect(!ble.canDeliverSecurely(to: victimPeerID))
-        rebindGate.release()
 
         let outbound = OutboundPacketTap()
         ble._test_onOutboundPacket = { outbound.record($0) }
@@ -1466,35 +1459,6 @@ private final class SessionReconcileCounter: @unchecked Sendable {
     func count(for peerID: PeerID) -> Int {
         lock.lock(); defer { lock.unlock() }
         return reconciles.filter { $0 == peerID }.count
-    }
-}
-
-private final class VerifiedDirectRebindGate: @unchecked Sendable {
-    private let condition = NSCondition()
-    private var paused = false
-    private var released = false
-
-    var hasPaused: Bool {
-        condition.lock()
-        defer { condition.unlock() }
-        return paused
-    }
-
-    func pause() {
-        condition.lock()
-        paused = true
-        condition.broadcast()
-        while !released {
-            condition.wait()
-        }
-        condition.unlock()
-    }
-
-    func release() {
-        condition.lock()
-        released = true
-        condition.broadcast()
-        condition.unlock()
     }
 }
 

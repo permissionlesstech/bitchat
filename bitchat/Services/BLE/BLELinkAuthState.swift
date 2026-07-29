@@ -11,9 +11,9 @@ import Foundation
 /// stop a replayed announce from flip-flopping bindings or survivor
 /// selection.
 ///
-/// bleQueue-confined today, alongside the link bindings it qualifies;
-/// both move to the engine together in the option-B boundary flip
-/// (docs/BLE-ARCHITECTURE-V3.md).
+/// Engine-owned (option-B boundary, docs/BLE-ARCHITECTURE-V3.md),
+/// alongside the link bindings it qualifies: BLEService debug-traps any
+/// access off the engine queue.
 struct BLELinkAuthState {
     private var authenticatedOwners: [BLEIngressLinkID: PeerID] = [:]
     private var reconnectPolicy = BLENoiseReconnectPolicy()
