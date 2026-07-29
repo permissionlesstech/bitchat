@@ -145,16 +145,17 @@ struct ChatComposerCoordinatorContextTests {
         coordinator.updateAutocomplete(for: "@a", cursorPosition: 2)
         #expect(context.queriedPeerCandidates == [["alice"]])
 
-        context.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pruydq"))
-        context.geoNicknames = [
+        let geoContext = MockChatComposerContext()
+        let geoCoordinator = ChatComposerCoordinator(context: geoContext)
+        geoContext.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pruydq"))
+        geoContext.geoNicknames = [
             "aaaabbbbccccdddd": "carol",
             "bbbbccccddddeeee": "blocked"
         ]
-        context.blockedNostrPubkeys = ["bbbbccccddddeeee"]
-        context.queriedPeerCandidates = []
+        geoContext.blockedNostrPubkeys = ["bbbbccccddddeeee"]
 
-        coordinator.updateAutocomplete(for: "@", cursorPosition: 1)
-        #expect(context.queriedPeerCandidates == [["carol#dddd"]])
+        geoCoordinator.updateAutocomplete(for: "@", cursorPosition: 1)
+        #expect(geoContext.queriedPeerCandidates == [["carol#dddd"]])
     }
 
     @Test @MainActor
