@@ -459,18 +459,13 @@ final class BLEService: NSObject {
     /// churn that aggravates flaky exit hangs.
     private var meshBackgroundEnabled = false
 
-    // MARK: - Connection budget & scheduling (central role)
-    private var connectionScheduler = BLEConnectionScheduler<CBPeripheral>()
-    // Recently seen peripherals retained for background wake-on-proximity
-    // connects (bleQueue-confined, like the link state store)
-    private let recentPeripheralCache = BLERecentPeripheralCache<CBPeripheral>()
-
-    // MARK: - Adaptive scanning duty-cycle
-    private var scanDutyTimer: DispatchSourceTimer?
-    private var dutyEnabled: Bool = true
-    private var dutyOnDuration: TimeInterval = TransportConfig.bleDutyOnDuration
-    private var dutyOffDuration: TimeInterval = TransportConfig.bleDutyOffDuration
-    private var dutyActive: Bool = false
+    // MARK: - Radio (central-role policy: discovery admission, connection
+    // budget, connect timeouts, background connects, scan duty, advertising)
+    private lazy var radio = BLERadioController(
+        queue: bleQueue,
+        linkStateStore: linkStateStore,
+        recentTraffic: recentTrafficTracker
+    )
     
     // Debounced publish to coalesce rapid changes
     private var peerPublishCoalescer = BLEPeerPublishCoalescer()
@@ -522,6 +517,8 @@ final class BLEService: NSObject {
         // Set queue key for identification
         messageQueue.setSpecific(key: messageQueueKey, value: ())
         engineScheduler.activate(engineQueue: messageQueue)
+        radio.delegate = self
+        radio.peripheralDelegate = self
         
         // Set up application state tracking (iOS only)
         #if os(iOS)
@@ -645,6 +642,7 @@ final class BLEService: NSObject {
         centralManager = CBCentralManager(delegate: self, queue: bleQueue)
         peripheralManager = CBPeripheralManager(delegate: self, queue: bleQueue)
         #endif
+        radio.central = centralManager
     }
     
     private func restartGossipManager() {
@@ -698,8 +696,7 @@ final class BLEService: NSObject {
     
     deinit {
         maintenanceTimer?.cancel()
-        scanDutyTimer?.cancel()
-        scanDutyTimer = nil
+        radio.stopDutyCycle()
         centralManager?.stopScan()
         peripheralManager?.stopAdvertising()
         #if os(iOS)
@@ -786,7 +783,7 @@ final class BLEService: NSObject {
             pendingWriteBuffers.removeAll()
             noiseAuthenticatedLinkOwners.removeAll()
             noiseReconnectPolicy.removeAll()
-            connectionScheduler.reset()
+            radio.reset()
         }
         disconnectNotifyDebouncer.removeAll()
 
@@ -1008,8 +1005,7 @@ final class BLEService: NSObject {
         // Stop timer
         maintenanceTimer?.cancel()
         maintenanceTimer = nil
-        scanDutyTimer?.cancel()
-        scanDutyTimer = nil
+        radio.stopDutyCycle()
 
         centralManager?.stopScan()
         peripheralManager?.stopAdvertising()
@@ -1031,8 +1027,7 @@ final class BLEService: NSObject {
 
         maintenanceTimer?.cancel()
         maintenanceTimer = nil
-        scanDutyTimer?.cancel()
-        scanDutyTimer = nil
+        radio.stopDutyCycle()
 
         centralManager?.stopScan()
         peripheralManager?.stopAdvertising()
@@ -1080,7 +1075,7 @@ final class BLEService: NSObject {
             linkStateStore.clearAll()
             noiseAuthenticatedLinkOwners.removeAll()
             noiseReconnectPolicy.removeAll()
-            connectionScheduler.reset()
+            radio.reset()
             subscriptionAnnounceLimiter.removeAll()
         }
         meshTopology.reset()
@@ -2988,7 +2983,7 @@ extension BLEService: CBCentralManagerDelegate {
             // nothing. Service rediscovery for restored-connected links waits
             // for poweredOn: CoreBluetooth drops commands issued during
             // restoration (API MISUSE warnings).
-            recentPeripheralCache.record(peripheral, peripheralID: identifier, at: Date())
+            radio.recordRecentPeripheral(peripheral, peripheralID: identifier, at: Date())
         }
 
         // Via the sampler (not a direct capture): it refreshes the cached
@@ -2997,7 +2992,7 @@ extension BLEService: CBCentralManagerDelegate {
         logBluetoothStatus("central-restore")
 
         if central.state == .poweredOn {
-            startScanning()
+            radio.startScanning()
         }
     }
     #endif
@@ -3023,7 +3018,7 @@ extension BLEService: CBCentralManagerDelegate {
             }
 
             // Start scanning - use allow duplicates for faster discovery when active
-            startScanning()
+            radio.startScanning()
 
         case .poweredOff:
             // CoreBluetooth has already transitioned out of poweredOn. Do
@@ -3070,70 +3065,11 @@ extension BLEService: CBCentralManagerDelegate {
         }
     }
     
-    private func startScanning() {
-        guard !isPanicSuspended,
-              let central = centralManager,
-              central.state == .poweredOn,
-              !central.isScanning else { return }
-        
-        // Use allow duplicates = true for faster discovery in foreground
-        // This gives us discovery events immediately instead of coalesced
-        #if os(iOS)
-        let allowDuplicates = isAppActive  // Use our tracked state (thread-safe)
-        #else
-        let allowDuplicates = true  // macOS doesn't have background restrictions
-        #endif
-        
-        central.scanForPeripherals(
-                withServices: [BLEService.serviceUUID],
-            options: [CBCentralManagerScanOptionAllowDuplicatesKey: allowDuplicates]
-        )
-        
-        // Started BLE scanning
-    }
     
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
-        guard !isPanicSuspended else { return }
-        let peripheralID = peripheral.identifier.uuidString
-        let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? (peripheralID.prefix(6) + "…")
-        let isConnectable = (advertisementData[CBAdvertisementDataIsConnectable] as? NSNumber)?.boolValue ?? true
-        let rssiValue = RSSI.intValue
-
-        let candidate = BLEConnectionCandidate(
-            peripheral: peripheral,
-            peripheralID: peripheralID,
-            rssi: rssiValue,
-            name: String(advertisedName),
-            isConnectable: isConnectable,
-            discoveredAt: Date()
-        )
-        if isConnectable {
-            recentPeripheralCache.record(peripheral, peripheralID: peripheralID, at: candidate.discoveredAt)
-        }
-        let existingState = linkStateStore.state(forPeripheralID: peripheralID).map(BLEExistingConnectionState.init)
-
-        switch connectionScheduler.handleDiscovery(
-            candidate,
-            connectedOrConnectingCount: linkStateStore.connectedOrConnectingPeripheralCount,
-            existingState: existingState,
-            peripheralState: peripheral.state.connectionSchedulerState,
-            now: candidate.discoveredAt
-        ) {
-        case .ignore, .queued:
-            return
-        case .scheduleRetry(let delay):
-            bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
-                self?.tryConnectFromQueue()
-            }
-            return
-        case .cancelStaleConnection:
-            central.cancelPeripheralConnection(peripheral)
-            return
-        case .connectNow:
-            beginCentralConnection(candidate, using: central, logPrefix: "📱 Connect")
-        }
+        radio.handleDiscovery(peripheral, advertisementData: advertisementData, rssi: RSSI)
     }
-    
+
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         guard !isPanicSuspended else {
             central.cancelPeripheralConnection(peripheral)
@@ -3153,7 +3089,7 @@ extension BLEService: CBCentralManagerDelegate {
         linkStateStore.markConnected(peripheral)
         
         // Reset backoff state on success
-        connectionScheduler.recordConnectionSuccess(peripheralID: peripheralID)
+        radio.recordConnectionSuccess(peripheralID: peripheralID)
 
         SecureLogger.debug("✅ Connected: \(peripheral.name ?? "Unknown") [\(peripheralID)]", category: .session)
         
@@ -3171,12 +3107,12 @@ extension BLEService: CBCentralManagerDelegate {
 
         // If disconnect carried an error (often timeout), apply short backoff to avoid thrash
         if error != nil {
-            connectionScheduler.recordDisconnectError(peripheralID: peripheralID, at: Date())
+            radio.recordDisconnectError(peripheralID: peripheralID, at: Date())
         }
 
         // Retain the handle: a dropped link is the best wake-on-proximity
         // candidate if the app backgrounds before the peer returns.
-        recentPeripheralCache.record(peripheral, peripheralID: peripheralID, at: Date())
+        radio.recordRecentPeripheral(peripheral, peripheralID: peripheralID, at: Date())
 
         #if os(iOS)
         // Link lost while backgrounded (peer walked away): re-arm a pending
@@ -3188,16 +3124,13 @@ extension BLEService: CBCentralManagerDelegate {
                 guard let self, !self.isAppActive else { return }
                 // Reserve 0: use the slot this disconnect freed even in a
                 // dense mesh, so the lost peer can wake us when it returns.
-                self.armPendingBackgroundConnects(slotReserve: 0)
+                self.radio.armPendingBackgroundConnects(slotReserve: 0)
             }
         }
         #endif
 
         // Clean up references and peer mappings
-        pendingPeripheralWrites.discardAll(for: peripheralID)
-        noiseAuthenticatedLinkOwners.removeValue(forKey: .peripheral(peripheralID))
-        noiseReconnectPolicy.endLinkEpoch(.peripheral(peripheralID))
-        _ = linkStateStore.removePeripheral(peripheralID)
+        tearDownPeripheralLink(peripheralID)
         // A duplicate link can drop while the peer stays live on another
         // (the dual-role central link, or a second bound link after a
         // restore): peer-disconnect bookkeeping only runs once the peer's
@@ -3220,11 +3153,11 @@ extension BLEService: CBCentralManagerDelegate {
             // Stop and restart scanning to ensure we get fresh discovery events
             centralManager?.stopScan()
             bleQueue.asyncAfter(deadline: .now() + TransportConfig.bleRestartScanDelaySeconds) { [weak self] in
-                self?.startScanning()
+                self?.radio.startScanning()
             }
         }
         // Attempt to fill freed slot from queue
-        bleQueue.async { [weak self] in self?.tryConnectFromQueue() }
+        bleQueue.async { [weak self] in self?.radio.tryConnectFromQueue() }
 
         // Notify delegate about disconnection on main thread (direct link dropped)
         notifyUI { [weak self] in
@@ -3245,119 +3178,46 @@ extension BLEService: CBCentralManagerDelegate {
         let peripheralID = peripheral.identifier.uuidString
         
         // Clean up the references
-        pendingPeripheralWrites.discardAll(for: peripheralID)
-        noiseAuthenticatedLinkOwners.removeValue(forKey: .peripheral(peripheralID))
-        noiseReconnectPolicy.endLinkEpoch(.peripheral(peripheralID))
-        _ = linkStateStore.removePeripheral(peripheralID)
+        tearDownPeripheralLink(peripheralID)
 
         SecureLogger.error("❌ Failed to connect to peripheral: \(peripheral.name ?? "Unknown") [\(peripheralID)] - Error: \(error?.localizedDescription ?? "Unknown")", category: .session)
-        connectionScheduler.recordConnectionFailure(peripheralID: peripheralID)
+        radio.recordConnectionFailure(peripheralID: peripheralID)
         // Try next candidate
-        bleQueue.async { [weak self] in self?.tryConnectFromQueue() }
-    }
-}
-
-// MARK: - Connection scheduling helpers
-private extension BLEExistingConnectionState {
-    init(_ state: BLEPeripheralLinkState) {
-        self.init(
-            isConnecting: state.isConnecting,
-            isConnected: state.isConnected,
-            lastConnectionAttempt: state.lastConnectionAttempt
-        )
-    }
-}
-
-private extension CBPeripheralState {
-    var connectionSchedulerState: BLEPeripheralConnectionState {
-        switch self {
-        case .connected:
-            return .connected
-        case .connecting:
-            return .connecting
-        case .disconnected, .disconnecting:
-            return .disconnected
-        @unknown default:
-            return .disconnected
-        }
+        bleQueue.async { [weak self] in self?.radio.tryConnectFromQueue() }
     }
 }
 
 extension BLEService {
-    private func tryConnectFromQueue() {
-        guard !isPanicSuspended,
-              let central = centralManager,
-              central.state == .poweredOn else { return }
+}
 
-        let decision = connectionScheduler.nextCandidate(
-            connectedOrConnectingCount: linkStateStore.connectedOrConnectingPeripheralCount,
-            isAlreadyConnectingOrConnected: { [linkStateStore] peripheralID in
-                let state = linkStateStore.state(forPeripheralID: peripheralID)
-                return state?.isConnected == true || state?.isConnecting == true
-            },
-            now: Date()
-        )
+// MARK: - Radio controller integration
 
-        switch decision {
-        case .none:
-            return
-        case .retryAfter(let delay):
-            bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in self?.tryConnectFromQueue() }
-        case .connect(let candidate):
-            beginCentralConnection(candidate, using: central, logPrefix: "⏩ Queue connect")
-        }
+extension BLEService: BLERadioControllerDelegate {
+    func radioIsPanicSuspended() -> Bool {
+        isPanicSuspended
     }
 
-    private func beginCentralConnection(
-        _ candidate: BLEConnectionCandidate<CBPeripheral>,
-        using central: CBCentralManager,
-        logPrefix: String
-    ) {
-        guard !isPanicSuspended else { return }
-        let peripheral = candidate.peripheral
-        let peripheralID = candidate.peripheralID
-        linkStateStore.beginConnecting(to: peripheral, at: Date())
-        peripheral.delegate = self
-        let options: [String: Any] = [
-            CBConnectPeripheralOptionNotifyOnConnectionKey: true,
-            CBConnectPeripheralOptionNotifyOnDisconnectionKey: true,
-            CBConnectPeripheralOptionNotifyOnNotificationKey: true
-        ]
-        central.connect(peripheral, options: options)
-        connectionScheduler.recordConnectionAttempt(at: Date())
-        SecureLogger.debug("\(logPrefix): \(candidate.name) [RSSI:\(candidate.rssi)]", category: .session)
+    func radioIsAppActive() -> Bool {
+        #if os(iOS)
+        return isAppActive
+        #else
+        return true
+        #endif
+    }
 
-        bleQueue.asyncAfter(deadline: .now() + TransportConfig.bleConnectTimeoutSeconds) { [weak self] in
-            guard let self = self,
-                  let state = self.linkStateStore.state(forPeripheralID: peripheralID),
-                  state.isConnecting && !state.isConnected else { return }
+    func radioTearDownPeripheralLink(_ peripheralID: String) {
+        tearDownPeripheralLink(peripheralID)
+    }
 
-            guard peripheral.state != .connected else {
-                SecureLogger.debug("⏱️ Timeout fired but peripheral already connected: \(candidate.name)", category: .session)
-                return
-            }
-
-            #if os(iOS)
-            if !self.isAppActive {
-                // Backgrounded: leave the connect pending. iOS never expires
-                // it — the controller completes it whenever the peer comes
-                // back into range, waking the app (state restoration relaunches
-                // us if we were terminated). Foreground return cancels stale
-                // pendings via cancelStalePendingConnects().
-                SecureLogger.info("🌙 Connect timeout deferred while backgrounded, left pending for wake-on-proximity: \(candidate.name)", category: .session)
-                return
-            }
-            #endif
-
-            SecureLogger.debug("⏱️ Timeout: \(candidate.name)", category: .session)
-            central.cancelPeripheralConnection(peripheral)
-            self.pendingPeripheralWrites.discardAll(for: peripheralID)
-            self.noiseAuthenticatedLinkOwners.removeValue(forKey: .peripheral(peripheralID))
-            self.noiseReconnectPolicy.endLinkEpoch(.peripheral(peripheralID))
-            _ = self.linkStateStore.removePeripheral(peripheralID)
-            self.connectionScheduler.recordConnectionTimeout(peripheralID: peripheralID, at: Date())
-            self.tryConnectFromQueue()
-        }
+    /// Retires one peripheral link's transport bookkeeping: its write
+    /// backpressure, its Noise link proof and reconnect epoch, and the
+    /// link-state entry (which repairs the peer's reverse mapping onto a
+    /// surviving duplicate link). bleQueue-confined.
+    func tearDownPeripheralLink(_ peripheralID: String) {
+        pendingPeripheralWrites.discardAll(for: peripheralID)
+        noiseAuthenticatedLinkOwners.removeValue(forKey: .peripheral(peripheralID))
+        noiseReconnectPolicy.endLinkEpoch(.peripheral(peripheralID))
+        _ = linkStateStore.removePeripheral(peripheralID)
     }
 }
 
@@ -4042,7 +3902,7 @@ extension BLEService: CBPeripheralManagerDelegate {
         logBluetoothStatus("peripheral-restore")
 
         if peripheral.state == .poweredOn && !peripheral.isAdvertising {
-            peripheral.startAdvertising(buildAdvertisementData())
+            peripheral.startAdvertising(BLERadioController.advertisementData())
         }
     }
     #endif
@@ -4060,7 +3920,7 @@ extension BLEService: CBPeripheralManagerDelegate {
         SecureLogger.debug("✅ Service added successfully, starting advertising", category: .session)
         
         // Start advertising after service is confirmed added
-        let adData = buildAdvertisementData()
+        let adData = BLERadioController.advertisementData()
         peripheral.startAdvertising(adData)
         
         SecureLogger.debug("📡 Started advertising (LocalName: \((adData[CBAdvertisementDataLocalNameKey] as? String) != nil ? "on" : "off"), ID: \(myPeerID.id.prefix(8))…)", category: .session)
@@ -4110,7 +3970,7 @@ extension BLEService: CBPeripheralManagerDelegate {
         // Ensure we're still advertising for other devices to find us
         if !isPanicSuspended, peripheral.isAdvertising == false {
             SecureLogger.debug("📡 Restarting advertising after central unsubscribed", category: .session)
-            peripheral.startAdvertising(buildAdvertisementData())
+            peripheral.startAdvertising(BLERadioController.advertisementData())
         }
         
         // Find and disconnect the peer associated with this central
@@ -4297,15 +4157,7 @@ extension BLEService: CBPeripheralManagerDelegate {
 // MARK: - Advertising Builders & Alias Rotation
 
 extension BLEService {
-    private func buildAdvertisementData() -> [String: Any] {
-        let data: [String: Any] = [
-            CBAdvertisementDataServiceUUIDsKey: [BLEService.serviceUUID]
-        ]
-        // No Local Name for privacy
-        return data
-    }
-    
-    // No alias rotation or advertising restarts required.
+    // Advertising payload and alias policy live on BLERadioController.
 }
 
 // MARK: - Private Media Deletion
@@ -4542,11 +4394,12 @@ extension BLEService {
         let peripheralState = peripheralManager?.state ?? .unknown
         let isAdvertising = peripheralManager?.isAdvertising ?? false
 
+        let candidateCount = radio.candidateCount
         let peerSummary = peerRegistry.read {
             (
                 connected: $0.connectedCount,
                 known: $0.count,
-                candidates: connectionScheduler.candidateCount
+                candidates: candidateCount
             )
         }
 
@@ -6094,9 +5947,9 @@ extension BLEService {
         // Restart scanning with allow duplicates when app becomes active
         if centralManager?.state == .poweredOn {
             centralManager?.stopScan()
-            startScanning()
+            radio.startScanning()
         }
-        cancelStalePendingConnects()
+        radio.cancelStalePendingConnects()
         logBluetoothStatus("became-active")
         scheduleBluetoothStatusSample(after: 5.0, context: "active-5s")
         // No Local Name; nothing to refresh for advertising policy
@@ -6108,96 +5961,15 @@ extension BLEService {
         // Restart scanning without allow duplicates in background
         if centralManager?.state == .poweredOn {
             centralManager?.stopScan()
-            startScanning()
+            radio.startScanning()
         }
-        armPendingBackgroundConnects()
+        radio.armPendingBackgroundConnects()
         // Backgrounding may precede a kill; flush the public-history archive
         // outside its 30s maintenance cadence.
         gossipSyncManager?.persistNow()
         logBluetoothStatus("entered-background")
         scheduleBluetoothStatusSample(after: 15.0, context: "background-15s")
         // No Local Name; nothing to refresh for advertising policy
-    }
-
-    /// Issue indefinite `connect()` requests to recently seen peripherals on
-    /// backgrounding. Pending connects live in the Bluetooth controller's
-    /// allowlist — no scanning and no app CPU — and complete whenever a peer
-    /// comes into range, waking (or relaunching) the app. A couple of central
-    /// slots stay reserved for connects driven by live background discovery —
-    /// except on the disconnect re-arm path, which may consume the slot the
-    /// disconnect itself just freed (a dense mesh with 4+ remaining links
-    /// would otherwise compute a zero budget and never re-arm the lost peer).
-    private func armPendingBackgroundConnects(
-        slotReserve: Int = TransportConfig.bleBackgroundPendingConnectSlotReserve
-    ) {
-        bleQueue.async { [weak self] in
-            guard let self,
-                  !self.isPanicSuspended,
-                  let central = self.centralManager,
-                  central.state == .poweredOn else { return }
-            let budget = TransportConfig.bleMaxCentralLinks
-                - slotReserve
-                - self.linkStateStore.connectedOrConnectingPeripheralCount
-            let now = Date()
-            let targets = self.recentPeripheralCache.reconnectTargets(now: now, limit: budget) { peripheralID in
-                let state = self.linkStateStore.state(forPeripheralID: peripheralID)
-                return state?.isConnected == true || state?.isConnecting == true
-            }
-            guard !targets.isEmpty else { return }
-            for target in targets {
-                // lastConnectionAttempt stays nil: an indefinite pending connect
-                // has no attempt clock, and nil marks it always-stale so
-                // cancelStalePendingConnects() reclaims it on foreground even
-                // after a quick background→foreground bounce.
-                self.linkStateStore.setPeripheralState(
-                    BLEPeripheralLinkState(
-                        peripheral: target.peripheral,
-                        characteristic: nil,
-                        peerID: nil,
-                        isConnecting: true,
-                        isConnected: false,
-                        lastConnectionAttempt: nil,
-                        assembler: NotificationStreamAssembler()
-                    ),
-                    for: target.peripheralID
-                )
-                target.peripheral.delegate = self
-                central.connect(target.peripheral, options: [
-                    CBConnectPeripheralOptionNotifyOnConnectionKey: true,
-                    CBConnectPeripheralOptionNotifyOnDisconnectionKey: true,
-                    CBConnectPeripheralOptionNotifyOnNotificationKey: true
-                ])
-            }
-            SecureLogger.info("🌙 Armed \(targets.count) pending background connect(s) for wake-on-proximity", category: .session)
-        }
-    }
-
-    /// Foreground restores normal connection management: pending connects
-    /// older than the connect timeout (including ones rebuilt by state
-    /// restoration after a relaunch) are cancelled so live scanning and the
-    /// scheduler take over. Anything still nearby is rediscovered within
-    /// seconds by the allow-duplicates foreground scan.
-    private func cancelStalePendingConnects() {
-        bleQueue.async { [weak self] in
-            guard let self, let central = self.centralManager else { return }
-            let now = Date()
-            var cancelled = 0
-            for state in self.linkStateStore.peripheralStates where state.isConnecting && !state.isConnected {
-                let age = state.lastConnectionAttempt.map { now.timeIntervalSince($0) } ?? .infinity
-                guard age > TransportConfig.bleConnectTimeoutSeconds else { continue }
-                let peripheralID = state.peripheral.identifier.uuidString
-                central.cancelPeripheralConnection(state.peripheral)
-                self.pendingPeripheralWrites.discardAll(for: peripheralID)
-                self.noiseAuthenticatedLinkOwners.removeValue(forKey: .peripheral(peripheralID))
-                self.noiseReconnectPolicy.endLinkEpoch(.peripheral(peripheralID))
-                _ = self.linkStateStore.removePeripheral(peripheralID)
-                cancelled += 1
-            }
-            if cancelled > 0 {
-                SecureLogger.info("🌅 Cancelled \(cancelled) stale pending connect(s) on foreground", category: .session)
-                self.tryConnectFromQueue()
-            }
-        }
     }
     #endif
     
@@ -6505,7 +6277,7 @@ extension BLEService {
                 let totalFragments = plan.totalFragments
                 let expectedMs = min(TransportConfig.bleExpectedWriteMaxMs, totalFragments * TransportConfig.bleExpectedWritePerFragmentMs)
                 self.bleQueue.asyncAfter(deadline: .now() + .milliseconds(expectedMs)) { [weak self] in
-                    self?.startScanning()
+                    self?.radio.startScanning()
                 }
             }
         }
@@ -7115,10 +6887,7 @@ extension BLEService {
         )
         for uuid in retiring {
             guard let state = linkStateStore.state(forPeripheralID: uuid) else { continue }
-            pendingPeripheralWrites.discardAll(for: uuid)
-            noiseAuthenticatedLinkOwners.removeValue(forKey: .peripheral(uuid))
-            noiseReconnectPolicy.endLinkEpoch(.peripheral(uuid))
-            _ = linkStateStore.removePeripheral(uuid)
+            tearDownPeripheralLink(uuid)
             SecureLogger.info(
                 "🔗 Retiring redundant link \(uuid.prefix(8))… bound to \(peerID.id.prefix(8))…\(keptUUID.map { " (keeping \($0.prefix(8))…)" } ?? "")",
                 category: .session
@@ -7765,20 +7534,20 @@ extension BLEService {
         if plan.shouldEnsureAdvertising {
             // Ensure we're advertising as peripheral
             if let pm = peripheralManager, pm.state == .poweredOn && !pm.isAdvertising {
-                pm.startAdvertising(buildAdvertisementData())
+                pm.startAdvertising(BLERadioController.advertisementData())
             }
         }
         
         // Update scanning duty-cycle based on connectivity
-        updateScanningDutyCycle(connectedCount: connectedCount)
-        updateRSSIThreshold(connectedCount: connectedCount)
+        radio.updateScanningDutyCycle(connectedCount: connectedCount)
+        radio.updateRSSIThreshold(connectedCount: connectedCount)
 
         // Drain the connection candidate queue. Weak-RSSI discoveries are
         // enqueued rather than connected immediately, and the event-driven
         // drains (disconnect/failure/timeout) never fire when we're idle —
         // without this, an isolated node surrounded only by weak (distant)
         // peers would queue them all and never connect to anyone.
-        tryConnectFromQueue()
+        radio.tryConnectFromQueue()
         
         // Check peer connectivity every cycle for snappier UI updates
         checkPeerConnectivity()
@@ -7893,7 +7662,7 @@ extension BLEService {
 
         // Clean old connection timeout backoff entries (> window)
         let timeoutCutoff = now.addingTimeInterval(-TransportConfig.bleConnectTimeoutBackoffWindowSeconds)
-        connectionScheduler.pruneConnectionTimeouts(before: timeoutCutoff)
+        radio.pruneConnectionTimeouts(before: timeoutCutoff)
 
         // Clean up stale scheduled relays that somehow persisted (> 2s)
         messageQueue.async { [weak self] in
@@ -7924,72 +7693,4 @@ extension BLEService {
         }
     }
 
-    private func updateScanningDutyCycle(connectedCount: Int) {
-        guard let central = centralManager, central.state == .poweredOn else { return }
-        // Duty cycle only when app is active and at least one peer connected
-        #if os(iOS)
-        let active = isAppActive
-        #else
-        let active = true
-        #endif
-        // Force full-time scanning if we have very few neighbors or very recent traffic
-        let hasRecentTraffic = recentTrafficTracker.hasTraffic(
-            within: TransportConfig.bleRecentTrafficForceScanSeconds,
-            now: Date()
-        )
-        let scanPlan = BLEScanDutyPolicy.plan(
-            dutyEnabled: dutyEnabled,
-            appIsActive: active,
-            connectedCount: connectedCount,
-            hasRecentTraffic: hasRecentTraffic
-        )
-
-        switch scanPlan {
-        case .dutyCycle(let onDuration, let offDuration):
-            let durationsChanged = dutyOnDuration != onDuration || dutyOffDuration != offDuration
-            dutyOnDuration = onDuration
-            dutyOffDuration = offDuration
-
-            if scanDutyTimer == nil {
-                // Start timer to toggle scanning on/off
-                let t = DispatchSource.makeTimerSource(queue: bleQueue)
-                // Start with scanning ON; we'll turn OFF after onDuration
-                if !central.isScanning { startScanning() }
-                dutyActive = true
-                t.schedule(deadline: .now() + dutyOnDuration, repeating: dutyOnDuration + dutyOffDuration)
-                t.setEventHandler { [weak self] in
-                    guard let self = self, let c = self.centralManager else { return }
-                    if self.dutyActive {
-                        // Turn OFF scanning for offDuration
-                        if c.isScanning { c.stopScan() }
-                        self.dutyActive = false
-                        // Schedule turning back ON after offDuration
-                        self.bleQueue.asyncAfter(deadline: .now() + self.dutyOffDuration) {
-                            if self.centralManager?.state == .poweredOn { self.startScanning() }
-                            self.dutyActive = true
-                        }
-                    }
-                }
-                t.resume()
-                scanDutyTimer = t
-            } else if durationsChanged {
-                scanDutyTimer?.schedule(deadline: .now() + dutyOnDuration, repeating: dutyOnDuration + dutyOffDuration)
-                if !central.isScanning { startScanning() }
-                dutyActive = true
-            }
-        case .continuous:
-            // Cancel duty cycle and ensure scanning is ON for discovery
-            scanDutyTimer?.cancel()
-            scanDutyTimer = nil
-            if !central.isScanning { startScanning() }
-        }
-    }
-
-    private func updateRSSIThreshold(connectedCount: Int) {
-        connectionScheduler.updateRSSIThreshold(
-            connectedCount: connectedCount,
-            connectedOrConnectingLinkCount: linkStateStore.connectedOrConnectingPeripheralCount,
-            now: Date()
-        )
-    }
 }
