@@ -76,10 +76,12 @@ struct ContentComposerView: View {
                 .bitchatFont(size: 15)
                 .foregroundColor(palette.primary)
                 .focused(isTextFieldFocused)
-                // Autocorrect left enabled for chat typing (#969). Nicknames
-                // and geohashes keep `.autocorrectionDisabled(true)` elsewhere.
+                // Token-aware (#969): autocorrect for prose, off while the
+                // current token is a /command, @mention, or #channel so the
+                // keyboard doesn't fight exact tokens (or learn them).
+                .autocorrectionDisabled(shouldDisableAutocorrect)
                 #if os(iOS)
-                .textInputAutocapitalization(.sentences)
+                .textInputAutocapitalization(shouldDisableAutocorrect ? .never : .sentences)
                 #endif
                 .submitLabel(.send)
                 .modifier(AutocompleteKeyboardNavigationModifier(
@@ -150,6 +152,12 @@ struct ContentComposerView: View {
 }
 
 private extension ContentComposerView {
+    /// Mirror autocomplete's end-of-string caret: SwiftUI's TextField doesn't
+    /// expose selection, and suggestions already assume the caret is at the end.
+    var shouldDisableAutocorrect: Bool {
+        ComposerAutocorrect.shouldDisable(for: messageText, cursorPosition: messageText.count)
+    }
+
     /// The nearby-only scope toggle appears only where it means something:
     /// the public mesh channel with the bridge on.
     var showsNearbyOnlyToggle: Bool {
