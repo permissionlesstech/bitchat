@@ -427,6 +427,7 @@ private extension ContentPeopleListView {
 
 private struct ContentPrivateChatSheetView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
+    @EnvironmentObject private var conversationUIModel: ConversationUIModel
 
     @Binding var showSidebar: Bool
     @Binding var messageText: String
@@ -441,6 +442,7 @@ private struct ContentPrivateChatSheetView: View {
     @Binding var autocompleteDebounceTimer: Timer?
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
+    @State private var showStickerPicker = false
 
     let headerHeight: CGFloat
     let onSendMessage: () -> Void
@@ -553,7 +555,8 @@ private struct ContentPrivateChatSheetView: View {
                 autocompleteDebounceTimer: $autocompleteDebounceTimer,
                 onSendMessage: onSendMessage,
                 showImagePicker: $showImagePicker,
-                imagePickerSourceType: $imagePickerSourceType
+                imagePickerSourceType: $imagePickerSourceType,
+                onShowStickerPicker: { showStickerPicker = true }
             )
             #else
             ContentComposerView(
@@ -562,9 +565,18 @@ private struct ContentPrivateChatSheetView: View {
                 voiceRecordingVM: voiceRecordingVM,
                 autocompleteDebounceTimer: $autocompleteDebounceTimer,
                 onSendMessage: onSendMessage,
-                showMacImagePicker: $showMacImagePicker
+                showMacImagePicker: $showMacImagePicker,
+                onShowStickerPicker: { showStickerPicker = true }
             )
             #endif
+        }
+        .sheet(isPresented: $showStickerPicker) {
+            // conversationUIModel routes to the selected private peer while
+            // this sheet is up, exactly like the public composer's picker.
+            StickerPickerSheet { ref in
+                showStickerPicker = false
+                conversationUIModel.sendMessage(ref.content)
+            }
         }
         .themedSheetBackground()
         .foregroundColor(palette.primary)

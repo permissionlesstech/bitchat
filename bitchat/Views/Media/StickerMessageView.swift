@@ -19,6 +19,11 @@ struct StickerMessageView: View {
 
     enum LoadState: Equatable {
         case loading, ready(Data), missing, untrusted
+        /// Pack is not installed and was never consented to: render a
+        /// placeholder and fetch only on explicit tap (privacy — an on-render
+        /// fetch of an uninstalled pack is a read beacon that tells the
+        /// sender/relays/Blossom host exactly when the message was viewed).
+        case needsConsent
     }
     @State private var loadState: LoadState = .loading
 
@@ -36,7 +41,14 @@ struct StickerMessageView: View {
             content(for: loadState)
                 .frame(maxWidth: stickerSize, maxHeight: stickerSize)
                 .onTapGesture {
-                    if loadState == .missing || loadState == .untrusted { Task { await resolve() } }
+                    switch loadState {
+                    case .needsConsent, .missing:
+                        Task { await resolve(userConsented: true) }
+                    case .untrusted:
+                        Task { await resolve() }
+                    case .loading, .ready:
+                        break
+                    }
                 }
         }
         .frame(maxWidth: .infinity, alignment: isFromMe ? .trailing : .leading)
@@ -48,6 +60,8 @@ struct StickerMessageView: View {
         switch state {
         case .loading:
             placeholder(symbol: "sparkles", tint: palette.secondary)
+        case .needsConsent:
+            placeholder(symbol: "arrow.down.circle", tint: palette.secondary)
         case .missing:
             placeholder(symbol: "photo", tint: palette.secondary)
         case .untrusted:
@@ -88,7 +102,7 @@ struct StickerMessageView: View {
     }
     #endif
 
-    private func resolve() async {
+    private func resolve(userConsented: Bool = false) async {
         guard let ref = StickerRefCodec.parse(message.content) else {
             loadState = .missing
             return
@@ -96,6 +110,18 @@ struct StickerMessageView: View {
         let service = StickerPackService.shared
         var pack = service.cachedPack(forCoordinate: ref.packCoordinate)
         if pack == nil {
+            // Privacy gate: fetching an UNINSTALLED pack on render is the
+            // app's first inbound-message-triggers-network path — a read
+            // beacon that leaks view timing (and, in DMs, conversation
+            // metadata) to relays and Blossom hosts. Installed packs (user
+            // opted in) resolve automatically; anything else requires an
+            // explicit tap.
+            let isInstalled = await StickerInstallStore.shared.installedPacks()
+                .contains(ref.packCoordinate)
+            guard isInstalled || userConsented else {
+                loadState = .needsConsent
+                return
+            }
             let parts = ref.packCoordinate.split(separator: ":", omittingEmptySubsequences: false)
             if parts.count == 3 {
                 pack = try? await service.fetchPack(authorPubkeyHex: String(parts[1]), identifier: String(parts[2]))

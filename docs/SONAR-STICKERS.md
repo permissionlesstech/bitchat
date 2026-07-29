@@ -72,21 +72,23 @@ Sticker references are always carried as **ordinary message content**:
   event (kind 20000), inside the existing encryption for that channel.
 
 No new message type, TLV, or Nostr kind is introduced for sending stickers.
-Clients SHOULD gate sending on the peer's advertised capabilities (below);
-receiving clients MUST accept sticker content regardless.
+v1 does not gate sending on capabilities; receiving clients MUST accept
+sticker content regardless (old clients render harmless literal text — see
+"Old-Client Behavior" below).
 
 ## Capability Bit
 
-Support is advertised via the `PeerCapabilities` bitfield in announce
-packets (see `localPackages/BitFoundation/.../PeerCapabilities.swift`):
-
-- **`.stickers` = bit 11** (`1 << 11`)
+- **`.stickers` = bit 13** (`1 << 13`) — **reserved, NOT advertised in v1.**
 
 Bit 10 remains reserved (`nonDestructiveNoiseReplacement`, decodable but
-unused) and MUST NOT be reused. A peer that advertises `.stickers`
-understands the `␟sticker␟` content prefix and can render refs to images.
-Senders SHOULD prefer sending a ref only to peers advertising the bit, and
-MAY fall back to a short textual description (`:shortcode:`) otherwise.
+unused), bit 11 is claimed by #1107 (double ratchet), and bit 12 by #1438
+(spray recovery); none of these MUST be reused. The stickers bit is
+reserved for a future inline-BLE byte delivery mode and is NOT set in v1
+announce packets: references ride as ordinary message content, so there is
+nothing to negotiate. When a peer capability becomes meaningful (e.g.
+inline delivery), senders SHOULD prefer sending a ref only to peers
+advertising the bit and MAY fall back to a short textual description
+(`:shortcode:`) otherwise.
 
 ## Pack Resolution
 
@@ -107,6 +109,15 @@ Resolution is a client-side cache/fetch concern and never touches the mesh:
    published as a replaceable kind-`10031` event whose `a` tags are
    `30031:<pubkey>:<identifier>` pointers, deduplicated in first-seen
    order. Clients SHOULD merge relays' versions keeping the newest event.
+5. **Fetch consent (privacy).** Resolving an uninstalled pack on behalf of
+   an inbound message MUST NOT happen automatically at render time: an
+   on-render fetch is a read beacon — a per-recipient pack URL tells the
+   sender exactly when the message was viewed, and DM sticker fetches leak
+   conversation metadata to relays/Blossom hosts. Uninstalled packs render
+   a placeholder and fetch only on explicit user consent (e.g. a tap).
+   Packs the user installed resolve automatically. Failed pack lookups
+   SHOULD be negative-cached with exponential backoff so a missing/dead
+   pack is not re-fetched on every render (a repeat beacon).
 
 See https://sonarprivacy.xyz/docs#SONAR-STICKERS for the full pack and
 publication spec.

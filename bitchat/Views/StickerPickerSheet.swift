@@ -29,7 +29,7 @@ struct StickerPickerSheet: View {
 
     /// New instances share persisted state (UserDefaults + deterministic
     /// file), so this is consistent with the store held by `ChatViewModel`.
-    private let installStore = StickerInstallStore()
+    private let installStore = StickerInstallStore.shared
     private let packService = StickerPackService.shared
 
     @State private var installedPacks: [StickerPack] = []
@@ -256,6 +256,16 @@ struct StickerPickerSheet: View {
                         newValue,
                         forKey: StickerInstallStore.syncEnabledDefaultsKey
                     )
+                    if newValue {
+                        // Enabling sync must actually synchronize: import the
+                        // remote list (so a second device's packs arrive),
+                        // then publish the merged local list. Failures are
+                        // logged inside the store; the toggle stays on.
+                        Task {
+                            try? await installStore.mergeInstalledFromNetwork()
+                            try? await installStore.publishInstalledList()
+                        }
+                    }
                 }
             )) {
                 Text(String(localized: "sticker.sync.title", comment: "Toggle label for syncing installed sticker packs to Nostr"))

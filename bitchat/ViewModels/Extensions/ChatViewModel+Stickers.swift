@@ -30,7 +30,7 @@ extension ChatViewModel {
     /// sidecar) and the persisted state is shared. This keeps `AppRuntime`
     /// wiring untouched, since the store works with no constructor args
     /// (it builds its own `NostrIdentityBridge` internally).
-    var stickerInstallStore: StickerInstallStore { StickerInstallStore() }
+    var stickerInstallStore: StickerInstallStore { StickerInstallStore.shared }
 
     /// Sends a sticker reference as an ordinary message in the current
     /// conversation (selected private peer, public mesh, or geohash channel).

@@ -192,10 +192,21 @@ struct StickerPackValidationTests {
         #expect(StickerPackService.parsePackEvent(makeEvent(tags: tags)) == nil)
     }
 
-    @Test("invalid shortcode is rejected", arguments: ["", "UPPER", "has space", "emoji🎉", String(repeating: "a", count: 65)])
+    // Shortcode rules come from the wire codec (`StickerRef.isValidShortcode`):
+    // `[A-Za-z0-9_]{1,64}` — uppercase is valid, dash is not.
+    @Test("invalid shortcode is rejected", arguments: ["", "has space", "emoji🎉", "so-wave", String(repeating: "a", count: 65)])
     func badShortcodeRejected(shortcode: String) {
         let tags = validTags(stickers: [stickerTag(shortcode: shortcode)])
         #expect(StickerPackService.parsePackEvent(makeEvent(tags: tags)) == nil)
+    }
+
+    @Test("codec-valid shortcode parses (pack and wire rules cannot drift)")
+    func codecValidShortcodeParses() {
+        let tags = validTags(stickers: [stickerTag(shortcode: "Wave_09")])
+        let pack = StickerPackService.parsePackEvent(makeEvent(tags: tags))
+        #expect(pack?.stickers.first?.shortcode == "Wave_09")
+        // …and the same shortcode is encodable into a wire reference.
+        #expect(StickerRef.isValidShortcode("Wave_09"))
     }
 
     @Test("duplicate shortcodes are rejected")

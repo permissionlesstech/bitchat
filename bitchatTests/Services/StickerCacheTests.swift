@@ -220,4 +220,66 @@ struct StickerCacheTests {
         // And the result was persisted.
         #expect(await cache.data(for: hash) == bytes)
     }
+
+    @Test("concurrent followers never receive unverified bytes: a hash mismatch fails every waiter")
+    func concurrentFollowersObserveValidationFailure() async throws {
+        let dir = makeTempDir()
+        defer { cleanup(dir) }
+        let cache = StickerCache(baseDirectory: dir)
+
+        let pinned = String(repeating: "1", count: 64)
+        let url = URL(string: "https://cdn.example.com/stickers/\(pinned).webp")!
+        let calls = Counter()
+
+        let downloader: StickerCache.Downloader = { _ in
+            calls.value += 1
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            return Data("tampered".utf8) // does not hash to `pinned`
+        }
+
+        async let first = cache.fetch(sha256: pinned, url: url, mime: "image/webp", using: downloader)
+        async let second = cache.fetch(sha256: pinned, url: url, mime: "image/webp", using: downloader)
+
+        // Verification+storage happens INSIDE the shared in-flight task, so
+        // the follower cannot render the raw, unverified payload: it observes
+        // the same hashMismatch as the caller that initiated the download.
+        do {
+            _ = try await first
+            Issue.record("expected hashMismatch for the initiating fetch")
+        } catch StickerCache.Error.hashMismatch {} catch {
+            Issue.record("expected hashMismatch, got \(error)")
+        }
+        do {
+            _ = try await second
+            Issue.record("expected hashMismatch for the coalesced follower")
+        } catch StickerCache.Error.hashMismatch {} catch {
+            Issue.record("expected hashMismatch, got \(error)")
+        }
+        #expect(calls.value == 1)
+        #expect(await cache.data(for: pinned) == nil)
+    }
+
+    @Test("store persists the index immediately: a restart inside the throttle window still discovers files")
+    func storePersistsIndexWithinThrottleWindow() async throws {
+        let dir = makeTempDir()
+        defer { cleanup(dir) }
+        let clock = MutableClock()
+        let cache = StickerCache(baseDirectory: dir, now: clock.now)
+
+        let bytesA = Data("alpha".utf8)
+        let hashA = sha256Hex(bytesA)
+        try await cache.store(bytesA, sha256: hashA, mime: "image/webp")
+        // Second store lands inside the 5s read-path throttle window.
+        clock.current = clock.current.addingTimeInterval(1)
+        let bytesB = Data("bravo".utf8)
+        let hashB = sha256Hex(bytesB)
+        try await cache.store(bytesB, sha256: hashB, mime: "image/webp")
+
+        // Simulated restart: a fresh cache over the same directory must
+        // discover BOTH extension-bearing files through the persisted index —
+        // the read path only finds `<hash>.<ext>` via an index entry.
+        let restarted = StickerCache(baseDirectory: dir, now: clock.now)
+        #expect(await restarted.data(for: hashA) == bytesA)
+        #expect(await restarted.data(for: hashB) == bytesB)
+    }
 }

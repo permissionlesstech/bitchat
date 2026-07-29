@@ -131,7 +131,7 @@ actor StickerCache {
     /// Returns cached bytes for a hash, or nil. Invalid hash shapes return nil
     /// (never throw, never touch the disk path builder with untrusted input).
     func data(for sha256: String) -> Data? {
-        guard StickerRefValidation.isValidSha256(sha256) else { return nil }
+        guard StickerRef.isValidSha256(sha256) else { return nil }
         let url: URL
         if let entry = index[sha256] {
             url = fileURL(forHash: sha256, extension: entry.fileExtension)
@@ -151,7 +151,7 @@ actor StickerCache {
     /// On-disk location of a cached sticker, for renderers that prefer a file
     /// URL (animated webp/gif). Nil when not cached or the hash shape is invalid.
     func fileURL(for sha256: String) -> URL? {
-        guard StickerRefValidation.isValidSha256(sha256) else { return nil }
+        guard StickerRef.isValidSha256(sha256) else { return nil }
         if let entry = index[sha256] {
             let url = fileURL(forHash: sha256, extension: entry.fileExtension)
             return fileManager.fileExists(atPath: url.path) ? url : nil
@@ -165,7 +165,7 @@ actor StickerCache {
     /// Verifies the SHA-256 of `data` BEFORE writing anything. Rejects invalid
     /// hash shapes (traversal guard) and payloads over 4 MiB.
     func store(_ data: Data, sha256: String, mime: String) throws {
-        guard StickerRefValidation.isValidSha256(sha256) else { throw Error.invalidSHA256 }
+        guard StickerRef.isValidSha256(sha256) else { throw Error.invalidSHA256 }
         guard data.count <= Self.maxStickerBytes else { throw Error.stickerTooLarge }
         let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         guard digest == sha256 else { throw Error.hashMismatch }
@@ -177,7 +177,10 @@ actor StickerCache {
             fileExtension: ext,
             size: data.count
         )
-        persistIndex()
+        // Mutation: persist immediately (not throttled) so a restart within
+        // the 5s read-throttle window can still discover the file — the read
+        // path only checks the extension-bearing name via the index.
+        persistIndex(force: true)
         evictIfNeeded(protecting: sha256)
     }
 
@@ -193,7 +196,7 @@ actor StickerCache {
         mime: String = "",
         using downloader: @escaping Downloader
     ) async throws -> Data {
-        guard StickerRefValidation.isValidSha256(sha256) else { throw Error.invalidSHA256 }
+        guard StickerRef.isValidSha256(sha256) else { throw Error.invalidSHA256 }
         if let cached = data(for: sha256) { return cached }
         if let retryAfter = negativeCache[sha256], now() < retryAfter {
             throw Error.negativeCacheBackoff(retryAfter: retryAfter)
@@ -201,12 +204,18 @@ actor StickerCache {
         if let existing = inFlight[sha256] {
             return try await existing.value
         }
-        let task = Task { try await downloader(url) }
+        // The shared in-flight task includes verification + storage, so every
+        // concurrent caller receives bytes whose hash was checked — a follower
+        // must never observe the raw, unverified download.
+        let task = Task { [self, downloader] in
+            let data = try await downloader(url)
+            try store(data, sha256: sha256, mime: mime)
+            return data
+        }
         inFlight[sha256] = task
         do {
             let data = try await task.value
             inFlight.removeValue(forKey: sha256)
-            try store(data, sha256: sha256, mime: mime)
             negativeCache.removeValue(forKey: sha256)
             failureCounts.removeValue(forKey: sha256)
             return data
@@ -271,7 +280,7 @@ actor StickerCache {
             index.removeValue(forKey: hash)
             total -= entry.size
         }
-        persistIndex()
+        persistIndex(force: true)
     }
 
     /// Index writes are throttled on the read path (one disk write per 5s at

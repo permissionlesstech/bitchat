@@ -11,44 +11,12 @@ import Foundation
 import ImageIO
 import Tor
 
-// MARK: - LOCAL STUB for StickerRefCodec validators
-//
-// `bitchat/Protocols/StickerRefCodec.swift` (owned by a parallel delegate) is
-// expected to provide `StickerRef` plus `StickerRefCodec.isValidCoordinate /
-// isValidShortcode / isValidSha256`. Until that file lands, the validator
-// shapes are stubbed here so the services layer compiles and stays testable.
-// A later pass should re-point these at the codec (or have the codec call
-// these) — do NOT duplicate them further.
-enum StickerRefValidation {
-    /// Strictly `[0-9a-f]{64}` — safe to use as a file name after this passes.
-    static func isValidSha256(_ value: String) -> Bool {
-        value.count == 64 && value.allSatisfy { $0.isHexDigit } && value == value.lowercased()
-    }
-
-    /// Nostr pubkey hex has the same shape as a sha256 hex string.
-    static func isValidPubkeyHex(_ value: String) -> Bool { isValidSha256(value) }
-
-    /// Shortcode: `[a-z0-9_-]{1,64}`.
-    static func isValidShortcode(_ value: String) -> Bool {
-        guard (1...64).contains(value.count) else { return false }
-        return value.allSatisfy { c in
-            c.isASCII && ((c.isLetter && c.isLowercase) || c.isNumber || c == "_" || c == "-")
-        }
-    }
-
-    /// `d` identifier: printable ASCII except whitespace, 1...256 chars.
-    static func isValidPackIdentifier(_ value: String) -> Bool {
-        guard (1...256).contains(value.count) else { return false }
-        return value.unicodeScalars.allSatisfy { (0x21...0x7E).contains($0.value) }
-    }
-
-    /// Pack coordinate: `30031:<author-pubkey-hex>:<d-identifier>`.
-    static func isValidCoordinate(_ value: String) -> Bool {
-        let parts = value.split(separator: ":", omittingEmptySubsequences: false)
-        guard parts.count == 3, parts[0] == "30031" else { return false }
-        return isValidPubkeyHex(String(parts[1])) && isValidPackIdentifier(String(parts[2]))
-    }
-}
+// Validation of coordinates, shortcodes, and hashes lives in exactly one
+// place: `StickerRef` (bitchat/Protocols/StickerRefCodec.swift), the wire
+// codec. Pack parsing round-trips candidate values through the codec's
+// validators so the pack layer and the wire layer can never drift apart —
+// a pack is only installable when every sticker shortcode it declares can
+// actually be encoded into a wire reference.
 
 // MARK: - Models
 
@@ -111,12 +79,19 @@ private final class StickerOneShotQuery {
     private var events: [NostrEvent] = []
     private var continuation: CheckedContinuation<[NostrEvent], Never>?
     private var timeoutTask: Task<Void, Never>?
+    /// Deliberate self-retain. The relay handlers and the timeout task capture
+    /// `self` weakly, so without this the query would deallocate as soon as
+    /// the `withCheckedContinuation` closure in `oneShot` returns — and
+    /// neither EOSE nor the timeout could ever resume the continuation,
+    /// hanging every uncached pack lookup forever. Broken in `finish`.
+    private var selfRetain: StickerOneShotQuery?
 
     init(continuation: CheckedContinuation<[NostrEvent], Never>) {
         self.continuation = continuation
     }
 
     func start(filter: NostrFilter, timeout: TimeInterval) {
+        selfRetain = self
         let id = "sticker-oneshot-\(UUID().uuidString)"
         NostrRelayManager.shared.subscribe(
             filter: filter,
@@ -141,6 +116,7 @@ private final class StickerOneShotQuery {
         timeoutTask?.cancel()
         NostrRelayManager.shared.unsubscribe(id: id)
         continuation.resume(returning: events)
+        selfRetain = nil
     }
 }
 
@@ -166,6 +142,9 @@ final class StickerPackService: ObservableObject {
         /// Tor preference is on but Tor failed to become ready. Fail-closed:
         /// the fetch is refused rather than leaked to clearnet.
         case torNotReady
+        /// A recent fetch for this pack came up empty; exponential backoff
+        /// has not elapsed yet. In-memory only (a restart resets it).
+        case packFetchBackoff(retryAfter: Date)
         case downloadTooLarge
         case mimeMismatch
         case invalidImageData
@@ -183,6 +162,11 @@ final class StickerPackService: ObservableObject {
     /// Pack metadata keyed by coordinate, for synchronous render lookups.
     @Published private(set) var packs: [String: StickerPack] = [:]
     private var packFetchedAt: [String: Date] = [:]
+    /// Negative cache for pack fetches: coordinate → do-not-retry-until.
+    /// In-memory only (a restart simply resets backoff), mirroring
+    /// `StickerCache`'s failure policy.
+    private var packFailureCounts: [String: Int] = [:]
+    private var packNegativeCache: [String: Date] = [:]
 
     private let cache: StickerCache
     private let relayQuery: RelayQuery
@@ -219,14 +203,17 @@ final class StickerPackService: ObservableObject {
     /// Any spec violation rejects the whole pack (returns nil).
     nonisolated static func parsePackEvent(_ event: NostrEvent) -> StickerPack? {
         guard event.kind == packEventKind else { return nil }
-        guard StickerRefValidation.isValidPubkeyHex(event.pubkey) else { return nil }
+        guard StickerRef.isValidSha256(event.pubkey) else { return nil }
         guard event.tags.contains(where: {
             $0.count >= 2 && $0[0] == "pack_format" && $0[1] == packFormatValue
         }) else { return nil }
 
-        guard let dTag = event.tags.first(where: { $0.count >= 2 && $0[0] == "d" }),
-              StickerRefValidation.isValidPackIdentifier(dTag[1]) else { return nil }
+        guard let dTag = event.tags.first(where: { $0.count >= 2 && $0[0] == "d" }) else { return nil }
         let identifier = dTag[1]
+        let coordinate = "30031:\(event.pubkey):\(identifier)"
+        // Round-trip through the wire codec: a pack is only valid when its
+        // coordinate is exactly one a StickerRef can express.
+        guard StickerRef.isValidCoordinate(coordinate) else { return nil }
 
         guard let titleTag = event.tags.first(where: { $0.count >= 2 && $0[0] == "title" }),
               titleTag[1].utf8.count <= 256,
@@ -255,8 +242,8 @@ final class StickerPackService: ObservableObject {
             let shortcode = tag[1]
             let hash = tag[3]
             let mime = tag[4]
-            guard StickerRefValidation.isValidShortcode(shortcode) else { return nil }
-            guard StickerRefValidation.isValidSha256(hash) else { return nil }
+            guard StickerRef.isValidShortcode(shortcode) else { return nil }
+            guard StickerRef.isValidSha256(hash) else { return nil }
             guard allowedMimes.contains(mime) else { return nil }
             guard let url = validatedStickerURL(tag[2], sha256: hash) else { return nil }
 
@@ -277,7 +264,7 @@ final class StickerPackService: ObservableObject {
         }
 
         return StickerPack(
-            coordinate: "30031:\(event.pubkey):\(identifier)",
+            coordinate: coordinate,
             authorPubkey: event.pubkey,
             identifier: identifier,
             title: titleTag[1],
@@ -322,17 +309,24 @@ final class StickerPackService: ObservableObject {
 
     /// Fetches a pack by author + identifier, preferring the 24h metadata
     /// cache. Relay queries are one-shot (EOSE-bounded, ~10s timeout) on the
-    /// built-in default relay set; the latest `created_at` wins.
+    /// built-in default relay set; the latest `created_at` wins. Misses are
+    /// negative-cached with exponential backoff (30s → 30min, in-memory) so a
+    /// missing/dead pack is not re-queried on every render — each retry would
+    /// be a repeat read beacon to the relays.
     func fetchPack(authorPubkeyHex: String, identifier: String) async throws -> StickerPack {
-        guard StickerRefValidation.isValidPubkeyHex(authorPubkeyHex),
-              StickerRefValidation.isValidPackIdentifier(identifier)
-        else { throw StickerPackError.invalidCoordinate }
         let coordinate = "30031:\(authorPubkeyHex):\(identifier)"
+        // Round-trip through the wire codec (see parsePackEvent).
+        guard StickerRef.isValidCoordinate(coordinate)
+        else { throw StickerPackError.invalidCoordinate }
 
         if let cached = packs[coordinate],
            let fetchedAt = packFetchedAt[coordinate],
            now().timeIntervalSince(fetchedAt) < Self.metadataTTL {
             return cached
+        }
+
+        if let retryAfter = packNegativeCache[coordinate], now() < retryAfter {
+            throw StickerPackError.packFetchBackoff(retryAfter: retryAfter)
         }
 
         // NOTE: NostrFilter.tagFilters is fileprivate, so a server-side "#d"
@@ -350,13 +344,28 @@ final class StickerPackService: ObservableObject {
             .compactMap(Self.parsePackEvent)
             .filter { $0.authorPubkey == authorPubkeyHex && $0.identifier == identifier }
         guard let latest = candidates.max(by: { $0.createdAt < $1.createdAt }) else {
+            recordPackFailure(for: coordinate)
             throw StickerPackError.packNotFound
         }
 
         packs[coordinate] = latest
         packFetchedAt[coordinate] = now()
+        packFailureCounts.removeValue(forKey: coordinate)
+        packNegativeCache.removeValue(forKey: coordinate)
         persistMetadata()
         return latest
+    }
+
+    /// In-memory exponential backoff for failed pack fetches (30s initial,
+    /// doubling, capped at 30min — same policy as `StickerCache`).
+    private func recordPackFailure(for coordinate: String) {
+        let count = (packFailureCounts[coordinate] ?? 0) + 1
+        packFailureCounts[coordinate] = count
+        let delay = min(
+            StickerCache.negativeCacheInitialDelay * pow(2.0, Double(count - 1)),
+            StickerCache.negativeCacheMaxDelay
+        )
+        packNegativeCache[coordinate] = now().addingTimeInterval(delay)
     }
 
     /// Synchronous cache-only lookup for renderers — never queries the network.

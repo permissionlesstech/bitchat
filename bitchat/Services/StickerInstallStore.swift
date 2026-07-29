@@ -31,6 +31,10 @@ actor StickerInstallStore {
     static let listEventKind = 10031
     static let syncEnabledDefaultsKey = "stickerInstallStore.syncEnabled"
 
+    /// App-wide shared instance (state is on disk + UserDefaults, but one
+    /// actor keeps in-memory `installed` coherent across views).
+    static let shared = StickerInstallStore()
+
     typealias RelayQuery = @Sendable (NostrFilter) async -> [NostrEvent]
     typealias EventPublisher = @Sendable (NostrEvent) async throws -> Void
     typealias IdentityProvider = @Sendable () throws -> NostrIdentity
@@ -90,7 +94,7 @@ actor StickerInstallStore {
         if let data = try? Data(contentsOf: self.storageURL),
            let coordinates = try? JSONDecoder().decode([String].self, from: data) {
             initial = Self.dedupePreservingOrder(
-                coordinates.filter { StickerRefValidation.isValidCoordinate($0) }
+                coordinates.filter { StickerRef.isValidCoordinate($0) }
             )
         }
         self.installed = initial
@@ -101,7 +105,7 @@ actor StickerInstallStore {
     /// Appends a coordinate (first-seen order, no duplicates), persists, and
     /// publishes the updated list only when `syncEnabled` is true.
     func install(_ coordinate: String) async throws {
-        guard StickerRefValidation.isValidCoordinate(coordinate) else {
+        guard StickerRef.isValidCoordinate(coordinate) else {
             throw StickerInstallError.invalidCoordinate
         }
         guard !installed.contains(coordinate) else { return }
@@ -137,7 +141,7 @@ actor StickerInstallStore {
         else { return [] }
         let coordinates = latest.tags.compactMap { tag -> String? in
             guard tag.count >= 2, tag[0] == "a",
-                  StickerRefValidation.isValidCoordinate(tag[1])
+                  StickerRef.isValidCoordinate(tag[1])
             else { return nil }
             return tag[1]
         }
