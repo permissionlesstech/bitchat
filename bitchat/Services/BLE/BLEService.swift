@@ -206,20 +206,11 @@ final class BLEService: NSObject {
     // 1. Consolidated BLE link tracking for both central and peripheral roles.
     private var linkStateStore = BLELinkStateStore()
 
-    // A peer ID can retain an established Noise session after its physical
-    // link disappears. Courier handover therefore needs the stronger fact
-    // that the session was established *on this current ingress link*, not
-    // merely that some session exists for the claimed ID. bleQueue-owned.
-    private var noiseAuthenticatedLinkOwners: [BLEIngressLinkID: PeerID] = [:]
-    private var noiseReconnectPolicy = BLENoiseReconnectPolicy()
-
-    // Rotation-rebind cooldown per link UUID (bleQueue-owned, like the link
-    // store): entries older than the cooldown are pruned on insert.
-    private var lastLinkRebindAt: [String: Date] = [:]
-
-    // Redundant-link retirement cooldown per peer (bleQueue-owned): bounds
-    // how often a replayed announce could flip which duplicate link survives.
-    private var lastRedundantLinkRetirementAt: [PeerID: Date] = [:]
+    // Per-link Noise authentication and rebind containment (bleQueue-owned,
+    // like the link store — courier handover needs the stronger fact that a
+    // session was established *on this current ingress link*, not merely
+    // that some session exists for the claimed ID).
+    private var linkAuth = BLELinkAuthState()
 
     // BCH-01-004: Rate-limiting for subscription-triggered announces.
     private var subscriptionAnnounceLimiter = BLESubscriptionAnnounceLimiter()
@@ -781,8 +772,7 @@ final class BLEService: NSObject {
             pendingPeripheralWrites.removeAll()
             pendingNotifications.removeAll()
             pendingWriteBuffers.removeAll()
-            noiseAuthenticatedLinkOwners.removeAll()
-            noiseReconnectPolicy.removeAll()
+            linkAuth.removeAll()
             radio.reset()
         }
         disconnectNotifyDebouncer.removeAll()
@@ -1073,8 +1063,7 @@ final class BLEService: NSObject {
         // Clear peripheral references (synchronized access to avoid races with BLE callbacks)
         bleQueue.sync {
             linkStateStore.clearAll()
-            noiseAuthenticatedLinkOwners.removeAll()
-            noiseReconnectPolicy.removeAll()
+            linkAuth.removeAll()
             radio.reset()
             subscriptionAnnounceLimiter.removeAll()
         }
@@ -2207,7 +2196,7 @@ final class BLEService: NSObject {
             if let peerID = requiredAuthenticatedPeer {
                 eligible = centrals.filter { central in
                     let link = BLEIngressLinkID.central(central.identifier.uuidString)
-                    return noiseAuthenticatedLinkOwners[link] == peerID
+                    return linkAuth.isAuthenticated(link, for: peerID)
                         && linkStateStore.peerID(forCentralUUID: central.identifier.uuidString) == peerID
                 }
             } else {
@@ -2703,13 +2692,7 @@ final class BLEService: NSObject {
         // canDeliverSecurely could remain true for a peer we just removed.
         clearNoiseSession(for: peerID)
         readLinkState { _ in
-            let departedLinks = noiseAuthenticatedLinkOwners.compactMap { link, owner in
-                owner == peerID ? link : nil
-            }
-            for link in departedLinks {
-                noiseAuthenticatedLinkOwners.removeValue(forKey: link)
-                noiseReconnectPolicy.endLinkEpoch(link)
-            }
+            _ = linkAuth.retireLinks(ownedBy: peerID)
         }
         // Remove the peer when they leave
         peerRegistry.mutate { _ = $0.remove(peerID) }
@@ -3030,10 +3013,7 @@ extension BLEService: CBCentralManagerDelegate {
             for state in peripheralStates {
                 let peripheralID = state.peripheral.identifier.uuidString
                 pendingPeripheralWrites.discardAll(for: peripheralID)
-                noiseAuthenticatedLinkOwners.removeValue(
-                    forKey: .peripheral(peripheralID)
-                )
-                noiseReconnectPolicy.endLinkEpoch(.peripheral(peripheralID))
+                linkAuth.retireLink(.peripheral(peripheralID))
             }
             _ = linkStateStore.clearPeripherals()
             // Notify UI of disconnections
@@ -3215,8 +3195,7 @@ extension BLEService: BLERadioControllerDelegate {
     /// surviving duplicate link). bleQueue-confined.
     func tearDownPeripheralLink(_ peripheralID: String) {
         pendingPeripheralWrites.discardAll(for: peripheralID)
-        noiseAuthenticatedLinkOwners.removeValue(forKey: .peripheral(peripheralID))
-        noiseReconnectPolicy.endLinkEpoch(.peripheral(peripheralID))
+        linkAuth.retireLink(.peripheral(peripheralID))
         _ = linkStateStore.removePeripheral(peripheralID)
     }
 }
@@ -3353,13 +3332,13 @@ extension BLEService {
     func _test_markNoiseAuthenticatedCentral(_ centralUUID: String, to peerID: PeerID) {
         bleQueue.sync {
             guard linkStateStore.peerID(forCentralUUID: centralUUID) == peerID else { return }
-            noiseAuthenticatedLinkOwners[.central(centralUUID)] = peerID
+            linkAuth.markAuthenticated(.central(centralUUID), owner: peerID)
         }
     }
 
     func _test_isNoiseAuthenticatedCentral(_ centralUUID: String, for peerID: PeerID) -> Bool {
         bleQueue.sync {
-            noiseAuthenticatedLinkOwners[.central(centralUUID)] == peerID
+            linkAuth.isAuthenticated(.central(centralUUID), for: peerID)
         }
     }
 
@@ -3834,10 +3813,7 @@ extension BLEService: CBPeripheralManagerDelegate {
             let centralSnapshot = linkStateStore.subscribedCentralSnapshot
             for central in centralSnapshot.centrals {
                 let centralID = central.identifier.uuidString
-                noiseAuthenticatedLinkOwners.removeValue(
-                    forKey: .central(centralID)
-                )
-                noiseReconnectPolicy.endLinkEpoch(.central(centralID))
+                linkAuth.retireLink(.central(centralID))
             }
             pendingNotifications.removeAll()
             pendingWriteBuffers.removeAll()
@@ -3963,8 +3939,7 @@ extension BLEService: CBPeripheralManagerDelegate {
         let centralID = central.identifier.uuidString
         SecureLogger.debug("📤 Central unsubscribed: \(centralID.prefix(8))…", category: .session)
         pendingNotifications.removeTarget { $0.identifier.uuidString == centralID }
-        noiseAuthenticatedLinkOwners.removeValue(forKey: .central(centralID))
-        noiseReconnectPolicy.endLinkEpoch(.central(centralID))
+        linkAuth.retireLink(.central(centralID))
         let removedPeerID = linkStateStore.removeSubscribedCentral(central)
         
         // Ensure we're still advertising for other devices to find us
@@ -4707,14 +4682,14 @@ extension BLEService {
         guard let link = ingressLinks.link(for: packet) else { return }
         readLinkState { store in
             guard boundPeerID(for: link, in: store) == peerID else { return }
-            noiseAuthenticatedLinkOwners[link] = peerID
+            linkAuth.markAuthenticated(link, owner: peerID)
         }
     }
 
     private func isNoiseAuthenticatedIngressLink(for packet: BitchatPacket, peerID: PeerID) -> Bool {
         guard let link = ingressLinks.link(for: packet) else { return false }
         return readLinkState { store in
-            noiseAuthenticatedLinkOwners[link] == peerID && boundPeerID(for: link, in: store) == peerID
+            linkAuth.isAuthenticated(link, for: peerID) && boundPeerID(for: link, in: store) == peerID
         }
     }
 
@@ -4724,8 +4699,8 @@ extension BLEService {
 
     private func currentNoiseAuthenticatedLinks(to peerID: PeerID) -> Set<BLEIngressLinkID> {
         readLinkState { store in
-            Set(noiseAuthenticatedLinkOwners.compactMap { link, owner in
-                owner == peerID && boundPeerID(for: link, in: store) == peerID ? link : nil
+            Set(linkAuth.links(ownedBy: peerID).filter { link in
+                boundPeerID(for: link, in: store) == peerID
             })
         }
     }
@@ -4747,10 +4722,10 @@ extension BLEService {
             guard boundPeerID(for: link, in: store) == peerID else {
                 return false
             }
-            return noiseReconnectPolicy.shouldRevalidate(
+            return linkAuth.shouldRevalidate(
                 on: link,
+                for: peerID,
                 hasEstablishedSession: hasEstablishedSession,
-                isNoiseAuthenticatedLink: noiseAuthenticatedLinkOwners[link] == peerID,
                 hasAuthenticatedPeerLink: !authenticatedPeerLinks.isEmpty,
                 now: Date()
             )
@@ -5862,7 +5837,7 @@ extension BLEService {
             if let peerID = requiredAuthenticatedPeer {
                 let link = BLEIngressLinkID.peripheral(uuid)
                 guard state.peerID == peerID,
-                      noiseAuthenticatedLinkOwners[link] == peerID else {
+                      linkAuth.isAuthenticated(link, for: peerID) else {
                     return false
                 }
             }
@@ -6773,20 +6748,19 @@ extension BLEService {
                 return
             }
             let now = Date()
-            self.lastLinkRebindAt = self.lastLinkRebindAt.filter {
-                now.timeIntervalSince($0.value) < TransportConfig.bleLinkRebindCooldownSeconds
-            }
-            guard self.lastLinkRebindAt[linkUUID] == nil else {
+            guard self.linkAuth.permitRebind(
+                linkUUID: linkUUID,
+                now: now,
+                cooldown: TransportConfig.bleLinkRebindCooldownSeconds
+            ) else {
                 SecureLogger.warning("🚫 Refusing link rebind to \(peerID.id.prefix(8))…: rebind cooldown active for this link", category: .security)
                 return
             }
-            self.lastLinkRebindAt[linkUUID] = now
 
             // A Noise proof belongs to the old physical binding. Never carry
             // it across an announce-driven rebind, whose direct TTL is
             // replayable; the new owner must complete a fresh handshake.
-            self.noiseAuthenticatedLinkOwners.removeValue(forKey: link)
-            self.noiseReconnectPolicy.endLinkEpoch(link)
+            self.linkAuth.retireLink(link)
             switch link {
             case .peripheral(let peripheralUUID):
                 self.linkStateStore.bindPeripheral(peripheralUUID, to: peerID)
@@ -6849,11 +6823,6 @@ extension BLEService {
         bleQueue.async { [weak self] in
             guard let self else { return }
             let now = Date()
-            self.lastRedundantLinkRetirementAt = self.lastRedundantLinkRetirementAt.filter {
-                now.timeIntervalSince($0.value) < TransportConfig.bleLinkRebindCooldownSeconds
-            }
-            guard self.lastRedundantLinkRetirementAt[peerID] == nil else { return }
-
             var ingressPeripheralUUID: String?
             if case .peripheral(let uuid) = ingressLink {
                 ingressPeripheralUUID = uuid
@@ -6865,7 +6834,11 @@ extension BLEService {
                 peerID: peerID
             ) else { return }
 
-            self.lastRedundantLinkRetirementAt[peerID] = now
+            guard self.linkAuth.permitRedundantRetirement(
+                peerID: peerID,
+                now: now,
+                cooldown: TransportConfig.bleLinkRebindCooldownSeconds
+            ) else { return }
             // The survivor becomes the peer's reverse-mapped link so directed
             // sends follow the consolidation.
             self.linkStateStore.bindPeripheral(keptUUID, to: peerID)
