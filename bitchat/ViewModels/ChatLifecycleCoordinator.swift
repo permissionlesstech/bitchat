@@ -106,8 +106,8 @@ extension ChatViewModel: ChatLifecycleContext {
     }
 
     func refreshBluetoothState() {
-        if let bleService = meshService as? BLEService {
-            updateBluetoothState(bleService.getCurrentBluetoothState())
+        if let radio = meshService as? BluetoothStateReporting {
+            updateBluetoothState(radio.getCurrentBluetoothState())
         }
     }
 

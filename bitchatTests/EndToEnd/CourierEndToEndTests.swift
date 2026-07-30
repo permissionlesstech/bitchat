@@ -669,7 +669,7 @@ struct CourierEndToEndTests {
 
 /// Minimal transport stub for exercising MessageRouter's courier deposit
 /// logic without BLE plumbing.
-private final class CourierCaptureTransport: Transport {
+private final class CourierCaptureTransport: Transport, MeshCourierTransporting {
     weak var delegate: BitchatDelegate?
     weak var eventDelegate: TransportEventDelegate?
     weak var peerEventsDelegate: TransportPeerEventsDelegate?

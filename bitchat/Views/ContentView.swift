@@ -182,7 +182,13 @@ struct ContentView: View {
                       !hasRootModalPresentation else {
                     return
                 }
-                appChromeModel.showBluetoothAlert = false
+                // SwiftUI can invoke this setter inside a view update (the
+                // alert dismisses when a scenePhase change re-evaluates the
+                // `get`); publishing synchronously there is undefined
+                // behavior, so defer the write one hop.
+                Task { @MainActor in
+                    appChromeModel.showBluetoothAlert = false
+                }
             }
         )
     }
@@ -205,7 +211,11 @@ struct ContentView: View {
                       !hasRootModalPresentationBesidesVoiceAlert else {
                     return
                 }
-                voiceRecordingVM.showAlert = false
+                // Same deferral as the Bluetooth alert above: the setter can
+                // run inside a view update when the sheet state changes.
+                Task { @MainActor in
+                    voiceRecordingVM.showAlert = false
+                }
             }
         )
     }

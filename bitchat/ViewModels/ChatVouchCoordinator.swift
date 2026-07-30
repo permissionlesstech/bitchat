@@ -90,7 +90,7 @@ extension ChatViewModel: ChatVouchContext {
     }
 
     func sendVouchAttestations(_ payload: Data, to peerID: PeerID) {
-        meshService.sendVouchAttestations(payload, to: peerID)
+        (meshService as? MeshVerifying)?.sendVouchAttestations(payload, to: peerID)
     }
 
     func notifyPeerTrustChanged() {
