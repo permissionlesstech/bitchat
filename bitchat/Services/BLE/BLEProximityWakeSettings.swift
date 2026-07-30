@@ -20,7 +20,23 @@ enum BLEProximityWakeSettings {
 
     /// When false, bitchat will not arm pending background connects.
     static var enabled: Bool {
-        get { UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
+        get { enabled(in: .standard) }
+        set { setEnabled(newValue, in: .standard) }
+    }
+
+    /// Store-injecting forms so tests can assert the default without
+    /// touching shared preferences other tests read.
+    static func enabled(in defaults: UserDefaults) -> Bool {
+        defaults.object(forKey: enabledKey) as? Bool ?? true
+    }
+
+    static func setEnabled(_ enabled: Bool, in defaults: UserDefaults) {
+        defaults.set(enabled, forKey: enabledKey)
+    }
+
+    /// Panic-wipe hook. Removing the key restores the on-by-default
+    /// mesh-reachability preference of a fresh install.
+    static func reset(in defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: enabledKey)
     }
 }
