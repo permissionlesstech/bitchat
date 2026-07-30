@@ -33,6 +33,7 @@ let package = Package(
             sources: [
                 "TorManager.swift",
                 "TorTransport.swift",
+                "TorTransportDiagnostic.swift",
                 "TorURLSession.swift",
                 "TorNotifications.swift"
             ],

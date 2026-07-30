@@ -708,7 +708,7 @@ struct AppInfoView: View {
             }
 
             if let active = torManager.transportStatus.transport {
-                Text(verbatim: "\(torManager.transportStatus.lifecycle.rawValue): \(active.rawValue)")
+                Text(verbatim: "\(torLifecycleLabel(torManager.transportStatus.lifecycle)): \(active.rawValue)")
                     .bitchatFont(size: 11)
                     .foregroundColor(
                         torManager.transportStatus.lifecycle == .failed
@@ -719,7 +719,7 @@ struct AppInfoView: View {
             }
 
             if let diagnostic = torManager.transportDiagnostic {
-                Text(verbatim: diagnostic)
+                Text(verbatim: torDiagnosticText(diagnostic))
                     .bitchatFont(size: 11)
                     .foregroundColor(
                         torManager.transportStatus.lifecycle == .failed
@@ -812,13 +812,73 @@ struct AppInfoView: View {
     private func torTransportLabel(_ mode: TorTransportMode) -> String {
         switch mode {
         case .direct:
-            return "direct tor"
+            return String(localized: "app_info.settings.tor.transport.mode.direct", defaultValue: "direct tor", comment: "Transport picker option for reaching Tor without a pluggable transport")
         case .auto:
-            return "auto"
+            return String(localized: "app_info.settings.tor.transport.mode.auto", defaultValue: "auto", comment: "Transport picker option that tries each way of reaching Tor in turn")
         case .obfs4:
-            return "obfs4"
+            return String(localized: "app_info.settings.tor.transport.mode.obfs4", defaultValue: "obfs4", comment: "Transport picker option naming the obfs4 pluggable transport; obfs4 is a protocol name and is normally left untranslated")
         case .snowflake:
-            return "snowflake"
+            return String(localized: "app_info.settings.tor.transport.mode.snowflake", defaultValue: "snowflake", comment: "Transport picker option naming the Snowflake pluggable transport; Snowflake is a protocol name and is normally left untranslated")
+        }
+    }
+
+    /// The route's current state, in the reader's language.
+    ///
+    /// `rawValue` reached the screen directly before this, which put English
+    /// state names in front of every non-English reader and left the strings
+    /// where the localization coverage test could not see them.
+    private func torLifecycleLabel(_ lifecycle: TorTransportLifecycle) -> String {
+        switch lifecycle {
+        case .idle:
+            return String(localized: "app_info.settings.tor.transport.lifecycle.idle", defaultValue: "idle", comment: "Tor transport state: nothing is being attempted")
+        case .starting:
+            return String(localized: "app_info.settings.tor.transport.lifecycle.starting", defaultValue: "starting", comment: "Tor transport state: an attempt to reach Tor is under way")
+        case .ready:
+            return String(localized: "app_info.settings.tor.transport.lifecycle.ready", defaultValue: "ready", comment: "Tor transport state: the route is carrying traffic")
+        case .stalled:
+            return String(localized: "app_info.settings.tor.transport.lifecycle.stalled", defaultValue: "stalled", comment: "Tor transport state: the attempt stopped making progress and was given up on")
+        case .failed:
+            return String(localized: "app_info.settings.tor.transport.lifecycle.failed", defaultValue: "failed", comment: "Tor transport state: the attempt ended without reaching Tor")
+        }
+    }
+
+    /// Renders what `TorManager` reports about the route it is building.
+    ///
+    /// The mapping lives here rather than in the Arti package because that
+    /// package has no access to this catalog: it publishes a value, and the app
+    /// owns the sentence and the language it is written in.
+    private func torDiagnosticText(_ diagnostic: TorTransportDiagnostic) -> String {
+        func withTransport(_ format: String, _ transport: TorTransport) -> String {
+            String(format: format, locale: .current, transport.rawValue)
+        }
+
+        switch diagnostic {
+        case .routeMismatch:
+            return String(localized: "app_info.settings.tor.diagnostic.route_mismatch", defaultValue: "internal route mismatch; tor was not started", comment: "Tor status line shown when the app refused to start a route that did not match the selected transport mode")
+        case .notReadyBeforeTimeout:
+            return String(localized: "app_info.settings.tor.diagnostic.not_ready_before_timeout", defaultValue: "tor did not become ready before the timeout", comment: "Tor status line shown when an attempt ran out of time before Tor could carry traffic")
+        case .configurationFailed:
+            return String(localized: "app_info.settings.tor.diagnostic.configuration_failed", defaultValue: "tor configuration failed", comment: "Tor status line shown when Tor rejected its configuration")
+        case .socksListenerFailed:
+            return String(localized: "app_info.settings.tor.diagnostic.socks_listener_failed", defaultValue: "the local tor proxy could not start", comment: "Tor status line shown when the on-device proxy that app traffic goes through could not be opened")
+        case .bootstrapFailed:
+            return String(localized: "app_info.settings.tor.diagnostic.bootstrap_failed", defaultValue: "tor bootstrap failed", comment: "Tor status line shown when Tor could not finish connecting to the network")
+        case .stoppedBeforeReady:
+            return String(localized: "app_info.settings.tor.diagnostic.stopped_before_ready", defaultValue: "tor stopped before becoming ready", comment: "Tor status line shown when Tor exited before it could carry traffic")
+        case .listenerReady(let transport):
+            return withTransport(String(localized: "app_info.settings.tor.diagnostic.listener_ready", defaultValue: "%@ listener ready; configuring tor handoff", comment: "Tor status line; %@ is a transport name such as obfs4 or snowflake, whose local listener is now up"), transport)
+        case .handoffConfigured(let transport):
+            return withTransport(String(localized: "app_info.settings.tor.diagnostic.handoff_configured", defaultValue: "tor handoff to %@ configured; waiting for proxy connection", comment: "Tor status line; %@ is a transport name such as obfs4 or snowflake that Tor has been pointed at"), transport)
+        case .proxyOpened(let transport):
+            return withTransport(String(localized: "app_info.settings.tor.diagnostic.proxy_opened", defaultValue: "tor opened %@; connecting to its local listener", comment: "Tor status line; %@ is a transport name such as obfs4 or snowflake that Tor has just launched"), transport)
+        case .bridgeRequestSent(let transport):
+            return withTransport(String(localized: "app_info.settings.tor.diagnostic.bridge_request_sent", defaultValue: "%@ received tor's bridge request; finding a proxy", comment: "Tor status line; %@ is a transport name such as obfs4 or snowflake that is now looking for a way through"), transport)
+        case .proxyConnected(let transport):
+            return withTransport(String(localized: "app_info.settings.tor.diagnostic.proxy_connected", defaultValue: "%@ proxy connected; bootstrapping tor", comment: "Tor status line; %@ is a transport name such as obfs4 or snowflake that has found a working proxy"), transport)
+        case .proxyRetrying(let transport):
+            return withTransport(String(localized: "app_info.settings.tor.diagnostic.proxy_retrying", defaultValue: "%@ could not connect to a proxy; retrying", comment: "Tor status line; %@ is a transport name such as obfs4 or snowflake that failed to find a proxy and is trying again"), transport)
+        case .routeStopped(let transport):
+            return withTransport(String(localized: "app_info.settings.tor.diagnostic.route_stopped", defaultValue: "%@ stopped unexpectedly", comment: "Tor status line; %@ is a transport name such as obfs4 or snowflake that exited on its own"), transport)
         }
     }
 

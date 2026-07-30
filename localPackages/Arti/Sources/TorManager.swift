@@ -94,7 +94,7 @@ public final class TorManager: ObservableObject {
     @Published private(set) var lastError: Error?
     @Published private(set) var bootstrapProgress: Int = 0
     @Published private(set) public var bootstrapSummary: String = ""
-    @Published private(set) public var transportDiagnostic: String?
+    @Published private(set) public var transportDiagnostic: TorTransportDiagnostic?
     @Published private(set) public var transportStatus: TorTransportStatus = .idle
     /// True once a bootstrap attempt has spent its whole deadline without
     /// completing.
@@ -503,7 +503,7 @@ public final class TorManager: ObservableObject {
                 "TorManager: refusing to start \(transport.rawValue) - not permitted by \(routeConfiguration.mode.rawValue) mode",
                 category: .session
             )
-            transportDiagnostic = "internal route mismatch; tor was not started"
+            transportDiagnostic = .routeMismatch
             failCurrentTransport(
                 NSError(
                     domain: "TorManager",
@@ -553,9 +553,7 @@ public final class TorManager: ObservableObject {
                     transport,
                     stateDirectory: ptDirectory
                 )
-                transportDiagnostic = transport == .snowflake
-                    ? "snowflake listener ready; configuring tor handoff"
-                    : "obfs4 listener ready; configuring tor handoff"
+                transportDiagnostic = .listenerReady(transport)
                 SecureLogger.info(
                     "TorManager: \(transport.rawValue) listener started",
                     category: .session
@@ -645,7 +643,7 @@ public final class TorManager: ObservableObject {
                 } else {
                     SecureLogger.error("TorManager: SOCKS not reachable (timeout)", category: .session)
                     if self.transportDiagnostic == nil {
-                        self.transportDiagnostic = "tor did not become ready before the timeout"
+                        self.transportDiagnostic = .notReadyBeforeTimeout
                     }
                     self.failCurrentTransport(
                         NSError(
@@ -784,14 +782,14 @@ public final class TorManager: ObservableObject {
                 let diagnostic = sanitizedBootstrapDiagnostic(summary)
                 self.transportDiagnostic = diagnostic
                 SecureLogger.error(
-                    "TorManager: Arti stopped during bootstrap (\(diagnostic))",
+                    "TorManager: Arti stopped during bootstrap (\(diagnostic.logDescription))",
                     category: .session
                 )
                 failCurrentTransport(
                     NSError(
                         domain: "TorManager",
                         code: -16,
-                        userInfo: [NSLocalizedDescriptionKey: diagnostic]
+                        userInfo: [NSLocalizedDescriptionKey: diagnostic.logDescription]
                     ),
                     stalled: false
                 )
@@ -814,7 +812,7 @@ public final class TorManager: ObservableObject {
                let diagnostic = transportStageDiagnostic(summary) {
                 self.transportDiagnostic = diagnostic
                 SecureLogger.info(
-                    "TorManager: \(diagnostic)",
+                    "TorManager: \(diagnostic.logDescription)",
                     category: .session
                 )
             }
@@ -884,7 +882,7 @@ public final class TorManager: ObservableObject {
                 )
             }
             if transportDiagnostic == nil {
-                transportDiagnostic = "tor did not become ready before the timeout"
+                transportDiagnostic = .notReadyBeforeTimeout
             }
             failCurrentTransport(
                 NSError(
@@ -938,31 +936,35 @@ public final class TorManager: ObservableObject {
         return ""
     }
 
-    private func sanitizedBootstrapDiagnostic(_ summary: String) -> String {
+    private func sanitizedBootstrapDiagnostic(
+        _ summary: String
+    ) -> TorTransportDiagnostic {
         switch summary {
         case "Error: Tor configuration failed":
-            return "tor configuration failed"
+            return .configurationFailed
         case "Error: local SOCKS listener failed":
-            return "the local tor proxy could not start"
+            return .socksListenerFailed
         case "Error: Tor bootstrap failed":
-            return "tor bootstrap failed"
+            return .bootstrapFailed
         default:
-            return "tor stopped before becoming ready"
+            return .stoppedBeforeReady
         }
     }
 
-    private func transportStageDiagnostic(_ summary: String) -> String? {
+    private func transportStageDiagnostic(
+        _ summary: String
+    ) -> TorTransportDiagnostic? {
         guard routeCandidates.indices.contains(routeIndex) else { return nil }
         let transport = routeCandidates[routeIndex]
         guard transport != .direct else { return nil }
 
         switch summary {
         case "Transport proxy configured":
-            return "tor handoff to \(transport.rawValue) configured; waiting for proxy connection"
+            return .handoffConfigured(transport)
         case "Tor opened transport proxy":
-            return "tor opened \(transport.rawValue); connecting to its local listener"
+            return .proxyOpened(transport)
         case "Connected to transport listener":
-            return "\(transport.rawValue) received tor's bridge request; finding a proxy"
+            return .bridgeRequestSent(transport)
         default:
             return nil
         }
@@ -992,13 +994,13 @@ public final class TorManager: ObservableObject {
             return
         case .proxyConnected:
             hasConnectedTransportProxy = true
-            transportDiagnostic = "\(transport.rawValue) proxy connected; bootstrapping tor"
+            transportDiagnostic = .proxyConnected(transport)
             SecureLogger.info(
                 "TorManager: \(transport.rawValue) proxy connected",
                 category: .session
             )
         case .proxyRetrying:
-            let diagnostic = "\(transport.rawValue) could not connect to a proxy; retrying"
+            let diagnostic = TorTransportDiagnostic.proxyRetrying(transport)
             guard transportDiagnostic != diagnostic else { return }
             transportDiagnostic = diagnostic
             SecureLogger.warning(
@@ -1017,7 +1019,7 @@ public final class TorManager: ObservableObject {
                 category: .session
             )
         case .routeStopped:
-            let diagnostic = "\(transport.rawValue) stopped unexpectedly"
+            let diagnostic = TorTransportDiagnostic.routeStopped(transport)
             transportDiagnostic = diagnostic
             SecureLogger.error(
                 "TorManager: \(transport.rawValue) stopped unexpectedly",
@@ -1027,7 +1029,7 @@ public final class TorManager: ObservableObject {
                 NSError(
                     domain: "TorManager",
                     code: -18,
-                    userInfo: [NSLocalizedDescriptionKey: diagnostic]
+                    userInfo: [NSLocalizedDescriptionKey: diagnostic.logDescription]
                 ),
                 stalled: false
             )
