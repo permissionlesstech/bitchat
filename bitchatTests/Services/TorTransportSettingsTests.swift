@@ -296,6 +296,36 @@ final class TorTransportSettingsTests: XCTestCase {
         )
     }
 
+    /// Backgrounding preserves the attempt now instead of tearing it down, so
+    /// nothing clears `isReady` when the system reclaims Arti during a long
+    /// suspension. Taking the flag at face value returned `.none` for a route
+    /// whose SOCKS listener was gone, and the app went on reporting a working
+    /// Tor until traffic failed against it.
+    func test_foregroundRecoveryRebuildsAReadyRouteWhoseRuntimeIsGone() {
+        XCTAssertEqual(
+            TorLifecyclePolicy.foregroundRecoveryAction(
+                autoStartAllowed: true,
+                isForeground: true,
+                isReady: true,
+                isRestarting: false,
+                shutdownInFlight: false,
+                artiIsRunning: false
+            ),
+            .restart
+        )
+        XCTAssertEqual(
+            TorLifecyclePolicy.foregroundRecoveryAction(
+                autoStartAllowed: true,
+                isForeground: true,
+                isReady: true,
+                isRestarting: false,
+                shutdownInFlight: true,
+                artiIsRunning: false
+            ),
+            .deferUntilShutdownCompletes
+        )
+    }
+
     // MARK: - Pluggable transport event aggregation
 
     private func outcome(
@@ -447,6 +477,80 @@ final class TorTransportSettingsTests: XCTestCase {
                 transport.bootstrapDeadline,
                 "\(transport) can never reach its stall window before its ceiling"
             )
+        }
+    }
+
+    /// Only the iOS slices were rebuilt to publish fractional progress. The
+    /// macOS one still reports 0 until the client is bootstrapped and then 100,
+    /// so "stopped advancing" is indistinguishable from "not started yet"
+    /// there: the stall windows called every cold start slower than 30s a
+    /// blocked network, and the per-transport ceiling cut the wait that build
+    /// used to get from 75s to 45s.
+    func test_aCoarseProgressSliceIsJudgedOnlyByItsCeiling() {
+        let coarse = TorBootstrapBudget.forRoute(
+            .direct,
+            reportsFractionalProgress: false
+        )
+        XCTAssertNil(coarse.stallWindow)
+        XCTAssertGreaterThanOrEqual(coarse.deadline, 75)
+        XCTAssertEqual(
+            TorBootstrapWaitPolicy.outcome(
+                progress: 0,
+                highWaterProgress: 0,
+                secondsSinceProgress: 600,
+                remainingSeconds: 30,
+                stallWindow: coarse.stallWindow
+            ),
+            .keepWaiting,
+            "progress that never moves carries no information on this slice"
+        )
+        XCTAssertEqual(
+            TorBootstrapWaitPolicy.outcome(
+                progress: 0,
+                highWaterProgress: 0,
+                secondsSinceProgress: 600,
+                remainingSeconds: 0,
+                stallWindow: coarse.stallWindow
+            ),
+            .ceilingReached
+        )
+    }
+
+    /// Coarse progress is a reason to wait longer, never to wait less. The
+    /// per-transport ceilings were written for a slice that reports real
+    /// percentages; applying them to one that reports 0 until it reports 100
+    /// cut the direct-route wait from the 75s that build used to get down to
+    /// 45s, on top of the stall window killing it at 30s.
+    func test_coarseProgressNeverShortensTheWaitAnyRouteWouldOtherwiseGet() {
+        for transport in [TorTransport.direct, .obfs4, .snowflake] {
+            let coarse = TorBootstrapBudget.forRoute(
+                transport,
+                reportsFractionalProgress: false
+            )
+            let fractional = TorBootstrapBudget.forRoute(
+                transport,
+                reportsFractionalProgress: true
+            )
+            XCTAssertGreaterThanOrEqual(
+                coarse.deadline,
+                fractional.deadline,
+                "\(transport) waits less on the slice with less information"
+            )
+            XCTAssertGreaterThanOrEqual(
+                coarse.deadline,
+                TorBootstrapBudget.coarseProgressDeadline
+            )
+        }
+    }
+
+    func test_aFractionalProgressSliceKeepsThePerTransportBudget() {
+        for transport in [TorTransport.direct, .obfs4, .snowflake] {
+            let budget = TorBootstrapBudget.forRoute(
+                transport,
+                reportsFractionalProgress: true
+            )
+            XCTAssertEqual(budget.stallWindow, transport.bootstrapStallWindow)
+            XCTAssertEqual(budget.deadline, transport.bootstrapDeadline)
         }
     }
 

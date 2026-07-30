@@ -106,7 +106,16 @@ enum TorLifecyclePolicy {
         shutdownInFlight: Bool,
         artiIsRunning: Bool
     ) -> TorForegroundRecoveryAction {
-        guard autoStartAllowed, isForeground, !isReady, !isRestarting else {
+        guard autoStartAllowed, isForeground, !isRestarting else {
+            return .none
+        }
+        // Readiness is only believed while the runtime it describes is still
+        // there. Backgrounding now preserves the attempt instead of tearing it
+        // down, so nothing clears `isReady` when iOS reclaims Arti during a
+        // long suspension: taking the flag at face value returned `.none` for
+        // a route whose SOCKS listener was gone, and the app went on reporting
+        // a working Tor until traffic failed against it.
+        if isReady && artiIsRunning {
             return .none
         }
         if shutdownInFlight {
@@ -116,6 +125,55 @@ enum TorLifecyclePolicy {
             return .continueCurrentAttempt
         }
         return .restart
+    }
+}
+
+/// Whether the Arti slice linked into this build publishes fractional
+/// bootstrap progress.
+///
+/// Only the iOS slices were rebuilt to report it. The macOS slice still stores
+/// 0 until the client finishes bootstrapping and then 100, so on that build
+/// "progress stopped advancing" is indistinguishable from "progress has not
+/// started yet" and carries no information about whether a route is blocked.
+enum TorBootstrapProgressGranularity {
+    #if os(iOS)
+    static let sliceReportsFractionalProgress = true
+    #else
+    static let sliceReportsFractionalProgress = false
+    #endif
+}
+
+/// How long one bootstrap attempt gets, and whether standing still may end it.
+///
+/// Split from `TorTransport` because the answer depends on the linked slice,
+/// not on the route: applying the per-transport stall windows to a slice that
+/// only reports 0 or 100 declares every cold start slower than the direct
+/// window a blocked network, and shortens the ceiling that build used to have.
+struct TorBootstrapBudget: Equatable {
+    let deadline: TimeInterval
+    /// `nil` when progress carries no information, leaving the ceiling as the
+    /// only thing that can end the attempt.
+    let stallWindow: Int?
+
+    /// The wait a coarse-progress build keeps: the fixed ceiling that preceded
+    /// per-transport budgets. Nothing shortens it, because there is no progress
+    /// signal that could justify giving up sooner.
+    static let coarseProgressDeadline: TimeInterval = 75
+
+    static func forRoute(
+        _ route: TorTransport,
+        reportsFractionalProgress: Bool
+    ) -> TorBootstrapBudget {
+        guard reportsFractionalProgress else {
+            return TorBootstrapBudget(
+                deadline: max(coarseProgressDeadline, route.bootstrapDeadline),
+                stallWindow: nil
+            )
+        }
+        return TorBootstrapBudget(
+            deadline: route.bootstrapDeadline,
+            stallWindow: route.bootstrapStallWindow
+        )
     }
 }
 
@@ -139,11 +197,11 @@ enum TorBootstrapWaitPolicy {
         highWaterProgress: Int,
         secondsSinceProgress: Int,
         remainingSeconds: Int,
-        stallWindow: Int
+        stallWindow: Int?
     ) -> TorBootstrapWaitOutcome {
         if progress >= 100 { return .ready }
         if progress > highWaterProgress { return .keepWaiting }
-        if secondsSinceProgress >= stallWindow { return .stalled }
+        if let stallWindow, secondsSinceProgress >= stallWindow { return .stalled }
         return remainingSeconds > 0 ? .keepWaiting : .ceilingReached
     }
 }

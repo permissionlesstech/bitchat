@@ -626,7 +626,11 @@ public final class TorManager: ObservableObject {
         // Deliberately past the poll loop's ceiling so that loop is the one
         // that reports the outcome: it can tell a route that stopped advancing
         // from one that is merely slow, and a bare probe timeout cannot.
-        let probeTimeout = transport.bootstrapDeadline + 5
+        let probeTimeout = TorBootstrapBudget.forRoute(
+            transport,
+            reportsFractionalProgress: TorBootstrapProgressGranularity
+                .sliceReportsFractionalProgress
+        ).deadline + 5
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             let ready = await self.waitForSocksReady(
@@ -753,9 +757,12 @@ public final class TorManager: ObservableObject {
         let activeRoute = routeCandidates.indices.contains(routeIndex)
             ? routeCandidates[routeIndex]
             : .direct
-        let timeout = activeRoute.bootstrapDeadline
-        let stallWindow = activeRoute.bootstrapStallWindow
-        var remainingForegroundSeconds = Int(timeout.rounded(.up))
+        let budget = TorBootstrapBudget.forRoute(
+            activeRoute,
+            reportsFractionalProgress: TorBootstrapProgressGranularity
+                .sliceReportsFractionalProgress
+        )
+        var remainingForegroundSeconds = Int(budget.deadline.rounded(.up))
         var didComplete = false
         // A bootstrap that is still advancing is not a stall. Snowflake pulls
         // the directory over a lossy WebRTC hop and can take minutes on a cold
@@ -831,7 +838,7 @@ public final class TorManager: ObservableObject {
                 highWaterProgress: highWaterProgress,
                 secondsSinceProgress: secondsSinceProgress,
                 remainingSeconds: remainingForegroundSeconds,
-                stallWindow: stallWindow
+                stallWindow: budget.stallWindow
             ) {
             case .ready:
                 didComplete = true
@@ -865,12 +872,17 @@ public final class TorManager: ObservableObject {
             // the ceiling while still climbing is a slow route, not a blocked
             // one, and saying "network may be blocking Tor" for it sends the
             // reader after the wrong problem.
-            SecureLogger.warning(
-                stoppedAdvancing
-                    ? "TorManager: bootstrap stopped advancing at \(self.bootstrapProgress)% for \(stallWindow)s; network may be blocking Tor"
-                    : "TorManager: bootstrap reached its \(Int(timeout))s ceiling while still advancing (progress=\(self.bootstrapProgress)%)",
-                category: .session
-            )
+            if stoppedAdvancing, let stallWindow = budget.stallWindow {
+                SecureLogger.warning(
+                    "TorManager: bootstrap stopped advancing at \(self.bootstrapProgress)% for \(stallWindow)s; network may be blocking Tor",
+                    category: .session
+                )
+            } else {
+                SecureLogger.warning(
+                    "TorManager: bootstrap reached its \(Int(budget.deadline))s ceiling while still advancing (progress=\(self.bootstrapProgress)%)",
+                    category: .session
+                )
+            }
             if transportDiagnostic == nil {
                 transportDiagnostic = "tor did not become ready before the timeout"
             }
