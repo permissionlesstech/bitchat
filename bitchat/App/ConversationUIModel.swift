@@ -115,6 +115,15 @@ final class ConversationUIModel: ObservableObject {
         return true
     }
 
+    /// Dismiss the mention suggestion panel without inserting (Escape).
+    func dismissAutocomplete() {
+        guard showAutocomplete else { return }
+        chatViewModel.showAutocomplete = false
+        chatViewModel.autocompleteSuggestions = []
+        chatViewModel.autocompleteRange = nil
+        chatViewModel.selectedAutocompleteIndex = 0
+    }
+
     func moveAutocompleteSelection(by delta: Int) {
         guard showAutocomplete, !autocompleteSuggestions.isEmpty else { return }
         let count = min(4, autocompleteSuggestions.count)

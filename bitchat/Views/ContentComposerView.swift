@@ -2,6 +2,9 @@ import SwiftUI
 #if os(iOS)
 import UIKit
 #endif
+#if os(macOS)
+import AppKit
+#endif
 
 struct ContentComposerView: View {
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
@@ -45,7 +48,7 @@ struct ContentComposerView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(
                                 index == conversationUIModel.selectedAutocompleteIndex
-                                    ? palette.secondary.opacity(0.18)
+                                    ? palette.secondary.opacity(0.15)
                                     : Color.clear
                             )
                         }
@@ -78,14 +81,6 @@ struct ContentComposerView: View {
                 .textInputAutocapitalization(.sentences)
                 #endif
                 .submitLabel(.send)
-                .onSubmit {
-                    onSendMessage()
-                    // Only the return-key path: it steals focus on iOS, so
-                    // every message would cost a tap to reopen the keyboard.
-                    // The send button must not reopen a deliberately
-                    // dismissed keyboard, so it stays out of this.
-                    isTextFieldFocused.wrappedValue = true
-                }
                 .modifier(AutocompleteKeyboardNavigationModifier(
                     isActive: conversationUIModel.showAutocomplete
                         && !conversationUIModel.autocompleteSuggestions.isEmpty,
@@ -94,8 +89,27 @@ struct ContentComposerView: View {
                     },
                     onAccept: {
                         conversationUIModel.completeSelectedSuggestion(in: &messageText)
+                    },
+                    onDismiss: {
+                        conversationUIModel.dismissAutocomplete()
                     }
                 ))
+                // Return while the mention panel is open completes the
+                // highlight instead of sending — matches command suggestions
+                // (#1504) and keeps Tab/Return/Escape on one convention.
+                .onSubmit {
+                    if conversationUIModel.showAutocomplete,
+                       !conversationUIModel.autocompleteSuggestions.isEmpty,
+                       conversationUIModel.completeSelectedSuggestion(in: &messageText) {
+                        return
+                    }
+                    onSendMessage()
+                    // Only the return-key path: it steals focus on iOS, so
+                    // every message would cost a tap to reopen the keyboard.
+                    // The send button must not reopen a deliberately
+                    // dismissed keyboard, so it stays out of this.
+                    isTextFieldFocused.wrappedValue = true
+                }
                 .padding(.vertical, theme.usesGlassChrome ? 8 : 4)
                 .padding(.horizontal, 6)
                 .themedInputBackground()
@@ -390,15 +404,40 @@ private extension ContentComposerView {
     }
 }
 
-/// Arrow/Tab navigation for the mention suggestion list. Inactive when the
-/// panel is hidden so Tab keeps its normal focus-cycle behavior.
+/// Arrow/Tab/Return/Escape navigation for the mention suggestion list.
+///
+/// Deployment targets are iOS 16 / macOS 13, so `.onKeyPress` (iOS 17 /
+/// macOS 14+) is gated and unavailable on the minimum OS. Separately, on
+/// macOS the single-line field editor consumes `moveUp:`/`moveDown:` itself,
+/// so arrow keys never reach SwiftUI while the composer has focus — the
+/// same reason command suggestions (#1504) use an `NSEvent` local monitor.
+/// Mentions follow that mechanism on macOS and keep `.onKeyPress` for iOS 17+.
 private struct AutocompleteKeyboardNavigationModifier: ViewModifier {
     let isActive: Bool
     let onMove: (Int) -> Void
     let onAccept: () -> Bool
+    let onDismiss: () -> Void
+
+    #if os(macOS)
+    @State private var keyMonitor: Any?
+    #endif
 
     func body(content: Content) -> some View {
-        if #available(iOS 17.0, macOS 14.0, *) {
+        #if os(macOS)
+        content
+            .onChange(of: isActive) { active in
+                if active {
+                    installKeyMonitor()
+                } else {
+                    removeKeyMonitor()
+                }
+            }
+            .onAppear {
+                if isActive { installKeyMonitor() }
+            }
+            .onDisappear { removeKeyMonitor() }
+        #else
+        if #available(iOS 17.0, *) {
             content
                 .onKeyPress(.upArrow) {
                     guard isActive else { return .ignored }
@@ -414,8 +453,57 @@ private struct AutocompleteKeyboardNavigationModifier: ViewModifier {
                     guard isActive else { return .ignored }
                     return onAccept() ? .handled : .ignored
                 }
+                .onKeyPress(.escape) {
+                    guard isActive else { return .ignored }
+                    onDismiss()
+                    return .handled
+                }
         } else {
             content
         }
+        #endif
     }
+
+    #if os(macOS)
+    private func installKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            handleKeyDown(event)
+        }
+    }
+
+    private func removeKeyMonitor() {
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+        }
+        keyMonitor = nil
+    }
+
+    /// Standard autocomplete navigation (aligned with #1504): arrows move
+    /// the highlight, return/tab insert, escape dismisses. Returning nil
+    /// consumes the event so return completes instead of sending while the
+    /// list is up. Inactive monitors pass everything through.
+    private func handleKeyDown(_ event: NSEvent) -> NSEvent? {
+        guard isActive,
+              event.modifierFlags.intersection([.command, .option, .control]).isEmpty else {
+            return event
+        }
+
+        switch event.keyCode {
+        case 126: // up arrow
+            onMove(-1)
+            return nil
+        case 125: // down arrow
+            onMove(1)
+            return nil
+        case 36, 48: // return, tab
+            return onAccept() ? nil : event
+        case 53: // escape
+            onDismiss()
+            return nil
+        default:
+            return event
+        }
+    }
+    #endif
 }
