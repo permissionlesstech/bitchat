@@ -1028,6 +1028,27 @@ final class NoiseSessionManager {
             .cancel()
     }
 
+    #if DEBUG
+    /// Fires a pending suppressed-initiation recovery immediately instead of
+    /// waiting out the completion-grace timer, so tests can inject a grace
+    /// period too large to lose against a starved runner and still exercise
+    /// the recovery path deterministically.
+    func _test_fireSuppressedInitiationRecovery(for peerID: PeerID) {
+        managerQueue.sync(flags: .barrier) {
+            guard let pending = suppressedInitiationRecoveryTimeouts
+                .removeValue(forKey: peerID) else {
+                return
+            }
+            pending.cancel()
+            guard let current = sessions[peerID],
+                  current.isEstablished() else {
+                return
+            }
+            requestHandshakeRecovery(for: peerID)
+        }
+    }
+    #endif
+
     private func requestHandshakeRecovery(
         for peerID: PeerID,
         after delay: TimeInterval = 0
