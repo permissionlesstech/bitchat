@@ -314,6 +314,13 @@ final class BLERadioController {
     func armPendingBackgroundConnects(
         slotReserve: Int = TransportConfig.bleBackgroundPendingConnectSlotReserve
     ) {
+        // Opt-out for people who don't want iOS 26's "accessory would like
+        // to open bitchat" wake prompt (#1427 / #1396). Default stays on.
+        // Turning the setting off only prevents future arming — already
+        // pending connects stay until the next foreground cancel/re-arm
+        // cycle. That is fine in practice: the toggle lives in-app, so it
+        // cannot change while we are backgrounded and actively waiting.
+        guard BLEProximityWakeSettings.enabled else { return }
         queue.async { [weak self] in
             guard let self,
                   self.delegate?.radioIsPanicSuspended() == false,
