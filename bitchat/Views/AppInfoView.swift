@@ -11,8 +11,11 @@ struct AppInfoView: View {
     @AppStorage(AppTheme.storageKey) private var appThemeRawValue = AppTheme.matrix.rawValue
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @ObservedObject private var bridgeService = BridgeService.shared
-    #if os(iOS)
+    // Cross-platform on purpose: a panic wipe can park the network on macOS
+    // too, and the notice that unparks it needs this to exist there. Only the
+    // transport picker below is iOS-only.
     @ObservedObject private var torTransportSettings = TorTransportSettings.shared
+    #if os(iOS)
     @ObservedObject private var torManager = TorManager.shared
     #endif
 
@@ -104,6 +107,9 @@ struct AppInfoView: View {
             static let torBridgeInvalid = String(localized: "app_info.settings.tor.bridges.invalid", defaultValue: "check the bridge lines and try again", comment: "Error shown when pasted obfs4 bridge lines are invalid")
             static let torBridgeStorageUnavailable = String(localized: "app_info.settings.tor.bridges.storage_unavailable", defaultValue: "secure bridge storage is unavailable while the device is locked", comment: "Warning shown when obfs4 bridges cannot be read from the device-only keychain")
             static let torRetry = String(localized: "app_info.settings.tor.transport.retry", defaultValue: "retry tor transports", comment: "Button that restarts the selected Tor transport sequence after it failed")
+            static let torSelectionRequiredTitle = String(localized: "app_info.settings.tor.selection_required.title", defaultValue: "networking is paused", comment: "Title of the notice shown after a panic wipe erased the chosen Tor transport, while the app keeps every internet connection closed")
+            static let torSelectionRequiredBody = String(localized: "app_info.settings.tor.selection_required.body", defaultValue: "the panic wipe erased the bridges your censorship-resistance setting was using, so bitchat keeps every connection closed until you choose a route again. resuming continues over direct tor.", comment: "Explanation under the paused-networking notice, stating why nothing connects and what resuming will use")
+            static let torSelectionRequiredAction = String(localized: "app_info.settings.tor.selection_required.action", defaultValue: "resume over direct tor", comment: "Button that clears the post-panic-wipe gate and lets the app use the network again over direct Tor")
 
             static let relaysTitle = String(localized: "app_info.settings.relays.title", defaultValue: "private message relays", comment: "Title of the relay list editor in settings")
             static let relaysSubtitle = String(localized: "app_info.settings.relays.subtitle", defaultValue: "when the mesh can't reach someone, private messages travel through these relays. the built-in ones are well-known addresses that a network filter can block, so you can add your own — including .onion addresses.", comment: "Subtitle explaining what the relay list is for and why someone would add a relay")
@@ -471,6 +477,37 @@ struct AppInfoView: View {
                             .bitchatFont(size: 11)
                             .foregroundColor(palette.alertRed)
                             .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                // A panic wipe that destroyed a chosen transport parks every
+                // internet activation until a route is chosen again. Say so,
+                // and carry the way back: this notice is deliberately outside
+                // both conditions below it, because on macOS the picker does
+                // not exist and on iOS it is hidden whenever tor is off, and a
+                // panic wipe is reachable in both of those states.
+                if torTransportSettings.requiresTransportSelection {
+                    settingsCard {
+                        Text(verbatim: Strings.Settings.torSelectionRequiredTitle)
+                            .bitchatFont(size: 12, weight: .semibold)
+                            .foregroundColor(palette.alertRed)
+                        Text(verbatim: Strings.Settings.torSelectionRequiredBody)
+                            .bitchatFont(size: 11)
+                            .foregroundColor(secondaryTextColor)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button {
+                            torTransportSettings.confirmTransportSelection()
+                        } label: {
+                            Text(verbatim: Strings.Settings.torSelectionRequiredAction)
+                                .bitchatFont(size: 12)
+                                .foregroundColor(palette.accent)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                                .background(palette.accent.opacity(0.12))
+                                .cornerRadius(6)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
 

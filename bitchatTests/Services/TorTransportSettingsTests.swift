@@ -128,6 +128,16 @@ final class TorTransportSettingsTests: XCTestCase {
         )
         XCTAssertFalse(settings.requiresTransportSelection)
 
+        // The gate answers for a route the user chose, so the wipe has to have
+        // something to destroy before it means anything.
+        XCTAssertEqual(
+            settings.saveObfs4BridgeInput(
+                "obfs4 192.0.2.10:443 \(fingerprint) cert=YWJjZA iat-mode=0"
+            ),
+            .success(1)
+        )
+        settings.setMode(.obfs4)
+
         settings.resetForPanic()
         XCTAssertTrue(settings.requiresTransportSelection)
 
@@ -143,6 +153,141 @@ final class TorTransportSettingsTests: XCTestCase {
         // no-op on mode and must still count as the user's choice.
         relaunched.setMode(.direct)
         XCTAssertFalse(relaunched.requiresTransportSelection)
+        XCTAssertFalse(
+            defaults.bool(forKey: TorTransportStorageKeys.transportSelectionRequired)
+        )
+    }
+
+    /// A default install chose no transport, so a wipe destroyed no route it
+    /// needs to re-consent to. Arming the gate anyway parked all internet
+    /// activation over a choice that was never made, and on macOS parked it
+    /// permanently: the picker that clears the gate is iOS-only, while the
+    /// triple-tap wipe that arms it is on every platform.
+    func test_panicOnADefaultInstallLeavesTheNetworkUsable() throws {
+        let suite = "TorTransportSettingsTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        let settings = TorTransportSettings(
+            defaults: defaults,
+            keychain: PreviewKeychainManager(),
+            notificationCenter: NotificationCenter()
+        )
+
+        settings.resetForPanic()
+
+        XCTAssertFalse(settings.requiresTransportSelection)
+        XCTAssertNil(
+            defaults.object(forKey: TorTransportStorageKeys.transportSelectionRequired)
+        )
+        let relaunched = TorTransportSettings(
+            defaults: defaults,
+            keychain: PreviewKeychainManager(),
+            notificationCenter: NotificationCenter()
+        )
+        XCTAssertFalse(relaunched.requiresTransportSelection)
+    }
+
+    /// The gate turns on what the wipe destroyed, not on which mode happens to
+    /// be stored. Auto with no bridges still plans snowflake, and bridges saved
+    /// while the mode reads direct are still a route the user configured; both
+    /// are choices a wipe takes away.
+    func test_panicArmsTheGateForEveryConfiguredRouteNotOnlyForAPickedMode() throws {
+        for setUp in [
+            { (settings: TorTransportSettings) in settings.setMode(.auto) },
+            { (settings: TorTransportSettings) in
+                _ = settings.saveObfs4BridgeInput(
+                    "obfs4 192.0.2.10:443 8838024498816A039FCBBAB14E6F40A0843051FA cert=YWJjZA iat-mode=0"
+                )
+            }
+        ] {
+            let suite = "TorTransportSettingsTests-\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defaults.removePersistentDomain(forName: suite)
+            let settings = TorTransportSettings(
+                defaults: defaults,
+                keychain: PreviewKeychainManager(),
+                notificationCenter: NotificationCenter()
+            )
+            setUp(settings)
+
+            settings.resetForPanic()
+
+            XCTAssertTrue(settings.requiresTransportSelection)
+        }
+    }
+
+    /// A second wipe must not inherit the first one's gate. The first wipe
+    /// already reset the mode and destroyed the bridges, so by the time the
+    /// second runs there is nothing left that the user chose -- and leaving the
+    /// gate armed there is exactly the state with no way out of it.
+    func test_aSecondPanicOnAnAlreadyWipedInstallReleasesTheGate() throws {
+        let suite = "TorTransportSettingsTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        let settings = TorTransportSettings(
+            defaults: defaults,
+            keychain: PreviewKeychainManager(),
+            notificationCenter: NotificationCenter()
+        )
+        settings.setMode(.obfs4)
+        settings.resetForPanic()
+        XCTAssertTrue(settings.requiresTransportSelection)
+
+        settings.resetForPanic()
+
+        XCTAssertFalse(settings.requiresTransportSelection)
+        XCTAssertNil(
+            defaults.object(forKey: TorTransportStorageKeys.transportSelectionRequired)
+        )
+    }
+
+    /// Confirming when nothing is parked must stay silent: the change
+    /// notification restarts tor and drops every relay socket, so posting it
+    /// for a no-op costs the user their connections.
+    func test_confirmingAnUnarmedGateChangesNothingAndNotifiesNobody() throws {
+        let suite = "TorTransportSettingsTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        let center = NotificationCenter()
+        let settings = TorTransportSettings(
+            defaults: defaults,
+            keychain: PreviewKeychainManager(),
+            notificationCenter: center
+        )
+        var notifications = 0
+        let token = center.addObserver(
+            forName: TorTransportSettings.didChangeNotification,
+            object: nil,
+            queue: nil
+        ) { _ in notifications += 1 }
+        defer { center.removeObserver(token) }
+
+        XCTAssertFalse(settings.requiresTransportSelection)
+        settings.confirmTransportSelection()
+
+        XCTAssertEqual(notifications, 0)
+        XCTAssertFalse(settings.requiresTransportSelection)
+    }
+
+    /// The way back that does not depend on the transport picker, which macOS
+    /// does not build and iOS hides whenever tor is switched off.
+    func test_transportSelectionIsConfirmableWithoutThePicker() throws {
+        let suite = "TorTransportSettingsTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        let settings = TorTransportSettings(
+            defaults: defaults,
+            keychain: PreviewKeychainManager(),
+            notificationCenter: NotificationCenter()
+        )
+        settings.setMode(.snowflake)
+        settings.resetForPanic()
+        XCTAssertTrue(settings.requiresTransportSelection)
+
+        settings.confirmTransportSelection()
+
+        XCTAssertFalse(settings.requiresTransportSelection)
+        XCTAssertEqual(settings.mode, .direct)
         XCTAssertFalse(
             defaults.bool(forKey: TorTransportStorageKeys.transportSelectionRequired)
         )

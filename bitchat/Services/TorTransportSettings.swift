@@ -92,6 +92,17 @@ final class TorTransportSettings: ObservableObject {
         notifyChanged()
     }
 
+    /// The way back onto the network after a panic wipe parked it.
+    ///
+    /// Same effect as re-picking the current mode, but reachable without the
+    /// transport picker, which only exists on iOS and is hidden there whenever
+    /// tor is switched off. A panic wipe is reachable on macOS and with tor
+    /// off, so without this the gate had states it could never be cleared from.
+    func confirmTransportSelection() {
+        guard clearTransportSelectionRequirement() else { return }
+        notifyChanged()
+    }
+
     @discardableResult
     private func clearTransportSelectionRequirement() -> Bool {
         guard requiresTransportSelection else { return false }
@@ -149,6 +160,12 @@ final class TorTransportSettings: ObservableObject {
     }
 
     func resetForPanic() {
+        // Only a wipe that destroyed a route the user actually chose leaves
+        // something to re-consent to. A default install configured nothing, so
+        // arming the gate for it parks the whole network over a choice that was
+        // never made, and on macOS parks it forever: the picker that clears the
+        // gate is iOS-only, and a panic wipe is reachable on both platforms.
+        let hadConfiguredTransport = mode != .direct || !obfs4BridgeLines.isEmpty
         keychain.deleteAll(service: Self.keychainService)
         defaults.removeObject(forKey: TorTransportStorageKeys.mode)
         defaults.removeObject(
@@ -157,11 +174,17 @@ final class TorTransportSettings: ObservableObject {
         mode = .direct
         obfs4BridgeLines = []
         bridgeStorageAvailable = true
-        requiresTransportSelection = true
-        defaults.set(
-            true,
-            forKey: TorTransportStorageKeys.transportSelectionRequired
-        )
+        requiresTransportSelection = hadConfiguredTransport
+        if hadConfiguredTransport {
+            defaults.set(
+                true,
+                forKey: TorTransportStorageKeys.transportSelectionRequired
+            )
+        } else {
+            defaults.removeObject(
+                forKey: TorTransportStorageKeys.transportSelectionRequired
+            )
+        }
         notifyChanged()
     }
 
