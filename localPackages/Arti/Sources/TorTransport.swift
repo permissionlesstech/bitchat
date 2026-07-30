@@ -272,6 +272,66 @@ enum TorTransportEventPolicy {
     }
 }
 
+enum TorRouteFailureOutcome: Equatable {
+    /// Nothing was in flight to fail, so there is no route to move on from and
+    /// nothing to delay.
+    case noRouteInFlight
+    /// The sequence has an untried candidate left. Advancing is what carries a
+    /// blocked direct route to obfs4, so it is never delayed.
+    case advance(from: TorTransport, to: TorTransport)
+    /// Every route this mode permits has been tried, so the next start would
+    /// repeat the attempt that just failed. It waits instead.
+    case exhausted(route: TorTransport, retryDelay: TimeInterval)
+}
+
+/// Decides what happens when a bootstrap attempt gives up.
+///
+/// Two rules meet here and neither is visible from the failed route on its own.
+/// Only `auto` may move the user to a different transport: every other mode is
+/// a choice the user made, and silently answering it with a weaker route is the
+/// thing this feature must never do. And only a sequence with nothing left to
+/// try may delay the next attempt, because delaying an advance would spend the
+/// censored-network budget doing nothing.
+///
+/// Getting the delay wrong is loud rather than slow. Every observer of "Tor is
+/// not ready" calls `startIfNeeded()` again, so without a backoff a failing
+/// obfs4 route restarted 15 times in 105 seconds, twice within 149 ms — which
+/// hammers the user's own bridge in a distinctive pattern.
+enum TorRouteFailurePolicy {
+    /// Delay after one exhausted sequence, doubled per consecutive failure so a
+    /// transient outage recovers in seconds.
+    static let baseRetryDelay: TimeInterval = 5
+    /// Ceiling on the doubling. A genuinely blocked network settles into an
+    /// occasional retry instead of a hot loop, and still recovers by itself
+    /// once the block lifts.
+    static let maximumRetryDelay: TimeInterval = 120
+
+    static func outcome(
+        mode: TorTransportMode,
+        candidates: [TorTransport],
+        index: Int,
+        priorConsecutiveFailures: Int
+    ) -> TorRouteFailureOutcome {
+        guard candidates.indices.contains(index) else { return .noRouteInFlight }
+        let failed = candidates[index]
+        if mode == .auto, candidates.indices.contains(index + 1) {
+            return .advance(from: failed, to: candidates[index + 1])
+        }
+        return .exhausted(
+            route: failed,
+            retryDelay: retryDelay(afterConsecutiveFailures: priorConsecutiveFailures + 1)
+        )
+    }
+
+    static func retryDelay(afterConsecutiveFailures failures: Int) -> TimeInterval {
+        guard failures > 0 else { return 0 }
+        // The count needs no bound of its own. An app left on a blocked network
+        // reaches exponents where `pow` saturates to infinity, and `min`
+        // resolves that to the ceiling like any other oversized value.
+        return min(maximumRetryDelay, baseRetryDelay * pow(2, Double(failures - 1)))
+    }
+}
+
 public struct TorRouteConfiguration: Equatable, Sendable {
     public var mode: TorTransportMode
     public var obfs4BridgeLines: [String]

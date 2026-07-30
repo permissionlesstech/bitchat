@@ -147,16 +147,12 @@ public final class TorManager: ObservableObject {
     private var lastRestartAt: Date? = nil
     private var startedAt: Date? = nil  // Tracks initial startup time for grace period
     // A route that has run out of transports stops on its own, but every
-    // observer of "tor is not ready" calls startIfNeeded() again, so the app
-    // restarted a failing obfs4 route 15 times in 105 seconds, twice within
-    // 149ms. On a censored network that hammers the user's bridge and is a
-    // loud, distinctive pattern. Failures back off; success clears it.
+    // observer of "tor is not ready" calls startIfNeeded() again. Failures back
+    // off on the curve in `TorRouteFailurePolicy`; success clears both.
     private var consecutiveRouteFailures = 0
     private var routeRetryNotBefore: Date? = nil
     /// How long the panic wipe waits for Arti to stop before deleting anyway.
     private static let panicShutdownWait: TimeInterval = 2
-    private static let baseRouteRetryDelay: TimeInterval = 5
-    private static let maximumRouteRetryDelay: TimeInterval = 120
     private(set) var allowAutoStart: Bool = false
 
     private init() {
@@ -1037,45 +1033,26 @@ public final class TorManager: ObservableObject {
     }
 
     private func failCurrentTransport(_ error: Error, stalled: Bool) {
-        guard routeCandidates.indices.contains(routeIndex) else {
+        lastError = error
+
+        switch TorRouteFailurePolicy.outcome(
+            mode: routeConfiguration.mode,
+            candidates: routeCandidates,
+            index: routeIndex,
+            priorConsecutiveFailures: consecutiveRouteFailures
+        ) {
+        case .noRouteInFlight:
             isStarting = false
-            lastError = error
             transportStatus = TorTransportStatus(
                 transport: nil,
                 lifecycle: .failed,
                 attempted: attemptedTransports
             )
-            return
-        }
 
-        let failedTransport = routeCandidates[routeIndex]
-        if attemptedTransports.last != failedTransport {
-            attemptedTransports.append(failedTransport)
-        }
-        lastError = error
-        bootstrapDidStall = stalled
-
-        let canAdvance = routeConfiguration.mode == .auto
-            && routeCandidates.indices.contains(routeIndex + 1)
-        if !canAdvance {
-            // The sequence is exhausted, so the next start would repeat the
-            // attempt that just failed. Doubling, capped, keeps a transient
-            // outage recovering quickly while a genuinely blocked network
-            // settles into an occasional retry instead of a hot loop.
-            consecutiveRouteFailures += 1
-            let delay = min(
-                Self.maximumRouteRetryDelay,
-                Self.baseRouteRetryDelay * pow(2, Double(consecutiveRouteFailures - 1))
-            )
-            routeRetryNotBefore = Date().addingTimeInterval(delay)
-            SecureLogger.warning(
-                "TorManager: route failed \(consecutiveRouteFailures)x; next attempt in \(Int(delay))s",
-                category: .session
-            )
-        }
-        if canAdvance {
+        case .advance(let failedTransport, let next):
+            recordAttempt(failedTransport)
+            bootstrapDidStall = stalled
             routeIndex += 1
-            let next = routeCandidates[routeIndex]
             transportStatus = TorTransportStatus(
                 transport: next,
                 lifecycle: .starting,
@@ -1083,20 +1060,35 @@ public final class TorManager: ObservableObject {
             )
             startPendingAfterShutdown = true
             shutdownCompletely(preserveRouteRestart: true)
-            return
-        }
 
-        isStarting = false
-        transportStatus = TorTransportStatus(
-            transport: failedTransport,
-            lifecycle: stalled ? .stalled : .failed,
-            attempted: attemptedTransports
-        )
-        startPendingAfterShutdown = false
-        if stalled {
-            NotificationCenter.default.post(name: .TorBootstrapDidStall, object: nil)
+        case .exhausted(let failedTransport, let retryDelay):
+            recordAttempt(failedTransport)
+            bootstrapDidStall = stalled
+            consecutiveRouteFailures += 1
+            routeRetryNotBefore = Date().addingTimeInterval(retryDelay)
+            SecureLogger.warning(
+                "TorManager: route failed \(consecutiveRouteFailures)x; next attempt in \(Int(retryDelay))s",
+                category: .session
+            )
+            isStarting = false
+            transportStatus = TorTransportStatus(
+                transport: failedTransport,
+                lifecycle: stalled ? .stalled : .failed,
+                attempted: attemptedTransports
+            )
+            startPendingAfterShutdown = false
+            if stalled {
+                NotificationCenter.default.post(name: .TorBootstrapDidStall, object: nil)
+            }
+            shutdownCompletely(preserveRouteRestart: true)
         }
-        shutdownCompletely(preserveRouteRestart: true)
+    }
+
+    /// A route that fails twice in a row is one attempt from the user's side,
+    /// so the status they see must not list it twice.
+    private func recordAttempt(_ transport: TorTransport) {
+        guard attemptedTransports.last != transport else { return }
+        attemptedTransports.append(transport)
     }
 
     // MARK: - Foreground/Background
