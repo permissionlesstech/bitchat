@@ -9,6 +9,7 @@
 import BitLogger
 import BitFoundation
 import Foundation
+import os
 import Security
 
 enum KeychainInstallLifecycleAction: Equatable {
@@ -33,7 +34,7 @@ final class KeychainInstallAccessGate: Sendable {
     }
 
     func allowsAccess(reconcile: () -> Bool) -> Bool {
-        let shouldReconcile = lock.withLock { state in
+        let shouldReconcile: KeychainAccessDecision = lock.withLock { state in
             if !state.blocked {
                 return .allowed
             }
