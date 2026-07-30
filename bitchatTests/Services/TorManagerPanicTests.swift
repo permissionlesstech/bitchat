@@ -2,6 +2,13 @@ import XCTest
 @testable import Tor
 @testable import bitchat
 
+/// Mirrors the declaration in `TorManager`, which keeps its FFI surface file
+/// private. `waitForArtiToStop()` decides whether to sleep at all from this
+/// symbol and nothing else, so reading it is how the cold-app case checks that
+/// the panic path does not block without timing the call.
+@_silgen_name("arti_is_running")
+private func arti_is_running() -> Int32
+
 /// Drives the real `TorManager` panic path rather than a mock.
 ///
 /// `NetworkActivationServiceTests` proves the panic boundary *calls*
@@ -82,14 +89,29 @@ final class TorManagerPanicTests: XCTestCase {
         // The panic boundary is synchronous and unconditional, so it also runs
         // on a cold app. `arti_stop()` reports -1 there rather than failing,
         // and the wipe still has to complete.
-        let started = Date()
+        //
+        // The wipe waits for Arti to finish stopping before unlinking its
+        // files, and the panic button must not stall on the main actor for
+        // that budget when there is nothing to wait for. `waitForArtiToStop()`
+        // returns on its guard without sleeping once, and this is the guard's
+        // only input, so establishing it is what makes the wait a no-op. The
+        // check is on that input rather than on elapsed wall-clock time: a
+        // loaded runner can exceed any elapsed bound with the behaviour
+        // entirely correct, which is the flake class `TestTimingHygieneTests`
+        // exists to keep out of this suite.
+        XCTAssertEqual(
+            arti_is_running(),
+            0,
+            "this case covers a cold app, so there must be no runtime to wait on"
+        )
+
         manager.resetTransportForPanic()
-        let elapsed = Date().timeIntervalSince(started)
 
         XCTAssertEqual(manager.transportStatus, .idle)
-        // The wipe waits for Arti to finish stopping before unlinking its
-        // files. With no Arti running there is nothing to wait for, and the
-        // panic button must not stall on the main actor for the full budget.
-        XCTAssertLessThan(elapsed, 1.0)
+        XCTAssertEqual(
+            arti_is_running(),
+            0,
+            "the wipe must not have left a runtime behind for the next attempt"
+        )
     }
 }

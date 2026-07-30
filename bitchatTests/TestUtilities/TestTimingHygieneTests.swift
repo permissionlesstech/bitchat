@@ -141,17 +141,46 @@ struct TestTimingHygieneTests {
     /// Date().timeIntervalSince(start), 1.4)` proving a debounce deadline was
     /// not restarted. It cannot separate "behaved correctly" from "runner was
     /// busy", so it only ever fails for the wrong reason.
+    ///
+    /// Two spellings count. The original pattern only saw the delta written
+    /// inside the assertion, so binding it to a local first and asserting a
+    /// line later walked straight through the rule, which is how one reached
+    /// the Tor panic tests and sat there until an unrelated rebase reshuffled
+    /// the schedule. Elapsed names are collected per file, then any upper
+    /// bound taken on one is an offender wherever it appears.
     @Test func testsDoNotAssertUpperBoundsOnElapsedTime() throws {
         let lines = try Self.swiftLines()
 
         let elapsedAssertion = try NSRegularExpression(
             pattern: #"(?:XCTAssertLessThan|XCTAssertLessThanOrEqual)\s*\(\s*(?:Date\(\)\.timeIntervalSince|[A-Za-z_][A-Za-z0-9_]*\.timeIntervalSince|ContinuousClock)"#
         )
+        let elapsedBinding = try NSRegularExpression(
+            pattern: #"\blet\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*[^/]*(?:\.timeIntervalSince|ContinuousClock)"#
+        )
+        let boundedLocal = try NSRegularExpression(
+            pattern: #"(?:XCTAssertLessThan|XCTAssertLessThanOrEqual)\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*[,)]"#
+        )
+
+        // Collected without the waiver filter: a waiver marks the assertion a
+        // reviewer chose to allow, not the binding that named the value.
+        var elapsedNames: [String: Set<String>] = [:]
+        for line in lines {
+            let range = NSRange(line.text.startIndex..., in: line.text)
+            guard let match = elapsedBinding.firstMatch(in: line.text, range: range),
+                  let name = Range(match.range(at: 1), in: line.text) else { continue }
+            elapsedNames[line.file, default: []].insert(String(line.text[name]))
+        }
 
         var offenders: [String] = []
         for line in lines where !Self.isWaived(line) {
             let range = NSRange(line.text.startIndex..., in: line.text)
-            guard elapsedAssertion.firstMatch(in: line.text, range: range) != nil else { continue }
+            var flagged = elapsedAssertion.firstMatch(in: line.text, range: range) != nil
+            if !flagged,
+               let match = boundedLocal.firstMatch(in: line.text, range: range),
+               let name = Range(match.range(at: 1), in: line.text) {
+                flagged = elapsedNames[line.file, default: []].contains(String(line.text[name]))
+            }
+            guard flagged else { continue }
             offenders.append("\(line.file):\(line.number) — \(line.text.trimmingCharacters(in: .whitespaces))")
         }
 
