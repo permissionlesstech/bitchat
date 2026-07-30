@@ -3349,6 +3349,378 @@
         }
       }
     },
+    "app_info.settings.proximity_wake.subtitle" : {
+      "comment" : "Subtitle explaining wake-on-proximity and the ios 26 accessory open prompt",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عندما يكون bitchat في الخلفية، اطلب من النظام إعادة الاتصال بأقران الشبكة الحديثين حتى يتمكن هاتف قريب من إيقاظ التطبيق. على ios 26 قد يظهر تنبيه \"يريد ملحق فتح bitchat\" — آمن للسماح، أو عطّله إن كنت تفضّل عدم رؤيته. مفعّل افتراضيًا لتبقى الشبكة قابلة للوصول."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat ব্যাকগ্রাউন্ডে থাকলে সিস্টেমকে সাম্প্রতিক মেশ পিয়ারদের সাথে আবার সংযুক্ত হতে বলুন যাতে কাছের ফোন অ্যাপ জাগাতে পারে। ios 26-এ সেই জাগানোতে \"অ্যাকসেসরি bitchat খুলতে চায়\" প্রম্পট দেখা যেতে পারে — অনুমতি দেওয়া নিরাপদ, অথবা দেখতে না চাইলে বন্ধ করুন। মেশ পৌঁছানো যায় রাখতে ডিফল্টে চালু।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "während bitchat im hintergrund ist, das system bitten, sich erneut mit kürzlichen mesh-peers zu verbinden, damit ein nahes telefon die app wecken kann. unter ios 26 kann dieses wecken einen \"zubehör möchte bitchat öffnen\"-hinweis zeigen — gefahrlos erlauben, oder abschalten wenn du ihn nicht sehen willst. standardmäßig an, damit das mesh erreichbar bleibt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "while bitchat is backgrounded, ask the system to reconnect to recent mesh peers so a nearby phone can wake the app. on ios 26 that wake can show an \"accessory would like to open bitchat\" prompt — safe to allow, or turn this off if you'd rather not see it. on by default so the mesh stays reachable."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mientras bitchat está en segundo plano, pide al sistema que se reconecte a pares recientes de la malla para que un teléfono cercano pueda despertar la app. en ios 26 ese despertar puede mostrar un aviso de \"un accesorio quiere abrir bitchat\" — es seguro permitirlo, o desactívalo si prefieres no verlo. activado por defecto para que la malla siga alcanzable."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "وقتی bitchat در پس‌زمینه است، از سیستم بخواهید به همتایان اخیر مش وصل شود تا گوشی نزدیک بتواند برنامه را بیدار کند. در ios 26 آن بیدارباش ممکن است پیام «یک لوازم جانبی می‌خواهد bitchat را باز کند» نشان دهد — اجازه دادن بی‌خطر است، یا اگر نمی‌خواهید ببینید خاموشش کنید. برای در دسترس ماندن مش به‌طور پیش‌فرض روشن است."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "habang naka-background ang bitchat, hilingin sa system na muling kumonekta sa mga recent mesh peer para magising ng malapit na telepono ang app. sa ios 26 maaaring magpakita ang paggising ng \"gustong buksan ng accessory ang bitchat\" — ligtas payagan, o i-off kung ayaw mong makita. naka-on bilang default para manatiling reachable ang mesh."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pendant que bitchat est en arrière-plan, demander au système de se reconnecter aux pairs mesh récents pour qu’un téléphone proche puisse réveiller l’app. sur ios 26 ce réveil peut afficher « un accessoire souhaite ouvrir bitchat » — sans danger d’autoriser, ou désactive si tu préfères ne pas le voir. activé par défaut pour que le mesh reste joignable."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כש־bitchat ברקע, לבקש מהמערכת להתחבר מחדש לעמיתי mesh אחרונים כדי שטלפון קרוב יוכל להעיר את האפליקציה. ב־ios 26 העירה יכולה להציג «אביזר רוצה לפתוח את bitchat» — בטוח לאשר, או לכבות אם לא רוצים לראות. פועל כברירת מחדל כדי שהרשת תישאר נגישה."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "जब bitchat पृष्ठभूमि में हो, सिस्टम से हाल के मेश साथियों से फिर जुड़ने को कहें ताकि पास का फ़ोन ऐप जगा सके। ios 26 पर वह जागरण \"एक एक्सेसरी bitchat खोलना चाहती है\" दिखा सकता है — अनुमति देना सुरक्षित है, या न दिखाना हो तो बंद करें। मेश पहुँच योग्य रखने के लिए डिफ़ॉल्ट रूप से चालू।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "saat bitchat di latar belakang, minta sistem menyambung ulang ke peer mesh baru-baru ini agar ponsel terdekat bisa membangunkan aplikasi. di ios 26 bangun itu bisa menampilkan \"aksesori ingin membuka bitchat\" — aman diizinkan, atau matikan jika tidak ingin melihatnya. aktif secara bawaan agar mesh tetap terjangkau."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mentre bitchat è in background, chiedere al sistema di riconnettersi ai peer mesh recenti così un telefono vicino può riattivare l’app. su ios 26 quel risveglio può mostrare «un accessorio vorrebbe aprire bitchat» — sicuro consentire, o disattiva se preferisci non vederlo. attivo di default così la mesh resta raggiungibile."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat がバックグラウンドの間、最近のメッシュピアへ再接続するようシステムに依頼し、近くの端末がアプリを起動できるようにします。ios 26 ではその起動で「アクセサリが bitchat を開こうとしています」と出ることがあります — 許可して問題ありません。見たくなければオフに。メッシュを到達可能に保つため既定はオンです。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat이 백그라운드일 때 시스템이 최근 메시 피어에 다시 연결하도록 요청해 근처 폰이 앱을 깨울 수 있게 합니다. ios 26에서는 그 깨움이 \"액세서리가 bitchat을 열려고 합니다\" 안내를 보일 수 있습니다 — 허용해도 안전하고, 보기 싫으면 끄세요. 메시가 닿을 수 있게 기본은 켜져 있습니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "semasa bitchat di latar belakang, minta sistem menyambung semula kepada rakan mesh baru-baru ini supaya telefon berdekatan boleh membangunkan aplikasi. pada ios 26 kebangkitan itu boleh menunjukkan \"aksesori mahu membuka bitchat\" — selamat dibenarkan, atau matikan jika anda tidak mahu melihatnya. dihidupkan secara lalai supaya mesh kekal boleh dicapai."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat पृष्ठभूमिमा हुँदा प्रणालीलाई हालसालैका मेश साथीसँग फेरि जोडिन भन्नुहोस् ताकि नजिकको फोनले एप जगाउन सकोस्। ios 26 मा त्यो जगाइले \"एउटा एक्सेसरी bitchat खोल्न चाहन्छ\" देखाउन सक्छ — अनुमति दिन सुरक्षित छ, वा नदेख्न चाहे बन्द गर्नुहोस्। मेश पुग्न सकियोस् भनी पूर्वनिर्धारित रूपमा खुला।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "terwijl bitchat op de achtergrond draait, het systeem vragen opnieuw te verbinden met recente mesh-peers zodat een nabije telefoon de app kan wekken. op ios 26 kan die wake een melding \"accessoire wil bitchat openen\" tonen — veilig om toe te staan, of zet uit als je die liever niet ziet. standaard aan zodat de mesh bereikbaar blijft."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gdy bitchat jest w tle, poproś system o ponowne połączenie z niedawnymi peerami mesh, aby pobliski telefon mógł wybudzić aplikację. na ios 26 to wybudzenie może pokazać „akcesorium chce otworzyć bitchat” — można bezpiecznie zezwolić, albo wyłącz jeśli wolisz tego nie widzieć. domyślnie włączone, by mesh pozostał osiągalny."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "enquanto o bitchat está em segundo plano, pedir ao sistema que se volte a ligar a pares mesh recentes para um telemóvel próximo poder acordar a app. no ios 26 esse despertar pode mostrar «um acessório gostaria de abrir o bitchat» — é seguro permitir, ou desliga se preferires não ver. ligado por predefinição para a mesh continuar alcançável."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "enquanto o bitchat está em segundo plano, peça ao sistema para reconectar a pares mesh recentes para um telefone próximo poder acordar o app. no ios 26 esse despertar pode mostrar \"um acessório gostaria de abrir o bitchat\" — é seguro permitir, ou desligue se preferir não ver. ligado por padrão para a mesh continuar alcançável."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "пока bitchat в фоне, просить систему переподключиться к недавним пирам mesh, чтобы соседний телефон мог разбудить приложение. на ios 26 этот подъём может показать «аксессуар хочет открыть bitchat» — разрешать безопасно, или выключи, если не хочешь видеть. по умолчанию вкл., чтобы mesh оставался доступен."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "när bitchat är i bakgrunden, be systemet återansluta till nya mesh-peers så att en närliggande telefon kan väcka appen. på ios 26 kan den väckningen visa \"ett tillbehör vill öppna bitchat\" — säkert att tillåta, eller stäng av om du inte vill se den. på som standard så meshen förblir nåbar."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat பின்னணியில் இருக்கும்போது, அண்மைய mesh சகாக்களுடன் மீண்டும் இணையுமாறு கணினியைக் கேளுங்கள் — அருகிலுள்ள தொலைபேசி பயன்பாட்டை எழுப்பும். ios 26இல் அந்த எழுப்புதல் \"ஒரு துணைக்கருவி bitchatஐத் திறக்க விரும்புகிறது\" காட்டலாம் — அனுமதிப்பது பாதுகாப்பானது, அல்லது பார்க்க விரும்பவில்லை எனில் அணைக்கவும். mesh அணுகக்கூடியதாக இருக்க இயல்பாக இயக்கத்தில்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ขณะที่ bitchat อยู่เบื้องหลัง ให้ระบบเชื่อมต่อกับเพียร์เมชล่าสุดอีกครั้งเพื่อให้โทรศัพท์ใกล้เคียงปลุกแอปได้ บน ios 26 การปลุกนี้อาจแสดง \"อุปกรณ์เสริมต้องการเปิด bitchat\" — อนุญาตได้โดยปลอดภัย หรือปิดหากไม่ต้องการเห็น เปิดเป็นค่าเริ่มต้นเพื่อให้เมชยังเข้าถึงได้"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat arka plandayken sistemden son mesh eşlerine yeniden bağlanmasını isteyin ki yakındaki telefon uygulamayı uyandırabilsin. ios 26’da bu uyandırma \"bir aksesuar bitchat’i açmak istiyor\" gösterebilir — izin vermek güvenli, ya da görmek istemiyorsanız kapatın. mesh erişilebilir kalsın diye varsayılan açık."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "поки bitchat у фоні, просити систему знову з’єднатися з недавніми пірами mesh, щоб сусідній телефон міг розбудити застосунок. на ios 26 це пробудження може показати «аксесуар хоче відкрити bitchat» — дозволяти безпечно, або вимкни, якщо не хочеш бачити. типово увімкнено, щоб mesh лишався досяжним."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جب bitchat پس منظر میں ہو، سسٹم سے کہیں کہ حالیہ میش پیرز سے دوبارہ جُڑیں تاکہ قریبی فون ایپ جگا سکے۔ ios 26 پر وہ جاگنا \"ایک لوازم bitchat کھولنا چاہتا ہے\" دکھا سکتا ہے — اجازت دینا محفوظ ہے، یا نہ دیکھنا ہو تو بند کر دیں۔ میش قابلِ رسائی رکھنے کے لیے بطورِ اصل آن۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "khi bitchat chạy nền, nhờ hệ thống kết nối lại các peer mesh gần đây để điện thoại gần có thể đánh thức ứng dụng. trên ios 26 lần đánh thức đó có thể hiện \"phụ kiện muốn mở bitchat\" — cho phép cũng an toàn, hoặc tắt nếu không muốn thấy. bật mặc định để mesh vẫn tới được."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当 bitchat 在后台时，请系统重新连接最近的网状对等端，以便附近的手机能唤醒应用。在 ios 26 上，该唤醒可能显示“配件想要打开 bitchat”——允许是安全的；若不想看到可关闭。默认开启，以保持网状网络可达。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "當 bitchat 在背景時，請系統重新連線最近的網狀對等端，以便附近的手機能喚醒應用程式。在 ios 26 上，該喚醒可能顯示「配件想要打開 bitchat」——允許是安全的；若不想看到可關閉。預設開啟，以保持網狀網路可達。"
+          }
+        }
+      }
+    },
+    "app_info.settings.proximity_wake.title" : {
+      "comment" : "Title of the setting that lets Bluetooth relaunch bitchat when a recent peer comes back into range",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الإيقاظ عند عودة الأقران القريبين"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "কাছের পিয়ার ফিরলে জাগান"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aufwachen wenn nahe peers zurückkehren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wake when nearby peers return"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "despertar cuando vuelvan pares cercanos"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بیدار شدن با بازگشت همتایان نزدیک"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gisingin kapag bumalik ang mga malapit na peer"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "réveiller au retour des pairs proches"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "להתעורר כשעמיתים קרובים חוזרים"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "नज़दीकी साथी लौटने पर जगाएँ"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bangunkan saat peer terdekat kembali"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "riattiva al ritorno dei peer vicini"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "近くのピアが戻ったら起動する"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "근처 피어가 돌아오면 깨우기"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bangunkan bila rakan berdekatan kembali"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "नजिकका साथी फर्कँदा जगाउनुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wakker worden als nabije peers terugkeren"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wybudzaj gdy wrócą pobliscy peerzy"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "acordar quando pares próximos regressarem"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "acordar quando pares próximos voltarem"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "буди при возвращении ближайших пиров"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "väck när närliggande peers återvänder"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "அருகிலுள்ள சகாக்கள் திரும்பும்போது எழுப்பு"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ปลุกเมื่อเพียร์ใกล้เคียงกลับมา"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yakındaki eşler dönünce uyandır"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "будити коли повертаються близькі піри"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قریبی پیرز کے واپس آنے پر جگائیں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "đánh thức khi peer gần quay lại"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "附近对等端返回时唤醒"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "附近對等端返回時喚醒"
+          }
+        }
+      }
+    },
     "app_info.settings.relays.title" : {
       "comment" : "Title of the relay list editor in settings",
       "extractionState" : "manual",
