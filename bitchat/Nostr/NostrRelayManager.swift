@@ -124,16 +124,41 @@ final class NostrRelayManager: ObservableObject {
         var nextReconnectTime: Date?
     }
     
-    // Default relays carry NIP-17 gift wraps, so avoid relays known to reject kind 1059.
-    private static let defaultRelays = [
+    // Built-in relays carry private-message envelopes, so avoid relays known to
+    // reject the kinds they use.
+    nonisolated private static let builtInRelays = [
         "wss://relay.damus.io",
         "wss://nos.lol",
         "wss://relay.primal.net",
         "wss://offchain.pub"
         // For local testing, you can add: "ws://localhost:8080"
     ]
-    private static let defaultRelaySet = Set(defaultRelays.compactMap { NostrRelayURL.normalized($0) })
-    
+    /// Exposed so the relay settings UI can reject re-adding a built-in.
+    /// `nonisolated` because it is an immutable constant with no actor state.
+    nonisolated static let builtInRelayURLs = Set(
+        builtInRelays.compactMap { NostrRelayURL.normalized($0) }
+    )
+
+    /// The relays private messages target: the built-in set plus any added by
+    /// hand. Four hardcoded hostnames are four names for a censor to block, so
+    /// the added ones are what keeps this reachable without a new build.
+    ///
+    /// Cached rather than computed per access: `allowedRelayList` consults the
+    /// set once per candidate URL, and recomputing would mean a `UserDefaults`
+    /// read and a fresh normalize-and-dedupe pass inside that loop. Refreshed
+    /// from `reloadDefaultRelays()` on construction and whenever the relay
+    /// settings change.
+    private var defaultRelays: [String] = []
+    private var defaultRelaySet: Set<String> = []
+
+    private func reloadDefaultRelays() {
+        var seen = Set<String>()
+        defaultRelays = (Self.builtInRelays + dependencies.customRelays())
+            .compactMap { NostrRelayURL.normalized($0) }
+            .filter { seen.insert($0).inserted }
+        defaultRelaySet = Set(defaultRelays)
+    }
+
     @Published private(set) var relays: [Relay] = []
     @Published private(set) var isConnected = false
     /// Whether a relay that carries private messages is connected. DMs
