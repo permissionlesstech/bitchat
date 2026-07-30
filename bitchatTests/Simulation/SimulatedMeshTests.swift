@@ -35,8 +35,12 @@ struct SimulatedMeshTests {
         mesh.connect(0, 1)
 
         mesh.announceAll()
-        // Handshake initiation and any deferred retries ride engine timers.
-        mesh.advanceTime(by: 2)
+        // Handshake initiation and any deferred retries ride engine
+        // timers; settle until both directions hold (normally 1 round).
+        mesh.settleUntil {
+            a.service.canDeliverSecurely(to: b.service.myPeerID)
+                && b.service.canDeliverSecurely(to: a.service.myPeerID)
+        }
 
         #expect(a.service.canDeliverSecurely(to: b.service.myPeerID))
         #expect(b.service.canDeliverSecurely(to: a.service.myPeerID))
@@ -104,6 +108,39 @@ struct SimulatedMeshTests {
     }
 
     @Test
+    func linkDropEventRetiresBindingAndReconnectHeals() {
+        let mesh = SimulatedMesh()
+        let a = mesh.addNode(nickname: "alice")
+        let b = mesh.addNode(nickname: "bob")
+        mesh.connect(0, 1)
+        mesh.announceAll()
+
+        let bobLinkOnAlice = mesh.linkUUID(from: 1, at: 0)
+        #expect(a.service._test_centralBinding(bobLinkOnAlice) == b.service.myPeerID)
+        #expect(a.service.getConnectedPeers().contains(b.service.myPeerID))
+
+        // The link layer reports the drop through the same port
+        // CoreBluetooth's didUnsubscribe uses: identity retirement and
+        // last-link peer bookkeeping are engine work.
+        a.service.emitLinkEvent(.centralLinkEnded(centralUUID: bobLinkOnAlice))
+        a.service._test_fenceEngine()
+
+        #expect(a.service._test_centralBinding(bobLinkOnAlice) == nil)
+        #expect(!a.service.getConnectedPeers().contains(b.service.myPeerID))
+
+        // A fresh announce over the (re-established) link binds and
+        // reconnects — the same heal path a real reconnection drives.
+        // (The announce throttle runs on wall clock; model elapsed time.)
+        b.service._test_resetAnnounceThrottle()
+        mesh.forceAnnounce(from: 1)
+        mesh.settleUntil {
+            a.service.getConnectedPeers().contains(b.service.myPeerID)
+        }
+        #expect(a.service._test_centralBinding(bobLinkOnAlice) == b.service.myPeerID)
+        #expect(a.service.getConnectedPeers().contains(b.service.myPeerID))
+    }
+
+    @Test
     func panicRotationRebindsSurvivorExactlyOnceAndStays() {
         let mesh = SimulatedMesh()
         let a = mesh.addNode(nickname: "alice")
@@ -133,7 +170,10 @@ struct SimulatedMeshTests {
 
         // Containment: further announces (and the rebind cooldown) leave
         // the healed binding alone — no flip-flop back to the dead ID.
+        // (Reset the wall-clock announce throttles so these actually send.)
+        b.service._test_resetAnnounceThrottle()
         mesh.forceAnnounce(from: 1)
+        a.service._test_resetAnnounceThrottle()
         mesh.forceAnnounce(from: 0)
         mesh.advanceTime(by: 2)
         #expect(a.service._test_centralBinding(bobLinkOnAlice) == newBobID)

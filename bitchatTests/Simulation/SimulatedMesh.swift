@@ -126,4 +126,18 @@ final class SimulatedMesh {
         }
         pump()
     }
+
+    /// Advances scheduler time one second per round until `condition`
+    /// holds (or the round budget runs out — the caller's assertion then
+    /// reports the real failure). Protocol exchanges normally settle in
+    /// one or two rounds; under a heavily loaded parallel suite, engine
+    /// slots can interleave with wall-clock-windowed crypto decisions and
+    /// need a retry cycle or two more. Deterministic: rounds are scheduler
+    /// time, never sleeps.
+    func settleUntil(maxRounds: Int = 20, _ condition: () -> Bool) {
+        for _ in 0..<maxRounds {
+            if condition() { return }
+            advanceTime(by: 1)
+        }
+    }
 }

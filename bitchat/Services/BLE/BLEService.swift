@@ -204,7 +204,7 @@ final class BLEService: NSObject {
     // MARK: - Core State (5 Essential Collections)
 
     // 1. Consolidated BLE link tracking for both central and peripheral roles.
-    private var linkStateStore = BLELinkStateStore()
+    var linkStateStore = BLELinkStateStore()
 
     // The engine-owned identity domain: per-link Noise authentication +
     // rebind containment (courier handover needs the stronger fact that a
@@ -237,7 +237,7 @@ final class BLEService: NSObject {
     }
 
     // BCH-01-004: Rate-limiting for subscription-triggered announces.
-    private var subscriptionAnnounceLimiter = BLESubscriptionAnnounceLimiter()
+    var subscriptionAnnounceLimiter = BLESubscriptionAnnounceLimiter()
     
     // 3. Peer Information (single source of truth). Lock-backed so the main
     // actor reads it directly instead of blocking on the engine queue.
@@ -330,7 +330,7 @@ final class BLEService: NSObject {
     
     // Application state tracking (thread-safe)
     #if os(iOS)
-    private var isAppActive: Bool = true  // Assume active initially
+    var isAppActive: Bool = true  // Assume active initially
     /// Last `UIApplication.shared.backgroundTimeRemaining` sampled on the
     /// main thread, cached so bleQueue status logs can read it without ever
     /// dispatching to main (see `captureBluetoothStatus` for the invariant).
@@ -344,9 +344,9 @@ final class BLEService: NSObject {
     
     // MARK: - Core BLE Objects
     
-    private var centralManager: CBCentralManager?
-    private var peripheralManager: CBPeripheralManager?
-    private var characteristic: CBMutableCharacteristic?
+    var centralManager: CBCentralManager?
+    var peripheralManager: CBPeripheralManager?
+    var characteristic: CBMutableCharacteristic?
     private let shouldInitializeBluetoothManagers: Bool
     private let panicLifecycleLock = NSLock()
     private var _isPanicSuspended: Bool
@@ -377,8 +377,8 @@ final class BLEService: NSObject {
     private let messageQueueKey = DispatchSpecificKey<Void>()
     /// The only source of deferred engine work (see BLEEngineScheduling);
     /// injectable so tests drive protocol deadlines with a manual clock.
-    private let engineScheduler: BLEEngineScheduling
-    private let bleQueue = DispatchQueue(label: "mesh.bluetooth", qos: .userInitiated)
+    let engineScheduler: BLEEngineScheduling
+    let bleQueue = DispatchQueue(label: "mesh.bluetooth", qos: .userInitiated)
     private let bleQueueKey = DispatchSpecificKey<Void>()
 
     /// Runs `body` exclusively with respect to all engine-owned state.
@@ -409,7 +409,7 @@ final class BLEService: NSObject {
     private var pendingNoiseSessionQueues = BLENoiseSessionQueues()
     // Queue for notifications that failed due to full queue (bleQueue-owned,
     // like the link state store: every producer and drain runs there).
-    private var pendingNotifications = BLEOutboundNotificationBuffer<CBCentral>()
+    var pendingNotifications = BLEOutboundNotificationBuffer<CBCentral>()
     // Backpressure logging fires per fragment during media transfers
     // (hundreds of lines per image); sampled via this counter, which is
     // only touched on bleQueue (no sync needed).
@@ -417,7 +417,7 @@ final class BLEService: NSObject {
 
     // Accumulate long write chunks per central until a full frame decodes
     // (bleQueue-owned)
-    private var pendingWriteBuffers = BLEInboundWriteBuffer()
+    var pendingWriteBuffers = BLEInboundWriteBuffer()
     // Relay jitter scheduling to reduce redundant floods
     private var scheduledRelays = BLEScheduledRelayStore()
     // Track short-lived traffic bursts to adapt announces/scanning under load
@@ -435,10 +435,10 @@ final class BLEService: NSObject {
     // delivery so a duplicate costs one decrypt instead of a delivery + ack
     // + handshake each. Engine-confined.
     private var openedCourierMessageIDs = BoundedIDSet(capacity: TransportConfig.courierOpenedMessageIDCap)
-    private let logRateLimiter = BLELogRateLimiter(defaultMinimumInterval: 5)
+    let logRateLimiter = BLELogRateLimiter(defaultMinimumInterval: 5)
 
     // Per-peripheral write backpressure (bleQueue-owned)
-    private var pendingPeripheralWrites = BLEOutboundWriteBuffer()
+    var pendingPeripheralWrites = BLEOutboundWriteBuffer()
     // Debounce duplicate disconnect notifies
     private var disconnectNotifyDebouncer = BLEPeerEventDebouncer()
     // Store-and-forward for directed messages when we have no links
@@ -475,7 +475,7 @@ final class BLEService: NSObject {
 
     // MARK: - Radio (central-role policy: discovery admission, connection
     // budget, connect timeouts, background connects, scan duty, advertising)
-    private lazy var radio = BLERadioController(
+    lazy var radio = BLERadioController(
         queue: bleQueue,
         linkStateStore: linkStateStore,
         recentTraffic: recentTrafficTracker
@@ -596,7 +596,7 @@ final class BLEService: NSObject {
         }
     }
 
-    private var isPanicSuspended: Bool {
+    var isPanicSuspended: Bool {
         panicLifecycleLock.lock()
         defer { panicLifecycleLock.unlock() }
         return _isPanicSuspended
@@ -2415,7 +2415,7 @@ final class BLEService: NSObject {
         }
     }
 
-    private func flushDirectedSpool() {
+    func flushDirectedSpool() {
         guard !isPanicSuspended else { return }
         // Runs from bleQueue maintenance: hop to the engine asynchronously
         // (bleQueue must never sync-wait on the engine). Move items out and
@@ -2741,7 +2741,7 @@ final class BLEService: NSObject {
         }
         return true
     }
-    private func sendAnnounce(forceSend: Bool = false) {
+    func sendAnnounce(forceSend: Bool = false) {
         guard !isPanicSuspended else { return }
         // Announce construction reads the replaceable Noise service and several
         // related state snapshots. Serialize the whole operation with identity
@@ -2958,272 +2958,6 @@ extension BLEService: GossipSyncManager.Delegate {
     }
 }
 
-// MARK: - CBCentralManagerDelegate
-
-extension BLEService: CBCentralManagerDelegate {
-    #if os(iOS)
-    func centralManager(_ central: CBCentralManager, willRestoreState dict: [String: Any]) {
-        let restoredPeripherals = (dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral]) ?? []
-        guard !isPanicSuspended else {
-            central.stopScan()
-            restoredPeripherals.forEach {
-                central.cancelPeripheralConnection($0)
-            }
-            return
-        }
-        let restoredServices = (dict[CBCentralManagerRestoredStateScanServicesKey] as? [CBUUID]) ?? []
-        let restoredOptions = (dict[CBCentralManagerRestoredStateScanOptionsKey] as? [String: Any]) ?? [:]
-        let allowDuplicates = restoredOptions[CBCentralManagerScanOptionAllowDuplicatesKey] as? Bool
-
-        SecureLogger.info(
-            "♻️ Central restore: peripherals=\(restoredPeripherals.count) services=\(restoredServices.count) allowDuplicates=\(String(describing: allowDuplicates))",
-            category: .session
-        )
-
-        for peripheral in restoredPeripherals {
-            let identifier = peripheral.identifier.uuidString
-            peripheral.delegate = self
-            let existing = linkStateStore.state(forPeripheralID: identifier)
-            let assembler = existing?.assembler ?? NotificationStreamAssembler()
-            let characteristic = existing?.characteristic
-            let wasConnecting = existing?.isConnecting ?? false
-            let wasConnected = existing?.isConnected ?? false
-
-            let restoredState = BLEPeripheralLinkState(
-                peripheral: peripheral,
-                characteristic: characteristic,
-                isConnecting: wasConnecting || peripheral.state == .connecting,
-                isConnected: wasConnected || peripheral.state == .connected,
-                lastConnectionAttempt: existing?.lastConnectionAttempt,
-                assembler: assembler
-            )
-            linkStateStore.setPeripheralState(restoredState, for: identifier)
-
-            // Restored peripherals are the freshest wake-on-proximity
-            // candidates we have after a relaunch — without this the cache
-            // starts empty and backgrounding right after a restore arms
-            // nothing. Service rediscovery for restored-connected links waits
-            // for poweredOn: CoreBluetooth drops commands issued during
-            // restoration (API MISUSE warnings).
-            radio.recordRecentPeripheral(peripheral, peripheralID: identifier, at: Date())
-        }
-
-        // Via the sampler (not a direct capture): it refreshes the cached
-        // background budget on main first, so the restore log shows the real
-        // wake window instead of the init sentinel.
-        logBluetoothStatus("central-restore")
-
-        if central.state == .poweredOn {
-            radio.startScanning()
-        }
-    }
-    #endif
-
-    func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        emitTransportEvent(.bluetoothStateUpdated(central.state))
-
-        switch central.state {
-        case .poweredOn:
-            guard !isPanicSuspended else {
-                central.stopScan()
-                return
-            }
-            // Links restored as connected have no characteristic in the new
-            // process; without rediscovery they sit connected-but-unusable
-            // until the peer disconnects. Runs here (not willRestoreState)
-            // because commands issued before poweredOn are dropped.
-            for state in linkStateStore.peripheralStates where state.isConnected
-                && state.characteristic == nil
-                && state.peripheral.state == .connected {
-                SecureLogger.info("♻️ Rediscovering services on restored link: \(state.peripheral.identifier.uuidString.prefix(8))…", category: .session)
-                state.peripheral.discoverServices([BLEService.serviceUUID])
-            }
-
-            // Start scanning - use allow duplicates for faster discovery when active
-            radio.startScanning()
-
-        case .poweredOff:
-            // CoreBluetooth has already transitioned out of poweredOn. Do
-            // not issue stop/cancel commands now; they are rejected as API
-            // misuse. Retire our link state locally instead.
-            SecureLogger.info("📴 Bluetooth powered off - cleaning up central state", category: .session)
-            let peripheralIDs = linkStateStore.peripheralStates.map { $0.peripheral.identifier.uuidString }
-            for peripheralID in peripheralIDs {
-                pendingPeripheralWrites.discardAll(for: peripheralID)
-            }
-            linkStateStore.clearPeripherals()
-            messageQueue.async { [weak self] in
-                guard let self else { return }
-                for peripheralID in peripheralIDs {
-                    self.linkAuth.retireLink(.peripheral(peripheralID))
-                }
-                let peerIDs = self.linkBindings.clearPeripherals()
-                // Notify UI of disconnections
-                for peerID in peerIDs {
-                    self.notifyUI { [weak self] in
-                        self?.notifyPeerDisconnectedDebounced(peerID)
-                    }
-                }
-            }
-
-        case .unauthorized:
-            // User denied Bluetooth permission
-            SecureLogger.warning("🚫 Bluetooth unauthorized - user denied permission", category: .session)
-            linkStateStore.clearPeripherals()
-            messageQueue.async { [weak self] in
-                _ = self?.linkBindings.clearPeripherals()
-            }
-
-        case .unsupported:
-            // Device doesn't support BLE
-            SecureLogger.error("❌ Bluetooth LE not supported on this device", category: .session)
-
-        case .resetting:
-            // Bluetooth stack is resetting - will get another state update when done
-            SecureLogger.info("🔄 Bluetooth stack resetting...", category: .session)
-
-        case .unknown:
-            // Initial state before we know the actual state
-            SecureLogger.debug("❓ Bluetooth state unknown (initializing)", category: .session)
-
-        @unknown default:
-            SecureLogger.warning("⚠️ Unknown Bluetooth state: \(central.state.rawValue)", category: .session)
-        }
-    }
-    
-    
-    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
-        radio.handleDiscovery(peripheral, advertisementData: advertisementData, rssi: RSSI)
-    }
-
-    func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        guard !isPanicSuspended else {
-            central.cancelPeripheralConnection(peripheral)
-            return
-        }
-        let peripheralID = peripheral.identifier.uuidString
-
-        #if os(iOS)
-        // A connect completing while backgrounded is the wake-on-proximity
-        // path doing its job — worth an info line for field verification.
-        if !isAppActive {
-            SecureLogger.info("🌙 Background wake: connected to \(peripheral.name ?? peripheralID) while backgrounded", category: .session)
-        }
-        #endif
-
-        // Update state to connected
-        linkStateStore.markConnected(peripheral)
-        
-        // Reset backoff state on success
-        radio.recordConnectionSuccess(peripheralID: peripheralID)
-
-        SecureLogger.debug("✅ Connected: \(peripheral.name ?? "Unknown") [\(peripheralID)]", category: .session)
-        
-        // Discover services
-        peripheral.discoverServices([BLEService.serviceUUID])
-    }
-    
-    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
-        let peripheralID = peripheral.identifier.uuidString
-
-        SecureLogger.debug("📱 Disconnect: \(peripheralID)\(error != nil ? " (\(error!.localizedDescription))" : "")", category: .session)
-
-        // If disconnect carried an error (often timeout), apply short backoff to avoid thrash
-        if error != nil {
-            radio.recordDisconnectError(peripheralID: peripheralID, at: Date())
-        }
-
-        // Retain the handle: a dropped link is the best wake-on-proximity
-        // candidate if the app backgrounds before the peer returns.
-        radio.recordRecentPeripheral(peripheral, peripheralID: peripheralID, at: Date())
-
-        #if os(iOS)
-        // Link lost while backgrounded (peer walked away): re-arm a pending
-        // connect during this wake window so the peer's return wakes us again.
-        // Delayed past the disconnect-settle window to avoid reconnect thrash
-        // at range edge.
-        if !isAppActive {
-            bleQueue.asyncAfter(deadline: .now() + TransportConfig.bleDisconnectDiscoveryIgnoreSeconds) { [weak self] in
-                guard let self, !self.isAppActive else { return }
-                // Reserve 0: use the slot this disconnect freed even in a
-                // dense mesh, so the lost peer can wake us when it returns.
-                self.radio.armPendingBackgroundConnects(slotReserve: 0)
-            }
-        }
-        #endif
-
-        // Physical teardown now; identity retirement and peer-disconnect
-        // bookkeeping on the engine, which owns the bindings. The scan
-        // restart and connect-slot refill below stay on bleQueue — they
-        // respond to the physical drop regardless of remaining logical
-        // links.
-        discardPeripheralLinkPhysical(peripheralID)
-        messageQueue.async { [weak self] in
-            guard let self else { return }
-            // A duplicate link can drop while the peer stays live on
-            // another (the dual-role central link, or a second bound link
-            // after a restore): peer-disconnect bookkeeping only runs once
-            // the peer's last live link is gone. The retirement just
-            // repaired the reverse map onto a connected survivor, so
-            // directLinkState is accurate here.
-            let peerID = self.retirePeripheralLinkIdentity(peripheralID)
-            if let peerID {
-                SecureLogger.debug("📱 Disconnected link was bound to \(peerID.id.prefix(8))…", category: .session)
-            }
-            let remainingLinks = peerID.map { self.directLinkState(for: $0) }
-            let peerStillLinked = (remainingLinks?.hasPeripheral ?? false) || (remainingLinks?.hasCentral ?? false)
-            if let peerID, !peerStillLinked {
-                // Do not remove peer; mark as not connected but retain for reachability
-                self.peerRegistry.mutate { $0.markDisconnected(peerID) }
-                self.refreshLocalTopology()
-            }
-
-            // Notify delegate about disconnection on main thread (direct link dropped)
-            self.notifyUI { [weak self] in
-                guard let self = self else { return }
-
-                // Get current peer list (after removal)
-                let currentPeerIDs = self.peerRegistry.peerIDs
-
-                if let peerID, !peerStillLinked {
-                    self.notifyPeerDisconnectedDebounced(peerID)
-                }
-                self.requestPeerDataPublish()
-                self.deliverTransportEvent(.peerListUpdated(currentPeerIDs))
-            }
-        }
-
-        // Restart scanning with allow duplicates for faster rediscovery
-        if centralManager?.state == .poweredOn {
-            // Stop and restart scanning to ensure we get fresh discovery events
-            centralManager?.stopScan()
-            bleQueue.asyncAfter(deadline: .now() + TransportConfig.bleRestartScanDelaySeconds) { [weak self] in
-                self?.radio.startScanning()
-            }
-        }
-        // Attempt to fill freed slot from queue
-        bleQueue.async { [weak self] in self?.radio.tryConnectFromQueue() }
-    }
-    
-    func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
-        let peripheralID = peripheral.identifier.uuidString
-
-        // Clean up the references: physical now, identity on the engine.
-        discardPeripheralLinkPhysical(peripheralID)
-        messageQueue.async { [weak self] in
-            self?.retirePeripheralLinkIdentity(peripheralID)
-        }
-
-        SecureLogger.error("❌ Failed to connect to peripheral: \(peripheral.name ?? "Unknown") [\(peripheralID)] - Error: \(error?.localizedDescription ?? "Unknown")", category: .session)
-        radio.recordConnectionFailure(peripheralID: peripheralID)
-        // Try next candidate
-        bleQueue.async { [weak self] in self?.radio.tryConnectFromQueue() }
-    }
-}
-
-extension BLEService {
-}
-
 // MARK: - Radio controller integration
 
 extension BLEService: BLERadioControllerDelegate {
@@ -3241,11 +2975,9 @@ extension BLEService: BLERadioControllerDelegate {
 
     func radioTearDownPeripheralLink(_ peripheralID: String) {
         // bleQueue (the controller's queue): physical discard now, identity
-        // retirement on the engine.
+        // retirement via the port.
         discardPeripheralLinkPhysical(peripheralID)
-        messageQueue.async { [weak self] in
-            self?.retirePeripheralLinkIdentity(peripheralID)
-        }
+        emitLinkEvent(.peripheralLinkEnded(peripheralID: peripheralID, runPeerBookkeeping: false))
     }
 
     /// bleQueue half of a peripheral-link teardown: the link's write
@@ -3315,14 +3047,6 @@ extension BLEService: BLERadioControllerDelegate {
     }
 }
 
-private extension BLEService {
-    static func shouldRediscoverBitChatService(
-        invalidatedServiceUUIDs: [CBUUID],
-        cachedServiceUUIDs: [CBUUID]?
-    ) -> Bool {
-        invalidatedServiceUUIDs.contains(serviceUUID) || cachedServiceUUIDs?.contains(serviceUUID) != true
-    }
-}
 
 #if DEBUG
 // Test-only helper to inject packets into the receive pipeline
@@ -3364,13 +3088,23 @@ extension BLEService {
     /// SimulatedMesh harness feeds every node through this, so multi-node
     /// tests exercise the same engine code as CoreBluetooth ingress.
     func _test_ingestFrame(_ packet: BitchatPacket, link: BLEIngressLinkID) {
-        ingestDecodedPacket(packet, link: link, linkDescription: "Simulated \(link)")
+        emitLinkEvent(.frameDecoded(packet, link: link, linkDescription: "Simulated \(link)"))
     }
 
     /// Sends an unthrottled announce, exactly like the maintenance forced
     /// path. SimulatedMesh uses this as the deterministic discovery step.
     func _test_forceAnnounce() {
         onEngine { sendAnnounceNow(forceSend: true) }
+    }
+
+    /// Clears the announce throttle's wall-clock debt — the simulator's
+    /// stand-in for "enough real time has passed", since scheduler time
+    /// cannot move the throttle's Date-based window. Deliberately NOT
+    /// part of `_test_forceAnnounce`: the panic-rotation mesh test relies
+    /// on the production panic path performing its own reset, and a
+    /// blanket reset here would mask that regression.
+    func _test_resetAnnounceThrottle() {
+        announceThrottle.reset()
     }
 
     /// Blocks until every engine slot enqueued so far has run — the
@@ -3666,544 +3400,6 @@ extension BLEService {
 }
 #endif
 
-// MARK: - CBPeripheralDelegate
-
-extension BLEService: CBPeripheralDelegate {
-    func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
-        guard !isPanicSuspended else { return }
-        if let error = error {
-            SecureLogger.error("❌ Error discovering services for \(peripheral.name ?? "Unknown"): \(error.localizedDescription)", category: .session)
-            // Retry service discovery after a delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                guard peripheral.state == .connected else { return }
-                peripheral.discoverServices([BLEService.serviceUUID])
-            }
-            return
-        }
-        
-        guard let services = peripheral.services else {
-            SecureLogger.warning("⚠️ No services discovered for \(peripheral.name ?? "Unknown")", category: .session)
-            return
-        }
-        
-        guard let service = services.first(where: { $0.uuid == BLEService.serviceUUID }) else {
-            // Not a BitChat peer - disconnect
-            centralManager?.cancelPeripheralConnection(peripheral)
-            return
-        }
-        
-        // Discovering BLE characteristics
-        peripheral.discoverCharacteristics([BLEService.characteristicUUID], for: service)
-    }
-    
-    func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
-        guard !isPanicSuspended else { return }
-        if let error = error {
-            SecureLogger.error("❌ Error discovering characteristics for \(peripheral.name ?? "Unknown"): \(error.localizedDescription)", category: .session)
-            return
-        }
-        
-        guard let characteristic = service.characteristics?.first(where: { $0.uuid == BLEService.characteristicUUID }) else {
-            SecureLogger.warning("⚠️ No matching characteristic found for \(peripheral.name ?? "Unknown")", category: .session)
-            return
-        }
-        
-        // Found characteristic
-        
-        // Log characteristic properties for debugging
-        var properties: [String] = []
-        if characteristic.properties.contains(.read) { properties.append("read") }
-        if characteristic.properties.contains(.write) { properties.append("write") }
-        if characteristic.properties.contains(.writeWithoutResponse) { properties.append("writeWithoutResponse") }
-        if characteristic.properties.contains(.notify) { properties.append("notify") }
-        if characteristic.properties.contains(.indicate) { properties.append("indicate") }
-        // Characteristic properties: \(properties.joined(separator: ", "))
-        
-        // Verify characteristic supports reliable writes
-        if !characteristic.properties.contains(.write) {
-            SecureLogger.warning("⚠️ Characteristic doesn't support reliable writes (withResponse)!", category: .session)
-        }
-        
-        // Store characteristic in our consolidated structure
-        let peripheralID = peripheral.identifier.uuidString
-        linkStateStore.updateCharacteristic(characteristic, forPeripheralID: peripheralID)
-        
-        // Subscribe for notifications
-        if characteristic.properties.contains(.notify) {
-            peripheral.setNotifyValue(true, for: characteristic)
-            SecureLogger.debug("🔔 Subscribed to notifications from \(peripheral.name ?? "Unknown")", category: .session)
-            
-            // Send announce after subscription is confirmed (force send for new connection)
-            engineScheduler.schedule(after: TransportConfig.blePostSubscribeAnnounceDelaySeconds) { [weak self] in
-                self?.sendAnnounce(forceSend: true)
-                // Try flushing any spooled directed packets now that we have a link
-                self?.flushDirectedSpool()
-            }
-        } else {
-            SecureLogger.warning("⚠️ Characteristic does not support notifications", category: .session)
-        }
-    }
-    
-    func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
-        guard !isPanicSuspended else { return }
-        if let error = error {
-            SecureLogger.error("❌ Error receiving notification: \(error.localizedDescription)", category: .session)
-            return
-        }
-        
-        guard let data = characteristic.value, !data.isEmpty else {
-            SecureLogger.warning("⚠️ No data in notification", category: .session)
-            return
-        }
-
-        bufferNotificationChunk(data, from: peripheral)
-    }
-
-    private func bufferNotificationChunk(_ chunk: Data, from peripheral: CBPeripheral) {
-        let peripheralUUID = peripheral.identifier.uuidString
-
-        var state = linkStateStore.state(forPeripheralID: peripheralUUID) ?? BLEPeripheralLinkState(
-            peripheral: peripheral,
-            characteristic: nil,
-            isConnecting: false,
-            isConnected: peripheral.state == .connected,
-            lastConnectionAttempt: nil,
-            assembler: NotificationStreamAssembler()
-        )
-
-        var assembler = state.assembler
-        let result = assembler.append(chunk)
-        state.assembler = assembler
-        linkStateStore.setPeripheralState(state, for: peripheralUUID)
-
-        for byte in result.droppedPrefixes {
-            SecureLogger.warning("⚠️ Dropping byte from BLE stream (unexpected prefix \(String(format: "%02x", byte)))", category: .session)
-        }
-
-        if result.reset {
-            SecureLogger.error("❌ Invalid BLE frame length; reset notification stream", category: .session)
-        }
-        
-        // Attribution — spoof rejection, announce binding, ingress
-        // recording — is engine work now (the engine owns the bindings).
-        // Frames hop up in decode order; the engine's serial slot ordering
-        // gives the same same-batch spoof protection the old bleQueue-side
-        // batch-local binding enforced: an announce that binds this link is
-        // attributed before every frame that rode behind it.
-        for frame in result.frames {
-            guard let packet = BinaryProtocol.decode(frame) else {
-                let prefix = frame.prefix(16).map { String(format: "%02x", $0) }.joined(separator: " ")
-                SecureLogger.error("❌ Failed to decode assembled notification frame (len=\(frame.count), prefix=\(prefix))", category: .session)
-                continue
-            }
-            ingestDecodedPacket(
-                packet,
-                link: .peripheral(peripheralUUID),
-                linkDescription: "Peripheral \(peripheralUUID.prefix(8))…"
-            )
-        }
-    }
-    
-    func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
-        if let error = error {
-            SecureLogger.error("❌ Write failed to \(peripheral.name ?? peripheral.identifier.uuidString): \(error.localizedDescription)", category: .session)
-            // Don't retry - just log the error
-        } else {
-            SecureLogger.debug("✅ Write confirmed to \(peripheral.name ?? peripheral.identifier.uuidString)", category: .session)
-        }
-    }
-    
-    func peripheralIsReady(toSendWriteWithoutResponse peripheral: CBPeripheral) {
-        guard !isPanicSuspended else { return }
-        // Resume queued writes for this peripheral - called when canSendWriteWithoutResponse becomes true again
-        if logRateLimiter.shouldLog(key: "peripheral-ready:\(peripheral.identifier.uuidString)") {
-            SecureLogger.debug("📤 Peripheral \(peripheral.name ?? peripheral.identifier.uuidString.prefix(8).description) ready for more writes", category: .session)
-        }
-        drainPendingWrites(for: peripheral)
-    }
-    
-    func peripheral(_ peripheral: CBPeripheral, didModifyServices invalidatedServices: [CBService]) {
-        guard !isPanicSuspended else { return }
-        SecureLogger.warning("⚠️ Services modified for \(peripheral.name ?? peripheral.identifier.uuidString)", category: .session)
-
-        let shouldRediscover = BLEService.shouldRediscoverBitChatService(
-            invalidatedServiceUUIDs: invalidatedServices.map(\.uuid),
-            cachedServiceUUIDs: peripheral.services?.map(\.uuid)
-        )
-
-        guard shouldRediscover else { return }
-
-        let peripheralID = peripheral.identifier.uuidString
-        linkStateStore.updatePeripheral(peripheralID) {
-            $0.characteristic = nil
-            $0.assembler = NotificationStreamAssembler()
-        }
-
-        SecureLogger.debug("🔄 BitChat service changed for \(peripheral.name ?? peripheral.identifier.uuidString), rediscovering", category: .session)
-        peripheral.discoverServices([BLEService.serviceUUID])
-    }
-    
-    func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
-        guard !isPanicSuspended else { return }
-        if let error = error {
-            SecureLogger.error("❌ Error updating notification state: \(error.localizedDescription)", category: .session)
-        } else {
-            SecureLogger.debug("🔔 Notification state updated for \(peripheral.name ?? peripheral.identifier.uuidString): \(characteristic.isNotifying ? "ON" : "OFF")", category: .session)
-            
-            // If notifications are now on, send an announce to ensure this peer knows about us
-            if characteristic.isNotifying {
-                // Sending announce after subscription
-                self.sendAnnounce(forceSend: true)
-            }
-        }
-    }
-
-}
-
-// MARK: - CBPeripheralManagerDelegate
-
-extension BLEService: CBPeripheralManagerDelegate {
-    func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
-        SecureLogger.debug("📡 Peripheral manager state: \(peripheral.state.rawValue)", category: .session)
-
-        switch peripheral.state {
-        case .poweredOn:
-            guard !isPanicSuspended else {
-                peripheral.stopAdvertising()
-                peripheral.removeAllServices()
-                characteristic = nil
-                return
-            }
-            // Remove all services first to ensure clean state
-            peripheral.removeAllServices()
-
-            // Create characteristic
-            characteristic = CBMutableCharacteristic(
-                type: BLEService.characteristicUUID,
-                properties: [.notify, .write, .writeWithoutResponse, .read],
-                value: nil,
-                permissions: [.readable, .writeable]
-            )
-
-            // Create service
-            let service = CBMutableService(type: BLEService.serviceUUID, primary: true)
-            service.characteristics = [characteristic!]
-
-            // Add service (advertising will start in didAdd delegate)
-            SecureLogger.debug("🔧 Adding BLE service...", category: .session)
-            peripheral.add(service)
-
-        case .poweredOff:
-            // Bluetooth was turned off - clean up peripheral state
-            SecureLogger.info("📴 Bluetooth powered off - cleaning up peripheral state", category: .session)
-            // Clear subscribed centrals (they are now invalid)
-            let centralIDs = linkStateStore.subscribedCentrals.map { $0.identifier.uuidString }
-            pendingNotifications.removeAll()
-            pendingWriteBuffers.removeAll()
-            linkStateStore.clearCentrals()
-            subscriptionAnnounceLimiter.removeAll()
-            characteristic = nil
-            messageQueue.async { [weak self] in
-                guard let self else { return }
-                for centralID in centralIDs {
-                    self.linkAuth.retireLink(.central(centralID))
-                }
-                let centralPeerIDs = self.linkBindings.clearCentrals()
-                // Notify UI of disconnections
-                for peerID in centralPeerIDs {
-                    self.notifyUI { [weak self] in
-                        self?.notifyPeerDisconnectedDebounced(peerID)
-                    }
-                }
-            }
-
-        case .unauthorized:
-            // User denied Bluetooth permission
-            SecureLogger.warning("🚫 Bluetooth unauthorized for peripheral role", category: .session)
-            linkStateStore.clearCentrals()
-            subscriptionAnnounceLimiter.removeAll()
-            characteristic = nil
-            messageQueue.async { [weak self] in
-                _ = self?.linkBindings.clearCentrals()
-            }
-
-        case .unsupported:
-            // Device doesn't support BLE peripheral role
-            SecureLogger.error("❌ Bluetooth LE peripheral role not supported", category: .session)
-
-        case .resetting:
-            // Bluetooth stack is resetting
-            SecureLogger.info("🔄 Bluetooth peripheral stack resetting...", category: .session)
-
-        case .unknown:
-            SecureLogger.debug("❓ Peripheral Bluetooth state unknown (initializing)", category: .session)
-
-        @unknown default:
-            SecureLogger.warning("⚠️ Unknown peripheral Bluetooth state: \(peripheral.state.rawValue)", category: .session)
-        }
-    }
-    
-    #if os(iOS)
-    func peripheralManager(_ peripheral: CBPeripheralManager, willRestoreState dict: [String: Any]) {
-        guard !isPanicSuspended else {
-            peripheral.stopAdvertising()
-            peripheral.removeAllServices()
-            characteristic = nil
-            return
-        }
-        let restoredServices = (dict[CBPeripheralManagerRestoredStateServicesKey] as? [CBMutableService]) ?? []
-        let restoredAdvertisement = (dict[CBPeripheralManagerRestoredStateAdvertisementDataKey] as? [String: Any]) ?? [:]
-
-        SecureLogger.info(
-            "♻️ Peripheral restore: services=\(restoredServices.count) advertisingDataKeys=\(Array(restoredAdvertisement.keys))",
-            category: .session
-        )
-
-        // Attempt to recover characteristic from restored services
-        if characteristic == nil {
-            if let service = restoredServices.first(where: { $0.uuid == BLEService.serviceUUID }),
-               let restoredCharacteristic = service.characteristics?.first(where: { $0.uuid == BLEService.characteristicUUID }) as? CBMutableCharacteristic {
-                characteristic = restoredCharacteristic
-            }
-        }
-
-        // Via the sampler for a fresh background budget (see central-restore).
-        logBluetoothStatus("peripheral-restore")
-
-        if peripheral.state == .poweredOn && !peripheral.isAdvertising {
-            peripheral.startAdvertising(BLERadioController.advertisementData())
-        }
-    }
-    #endif
-    
-    func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?) {
-        guard !isPanicSuspended else {
-            peripheral.stopAdvertising()
-            return
-        }
-        if let error = error {
-            SecureLogger.error("❌ Failed to add service: \(error.localizedDescription)", category: .session)
-            return
-        }
-        
-        SecureLogger.debug("✅ Service added successfully, starting advertising", category: .session)
-        
-        // Start advertising after service is confirmed added
-        let adData = BLERadioController.advertisementData()
-        peripheral.startAdvertising(adData)
-        
-        SecureLogger.debug("📡 Started advertising (LocalName: \((adData[CBAdvertisementDataLocalNameKey] as? String) != nil ? "on" : "off"), ID: \(myPeerID.id.prefix(8))…)", category: .session)
-    }
-    
-    func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {
-        guard !isPanicSuspended else { return }
-        let centralUUID = central.identifier.uuidString
-        SecureLogger.debug("📥 Central subscribed: \(centralUUID.prefix(8))…", category: .session)
-        linkStateStore.addSubscribedCentral(central)
-
-        // BCH-01-004: Rate-limit subscription-triggered announces to prevent enumeration attacks
-        let now = Date()
-        switch subscriptionAnnounceLimiter.decision(for: centralUUID, now: now) {
-        case .allowed:
-            break
-        case let .rateLimited(backoffSeconds, attemptCount, suppressAnnounce):
-            SecureLogger.warning("🛡️ BCH-01-004: Rate-limited announce for central \(centralUUID.prefix(8))... (backoff: \(Int(backoffSeconds))s, attempts: \(attemptCount))", category: .security)
-            if suppressAnnounce {
-                SecureLogger.warning("🚨 BCH-01-004: Possible enumeration attack from central \(centralUUID.prefix(8))... - suppressing announce", category: .security)
-                return
-            }
-
-            // Still flush directed packets for legitimate mesh operation
-            engineScheduler.schedule(after: TransportConfig.blePostAnnounceDelaySeconds) { [weak self] in
-                self?.flushDirectedSpool()
-            }
-            return
-        }
-
-        // Send announce to the newly subscribed central after a small delay
-        engineScheduler.schedule(after: TransportConfig.blePostAnnounceDelaySeconds) { [weak self] in
-            self?.sendAnnounce(forceSend: true)
-            // Flush any spooled directed packets now that we have a central subscribed
-            self?.flushDirectedSpool()
-        }
-    }
-    
-    func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
-        let centralID = central.identifier.uuidString
-        SecureLogger.debug("📤 Central unsubscribed: \(centralID.prefix(8))…", category: .session)
-        // bleQueue: physical retirement now.
-        pendingNotifications.removeTarget { $0.identifier.uuidString == centralID }
-        linkStateStore.removeSubscribedCentral(central)
-
-        // Ensure we're still advertising for other devices to find us
-        if !isPanicSuspended, peripheral.isAdvertising == false {
-            SecureLogger.debug("📡 Restarting advertising after central unsubscribed", category: .session)
-            peripheral.startAdvertising(BLERadioController.advertisementData())
-        }
-
-        // Identity retirement and peer-disconnect bookkeeping on the
-        // engine, which owns the bindings.
-        messageQueue.async { [weak self] in
-            guard let self else { return }
-            self.linkAuth.retireLink(.central(centralID))
-            guard let peerID = self.linkBindings.centralRemoved(centralID) else { return }
-            // The remote side retiring a redundant duplicate connection
-            // arrives here as an unsubscribe while the peer stays live on
-            // its other links; only the peer's last link disconnecting
-            // counts. If every link truly dropped, the surviving-link
-            // callbacks (didDisconnectPeripheral, or this one again) run
-            // the bookkeeping.
-            guard self.linkBindings.links(to: peerID).isEmpty else { return }
-            // Mark peer as not connected; retain for reachability
-            self.peerRegistry.mutate { $0.markDisconnected(peerID) }
-
-            self.refreshLocalTopology()
-
-            // Update UI immediately
-            self.notifyUI { [weak self] in
-                guard let self = self else { return }
-
-                // Get current peer list (after removal)
-                let currentPeerIDs = self.peerRegistry.peerIDs
-
-                self.notifyPeerDisconnectedDebounced(peerID)
-                // Publish snapshots so UnifiedPeerService can refresh icons promptly
-                self.requestPeerDataPublish()
-                self.deliverTransportEvent(.peerListUpdated(currentPeerIDs))
-            }
-        }
-    }
-    
-    func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager) {
-        guard !isPanicSuspended else { return }
-        drainPendingNotifications(logPrefix: "✅ Sent")
-    }
-
-    private func logBackpressureSampled(_ message: @autoclosure () -> String) {
-        notificationBackpressureLogCount += 1
-        if notificationBackpressureLogCount == 1 ||
-            notificationBackpressureLogCount.isMultiple(of: TransportConfig.bleBackpressureLogInterval) {
-            SecureLogger.debug("\(message()) [backpressure event #\(notificationBackpressureLogCount)]", category: .session)
-        }
-    }
-
-    private func drainPendingNotifications(logPrefix: String) {
-        bleQueue.async { [weak self] in
-            guard let self = self,
-                  let characteristic = self.characteristic,
-                  !self.pendingNotifications.isEmpty else { return }
-
-            let pending = self.pendingNotifications.takeAll()
-            let sentCount = self.sendPendingNotifications(pending, characteristic: characteristic)
-
-            if sentCount > 0 {
-                self.logBackpressureSampled("\(logPrefix) \(sentCount) pending notifications from retry queue (\(self.pendingNotifications.count) still pending)")
-            }
-        }
-    }
-
-    private func sendPendingNotifications(_ pending: [BLEPendingNotification<CBCentral>], characteristic: CBMutableCharacteristic) -> Int {
-        var sentCount = 0
-
-        for (index, notification) in pending.enumerated() {
-            let success = peripheralManager?.updateValue(
-                notification.data,
-                for: characteristic,
-                onSubscribedCentrals: notification.targets
-            ) ?? false
-
-            guard success else {
-                let remaining = Array(pending.dropFirst(index))
-                pendingNotifications.prepend(remaining)
-                logBackpressureSampled("⚠️ Notification queue still full after \(sentCount) sent, re-queuing \(remaining.count) items")
-                break
-            }
-
-            sentCount += 1
-        }
-
-        return sentCount
-    }
-    
-    func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {
-        // Suppress logs for single write requests to reduce noise
-        if requests.count > 1 {
-            SecureLogger.debug("📥 Received \(requests.count) write requests from central", category: .session)
-        }
-        
-        // IMPORTANT: Respond immediately to prevent timeouts!
-        // We must respond within a few milliseconds or the central will timeout
-        for request in requests {
-            peripheral.respond(to: request, withResult: .success)
-        }
-        guard !isPanicSuspended else { return }
-        
-        // Process writes. For long writes, CoreBluetooth may deliver multiple CBATTRequest values with offsets.
-        // Combine per-central request values by offset before decoding.
-        // Process directly on our message queue to match transport context
-        let grouped = Dictionary(grouping: requests, by: { $0.central.identifier.uuidString })
-        for (centralUUID, group) in grouped {
-            // Sort by offset ascending
-            let sorted = group.sorted { $0.offset < $1.offset }
-            let hasMultiple = sorted.count > 1 || (sorted.first?.offset ?? 0) > 0
-            let chunks = sorted.compactMap { request -> BLEInboundWriteChunk? in
-                guard let data = request.value, !data.isEmpty else { return nil }
-                return BLEInboundWriteChunk(offset: request.offset, data: data)
-            }
-
-            let result = pendingWriteBuffers.append(
-                chunks: chunks,
-                for: centralUUID,
-                capBytes: TransportConfig.blePendingWriteBufferCapBytes
-            )
-
-            switch result {
-            case let .decoded(packet, metadata):
-                logAccumulatedCentralWrite(metadata, centralUUID: centralUUID)
-                processDecodedCentralWrite(packet, centralUUID: centralUUID, central: sorted[0].central)
-
-            case let .waiting(metadata):
-                logAccumulatedCentralWrite(metadata, centralUUID: centralUUID)
-                logFailedSingleWriteIfNeeded(hasMultiple: hasMultiple, sortedRequests: sorted)
-
-            case let .oversized(metadata):
-                logAccumulatedCentralWrite(metadata, centralUUID: centralUUID)
-                SecureLogger.warning("⚠️ Dropping oversized pending write buffer (\(metadata.accumulatedBytes) bytes) for central \(centralUUID.prefix(8))…", category: .session)
-                logFailedSingleWriteIfNeeded(hasMultiple: hasMultiple, sortedRequests: sorted)
-            }
-        }
-    }
-
-    private func logAccumulatedCentralWrite(_ metadata: BLEInboundWriteAppendMetadata, centralUUID: String) {
-        guard let packetType = metadata.packetType,
-              packetType != MessageType.announce.rawValue else { return }
-
-        SecureLogger.debug(
-            "📥 Accumulated write from central \(centralUUID.prefix(8))…: size=\(metadata.accumulatedBytes) (+\(metadata.appendedBytes)) bytes (type=\(packetType)), offsets=\(metadata.offsets)",
-            category: .session
-        )
-    }
-
-    private func logFailedSingleWriteIfNeeded(hasMultiple: Bool, sortedRequests: [CBATTRequest]) {
-        guard !hasMultiple, let raw = sortedRequests.first?.value else { return }
-
-        let prefix = raw.prefix(16).map { String(format: "%02x", $0) }.joined(separator: " ")
-        SecureLogger.error("❌ Failed to decode packet from central (len=\(raw.count), prefix=\(prefix))", category: .session)
-    }
-
-    private func processDecodedCentralWrite(_ packet: BitchatPacket, centralUUID: String, central: CBCentral) {
-        // bleQueue: physical bookkeeping only. A writer is a live central
-        // whether or not it subscribed; track it so directed replies and
-        // the fanout planner can reach it.
-        linkStateStore.addSubscribedCentral(central)
-        // Attribution is engine work (the engine owns the bindings).
-        ingestDecodedPacket(
-            packet,
-            link: .central(centralUUID),
-            linkDescription: "Central \(centralUUID.prefix(8))…"
-        )
-    }
-}
 
 // MARK: - Advertising Builders & Alias Rotation
 
@@ -4320,7 +3516,7 @@ extension BLEService {
         }
     }
 
-    private func emitTransportEvent(
+    func emitTransportEvent(
         _ event: TransportEvent,
         shouldDeliver: (() -> Bool)? = nil,
         completion: (() -> Void)? = nil,
@@ -4405,7 +3601,7 @@ extension BLEService {
         }
     }
 
-    private func logBluetoothStatus(_ context: String) {
+    func logBluetoothStatus(_ context: String) {
         scheduleBluetoothStatusSample(after: 0, context: context)
     }
 
@@ -5946,7 +5142,7 @@ extension BLEService {
         return bleQueue.sync(execute: accept)
     }
 
-    private func drainPendingWrites(for peripheral: CBPeripheral) {
+    func drainPendingWrites(for peripheral: CBPeripheral) {
         let uuid = peripheral.identifier.uuidString
         bleQueue.async { [weak self] in
             guard let self = self else { return }
@@ -6494,6 +5690,111 @@ extension BLEService {
         )
     }
     
+    // MARK: Link-event port (bleQueue → engine)
+
+    /// The single upward entry of the link-layer port: the bleQueue side
+    /// (CoreBluetooth delegates, radio policy) and the simulated mesh
+    /// report everything through here. Frames capture the panic lifecycle
+    /// at the handoff; lifecycle events ride plain engine slots (the
+    /// panic path clears their state wholesale either way).
+    func emitLinkEvent(_ event: BLELinkEvent) {
+        if case let .frameDecoded(packet, link, linkDescription) = event {
+            ingestDecodedPacket(packet, link: link, linkDescription: linkDescription)
+            return
+        }
+        messageQueue.async { [weak self] in
+            self?.handleLinkEvent(event)
+        }
+    }
+
+    /// Engine-confined consumer of the link-layer port: identity
+    /// retirement, survivor repair, and peer-disconnect bookkeeping for
+    /// every physical lifecycle transition the link layer reports.
+    private func handleLinkEvent(_ event: BLELinkEvent) {
+        switch event {
+        case .frameDecoded:
+            // Routed through ingestDecodedPacket by emitLinkEvent; frames
+            // never reach the lifecycle switch.
+            assertionFailure("frameDecoded must enter via emitLinkEvent")
+
+        case let .peripheralLinkEnded(peripheralID, runPeerBookkeeping):
+            let peerID = retirePeripheralLinkIdentity(peripheralID)
+            guard runPeerBookkeeping else { return }
+            if let peerID {
+                SecureLogger.debug("📱 Disconnected link was bound to \(peerID.id.prefix(8))…", category: .session)
+            }
+            // A duplicate link can drop while the peer stays live on
+            // another (the dual-role central link, or a second bound link
+            // after a restore): peer-disconnect bookkeeping only runs once
+            // the peer's last live link is gone. The retirement just
+            // repaired the reverse map onto a connected survivor, so
+            // directLinkState is accurate here.
+            let remainingLinks = peerID.map { directLinkState(for: $0) }
+            let peerStillLinked = (remainingLinks?.hasPeripheral ?? false) || (remainingLinks?.hasCentral ?? false)
+            if let peerID, !peerStillLinked {
+                // Do not remove peer; mark as not connected but retain for reachability
+                peerRegistry.mutate { $0.markDisconnected(peerID) }
+                refreshLocalTopology()
+            }
+            notifyUI { [weak self] in
+                guard let self = self else { return }
+                let currentPeerIDs = self.peerRegistry.peerIDs
+                if let peerID, !peerStillLinked {
+                    self.notifyPeerDisconnectedDebounced(peerID)
+                }
+                self.requestPeerDataPublish()
+                self.deliverTransportEvent(.peerListUpdated(currentPeerIDs))
+            }
+
+        case let .centralLinkEnded(centralUUID):
+            linkAuth.retireLink(.central(centralUUID))
+            guard let peerID = linkBindings.centralRemoved(centralUUID) else { return }
+            // The remote side retiring a redundant duplicate connection
+            // arrives as an unsubscribe while the peer stays live on its
+            // other links; only the peer's last link disconnecting counts.
+            guard linkBindings.links(to: peerID).isEmpty else { return }
+            peerRegistry.mutate { $0.markDisconnected(peerID) }
+            refreshLocalTopology()
+            notifyUI { [weak self] in
+                guard let self = self else { return }
+                let currentPeerIDs = self.peerRegistry.peerIDs
+                self.notifyPeerDisconnectedDebounced(peerID)
+                self.requestPeerDataPublish()
+                self.deliverTransportEvent(.peerListUpdated(currentPeerIDs))
+            }
+
+        case let .allPeripheralLinksEnded(peripheralIDs, retireProofsAndNotify):
+            guard retireProofsAndNotify else {
+                _ = linkBindings.clearPeripherals()
+                return
+            }
+            for peripheralID in peripheralIDs {
+                linkAuth.retireLink(.peripheral(peripheralID))
+            }
+            let peerIDs = linkBindings.clearPeripherals()
+            for peerID in peerIDs {
+                notifyUI { [weak self] in
+                    self?.notifyPeerDisconnectedDebounced(peerID)
+                }
+            }
+
+        case let .allCentralLinksEnded(centralUUIDs, retireProofsAndNotify):
+            guard retireProofsAndNotify else {
+                _ = linkBindings.clearCentrals()
+                return
+            }
+            for centralUUID in centralUUIDs {
+                linkAuth.retireLink(.central(centralUUID))
+            }
+            let peerIDs = linkBindings.clearCentrals()
+            for peerID in peerIDs {
+                notifyUI { [weak self] in
+                    self?.notifyPeerDisconnectedDebounced(peerID)
+                }
+            }
+        }
+    }
+
     // MARK: Packet Reception
 
     /// The bleQueue → engine handoff for every frame the link layer

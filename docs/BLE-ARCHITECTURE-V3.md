@@ -218,9 +218,28 @@ throughput is nowhere near what one serial queue sustains.
    `bleForceAnnounceMinIntervalSeconds` of the last announce left the
    new identity invisible until the next maintenance cycle
    (`BLEAnnounceThrottle.reset()` now runs in the panic slot).
-   Remaining from the original slice-C scope: the mechanical delegate
-   extraction behind explicit LinkEvent/LinkCommand types, and the
-   formal `handle(event) -> [Effect]` engine shape.
+   **The upward port is named and the delegates live behind it.**
+   `BLELinkEvent` (frameDecoded + the four physical lifecycle
+   transitions) is the enumerable bleQueue→engine surface; every
+   crossing goes through `emitLinkEvent` into one engine consumer
+   (`handleLinkEvent`), and the simulated mesh drives lifecycle events
+   through the identical enum a radio does (see
+   `linkDropEventRetiresBindingAndReconnectHeals`). The CoreBluetooth
+   delegate extensions moved to their own files —
+   `BLEService+LinkLayerCentralRole.swift` /
+   `BLEService+LinkLayerPeripheralRole.swift` — as physical
+   bookkeeping plus event emission; the physical-domain members they
+   share are `internal` with the queue contract enforced by the
+   existing traps and grep guards rather than access control.
+
+   **Deliberately not done:** a formal `handle(event) -> [Effect]`
+   effect system, and splitting the engine-domain feature handlers
+   into more files. Both would flip the engine's private state
+   (noiseService, peerRegistry, the identity domain) to internal for
+   purely cosmetic file counts — the domains are already uniform
+   (one queue, one rule set) and mechanically guarded. The effect
+   formalization should ride actual feature-module extractions when a
+   feature earns its own module, not precede them.
 
 ## What this is not
 
