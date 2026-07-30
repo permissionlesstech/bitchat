@@ -12,15 +12,25 @@ RUST_TOOLCHAIN="${RUST_TOOLCHAIN:-1.96.0}"
 RUSTC_VERSION="${RUSTC_VERSION:-1.96.0}"
 CBINDGEN_VERSION="${CBINDGEN_VERSION:-0.29.4}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CARGO_HOME_PATH="${CARGO_HOME:-$HOME/.cargo}"
+# Absolute build paths reach the archive through panic locations and debug
+# info, so two machines compiling identical source produced different bytes and
+# the hash manifest could only ever be checked by whoever built it. Remapping
+# the two roots that vary between machines -- this crate and the registry its
+# dependencies unpack into -- makes the output depend on source alone. They are
+# separate trees, so no input can match both and their order carries no meaning.
+REMAP_FLAGS="--remap-path-prefix=$SCRIPT_DIR=/arti-bitchat"
+REMAP_FLAGS="$REMAP_FLAGS --remap-path-prefix=$CARGO_HOME_PATH=/cargo"
 DEVICE_TARGET="aarch64-apple-ios"
 SIMULATOR_TARGETS=("aarch64-apple-ios-sim" "x86_64-apple-ios")
 FRAMEWORK="$SCRIPT_DIR/Frameworks/arti.xcframework"
 NORMALIZED="$(mktemp)"
+STRIPPED="$(mktemp)"
 SIMULATOR_FAT="$(mktemp)"
 GENERATED_HEADER="$(mktemp)"
 
 cleanup() {
-    rm -f "$NORMALIZED" "$SIMULATOR_FAT" "$GENERATED_HEADER"
+    rm -f "$NORMALIZED" "$STRIPPED" "$SIMULATOR_FAT" "$GENERATED_HEADER"
 }
 trap cleanup EXIT
 
@@ -39,7 +49,7 @@ build_target() {
     rustup target add --toolchain "$RUST_TOOLCHAIN" "$target"
     DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}" \
     IPHONEOS_DEPLOYMENT_TARGET=16.0 \
-    RUSTFLAGS="-C opt-level=z -C lto=fat -C codegen-units=1 -C panic=abort -C strip=symbols" \
+    RUSTFLAGS="-C opt-level=z -C lto=fat -C codegen-units=1 -C panic=abort -C strip=symbols $REMAP_FLAGS" \
     rustup run "$RUST_TOOLCHAIN" cargo build \
         --manifest-path "$SCRIPT_DIR/Cargo.toml" \
         --release \
@@ -47,13 +57,25 @@ build_target() {
         -p arti-bitchat
 }
 
-# Normalize archive metadata so the installed library depends only on its
-# object contents, not on build paths or timestamps.
+# Drop the symbols the linker never reads, then normalize archive metadata so
+# the installed library depends only on its object contents, not on build paths
+# or timestamps.
+#
+# `-C strip=symbols` only reaches the objects rustc itself emits. Dependencies
+# that compile C through a build script -- ring's BoringSSL above all -- land in
+# the archive with their symbol tables intact, which is why the vendored iOS
+# slices carried about 18MB nothing links against. `-x -S` removes local and
+# debug symbols only; every global survives, so the exported FFI is unchanged.
+# Stripping precedes the `libtool -D` pass because that pass is what zeroes the
+# archive timestamps, and strip rewrites them.
 install_library() {
     local source="$1"
     local destination="$2"
+    cp "$source" "$STRIPPED"
     DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}" \
-    xcrun libtool -static -D -no_warning_for_no_symbols "$source" -o "$NORMALIZED"
+    xcrun strip -x -S "$STRIPPED"
+    DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}" \
+    xcrun libtool -static -D -no_warning_for_no_symbols "$STRIPPED" -o "$NORMALIZED"
     cp "$NORMALIZED" "$destination"
 }
 
