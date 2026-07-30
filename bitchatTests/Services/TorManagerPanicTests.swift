@@ -12,9 +12,24 @@ import XCTest
 /// claim lives entirely in this method.
 ///
 /// These cases mutate `TorManager.shared` and the state directories it owns,
-/// both of which are process-wide.
+/// both of which are process-wide. The wipe below deletes the whole tree
+/// `TorManagerDirectoryCacheTests` writes into, so both classes run under
+/// `TorStateDirectoryLock`.
 @MainActor
 final class TorManagerPanicTests: XCTestCase {
+
+    private var stateDirectoryLock: TorStateDirectoryLock.Token?
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        stateDirectoryLock = try TorStateDirectoryLock.acquire()
+    }
+
+    override func tearDownWithError() throws {
+        stateDirectoryLock?.release()
+        stateDirectoryLock = nil
+        try super.tearDownWithError()
+    }
 
     func test_resetTransportForPanic_removesCachedBridgeAndGuardStateFromDisk() throws {
         let manager = TorManager.shared

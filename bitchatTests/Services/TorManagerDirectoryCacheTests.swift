@@ -12,16 +12,27 @@ import XCTest
 /// is further along than the copy.
 ///
 /// These cases mutate the state directories `TorManager.shared` owns, which are
-/// process-wide.
+/// process-wide and shared with `TorManagerPanicTests`, so they run under
+/// `TorStateDirectoryLock`.
 @MainActor
 final class TorManagerDirectoryCacheTests: XCTestCase {
 
     private let manager = TorManager.shared
+    private var stateDirectoryLock: TorStateDirectoryLock.Token?
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        stateDirectoryLock = try TorStateDirectoryLock.acquire()
+    }
 
     override func tearDownWithError() throws {
         if let root = manager.dataDirectoryURL(for: .direct) {
             try? FileManager.default.removeItem(at: root)
         }
+        // Released after the removal above, which deletes the shared tree.
+        stateDirectoryLock?.release()
+        stateDirectoryLock = nil
+        try super.tearDownWithError()
     }
 
     /// Seeds the marker file the tests use to tell one directory from another.
