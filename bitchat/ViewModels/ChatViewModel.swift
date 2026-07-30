@@ -1317,7 +1317,15 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
     @MainActor
     func setNearbyNotificationMuted(for peerID: PeerID, muted: Bool) {
-        guard let fingerprint = getFingerprint(for: peerID) else { return }
+        guard let fingerprint = getFingerprint(for: peerID) else {
+            // Pre-handshake peers have no Noise fingerprint yet — the mute
+            // key is fingerprint-stable, so there is nothing to persist.
+            SecureLogger.debug(
+                "🔇 Nearby-notification mute no-op for \(peerID.id.prefix(8))… (no fingerprint yet)",
+                category: .session
+            )
+            return
+        }
         identityManager.setNearbyNotificationMuted(fingerprint, muted: muted)
         objectWillChange.send()
     }

@@ -57,10 +57,13 @@ extension ChatViewModel: ChatPeerListContext {
     // call.
 
     func activeMeshPeerCount() -> Int {
+        // Exclude blocked / proximity-muted peers so a muted-only mesh
+        // still counts as empty for the notification reset timers.
         meshService
             .currentPeerSnapshots()
             .filter { snapshot in
-                snapshot.isConnected || meshService.isPeerReachable(snapshot.peerID)
+                (snapshot.isConnected || meshService.isPeerReachable(snapshot.peerID))
+                    && !suppressesNearbyNotification(for: snapshot.peerID)
             }
             .count
     }
@@ -115,7 +118,7 @@ final class ChatPeerListCoordinator: @unchecked Sendable {
     }
 }
 
-private extension ChatPeerListCoordinator {
+extension ChatPeerListCoordinator {
     @MainActor
     func handlePeerListUpdate(_ peers: [PeerID]) {
         context.isConnected = !peers.isEmpty
@@ -147,14 +150,19 @@ private extension ChatPeerListCoordinator {
             return
         }
 
-        invalidateNetworkEmptyTimer()
         context.recordMeshSightings(peerIDs: meshPeers)
 
         // Only peers that aren't blocked / proximity-muted count toward the
-        // empty→populated notification. Muted-only meshes stay "empty" for
-        // that gate so a stranger joining later still alerts.
+        // empty→populated notification and the reset-path emptiness check.
+        // A muted-only mesh stays "empty" so a stranger joining later still
+        // alerts, and so meshWasEmpty can reset after the first alert.
         let countablePeers = meshPeers.filter { !context.suppressesNearbyNotification(for: $0) }
-        guard !countablePeers.isEmpty else { return }
+        if countablePeers.isEmpty {
+            scheduleNetworkEmptyTimer()
+            return
+        }
+
+        invalidateNetworkEmptyTimer()
 
         let countableSet = Set(countablePeers)
         let newPeers = countableSet.subtracting(recentlySeenPeers)
