@@ -58,10 +58,19 @@ final class SimulatedMesh {
         )
         let index = nodes.count
         let node = Node(service: service, scheduler: scheduler)
+        // An earlier node's engine can fire its tap (which reads `emitted`
+        // under the lock) while this append reallocates the array.
+        lock.lock()
         nodes.append(node)
         neighbors.append([])
         emitted.append([])
-        service.setNickname(nickname)
+        lock.unlock()
+        // The tap must be live before `setNickname` below: setNickname
+        // force-announces asynchronously on the engine, and if that slot
+        // ran in the gap before a later tap install, the announce was
+        // emitted invisibly while still stamping the wall-clock announce
+        // throttle — swallowing `announceAll`'s forced announce on a
+        // starved runner (the CI flake this ordering fixes).
         service._test_onOutboundPacket = { [weak self] packet in
             // Runs on the sender's engine; only buffer here — delivering
             // inline would nest one engine inside another.
@@ -71,6 +80,7 @@ final class SimulatedMesh {
             self.emitted[index].append(packet)
             self.lock.unlock()
         }
+        service.setNickname(nickname)
         return node
     }
 
@@ -175,8 +185,16 @@ final class SimulatedMesh {
     }
 
     /// Full discovery round: every node announces, traffic settles.
+    ///
+    /// Resets each node's announce throttle first: the throttle window is
+    /// wall-clock, so any announce that already ran (setNickname's, in
+    /// `addNode`) would otherwise swallow this forced one whenever the two
+    /// land within the forced minimum interval — which is always, on any
+    /// runner. `forceAnnounce(from:)` deliberately does NOT reset — the
+    /// panic-rotation tests pin the production reset behavior through it.
     func announceAll() {
         for node in nodes {
+            node.service._test_resetAnnounceThrottle()
             node.service._test_forceAnnounce()
         }
         pump()

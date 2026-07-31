@@ -1089,6 +1089,10 @@ final class NoiseEncryptionService {
     func _test_initiateAutomaticRekey(for peerID: PeerID) throws {
         try initiateAutomaticRekey(for: peerID)
     }
+
+    func _test_fireSuppressedInitiationRecovery(for peerID: PeerID) {
+        sessionManager._test_fireSuppressedInitiationRecovery(for: peerID)
+    }
     #endif
     
     deinit {
