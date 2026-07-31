@@ -37,10 +37,11 @@ final class KeychainInstallAccessGate: Sendable {
     /// lifecycle is blocked.
     ///
     /// `reconcile` is deliberately invoked outside the lock so a slow keychain
-    /// cleanup never blocks every other caller. It must therefore not re-enter
-    /// the gate on the same thread (by calling `block()` or `allowsAccess`
-    /// again): `OSAllocatedUnfairLock` is not reentrant, so a self-reentrant
-    /// call would deadlock that thread and the waiters queued behind it.
+    /// cleanup never blocks every other caller. It must not re-enter the gate
+    /// on the same thread (by calling `block()` or `allowsAccess` again):
+    /// `reconcile` runs with no lock held, so a re-entrant call fails closed
+    /// (returns false) instead of deadlocking, reporting access denied while
+    /// the cleanup it triggered is still in flight.
     func allowsAccess(reconcile: () -> Bool) -> Bool {
         let shouldReconcile: KeychainAccessDecision = lock.withLock { state in
             if !state.blocked {

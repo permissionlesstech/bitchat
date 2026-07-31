@@ -316,6 +316,53 @@ struct PreviewKeychainManagerTests {
         #expect(recorder.reconcileCount == 1)
         #expect(recorder.maxConcurrent == 1)
     }
+
+    @Test("Re-entering the gate from reconcile fails closed without a second cleanup")
+    func reentrantReconcileFailsClosed() {
+        let gate = KeychainInstallAccessGate()
+        gate.block()
+
+        let enteredReconcile = DispatchSemaphore(value: 0)
+        let reentryReturned = DispatchSemaphore(value: 0)
+        let secondReconcileRan = DispatchSemaphore(value: 0)
+        let outerCompleted = DispatchSemaphore(value: 0)
+
+        let reconcile: @Sendable () -> Bool = {
+            enteredReconcile.signal()
+            // Deliberate contract violation: calling back into the gate from
+            // inside the reconcile closure. `reconcile` runs outside the lock,
+            // so this must not deadlock; it observes the in-flight
+            // reconciliation and fails closed without starting a second
+            // cleanup.
+            _ = gate.allowsAccess(reconcile: {
+                secondReconcileRan.signal()
+                return true
+            })
+            reentryReturned.signal()
+            return true
+        }
+
+        DispatchQueue.global().async {
+            _ = gate.allowsAccess(reconcile: reconcile)
+            outerCompleted.signal()
+        }
+
+        enteredReconcile.wait()
+
+        // The re-entrant call returns promptly rather than deadlocking...
+        #expect(reentryReturned.wait(timeout: .now() + 1) == .success)
+        // ...fails closed, and never runs a second reconciliation.
+        #expect(secondReconcileRan.wait(timeout: .now() + 1) == .timedOut)
+
+        // The outer cleanup still completes and restores access.
+        #expect(outerCompleted.wait(timeout: .now() + 1) == .success)
+        var reconcileCount = 0
+        #expect(gate.allowsAccess(reconcile: {
+            reconcileCount += 1
+            return true
+        }))
+        #expect(reconcileCount == 0)
+    }
 }
 
 /// Records reconcile-closure overlap across threads so a test can assert the
