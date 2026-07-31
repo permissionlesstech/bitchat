@@ -108,4 +108,5 @@ Known gaps, so nobody assumes more protection than exists:
 
 - **No published signing key.** Tags are not currently verifiable against a known key. Publishing a fingerprint through channels independent of GitHub, and signing tags with it from then on, is the missing piece.
 - **No verifiable compiled builds outside the App Store.** Closing this needs either a signed-and-notarized release pipeline or a reproducible build, and until one exists the guidance above stands.
+- **No notarized Developer ID `.dmg` on Releases yet.** [#1097](https://github.com/permissionlesstech/bitchat/issues/1097) tracks that ask; see "macOS Developer ID / notarized `.dmg`" above.
 - **No non-GitHub source mirror.** Every remote for this project is on the platform the takedown demands were served to. A mirror on independent infrastructure, published before it is needed, would mean a takedown does not remove the ability to verify.
