@@ -28,3 +28,9 @@ boundary (#1556) over a brittle xcframework rebuild inside Nix.
 
 If you need reproducible **Rust** pieces (e.g. Arti tooling), add those packages
 explicitly in a follow-up rather than expanding this flake by default.
+
+## Lockfile
+
+If you have Nix installed, run `nix flake lock` and commit `flake.lock` so the
+nixpkgs input is pinned for everyone.
+
