@@ -14,6 +14,8 @@ A decentralized peer-to-peer messaging app with dual transport architecture: loc
 
 Install from the App Store, or build from source you have verified. A compiled build from anywhere else cannot be verified — see [Verifying bitchat](docs/VERIFYING-A-BUILD.md) for how to check source against the per-release hash manifest, and for what to do if that is the only build you can get.
 
+Cross-platform image and voice note issues (especially Android → iOS): see [Media interop](docs/MEDIA-INTEROP.md).
+
 This matters more than it usually would: this repository has been the target of takedown demands, and when a repository or releases page disappears, mirrors appear that nobody can check.
 
 ## License
