@@ -500,6 +500,8 @@ private extension MessageListView {
                 systemMessageRow(message)
             } else if let media = conversationUIModel.mediaAttachment(for: message) {
                 MediaMessageView(message: message, media: media, imagePreviewURL: $imagePreviewURL)
+            } else if StickerRefCodec.parse(message.content) != nil {
+                StickerMessageView(message: message)
             } else {
                 TextMessageView(message: message)
             }

@@ -32,6 +32,11 @@ extension BitchatMessage {
         }
     }
 
+    /// A Sonar sticker reference if this message's content is a sticker wire
+    /// string (`\u{1F}sticker\u{1F}\u{2026}`), otherwise nil. Pure parse; never
+    /// touches the disk. Used by the message-row dispatcher.
+    var stickerRef: StickerRef? { StickerRefCodec.parse(content) }
+
     func mediaAttachment(for nickname: String) -> Media? {
         guard let baseDirectory = Cache.shared.filesDir else { return nil }
 

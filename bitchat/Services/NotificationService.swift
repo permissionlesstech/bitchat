@@ -228,9 +228,21 @@ final class NotificationService {
         requestDeliverer.add(request)
     }
     
+    /// Maps a sticker wire string to a clean notification body so the raw
+    /// `\u{1F}sticker\u{1F}\u{2026}` reference never reaches the lock screen.
+    /// Plain text and other content pass through unchanged.
+    private func displayBody(forContent content: String) -> String {
+        if StickerRefCodec.parse(content) != nil {
+            // Plain string, matching the file's notification-body convention
+            // (e.g. "🔒 DM from …"); avoids leaking the raw ref to the lock screen.
+            return "🎟 Sticker"
+        }
+        return content
+    }
+
     func sendMentionNotification(from sender: String, message: String) {
         let title = hidePreviews ? Redacted.mentionTitle : "🫵 you were mentioned by \(sender)"
-        let body = hidePreviews ? Redacted.body : message
+        let body = hidePreviews ? Redacted.body : displayBody(forContent: message)
         let identifier = "mention-\(UUID().uuidString)"
 
         sendLocalNotification(title: title, body: body, identifier: identifier)
@@ -238,7 +250,7 @@ final class NotificationService {
 
     func sendPrivateMessageNotification(from sender: String, message: String, peerID: PeerID) {
         let title = hidePreviews ? Redacted.directMessageTitle : "🔒 DM from \(sender)"
-        let body = hidePreviews ? Redacted.body : message
+        let body = hidePreviews ? Redacted.body : displayBody(forContent: message)
         let identifier = "private-\(UUID().uuidString)"
         // Routing payload, not display copy: `userInfo` never reaches the lock
         // screen, and the conversation to open still has to be identifiable.
