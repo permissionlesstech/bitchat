@@ -54,13 +54,20 @@ enum BLERedundantLinkPolicy {
     /// Physical connect recency is also a signal an announce replay cannot
     /// nominate, unlike the previous ingress-link preference — announce
     /// anchors (ingress, then most recently bound) now only break ties and
-    /// serve links with no connect timestamp at all.
+    /// serve links with no connect timestamp at all. Link "health" signals
+    /// like RSSI are deliberately not inputs: they are transient and the
+    /// stale-address link often reads stronger; connect recency is the only
+    /// signal that tracks address currency.
     ///
-    /// All of it only among writable links while any exist: keeping a
-    /// characteristic-less link and cancelling the writable duplicate would
-    /// strand outbound traffic on the central link until rediscovery
-    /// finishes. When no candidate is identifiable, consolidation waits for
-    /// a later announce rather than guessing.
+    /// The survivor must be writable while any writable candidate exists:
+    /// keeping a characteristic-less link and cancelling the writable
+    /// duplicate would strand outbound traffic on the central link until
+    /// rediscovery finishes. But when the physically NEWEST connection is
+    /// the one that is not writable yet (service discovery still running),
+    /// consolidation defers entirely — selecting an older writable link
+    /// would cancel the freshly advertised connection and recreate the
+    /// oscillation. When no candidate is identifiable, consolidation waits
+    /// for a later announce rather than guessing.
     static func keptPeripheralUUID(
         ingressPeripheralUUID: String?,
         mostRecentlyBoundUUID: String?,
@@ -72,6 +79,16 @@ enum BLERedundantLinkPolicy {
 
         let writable = bound.filter(\.hasCharacteristic)
         let candidates = writable.isEmpty ? bound : writable
+
+        // The newest connection is still mid-service-discovery while a
+        // writable (typically restored, stale-address) duplicate exists:
+        // defer to a later announce instead of keeping the older link and
+        // cancelling the one connection on the currently advertised address.
+        if !writable.isEmpty,
+           let newestBoundDate = bound.compactMap(\.lastConnectedAt).max(),
+           !writable.contains(where: { $0.lastConnectedAt == newestBoundDate }) {
+            return nil
+        }
 
         if let newestDate = candidates.compactMap(\.lastConnectedAt).max() {
             let newest = candidates.filter { $0.lastConnectedAt == newestDate }

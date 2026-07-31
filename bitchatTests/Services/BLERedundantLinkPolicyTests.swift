@@ -170,21 +170,73 @@ struct BLERedundantLinkPolicyTests {
     }
 
     @Test
-    func writabilityStillTrumpsConnectRecency() {
-        // A newest link mid-service-rediscovery must not be kept over a
-        // writable duplicate: cancelling the writable one would strand
-        // directed sends until rediscovery finishes.
+    func newestLinkMidDiscoveryDefersInsteadOfKeepingOlderWritable() {
+        // The fresh connection hasn't finished service discovery, so it is
+        // not writable yet. Keeping the older writable (restored) link now
+        // would cancel the one connection on the currently advertised
+        // address and recreate the oscillation — defer to a later announce.
         let now = Date()
         let kept = BLERedundantLinkPolicy.keptPeripheralUUID(
-            ingressPeripheralUUID: nil,
+            ingressPeripheralUUID: "p-writable",
             mostRecentlyBoundUUID: "p-writable",
             links: [
                 link("p-writable", peer, connectedAt: now.addingTimeInterval(-30)),
-                link("p-bare", peer, writable: false, connectedAt: now)
+                link("p-fresh-bare", peer, writable: false, connectedAt: now)
+            ],
+            peerID: peer
+        )
+        #expect(kept == nil)
+    }
+
+    @Test
+    func restoredWritableAnchorAlsoDefersToFreshUnwritableLink() {
+        // Same discovery window as above, but the writable duplicate is a
+        // restored link with no connect timestamp at all — the exact field
+        // topology. It must not win just because the fresh link is bare.
+        let kept = BLERedundantLinkPolicy.keptPeripheralUUID(
+            ingressPeripheralUUID: "p-restored",
+            mostRecentlyBoundUUID: "p-restored",
+            links: [
+                link("p-restored", peer),
+                link("p-fresh-bare", peer, writable: false, connectedAt: Date())
+            ],
+            peerID: peer
+        )
+        #expect(kept == nil)
+    }
+
+    @Test
+    func coNewestWritableLinkStillWinsOverBareTwin() {
+        // Two links share the newest timestamp and one is writable: no
+        // discovery window to wait out — the writable co-newest survives.
+        let now = Date()
+        let kept = BLERedundantLinkPolicy.keptPeripheralUUID(
+            ingressPeripheralUUID: nil,
+            mostRecentlyBoundUUID: nil,
+            links: [
+                link("p-bare", peer, writable: false, connectedAt: now),
+                link("p-writable", peer, connectedAt: now)
             ],
             peerID: peer
         )
         #expect(kept == "p-writable")
+    }
+
+    @Test
+    func allUnwritableDuplicatesConsolidateByConnectRecency() {
+        // No writable link exists at all: nothing can be stranded, so the
+        // newest connection consolidates immediately.
+        let now = Date()
+        let kept = BLERedundantLinkPolicy.keptPeripheralUUID(
+            ingressPeripheralUUID: "p-older",
+            mostRecentlyBoundUUID: "p-older",
+            links: [
+                link("p-older", peer, writable: false, connectedAt: now.addingTimeInterval(-30)),
+                link("p-newer", peer, writable: false, connectedAt: now)
+            ],
+            peerID: peer
+        )
+        #expect(kept == "p-newer")
     }
 
     @Test
