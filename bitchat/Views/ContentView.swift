@@ -268,6 +268,10 @@ struct ContentView: View {
         .frame(minWidth: 600, minHeight: 400)
         #endif
         .onChange(of: selectedPrivatePeerID) { newValue in
+            // Shared composer draft must not travel across conversation
+            // targets (quoting a DM then opening public would otherwise
+            // one-tap-broadcast private content).
+            messageText = ""
             if newValue != nil {
                 showSidebar = true
             }

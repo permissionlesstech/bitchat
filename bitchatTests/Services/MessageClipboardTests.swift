@@ -5,7 +5,7 @@ import Testing
 struct MessageClipboardTests {
     @Test func quoteWrapsEachLineAndAddsSender() {
         let quoted = MessageClipboard.quoteForComposer("hello\nworld", sender: "alice")
-        #expect(quoted == "> @alice:\n> hello\n> world\n\n")
+        #expect(quoted == "> alice:\n> hello\n> world\n\n")
     }
 
     @Test func quoteSkipsSystemSenderHeader() {
@@ -23,7 +23,7 @@ struct MessageClipboardTests {
             content: "prior message",
             sender: "bob"
         )
-        #expect(result == "already typing\n> @bob:\n> prior message\n\n")
+        #expect(result == "already typing\n> bob:\n> prior message\n\n")
     }
 
     @Test func appendQuoteOntoEmptyDraft() {
@@ -32,6 +32,15 @@ struct MessageClipboardTests {
             content: "solo",
             sender: "carol"
         )
-        #expect(result == "> @carol:\n> solo\n\n")
+        #expect(result == "> carol:\n> solo\n\n")
+    }
+
+    @Test func appendQuoteAfterTrailingSpaceStartsNewLine() {
+        let result = MessageClipboard.appendQuote(
+            to: "draft with space ",
+            content: "quoted",
+            sender: "dana"
+        )
+        #expect(result == "draft with space \n> dana:\n> quoted\n\n")
     }
 }
