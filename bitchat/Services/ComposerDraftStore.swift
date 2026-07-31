@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import BitFoundation
 
 /// Persists unfinished composer text per conversation so switching mesh /
 /// geohash / DM channels does not silently discard what someone was typing.
