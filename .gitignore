@@ -81,3 +81,6 @@ build.log
 # Local configs
 Local.xcconfig
 *.profraw
+# Nix
+result
+.direnv
