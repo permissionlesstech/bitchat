@@ -314,18 +314,10 @@ final class BLEService: NSObject {
     private var meshPings = BLEMeshPingTracker()
 
     // Per-offer assume-delivered timeouts for spray copies handed to a
-    // `.courierAck`-capable taker, keyed by `(ciphertextHash, courierNoiseKey)`
-    // to match CourierStore's own pending-offer map so an ack/decline (or the
-    // timeout) resolves the right entry. This dictionary only holds the
-    // `DispatchWorkItem`s for cancellation — the offer/budget state lives in
-    // `CourierStore` behind its own serial queue; this side just calls
-    // `offerSprayCopies`/`confirmSpray`/`cancelSpray` (mirrors the ping/pong
-    // queue split).
-    private struct PendingSprayTimeoutKey: Hashable {
-        let ciphertextHash: Data
-        let courierNoiseKey: Data
-    }
-    private var pendingSprayTimeouts: [PendingSprayTimeoutKey: DispatchWorkItem] = [:]
+    // `.courierAck`-capable taker (lock-backed store: armed on the main actor
+    // inside the notifyUI hop, resolved on the engine by an ack, a decline, or
+    // the timeout itself).
+    private let sprayTimeouts = BLESprayTimeoutStore()
 
     // 5. Fragment Reassembly (necessary for messages > MTU)
     private var fragmentAssemblyBuffer = BLEFragmentAssemblyBuffer()
@@ -4915,7 +4907,7 @@ extension BLEService {
             SecureLogger.debug("📦 Spray-\(kind) rejected: relayed \(kind) claims sender \(PeerID(hexData: packet.senderID).id.prefix(8))… but arrived from \(peerID.id.prefix(8))…", category: .security)
             return nil
         }
-        let takerInfo = collectionsQueue.sync { peerRegistry.info(for: peerID) }
+        let takerInfo = peerRegistry.info(for: peerID)
         guard let takerKey = takerInfo?.noisePublicKey else {
             SecureLogger.debug("📦 Spray-\(kind) from unknown peer \(peerID.id.prefix(8))… rejected", category: .session)
             return nil
@@ -4942,10 +4934,7 @@ extension BLEService {
         guard packet.payload.count == CourierEnvelope.tagLength else { return }
         let ciphertextHash = packet.payload
         guard courierStore.confirmSpray(courierNoiseKey: takerKey, ciphertextHash: ciphertextHash) else { return }
-        let key = PendingSprayTimeoutKey(ciphertextHash: ciphertextHash, courierNoiseKey: takerKey)
-        collectionsQueue.sync(flags: .barrier) {
-            pendingSprayTimeouts.removeValue(forKey: key)?.cancel()
-        }
+        sprayTimeouts.cancel(BLESprayTimeoutKey(ciphertextHash: ciphertextHash, courierNoiseKey: takerKey))
     }
 
     /// Applies a taker's signed refusal of an offered copy, restoring the
@@ -4971,10 +4960,7 @@ extension BLEService {
         guard packet.payload.count == CourierEnvelope.tagLength else { return }
         let ciphertextHash = packet.payload
         guard courierStore.cancelSpray(ciphertextHash: ciphertextHash, courierNoiseKey: takerKey) else { return }
-        let key = PendingSprayTimeoutKey(ciphertextHash: ciphertextHash, courierNoiseKey: takerKey)
-        collectionsQueue.sync(flags: .barrier) {
-            pendingSprayTimeouts.removeValue(forKey: key)?.cancel()
-        }
+        sprayTimeouts.cancel(BLESprayTimeoutKey(ciphertextHash: ciphertextHash, courierNoiseKey: takerKey))
     }
 
     /// Starts (or replaces) the timeout for one outstanding spray offer. When
@@ -4988,25 +4974,14 @@ extension BLEService {
     /// refused sends an explicit decline, which restores the budget before this
     /// fires.
     private func scheduleSprayOfferTimeout(ciphertextHash: Data, courierNoiseKey: Data) {
-        let key = PendingSprayTimeoutKey(ciphertextHash: ciphertextHash, courierNoiseKey: courierNoiseKey)
+        let key = BLESprayTimeoutKey(ciphertextHash: ciphertextHash, courierNoiseKey: courierNoiseKey)
         let store = courierStore
         let timeout = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            let stillPending = self.collectionsQueue.sync(flags: .barrier) {
-                self.pendingSprayTimeouts.removeValue(forKey: key) != nil
-            }
-            guard stillPending else { return }
+            guard let self, self.sprayTimeouts.claim(key) else { return }
             store.confirmSpray(courierNoiseKey: courierNoiseKey, ciphertextHash: ciphertextHash)
         }
-        collectionsQueue.sync(flags: .barrier) {
-            // Commit-time revalidation in `offerSprayCopies` means at most one
-            // copy per courier is committed for this envelope, but a re-announce
-            // can schedule a timeout before the losing commit no-ops — cancel
-            // any prior timeout for this key and keep the latest.
-            pendingSprayTimeouts.removeValue(forKey: key)?.cancel()
-            pendingSprayTimeouts[key] = timeout
-        }
-        messageQueue.asyncAfter(deadline: .now() + TransportConfig.courierSprayAckTimeoutSeconds, execute: timeout)
+        sprayTimeouts.arm(key, timeout: timeout)
+        engineScheduler.schedule(after: TransportConfig.courierSprayAckTimeoutSeconds, execute: timeout)
     }
 
     // MARK: One-Time Prekey Bundles
