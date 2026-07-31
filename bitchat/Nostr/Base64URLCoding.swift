@@ -1,5 +1,7 @@
 import Foundation
 
+/// Shared unpadded base64url codec for Nostr / BitChat embed payloads.
+/// `NostrEmbeddedBitChat` and `NostrProtocol` both encode through this type (#642).
 enum Base64URLCoding {
     static func encode(_ data: Data) -> String {
         data.base64EncodedString()
