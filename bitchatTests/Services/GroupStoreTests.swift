@@ -92,7 +92,7 @@ struct GroupStoreTests {
         #expect(store.updateRoster(groupID: group.groupID, members: [creator, me]) != nil)
         let realKey = try #require(store.key(forGroupID: group.groupID))
 
-        // Same groupID, same name, higher epoch, attacker as creator — every
+        // Same groupID, same name, higher epoch, attacker as creator. Every
         // other check in applyGroupState passes for this.
         let hijack = BitchatGroup(
             groupID: group.groupID,

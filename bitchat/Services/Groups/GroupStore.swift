@@ -77,20 +77,11 @@ final class GroupStore: ObservableObject {
               !group.members.isEmpty,
               group.members.count <= BitchatGroup.maxMembers,
               group.creator != nil else { return false }
-        // A group keeps the creator it was created with.
-        //
-        // `applyGroupState` checks that the sender is the creator the state
-        // NAMES, that the creator signature verifies, that we are still in the
-        // roster, and that the epoch does not regress — but nothing compares the
-        // creator against the group we already hold. Each check passes for an
-        // attacker who simply names themselves creator of an existing groupID at
-        // a higher epoch and signs with their own key, and the roster and key are
-        // then replaced wholesale. Members would seal their next message under a
-        // key the attacker holds, while the real group silently stops seeing
-        // them; nothing in the UI changes.
-        //
-        // Pinning here rather than in `applyGroupState` because this is the one
-        // point every write goes through, local and remote alike.
+        // A group keeps the creator it was created with. `applyGroupState`
+        // checks the sender is the creator the state NAMES, but never against
+        // the creator already stored, so a peer naming themselves creator of a
+        // known groupID at a higher epoch replaces the roster and key wholesale.
+        // Pinned here, the one point every write goes through.
         if let existing = groups.first(where: { $0.groupID == group.groupID }),
            existing.creatorFingerprint != group.creatorFingerprint {
             SecureLogger.warning("Refusing group state that changes the creator of an existing group", category: .security)
