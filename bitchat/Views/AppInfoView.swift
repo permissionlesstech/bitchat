@@ -22,7 +22,9 @@ struct AppInfoView: View {
     @State private var liveVoiceEnabled = PTTSettings.liveVoiceEnabled
     @State private var locationNotesEnabled = LocationNotesSettings.enabled
     @State private var hideMessagePreviews = NotificationPrivacySettings.hideMessagePreviews
-    @State private var confirmLogoPanic = PanicWipeSettings.confirmLogoShortcut
+    @State private var logoShortcutMode = PanicWipeSettings.logoShortcutMode
+    @State private var pendingLogoShortcutMode: PanicWipeSettings.LogoShortcutMode?
+    @State private var showDisableLogoShortcutConfirm = false
     @State private var customRelays = NostrRelaySettings.customRelays()
     @State private var relayInput = ""
     @State private var relayError: String?
@@ -121,10 +123,16 @@ struct AppInfoView: View {
 
             static let dangerTitle = String(localized: "app_info.settings.danger.title", defaultValue: "DANGER ZONE", comment: "Section header (uppercase) for destructive actions in settings")
             static let panicButton = String(localized: "app_info.settings.danger.panic_button", defaultValue: "panic wipe", comment: "Button in the settings danger zone that erases all local data after confirmation")
-            static let panicNote = String(localized: "app_info.settings.danger.panic_note", defaultValue: "erases all messages, keys, and identity. triple-tapping the bitchat/ logo does the same, instantly.", comment: "Caption under the panic wipe button when logo confirmation is off (default)")
-            static let panicNoteConfirm = String(localized: "app_info.settings.danger.panic_note_confirm", defaultValue: "erases all messages, keys, and identity. triple-tapping the bitchat/ logo asks for the same confirmation.", comment: "Caption under the panic wipe button when confirm-before-logo-wipe is on")
-            static let confirmLogoTitle = String(localized: "app_info.settings.danger.confirm_logo.title", defaultValue: "confirm before logo wipe", comment: "Title of the setting that requires confirmation before the triple-tap logo panic wipe")
-            static let confirmLogoSubtitle = String(localized: "app_info.settings.danger.confirm_logo.subtitle", defaultValue: "off by default: triple-tap wipes instantly so it still works if someone grabs the phone. turn on only if accidental taps worry you more than losing those seconds.", comment: "Subtitle explaining the seizure-path trade-off of confirming before the logo panic wipe")
+            static let panicNoteInstant = String(localized: "app_info.settings.danger.panic_note", defaultValue: "erases all messages, keys, and identity. triple-tapping the bitchat/ logo does the same, instantly.", comment: "Caption under the panic wipe button when logo gesture is instant (default)")
+            static let panicNoteConfirm = String(localized: "app_info.settings.danger.panic_note_confirm", defaultValue: "erases all messages, keys, and identity. triple-tapping the bitchat/ logo asks for the same confirmation.", comment: "Caption under the panic wipe button when logo gesture confirms first")
+            static let panicNoteDisabled = String(localized: "app_info.settings.danger.panic_note_disabled", defaultValue: "erases all messages, keys, and identity. the bitchat/ logo triple-tap is off — only this button wipes.", comment: "Caption under the panic wipe button when logo gesture is disabled")
+            static let logoModeTitle = String(localized: "app_info.settings.danger.logo_mode.title", defaultValue: "logo triple-tap wipe", comment: "Title of the setting that chooses instant / confirm / off for the logo panic gesture")
+            static let logoModeSubtitle = String(localized: "app_info.settings.danger.logo_mode.subtitle", defaultValue: "instant by default for the seizure path. confirm if accidental taps worry you. off removes the gesture — turning off asks for confirmation because a disabled triple-tap is a silent failure in a panic.", comment: "Subtitle explaining the three logo panic gesture modes")
+            static let logoModeInstant = String(localized: "app_info.settings.danger.logo_mode.instant", defaultValue: "instant", comment: "Logo panic mode: wipe immediately on triple-tap")
+            static let logoModeConfirm = String(localized: "app_info.settings.danger.logo_mode.confirm", defaultValue: "confirm first", comment: "Logo panic mode: ask before wiping on triple-tap")
+            static let logoModeOff = String(localized: "app_info.settings.danger.logo_mode.off", defaultValue: "off", comment: "Logo panic mode: disable the triple-tap gesture")
+            static let disableLogoConfirmTitle = String(localized: "app_info.settings.danger.logo_disable_confirm_title", defaultValue: "turn off logo wipe?", comment: "Title asking to confirm disabling the logo triple-tap panic gesture")
+            static let disableLogoConfirmAction = String(localized: "app_info.settings.danger.logo_disable_confirm_action", defaultValue: "turn off", comment: "Confirm button that disables the logo triple-tap panic gesture")
             static let panicConfirmTitle = String(localized: "app_info.settings.danger.panic_confirm_title", defaultValue: "wipe all data?", comment: "Title of the confirmation dialog before a panic wipe")
             static let panicConfirmAction = String(localized: "app_info.settings.danger.panic_confirm_action", defaultValue: "wipe everything", comment: "Destructive confirmation button that performs the panic wipe")
         }
@@ -573,28 +581,75 @@ struct AppInfoView: View {
                         Button("common.cancel", role: .cancel) {}
                     }
 
-                    Text(confirmLogoPanic ? Strings.Settings.panicNoteConfirm : Strings.Settings.panicNote)
+                    Text(logoShortcutPanicNote)
                         .bitchatFont(size: 11)
                         .foregroundColor(secondaryTextColor)
                         .fixedSize(horizontal: false, vertical: true)
 
                     settingsCard {
-                        settingToggle(
-                            title: Text(verbatim: Strings.Settings.confirmLogoTitle),
-                            subtitle: Text(verbatim: Strings.Settings.confirmLogoSubtitle),
-                            isOn: Binding(
-                                get: { confirmLogoPanic },
-                                set: { newValue in
-                                    confirmLogoPanic = newValue
-                                    PanicWipeSettings.confirmLogoShortcut = newValue
-                                }
-                            )
-                        )
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(verbatim: Strings.Settings.logoModeTitle)
+                                .bitchatFont(size: 12)
+                                .foregroundColor(palette.primary)
+                            Text(verbatim: Strings.Settings.logoModeSubtitle)
+                                .bitchatFont(size: 11)
+                                .foregroundColor(secondaryTextColor)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Picker(
+                                selection: Binding(
+                                    get: { logoShortcutMode },
+                                    set: { requestLogoShortcutMode($0) }
+                                )
+                            ) {
+                                Text(Strings.Settings.logoModeInstant).tag(PanicWipeSettings.LogoShortcutMode.instant)
+                                Text(Strings.Settings.logoModeConfirm).tag(PanicWipeSettings.LogoShortcutMode.confirm)
+                                Text(Strings.Settings.logoModeOff).tag(PanicWipeSettings.LogoShortcutMode.off)
+                            } label: {
+                                EmptyView()
+                            }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
+                        }
+                    }
+                    .confirmationDialog(
+                        Strings.Settings.disableLogoConfirmTitle,
+                        isPresented: $showDisableLogoShortcutConfirm,
+                        titleVisibility: .visible
+                    ) {
+                        Button(Strings.Settings.disableLogoConfirmAction, role: .destructive) {
+                            applyLogoShortcutMode(.off)
+                        }
+                        Button("common.cancel", role: .cancel) {
+                            pendingLogoShortcutMode = nil
+                        }
                     }
                 }
             }
         }
         .padding()
+    }
+
+    private var logoShortcutPanicNote: String {
+        switch logoShortcutMode {
+        case .instant: return Strings.Settings.panicNoteInstant
+        case .confirm: return Strings.Settings.panicNoteConfirm
+        case .off: return Strings.Settings.panicNoteDisabled
+        }
+    }
+
+    private func requestLogoShortcutMode(_ mode: PanicWipeSettings.LogoShortcutMode) {
+        if mode == .off, logoShortcutMode != .off {
+            pendingLogoShortcutMode = mode
+            showDisableLogoShortcutConfirm = true
+            return
+        }
+        applyLogoShortcutMode(mode)
+    }
+
+    private func applyLogoShortcutMode(_ mode: PanicWipeSettings.LogoShortcutMode) {
+        logoShortcutMode = mode
+        PanicWipeSettings.logoShortcutMode = mode
+        pendingLogoShortcutMode = nil
     }
 
     private func selectLanguage(_ code: String?) {

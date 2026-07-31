@@ -59,7 +59,7 @@ struct ContentHeaderView: View {
                 // This is the only entry point to App Info, but it reads as
                 // static text; surface the tap. (The triple-tap panic wipe
                 // stays undiscoverable on purpose — it's destructive — and
-                // wipes instantly unless confirm-before-logo-wipe is on.)
+                // follows PanicWipeSettings: instant / confirm / off.)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityHint(
                     String(localized: "content.accessibility.app_info_hint", comment: "Accessibility hint on the bitchat/ logo explaining a tap opens app info")
@@ -81,6 +81,24 @@ struct ContentHeaderView: View {
                     Button("common.cancel", role: .cancel) {
                         appChromeModel.cancelPanicWipe()
                     }
+                }
+                .alert(
+                    String(
+                        localized: "app_info.settings.danger.logo_disabled_title",
+                        defaultValue: "logo wipe is off",
+                        comment: "Title of the alert when triple-tapping the logo while the gesture is disabled"
+                    ),
+                    isPresented: $appChromeModel.showPanicGestureDisabledAlert
+                ) {
+                    Button("common.ok", role: .cancel) {
+                        appChromeModel.acknowledgePanicGestureDisabled()
+                    }
+                } message: {
+                    Text(String(
+                        localized: "app_info.settings.danger.logo_disabled_message",
+                        defaultValue: "nothing was wiped. turn the logo gesture back on in settings, or use the panic wipe button there.",
+                        comment: "Message explaining that the logo triple-tap did nothing because it is disabled"
+                    ))
                 }
 
             HStack(spacing: 0) {

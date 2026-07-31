@@ -13961,6 +13961,1671 @@
         }
       }
     },
+    "app_info.settings.danger.logo_disable_confirm_action" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إيقاف"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "বন্ধ করুন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ausschalten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "turn off"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apagar"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خاموش کن"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "i-off"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "désactiver"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כבה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "बंद करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "matikan"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "disattiva"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オフにする"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "끄기"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "matikan"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "बन्द गर्नुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "uitzetten"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wyłącz"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "desligar"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "desligar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "выключить"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "stäng av"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "அணை"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ปิด"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kapat"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "вимкнути"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بند کریں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tắt"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "關閉"
+          }
+        }
+      }
+    },
+    "app_info.settings.danger.logo_disable_confirm_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إيقاف المسح بالشعار؟"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "লোগো মুছা বন্ধ করবেন?"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "logo-löschen ausschalten?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "turn off logo wipe?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿apagar el borrado del logo?"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پاک‌کردن با لوگو خاموش شود؟"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "i-off ang logo wipe?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "désactiver l’effacement logo ?"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לכבות מחיקת לוגו?"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "लोगो मिटाना बंद करें?"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "matikan hapus logo?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "disattivare la cancellazione dal logo?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ロゴ消去をオフにしますか？"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "로고 지우기를 끌까요?"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "matikan padam logo?"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "लोगो मेटाउने बन्द गर्ने?"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "logo-wissen uitzetten?"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wyłączyć czyszczenie logo?"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "desligar o apagar pelo logo?"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "desligar o apagar pelo logo?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "выключить стирание логотипом?"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "stäng av radering via loggan?"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "லோகோ அழிப்பை அணைக்கவா?"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ปิดการลบด้วยโลโก้?"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "logo silmeyi kapat?"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "вимкнути стирання логотипом?"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لوگو مٹانا بند کریں؟"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tắt xóa bằng logo?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭标志清除？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "關閉標誌清除？"
+          }
+        }
+      }
+    },
+    "app_info.settings.danger.logo_disabled_message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لم يُمسح شيء. أعد تشغيل إيماءة الشعار في الإعدادات، أو استخدم زر المسح الطارئ هناك."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "কিছুই মুছেনি। সেটিংসে লোগো জেসচার আবার চালু করুন, অথবা সেখানকার প্যানিক ওয়াইপ বোতাম ব্যবহার করুন।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nichts wurde gelöscht. schalte die logo-geste in den einstellungen wieder ein, oder nutze dort den panic-wipe-knopf."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nothing was wiped. turn the logo gesture back on in settings, or use the panic wipe button there."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no se borró nada. vuelve a activar el gesto del logo en ajustes, o usa el botón de borrado de pánico allí."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "چیزی پاک نشد. ژست لوگو را در تنظیمات دوباره روشن کنید، یا از دکمه پاک‌سازی اضطراری آنجا استفاده کنید."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "walang nabura. i-on muli ang logo gesture sa settings, o gamitin ang panic wipe button doon."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "rien n’a été effacé. réactivez le geste logo dans les réglages, ou utilisez le bouton d’effacement panique."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "דבר לא נמחק. הפעל מחדש את מחוות הלוגו בהגדרות, או השתמש בכפתור המחיקה שם."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "कुछ नहीं मिटा। सेटिंग्स में लोगो जेस्चर वापस चालू करें, या वहाँ का पैनिक वाइप बटन इस्तेमाल करें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tidak ada yang dihapus. nyalakan lagi gestur logo di pengaturan, atau gunakan tombol hapus panik di sana."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "non è stato cancellato nulla. riattiva il gesto del logo nelle impostazioni, oppure usa lì il pulsante di cancellazione panico."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "何も消去されていません。設定でロゴジェスチャを戻すか、そこのパニック消去ボタンを使ってください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "지워진 것이 없습니다. 설정에서 로고 제스처를 다시 켜거나 그곳의 패닉 지우기 버튼을 사용하세요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tiada yang dipadam. hidupkan semula gestur logo dalam tetapan, atau gunakan butang padam panik di situ."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "केही मेटिएन। सेटिङमा लोगो जेस्चर फेरि खोल्नुहोस्, वा त्यहाँको प्यानिक वाइप बटन प्रयोग गर्नुहोस्।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "er is niets gewist. zet het logo-gebaar weer aan in instellingen, of gebruik daar de panic-wipeknop."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nic nie zostało wyczyszczone. włącz ponownie gest logo w ustawieniach albo użyj tam przycisku panic wipe."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nada foi apagado. volte a ligar o gesto do logo nas definições, ou use o botão de apagar em pânico."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nada foi apagado. ligue de novo o gesto do logo nas configurações, ou use o botão de apagar em pânico."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ничего не стёрто. снова включите жест логотипа в настройках или нажмите там кнопку экстренного стирания."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ingenting raderades. sätt på logggesten igen i inställningar, eller använd panic wipe-knappen där."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "எதுவும் அழியவில்லை. அமைப்புகளில் லோகோ சைகையை மீண்டும் இயக்கவும், அல்லது அங்குள்ள பேனிக் அழி பொத்தானைப் பயன்படுத்தவும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ไม่ได้ลบอะไร เปิดท่าทางโลโก้ในตั้งค่าอีกครั้ง หรือใช้ปุ่มลบฉุกเฉินที่นั่น"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hiçbir şey silinmedi. ayarlardan logo jestini yeniden açın veya oradaki panik sil düğmesini kullanın."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "нічого не стерто. знову ввімкніть жест логотипу в параметрах або натисніть там кнопку екстреного стирання."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "کچھ نہیں مٹا۔ سیٹنگز میں لوگو جیسچر دوبارہ چالو کریں، یا وہاں کا پینک وائپ بٹن استعمال کریں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "không có gì bị xóa. bật lại cử chỉ logo trong cài đặt, hoặc dùng nút xóa khẩn cấp ở đó."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有清除任何内容。请在设置中重新打开标志手势，或使用那里的紧急清除按钮。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "沒有清除任何內容。請在設定中重新打開標誌手勢，或使用那裡的緊急清除按鈕。"
+          }
+        }
+      }
+    },
+    "app_info.settings.danger.logo_disabled_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مسح الشعار متوقف"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "লোগো মুছা বন্ধ"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "logo-löschen ist aus"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "logo wipe is off"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "borrado del logo apagado"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پاک‌کردن لوگو خاموش است"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "naka-off ang logo wipe"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "effacement logo désactivé"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מחיקת לוגו כבויה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "लोगो मिटाना बंद है"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hapus logo mati"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cancellazione logo disattivata"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ロゴ消去はオフです"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "로고 지우기가 꺼져 있습니다"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "padam logo mati"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "लोगो मेटाउने बन्द छ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "logo-wissen staat uit"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "czyszczenie logo wyłączone"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apagar pelo logo desligado"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apagar pelo logo desligado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "стирание логотипом выключено"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "radering via loggan är av"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "லோகோ அழிப்பு அணைக்கப்பட்டுள்ளது"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "การลบด้วยโลโก้ปิดอยู่"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "logo silme kapalı"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "стирання логотипом вимкнено"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لوگو مٹانا بند ہے"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "xóa bằng logo đang tắt"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标志清除已关闭"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "標誌清除已關閉"
+          }
+        }
+      }
+    },
+    "app_info.settings.danger.logo_mode.confirm" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أكد أولاً"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "আগে নিশ্চিত করুন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "erst bestätigen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "confirm first"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "confirmar antes"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ابتدا تأیید"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kumpirmahin muna"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "confirmer d’abord"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אשר קודם"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पहले पुष्टि करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "konfirmasi dulu"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "conferma prima"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "先に確認"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "먼저 확인"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sahkan dahulu"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पहिले पुष्टि"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "eerst bevestigen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "najpierw potwierdź"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "confirmar primeiro"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "confirmar primeiro"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "сначала подтвердить"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bekräfta först"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "முதலில் உறுதிப்படுத்து"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ยืนยันก่อน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "önce onayla"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "спочатку підтвердити"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پہلے تصدیق"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "xác nhận trước"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "先确认"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "先確認"
+          }
+        }
+      }
+    },
+    "app_info.settings.danger.logo_mode.instant" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فوري"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "তাৎক্ষণিক"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sofort"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "instant"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "instantáneo"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فوری"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "agad"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "immédiat"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מיידי"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "तत्काल"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "instan"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "immediato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "即座"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "즉시"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "segera"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "तुरुन्त"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "direct"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "natychmiast"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "instantâneo"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "instantâneo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "сразу"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "direkt"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "உடனடி"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ทันที"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "anında"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "одразу"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فوری"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ngay"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "立即"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "立即"
+          }
+        }
+      }
+    },
+    "app_info.settings.danger.logo_mode.off" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إيقاف"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "বন্ধ"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aus"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "off"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apagado"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خاموش"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "off"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "désactivé"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כבוי"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "बंद"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mati"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "disattivato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オフ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "끔"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mati"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "बन्द"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "uit"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wyłączone"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "desligado"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "desligado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "выкл."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "av"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "அணை"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ปิด"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kapalı"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "вимк."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بند"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tắt"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "關"
+          }
+        }
+      }
+    },
+    "app_info.settings.danger.logo_mode.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فوري افتراضيًا لمسار المصادرة. أكّد إن أقلقتك النقرات العرضية. الإيقاف يزيل الإيماءة — والإيقاف يطلب تأكيدًا لأن النقر الثلاثي المعطّل يفشل بصمت في الذعر."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "বাজেয়াপ্তির পথে ডিফল্ট তাৎক্ষণিক। ভুল ট্যাপ চিন্তা হলে নিশ্চিত করুন। বন্ধ জেসচার সরায় — বন্ধ করতে নিশ্চিতকরণ চায় কারণ মৃত ট্রিপল-ট্যাপ আতঙ্কে চুপচাপ ব্যর্থ হয়।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "standardmäßig sofort für den beschlagnahme-pfad. bestätigen, wenn versehentliche tipps sorgen. aus entfernt die geste — das ausschalten fragt nach, weil ein deaktivierter dreifachtipp in der panik still scheitert."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "instant by default for the seizure path. confirm if accidental taps worry you. off removes the gesture — turning off asks for confirmation because a disabled triple-tap is a silent failure in a panic."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "instantáneo por defecto para el camino de confiscación. confirma si te preocupan toques accidentales. apagado quita el gesto — al apagar se pide confirmación porque un triple toque muerto falla en silencio en un pánico."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پیش‌فرض فوری برای مسیر ضبط. اگر ضربه تصادفی نگران‌تان است تأیید کنید. خاموش ژست را برمی‌دارد — خاموش‌کردن تأیید می‌خواهد چون ضربه سه‌تایی مرده در وحشت بی‌صدا شکست می‌خورد."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "agad bilang default para sa seizure path. kumpirmahin kung nakakaalarma ang aksidenteng tap. off inaalis ang gesture — ang pag-off ay humihingi ng kumpirmasyon dahil ang patay na triple-tap ay tahimik na nabibigo sa panic."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "immédiat par défaut pour la saisie. confirmer si les taps accidentels inquiètent. désactivé retire le geste — l’extinction demande confirmation car un triple tap mort est un échec silencieux en panique."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מיידי כברירת מחדל לנתיב תפיסה. אשר אם הקשות בטעות מדאיגות. כבוי מסיר את המחווה — הכיבוי מבקש אישור כי הקשה משולשת מתה נכשלת בשקט בפאניקה."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ज़ब्ती पथ के लिए डिफ़ॉल्ट तत्काल। आकस्मिक टैप चिंता हो तो पुष्टि। बंद जेस्चर हटाता है — बंद करते समय पुष्टि क्योंकि मृत ट्रिपल-टैप पैनिक में चुपचाप विफल होता है।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "instan secara default untuk jalur penyitaan. konfirmasi jika ketukan tak sengaja mengkhawatirkan. mati menghapus gestur — mematikan meminta konfirmasi karena ketuk tiga mati gagal diam-diam saat panik."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "immediato di default per il percorso di sequestro. conferma se temi tocchi accidentali. disattivato rimuove il gesto — spegnerlo chiede conferma perché un triplo tap morto fallisce in silenzio nel panico."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "押収時は既定で即座。誤タップが心配なら確認。オフはジェスチャを外します。オフにするときは確認します。無効なトリプルタップはパニック時に無言で失敗するためです。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "압수 경로에서는 기본이 즉시입니다. 실수 탭이 걱정되면 확인. 끔은 제스처를 제거합니다. 끌 때는 확인합니다. 꺼진 세 번 탭은 패닉 때 조용히 실패하기 때문입니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "segera secara lalai untuk laluan rampasan. sahkan jika ketikan tidak sengaja merisaukan. mati mengalih gestur — mematikan meminta pengesahan kerana ketik tiga mati gagal senyap semasa panik."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "जफत मार्गका लागि पूर्वनिर्धारित तुरुन्त। आकस्मिक ट्याप चिन्ता भए पुष्टि। बन्दले जेस्चर हटाउँछ — बन्द गर्दा पुष्टि सोधिन्छ किनकि मृत ट्रिपल-ट्याप आतंकमा चुपचाप असफल हुन्छ।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "standaard direct voor het inbeslagnamepad. bevestig als per ongeluk tippen je zorgen baart. uit verwijdert het gebaar — uitzetten vraagt bevestiging omdat een dode driedubbele tip stil faalt in paniek."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "domyślnie natychmiast na ścieżce zajęcia. potwierdź, jeśli martwią przypadkowe stuknięcia. wyłączone usuwa gest — wyłączenie pyta o potwierdzenie, bo martwy potrójny tap milcząco zawodzi w panice."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "instantâneo por omissão para o caminho de apreensão. confirme se toques acidentais preocupam. desligado remove o gesto — desligar pede confirmação porque um toque triplo morto falha em silêncio num pânico."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "instantâneo por padrão para o caminho de apreensão. confirme se toques acidentais preocupam. desligado remove o gesto — desligar pede confirmação porque um toque triplo morto falha em silêncio num pânico."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "по умолчанию сразу для сценария изъятия. подтверждение, если страшны случайные тапы. выкл. убирает жест — выключение спрашивает подтверждение, потому что мёртвый тройной тап тихо проваливается в панике."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "direkt som standard för beslagtagandespåret. bekräfta om oavsiktliga tryck oroar. av tar bort gesten — att stänga av frågar eftersom en död trippelklick tyst misslyckas i panik."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "பறிமுதல் பாதைக்கு இயல்பு உடனடி. தவறுதலான தட்டு கவலைப்பட்டால் உறுதிப்படுத்து. அணைத்தால் சைகை நீங்கும் — அணைக்கும்போது உறுதி கேட்கும்; செயலிழந்த மூன்று தட்டு பீதியில் அமைதியாக தோல்வியடையும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ค่าเริ่มต้นคือทันทีสำหรับเส้นทางยึด หากกังวลการแตะพลาดให้ยืนยัน ปิดจะเอาท่าทางออก — การปิดจะถามยืนยัน เพราะการแตะสามครั้งที่ปิดจะล้มเหลวเงียบตอนตื่นตระหนก"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "el koyma yolu için varsayılan anında. yanlışlıkla dokunmalar kaygılandırıyorsa onaylayın. kapalı jesti kaldırır — kapatmak onay ister çünkü ölü üç dokunuş panikte sessizce başarısız olur."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "за замовчуванням одразу для сценарію вилучення. підтвердження, якщо лякають випадкові дотики. вимк. прибирає жест — вимкнення питає підтвердження, бо мертвий потрійний дотик тихо провалюється в паніці."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ضبطی راستے کے لیے ڈیفالٹ فوری۔ اگر غلط ٹیپ پریشان کرے تو تصدیق۔ بند جیسچر ہٹا دیتا ہے — بند کرتے وقت تصدیق کیونکہ مردہ ٹرپل-ٹیپ گھبراہٹ میں خاموشی سے ناکام ہوتا ہے۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mặc định ngay cho đường tịch thu. xác nhận nếu chạm nhầm gây lo. tắt gỡ cử chỉ — tắt sẽ hỏi xác nhận vì chạm ba lần chết sẽ thất bại im lặng khi hoảng."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查扣场景默认立即清除。担心误触可选确认。关闭会去掉手势——关闭时会再确认，因为禁用的三连点在紧急时会无声失败。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查扣場景預設立即清除。擔心誤觸可選確認。關閉會去掉手勢——關閉時會再確認，因為停用的三連點在緊急時會無聲失敗。"
+          }
+        }
+      }
+    },
+    "app_info.settings.danger.logo_mode.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مسح بنقر شعار ثلاثي"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "লোগো ট্রিপল-ট্যাপ মুছা"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "logo-dreifachtipp-löschen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "logo triple-tap wipe"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "borrado por triple toque del logo"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پاک کردن با ضربه سه‌تایی لوگو"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "burahin sa triple-tap ng logo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "effacement triple tap logo"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מחיקה בהקשה משולשת על הלוגו"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "लोगो ट्रिपल-टैप मिटान"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hapus ketuk tiga logo"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cancellazione triplo tap logo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ロゴ三回タップで消去"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "로고 세 번 탭으로 지우기"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "padam ketik tiga logo"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "लोगो ट्रिपल-ट्याप मेटाउने"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "logo driedubbele tip wissen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "czyszczenie potrójnym stuknięciem logo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apagar com toque triplo no logo"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apagar com toque triplo no logo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "стирание тройным тапом логотипа"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "radera med trippelklick på loggan"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "லோகோ மூன்று தட்டில் அழி"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ลบด้วยแตะโลโก้สามครั้ง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "logo üç dokunuşla sil"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "стирання потрійним дотиком логотипу"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لوگو ٹرپل-ٹیپ مٹانا"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "xóa bằng chạm ba lần logo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标志三连点清除"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "標誌三連點清除"
+          }
+        }
+      }
+    },
     "app_info.settings.danger.panic_button" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -14887,6 +16552,192 @@
         }
       }
     },
+    "app_info.settings.danger.panic_note_disabled" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يمسح كل الرسائل والمفاتيح والهوية. النقر الثلاثي على شعار bitchat/ متوقف — هذا الزر فقط يمسح."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "সব বার্তা, কী এবং পরিচয় মুছে ফেলে। bitchat/ লোগো ট্রিপল-ট্যাপ বন্ধ — শুধু এই বোতাম মুছে।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "löscht alle nachrichten, schlüssel und die identität. der bitchat/-logo-dreifachtipp ist aus — nur dieser knopf wischt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "erases all messages, keys, and identity. the bitchat/ logo triple-tap is off — only this button wipes."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "borra todos los mensajes, claves e identidad. el triple toque del logo bitchat/ está apagado: solo este botón borra."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "همه پیام‌ها، کلیدها و هویت را پاک می‌کند. ضربه سه‌تایی لوگوی bitchat/ خاموش است — فقط این دکمه پاک می‌کند."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "binubura ang lahat ng mensahe, key, at identity. naka-off ang triple-tap sa bitchat/ logo — button na ito lang ang magbubura."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "efface tous les messages, clés et l’identité. le triple tap sur le logo bitchat/ est désactivé — seul ce bouton efface."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מוחק את כל ההודעות, המפתחות והזהות. הקשה משולשת על לוגו bitchat/ כבויה — רק הכפתור הזה מוחק."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सभी संदेश, कुंजियाँ और पहचान मिटाता है। bitchat/ लोगो ट्रिपल-टैप बंद है — केवल यह बटन मिटाता है।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "menghapus semua pesan, kunci, dan identitas. ketuk tiga kali logo bitchat/ dimatikan — hanya tombol ini yang menghapus."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cancella tutti i messaggi, le chiavi e l’identità. il triplo tap sul logo bitchat/ è disattivato — solo questo pulsante cancella."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべてのメッセージ、鍵、身元を消去します。bitchat/ ロゴのトリプルタップはオフです。消すのはこのボタンだけです。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "모든 메시지, 키, 신원을 지웁니다. bitchat/ 로고 세 번 탭은 꺼져 있습니다. 이 버튼만 지웁니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "memadam semua mesej, kunci dan identiti. ketik tiga kali logo bitchat/ dimatikan — hanya butang ini memadam."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सबै सन्देश, कुञ्जी र पहिचान मेटाउँछ। bitchat/ लोगो ट्रिपल-ट्याप बन्द छ — यो बटन मात्र मेटाउँछ।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wist alle berichten, sleutels en identiteit. de driedubbele tip op het bitchat/-logo staat uit — alleen deze knop wist."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "usuwa wszystkie wiadomości, klucze i tożsamość. potrójne stuknięcie logo bitchat/ jest wyłączone — czyści tylko ten przycisk."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apaga todas as mensagens, chaves e identidade. o toque triplo no logo bitchat/ está desligado — só este botão apaga."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apaga todas as mensagens, chaves e identidade. o toque triplo no logo bitchat/ está desligado — só este botão apaga."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "стирает все сообщения, ключи и личность. тройной тап по логотипу bitchat/ выключен — стирает только эта кнопка."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "raderar alla meddelanden, nycklar och identitet. trippelklick på bitchat/-loggan är av — bara den här knappen raderar."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "எல்லா செய்திகள், விசைகள், அடையாளத்தையும் அழிக்கும். bitchat/ லோகோ மூன்று தட்டு அணைக்கப்பட்டுள்ளது — இந்த பொத்தான் மட்டும் அழிக்கும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ลบข้อความ กุญแจ และตัวตนทั้งหมด การแตะโลโก้ bitchat/ สามครั้งปิดอยู่ — มีแค่ปุ่มนี้ที่ลบ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tüm mesajları, anahtarları ve kimliği siler. bitchat/ logosuna üç kez dokunma kapalı — yalnızca bu düğme siler."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "стирає всі повідомлення, ключі та особу. потрійний дотик логотипу bitchat/ вимкнено — стирає лише ця кнопка."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تمام پیغامات، کلیدیں اور شناخت مٹا دیتا ہے۔ bitchat/ لوگو ٹرپل-ٹیپ بند ہے — صرف یہ بٹن مٹاتا ہے۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "xóa mọi tin nhắn, khóa và danh tính. chạm ba lần logo bitchat/ đang tắt — chỉ nút này mới xóa."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除所有消息、密钥和身份。bitchat/ 标志三连点已关闭——只有此按钮会清除。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除所有訊息、金鑰與身分。bitchat/ 標誌三連點已關閉——只有此按鈕會清除。"
+          }
+        }
+      }
+    },
+
     "app_info.settings.danger.title" : {
       "extractionState" : "manual",
       "localizations" : {
