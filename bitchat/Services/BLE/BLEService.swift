@@ -6376,7 +6376,8 @@ extension BLEService {
             store.peripheralStates.map {
                 (uuid: $0.peripheral.identifier.uuidString,
                  isConnected: $0.isConnected,
-                 hasCharacteristic: $0.characteristic != nil)
+                 hasCharacteristic: $0.characteristic != nil,
+                 lastConnectedAt: $0.lastConnectedAt)
             }
         }
         return physical.map {
@@ -6384,7 +6385,8 @@ extension BLEService {
                 uuid: $0.uuid,
                 peerID: linkBindings.peer(forPeripheralID: $0.uuid),
                 isConnected: $0.isConnected,
-                hasCharacteristic: $0.hasCharacteristic
+                hasCharacteristic: $0.hasCharacteristic,
+                lastConnectedAt: $0.lastConnectedAt
             )
         }
     }
