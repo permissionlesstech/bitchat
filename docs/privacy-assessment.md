@@ -119,3 +119,7 @@ The panic action clears identity/session state, preferences, location state, gro
 - Treat geohash precision, bridge-cell changes, new relay tags, and announce fields as privacy-surface changes.
 - Re-run real-device Bluetooth, background/locked-device recovery, location revocation, and audio-route checks; simulators cannot validate the physical side of those behaviors.
 - Check what a new notification discloses on a locked screen, and that the app-switcher snapshot is covered, whenever notification or scene-lifecycle code changes.
+
+## Cross-platform media
+
+Silent Android ↔ iOS image/voice drops are documented in [MEDIA-INTEROP.md](MEDIA-INTEROP.md).
