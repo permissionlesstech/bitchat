@@ -24,6 +24,9 @@ iOS accepts those via `MimeType` / `BLEIncomingFileValidator`. A MIME reject
 or magic-byte mismatch is logged (`MIME REJECT` / `MAGIC REJECT`) and the
 payload is dropped — there is no in-chat error bubble yet.
 
+When a local wire-shape / file-transfer spec lands under `/spec` (see #1519),
+prefer that over the Android doc link above.
+
 ## Version skew (the #1518 smoking gun)
 
 Reporter stack in #1518:
@@ -32,21 +35,23 @@ Reporter stack in #1518:
 - iOS App Store **1.7.0** (tag `v1.7.0`, 2026-07-08)
 
 After `v1.7.0`, main gained several **private-media** fixes that App Store
-1.7.0 does not include, including (non-exhaustive):
+1.7.0 did not include. Those shipped in App Store **1.7.1** (`v1.7.1`),
+including:
 
-- Encrypt private media before BLE fragmentation
-- Persist authenticated private-media delivery receipts
-- Retry confirmed private media after reconnect
-- Earlier: stamp incoming DM images delivered (#1402)
+- Encrypt private media before BLE fragmentation (#1434)
+- Persist authenticated private-media delivery receipts (#1466)
+- Retry confirmed private media after reconnect (#1467)
+
+Note: stamp incoming DM images delivered (#1402 / `35fb9fdd`) **is already in
+v1.7.0** — do not treat it as missing on store 1.7.0.
 
 Public / mesh file transfer and private Noise media do not share the same
 code path. A skew where Android has newer private-media behavior than iOS
 1.7.0 matches "private chat photos die Android→iOS, text is fine."
 
-**First remediation for reporters:** install an iOS build from current
-`main` (TestFlight / Xcode) or wait for the next App Store cut that includes
-the July private-media stack — do not assume MIME incompatibility until that
-is ruled out.
+**First remediation for reporters:** update iOS to App Store **1.7.1** (or
+newer / a current `main` build). Do not assume MIME incompatibility until
+matched versions are ruled out.
 
 ## What to collect if it still fails on matched builds
 
@@ -60,16 +65,17 @@ On the **iOS** device, with verbose logging / Console:
 On Android, confirm `MediaSendingManager` still emits `image/jpeg` /
 `audio/mp4` for the failing send.
 
-## Maintainer release gate
+## Maintainer release gate (media parity)
 
-Before cutting an App Store build that claims Android media parity, run the
-device matrix in [#1580](https://github.com/permissionlesstech/bitchat/issues/1580)
-**plus**:
+Before cutting an App Store build that claims Android media parity, run at
+least:
 
+- [ ] Upgrade-in-place from the previous store build (identity / favorites / DM history intact)
 - [ ] Android → iOS private DM image
 - [ ] Android → iOS private DM voice note
 - [ ] iOS → Android private DM image (control)
 - [ ] Android → iOS public/mesh image (control)
+- [ ] Locked-device background receive of an image over mesh
 
 See also Tor / distribution notes in `docs/VERIFYING-A-BUILD.md` when the
 store build itself is unreachable.
