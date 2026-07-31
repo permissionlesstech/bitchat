@@ -79,6 +79,19 @@ What to do instead, in order of preference: install from the App Store; build fr
 
 Do not rely on the app looking right. A modified build has no reason to look different.
 
+
+## App Store fallbacks (TestFlight)
+
+Issue [#966](https://github.com/permissionlesstech/bitchat/issues/966) tracks non–App Store distribution for regions where the store is blocked or unreliable. The project already ships an attested source manifest so people can **build from verified source** when binaries are untrustworthy (see above).
+
+What remains as a product decision — not something a random mirror can invent — is a **maintained public TestFlight link** as an App Store fallback:
+
+- TestFlight builds are still Apple-signed and consent-gated; they are closer to the App Store trust model than an unsigned `.ipa` from a forum.
+- The link itself must be published by maintainers (and kept current across beta expiry). This document will not invent a URL.
+- Until a link is published here, treat TestFlight the same as any other sideloaded binary unless you received the invite from a channel you already trust for bitchat releases.
+
+Android sideloading (signed APKs) lives in the [bitchat-android](https://github.com/permissionlesstech/bitchat-android) project and is out of scope for this iOS/macOS repository.
+
 ## For maintainers
 
 Cutting a release:
