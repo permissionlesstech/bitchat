@@ -2943,7 +2943,7 @@ extension BLEService: GossipSyncManager.Delegate {
 
     func sendPacket(to peerID: PeerID, packet: BitchatPacket) {
         onEngine {
-            sendPacketDirected(packet, to: peerID)
+            _ = sendPacketDirected(packet, to: peerID)
         }
     }
 
@@ -3336,9 +3336,12 @@ extension BLEService {
     }
 
     func _test_drainPrivateMediaSendPipeline() async {
+        // Capture only the (Sendable) queue, not self, so the @Sendable
+        // dispatch closures carry no non-Sendable state.
+        let queue = messageQueue
         await withCheckedContinuation { continuation in
-            self.messageQueue.async { [weak self] in
-                self?.messageQueue.async {
+            queue.async {
+                queue.async {
                     continuation.resume()
                 }
             }
@@ -3357,9 +3360,10 @@ extension BLEService {
     }
 
     func _test_drainNoiseMessagePipeline() async {
+        let queue = messageQueue
         await withCheckedContinuation { continuation in
-            self.messageQueue.async {
-                self.messageQueue.async {
+            queue.async {
+                queue.async {
                     continuation.resume()
                 }
             }
