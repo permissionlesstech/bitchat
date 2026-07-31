@@ -92,10 +92,10 @@ private final class MockChatVerificationContext: ChatVerificationContext {
     }
 
     private(set) var flushedOutboxPeerIDs: [PeerID] = []
-    private(set) var flushedSkippingSecurelyTransmitted: [Bool] = []
-    func flushRouterOutbox(forAliases peerIDAliases: [PeerID], skippingSecurelyTransmitted: Bool) {
+    private(set) var flushedSkippingMessageIDs: [Set<String>] = []
+    func flushRouterOutbox(forAliases peerIDAliases: [PeerID], skippingMessageIDs: Set<String>) {
         flushedOutboxPeerIDs.append(contentsOf: peerIDAliases)
-        flushedSkippingSecurelyTransmitted.append(skippingSecurelyTransmitted)
+        flushedSkippingMessageIDs.append(skippingMessageIDs)
     }
 
     // Noise sessions & verification transport
@@ -126,8 +126,10 @@ private final class MockChatVerificationContext: ChatVerificationContext {
         privateMediaAuthenticatedPeers.append(peerID)
     }
 
-    func retrySecurePrivateMessagesAfterAuthentication(for peerIDAliases: [PeerID]) {
+    var securePrivateMessageRetryResult: Set<String> = []
+    func retrySecurePrivateMessagesAfterAuthentication(for peerIDAliases: [PeerID]) -> Set<String> {
         securePrivateMessageRetryAliases.append(peerIDAliases)
+        return securePrivateMessageRetryResult
     }
 
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {
@@ -321,6 +323,7 @@ struct ChatVerificationCoordinatorContextTests {
         let noiseKey = Data(repeating: 0x55, count: 32)
         let stablePeerID = PeerID(hexData: noiseKey)
         context.noiseSessionKeysByPeerID[peerID] = noiseKey
+        context.securePrivateMessageRetryResult = ["retried-1"]
 
         coordinator.setupNoiseCallbacks()
         context.installedCallbacks?.onPeerAuthenticated(peerID, "fp-unverified")
@@ -330,10 +333,13 @@ struct ChatVerificationCoordinatorContextTests {
             context.flushedOutboxPeerIDs == [peerID, stablePeerID],
             "offline-queued mail under the stable key was never flushed on authentication"
         )
-        // The retry pass just transmitted everything in `secureTransmissions`;
-        // flushing that set again would double-send it and burn a second
-        // attempt against the cap.
-        #expect(context.flushedSkippingSecurelyTransmitted == [true])
+        // The flush must skip exactly what the retry reported transmitting.
+        // Re-deriving that set from `secureTransmissions` would also skip mail
+        // the retry passed over for want of a live secure session, stranding it.
+        #expect(
+            context.flushedSkippingMessageIDs == [["retried-1"]],
+            "the flush did not skip exactly the set the retry transmitted"
+        )
     }
 
     @Test @MainActor

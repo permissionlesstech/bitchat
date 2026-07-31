@@ -59,7 +59,7 @@ protocol ChatTransportEventContext: AnyObject {
     /// Drains the message router's disk outbox for every alias of one peer
     /// as a single chronological stream, so mail split across the ephemeral
     /// and stable keys cannot be delivered out of order.
-    func flushRouterOutbox(forAliases peerIDAliases: [PeerID], skippingSecurelyTransmitted: Bool)
+    func flushRouterOutbox(forAliases peerIDAliases: [PeerID], skippingMessageIDs: Set<String>)
     /// Offer queued mail for *other* peers to this newly connected courier.
     func retryCourierDeposits(via peerID: PeerID)
     func sendMeshDeliveryAck(for messageID: String, to peerID: PeerID)
@@ -117,10 +117,10 @@ extension ChatViewModel: ChatTransportEventContext {
         meshService.noiseSessionPublicKeyData(for: peerID)
     }
 
-    func flushRouterOutbox(forAliases peerIDAliases: [PeerID], skippingSecurelyTransmitted: Bool) {
+    func flushRouterOutbox(forAliases peerIDAliases: [PeerID], skippingMessageIDs: Set<String>) {
         messageRouter.flushOutbox(
             forAliases: peerIDAliases,
-            skippingSecurelyTransmitted: skippingSecurelyTransmitted
+            skippingMessageIDs: skippingMessageIDs
         )
     }
 
@@ -311,7 +311,7 @@ final class ChatTransportEventCoordinator {
         if let stablePeerID, stablePeerID != peerID {
             aliases.append(stablePeerID)
         }
-        context.flushRouterOutbox(forAliases: aliases, skippingSecurelyTransmitted: false)
+        context.flushRouterOutbox(forAliases: aliases, skippingMessageIDs: [])
         context.retryCourierDeposits(via: peerID)
     }
 

@@ -124,10 +124,10 @@ private final class MockChatTransportEventContext: ChatTransportEventContext {
     private(set) var courierRetryPeerIDs: [PeerID] = []
     private(set) var meshDeliveryAcks: [(messageID: String, peerID: PeerID)] = []
 
-    private(set) var flushedSkippingSecurelyTransmitted: [Bool] = []
-    func flushRouterOutbox(forAliases peerIDAliases: [PeerID], skippingSecurelyTransmitted: Bool) {
+    private(set) var flushedSkippingMessageIDs: [Set<String>] = []
+    func flushRouterOutbox(forAliases peerIDAliases: [PeerID], skippingMessageIDs: Set<String>) {
         flushedOutboxPeerIDs.append(contentsOf: peerIDAliases)
-        flushedSkippingSecurelyTransmitted.append(skippingSecurelyTransmitted)
+        flushedSkippingMessageIDs.append(skippingMessageIDs)
     }
     func retryCourierDeposits(via peerID: PeerID) { courierRetryPeerIDs.append(peerID) }
     func sendMeshDeliveryAck(for messageID: String, to peerID: PeerID) {
@@ -577,12 +577,12 @@ struct ChatTransportEventCoordinatorContextTests {
             .didConnectToPeerSynchronously(shortPeerID)
 
         #expect(
-            context.flushedSkippingSecurelyTransmitted.count == 1,
+            context.flushedSkippingMessageIDs.count == 1,
             "the two keys must be merged into one flush, not drained in sequence"
         )
         #expect(context.flushedOutboxPeerIDs == [shortPeerID, stablePeerID])
         // Connect has no preceding retry pass, so nothing may be skipped.
-        #expect(context.flushedSkippingSecurelyTransmitted == [false])
+        #expect(context.flushedSkippingMessageIDs == [[]])
     }
 
     /// Short BLE IDs are ephemeral and get recycled. A cache entry left by a

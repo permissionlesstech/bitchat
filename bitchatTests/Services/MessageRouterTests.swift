@@ -234,7 +234,7 @@ struct MessageRouterTests {
 
         transport.connectedPeers = [shortPeerID, stablePeerID]
         transport.securePeers = [shortPeerID, stablePeerID]
-        router.flushOutbox(forAliases: [shortPeerID, stablePeerID], skippingSecurelyTransmitted: false)
+        router.flushOutbox(forAliases: [shortPeerID, stablePeerID], skippingMessageIDs: [])
 
         #expect(transport.sentPrivateMessages.map(\.messageID) == ["flush-old", "flush-new"])
         #expect(transport.sentPrivateMessages.map(\.peerID) == [stablePeerID, shortPeerID])
@@ -256,7 +256,7 @@ struct MessageRouterTests {
 
         transport.connectedPeers = [shortPeerID, stablePeerID]
         transport.securePeers = [shortPeerID, stablePeerID]
-        router.flushOutbox(forAliases: [shortPeerID, stablePeerID], skippingSecurelyTransmitted: false)
+        router.flushOutbox(forAliases: [shortPeerID, stablePeerID], skippingMessageIDs: [])
 
         #expect(transport.sentPrivateMessages.map(\.messageID) == ["dup-1"])
 
@@ -265,7 +265,7 @@ struct MessageRouterTests {
         // holds the ID, so the copy the flush passed over goes with it.
         router.markDelivered("dup-1", for: [shortPeerID, stablePeerID])
         transport.resetRecordings()
-        router.flushOutbox(forAliases: [shortPeerID, stablePeerID], skippingSecurelyTransmitted: false)
+        router.flushOutbox(forAliases: [shortPeerID, stablePeerID], skippingMessageIDs: [])
         #expect(
             transport.sentPrivateMessages.isEmpty,
             "the copy the merged flush skipped was re-sent after the ack"
@@ -278,7 +278,7 @@ struct MessageRouterTests {
     /// every retried message goes out twice and burns two attempts against the
     /// cap. Never-transmitted mail must still go out.
     @Test @MainActor
-    func mergedFlush_skippingSecurelyTransmitted_doesNotResendTheRetriedSet() async {
+    func mergedFlush_skippingRetriedIDs_doesNotResendTheRetriedSet() async {
         let peerID = PeerID(str: "0000000000000025")
         let transport = MockTransport()
         transport.connectedPeers = [peerID]
@@ -299,7 +299,7 @@ struct MessageRouterTests {
         transport.securePeers = [peerID]
         transport.resetRecordings()
 
-        router.flushOutbox(forAliases: [peerID], skippingSecurelyTransmitted: true)
+        router.flushOutbox(forAliases: [peerID], skippingMessageIDs: ["sec-1"])
 
         #expect(
             transport.sentPrivateMessages.map(\.messageID) == ["off-1"],
@@ -314,7 +314,7 @@ struct MessageRouterTests {
     /// the untransmitted twin through, putting the message on the air twice in
     /// the very pass that was meant to prevent it.
     @Test @MainActor
-    func mergedFlush_skippingSecurelyTransmitted_coversTheTwinUnderTheOtherAlias() async {
+    func mergedFlush_skippingRetriedIDs_coversTheTwinUnderTheOtherAlias() async {
         let shortPeerID = PeerID(str: "0000000000000026")
         let stablePeerID = PeerID(hexData: Data(repeating: 0x26, count: 32))
         let transport = MockTransport()
@@ -338,12 +338,90 @@ struct MessageRouterTests {
 
         router.flushOutbox(
             forAliases: [shortPeerID, stablePeerID],
-            skippingSecurelyTransmitted: true
+            skippingMessageIDs: ["twin-1"]
         )
 
         #expect(
             transport.sentPrivateMessages.isEmpty,
             "the untransmitted twin was sent even though the retry already covered this ID"
+        )
+    }
+
+    /// A message ID must be claimed only once an alias actually put it on a
+    /// transport. The same ID can sit under both the ephemeral and the stable
+    /// key; if the first alias visited has no transport at all, its flush is a
+    /// no-op, and claiming the ID there would suppress the twin under the
+    /// alias that *can* deliver — dropping the message rather than deduping it.
+    @Test @MainActor
+    func mergedFlush_deadAliasDoesNotSuppressTheDeliverableTwin() async {
+        let deadPeerID = PeerID(str: "0000000000000028")
+        let livePeerID = PeerID(hexData: Data(repeating: 0x28, count: 32))
+        let transport = MockTransport()
+        let router = MessageRouter(transports: [transport])
+
+        // Queue the same message ID under both aliases while neither is
+        // reachable, so nothing is sent yet.
+        transport.connectedPeers = []
+        transport.securePeers = []
+        router.sendPrivate("Twin", to: deadPeerID, recipientNickname: "Peer", messageID: "twin-2")
+        router.sendPrivate("Twin", to: livePeerID, recipientNickname: "Peer", messageID: "twin-2")
+
+        // Only the stable alias comes up. The ephemeral one stays dark, so its
+        // flush sends nothing.
+        transport.connectedPeers = [livePeerID]
+        transport.securePeers = [livePeerID]
+        transport.resetRecordings()
+
+        router.flushOutbox(forAliases: [deadPeerID, livePeerID], skippingMessageIDs: [])
+
+        #expect(
+            transport.sentPrivateMessages.map(\.messageID) == ["twin-2"],
+            "the dead alias claimed the ID and suppressed the twin that could deliver"
+        )
+    }
+
+    /// The skip set must be what the retry *transmitted*, not every entry in
+    /// `secureTransmissions` under these aliases. Those differ whenever an
+    /// alias is connected but has no live secure session: the retry abandons
+    /// that alias wholesale, so its messages are in `secureTransmissions`
+    /// having never been sent. Deriving the skip set from that map left them
+    /// neither retried nor flushed — stranded until the next reconnect or the
+    /// 24h TTL, which is the exact delay this flush exists to remove.
+    @Test @MainActor
+    func mergedFlush_deliversMailTheRetrySkippedForWantOfASecureSession() async {
+        let peerID = PeerID(str: "0000000000000027")
+        let transport = MockTransport()
+        transport.connectedPeers = [peerID]
+        transport.securePeers = [peerID]
+        let router = MessageRouter(transports: [transport])
+
+        // Transmitted securely, so it lands in `secureTransmissions` and stays
+        // queued pending an ack.
+        router.sendPrivate("Stranded", to: peerID, recipientNickname: "Peer", messageID: "stranded-1")
+        router.flushOutbox(for: peerID)
+        #expect(transport.sentPrivateMessages.allSatisfy { $0.messageID == "stranded-1" })
+
+        // The link comes back without a secure session: still connected, but
+        // `canDeliverSecurely` is false, so the retry abandons this alias.
+        transport.securePeers = []
+        transport.resetRecordings()
+
+        let retried = router.retrySecurePrivateMessagesAfterAuthentication(for: [peerID])
+
+        #expect(
+            retried.isEmpty,
+            "the retry reported transmitting a message it never sent"
+        )
+        #expect(
+            transport.sentPrivateMessages.isEmpty,
+            "the retry sent over a link that cannot deliver securely"
+        )
+
+        router.flushOutbox(forAliases: [peerID], skippingMessageIDs: retried)
+
+        #expect(
+            transport.sentPrivateMessages.map(\.messageID) == ["stranded-1"],
+            "the flush skipped a message the retry never transmitted, stranding it until TTL"
         )
     }
 
@@ -381,7 +459,7 @@ struct MessageRouterTests {
             router.markDelivered("gone-1", for: [shortPeerID])
         }
 
-        router.flushOutbox(forAliases: [shortPeerID, stablePeerID], skippingSecurelyTransmitted: false)
+        router.flushOutbox(forAliases: [shortPeerID, stablePeerID], skippingMessageIDs: [])
         transport.onSendPrivateMessage = nil
 
         #expect(

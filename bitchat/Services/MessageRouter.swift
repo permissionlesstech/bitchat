@@ -616,11 +616,18 @@ final class MessageRouter {
         }
     }
 
-    func retrySecurePrivateMessagesAfterAuthentication(for peerIDAliases: [PeerID]) {
+    /// Returns the message IDs this pass actually put on the air, so a flush
+    /// that follows can skip exactly those and nothing more. Deriving that set
+    /// from `secureTransmissions` instead would over-skip: an alias with no
+    /// live secure transport is abandoned wholesale below, and its entries are
+    /// in that set while never having been sent.
+    @discardableResult
+    func retrySecurePrivateMessagesAfterAuthentication(for peerIDAliases: [PeerID]) -> Set<String> {
         typealias Candidate = OutboxCandidate
 
         var visitedPeerIDs = Set<PeerID>()
         var retriedMessageIDs = Set<String>()
+        var transmittedMessageIDs = Set<String>()
         var outboxChanged = false
         let currentDate = now()
         var candidates: [Candidate] = []
@@ -699,12 +706,15 @@ final class MessageRouter {
                 messageID: message.messageID
             )
             metrics?.record(.outboxResent)
+            transmittedMessageIDs.insert(message.messageID)
             outboxChanged = incrementSendAttemptsIfQueued(message.messageID, for: peerID) || outboxChanged
         }
 
         if outboxChanged {
             persistOutbox()
         }
+
+        return transmittedMessageIDs
     }
 
     func flushOutbox(for peerID: PeerID) {
@@ -715,7 +725,7 @@ final class MessageRouter {
         var outboxChanged = false
 
         for message in queued {
-            outboxChanged = flushQueuedMessage(message, for: peerID, now: now) || outboxChanged
+            outboxChanged = flushQueuedMessage(message, for: peerID, now: now).outboxChanged || outboxChanged
         }
 
         if outboxChanged {
@@ -736,31 +746,24 @@ final class MessageRouter {
     /// `retrySecurePrivateMessagesAfterAuthentication` already does, and send
     /// each message ID once no matter how many keys hold a copy.
     ///
-    /// Pass `skippingSecurelyTransmitted` when a caller has just run
-    /// `retrySecurePrivateMessagesAfterAuthentication` over the same aliases.
-    /// That retry covers exactly the entries in `secureTransmissions`, and on
-    /// an authenticated link this flush would otherwise be a strict superset
-    /// of it — re-sending every message the retry just put on the air and
-    /// burning a second attempt against the cap. Skipping that set makes the
-    /// two passes disjoint by construction rather than by comment.
-    func flushOutbox(forAliases peerIDAliases: [PeerID], skippingSecurelyTransmitted: Bool) {
+    /// Pass the set returned by `retrySecurePrivateMessagesAfterAuthentication`
+    /// as `skippingMessageIDs` when a caller has just run it over the same
+    /// aliases. Those messages are already on the air, and re-sending them here
+    /// would burn a second attempt against the cap.
+    ///
+    /// It has to be the IDs that retry *transmitted*, not the entries in
+    /// `secureTransmissions` matching these aliases. Those differ: the retry
+    /// abandons an alias wholesale when it has no live secure transport, so a
+    /// message under that alias is in `secureTransmissions` yet was never sent.
+    /// Skipping the wider set left such a message neither retried nor flushed,
+    /// waiting on the next reconnect or the 24h TTL — the exact delay this
+    /// flush exists to remove.
+    ///
+    /// The skip is by message ID across the whole alias set rather than by
+    /// peer/message pair, because the same ID can sit under both aliases and
+    /// filtering per pair would put it on the air twice.
+    func flushOutbox(forAliases peerIDAliases: [PeerID], skippingMessageIDs: Set<String>) {
         typealias Candidate = OutboxCandidate
-
-        let aliasSet = Set(peerIDAliases)
-
-        // The retry that precedes a skipping flush covers a message ID once,
-        // under whichever alias holds the securely-transmitted copy. So the
-        // skip has to be by message ID across the whole alias set, not by
-        // peer/message pair: the same ID can also sit under the *other* alias
-        // without being in `secureTransmissions`, and filtering per pair would
-        // let that copy sail through and put the message on the air twice —
-        // precisely the double-send this flag exists to prevent.
-        var retriedMessageIDs = Set<String>()
-        if skippingSecurelyTransmitted {
-            for key in secureTransmissions where aliasSet.contains(key.peerID) {
-                retriedMessageIDs.insert(key.messageID)
-            }
-        }
 
         var visitedPeerIDs = Set<PeerID>()
         var candidates: [Candidate] = []
@@ -769,7 +772,7 @@ final class MessageRouter {
             guard visitedPeerIDs.insert(peerID).inserted else { continue }
             guard let queued = outbox[peerID], !queued.isEmpty else { continue }
             for (queueOrder, message) in queued.enumerated() {
-                guard !retriedMessageIDs.contains(message.messageID) else { continue }
+                guard !skippingMessageIDs.contains(message.messageID) else { continue }
                 candidates.append((
                     peerID: peerID,
                     message: message,
@@ -793,19 +796,24 @@ final class MessageRouter {
         var flushedMessageIDs = Set<String>()
 
         for candidate in candidates {
-            // Claim the ID only for a candidate that is still live. Marking it
-            // flushed first would let a copy removed by a synchronous ack
-            // earlier in this loop suppress the live copy under the other
-            // alias, which would silently drop mail rather than dedup it.
-            guard queuedMessage(candidate.message.messageID, for: candidate.peerID) != nil else {
-                continue
-            }
-            guard flushedMessageIDs.insert(candidate.message.messageID).inserted else { continue }
-            outboxChanged = flushQueuedMessage(
+            // Claim the ID only once this alias actually put the message on a
+            // transport. Claiming any earlier — before the liveness check, or
+            // merely because the candidate was still queued — lets an alias
+            // that sends nothing suppress the live twin under the other alias,
+            // silently dropping mail instead of deduping it. A copy removed by
+            // a synchronous ack earlier in this loop, or an alias with no
+            // transport at all, both fail to send and so leave the twin
+            // eligible.
+            guard !flushedMessageIDs.contains(candidate.message.messageID) else { continue }
+            let attempt = flushQueuedMessage(
                 candidate.message,
                 for: candidate.peerID,
                 now: now
-            ) || outboxChanged
+            )
+            outboxChanged = attempt.outboxChanged || outboxChanged
+            if attempt.sent {
+                flushedMessageIDs.insert(candidate.message.messageID)
+            }
         }
 
         if outboxChanged {
@@ -813,20 +821,34 @@ final class MessageRouter {
         }
     }
 
+    /// What one flush attempt did. The two facts are independent and neither
+    /// implies the other: a message past TTL is dropped without being sent
+    /// (`outboxChanged`, not `sent`), while a send over a connected link with
+    /// no secure session deliberately does not touch the attempt count
+    /// (`sent`, not `outboxChanged`). A caller deduping by message ID needs
+    /// `sent`; a caller deciding whether to persist needs `outboxChanged`.
+    private struct FlushAttempt {
+        let sent: Bool
+        let outboxChanged: Bool
+    }
+
     /// Send one queued message, or drop it if it is past TTL or the attempt
-    /// cap. Returns whether the outbox changed and needs persisting; the
-    /// caller owns the `persistOutbox()` so a whole flush costs one write.
+    /// cap. The caller owns the `persistOutbox()` so a whole flush costs one
+    /// write.
     private func flushQueuedMessage(
         _ message: QueuedMessage,
         for peerID: PeerID,
         now: Date
-    ) -> Bool {
+    ) -> FlushAttempt {
         var outboxChanged = false
+        var sent = false
 
         // A synchronous ack from an earlier send in this flush may have
         // removed an entry from the live outbox. The snapshot is only an
         // iteration order; never use it to recreate removed messages.
-        guard queuedMessage(message.messageID, for: peerID) != nil else { return false }
+        guard queuedMessage(message.messageID, for: peerID) != nil else {
+            return FlushAttempt(sent: false, outboxChanged: false)
+        }
 
         // Skip expired messages (TTL exceeded)
         if now.timeIntervalSince(message.timestamp) > Self.messageTTLSeconds {
@@ -835,7 +857,7 @@ final class MessageRouter {
                 dropMessage(message.messageID, for: peerID)
                 outboxChanged = true
             }
-            return outboxChanged
+            return FlushAttempt(sent: false, outboxChanged: outboxChanged)
         }
 
         if let transport = connectedTransport(for: peerID), transport.canDeliverSecurely(to: peerID) {
@@ -850,7 +872,7 @@ final class MessageRouter {
                     dropMessage(message.messageID, for: peerID)
                     outboxChanged = true
                 }
-                return outboxChanged
+                return FlushAttempt(sent: false, outboxChanged: outboxChanged)
             }
             SecureLogger.debug("Outbox -> \(type(of: transport)) (connected) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
             secureTransmissions.insert(
@@ -858,6 +880,7 @@ final class MessageRouter {
             )
             transport.sendPrivateMessage(message.content, to: peerID, recipientNickname: message.nickname, messageID: message.messageID)
             metrics?.record(.outboxResent)
+            sent = true
             outboxChanged = incrementSendAttemptsIfQueued(message.messageID, for: peerID) || outboxChanged
         } else if let transport = connectedTransport(for: peerID) {
             // "Connected" without a secure session — possibly a stolen
@@ -876,6 +899,7 @@ final class MessageRouter {
             )
             transport.sendPrivateMessage(message.content, to: peerID, recipientNickname: message.nickname, messageID: message.messageID)
             metrics?.record(.outboxResent)
+            sent = true
         } else if let transport = reachableTransport(for: peerID) {
             // Reachability without a connection is a freshness heuristic,
             // so the send can silently go nowhere: send but keep retaining
@@ -887,15 +911,16 @@ final class MessageRouter {
                     dropMessage(message.messageID, for: peerID)
                     outboxChanged = true
                 }
-                return outboxChanged
+                return FlushAttempt(sent: false, outboxChanged: outboxChanged)
             }
             SecureLogger.debug("Outbox -> \(type(of: transport)) (reachable) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
             transport.sendPrivateMessage(message.content, to: peerID, recipientNickname: message.nickname, messageID: message.messageID)
             metrics?.record(.outboxResent)
+            sent = true
             outboxChanged = incrementSendAttemptsIfQueued(message.messageID, for: peerID) || outboxChanged
         }
 
-        return outboxChanged
+        return FlushAttempt(sent: sent, outboxChanged: outboxChanged)
     }
 
     func flushAllOutbox() {
