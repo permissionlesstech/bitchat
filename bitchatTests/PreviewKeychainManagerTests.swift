@@ -300,15 +300,27 @@ struct PreviewKeychainManagerTests {
 
         // The first caller to acquire the gate is now blocked inside the
         // reconcile closure, with reconciliationInProgress set.
-        reconcileEntered.wait()
+        #expect(reconcileEntered.wait(
+            timeout: .now() + TestConstants.settleTimeout
+        ) == .success)
 
         // A caller arriving while reconciliation is in flight must fail
-        // closed instead of racing the cleanup.
-        #expect(!gate.allowsAccess(reconcile: reconcile))
+        // closed instead of racing the cleanup. A benign closure proves the
+        // gate never ran a second cleanup: a regression flips the flag and
+        // fails the expectation instead of deadlocking on the shared blocking
+        // reconcile closure.
+        var mustNotRun = false
+        #expect(!gate.allowsAccess(reconcile: {
+            mustNotRun = true
+            return true
+        }))
+        #expect(!mustNotRun)
 
         releaseReconcile.signal()
         for _ in 0..<16 {
-            completed.wait()
+            #expect(completed.wait(
+                timeout: .now() + TestConstants.settleTimeout
+            ) == .success)
         }
 
         // The gate must have serialized the reconciliation: exactly one
@@ -347,15 +359,24 @@ struct PreviewKeychainManagerTests {
             outerCompleted.signal()
         }
 
-        enteredReconcile.wait()
+        #expect(enteredReconcile.wait(
+            timeout: .now() + TestConstants.settleTimeout
+        ) == .success)
 
         // The re-entrant call returns promptly rather than deadlocking...
-        #expect(reentryReturned.wait(timeout: .now() + 1) == .success)
-        // ...fails closed, and never runs a second reconciliation.
-        #expect(secondReconcileRan.wait(timeout: .now() + 1) == .timedOut)
+        #expect(reentryReturned.wait(
+            timeout: .now() + TestConstants.settleTimeout
+        ) == .success)
+        // ...fails closed, and never runs a second reconciliation. Negative
+        // wait, so the short named window is intentional.
+        #expect(secondReconcileRan.wait(
+            timeout: .now() + TestConstants.negativeWaitWindow
+        ) == .timedOut)
 
         // The outer cleanup still completes and restores access.
-        #expect(outerCompleted.wait(timeout: .now() + 1) == .success)
+        #expect(outerCompleted.wait(
+            timeout: .now() + TestConstants.settleTimeout
+        ) == .success)
         var reconcileCount = 0
         #expect(gate.allowsAccess(reconcile: {
             reconcileCount += 1
