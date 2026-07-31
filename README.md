@@ -12,7 +12,7 @@ A decentralized peer-to-peer messaging app with dual transport architecture: loc
 
 ### Getting a copy you can trust
 
-Install from the App Store, or build from source you have verified. A compiled build from anywhere else cannot be verified — see [Verifying bitchat](docs/VERIFYING-A-BUILD.md) (including the notarized `.dmg` ask in #1097) for how to check source against the per-release hash manifest, and for what to do if that is the only build you can get.
+Install from the App Store, or build from source you have verified. A compiled build from anywhere else cannot be verified — see [Verifying bitchat](docs/VERIFYING-A-BUILD.md) (including the [notarized `.dmg` ask](https://github.com/permissionlesstech/bitchat/issues/1097)) for how to check source against the per-release hash manifest, and for what to do if that is the only build you can get.
 
 This matters more than it usually would: this repository has been the target of takedown demands, and when a repository or releases page disappears, mirrors appear that nobody can check.
 
