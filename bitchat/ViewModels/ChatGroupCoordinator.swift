@@ -105,16 +105,19 @@ extension ChatViewModel: ChatGroupContext {
         identityManager.isBlocked(fingerprint: fingerprint)
     }
 
+    /// Group state rides the mesh's Noise sessions only.
+    private var groupTransport: MeshGroupMessaging? { meshService as? MeshGroupMessaging }
+
     func sendGroupInvitePayload(_ payload: Data, to peerID: PeerID) {
-        meshService.sendGroupInvite(payload, to: peerID)
+        groupTransport?.sendGroupInvite(payload, to: peerID)
     }
 
     func sendGroupKeyUpdatePayload(_ payload: Data, to peerID: PeerID) {
-        meshService.sendGroupKeyUpdate(payload, to: peerID)
+        groupTransport?.sendGroupKeyUpdate(payload, to: peerID)
     }
 
     func broadcastGroupMessagePayload(_ payload: Data) {
-        meshService.broadcastGroupMessage(payload)
+        groupTransport?.broadcastGroupMessage(payload)
     }
 
     // MARK: CommandContextProvider group commands (parsed by CommandProcessor)

@@ -43,14 +43,14 @@ struct ChatViewModelRefactoringTests {
         transport.simulateConnect(peerID, nickname: "alice")
 
         let didResolve = await TestHelpers.waitUntil({ viewModel.getPeerIDForNickname("alice") != nil },
-                                                     timeout: TestConstants.shortTimeout)
+                                                     timeout: TestConstants.settleTimeout)
         #expect(didResolve)
         
         // Action: User types /msg command
         viewModel.sendMessage("/msg @alice Hello Private World")
 
         let didSend = await TestHelpers.waitUntil({ transport.sentPrivateMessages.count == 1 },
-                                                  timeout: TestConstants.shortTimeout)
+                                                  timeout: TestConstants.settleTimeout)
         #expect(didSend)
         
         // Assert:
@@ -74,7 +74,7 @@ struct ChatViewModelRefactoringTests {
         transport.simulateConnect(peerID, nickname: "troll")
 
         let didResolve = await TestHelpers.waitUntil({ viewModel.getPeerIDForNickname("troll") != nil },
-                                                     timeout: TestConstants.shortTimeout)
+                                                     timeout: TestConstants.settleTimeout)
         #expect(didResolve)
         
         // Action
@@ -83,7 +83,7 @@ struct ChatViewModelRefactoringTests {
         // Assert
         // Verify identity manager was called to block "fingerprint_123"
         let didBlock = await TestHelpers.waitUntil({ identity.isBlocked(fingerprint: "fingerprint_123") },
-                                                   timeout: TestConstants.shortTimeout)
+                                                   timeout: TestConstants.settleTimeout)
         #expect(didBlock)
     }
 
@@ -114,7 +114,7 @@ struct ChatViewModelRefactoringTests {
         // Wait for async processing with proper timeout
         let found = await TestHelpers.waitUntil(
             { viewModel.privateChats[senderID]?.first?.content == "Secret" },
-            timeout: TestConstants.defaultTimeout
+            timeout: TestConstants.settleTimeout
         )
 
         // Assert
@@ -140,7 +140,7 @@ struct ChatViewModelRefactoringTests {
             {
                 viewModel.publicMessages(for: .mesh).contains(where: { $0.content == "Public Hi" })
             },
-            timeout: TestConstants.defaultTimeout
+            timeout: TestConstants.settleTimeout
         )
 
         // Assert

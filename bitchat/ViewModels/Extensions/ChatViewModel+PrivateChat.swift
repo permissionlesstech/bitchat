@@ -97,14 +97,17 @@ extension ChatViewModel {
     /// `sendVoiceNote(at:)`, which live receivers absorb into the live bubble.
     @MainActor
     func makeVoiceCaptureSession() -> VoiceCaptureSession {
+        // Live voice rides the mesh only; frames are useful now or never,
+        // so a transport without the capability just drops them.
+        let voiceTransport = meshService as? MeshVoiceStreaming
         switch liveVoiceTarget() {
         case .peer(let peerID):
-            return PTTLiveVoiceSession(sendPacket: { [meshService] packet in
-                meshService.sendVoiceFrame(packet, to: peerID)
+            return PTTLiveVoiceSession(sendPacket: { packet in
+                voiceTransport?.sendVoiceFrame(packet, to: peerID)
             })
         case .publicMesh:
-            return PTTLiveVoiceSession(sendPacket: { [meshService] packet in
-                meshService.sendVoiceFrameBroadcast(packet)
+            return PTTLiveVoiceSession(sendPacket: { packet in
+                voiceTransport?.sendVoiceFrameBroadcast(packet)
             })
         case nil:
             SecureLogger.info("PTT: hold uses classic voice note (liveVoiceEnabled=\(PTTSettings.liveVoiceEnabled), dmSelected=\(selectedPrivateChatPeer != nil))", category: .session)

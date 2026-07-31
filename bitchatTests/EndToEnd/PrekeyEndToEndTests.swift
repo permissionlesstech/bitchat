@@ -87,7 +87,7 @@ struct PrekeyEndToEndTests {
         peer.sendBroadcastAnnounce()
         let published = await TestHelpers.waitUntil(
             { tap.first(ofType: .announce) != nil && tap.first(ofType: .prekeyBundle) != nil },
-            timeout: TestConstants.defaultTimeout
+            timeout: TestConstants.settleTimeout
         )
         #expect(published)
         return (
@@ -124,7 +124,7 @@ struct PrekeyEndToEndTests {
 
         let cached = await TestHelpers.waitUntil(
             { alice.prekeyBundleStore.hasUsableBundle(for: bob.noiseStaticPublicKeyData()) },
-            timeout: TestConstants.defaultTimeout
+            timeout: TestConstants.settleTimeout
         )
         #expect(cached)
 
@@ -138,7 +138,7 @@ struct PrekeyEndToEndTests {
         ))
         let deposited = await TestHelpers.waitUntil(
             { aliceOut.first(ofType: .courierEnvelope) != nil },
-            timeout: TestConstants.defaultTimeout
+            timeout: TestConstants.settleTimeout
         )
         #expect(deposited)
         let depositPacket = try #require(aliceOut.first(ofType: .courierEnvelope))
@@ -149,7 +149,7 @@ struct PrekeyEndToEndTests {
         carol._test_handlePacket(depositPacket, fromPeerID: alice.myPeerID, signingPublicKey: alice.noiseSigningPublicKeyData())
         let carried = await TestHelpers.waitUntil(
             { !carol.courierStore.isEmpty },
-            timeout: TestConstants.defaultTimeout
+            timeout: TestConstants.settleTimeout
         )
         #expect(carried)
 
@@ -158,7 +158,7 @@ struct PrekeyEndToEndTests {
         bob.sendBroadcastAnnounce()
         let reannounced = await TestHelpers.waitUntil(
             { bobOut.first(ofType: .announce) != nil },
-            timeout: TestConstants.defaultTimeout
+            timeout: TestConstants.settleTimeout
         )
         #expect(reannounced)
         let handoverTrigger = try #require(bobOut.first(ofType: .announce))
@@ -166,7 +166,7 @@ struct PrekeyEndToEndTests {
 
         let handedOver = await TestHelpers.waitUntil(
             { carolOut.first(ofType: .courierEnvelope) != nil },
-            timeout: TestConstants.defaultTimeout
+            timeout: TestConstants.settleTimeout
         )
         #expect(handedOver)
         let handoverPacket = try #require(carolOut.first(ofType: .courierEnvelope))
@@ -178,7 +178,7 @@ struct PrekeyEndToEndTests {
         bob._test_handlePacket(handoverPacket, fromPeerID: carol.myPeerID)
         let received = await TestHelpers.waitUntil(
             { !bobDelegate.snapshot().isEmpty },
-            timeout: TestConstants.defaultTimeout
+            timeout: TestConstants.settleTimeout
         )
         #expect(received)
 
@@ -207,7 +207,7 @@ struct PrekeyEndToEndTests {
         bob._test_handlePacket(redelivery, fromPeerID: carol.myPeerID)
         let redelivered = await TestHelpers.waitUntil(
             { bobDelegate.snapshot().count == 2 },
-            timeout: TestConstants.shortTimeout
+            timeout: TestConstants.negativeWaitWindow
         )
         #expect(!redelivered)
         #expect(bobDelegate.snapshot().count == 1)
@@ -235,7 +235,7 @@ struct PrekeyEndToEndTests {
         ))
         let deposited = await TestHelpers.waitUntil(
             { aliceOut.first(ofType: .courierEnvelope) != nil },
-            timeout: TestConstants.defaultTimeout
+            timeout: TestConstants.settleTimeout
         )
         #expect(deposited)
         let depositPacket = try #require(aliceOut.first(ofType: .courierEnvelope))
@@ -248,7 +248,7 @@ struct PrekeyEndToEndTests {
         bob._test_handlePacket(depositPacket, fromPeerID: alice.myPeerID, preseedPeer: false)
         let received = await TestHelpers.waitUntil(
             { !bobDelegate.snapshot().isEmpty },
-            timeout: TestConstants.defaultTimeout
+            timeout: TestConstants.settleTimeout
         )
         #expect(received)
         let delivered = try #require(bobDelegate.snapshot().first)
@@ -272,7 +272,7 @@ struct PrekeyEndToEndTests {
 
         let cached = await TestHelpers.waitUntil(
             { alice.prekeyBundleStore.hasUsableBundle(for: bob.noiseStaticPublicKeyData()) },
-            timeout: TestConstants.shortTimeout
+            timeout: TestConstants.negativeWaitWindow
         )
         #expect(!cached)
     }
@@ -310,7 +310,7 @@ struct PrekeyEndToEndTests {
 
         let cached = await TestHelpers.waitUntil(
             { alice.prekeyBundleStore.hasUsableBundle(for: bob.noiseStaticPublicKeyData()) },
-            timeout: TestConstants.shortTimeout
+            timeout: TestConstants.negativeWaitWindow
         )
         #expect(!cached)
     }
@@ -328,7 +328,7 @@ struct PrekeyEndToEndTests {
 
         let cached = await TestHelpers.waitUntil(
             { alice.prekeyBundleStore.hasUsableBundle(for: bob.noiseStaticPublicKeyData()) },
-            timeout: TestConstants.defaultTimeout
+            timeout: TestConstants.settleTimeout
         )
         #expect(cached)
         // The verified bundle now participates in Alice's sync rounds.
@@ -364,7 +364,7 @@ struct PrekeyEndToEndTests {
 
         let cached = await TestHelpers.waitUntil(
             { alice.prekeyBundleStore.hasUsableBundle(for: bob.noiseStaticPublicKeyData()) },
-            timeout: TestConstants.shortTimeout
+            timeout: TestConstants.negativeWaitWindow
         )
         #expect(!cached)
         #expect(!alice._test_hasGossipPrekeyBundle(for: bob.myPeerID))
@@ -396,7 +396,7 @@ struct PrekeyEndToEndTests {
 
         let cached = await TestHelpers.waitUntil(
             { alice.prekeyBundleStore.hasUsableBundle(for: bob.noiseStaticPublicKeyData()) },
-            timeout: TestConstants.shortTimeout
+            timeout: TestConstants.negativeWaitWindow
         )
         #expect(!cached)
         #expect(!alice._test_hasGossipPrekeyBundle(for: bob.myPeerID))
