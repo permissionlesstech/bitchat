@@ -67,12 +67,6 @@ enum AlternateAppIconSettings {
         }
     }
 
-    /// Current preference (UserDefaults). The App Info picker calls
-    /// `setSelected` directly — no setter here.
-    static var selected: Icon {
-        selected(in: .standard)
-    }
-
     static func selected(in defaults: UserDefaults) -> Icon {
         let raw = defaults.string(forKey: storageKey) ?? Icon.primary.rawValue
         return Icon(rawValue: raw) ?? .primary
