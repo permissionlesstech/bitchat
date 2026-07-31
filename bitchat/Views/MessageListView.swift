@@ -143,13 +143,23 @@ struct MessageListView: View {
                                     }
                                 }
                                 Button("content.message.copy") {
-                                    #if os(iOS)
-                                    UIPasteboard.general.string = message.content
-                                    #else
-                                    let pb = NSPasteboard.general
-                                    pb.clearContents()
-                                    pb.setString(message.content, forType: .string)
-                                    #endif
+                                    MessageClipboard.copyPlaintext(message.content)
+                                }
+                                if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                                   message.sender != "system" {
+                                    Button {
+                                        messageText = MessageClipboard.appendQuote(
+                                            to: messageText,
+                                            content: message.content,
+                                            sender: message.sender
+                                        )
+                                    } label: {
+                                        Text(String(
+                                            localized: "content.message.quote",
+                                            defaultValue: "quote in composer",
+                                            comment: "Context menu action that inserts a quoted copy of the message into the composer draft"
+                                        ))
+                                    }
                                 }
                                 if isResendableFailedMessage(message) {
                                     Button("content.actions.resend") {
