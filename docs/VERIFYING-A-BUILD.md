@@ -11,8 +11,9 @@ The honest summary is short. **Source can be verified. Compiled apps cannot, unl
 In order of how much verification is possible:
 
 1. **The App Store.** Apple verifies the developer signature, and the binary cannot be altered without breaking it. This is the only channel where a compiled build is verifiable end to end, and it is the right recommendation for almost everyone.
-2. **Build it yourself from verified source.** See below. Requires a Mac and Xcode, and gives you the strongest guarantee if you can do it.
-3. **A compiled build from anywhere else.** Not verifiable. See "Builds from other sources".
+2. **Maintainer TestFlight (when published).** Still Apple-signed; see "App Store fallbacks (TestFlight)". Prefer this over forum IPAs when the store itself is unreachable.
+3. **Build it yourself from verified source.** See below. Requires a Mac and Xcode, and gives you the strongest guarantee if you can do it.
+4. **A compiled build from anywhere else.** Not verifiable. See "Builds from other sources".
 
 ## Verifying source
 
