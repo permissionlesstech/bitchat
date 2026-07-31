@@ -103,6 +103,7 @@ Cutting a release:
 - Push the tag. `source-manifest.yml` runs and attaches `SOURCE-MANIFEST.txt` to the release; if the release does not exist yet, collect the manifest from the workflow artifact and attach it when you publish.
 - Sign the tag (`git tag -s`). A signed tag lets anyone verify the release came from a key you control, independent of GitHub. This needs a published key fingerprint to be useful — see the gap below.
 - Note the commit hash somewhere outside this repository. If the repository is taken down, a hash recorded elsewhere is what lets people verify a mirror.
+- If/when notarized Developer ID `.dmg` artifacts exist, attach them to the same release as `SOURCE-MANIFEST.txt` and link them from the "macOS Developer ID" section above.
 
 Known gaps, so nobody assumes more protection than exists:
 
