@@ -39,10 +39,20 @@ struct GroupChatRow: Identifiable, Equatable {
     var id: String { peerID.id }
 }
 
+struct RecentDirectRow: Identifiable, Equatable {
+    let peerID: PeerID
+    let displayName: String
+    let hasUnread: Bool
+    let preview: String
+
+    var id: String { peerID.id }
+}
+
 @MainActor
 final class PeerListModel: ObservableObject {
     @Published private(set) var allPeers: [BitchatPeer] = []
     @Published private(set) var meshRows: [MeshPeerRow] = []
+    @Published private(set) var recentDirectRows: [RecentDirectRow] = []
     @Published private(set) var geohashPeople: [GeohashPersonRow] = []
     @Published private(set) var groupRows: [GroupChatRow] = []
     @Published private(set) var reachableMeshPeerCount = 0
@@ -137,6 +147,13 @@ final class PeerListModel: ObservableObject {
             .store(in: &cancellables)
 
         conversations.$unreadConversations
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refresh()
+            }
+            .store(in: &cancellables)
+
+        conversations.$conversationIDs
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.refresh()
@@ -239,14 +256,19 @@ final class PeerListModel: ObservableObject {
 
         let geohashPeople = buildGeohashPeople()
         let groupRows = buildGroupRows()
+        let recentDirectRows = buildRecentDirectRows(excluding: myPeerID)
 
         self.meshRows = meshRows
+        self.recentDirectRows = recentDirectRows
         reachableMeshPeerCount = meshCounts.reachable
         connectedMeshPeerCount = meshCounts.connected
         self.geohashPeople = geohashPeople
         visibleGeohashPeerCount = geohashPeople.count
         self.groupRows = groupRows
         renderID = (
+            recentDirectRows.map {
+                "recent:\($0.id)-\($0.hasUnread)-\($0.displayName)-\($0.preview)"
+            } +
             meshRows.map {
                 "\($0.id)-\($0.displayName)-\($0.isConnected)-\($0.isReachable)-\($0.hasUnread)-\($0.isFavorite)-\($0.isBlocked)"
             } +
@@ -257,6 +279,29 @@ final class PeerListModel: ObservableObject {
                 "group:\($0.id)-\($0.name)-\($0.memberCount)-\($0.hasUnread)"
             }
         ).joined(separator: "|")
+    }
+
+    private func buildRecentDirectRows(excluding myPeerID: PeerID) -> [RecentDirectRow] {
+        let messagesByPeer = conversations.directMessagesByRoutingPeerID()
+        return conversations.recentDirectRoutingPeerIDs(limit: 8).compactMap { peerID in
+            guard peerID != myPeerID else { return nil }
+            let messages = messagesByPeer[peerID] ?? []
+            guard let last = messages.last else { return nil }
+            let preview = last.content
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let clipped: String
+            if preview.count > 48 {
+                clipped = String(preview.prefix(45)) + "…"
+            } else {
+                clipped = preview
+            }
+            return RecentDirectRow(
+                peerID: peerID,
+                displayName: chatViewModel.nicknameForPeer(peerID),
+                hasUnread: chatViewModel.hasUnreadMessages(for: peerID),
+                preview: clipped
+            )
+        }
     }
 
     private func buildGroupRows() -> [GroupChatRow] {

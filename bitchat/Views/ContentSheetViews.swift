@@ -366,6 +366,19 @@ private struct ContentPeopleListView: View {
                             }
                         )
                     } else {
+                        if !peerListModel.recentDirectRows.isEmpty {
+                            PeopleSectionHeader(
+                                icon: "bubble.left.and.bubble.right",
+                                iconColor: palette.accentBlue,
+                                title: String(localized: "content.people.recent_messages", defaultValue: "recent messages", comment: "People sheet section header for recent private message threads")
+                            )
+                            RecentDirectMessagesList(
+                                onTapPeer: { peerID in
+                                    peerListModel.startConversation(with: peerID)
+                                    showSidebar = true
+                                }
+                            )
+                        }
                         PeopleSectionHeader(
                             icon: "antenna.radiowaves.left.and.right",
                             iconColor: palette.accentBlue,

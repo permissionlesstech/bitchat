@@ -821,6 +821,29 @@ extension ConversationID {
 }
 
 extension ConversationStore {
+    /// Routing peer IDs for direct conversations with at least one message,
+    /// newest activity first. Caps at `limit` so the people sheet stays short.
+    func recentDirectRoutingPeerIDs(limit: Int = 8) -> [PeerID] {
+        var scored: [(peerID: PeerID, last: Date)] = []
+        scored.reserveCapacity(conversationsByID.count)
+        for (id, conversation) in conversationsByID {
+            guard case .direct(let handle) = id else { continue }
+            guard let last = conversation.messages.last else { continue }
+            scored.append((handle.routingPeerID, last.timestamp))
+        }
+        scored.sort { $0.last > $1.last }
+
+        var seen = Set<PeerID>()
+        var result: [PeerID] = []
+        result.reserveCapacity(min(limit, scored.count))
+        for entry in scored {
+            guard seen.insert(entry.peerID).inserted else { continue }
+            result.append(entry.peerID)
+            if result.count == limit { break }
+        }
+        return result
+    }
+
     /// All direct conversations' messages keyed by routing peer ID — the
     /// shape `ChatViewModel.privateChats` exposes to the coordinators.
     /// Values are the conversations' backing arrays (COW), so building this
