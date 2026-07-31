@@ -67,11 +67,10 @@ enum AlternateAppIconSettings {
         }
     }
 
-    // periphery:ignore - convenience for iOS settings; storage APIs below are
-    // what panic wipe and tests exercise on the macOS scan.
+    /// Current preference (UserDefaults). The App Info picker calls
+    /// `setSelected` directly — no setter here.
     static var selected: Icon {
-        get { selected(in: .standard) }
-        set { setSelected(newValue, in: .standard, applySystem: true) }
+        selected(in: .standard)
     }
 
     static func selected(in defaults: UserDefaults) -> Icon {
@@ -95,9 +94,12 @@ enum AlternateAppIconSettings {
         apply(selected(in: .standard))
     }
 
+    /// Panic wipe clears the *stored* preference only — do not call `apply`.
+    /// `setAlternateIconName` pops a system alert that names "bitchat", which
+    /// would un-disguise the phone at the worst moment. The home-screen glyph
+    /// stays until the next intentional picker change or relaunch policy.
     static func reset(in defaults: UserDefaults = .standard) {
         defaults.removeObject(forKey: storageKey)
-        apply(.primary)
     }
 
     private static func apply(_ icon: Icon) {
