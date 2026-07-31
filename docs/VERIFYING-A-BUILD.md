@@ -83,7 +83,7 @@ Do not rely on the app looking right. A modified build has no reason to look dif
 ## macOS Developer ID / notarized `.dmg` (#1097)
 
 A notarized Developer ID `.dmg` attached to GitHub Releases would give macOS
-users a sideload path that still carries Apple's signature chain — stronger
+people a sideload path that still carries Apple's signature chain — stronger
 than an unsigned forum binary, weaker than the App Store for verification
 storytelling, and useful when the store is unreachable.
 
