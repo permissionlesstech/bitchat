@@ -160,17 +160,12 @@ struct ContentComposerView: View {
         .themedChromePanel(edge: .bottom)
         .onDisappear {
             autocompleteDebounceTimer?.invalidate()
+            autocorrectTraitTimer?.invalidate()
         }
     }
 }
 
 private extension ContentComposerView {
-    /// Mirror autocomplete's end-of-string caret: SwiftUI's TextField doesn't
-    /// expose selection, and suggestions already assume the caret is at the end.
-    var shouldDisableAutocorrect: Bool {
-        ComposerAutocorrect.shouldDisable(for: messageText, cursorPosition: messageText.count)
-    }
-
     /// Debounce trait flips so UIKit isn't asked to reload the keyboard on
     /// every character while the user is still deciding the token.
     func scheduleAutocorrectTraitUpdate(for text: String) {
