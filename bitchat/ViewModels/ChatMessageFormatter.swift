@@ -41,7 +41,9 @@ final class ChatMessageFormatter {
         }()
 
         let isDark = colorScheme == .dark
-        if let cachedText = message.getCachedFormattedText(isDark: isDark, isSelf: isSelf, variant: theme.formatCacheVariant) {
+        let isVerifiedSender = !isSelf && isVerifiedSender(of: message)
+        let cacheVariant = theme.formatCacheVariant + (isVerifiedSender ? "-vf" : "")
+        if let cachedText = message.getCachedFormattedText(isDark: isDark, isSelf: isSelf, variant: cacheVariant) {
             return cachedText
         }
 
@@ -65,6 +67,9 @@ final class ChatMessageFormatter {
                 var suffixStyle = senderStyle
                 suffixStyle.foregroundColor = baseColor.opacity(0.6)
                 result.append(AttributedString(suffix).mergingAttributes(suffixStyle))
+            }
+            if isVerifiedSender {
+                appendVerifiedSeal(to: &result, baseColor: baseColor, design: design)
             }
             result.append(AttributedString("> ").mergingAttributes(senderStyle))
 
@@ -183,7 +188,8 @@ final class ChatMessageFormatter {
                 allMatches.sort { $0.range.location < $1.range.location }
 
                 var lastEnd = content.startIndex
-                let isMentioned = message.mentions?.contains(viewModel.nickname) ?? false
+                let myNickname = viewModel.nickname.normalizedNickname
+                let isMentioned = message.mentions?.contains { $0.normalizedNickname == myNickname } ?? false
 
                 for (range, type) in allMatches {
                     guard let swiftRange = Range(range, in: content) else { continue }
@@ -335,7 +341,7 @@ final class ChatMessageFormatter {
             result.append(timestamp.mergingAttributes(timestampStyle))
         }
 
-        message.setCachedFormattedText(result, isDark: isDark, isSelf: isSelf, variant: theme.formatCacheVariant)
+        message.setCachedFormattedText(result, isDark: isDark, isSelf: isSelf, variant: cacheVariant)
         return result
     }
 
@@ -356,6 +362,7 @@ final class ChatMessageFormatter {
 
         let isDark = colorScheme == .dark
         let baseColor: Color = isSelf ? .orange : peerColor(for: message, isDark: isDark)
+        let isVerifiedSender = !isSelf && isVerifiedSender(of: message)
 
         if message.sender == "system" {
             var style = AttributeContainer()
@@ -380,6 +387,9 @@ final class ChatMessageFormatter {
             var suffixStyle = senderStyle
             suffixStyle.foregroundColor = baseColor.opacity(0.6)
             result.append(AttributedString(suffix).mergingAttributes(suffixStyle))
+        }
+        if isVerifiedSender {
+            appendVerifiedSeal(to: &result, baseColor: baseColor, design: design)
         }
         result.append(AttributedString("> ").mergingAttributes(senderStyle))
         return result
@@ -427,6 +437,29 @@ final class ChatMessageFormatter {
 }
 
 private extension ChatMessageFormatter {
+    /// Whether the message sender has a fingerprint the user has verified.
+    /// Used for the in-chat seal next to `<@name>` so verification is visible
+    /// without opening the fingerprint sheet (#1439).
+    func isVerifiedSender(of message: BitchatMessage) -> Bool {
+        guard let peerID = message.senderPeerID,
+              let fingerprint = viewModel.getFingerprint(for: peerID) else {
+            return false
+        }
+        return viewModel.peerIdentityStore.isVerified(fingerprint)
+    }
+
+    func appendVerifiedSeal(
+        to result: inout AttributedString,
+        baseColor: Color,
+        design: Font.Design
+    ) {
+        var sealStyle = AttributeContainer()
+        // Match the peer-list verified seal: filled checkmark in the sender tint.
+        sealStyle.foregroundColor = baseColor
+        sealStyle.font = .bitchatSystem(size: 11, weight: .semibold, design: design)
+        result.append(AttributedString(" ✓").mergingAttributes(sealStyle))
+    }
+
     func peerColor(for message: BitchatMessage, isDark: Bool) -> Color {
         if let spid = message.senderPeerID {
             if spid.isGeoChat || spid.isGeoDM {

@@ -31,6 +31,10 @@ protocol ChatComposerContext: AnyObject {
     /// The transport's own nickname (excluded from autocomplete candidates).
     var meshNickname: String { get }
     func meshPeerNicknames() -> [PeerID: String]
+    /// True when this mesh nickname belongs to a blocked peer.
+    func isMeshNicknameBlocked(_ nickname: String) -> Bool
+    /// True when this geohash pubkey is blocked for location chats.
+    func isNostrBlocked(pubkeyHexLowercased: String) -> Bool
 
     // MARK: Geohash identity (shared with the other contexts)
     var geoNicknames: [String: String] { get }
@@ -40,8 +44,8 @@ protocol ChatComposerContext: AnyObject {
 extension ChatViewModel: ChatComposerContext {
     // `autocompleteSuggestions`, `autocompleteRange`, `showAutocomplete`,
     // `selectedAutocompleteIndex`, `nickname`, `myPeerID`, `activeChannel`,
-    // `geoNicknames`, `meshPeerNicknames()`, and
-    // `deriveNostrIdentity(forGeohash:)` are shared requirements with the
+    // `geoNicknames`, `meshPeerNicknames()`, `isNostrBlocked(pubkeyHexLowercased:)`,
+    // and `deriveNostrIdentity(forGeohash:)` are shared requirements with the
     // other contexts or satisfied by existing `ChatViewModel` members. The
     // members below flatten nested service accesses into intent-named calls.
 
@@ -59,6 +63,13 @@ extension ChatViewModel: ChatComposerContext {
 
     var meshNickname: String {
         meshService.myNickname
+    }
+
+    func isMeshNicknameBlocked(_ nickname: String) -> Bool {
+        for (peerID, nick) in meshService.getPeerNicknames() where nick == nickname {
+            if isPeerBlocked(peerID) { return true }
+        }
+        return false
     }
 }
 
@@ -136,11 +147,14 @@ private extension ChatComposerCoordinator {
         switch context.activeChannel {
         case .mesh:
             let values = context.meshPeerNicknames().values
-            return Array(values.filter { $0 != context.meshNickname })
+            return Array(values.filter { nick in
+                nick != context.meshNickname && !context.isMeshNicknameBlocked(nick)
+            })
 
         case .location(let channel):
             var tokens = Set<String>()
             for (pubkey, nick) in context.geoNicknames {
+                guard !context.isNostrBlocked(pubkeyHexLowercased: pubkey) else { continue }
                 tokens.insert("\(nick)#\(pubkey.suffix(4))")
             }
             if let identity = try? context.deriveNostrIdentity(forGeohash: channel.geohash) {
