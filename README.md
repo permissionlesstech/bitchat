@@ -14,8 +14,6 @@ A decentralized peer-to-peer messaging app with dual transport architecture: loc
 
 Install from the App Store, or build from source you have verified. A compiled build from anywhere else cannot be verified — see [Verifying bitchat](docs/VERIFYING-A-BUILD.md) for how to check source against the per-release hash manifest, and for what to do if that is the only build you can get.
 
-Cross-platform image and voice note issues (especially Android → iOS): see [Media interop](docs/MEDIA-INTEROP.md).
-
 This matters more than it usually would: this repository has been the target of takedown demands, and when a repository or releases page disappears, mirrors appear that nobody can check.
 
 ## License
@@ -30,6 +28,7 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 - **Decentralized Mesh Network**: Automatic peer discovery and multi-hop message relay over Bluetooth LE
 - **Privacy First**: No accounts, no phone numbers, no servers. Note that the mesh does use a persistent per-device identifier derived from your identity key — see [the whitepaper](WHITEPAPER.md) on identity and metadata for what a nearby radio can observe
 - **Private Message End-to-End Encryption**: [Noise Protocol](https://noiseprotocol.org) for mesh, BitChat private envelopes for Nostr fallback
+- **Cross-platform media troubleshooting**: Android ↔ iOS image/voice note drops — see [Media interop](docs/MEDIA-INTEROP.md)
 - **IRC-Style Commands**: Familiar `/slap`, `/msg`, `/who` style interface
 - **Universal App**: Native support for iOS and macOS
 - **Emergency Wipe**: Triple-tap to instantly clear all data

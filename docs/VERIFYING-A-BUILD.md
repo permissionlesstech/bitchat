@@ -91,5 +91,6 @@ Known gaps, so nobody assumes more protection than exists:
 
 - **No published signing key.** Tags are not currently verifiable against a known key. Publishing a fingerprint through channels independent of GitHub, and signing tags with it from then on, is the missing piece.
 - **No verifiable compiled builds outside the App Store.** Closing this needs either a signed-and-notarized release pipeline or a reproducible build, and until one exists the guidance above stands.
-- **No non-GitHub source mirror.** Every remote for this project is on the platform the takedown demands were served to. A mirror on independent infrastructure, published before it is needed, would mean a takedown does not remove the ability to verify.- **App Store iOS builds can lag Android private-media fixes.** See docs/MEDIA-INTEROP.md and #1518 before treating silent Android→iOS image drops as MIME bugs.
+- **No non-GitHub source mirror.** Every remote for this project is on the platform the takedown demands were served to. A mirror on independent infrastructure, published before it is needed, would mean a takedown does not remove the ability to verify.
+- **App Store iOS builds can lag Android private-media fixes.** See [docs/MEDIA-INTEROP.md](MEDIA-INTEROP.md) and [#1518](https://github.com/permissionlesstech/bitchat/issues/1518) before treating silent Android→iOS image drops as MIME bugs. App Store **1.7.1** includes the July private-media stack (#1434/#1466/#1467); **1.7.0** already included #1402.
 
