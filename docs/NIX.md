@@ -34,3 +34,8 @@ explicitly in a follow-up rather than expanding this flake by default.
 If you have Nix installed, run `nix flake lock` and commit `flake.lock` so the
 nixpkgs input is pinned for everyone.
 
+## CI
+
+GitHub Actions continues to use macOS runners with Xcode. This flake is for
+local contributor convenience only and is not wired into CI yet.
+
