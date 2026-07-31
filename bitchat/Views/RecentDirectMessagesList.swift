@@ -1,4 +1,5 @@
 import SwiftUI
+import BitFoundation
 
 /// Compact recent-DM rows for the people sheet — reopen past private threads
 /// without hunting through the full mesh / favorites lists (#615).
@@ -49,7 +50,11 @@ struct RecentDirectMessagesList: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(row.displayName)
+                .accessibilityLabel(
+                    row.hasUnread
+                        ? "\(row.displayName), \(Strings.unread)"
+                        : row.displayName
+                )
                 .accessibilityHint(Strings.openDMHint)
             }
         }

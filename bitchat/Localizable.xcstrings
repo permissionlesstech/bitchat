@@ -39029,25 +39029,24 @@
       }
     },
         "content.people.recent_messages" : {
-      "comment" : "People sheet section header for recent private message threads",
       "extractionState" : "manual",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "الرسائل الأخيرة"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "সাম্প্রতিক বার্তা"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "letzte nachrichten"
           }
         },
         "en" : {
@@ -39059,157 +39058,157 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "mensajes recientes"
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "پیام‌های اخیر"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "mga kamakailang mensahe"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "messages récents"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "הודעות אחרונות"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "हाल के संदेश"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "pesan terbaru"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "messaggi recenti"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "最近のメッセージ"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "최근 메시지"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "mesej terbaru"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "हालका सन्देशहरू"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "recente berichten"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "ostatnie wiadomości"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "mensagens recentes"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "mensagens recentes"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "недавние сообщения"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "senaste meddelanden"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "சமீபத்திய செய்திகள்"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "ข้อความล่าสุด"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "son mesajlar"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "нещодавні повідомлення"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "حالیہ پیغامات"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "tin nhắn gần đây"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "最近的消息"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recent messages"
+            "value" : "最近的訊息"
           }
         }
       }

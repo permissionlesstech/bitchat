@@ -167,6 +167,16 @@ final class PeerListModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // New/updated messages in an existing thread must refresh ordering and
+        // preview while the people sheet is open — conversationIDs alone does
+        // not change for those mutations.
+        conversations.changes
+            .debounce(for: .milliseconds(120), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refresh()
+            }
+            .store(in: &cancellables)
+
         chatViewModel.groupStore.$groups
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -274,7 +284,9 @@ final class PeerListModel: ObservableObject {
         self.groupRows = groupRows
         renderID = (
             recentDirectRows.map {
-                "recent:\($0.id)-\($0.hasUnread)-\($0.displayName)-\($0.preview)"
+                // Hash the preview so a `|` inside message text cannot collide
+                // with the render-id separator and skip a re-render.
+                "recent:\($0.id)-\($0.hasUnread)-\($0.displayName)-\($0.preview.stableRenderHash)"
             } +
             meshRows.map {
                 "\($0.id)-\($0.displayName)-\($0.isConnected)-\($0.isReachable)-\($0.hasUnread)-\($0.isFavorite)-\($0.isBlocked)"
@@ -295,23 +307,30 @@ final class PeerListModel: ObservableObject {
             guard peerID != myPeerID else { return nil }
             // Already in that thread — no need to list it again here.
             guard peerID != selected else { return nil }
+            // Match mesh rows: blocked people stay out of the people sheet.
+            guard !chatViewModel.isPeerBlocked(peerID) else { return nil }
             let messages = messagesByPeer[peerID] ?? []
             guard let last = messages.last else { return nil }
-            let preview = last.content
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            let clipped: String
-            if preview.count > 48 {
-                clipped = String(preview.prefix(45)) + "…"
-            } else {
-                clipped = preview
-            }
+            let preview = Self.friendlyRecentPreview(last.content)
             return RecentDirectRow(
                 peerID: peerID,
                 displayName: chatViewModel.nicknameForPeer(peerID),
                 hasUnread: chatViewModel.hasUnreadMessages(for: peerID),
-                preview: clipped
+                preview: preview
             )
         }
+    }
+
+    /// Strip media placeholder filenames (`[image] <uuid>.jpg`) down to a
+    /// short type marker so the recent-DM preview stays readable.
+    private static func friendlyRecentPreview(_ content: String) -> String {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("[image]") { return "[image]" }
+        if trimmed.hasPrefix("[voice]") { return "[voice]" }
+        if trimmed.count > 48 {
+            return String(trimmed.prefix(45)) + "…"
+        }
+        return trimmed
     }
 
     private func buildGroupRows() -> [GroupChatRow] {
@@ -350,5 +369,17 @@ final class PeerListModel: ObservableObject {
         }
 
         return identity.publicKeyHex.lowercased()
+    }
+}
+
+private extension String {
+    /// Stable within-process digest for render-id segments — avoids embedding
+    /// raw message text (and `|` separators) in the joined render token.
+    var stableRenderHash: String {
+        var hash: UInt64 = 5381
+        for byte in utf8 {
+            hash = ((hash << 5) &+ hash) &+ UInt64(byte)
+        }
+        return String(hash, radix: 16)
     }
 }
