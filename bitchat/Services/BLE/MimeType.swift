@@ -18,6 +18,11 @@ extension UTType {
 }
 
 // MARK: - MimeType Enum
+//
+// Android send paths use `image/jpeg` and `audio/mp4` (see bitchat-android
+// docs/file_transfer.md). Keep those strings in `allowed` and document
+// changes in docs/MEDIA-INTEROP.md — silent MIME REJECT drops are a common
+// false lead for Android → iOS reports (#1518).
 
 enum MimeType: CaseIterable, Hashable {
     case jpeg
