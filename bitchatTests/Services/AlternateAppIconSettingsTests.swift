@@ -3,9 +3,13 @@ import Testing
 @testable import bitchat
 
 struct AlternateAppIconSettingsTests {
-    private func makeDefaults() -> UserDefaults {
+    private func makeDefaults() -> (suite: String, defaults: UserDefaults) {
         let suite = "bitchat.tests.alticon.\(UUID().uuidString)"
-        return UserDefaults(suiteName: suite)!
+        return (suite, UserDefaults(suiteName: suite)!)
+    }
+
+    private func cleanup(_ suite: String) {
+        UserDefaults().removePersistentDomain(forName: suite)
     }
 
     @Test func primarySystemNameIsNil() {
@@ -24,7 +28,8 @@ struct AlternateAppIconSettingsTests {
     }
 
     @Test func selectedPersistsRawValueWithoutTouchingSystem() {
-        let defaults = makeDefaults()
+        let (suite, defaults) = makeDefaults()
+        defer { cleanup(suite) }
         #expect(AlternateAppIconSettings.selected(in: defaults) == .primary)
 
         AlternateAppIconSettings.setSelected(.notes, in: defaults, applySystem: false)
@@ -36,10 +41,12 @@ struct AlternateAppIconSettingsTests {
         #expect(AlternateAppIconSettings.selected(in: defaults) == .primary)
     }
 
-    @Test func resetClearsStoredPreference() {
-        let defaults = makeDefaults()
+    @Test func resetClearsStoredPreferenceWithoutApplyingPrimary() {
+        let (suite, defaults) = makeDefaults()
+        defer { cleanup(suite) }
         AlternateAppIconSettings.setSelected(.quiet, in: defaults, applySystem: false)
-        defaults.removeObject(forKey: AlternateAppIconSettings.storageKey)
+        AlternateAppIconSettings.reset(in: defaults)
+        #expect(defaults.string(forKey: AlternateAppIconSettings.storageKey) == nil)
         #expect(AlternateAppIconSettings.selected(in: defaults) == .primary)
     }
 }
