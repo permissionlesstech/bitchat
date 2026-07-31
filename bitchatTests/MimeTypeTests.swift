@@ -87,4 +87,12 @@ struct MimeTypeTests {
         #expect(MimeType.octetStream.matches(data: randomData),
                 "application/octet-stream should always be considered valid")
     }
+
+    /// Android MediaSendingManager emits these exact strings today.
+    @Test func androidCanonicalSendMimesAreAccepted() {
+        #expect(MimeType("image/jpeg") == .jpeg)
+        #expect(MimeType("audio/mp4") == .mp4Audio)
+        #expect(MimeType("image/jpeg")?.isAllowed == true)
+        #expect(MimeType("audio/mp4")?.isAllowed == true)
+    }
 }
