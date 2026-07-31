@@ -110,13 +110,4 @@ struct NostrEmbeddedBitChat {
         // Fallback: return as-is (expecting 16 hex chars) – caller should pass a valid peer ID
         return recipientPeerID
     }
-
-    /// Base64url encode without padding
-    private static func base64URLEncode(_ data: Data) -> String {
-        let b64 = data.base64EncodedString()
-        return b64
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
-    }
 }
