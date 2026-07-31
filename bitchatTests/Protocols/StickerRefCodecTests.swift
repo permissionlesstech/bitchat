@@ -128,6 +128,28 @@ struct StickerRefCodecTests {
         #expect(StickerRefCodec.parse("\u{1F}sticker\u{1F}30031:\(pubkey):pack\u{1F}\u{1F}\(sha256)") == nil) // empty shortcode field
     }
 
+    // MARK: - Truncated / oversized wire input
+
+    @Test func rejectsTruncatedAndOversizedWireRefs() {
+        let wire = "\u{1F}sticker\u{1F}30031:\(pubkey):pack\u{1F}wave\u{1F}\(sha256)"
+
+        // Truncated at a field boundary, mid-hash, and mid-tag: a cut
+        // packet must never parse as a valid ref.
+        for cut in [wire.count - 1, wire.count - 32, wire.count / 2, 9, 1] {
+            #expect(StickerRefCodec.parse(String(wire.prefix(cut))) == nil)
+        }
+        // Valid framing with a hash truncated to 63 chars.
+        #expect(StickerRefCodec.parse("\u{1F}sticker\u{1F}30031:\(pubkey):pack\u{1F}wave\u{1F}\(String(sha256.dropLast()))") == nil)
+
+        // Oversized fields (64KiB) must be rejected by the length guards
+        // before any field is trusted, so a bad packet cannot make the
+        // decoder retain an inflated buffer.
+        let huge = String(repeating: "a", count: 65_536)
+        #expect(StickerRefCodec.parse("\u{1F}sticker\u{1F}30031:\(pubkey):\(huge)\u{1F}wave\u{1F}\(sha256)") == nil)
+        #expect(StickerRefCodec.parse("\u{1F}sticker\u{1F}30031:\(pubkey):pack\u{1F}\(huge)\u{1F}\(sha256)") == nil)
+        #expect(StickerRefCodec.parse("\u{1F}sticker\u{1F}30031:\(pubkey):pack\u{1F}wave\u{1F}\(huge)") == nil)
+    }
+
     // MARK: - Never-crash fuzz-ish
 
     @Test func pathologicalInputsNeverCrashAndNeverParse() {
