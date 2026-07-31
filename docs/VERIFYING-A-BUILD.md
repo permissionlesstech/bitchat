@@ -79,6 +79,23 @@ What to do instead, in order of preference: install from the App Store; build fr
 
 Do not rely on the app looking right. A modified build has no reason to look different.
 
+
+## macOS Developer ID / notarized `.dmg` (#1097)
+
+A notarized Developer ID `.dmg` attached to GitHub Releases would give macOS
+users a sideload path that still carries Apple's signature chain — stronger
+than an unsigned forum binary, weaker than the App Store for verification
+storytelling, and useful when the store is unreachable.
+
+Status on main today:
+
+- Tagged releases already ship an **attested source manifest** (build from
+  verified source remains the supported non–App Store path).
+- There is **no** published notarized `.dmg` yet — that needs release-signing
+  infrastructure and a maintainer decision on key custody.
+- Until that lands, treat any third-party `.dmg` / `.app` the same as other
+  unverifiable compiled builds above.
+
 ## For maintainers
 
 Cutting a release:
