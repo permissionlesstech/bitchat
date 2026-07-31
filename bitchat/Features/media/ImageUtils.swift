@@ -73,10 +73,24 @@ enum ImageUtils {
                 }
             }
 
-            let outputURL = try makeOutputURL(
-                outputDirectory: outputDirectory,
-                reservingBytes: jpegData.count
-            )
+            let outputURL = try makeOutputURL(outputDirectory: outputDirectory)
+            let reservation: BLEIncomingFileStore.QuotaByteReservation?
+            if outputDirectory == nil {
+                // Hold headroom only for the default Application Support tree;
+                // test / custom directories skip quota. Release even if the
+                // write throws so a failed encode→disk handoff cannot leak.
+                reservation = BLEIncomingFileStore.shared.reserveQuotaBytes(
+                    jpegData.count,
+                    scope: .outgoing
+                )
+            } else {
+                reservation = nil
+            }
+            defer {
+                if let reservation {
+                    BLEIncomingFileStore.shared.releaseQuotaReservation(reservation)
+                }
+            }
             try jpegData.write(to: outputURL, options: .atomic)
             return outputURL
         }
@@ -154,10 +168,21 @@ enum ImageUtils {
                     }
                 }
             }
-            let outputURL = try makeOutputURL(
-                outputDirectory: outputDirectory,
-                reservingBytes: jpegData.count
-            )
+            let outputURL = try makeOutputURL(outputDirectory: outputDirectory)
+            let reservation: BLEIncomingFileStore.QuotaByteReservation?
+            if outputDirectory == nil {
+                reservation = BLEIncomingFileStore.shared.reserveQuotaBytes(
+                    jpegData.count,
+                    scope: .outgoing
+                )
+            } else {
+                reservation = nil
+            }
+            defer {
+                if let reservation {
+                    BLEIncomingFileStore.shared.releaseQuotaReservation(reservation)
+                }
+            }
             try jpegData.write(to: outputURL, options: .atomic)
             return outputURL
         }
@@ -201,7 +226,7 @@ enum ImageUtils {
     }
     #endif
 
-    private static func makeOutputURL(outputDirectory: URL? = nil, reservingBytes: Int = 0) throws -> URL {
+    private static func makeOutputURL(outputDirectory: URL? = nil) throws -> URL {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd_HHmmss"
         let fileName = "img_\(formatter.string(from: Date()))_\(UUID().uuidString).jpg"
@@ -212,7 +237,7 @@ enum ImageUtils {
         } else {
             // Default Application Support outgoing tree shares the process-wide
             // store with BLE deletion/delivery so quota exclusions stay live.
-            BLEIncomingFileStore.shared.enforceOutgoingQuota(reservingBytes: reservingBytes)
+            // Callers reserve/release quota bytes around the write itself.
             directory = try applicationFilesDirectory().appendingPathComponent("images/outgoing", isDirectory: true)
         }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: BLEIncomingFileStore.mediaProtectionAttributes)

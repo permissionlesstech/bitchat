@@ -73,6 +73,9 @@ actor VoiceRecorder {
     /// True only while `startRecording()` is suspended in session acquire.
     /// A second start is rejected instead of superseding the first one.
     private var startInFlight = false
+    /// Held outgoing quota headroom for the in-flight capture; released on
+    /// stop, cancel, start failure, and panic cancel.
+    private var quotaReservation: BLEIncomingFileStore.QuotaByteReservation?
 
     init(
         sessionCoordinator: AudioSessionCoordinator = .shared,
@@ -171,6 +174,7 @@ actor VoiceRecorder {
             return newURL
         } catch {
             releaseSessionToken()
+            releaseQuotaReservation()
             recorder = nil
             currentURL = nil
             activeOwner = nil
@@ -189,12 +193,14 @@ actor VoiceRecorder {
         if startInFlight {
             activeOwner = nil
             startInFlight = false
+            releaseQuotaReservation()
             return nil
         }
 
         guard let activeRecorder = recorder else {
             let sessionURL = currentURL
             releaseSessionToken()
+            releaseQuotaReservation()
             currentURL = nil
             activeOwner = nil
             return sessionURL
@@ -221,6 +227,7 @@ actor VoiceRecorder {
             activeRecorder.stop()
         }
         releaseSessionToken()
+        releaseQuotaReservation()
         self.recorder = nil
         currentURL = nil
         activeOwner = nil
@@ -240,6 +247,7 @@ actor VoiceRecorder {
             recorder.stop()
         }
         releaseSessionToken()
+        releaseQuotaReservation()
         if let currentURL {
             try? FileManager.default.removeItem(at: currentURL)
         }
@@ -303,8 +311,13 @@ actor VoiceRecorder {
         if let outputDirectory {
             baseDirectory = outputDirectory
         } else {
-            BLEIncomingFileStore.shared.enforceOutgoingQuota(
-                reservingBytes: FileTransferLimits.maxVoiceNoteBytes
+            // Reserve worst-case note size for the whole capture. Released on
+            // stop / cancel / start failure so a abandoned hold cannot keep
+            // the outgoing budget permanently tighter.
+            releaseQuotaReservation()
+            quotaReservation = BLEIncomingFileStore.shared.reserveQuotaBytes(
+                FileTransferLimits.maxVoiceNoteBytes,
+                scope: .outgoing
             )
             baseDirectory = try applicationFilesDirectory()
                 .appendingPathComponent("voicenotes/outgoing", isDirectory: true)
@@ -315,6 +328,12 @@ actor VoiceRecorder {
             attributes: BLEIncomingFileStore.mediaProtectionAttributes
         )
         return baseDirectory.appendingPathComponent(fileName)
+    }
+
+    private func releaseQuotaReservation() {
+        guard let quotaReservation else { return }
+        BLEIncomingFileStore.shared.releaseQuotaReservation(quotaReservation)
+        self.quotaReservation = nil
     }
 
     private func applicationFilesDirectory() throws -> URL {

@@ -107,10 +107,22 @@ struct BLEIncomingFileStore: @unchecked Sendable {
         fileprivate let id: UUID
     }
 
+    /// Held headroom for a multi-step write (image encode→disk, voice
+    /// capture, live PTT). Unlike the call-scoped `reservingBytes` argument
+    /// to `enforceQuota`, this stays charged against the quota until
+    /// `releaseQuotaReservation` — so cancel / encode failure / panic must
+    /// release it or later writers see a permanently tighter budget.
+    struct QuotaByteReservation: Sendable {
+        fileprivate let id: UUID
+        fileprivate let scope: MediaQuotaScope
+        fileprivate let bytes: Int64
+    }
+
     private final class PayloadCoordination: @unchecked Sendable {
         let lock = NSLock()
         var pendingDeliveryPaths: Set<String> = []
         var deletionReservations: [UUID: Set<String>] = [:]
+        var byteReservations: [UUID: (scope: MediaQuotaScope, bytes: Int64)] = [:]
     }
 
     private static let defaultQuotaBytes: Int64 = 100 * 1024 * 1024
@@ -245,6 +257,9 @@ struct BLEIncomingFileStore: @unchecked Sendable {
                 keepingCapacity: false
             )
             payloadCoordination.deletionReservations.removeAll(
+                keepingCapacity: false
+            )
+            payloadCoordination.byteReservations.removeAll(
                 keepingCapacity: false
             )
             payloadCoordination.lock.unlock()
@@ -558,11 +573,17 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     }
 
     /// Frees least-recently-modified files in `scope` until `reservingBytes`
-    /// fits under the quota. Files named `voice_live_*` (in-flight live
-    /// captures) are never evicted regardless of who triggers enforcement —
-    /// a finalized transfer can arrive at quota while a burst is still
-    /// streaming — but they still count toward usage. Paths reserved for an
-    /// in-flight delivery or private-media deletion are also skipped.
+    /// (plus any held `QuotaByteReservation`s for that scope) fits under the
+    /// quota. `reservingBytes` itself is call-scoped — it is not stored —
+    /// and is the right tool for a synchronous write that completes before
+    /// the next eviction. Multi-step writers should use
+    /// `reserveQuotaBytes` / `releaseQuotaReservation` instead.
+    ///
+    /// Files named `voice_live_*` (in-flight live captures) are never
+    /// evicted regardless of who triggers enforcement — a finalized
+    /// transfer can arrive at quota while a burst is still streaming — but
+    /// they still count toward usage. Paths reserved for an in-flight
+    /// delivery or private-media deletion are also skipped.
     func enforceQuota(reservingBytes: Int) {
         enforceQuota(reservingBytes: reservingBytes, scope: .incoming)
     }
@@ -576,7 +597,49 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     func enforceQuota(reservingBytes: Int, scope: MediaQuotaScope) {
         payloadCoordination.lock.lock()
         defer { payloadCoordination.lock.unlock() }
+        enforceQuotaLocked(reservingBytes: reservingBytes, scope: scope)
+    }
 
+    /// Evicts enough room for `bytes`, then holds that headroom against the
+    /// scope's quota until `releaseQuotaReservation`. Callers must release
+    /// on success, cancel, encode/write failure, and panic (panic also
+    /// clears every outstanding reservation).
+    @discardableResult
+    func reserveQuotaBytes(_ bytes: Int, scope: MediaQuotaScope) -> QuotaByteReservation {
+        payloadCoordination.lock.lock()
+        defer { payloadCoordination.lock.unlock() }
+
+        let clamped = Int64(max(0, bytes))
+        enforceQuotaLocked(reservingBytes: Int(clamped), scope: scope)
+        let reservation = QuotaByteReservation(
+            id: UUID(),
+            scope: scope,
+            bytes: clamped
+        )
+        payloadCoordination.byteReservations[reservation.id] = (
+            scope: scope,
+            bytes: clamped
+        )
+        return reservation
+    }
+
+    func releaseQuotaReservation(_ reservation: QuotaByteReservation) {
+        payloadCoordination.lock.lock()
+        defer { payloadCoordination.lock.unlock() }
+        payloadCoordination.byteReservations.removeValue(forKey: reservation.id)
+    }
+
+    /// Test seam: bytes currently held by `reserveQuotaBytes` for `scope`.
+    func reservedQuotaBytes(for scope: MediaQuotaScope) -> Int64 {
+        payloadCoordination.lock.lock()
+        defer { payloadCoordination.lock.unlock() }
+        return payloadCoordination.byteReservations.values.reduce(into: Int64(0)) {
+            guard $1.scope == scope else { return }
+            $0 += $1.bytes
+        }
+    }
+
+    private func enforceQuotaLocked(reservingBytes: Int, scope: MediaQuotaScope) {
         do {
             let base = try filesDirectory()
             let dirs = scope.subdirectories.map {
@@ -599,8 +662,12 @@ struct BLEIncomingFileStore: @unchecked Sendable {
                 }
             }
 
+            let heldBytes = payloadCoordination.byteReservations.values.reduce(into: Int64(0)) {
+                guard $1.scope == scope else { return }
+                $0 += $1.bytes
+            }
             let currentUsage = allFiles.reduce(0) { $0 + $1.size }
-            let targetUsage = quotaBytes - Int64(reservingBytes)
+            let targetUsage = quotaBytes - Int64(reservingBytes) - heldBytes
             guard currentUsage > targetUsage else { return }
 
             let needToFree = currentUsage - targetUsage

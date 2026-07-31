@@ -100,6 +100,9 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
     private let stream: StreamState
     private var startDate: Date?
     private var completed = false
+    /// Held outgoing quota headroom for this capture; released on finish,
+    /// cancel, start failure, and panic cancel.
+    private var quotaReservation: BLEIncomingFileStore.QuotaByteReservation?
 
     var isLive: Bool { true }
 
@@ -124,7 +127,8 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
     }
 
     func start() async throws {
-        let outputURL = try Self.makeOutputURL(burstID: burstID)
+        let (outputURL, reservation) = try Self.makeOutputURL(burstID: burstID)
+        quotaReservation = reservation
         let sendPacket = sendPacket
         let stream = stream
         capture.onFrames = { frames in
@@ -158,6 +162,8 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
             // handed its token back — nothing to retry. A coordinator-side
             // interruption during handoff also cancels acquire, but that is
             // not a successful start and must propagate to the view model.
+            releaseQuotaReservation()
+            try? FileManager.default.removeItem(at: outputURL)
             guard completed else { throw CancellationError() }
             return
         } catch {
@@ -171,9 +177,17 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
             // user let go, so bail instead of opening a hot mic.
             guard !completed else {
                 capture.cancel()
+                releaseQuotaReservation()
+                try? FileManager.default.removeItem(at: outputURL)
                 return
             }
-            try await capture.start(outputURL: outputURL)
+            do {
+                try await capture.start(outputURL: outputURL)
+            } catch {
+                releaseQuotaReservation()
+                try? FileManager.default.removeItem(at: outputURL)
+                throw error
+            }
         }
         startDate = now()
         SecureLogger.info("PTT: live burst \(burstID.hexEncodedString()) capture started", category: .session)
@@ -182,6 +196,7 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
     func finish() async -> URL? {
         guard !completed else { return nil }
         completed = true
+        defer { releaseQuotaReservation() }
 
         let elapsed = startDate.map { now().timeIntervalSince($0) } ?? 0
         let (url, encodedFrames) = capture.stop()
@@ -217,6 +232,7 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
         // pause), and only capture.cancel() stops the mic and deactivates the
         // session. It is idempotent, so a redundant call is harmless.
         capture.cancel()
+        releaseQuotaReservation()
         if !alreadyCompleted {
             sendControlPacket(.canceled)
         }
@@ -227,6 +243,7 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
         // conversation data racing the emergency transport reset.
         completed = true
         capture.cancel()
+        releaseQuotaReservation()
     }
 
     private func sendControlPacket(_ kind: VoiceBurstPacket.Kind) {
@@ -234,20 +251,37 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
         sendPacket(packet.encode())
     }
 
-    private static func makeOutputURL(burstID: Data) throws -> URL {
+    private func releaseQuotaReservation() {
+        guard let quotaReservation else { return }
+        BLEIncomingFileStore.shared.releaseQuotaReservation(quotaReservation)
+        self.quotaReservation = nil
+    }
+
+    private static func makeOutputURL(burstID: Data) throws -> (URL, BLEIncomingFileStore.QuotaByteReservation) {
         let base = try FileManager.default.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
             appropriateFor: nil,
             create: true
         )
-        BLEIncomingFileStore.shared.enforceOutgoingQuota(
-            reservingBytes: FileTransferLimits.maxVoiceNoteBytes
+        let reservation = BLEIncomingFileStore.shared.reserveQuotaBytes(
+            FileTransferLimits.maxVoiceNoteBytes,
+            scope: .outgoing
         )
         let directory = base
             .appendingPathComponent("files", isDirectory: true)
             .appendingPathComponent("voicenotes/outgoing", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: BLEIncomingFileStore.mediaProtectionAttributes)
-        return directory.appendingPathComponent("voice_\(burstID.hexEncodedString()).m4a")
+        do {
+            try FileManager.default.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true,
+                attributes: BLEIncomingFileStore.mediaProtectionAttributes
+            )
+        } catch {
+            BLEIncomingFileStore.shared.releaseQuotaReservation(reservation)
+            throw error
+        }
+        let url = directory.appendingPathComponent("voice_\(burstID.hexEncodedString()).m4a")
+        return (url, reservation)
     }
 }

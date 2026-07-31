@@ -168,4 +168,87 @@ struct BLEIncomingFileStoreOutgoingQuotaTests {
         #expect(!FileManager.default.fileExists(atPath: outgoingOld.path))
         #expect(FileManager.default.fileExists(atPath: outgoingNew.path))
     }
+
+    @Test func quotaByteReservationReleasesOnExplicitRelease() throws {
+        let (store, _, cleanup) = try makeTempStore()
+        defer { cleanup() }
+
+        let reservation = store.reserveQuotaBytes(
+            12 * 1024 * 1024,
+            scope: .outgoing
+        )
+        #expect(store.reservedQuotaBytes(for: .outgoing) == 12 * 1024 * 1024)
+        #expect(store.reservedQuotaBytes(for: .incoming) == 0)
+
+        store.releaseQuotaReservation(reservation)
+        #expect(store.reservedQuotaBytes(for: .outgoing) == 0)
+    }
+
+    @Test func quotaByteReservationReleasedAfterFailedWritePattern() throws {
+        // Mirrors ImageUtils: reserve → write throws → defer release must
+        // leave no held headroom behind.
+        let (store, _, cleanup) = try makeTempStore()
+        defer { cleanup() }
+
+        do {
+            let reservation = store.reserveQuotaBytes(8 * 1024 * 1024, scope: .outgoing)
+            defer { store.releaseQuotaReservation(reservation) }
+            #expect(store.reservedQuotaBytes(for: .outgoing) == 8 * 1024 * 1024)
+            throw CocoaError(.fileWriteUnknown)
+        } catch {
+            #expect(store.reservedQuotaBytes(for: .outgoing) == 0)
+        }
+    }
+
+    @Test func panicWipeClearsInFlightQuotaByteReservations() throws {
+        let (store, root, cleanup) = try makeTempStore()
+        defer { cleanup() }
+
+        let outgoingReservation = store.reserveQuotaBytes(
+            20 * 1024 * 1024,
+            scope: .outgoing
+        )
+        let incomingReservation = store.reserveQuotaBytes(
+            15 * 1024 * 1024,
+            scope: .incoming
+        )
+        #expect(store.reservedQuotaBytes(for: .outgoing) == 20 * 1024 * 1024)
+        #expect(store.reservedQuotaBytes(for: .incoming) == 15 * 1024 * 1024)
+
+        // Seed a file so panicWipe has a media tree to rebuild.
+        try writeBytes(
+            1024,
+            to: root.appendingPathComponent("files/images/outgoing/seed.jpg"),
+            modified: Date()
+        )
+
+        try store.panicWipe()
+
+        #expect(store.reservedQuotaBytes(for: .outgoing) == 0)
+        #expect(store.reservedQuotaBytes(for: .incoming) == 0)
+        // Stale tokens must not resurrect pre-panic headroom.
+        store.releaseQuotaReservation(outgoingReservation)
+        store.releaseQuotaReservation(incomingReservation)
+        #expect(store.reservedQuotaBytes(for: .outgoing) == 0)
+        #expect(store.reservedQuotaBytes(for: .incoming) == 0)
+    }
+
+    @Test func heldQuotaByteReservationTightensEvictionTarget() throws {
+        let (store, root, cleanup) = try makeTempStore()
+        defer { cleanup() }
+
+        let oldURL = root.appendingPathComponent("files/images/outgoing/old.jpg")
+        let newURL = root.appendingPathComponent("files/images/outgoing/new.jpg")
+        try writeBytes(60 * 1024 * 1024, to: oldURL, modified: Date(timeIntervalSinceNow: -3600))
+        try writeBytes(45 * 1024 * 1024, to: newURL, modified: Date(timeIntervalSinceNow: -60))
+
+        // Hold 10 MB without an extra reservingBytes argument — eviction must
+        // still free the oldest file because usage + held exceeds quota.
+        let reservation = store.reserveQuotaBytes(10 * 1024 * 1024, scope: .outgoing)
+        defer { store.releaseQuotaReservation(reservation) }
+
+        #expect(!FileManager.default.fileExists(atPath: oldURL.path))
+        #expect(FileManager.default.fileExists(atPath: newURL.path))
+        #expect(store.reservedQuotaBytes(for: .outgoing) == 10 * 1024 * 1024)
+    }
 }
