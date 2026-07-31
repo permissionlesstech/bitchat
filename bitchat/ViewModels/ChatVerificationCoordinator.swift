@@ -129,12 +129,15 @@ extension ChatViewModel: ChatVerificationContext {
         messageRouter.retrySecurePrivateMessagesAfterAuthentication(for: peerIDAliases)
     }
 
+    /// QR verification rides the mesh's Noise sessions only.
+    private var verifyTransport: MeshVerifying? { meshService as? MeshVerifying }
+
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {
-        meshService.sendVerifyChallenge(to: peerID, noiseKeyHex: noiseKeyHex, nonceA: nonceA)
+        verifyTransport?.sendVerifyChallenge(to: peerID, noiseKeyHex: noiseKeyHex, nonceA: nonceA)
     }
 
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {
-        meshService.sendVerifyResponse(to: peerID, noiseKeyHex: noiseKeyHex, nonceA: nonceA)
+        verifyTransport?.sendVerifyResponse(to: peerID, noiseKeyHex: noiseKeyHex, nonceA: nonceA)
     }
 
     func postLocalNotification(title: String, body: String, identifier: String) {

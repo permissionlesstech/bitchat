@@ -723,9 +723,9 @@ struct NoiseCoverageTests {
             // A failed startup requirement must not strand a late thread in
             // the blocking test double after the test has returned.
             oldSession.resumeDecrypt()
-            _ = decryptResult.wait(timeout: 5)
+            _ = decryptResult.wait(timeout: TestConstants.settleTimeout)
             if let promotionResultForCleanup {
-                _ = promotionResultForCleanup.wait(timeout: 5)
+                _ = promotionResultForCleanup.wait(timeout: TestConstants.settleTimeout)
             }
         }
 
@@ -751,15 +751,19 @@ struct NoiseCoverageTests {
         promotionThread.name = "NoiseCoverageTests.staleDecrypt.promote"
         promotionThread.qualityOfService = .userInitiated
         promotionThread.start()
-        try #require(promotionStarted.wait(timeout: .now() + 5) == .success)
+        try #require(promotionStarted.wait(timeout: .now() + TestConstants.settleTimeout) == .success)
         #expect(
+            // test-timing-ok: a NEGATIVE wait — it asserts the promotion has
+            // NOT completed yet, so a long deadline would only make the suite
+            // slow while still passing. A starved runner can only make this
+            // more likely to hold, never less.
             promotionResult.wait(timeout: 0.05) == nil,
             "Promotion must wait for the exact decrypting-session lease"
         )
 
         oldSession.resumeDecrypt()
-        let decrypted = try #require(decryptResult.wait(timeout: 5)).get()
-        _ = try #require(promotionResult.wait(timeout: 5)).get()
+        let decrypted = try #require(decryptResult.wait(timeout: TestConstants.settleTimeout)).get()
+        _ = try #require(promotionResult.wait(timeout: TestConstants.settleTimeout)).get()
 
         #expect(decrypted.plaintext == Data("old session".utf8))
         #expect(decrypted.sessionGeneration == oldGeneration)

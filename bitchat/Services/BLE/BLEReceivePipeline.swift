@@ -77,6 +77,26 @@ struct BLEReceivePipeline {
     }
 }
 
+/// Lock-backed traffic-level signal: the receive pipeline records packets,
+/// and the radio layer (maintenance and scan-duty adaptation on bleQueue)
+/// reads the level without crossing onto a transport queue.
+final class BLERecentTrafficMonitor: @unchecked Sendable {
+    private let lock = NSLock()
+    private var tracker = BLERecentTrafficTracker()
+
+    func recordPacket(at now: Date) {
+        lock.withLock { tracker.recordPacket(at: now) }
+    }
+
+    func hasTraffic(within seconds: TimeInterval, now: Date) -> Bool {
+        lock.withLock { tracker.hasTraffic(within: seconds, now: now) }
+    }
+
+    func removeAll() {
+        lock.withLock { tracker.removeAll() }
+    }
+}
+
 struct BLERecentTrafficTracker: Equatable {
     private var packetTimestamps: [Date] = []
 
