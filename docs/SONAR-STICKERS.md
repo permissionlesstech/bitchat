@@ -15,6 +15,19 @@ specifies only the bitchat wire format and client behavior. The reference
 implementation is byte-identical to sonar-ffi's `mesh_sticker_content` /
 `mesh_parse_sticker_content`.
 
+> **Status:** this lands in slices. The wire codec below is merged first as
+> dead-on-arrival infrastructure — **nothing in the client parses, routes,
+> fetches, or renders sticker references yet.** Parsing, consent-gated
+> rendering, and opt-in sync arrive in the follow-up PRs (see the split of
+> #1517). Until then, sticker content is ordinary text to every client.
+
+> **DM size constraint:** a maximally long reference (80-char identifier +
+> 64-char shortcode) is ~290 bytes, which exceeds the current 255-byte
+> private-message content limit (`PrivateMessagePacket`). Senders SHOULD keep
+> the encoded reference within 255 bytes for DMs until that limit is raised
+> (tracked in #784); oversized references remain valid on public mesh and
+> geohash channels.
+
 ## Wire Format
 
 ### Content Prefix
@@ -46,8 +59,11 @@ Field order and count are fixed:
 
 Parsers MUST:
 
-1. Split the content on `0x1F` with **at most 4 splits**, preserving empty
-   subsequences.
+1. Split the content on `0x1F` into **at most 5 parts**, preserving empty
+   subsequences. Beware off-by-one semantics across languages: this is
+   Swift's `split(separator:maxSplits:)` with `maxSplits: 4` (4 splits → up
+   to 5 parts), but Rust's `splitn(5, ...)` — `splitn(4, ...)` yields at
+   most 4 parts and would reject every valid reference.
 2. Accept only if the split yields **exactly 5 parts**, `parts[0]` is empty,
    and `parts[1] == "sticker"`.
 3. Validate fields 2–4 against the table above; any violation MUST cause the

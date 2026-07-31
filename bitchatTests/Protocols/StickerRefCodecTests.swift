@@ -51,10 +51,12 @@ struct StickerRefCodecTests {
         #expect(StickerRefCodec.encode(ref).hasPrefix("\u{1F}sticker\u{1F}"))
     }
 
-    @Test func parseAcceptsSonarFfiEncodedContent() {
+    @Test func parseAcceptsSonarFfiEncodedContent() throws {
         // Hand-built exactly as mesh_parse_sticker_content would see it.
         let wire = "\u{1F}sticker\u{1F}30031:\(pubkey):pack\u{1F}wave\u{1F}\(sha256)"
-        let ref = StickerRefCodec.parse(wire)
+        // #require (not #expect against makeRef): if a regression made parse
+        // return nil here, `nil == nil` would let the test pass vacuously.
+        let ref = try #require(StickerRefCodec.parse(wire))
         #expect(ref == makeRef(coordinate: "30031:\(pubkey):pack"))
     }
 
