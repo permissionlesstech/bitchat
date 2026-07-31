@@ -251,6 +251,7 @@ struct ContentView: View {
                 sharedContentImportModel.updateDestination(sharedContentDestination)
                 activeDraftKey = ComposerDraftStore.Key.from(
                     peerID: selectedPrivatePeerID,
+                    fingerprint: selectedPrivatePeerID.flatMap { conversationUIModel.getFingerprint(for: $0) },
                     channel: locationChannelsModel.selectedChannel
                 )
                 messageText = ComposerDraftStore.load(activeDraftKey)
@@ -273,6 +274,7 @@ struct ContentView: View {
             sharedContentImportModel.updateDestination(sharedContentDestination)
             switchComposerDraft(to: ComposerDraftStore.Key.from(
                 peerID: newValue,
+                fingerprint: newValue.flatMap { conversationUIModel.getFingerprint(for: $0) },
                 channel: locationChannelsModel.selectedChannel
             ))
         }
@@ -283,16 +285,16 @@ struct ContentView: View {
             if selectedPrivatePeerID == nil {
                 switchComposerDraft(to: ComposerDraftStore.Key.from(
                     peerID: nil,
+                    fingerprint: nil,
                     channel: newChannel
                 ))
             }
         }
         .onChange(of: scenePhase) { phase in
             if phase == .background || phase == .inactive {
-                // Skip persist when the composer was already cleared (e.g.
-                // panic wipe): otherwise a half-written message would be
-                // written back after ComposerDraftStore.reset().
-                guard !messageText.isEmpty else { return }
+                // Always save, including empty — clearing the composer must
+                // remove the in-memory draft so it does not resurrect on the
+                // next switch back into this conversation.
                 ComposerDraftStore.save(messageText, for: activeDraftKey)
             }
         }
