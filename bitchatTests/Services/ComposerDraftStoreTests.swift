@@ -62,3 +62,15 @@ struct ComposerDraftStoreTests {
         #expect(defaults.object(forKey: ComposerDraftStore.storageKey) == nil)
     }
 }
+
+    @Test func maxDraftCountEvictsSurplusKeys() {
+        let defaults = makeDefaults()
+        for index in 0..<ComposerDraftStore.maxDraftCount {
+            ComposerDraftStore.save("d\(index)", for: .location(geohash: String(format: "gh%04d", index)), in: defaults)
+        }
+        ComposerDraftStore.save("newest", for: .mesh, in: defaults)
+        let map = defaults.dictionary(forKey: ComposerDraftStore.storageKey) as? [String: String] ?? [:]
+        #expect(map.count == ComposerDraftStore.maxDraftCount)
+        #expect(map["mesh"] == "newest")
+    }
+}
