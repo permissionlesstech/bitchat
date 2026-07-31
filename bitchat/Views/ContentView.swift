@@ -114,6 +114,7 @@ struct ContentView: View {
     #else
     @State private var showMacImagePicker = false
     #endif
+    @State private var showStickerPicker = false
     @ScaledMetric(relativeTo: .body) private var headerHeight: CGFloat = 44
     @ScaledMetric(relativeTo: .subheadline) private var headerPeerIconSize: CGFloat = 11
     @ScaledMetric(relativeTo: .subheadline) private var headerPeerCountFontSize: CGFloat = 12
@@ -375,6 +376,12 @@ struct ContentView: View {
                 ImagePreviewView(url: url)
             }
         }
+        .sheet(isPresented: $showStickerPicker) {
+            StickerPickerSheet { ref in
+                showStickerPicker = false
+                conversationUIModel.sendMessage(ref.content)
+            }
+        }
         .alert("Recording Error", isPresented: rootVoiceAlertBinding, actions: {
             Button("common.ok", role: .cancel) {}
             if voiceRecordingVM.state == .permissionDenied {
@@ -501,7 +508,8 @@ struct ContentView: View {
             autocompleteDebounceTimer: $autocompleteDebounceTimer,
             onSendMessage: sendMessage,
             showImagePicker: $showImagePicker,
-            imagePickerSourceType: $imagePickerSourceType
+            imagePickerSourceType: $imagePickerSourceType,
+            onShowStickerPicker: { showStickerPicker = true }
         )
         #else
         ContentComposerView(
@@ -510,7 +518,8 @@ struct ContentView: View {
             voiceRecordingVM: voiceRecordingVM,
             autocompleteDebounceTimer: $autocompleteDebounceTimer,
             onSendMessage: sendMessage,
-            showMacImagePicker: $showMacImagePicker
+            showMacImagePicker: $showMacImagePicker,
+            onShowStickerPicker: { showStickerPicker = true }
         )
         #endif
     }
