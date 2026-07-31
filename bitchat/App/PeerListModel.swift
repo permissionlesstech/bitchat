@@ -160,6 +160,13 @@ final class PeerListModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        conversations.$selectedPrivatePeerID
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refresh()
+            }
+            .store(in: &cancellables)
+
         chatViewModel.groupStore.$groups
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -283,8 +290,11 @@ final class PeerListModel: ObservableObject {
 
     private func buildRecentDirectRows(excluding myPeerID: PeerID) -> [RecentDirectRow] {
         let messagesByPeer = conversations.directMessagesByRoutingPeerID()
+        let selected = conversations.selectedPrivatePeerID
         return conversations.recentDirectRoutingPeerIDs(limit: 8).compactMap { peerID in
             guard peerID != myPeerID else { return nil }
+            // Already in that thread — no need to list it again here.
+            guard peerID != selected else { return nil }
             let messages = messagesByPeer[peerID] ?? []
             guard let last = messages.last else { return nil }
             let preview = last.content
