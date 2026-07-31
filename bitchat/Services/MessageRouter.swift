@@ -621,7 +621,12 @@ final class MessageRouter {
     /// from `secureTransmissions` instead would over-skip: an alias with no
     /// live secure transport is abandoned wholesale below, and its entries are
     /// in that set while never having been sent.
-    @discardableResult
+    ///
+    /// Deliberately not `@discardableResult`. A caller that drops this set and
+    /// passes an empty one to `flushOutbox` re-sends everything this pass just
+    /// put on the air and burns a second attempt against the cap. An unused
+    /// result is the one thing that catches that at compile time, so the tests
+    /// that genuinely do not care spell it `_ =`.
     func retrySecurePrivateMessagesAfterAuthentication(for peerIDAliases: [PeerID]) -> Set<String> {
         typealias Candidate = OutboxCandidate
 
@@ -662,16 +667,13 @@ final class MessageRouter {
             let peerID = candidate.peerID
             let message = candidate.message
             let key = PeerMessageKey(peerID: peerID, messageID: message.messageID)
-            // Claim the ID last. A synchronous ack from an earlier send in
-            // this loop is peer-scoped, so it can clear this copy while the
-            // twin under the other alias stays live and eligible — and a
-            // claim made before these checks would let the dead candidate
-            // suppress that twin, silently skipping a retry that was due.
+            // A synchronous ack from an earlier send in this loop is
+            // peer-scoped, so it can clear this copy while the twin under the
+            // other alias stays live and eligible.
             guard secureTransmissions.contains(key),
                   queuedMessage(message.messageID, for: peerID) != nil,
                   let transport = connectedTransport(for: peerID),
-                  transport.canDeliverSecurely(to: peerID),
-                  retriedMessageIDs.insert(message.messageID).inserted else {
+                  transport.canDeliverSecurely(to: peerID) else {
                 continue
             }
 
@@ -694,6 +696,16 @@ final class MessageRouter {
                 }
                 continue
             }
+
+            // Claim the ID only now — past every check that can drop this
+            // candidate instead of sending it. Claiming in the guard chain
+            // above let a copy that was expired or past the attempt cap take
+            // the ID, drop itself, and suppress the live twin under the other
+            // alias, which then went unsent for this whole pass. The flush
+            // that follows still recovered it, but the drop had already
+            // reported the message failed to the UI while it was in fact
+            // about to deliver.
+            guard retriedMessageIDs.insert(message.messageID).inserted else { continue }
 
             SecureLogger.debug(
                 "Auth retry -> \(type(of: transport)) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…",

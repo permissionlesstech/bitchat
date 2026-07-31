@@ -509,7 +509,7 @@ struct ChatViewModelDeliveryStatusTests {
         transport.connectedPeers.insert(peerID)
         transport.securePeers = [peerID]
         viewModel.messageRouter.flushOutbox(for: peerID)
-        viewModel.messageRouter.retrySecurePrivateMessagesAfterAuthentication(for: [peerID])
+        _ = viewModel.messageRouter.retrySecurePrivateMessagesAfterAuthentication(for: [peerID])
         #expect(transport.sentPrivateMessages.isEmpty)
 
         // The clear reached the durable snapshot: the next relaunch restores
