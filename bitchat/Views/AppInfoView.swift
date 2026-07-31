@@ -222,17 +222,19 @@ struct AppInfoView: View {
                 description: "app_info.privacy.ephemeral.description"
             )
             /// Explains the iOS 26 “accessory would like to open bitchat”
-            /// modal from wake-on-proximity (#1427 / #1396).
+            /// modal from wake-on-proximity (#1427 / #1396). The system modal
+            /// text is Apple-controlled (Info.plist usage strings are not
+            /// shown there); this App Info row is the honest in-app label.
             static let wakeProximity = AppInfoFeatureInfo(
                 icon: "antenna.radiowaves.left.and.right",
                 resolvedTitle: String(
                     localized: "app_info.privacy.wake_proximity.title",
-                    defaultValue: "Background mesh wake",
+                    defaultValue: "background mesh wake",
                     comment: "App Info privacy feature title explaining BLE wake-on-proximity"
                 ),
                 resolvedDescription: String(
                     localized: "app_info.privacy.wake_proximity.description",
-                    defaultValue: "while closed, nearby peers may reopen bitchat over bluetooth so the mesh can reach you — the ios “accessory would like to open bitchat” prompt is that wake, and is safe to allow",
+                    defaultValue: "while closed, bitchat arms bluetooth reconnects so ios can reopen the app when a peer returns into range — the “accessory would like to open bitchat” prompt is that wake, and is safe to allow",
                     comment: "App Info privacy feature description for the iOS accessory wake modal"
                 )
             )
