@@ -430,7 +430,7 @@ private extension MessageListView {
         guard message.isPrivate,
               conversationUIModel.isSentByCurrentUser(message),
               conversationUIModel.mediaAttachment(for: message) == nil,
-              case .some(.failed) = message.deliveryStatus
+              case .failed = message.deliveryStatus
         else { return false }
         return true
     }

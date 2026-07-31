@@ -140,6 +140,124 @@ struct SimulatedMeshTests {
         #expect(a.service.getConnectedPeers().contains(b.service.myPeerID))
     }
 
+    /// Issue #1538: with two live links to the same phone, a panic
+    /// rotation used to heal only the link the verified announce arrived
+    /// on. The second link kept its binding to
+    /// the retired identity, which therefore stayed in the peer list as a
+    /// ghost — and, worse, kept being refreshed by the *new* identity's
+    /// traffic (a bound link attributes non-announce frames to its bound
+    /// peer, so the dead ID looked alive for as long as the link lived).
+    @Test
+    func duplicateLinkPanicRotationLeavesNoGhostAndHealsBothLinks() {
+        let mesh = SimulatedMesh()
+        let a = mesh.addNode(nickname: "alice")
+        let b = mesh.addNode(nickname: "bob")
+        mesh.connectDuplicateLinks(0, 1)
+        mesh.announceAll()
+
+        let centralLink = BLEIngressLinkID.central(mesh.linkUUID(from: 1, at: 0))
+        let duplicateLink = BLEIngressLinkID.central(mesh.duplicateLinkUUID(from: 1, at: 0))
+        let oldBobID = b.service.myPeerID
+        // Both links bind to bob: raw direct announces bind unbound links,
+        // and that happens before duplicate suppression.
+        #expect(a.service._test_linkBinding(centralLink) == oldBobID)
+        #expect(a.service._test_linkBinding(duplicateLink) == oldBobID)
+
+        b.service.suspendForPanicReset()
+        b.service.resetIdentityForPanic(currentNickname: "anon", restartServices: false)
+        b.service.completePanicReset(restartServices: false)
+        mesh.pump()
+        let newBobID = b.service.myPeerID
+        #expect(newBobID != oldBobID)
+
+        // One verified direct announce must retire the old identity
+        // outright — no ghost survives on the link it did not arrive on.
+        mesh.forceAnnounce(from: 1)
+        mesh.settleUntil { !a.service._test_knownPeerIDs().contains(oldBobID) }
+        #expect(!a.service._test_knownPeerIDs().contains(oldBobID))
+        #expect(a.service._test_linkBinding(centralLink) != oldBobID)
+        #expect(a.service._test_linkBinding(duplicateLink) != oldBobID)
+
+        // Both links converge onto the new identity as its announces land
+        // (the released link binds through the ordinary unbound-link path,
+        // so no containment rule has to be relaxed).
+        for _ in 0..<4 {
+            b.service._test_resetAnnounceThrottle()
+            mesh.forceAnnounce(from: 1)
+            mesh.advanceTime(by: 1)
+        }
+        #expect(a.service._test_linkBinding(centralLink) == newBobID)
+        #expect(a.service._test_linkBinding(duplicateLink) == newBobID)
+        #expect(a.service.getConnectedPeers() == [newBobID])
+    }
+
+    /// The #1401 containment rule, pinned against the attack the #1538 fix
+    /// had to avoid re-opening: a captured verified direct announce replayed
+    /// onto a link the attacker controls must NOT bind that link to the
+    /// victim while the victim holds a live link of its own — and must not
+    /// evict the victim either (the rotation release only runs after a
+    /// rebind the containment actually permitted).
+    @Test
+    func replayedVerifiedAnnounceCannotStealALinkOrEvictTheVictim() {
+        let mesh = SimulatedMesh()
+        let alice = mesh.addNode(nickname: "alice")
+        let bob = mesh.addNode(nickname: "bob")
+        let mallory = mesh.addNode(nickname: "mallory")
+        mesh.connect(0, 1)
+        mesh.connect(0, 2)
+        mesh.announceAll()
+
+        let bobLink = BLEIngressLinkID.central(mesh.linkUUID(from: 1, at: 0))
+        let malloryLink = BLEIngressLinkID.central(mesh.linkUUID(from: 2, at: 0))
+        #expect(alice.service._test_linkBinding(bobLink) == bob.service.myPeerID)
+        #expect(alice.service._test_linkBinding(malloryLink) == mallory.service.myPeerID)
+
+        // Mallory captures a signed direct announce alice has NOT seen, so
+        // duplicate suppression cannot mask the containment check: bob
+        // announces while out of alice's range, and mallory replays it on
+        // her own link. Directness is forgeable; the signature is real.
+        mesh.silence(0, 1)
+        bob.service._test_resetAnnounceThrottle()
+        mesh.forceAnnounce(from: 1)
+        let replay = mesh.emittedPackets(from: 1).last {
+            $0.type == MessageType.announce.rawValue && $0.ttl == TransportConfig.messageTTLDefault
+        }
+        guard let replay else {
+            Issue.record("bob emitted no direct announce to capture")
+            return
+        }
+        alice.service._test_ingestFrame(replay, link: malloryLink)
+        mesh.pump()
+        mesh.advanceTime(by: 1)
+
+        // The link is not stolen, and bob keeps both his binding and his
+        // place in the peer list.
+        #expect(alice.service._test_linkBinding(malloryLink) == mallory.service.myPeerID)
+        #expect(alice.service._test_linkBinding(bobLink) == bob.service.myPeerID)
+        #expect(alice.service._test_knownPeerIDs().contains(bob.service.myPeerID))
+        #expect(alice.service.getConnectedPeers().contains(bob.service.myPeerID))
+
+        // Positive control — proves the refusal above was the containment
+        // rule and not duplicate suppression: once bob holds no live link,
+        // the very same replayed announce on the very same link does take
+        // effect. (Long-standing accepted residual: a stolen link carries
+        // only Noise ciphertext, and the rebind retires the link's proof.)
+        alice.service.emitLinkEvent(.centralLinkEnded(centralUUID: mesh.linkUUID(from: 1, at: 0)))
+        alice.service._test_fenceEngine()
+        bob.service._test_resetAnnounceThrottle()
+        mesh.forceAnnounce(from: 1)
+        let secondReplay = mesh.emittedPackets(from: 1).last {
+            $0.type == MessageType.announce.rawValue && $0.ttl == TransportConfig.messageTTLDefault
+        }
+        #expect(secondReplay?.timestamp != replay.timestamp)
+        if let secondReplay {
+            alice.service._test_ingestFrame(secondReplay, link: malloryLink)
+            mesh.pump()
+            mesh.advanceTime(by: 1)
+        }
+        #expect(alice.service._test_linkBinding(malloryLink) == bob.service.myPeerID)
+    }
+
     @Test
     func panicRotationRebindsSurvivorExactlyOnceAndStays() {
         let mesh = SimulatedMesh()
