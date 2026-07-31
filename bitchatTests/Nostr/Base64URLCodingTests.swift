@@ -28,3 +28,16 @@ struct Base64URLCodingTests {
         #expect(decoded == original)
     }
 }
+
+    @Test
+    func matchesLegacyNostrEmbeddedBitChatEncoder() {
+        // Character-identical to the deleted private helper in NostrEmbeddedBitChat.
+        let data = Data([0x00, 0x01, 0x02, 0xfd, 0xfe, 0xff])
+        let legacy = data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+
+        #expect(Base64URLCoding.encode(data) == legacy)
+    }
+
