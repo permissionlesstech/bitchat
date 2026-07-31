@@ -236,6 +236,11 @@ struct ContentView: View {
                 }
                 appChromeModel.setPanicPreparation { [weak voiceRecordingVM] in
                     voiceRecordingVM?.panicWipe()
+                    // Drop in-memory composer text before ChatViewModel resets
+                    // persisted drafts — otherwise the next inactive/background
+                    // transition would write the pre-wipe draft back.
+                    messageText = ""
+                    activeDraftKey = .mesh
                 }
                 #if os(macOS)
                 DispatchQueue.main.async {
@@ -284,6 +289,10 @@ struct ContentView: View {
         }
         .onChange(of: scenePhase) { phase in
             if phase == .background || phase == .inactive {
+                // Skip persist when the composer was already cleared (e.g.
+                // panic wipe): otherwise a half-written message would be
+                // written back after ComposerDraftStore.reset().
+                guard !messageText.isEmpty else { return }
                 ComposerDraftStore.save(messageText, for: activeDraftKey)
             }
         }
