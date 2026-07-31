@@ -272,4 +272,83 @@ struct PreviewKeychainManagerTests {
             service: "chat.bitchat.future-custom"
         ) == replacementCustom)
     }
+
+    @Test("Concurrent callers cannot race the install access gate")
+    func concurrentCallersDoNotRaceTheGate() {
+        let gate = KeychainInstallAccessGate()
+        gate.block()
+
+        let recorder = GateReconcileRecorder()
+        let reconcileEntered = DispatchSemaphore(value: 0)
+        let releaseReconcile = DispatchSemaphore(value: 0)
+        let completed = DispatchSemaphore(value: 0)
+
+        let reconcile: @Sendable () -> Bool = {
+            recorder.started()
+            reconcileEntered.signal()
+            releaseReconcile.wait()
+            recorder.finished()
+            return true
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.concurrentPerform(iterations: 16) { _ in
+                _ = gate.allowsAccess(reconcile: reconcile)
+                completed.signal()
+            }
+        }
+
+        // The first caller to acquire the gate is now blocked inside the
+        // reconcile closure, with reconciliationInProgress set.
+        reconcileEntered.wait()
+
+        // A caller arriving while reconciliation is in flight must fail
+        // closed instead of racing the cleanup.
+        #expect(!gate.allowsAccess(reconcile: reconcile))
+
+        releaseReconcile.signal()
+        for _ in 0..<16 {
+            completed.wait()
+        }
+
+        // The gate must have serialized the reconciliation: exactly one
+        // caller ran the closure, and no two callers ever ran it at once.
+        #expect(recorder.reconcileCount == 1)
+        #expect(recorder.maxConcurrent == 1)
+    }
+}
+
+/// Records reconcile-closure overlap across threads so a test can assert the
+/// install access gate serializes reconciliation.
+private final class GateReconcileRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedReconcileCount = 0
+    private var storedActive = 0
+    private var storedMaxConcurrent = 0
+
+    func started() {
+        lock.lock()
+        storedReconcileCount += 1
+        storedActive += 1
+        storedMaxConcurrent = max(storedMaxConcurrent, storedActive)
+        lock.unlock()
+    }
+
+    func finished() {
+        lock.lock()
+        storedActive -= 1
+        lock.unlock()
+    }
+
+    var reconcileCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedReconcileCount
+    }
+
+    var maxConcurrent: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedMaxConcurrent
+    }
 }
