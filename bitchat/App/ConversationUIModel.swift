@@ -12,7 +12,6 @@ final class ConversationUIModel: ObservableObject {
     @Published private(set) var currentNickname: String
     @Published private(set) var isBatchingPublic = false
     @Published private(set) var canSendMediaInCurrentContext = true
-    @Published private(set) var legacyPrivateMediaConsentRequest: LegacyPrivateMediaConsentRequest?
     /// Who is talking live in the public mesh channel right now (floor
     /// courtesy: the composer mic tints "busy" while someone holds the floor).
     @Published private(set) var activeLiveVoiceTalker: String?
@@ -139,26 +138,24 @@ final class ConversationUIModel: ObservableObject {
     }
 
     #if os(iOS)
-    func processSelectedImage(_ image: UIImage?) {
-        chatViewModel.processThenSendImage(image)
+    func processSelectedImage(_ picked: PickedImage?) {
+        switch picked {
+        case .camera(let image):
+            chatViewModel.processThenSendImage(image)
+        case .photoLibraryFile(let url, let cleanup):
+            chatViewModel.processThenSendImage(from: url, cleanup: cleanup)
+        case .none:
+            break
+        }
     }
     #endif
 
-    func processSelectedImage(from url: URL?) {
-        #if os(macOS)
-        chatViewModel.processThenSendImage(from: url)
-        #endif
+    func processSelectedImage(from url: URL?, cleanup: (() -> Void)? = nil) {
+        chatViewModel.processThenSendImage(from: url, cleanup: cleanup)
     }
 
     func sendVoiceNote(at url: URL) {
         chatViewModel.sendVoiceNote(at: url)
-    }
-
-    func resolveLegacyPrivateMediaConsent(requestID: UUID, approved: Bool) {
-        chatViewModel.resolveLegacyPrivateMediaConsent(
-            requestID: requestID,
-            approved: approved
-        )
     }
 
     /// Capture backend for the mic gesture: live PTT when the current DM
@@ -200,10 +197,6 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.$activePublicVoiceTalker
             .receive(on: DispatchQueue.main)
             .assign(to: &$activeLiveVoiceTalker)
-
-        chatViewModel.$legacyPrivateMediaConsentRequest
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$legacyPrivateMediaConsentRequest)
 
         conversations.$activeChannel
             .receive(on: DispatchQueue.main)

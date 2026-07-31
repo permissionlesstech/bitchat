@@ -66,10 +66,7 @@ class NoiseSession {
             
             // Only initiator writes the first message
             if role == .initiator {
-                guard let handshake = handshakeState else {
-                    throw NoiseSessionError.invalidState
-                }
-                let message = try handshake.writeMessage()
+                let message = try handshakeState!.writeMessage()
                 sentHandshakeMessages.append(message)
                 return message
             } else {

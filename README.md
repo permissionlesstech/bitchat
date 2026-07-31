@@ -8,14 +8,6 @@ A decentralized peer-to-peer messaging app with dual transport architecture: loc
 
 📲 [App Store](https://apps.apple.com/us/app/bitchat-mesh/id6748219622)
 
-📲 [Play Store](https://play.google.com/store/apps/details?id=com.bitchat.droid)
-
-### Getting a copy you can trust
-
-Install from the App Store, or build from source you have verified. A compiled build from anywhere else cannot be verified — see [Verifying bitchat](docs/VERIFYING-A-BUILD.md) for how to check source against the per-release hash manifest, and for what to do if that is the only build you can get.
-
-This matters more than it usually would: this repository has been the target of takedown demands, and when a repository or releases page disappears, mirrors appear that nobody can check.
-
 ## License
 
 This project is released into the public domain. See the [LICENSE](LICENSE) file for details.
@@ -26,8 +18,8 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 - **Location-Based Channels**: Geographic chat rooms using geohash coordinates over global Nostr relays
 - **Intelligent Message Routing**: Automatically chooses best transport (Bluetooth → Nostr fallback)
 - **Decentralized Mesh Network**: Automatic peer discovery and multi-hop message relay over Bluetooth LE
-- **Privacy First**: No accounts, no phone numbers, no servers. Note that the mesh does use a persistent per-device identifier derived from your identity key — see [the whitepaper](WHITEPAPER.md) on identity and metadata for what a nearby radio can observe
-- **Private Message End-to-End Encryption**: [Noise Protocol](https://noiseprotocol.org) for mesh, BitChat private envelopes for Nostr fallback
+- **Privacy First**: No accounts, no phone numbers, no persistent identifiers
+- **Private Message End-to-End Encryption**: [Noise Protocol](https://noiseprotocol.org) for mesh, NIP-17 for Nostr
 - **IRC-Style Commands**: Familiar `/slap`, `/msg`, `/who` style interface
 - **Universal App**: Native support for iOS and macOS
 - **Emergency Wipe**: Triple-tap to instantly clear all data
@@ -42,7 +34,7 @@ BitChat uses a **hybrid messaging architecture** with two complementary transpor
 - **Local Communication**: Direct peer-to-peer within Bluetooth range
 - **Multi-hop Relay**: Messages route through nearby devices (max 7 hops)
 - **No Internet Required**: Works completely offline in disaster scenarios
-- **Noise Protocol Encryption**: End-to-end encryption, with forward secrecy for live sessions (store-and-forward mail is sealed without it — see the whitepaper)
+- **Noise Protocol Encryption**: End-to-end encryption with forward secrecy
 - **Binary Protocol**: Compact packet format optimized for Bluetooth LE constraints
 - **Automatic Discovery**: Peer discovery and connection management
 - **Adaptive Power**: Battery-optimized duty cycling
@@ -51,15 +43,9 @@ BitChat uses a **hybrid messaging architecture** with two complementary transpor
 
 - **Global Reach**: Connect with users worldwide via internet relays
 - **Location Channels**: Geographic chat rooms using geohash coordinates
-- **440+ Relay Network**: Distributed across the globe for reliability
-- **BitChat Private Envelopes**: App-specific encrypted private messages over Nostr relays
+- **290+ Relay Network**: Distributed across the globe for reliability
+- **NIP-17 Encryption**: Gift-wrapped private messages for internet privacy
 - **Ephemeral Keys**: Fresh cryptographic identity per geohash area
-
-BitChat's private-envelope format is proprietary and is **not** NIP-17,
-NIP-44, or NIP-59 compatible. It uses Nostr as a relay transport but only
-interoperates with BitChat clients: private payloads travel inside kind-1059
-events whose `v2:`-prefixed content is a BitChat-specific XChaCha20-Poly1305
-construction, not NIP-44 encryption.
 
 ### Channel Types
 
@@ -94,7 +80,7 @@ Private messages use **intelligent transport selection**:
 2. **Nostr Fallback** (when Bluetooth unavailable)
 
    - Uses recipient's Nostr public key
-   - BitChat's app-specific private-envelope encryption
+   - NIP-17 gift-wrapping for privacy
    - Routes through global relay network
 
 3. **Smart Queuing** (when neither available)
@@ -107,62 +93,30 @@ For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.m
 
 ### Option 1: Using Xcode
 
-```bash
-open bitchat.xcodeproj
-```
+   ```bash
+   cd bitchat
+   open bitchat.xcodeproj
+   ```
 
-For a signed device build, create your ignored local configuration and replace
-the example team ID with your Apple Developer Team ID:
-
-```bash
-cp Configs/Local.xcconfig.example Configs/Local.xcconfig
-```
-
-`Local.xcconfig.example` derives unique app and App Group identifiers from that
-team ID. The entitlement files already reference `$(APP_GROUP_ID)`, so tracked
-project or entitlement files do not need to be edited.
-
-Useful command-line checks from the repository root:
-
-```bash
-# macOS Debug build without signing
-xcodebuild -project bitchat.xcodeproj -scheme "bitchat (macOS)" \
-  -configuration Debug CODE_SIGNING_ALLOWED=NO build
-
-# Full SwiftPM test suite
-swift test
-
-# iOS simulator tests
-xcodebuild -project bitchat.xcodeproj -scheme "bitchat (iOS)" \
-  -sdk iphonesimulator \
-  -destination 'platform=iOS Simulator,name=iPhone 17' test
-```
-
-If `iPhone 17` is unavailable, choose an installed simulator from:
-
-```bash
-xcodebuild -showdestinations -project bitchat.xcodeproj -scheme "bitchat (iOS)"
-```
+   To run on a device there're a few steps to prepare the code:
+   - Clone the local configs: `cp Configs/Local.xcconfig.example Configs/Local.xcconfig`
+   - Add your Developer Team ID into the newly created `Configs/Local.xcconfig`
+      - Bundle ID would be set to `chat.bitchat.<team_id>` (unless you set to something else)
+   - Entitlements need to be updated manually (TODO: Automate):
+      - Search and replace `group.chat.bitchat` with `group.<your_bundle_id>` (e.g. `group.chat.bitchat.ABC123`)
 
 ### Option 2: Using `just`
 
-```bash
-brew install just
-just check
-just run
-```
+   ```bash
+   brew install just
+   ```
 
-`just build` and `just run` use the current `bitchat (macOS)` scheme and keep
-Xcode output in the ignored `.DerivedData/` directory. They never patch source,
-project, configuration, or entitlement files.
-
-`just clean` removes only `.DerivedData/` and `.build/`. It does not invoke Git
-or restore tracked files, so uncommitted work is preserved. `just test` runs the
-SwiftPM suite and `just test-ios` runs the iPhone 17 simulator suite.
+Want to try this on macos: `just run` will set it up and run from source.
+Run `just clean` afterwards to restore things to original state for mobile app building and development.
 
 ## Localization
 
-- App localizations live in `bitchat/Localizable.xcstrings`.
-- Share extension strings are separate in `bitchatShareExtension/Localization/Localizable.xcstrings`.
+- Base app resources live under `bitchat/Localization/Base.lproj/`. Add new copy to `Localizable.strings` and plural rules to `Localizable.stringsdict`.
+- Share extension strings are separate in `bitchatShareExtension/Localization/Base.lproj/Localizable.strings`.
 - Prefer keys that describe intent (`app_info.features.offline.title`) and reuse existing ones where possible.
 - Run `xcodebuild -project bitchat.xcodeproj -scheme "bitchat (macOS)" -configuration Debug CODE_SIGNING_ALLOWED=NO build` to compile-check any localization updates.

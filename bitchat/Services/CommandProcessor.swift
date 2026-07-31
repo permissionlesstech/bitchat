@@ -90,9 +90,6 @@ protocol CommandContextProvider: AnyObject {
 final class CommandProcessor {
     weak var contextProvider: CommandContextProvider?
     weak var meshService: Transport?
-    /// Mesh-only command surfaces, absent when the transport lacks them.
-    private var meshDiagnostics: MeshDiagnosing? { meshService as? MeshDiagnosing }
-    private var meshArchive: MeshPublicArchiving? { meshService as? MeshPublicArchiving }
     private let identityManager: SecureIdentityStateManagerProtocol
 
     init(contextProvider: CommandContextProvider? = nil, meshService: Transport? = nil, identityManager: SecureIdentityStateManagerProtocol) {
@@ -374,7 +371,7 @@ final class CommandProcessor {
             }
             // Scrub their carried public messages now, while the peerID is
             // resolvable, so they can't resurface as archived echoes.
-            meshArchive?.purgeArchivedPublicMessages(from: peerID)
+            meshService?.purgeArchivedPublicMessages(from: peerID)
             return .success(message: "blocked \(nickname). you will no longer receive messages from them")
         }
         // Mesh lookup failed; try geohash (Nostr) participant by display name
@@ -477,7 +474,7 @@ final class CommandProcessor {
         // meshPingTimeoutSeconds later, and reading the selected chat at
         // callback time would misroute the result after a chat switch.
         let destination = contextProvider?.currentCommandDestination() ?? .meshTimeline
-        meshDiagnostics?.sendMeshPing(to: target.peerID) { [weak currentProvider] result in
+        meshService?.sendMeshPing(to: target.peerID) { [weak currentProvider] result in
             let provider = currentProvider
             guard let result else {
                 provider?.addCommandOutput("no reply from \(nickname)", to: destination)
@@ -499,7 +496,7 @@ final class CommandProcessor {
         }
 
         guard let mesh = meshService,
-              let intermediates = meshDiagnostics?.computeMeshPath(to: target.peerID) else {
+              let intermediates = mesh.computeMeshPath(to: target.peerID) else {
             return .success(message: "no known path to \(target.nickname)")
         }
         // Graph-derived from gossiped neighbor claims, not route-recorded —

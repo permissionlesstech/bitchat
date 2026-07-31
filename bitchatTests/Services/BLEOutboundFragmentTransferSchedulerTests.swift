@@ -21,20 +21,111 @@ struct BLEOutboundFragmentTransferSchedulerTests {
     }
 
     @Test
-    func explicitTransferIDReservesEncryptedPrivateFileFragments() {
+    func privateImageNoiseChunkTrainsThrottleAtTwoConcurrentAndDoNotSerializeToOne() {
         var scheduler = BLEOutboundFragmentTransferScheduler()
-        let request = makeRequest(
+        let peerID = PeerID(str: "1122334455667788")
+        let imageTransferId = "private-image-transfer"
+        var startedTrainIds: [String] = []
+        var queuedTrainIds: [String] = []
+        var maxActiveCount = 0
+
+        for index in 0..<9 {
+            let trainId = "\(imageTransferId)#noise-chunk-\(index)"
+            let request = makeRequest(
+                type: MessageType.noiseEncrypted.rawValue,
+                transferId: imageTransferId,
+                payload: "encrypted-chunk-\(index)",
+                directedPeer: peerID,
+                fragmentTrainId: trainId,
+                reportsTransferProgress: false
+            )
+
+            switch scheduler.submit(request, maxConcurrentTransfers: 2) {
+            case let .start(_, reservedTransferId?):
+                startedTrainIds.append(reservedTransferId)
+                _ = scheduler.activateReservedTransfer(id: reservedTransferId, totalFragments: 1, workItems: [])
+            case let .queued(_, transferId?, _):
+                queuedTrainIds.append(transferId)
+            default:
+                Issue.record("Expected private image chunk train to start or queue with a reservation id")
+            }
+            maxActiveCount = max(maxActiveCount, scheduler.activeCount)
+        }
+
+        #expect(startedTrainIds == [
+            "\(imageTransferId)#noise-chunk-0",
+            "\(imageTransferId)#noise-chunk-1"
+        ])
+        #expect(queuedTrainIds.count == 7)
+        #expect(maxActiveCount == 2)
+        #expect(scheduler.activeCount == 2)
+        #expect(scheduler.pendingCount == 7)
+
+        #expect(scheduler.markFragmentSent(transferId: startedTrainIds[0]) == .complete(sentFragments: 1, totalFragments: 1))
+        let starts = scheduler.reservePendingStarts(maxConcurrentTransfers: 2)
+
+        #expect(scheduler.activeCount == 2)
+        #expect(scheduler.pendingCount == 6)
+        if case let .start(request, reservedTransferId?) = starts.first {
+            #expect(request.packet.type == MessageType.noiseEncrypted.rawValue)
+            #expect(request.directedPeer == peerID)
+            #expect(request.transferId == imageTransferId)
+            #expect(request.fragmentTrainId == "\(imageTransferId)#noise-chunk-2")
+            #expect(reservedTransferId == "\(imageTransferId)#noise-chunk-2")
+            #expect(!request.reportsTransferProgress)
+        } else {
+            Issue.record("Expected the next queued private image chunk train to start when a slot frees")
+        }
+    }
+
+    @Test
+    func mixedPublicFileAndPrivateImageChunkTrainsShareOneGlobalTransferPool() {
+        var scheduler = BLEOutboundFragmentTransferScheduler()
+        let peerID = PeerID(str: "1122334455667788")
+        let publicRequest = makeRequest(
+            type: MessageType.fileTransfer.rawValue,
+            transferId: "public-file-transfer",
+            payload: "public-file"
+        )
+        let firstPrivateTrain = makeRequest(
             type: MessageType.noiseEncrypted.rawValue,
-            transferId: "private-media"
+            transferId: "private-image-transfer",
+            payload: "encrypted-chunk-0",
+            directedPeer: peerID,
+            fragmentTrainId: "private-image-transfer#noise-chunk-0",
+            reportsTransferProgress: false
+        )
+        let secondPrivateTrain = makeRequest(
+            type: MessageType.noiseEncrypted.rawValue,
+            transferId: "private-image-transfer",
+            payload: "encrypted-chunk-1",
+            directedPeer: peerID,
+            fragmentTrainId: "private-image-transfer#noise-chunk-1",
+            reportsTransferProgress: false
         )
 
-        let result = scheduler.submit(request, maxConcurrentTransfers: 1)
+        guard case let .start(_, publicReservation?) = scheduler.submit(publicRequest, maxConcurrentTransfers: 2) else {
+            Issue.record("Expected public file transfer to reserve the first slot")
+            return
+        }
+        _ = scheduler.activateReservedTransfer(id: publicReservation, totalFragments: 1, workItems: [])
 
-        if case let .start(_, reservedTransferId) = result {
-            #expect(reservedTransferId == "private-media")
-            #expect(scheduler.activeCount == 1)
+        guard case let .start(_, privateReservation?) = scheduler.submit(firstPrivateTrain, maxConcurrentTransfers: 2) else {
+            Issue.record("Expected first private image chunk train to reserve the second slot")
+            return
+        }
+        _ = scheduler.activateReservedTransfer(id: privateReservation, totalFragments: 1, workItems: [])
+
+        let result = scheduler.submit(secondPrivateTrain, maxConcurrentTransfers: 2)
+
+        if case let .queued(request, transferId, position) = result {
+            #expect(request.packet.type == MessageType.noiseEncrypted.rawValue)
+            #expect(transferId == "private-image-transfer#noise-chunk-1")
+            #expect(position == .back)
+            #expect(scheduler.activeCount == 2)
+            #expect(scheduler.pendingCount == 1)
         } else {
-            Issue.record("Expected encrypted private media to reserve its progress slot")
+            Issue.record("Expected mixed public/private trains to share the same two-slot pool")
         }
     }
 
@@ -261,48 +352,6 @@ struct BLEOutboundFragmentTransferSchedulerTests {
     }
 
     @Test
-    func blockedDuplicateAtFrontOfQueueDoesNotStarveALaterUnrelatedPendingTransfer() {
-        // Bug: reservePendingStarts spent the slot budget on a pending
-        // request the moment it was dequeued, before checking whether that
-        // request would actually be admitted. A resend of still-active
-        // content sitting at the front of the queue therefore consumed a
-        // slot even though it was deferred back to the queue rather than
-        // started -- starving an unrelated, genuinely startable transfer
-        // right behind it until some other transfer happened to complete.
-        var scheduler = BLEOutboundFragmentTransferScheduler()
-        let t1 = makeRequest(type: MessageType.fileTransfer.rawValue, transferId: "t1", payload: "file-a")
-        let t2 = makeRequest(type: MessageType.fileTransfer.rawValue, transferId: "t2", payload: "file-b")
-        let dupT1 = makeRequest(type: MessageType.fileTransfer.rawValue, transferId: "t1", payload: "file-a")
-        let unrelated = makeRequest(type: MessageType.fileTransfer.rawValue, transferId: "t3", payload: "file-c")
-
-        _ = scheduler.submit(t1, maxConcurrentTransfers: 2)
-        _ = scheduler.submit(t2, maxConcurrentTransfers: 2)
-        #expect(scheduler.activeCount == 2)
-
-        // Both slots are full, so a resend of "t1" (still active) and an
-        // unrelated transfer both land in the pending queue, in that order.
-        _ = scheduler.submit(dupT1, maxConcurrentTransfers: 2)
-        _ = scheduler.submit(unrelated, maxConcurrentTransfers: 2)
-        #expect(scheduler.pendingCount == 2)
-
-        // "t2" finishes; "t1" stays active, so the queued "t1" resend at the
-        // front of the queue is still blocked when we reserve pending starts.
-        let didActivate = scheduler.activateReservedTransfer(id: "t2", totalFragments: 1, workItems: [])
-        #expect(didActivate)
-        #expect(scheduler.markFragmentSent(transferId: "t2") == .complete(sentFragments: 1, totalFragments: 1))
-
-        let starts = scheduler.reservePendingStarts(maxConcurrentTransfers: 2)
-
-        let startedTransferIds: [String] = starts.compactMap {
-            if case let .start(_, reservedTransferId) = $0 { return reservedTransferId }
-            return nil
-        }
-        #expect(startedTransferIds == ["t3"], "the unrelated pending transfer must start in the same pass despite the blocked front item")
-        #expect(scheduler.activeCount == 2, "t1 (still running) and the newly-started t3")
-        #expect(scheduler.pendingCount == 1, "only the blocked t1 resend remains queued")
-    }
-
-    @Test
     func removeAllReturnsActiveWorkItemsAndDropsPendingTransfers() {
         var scheduler = BLEOutboundFragmentTransferScheduler()
         let active = makeRequest(type: MessageType.fileTransfer.rawValue, transferId: "active")
@@ -328,6 +377,8 @@ struct BLEOutboundFragmentTransferSchedulerTests {
         transferId: String?,
         payload: String? = nil,
         directedPeer: PeerID? = nil,
+        fragmentTrainId: String? = nil,
+        reportsTransferProgress: Bool = true,
         requireDirectPeerLink: Bool = false
     ) -> BLEOutboundFragmentTransferRequest {
         BLEOutboundFragmentTransferRequest(
@@ -344,6 +395,8 @@ struct BLEOutboundFragmentTransferSchedulerTests {
             maxChunk: nil,
             directedPeer: directedPeer,
             transferId: transferId,
+            fragmentTrainId: fragmentTrainId,
+            reportsTransferProgress: reportsTransferProgress,
             requireDirectPeerLink: requireDirectPeerLink
         )
     }

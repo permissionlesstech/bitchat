@@ -501,9 +501,6 @@ final class ChatPeerIdentityCoordinator {
 
     @MainActor
     func getPeerIDForNickname(_ nickname: String) -> PeerID? {
-        // Queries arrive from typed commands and message content, so bring
-        // them to the same canonical (NFC) form nicknames are stored in.
-        let nickname = nickname.normalizedNickname
         switch context.activeChannel {
         case .location:
             if nickname.contains("#"),

@@ -39,4 +39,13 @@ enum NostrRelayURL {
 
         return components.string
     }
+
+    static func directoryAddress(_ rawValue: String) -> String? {
+        guard var normalized = normalized(rawValue, defaultScheme: "wss") else { return nil }
+        for prefix in ["wss://", "ws://"] where normalized.hasPrefix(prefix) {
+            normalized.removeFirst(prefix.count)
+            break
+        }
+        return normalized
+    }
 }

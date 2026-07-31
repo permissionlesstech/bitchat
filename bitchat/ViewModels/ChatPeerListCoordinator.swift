@@ -100,13 +100,8 @@ final class ChatPeerListCoordinator: @unchecked Sendable {
 
     func didUpdatePeerList(_ peers: [PeerID]) {
         Task { @MainActor [weak self] in
-            self?.didUpdatePeerListSynchronously(peers)
+            self?.handlePeerListUpdate(peers)
         }
-    }
-
-    @MainActor
-    func didUpdatePeerListSynchronously(_ peers: [PeerID]) {
-        handlePeerListUpdate(peers)
     }
 }
 

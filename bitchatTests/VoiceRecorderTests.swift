@@ -13,16 +13,17 @@ import Testing
 private final class VoiceRecorderTestSession: SessionApplying, @unchecked Sendable {
     private let lock = NSLock()
     private let activationGate = DispatchSemaphore(value: 0)
-    private let activationBeganGate = DispatchSemaphore(value: 0)
     private let shouldGateFirstActivation: Bool
     private var gatedFirstActivation = false
     private var _activationCalls: [Bool] = []
+    private var _activationBegan = false
 
     init(gateFirstActivation: Bool = false) {
         self.shouldGateFirstActivation = gateFirstActivation
     }
 
     var activationCalls: [Bool] { lock.withLock { _activationCalls } }
+    var activationBegan: Bool { lock.withLock { _activationBegan } }
 
     func setCategory(_ category: AudioSessionCoordinator.Category) throws {}
 
@@ -31,25 +32,11 @@ private final class VoiceRecorderTestSession: SessionApplying, @unchecked Sendab
             _activationCalls.append(active)
             guard active, shouldGateFirstActivation, !gatedFirstActivation else { return false }
             gatedFirstActivation = true
+            _activationBegan = true
             return true
         }
         if shouldWait {
-            activationBeganGate.signal()
             activationGate.wait()
-        }
-    }
-
-    func waitUntilActivationBegan(
-        timeout: DispatchTimeInterval = .seconds(5)
-    ) async -> Bool {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                continuation.resume(
-                    returning: self.activationBeganGate.wait(
-                        timeout: DispatchTime.now() + timeout
-                    ) == .success
-                )
-            }
         }
     }
 
@@ -155,34 +142,22 @@ private final class TestVoiceAudioRecorderFactory: VoiceAudioRecorderCreating {
 /// this remains deterministic when the full test suite saturates the executor.
 private final class VoiceRecorderPaddingGate: @unchecked Sendable {
     private let lock = NSLock()
-    private let enteredGate = DispatchSemaphore(value: 0)
+    private var _entered = false
     private var isOpen = false
     private var openWaiters: [CheckedContinuation<Void, Never>] = []
+
+    var entered: Bool { lock.withLock { _entered } }
 
     func wait() async {
         await withCheckedContinuation { continuation in
             let resumeImmediately = lock.withLock { () -> Bool in
+                _entered = true
                 guard !isOpen else { return true }
                 openWaiters.append(continuation)
                 return false
             }
-            enteredGate.signal()
             if resumeImmediately {
                 continuation.resume()
-            }
-        }
-    }
-
-    func waitUntilEntered(
-        timeout: DispatchTimeInterval = .seconds(5)
-    ) async -> Bool {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                continuation.resume(
-                    returning: self.enteredGate.wait(
-                        timeout: DispatchTime.now() + timeout
-                    ) == .success
-                )
             }
         }
     }
@@ -206,6 +181,18 @@ struct VoiceRecorderTests {
         return url
     }
 
+    private func waitUntil(
+        _ condition: () -> Bool,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while !condition(), ContinuousClock.now < deadline {
+            await Task.yield()
+            try? await Task.sleep(nanoseconds: 1_000_000)
+        }
+        #expect(condition(), sourceLocation: sourceLocation)
+    }
+
     @Test func cancelWhileSessionAcquireIsInFlightNeverCreatesARecorder() async throws {
         let directory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -223,7 +210,7 @@ struct VoiceRecorderTests {
         let owner = VoiceRecorder.RecordingOwner()
 
         let startTask = Task { try await voiceRecorder.startRecording(owner: owner) }
-        #expect(await session.waitUntilActivationBegan())
+        await waitUntil { session.activationBegan }
 
         await voiceRecorder.cancelRecording(owner: owner)
         session.resumeActivation()
@@ -321,7 +308,7 @@ struct VoiceRecorderTests {
         try await finishingHold.start()
         let firstURL = try #require(factory.urls.first)
         let finishTask = Task { await finishingHold.finish() }
-        #expect(await paddingGate.waitUntilEntered())
+        await waitUntil { paddingGate.entered }
 
         await #expect(throws: VoiceRecorder.RecorderError.recordingInProgress) {
             try await rejectedHold.start()
@@ -371,35 +358,6 @@ struct VoiceRecorderTests {
         #expect(secondRecorder.stopCallCount == 1)
         #expect(FileManager.default.fileExists(atPath: firstURL.path))
         #expect(FileManager.default.fileExists(atPath: secondURL.path))
-    }
-
-    @Test func classicSessionPanicStopsRecorderAndDeletesFileBeforeReturning() async throws {
-        let directory = try makeTemporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-
-        let rawSession = VoiceRecorderTestSession()
-        let coordinator = AudioSessionCoordinator(session: rawSession)
-        let factory = TestVoiceAudioRecorderFactory(plans: [.success])
-        let voiceRecorder = VoiceRecorder(
-            sessionCoordinator: coordinator,
-            recorderFactory: factory,
-            permissionGranted: { true },
-            paddingInterval: 0,
-            outputDirectory: directory
-        )
-        let capture = VoiceNoteCaptureSession(recorder: voiceRecorder)
-
-        try await capture.start()
-        let url = try #require(factory.urls.first)
-        let recorder = try #require(factory.recorders.first)
-
-        capture.panicCancelSynchronously()
-
-        #expect(recorder.stopCallCount == 1)
-        #expect(!recorder.isRecording)
-        #expect(!FileManager.default.fileExists(atPath: url.path))
-        await coordinator.drain()
-        #expect(rawSession.activationCalls == [true, false])
     }
 
     private func verifyFailedStart(

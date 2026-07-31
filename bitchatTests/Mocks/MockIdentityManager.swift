@@ -14,8 +14,6 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
     private var blockedFingerprints: Set<String> = []
     private var blockedNostrPubkeys: Set<String> = []
     private var socialIdentities: [String: SocialIdentity] = [:]
-    private var privateMediaCapableFingerprints: Set<String> = []
-    private var authenticatedSigningKeys: [String: Data] = [:]
 
     init(_: KeychainManagerProtocol) {}
     
@@ -89,10 +87,7 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
     
     func registerEphemeralSession(peerID: PeerID, handshakeState: HandshakeState) {}
 
-    func clearAllIdentityData() {
-        privateMediaCapableFingerprints.removeAll()
-        authenticatedSigningKeys.removeAll()
-    }
+    func clearAllIdentityData() {}
     
     func removeEphemeralSession(peerID: PeerID) {}
     
@@ -104,22 +99,6 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
 
     func getVerifiedFingerprints() -> Set<String> {
         Set()
-    }
-
-    func markPrivateMediaCapable(fingerprint: String) {
-        privateMediaCapableFingerprints.insert(fingerprint)
-    }
-
-    func hasObservedPrivateMediaCapability(fingerprint: String) -> Bool {
-        privateMediaCapableFingerprints.contains(fingerprint)
-    }
-
-    func bindAuthenticatedSigningPublicKey(_ signingPublicKey: Data, fingerprint: String) {
-        authenticatedSigningKeys[fingerprint] = signingPublicKey
-    }
-
-    func authenticatedSigningPublicKey(forFingerprint fingerprint: String) -> Data? {
-        authenticatedSigningKeys[fingerprint]
     }
 
     // MARK: Vouching (transitive verification)

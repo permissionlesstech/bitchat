@@ -50,7 +50,7 @@ struct PublicChatE2ETests {
         var bobReceivedMessage = false
         var charlieReceivedMessage = false
         
-        await confirmation("Both receive message", expectedCount: 2) { receiveMessage in
+        await confirmation("Both recieve message", expectedCount: 2) { receiveMessage in
             bob.messageDeliveryHandler = { message in
                 if message.content == TestConstants.testMessage1 {
                     if !bobReceivedMessage {

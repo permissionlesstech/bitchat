@@ -85,11 +85,6 @@ protocol ChatPrivateConversationContext: AnyObject {
     func routePrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String)
     @discardableResult
     func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool
-    /// Confirms an authenticated delivery/read acknowledgement so the router
-    /// stops retaining the original private message for resend. The peer
-    /// aliases scope the removal to the authenticated sender.
-    @discardableResult
-    func markMessageDelivered(_ messageID: String, for peerIDs: [PeerID]) -> Bool
     func sendMeshReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID)
     func sendGeohashPrivateMessage(_ content: String, toRecipientHex recipientHex: String, from identity: NostrIdentity, messageID: String)
     func sendGeohashDeliveryAck(for messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity)
@@ -169,11 +164,6 @@ extension ChatViewModel: ChatPrivateConversationContext {
     @discardableResult
     func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool {
         messageRouter.sendReadReceipt(receipt, to: peerID)
-    }
-
-    @discardableResult
-    func markMessageDelivered(_ messageID: String, for peerIDs: [PeerID]) -> Bool {
-        messageRouter.markDelivered(messageID, for: peerIDs)
     }
 
     func routeFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
@@ -258,60 +248,6 @@ final class ChatPrivateConversationCoordinator {
             seenInboundGeoDMIDs.remove(seenInboundGeoDMOrder.removeFirst())
         }
         return true
-    }
-
-    /// Account DMs can arrive under the authenticated peer's full Noise key
-    /// while an existing mesh conversation is keyed by its derived short ID.
-    /// These are the only aliases we may safely join: the short ID is derived
-    /// directly from the authenticated key, rather than guessed from a
-    /// nickname or found by scanning unrelated chats.
-    private func accountConversationAliases(for peerID: PeerID) -> [PeerID] {
-        guard peerID.noiseKey != nil else { return [peerID] }
-        let shortPeerID = peerID.toShort()
-        return shortPeerID == peerID ? [peerID] : [peerID, shortPeerID]
-    }
-
-    /// Keeps a connected account DM on its short routing ID and an offline DM
-    /// on its stable Noise-key ID, folding the other authenticated alias into
-    /// it and handing an open sheet across without closing it.
-    private func consolidateAccountConversationAliases(for peerID: PeerID) -> PeerID {
-        let aliases = accountConversationAliases(for: peerID)
-        guard aliases.count > 1 else { return peerID }
-
-        let shortPeerID = peerID.toShort()
-        let targetPeerID = context.isPeerConnected(shortPeerID) ? shortPeerID : peerID
-        let sourcePeerIDs = aliases.filter { $0 != targetPeerID }
-
-        for sourcePeerID in sourcePeerIDs where !context.privateMessages(for: sourcePeerID).isEmpty {
-            context.migratePrivateChat(from: sourcePeerID, to: targetPeerID)
-            // ConversationStore deliberately preserves message values during a
-            // generic migration, including its destination-wins rule for
-            // duplicate IDs. Rewrite the resulting canonical copies so later
-            // read-receipt scans compare against the new routing key without
-            // replacing a newer destination value with the source snapshot.
-            let canonicalMessages = context.privateMessages(for: targetPeerID)
-            for message in canonicalMessages where message.senderPeerID == sourcePeerID {
-                context.upsertPrivateMessage(
-                    BitchatMessage(
-                        id: message.id,
-                        sender: message.sender,
-                        content: message.content,
-                        timestamp: message.timestamp,
-                        isRelay: message.isRelay,
-                        originalSender: message.originalSender,
-                        isPrivate: message.isPrivate,
-                        recipientNickname: message.recipientNickname,
-                        senderPeerID: targetPeerID,
-                        mentions: message.mentions,
-                        deliveryStatus: message.deliveryStatus,
-                        isBridged: message.isBridged
-                    ),
-                    in: targetPeerID
-                )
-            }
-        }
-        context.handOffSelectedPrivateChat(from: sourcePeerIDs, to: targetPeerID)
-        return targetPeerID
     }
 
     func sendPrivateMessage(_ content: String, to peerID: PeerID) {
@@ -528,8 +464,6 @@ final class ChatPrivateConversationCoordinator {
             return
         }
 
-        let conversationPeerID = consolidateAccountConversationAliases(for: convKey)
-
         if context.privateChatsContainMessage(withID: messageId) { return }
 
         let message = BitchatMessage(
@@ -540,18 +474,18 @@ final class ChatPrivateConversationCoordinator {
             isRelay: false,
             isPrivate: true,
             recipientNickname: context.nickname,
-            senderPeerID: conversationPeerID,
+            senderPeerID: convKey,
             deliveryStatus: .delivered(to: context.nickname, at: Date())
         )
 
-        context.appendPrivateMessage(message, to: conversationPeerID)
+        context.appendPrivateMessage(message, to: convKey)
 
-        let isViewing = context.selectedPrivateChatPeer == conversationPeerID
+        let isViewing = context.selectedPrivateChatPeer == convKey
         let wasReadBefore = context.sentReadReceipts.contains(messageId)
         let isRecentMessage = Date().timeIntervalSince(messageTimestamp) < 30
         let shouldMarkUnread = !wasReadBefore && !isViewing && isRecentMessage
         if shouldMarkUnread {
-            context.markPrivateChatUnread(conversationPeerID)
+            context.markPrivateChatUnread(convKey)
         }
 
         if isViewing {
@@ -559,7 +493,7 @@ final class ChatPrivateConversationCoordinator {
         }
 
         if !isViewing && shouldMarkUnread {
-            context.notifyPrivateMessage(from: senderName, message: pm.content, peerID: conversationPeerID)
+            context.notifyPrivateMessage(from: senderName, message: pm.content, peerID: convKey)
         }
 
         context.notifyUIChanged()
@@ -568,30 +502,15 @@ final class ChatPrivateConversationCoordinator {
     func handleDelivered(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID) {
         guard let messageID = String(data: payload.data, encoding: .utf8) else { return }
 
-        let aliases = accountConversationAliases(for: convKey)
-        let clearedRetainedMessage = convKey.noiseKey != nil
-            ? context.markMessageDelivered(messageID, for: aliases)
-            : false
-        let hasConversationMessage = aliases.contains {
-            context.privateChat($0, containsMessageWithID: messageID)
-        }
-        if hasConversationMessage {
-            let conversationPeerID = consolidateAccountConversationAliases(for: convKey)
-            let didChange = context.setPrivateDeliveryStatus(
+        if context.privateChat(convKey, containsMessageWithID: messageID) {
+            context.setPrivateDeliveryStatus(
                 .delivered(to: context.displayNameForNostrPubkey(senderPubkey), at: Date()),
                 forMessageID: messageID,
-                peerID: conversationPeerID
+                peerID: convKey
             )
-            if didChange {
-                context.notifyUIChanged()
-            }
+            context.notifyUIChanged()
             SecureLogger.info(
                 "GeoDM: recv DELIVERED for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…",
-                category: .session
-            )
-        } else if clearedRetainedMessage {
-            SecureLogger.debug(
-                "GeoDM: recv DELIVERED for cleared mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…",
                 category: .session
             )
         } else {
@@ -605,29 +524,14 @@ final class ChatPrivateConversationCoordinator {
     func handleReadReceipt(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID) {
         guard let messageID = String(data: payload.data, encoding: .utf8) else { return }
 
-        let aliases = accountConversationAliases(for: convKey)
-        let clearedRetainedMessage = convKey.noiseKey != nil
-            ? context.markMessageDelivered(messageID, for: aliases)
-            : false
-        let hasConversationMessage = aliases.contains {
-            context.privateChat($0, containsMessageWithID: messageID)
-        }
-        if hasConversationMessage {
-            let conversationPeerID = consolidateAccountConversationAliases(for: convKey)
-            let didChange = context.setPrivateDeliveryStatus(
+        if context.privateChat(convKey, containsMessageWithID: messageID) {
+            context.setPrivateDeliveryStatus(
                 .read(by: context.displayNameForNostrPubkey(senderPubkey), at: Date()),
                 forMessageID: messageID,
-                peerID: conversationPeerID
+                peerID: convKey
             )
-            if didChange {
-                context.notifyUIChanged()
-            }
+            context.notifyUIChanged()
             SecureLogger.info("GeoDM: recv READ for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
-        } else if clearedRetainedMessage {
-            SecureLogger.debug(
-                "GeoDM: recv READ for cleared mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…",
-                category: .session
-            )
         } else {
             SecureLogger.warning("GeoDM: read ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
         }

@@ -9,19 +9,6 @@ enum TransportConfig {
     static let bleMaxInFlightAssemblies: Int = 128          // Cap concurrent fragment assemblies
     static let bleHighDegreeThreshold: Int = 6              // For adaptive TTL/probabilistic relays
     static let bleMaxConcurrentTransfers: Int = 2           // Limit simultaneous large media sends
-    // Bounded wait for the session-authenticated capability proof used by
-    // private-media migration. Expiry never auto-sends clear bytes; it only
-    // resolves to the existing one-shot consent or downgrade-blocked path.
-    static let privateMediaCapabilityProofTimeoutSeconds: TimeInterval = 5
-    static let privateMediaCapabilityProofPendingPeerCap: Int = 64
-    static let privateMediaCapabilityProofWaitersPerPeerCap: Int = 16
-    /// Accepted private-media receipts and explicit-deletion tombstones each
-    /// receive this independent capacity.
-    static let privateMediaReceivedLedgerCapacity: Int = 4_096
-    /// A bounded retry horizon prevents stable receipt state from growing into
-    /// permanent application history.
-    static let privateMediaReceivedLedgerTTLSeconds: TimeInterval =
-        7 * 24 * 60 * 60
     static let bleFragmentRelayMinDelayMs: Int = 8          // Faster forwarding for media fragments
     static let bleFragmentRelayMaxDelayMs: Int = 25         // Upper jitter bound for fragment relays
     // Fragment relay TTL in sparse graphs; matches messageTTLDefault so media
@@ -59,7 +46,6 @@ enum TransportConfig {
     static let privateChatCap: Int = 1337
     static let meshTimelineCap: Int = 1337
     static let geoTimelineCap: Int = 1337
-    static let geoNicknameParticipantsCap: Int = 1337
     static let contentLRUCap: Int = 2000
     static let geoSamplingEventLRUCap: Int = 2000
 
@@ -95,31 +81,6 @@ enum TransportConfig {
     static let nostrDuplicateEventLogInterval: Int = 50
     // Sample interval for per-event debug logs on the inbound hot path.
     static let nostrInboundEventLogInterval: Int = 100
-    // Reject oversized/untrusted relay frames before JSON parse / store.
-    static let nostrMaxInboundMessageBytes: Int = 256 * 1024
-    static let nostrMaxEventTags: Int = 64
-    static let nostrMaxEventTagValues: Int = 16
-    static let nostrMaxEventTagValueBytes: Int = 1024
-    // Bounded per-relay inbound frame buffer. Each relay connection owns its
-    // own serial verify pipeline; if a relay floods faster than its Schnorr
-    // verification drains, the oldest buffered frames for THAT relay are
-    // dropped (bufferingNewest) so one relay cannot stall other relays.
-    // Nostr inbound is already best-effort (relays are redundant and events
-    // replay), so dropping a flooding relay's backlog is safe. Together with
-    // nostrInboundMaxFrameBytes this caps buffered inbound bytes at
-    // cap × maxFrameBytes (128 MiB) per hostile relay — bounded, not zero.
-    static let nostrInboundPerRelayBufferCap: Int = 256
-    // Hard per-frame byte bound, applied as URLSessionWebSocketTask
-    // .maximumMessageSize (oversized frames fail the receive instead of
-    // buffering). BitChat's legitimate Nostr traffic is small: geohash chat /
-    // presence events (kind 20000/20001), kind-1 notes, and NIP-17
-    // gift-wrapped DMs carrying text payloads or receipts are all a few KiB,
-    // and most public relays reject events beyond ~64–256 KiB anyway. 512 KiB
-    // leaves an order-of-magnitude margin over anything we produce or expect
-    // while halving the URLSession default (1 MiB), so a hostile relay's
-    // worst-case buffered pile-up per connection is
-    // nostrInboundPerRelayBufferCap × 512 KiB = 128 MiB instead of 256 MiB.
-    static let nostrInboundMaxFrameBytes: Int = 512 * 1024
 
     // Conversation store diagnostics (field observability)
     // Sample interval for the periodic store-audit "OK" heartbeat line
@@ -137,16 +98,11 @@ enum TransportConfig {
     static let uiSenderRateBucketRefillPerSec: Double = 1.0
     static let uiContentRateBucketCapacity: Double = 3
     static let uiContentRateBucketRefillPerSec: Double = 0.5
-    // Bound attacker-keyed bucket maps (sender IDs / content digests).
-    static let uiSenderRateBucketMaxEntries: Int = 2000
-    static let uiContentRateBucketMaxEntries: Int = 2000
-    static let uiRateBucketIdleTTL: TimeInterval = 10 * 60
-    // Cap teleported-participant markers so remote events cannot grow the set.
-    static let geoTeleportedParticipantsCap: Int = 1337
 
     // UI sleeps/delays
     static let uiStartupInitialDelaySeconds: TimeInterval = 1.0
     static let uiStartupPhaseDurationSeconds: TimeInterval = 2.0
+    static let uiAsyncShortSleepNs: UInt64 = 100_000_000
     static let uiReadReceiptRetryShortSeconds: TimeInterval = 0.1
     static let uiReadReceiptRetryLongSeconds: TimeInterval = 0.5
     static let uiBatchDispatchStaggerSeconds: TimeInterval = 0.15
@@ -259,7 +215,7 @@ enum TransportConfig {
     // Fallback deadline for treating a subscription's initial fetch as complete
     // when a relay never sends EOSE (generous to cover Tor circuit setup).
     static let nostrSubscriptionEOSEFallbackSeconds: TimeInterval = 10.0
-    // A bridge drop is durable only after NIP-01 `OK`. Relays that omit OK must
+    // A bridge drop is durable only after NIP-20 OK. Relays that omit OK must
     // not pin the router's in-flight state indefinitely.
     static let nostrConfirmedSendAckTimeoutSeconds: TimeInterval = 10.0
     // After this long, a relay marked permanently failed gets another chance.
@@ -358,6 +314,7 @@ enum TransportConfig {
 
     // Share extension
     static let uiShareExtensionDismissDelaySeconds: TimeInterval = 2.0
+    static let uiShareAcceptWindowSeconds: TimeInterval = 30.0
     static let uiMigrationCutoffSeconds: TimeInterval = 24 * 60 * 60
 
     // Gossip Sync Configuration

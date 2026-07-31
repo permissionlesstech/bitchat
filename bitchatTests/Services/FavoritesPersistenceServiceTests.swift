@@ -15,7 +15,7 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
 
         service.addFavorite(peerNoisePublicKey: peerKey, peerNostrPublicKey: "npub1alice", peerNickname: "Alice")
 
-        wait(for: [expectation], timeout: TestConstants.settleTimeout)
+        wait(for: [expectation], timeout: 1.0)
         XCTAssertTrue(service.isFavorite(peerKey))
         XCTAssertEqual(service.getFavoriteStatus(for: peerKey)?.peerNickname, "Alice")
         XCTAssertNotNil(keychain.load(key: storageKey, service: serviceKey))

@@ -1,6 +1,9 @@
 import BitFoundation
+import CoreGraphics
 import Foundation
+import ImageIO
 import Testing
+import UniformTypeIdentifiers
 #if os(iOS)
 import UIKit
 #else
@@ -58,6 +61,18 @@ struct ChatMediaPreparationTests {
         #expect(prepared.packet.fileSize == UInt64(prepared.packet.content.count))
         #expect(prepared.packet.encode() != nil)
     }
+
+    @Test
+    func prepareOriginalImagePacket_rejectsOversizedOriginalImage() throws {
+        let sourceURL = try makeOversizedPNGURL()
+        defer { try? FileManager.default.removeItem(at: sourceURL) }
+        let sourceSize = try Data(contentsOf: sourceURL).count
+        #expect(sourceSize > FileTransferLimits.maxImageBytes)
+
+        #expect(throws: ChatMediaPreparationError.imageTooLarge(bytes: sourceSize)) {
+            try ChatMediaPreparation.prepareOriginalImagePacket(from: sourceURL)
+        }
+    }
 }
 
 private func makeTemporaryImageURL() throws -> URL {
@@ -84,6 +99,56 @@ private func makeTemporaryImageURL() throws -> URL {
     }
     #endif
     try data.write(to: url, options: .atomic)
+    return url
+}
+
+private func makeOversizedPNGURL() throws -> URL {
+    let width = 1024
+    let height = 1024
+    var state: UInt64 = 0x1234_5678_9ABC_DEF0
+    var rgba = Data(count: width * height * 4)
+    rgba.withUnsafeMutableBytes { rawBuffer in
+        let bytes = rawBuffer.bindMemory(to: UInt8.self)
+        for pixel in 0..<(width * height) {
+            let offset = pixel * 4
+            state = state &* 6364136223846793005 &+ 1442695040888963407
+            bytes[offset] = UInt8(truncatingIfNeeded: state >> 24)
+            state = state &* 6364136223846793005 &+ 1442695040888963407
+            bytes[offset + 1] = UInt8(truncatingIfNeeded: state >> 32)
+            state = state &* 6364136223846793005 &+ 1442695040888963407
+            bytes[offset + 2] = UInt8(truncatingIfNeeded: state >> 40)
+            bytes[offset + 3] = 0xFF
+        }
+    }
+
+    guard let provider = CGDataProvider(data: rgba as CFData),
+          let image = CGImage(
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bitsPerPixel: 32,
+            bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+            provider: provider,
+            decode: nil,
+            shouldInterpolate: false,
+            intent: .defaultIntent
+          ) else {
+        throw ChatMediaPreparationTestError.imageEncodingFailed
+    }
+
+    let data = NSMutableData()
+    guard let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil) else {
+        throw ChatMediaPreparationTestError.imageEncodingFailed
+    }
+    CGImageDestinationAddImage(destination, image, nil)
+    guard CGImageDestinationFinalize(destination) else {
+        throw ChatMediaPreparationTestError.imageEncodingFailed
+    }
+
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent("image-too-large-\(UUID().uuidString).png")
+    try (data as Data).write(to: url, options: .atomic)
     return url
 }
 

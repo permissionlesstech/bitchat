@@ -355,7 +355,7 @@ final class LocationStateManagerTests: XCTestCase {
     }
 
     private func waitUntil(
-        timeout: TimeInterval = TestConstants.settleTimeout,
+        timeout: TimeInterval = 1.0,
         condition: @escaping @MainActor () -> Bool
     ) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)

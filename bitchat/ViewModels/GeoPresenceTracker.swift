@@ -103,8 +103,7 @@ final class GeoPresenceTracker {
         else {
             return
         }
-        // The signature was already verified (exactly once, off the main
-        // actor) by NostrRelayManager before delivery.
+        guard event.isValidSignature() else { return }
         guard shouldProcessGeoSamplingEvent(event.id) else { return }
 
         let existingCount = context.geoParticipantCount(for: gh)

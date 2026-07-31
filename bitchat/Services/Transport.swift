@@ -83,50 +83,8 @@ enum TransportEvent: @unchecked Sendable {
     case bluetoothStateUpdated(CBManagerState)
 }
 
-/// Downgrade-safe decision for a private-media recipient. Callers ask before
-/// prompting, and BLEService checks again when it consumes any one-shot
-/// legacy consent.
-enum PrivateMediaSendPolicy: Equatable {
-    case encrypted
-    /// A public announce hinted at encrypted media (or a prior authenticated
-    /// pin exists), but this exact Noise session has not yet supplied its
-    /// authenticated peer-state proof. Callers wait boundedly; they must not
-    /// pre-queue encrypted bytes or silently select the legacy path.
-    case awaitingCapabilityProof
-    case legacyRequiresConsent
-    case blockedDowngrade
-}
-
-/// Receiver-only persistence surface for explicit private-media deletion.
-/// Kept separate from `Transport` so sender retry branches can rebase without
-/// inheriting or implementing receiver storage concerns.
-protocol PrivateMediaDeletionPersisting: AnyObject {
-    @MainActor
-    func persistDeletedPrivateMedia(
-        messageIDs: [String],
-        payloadRelativePaths: [String: String],
-        protectedPayloadRelativePaths: Set<String>,
-        completion: @escaping @MainActor (Bool) -> Void
-    )
-
-    /// Gated unlink for a LEGACY (non-stable-ID) incoming payload whose
-    /// bubble was explicitly removed. Implementations delete the file only
-    /// when its path is not pending delivery and not reserved by any receipt
-    /// or in-flight deletion transaction; otherwise the file stays for
-    /// bounded quota cleanup.
-    @MainActor
-    func removeLegacyPrivateMediaPayload(relativePath: String)
-}
-
 protocol TransportEventDelegate: AnyObject {
     @MainActor func didReceiveTransportEvent(_ event: TransportEvent)
-}
-
-/// Optional typed-event contract for sinks that can synchronously decide
-/// whether an inbound message was accepted.
-protocol SynchronousMessageTransportEventDelegate: TransportEventDelegate {
-    @MainActor
-    func didReceiveTransportMessageSynchronously(_ message: BitchatMessage) -> Bool
 }
 
 protocol Transport: AnyObject {
@@ -203,14 +161,73 @@ protocol Transport: AnyObject {
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool)
     func sendBroadcastAnnounce()
     func sendDeliveryAck(for messageID: String, to peerID: PeerID)
+    func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String)
+    func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String)
+    func sendOriginalImagePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String)
+    func cancelTransfer(_ transferId: String)
+
+    // Live voice / push-to-talk (mesh transports only): one encoded
+    // `VoiceBurstPacket`, fire-and-forget inside the Noise session. Frames are
+    // only useful now — transports drop them (never queue) when no
+    // established session exists.
+    func sendVoiceFrame(_ burstContent: Data, to peerID: PeerID)
+    // Public-mesh counterpart: signed ephemeral broadcast, never synced.
+    func sendVoiceFrameBroadcast(_ burstContent: Data)
+
+    // Courier store-and-forward (mesh transports only): seal a message to the
+    // recipient's static key and hand it to connected couriers for physical
+    // delivery while the recipient is offline. Returns false when the
+    // transport cannot courier (no connected courier, or unsupported).
+    func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool
+
+    // Private groups (mesh transports only): creator-signed state travels
+    // 1:1 over Noise sessions; group messages flood like public broadcasts.
+    func sendGroupInvite(_ statePayload: Data, to peerID: PeerID)
+    func sendGroupKeyUpdate(_ statePayload: Data, to peerID: PeerID)
+    func broadcastGroupMessage(_ envelope: Data)
+
+    // Bulletin board (mesh transports only): broadcast a pre-signed board
+    // payload (post or tombstone) so it spreads over relay and gossip sync.
+    func sendBoardPayload(_ payload: Data)
+
+    // Mesh diagnostics (optional for transports). Defaults are inert so
+    // queue-backed transports (e.g. NostrTransport) stay untouched.
+    /// Sends a directed ping probe; the completion fires exactly once on the
+    /// main actor with the measured result, or nil on timeout/unsupported.
+    func sendMeshPing(to peerID: PeerID, completion: @escaping @MainActor (MeshPingResult?) -> Void)
+    /// Estimated intermediate hops toward `peerID` from gossiped topology
+    /// ([] = direct link, nil = no known path).
+    func computeMeshPath(to peerID: PeerID) -> [PeerID]?
+    /// Current mesh graph for the topology map; nil when unsupported.
+    func currentMeshTopology() -> MeshTopologySnapshot?
+
+    // QR verification (optional for transports)
+    func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
+    func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
+
+    // Vouching / transitive verification (optional for transports)
     /// Capabilities the peer advertised in its last verified announce;
     /// empty for peers that predate the capabilities TLV.
     func peerCapabilities(_ peerID: PeerID) -> PeerCapabilities
+    /// Sends an encoded vouch-attestation batch inside the Noise session.
+    func sendVouchAttestations(_ payload: Data, to peerID: PeerID)
     /// Appends a peer-authenticated observer. Unlike
     /// `installNoiseSessionCallbacks` this never touches the (single-slot)
     /// handshake-required callback, so secondary features can observe
     /// session establishment without disturbing the primary registration.
     func addPeerAuthenticatedObserver(_ handler: @escaping (PeerID, String) -> Void)
+
+    // Pending file management (BCH-01-002: files held in memory until user accepts)
+    func acceptPendingFile(id: String) -> URL?
+    func declinePendingFile(id: String)
+
+    // Store-and-forward archive (mesh transports only): the public messages
+    // this device is carrying for gossip sync, decoded for display as
+    // "heard here earlier" timeline echoes.
+    func collectArchivedPublicMessages(completion: @escaping @MainActor ([ArchivedPublicMessage]) -> Void)
+    /// Drops any carried public messages from a (newly blocked) sender so
+    /// they can't resurface as archived echoes on a later launch.
+    func purgeArchivedPublicMessages(from peerID: PeerID)
 }
 
 /// A carried public mesh message from the store-and-forward window, decoded
@@ -256,12 +273,43 @@ extension Transport {
         onHandshakeRequired: @escaping (PeerID) -> Void
     ) {}
 
+    func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {}
+    func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {}
+    func sendGroupInvite(_ statePayload: Data, to peerID: PeerID) {}
+    func sendGroupKeyUpdate(_ statePayload: Data, to peerID: PeerID) {}
+    func broadcastGroupMessage(_ envelope: Data) {}
     func peerCapabilities(_ peerID: PeerID) -> PeerCapabilities { [] }
+    func sendVouchAttestations(_ payload: Data, to peerID: PeerID) {}
     func addPeerAuthenticatedObserver(_ handler: @escaping (PeerID, String) -> Void) {}
+    func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool { false }
+    func sendBoardPayload(_ payload: Data) {}
+    func sendVoiceFrame(_ burstContent: Data, to peerID: PeerID) {}
+    func sendVoiceFrameBroadcast(_ burstContent: Data) {}
+
+    // Mesh diagnostics are mesh-transport-only; other transports report
+    // "no reply"/"no path" rather than pretending to measure anything.
+    func sendMeshPing(to peerID: PeerID, completion: @escaping @MainActor (MeshPingResult?) -> Void) {
+        Task { @MainActor in completion(nil) }
+    }
+    func computeMeshPath(to peerID: PeerID) -> [PeerID]? { nil }
+    func currentMeshTopology() -> MeshTopologySnapshot? { nil }
+    func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String) {}
+    func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String) {}
+    func sendOriginalImagePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String) {}
+    func cancelTransfer(_ transferId: String) {}
 
     func sendMessage(_ content: String, mentions: [String], messageID: String, timestamp: Date) {
         sendMessage(content, mentions: mentions)
     }
+
+    func acceptPendingFile(id: String) -> URL? { nil }
+    func declinePendingFile(id: String) {}
+
+    func collectArchivedPublicMessages(completion: @escaping @MainActor ([ArchivedPublicMessage]) -> Void) {
+        Task { @MainActor in completion([]) }
+    }
+
+    func purgeArchivedPublicMessages(from peerID: PeerID) {}
 }
 
 protocol TransportPeerEventsDelegate: AnyObject {
@@ -305,14 +353,3 @@ extension BitchatDelegate {
 }
 
 extension BLEService: Transport {}
-extension BLEService: MeshFileTransferring {}
-extension BLEService: MeshVoiceStreaming {}
-extension BLEService: MeshCourierTransporting {}
-extension BLEService: MeshGroupMessaging {}
-extension BLEService: MeshBoardBroadcasting {}
-extension BLEService: MeshDiagnosing {}
-extension BLEService: MeshVerifying {}
-extension BLEService: MeshPublicArchiving {}
-extension BLEService: BluetoothStateReporting {}
-extension BLEService: PanicResettingTransport {}
-extension BLEService: MeshBridgingTransport {}

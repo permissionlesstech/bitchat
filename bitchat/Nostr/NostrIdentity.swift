@@ -1,8 +1,7 @@
 import Foundation
 import P256K
 
-/// Manages the secp256k1 identity used by BitChat's Nostr relay features,
-/// including the proprietary private-envelope transport.
+/// Manages Nostr identity (secp256k1 keypair) for NIP-17 private messaging
 struct NostrIdentity: Codable {
     let privateKey: Data
     let publicKey: Data

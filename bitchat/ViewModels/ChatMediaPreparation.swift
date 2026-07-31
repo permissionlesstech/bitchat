@@ -54,4 +54,37 @@ enum ChatMediaPreparation {
             throw error
         }
     }
+
+    static func prepareOriginalImagePacket(from sourceURL: URL) throws -> ChatPreparedImage {
+        try ImageUtils.validateImageSource(at: sourceURL)
+        let mimeType = try ImageUtils.mimeTypeForImage(at: sourceURL)
+        guard let mime = MimeType(mimeType),
+              mime.category == .image,
+              mime.isAllowed else {
+            throw ImageUtilsError.invalidImage
+        }
+
+        let outputURL = try ImageUtils.copyOriginalImage(at: sourceURL)
+        do {
+            let data = try Data(contentsOf: outputURL)
+            guard data.count <= FileTransferLimits.maxImageBytes else {
+                throw ChatMediaPreparationError.imageTooLarge(bytes: data.count)
+            }
+            guard mime.matches(data: data) else {
+                throw ImageUtilsError.invalidImage
+            }
+
+            let packet = BitchatFilePacket(
+                fileName: outputURL.lastPathComponent,
+                fileSize: UInt64(data.count),
+                mimeType: mime.mimeString,
+                content: data
+            )
+            guard packet.encode() != nil else { throw ChatMediaPreparationError.encodingFailed }
+            return ChatPreparedImage(outputURL: outputURL, packet: packet)
+        } catch {
+            try? FileManager.default.removeItem(at: outputURL)
+            throw error
+        }
+    }
 }

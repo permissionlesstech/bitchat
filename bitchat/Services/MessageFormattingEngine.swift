@@ -39,23 +39,37 @@ final class MessageFormattingEngine {
 
     /// Precompiled regex patterns for message content parsing
     enum Patterns {
-        static let hashtag = SafeRegex.compile("#([a-zA-Z0-9_]+)")
+        static let hashtag: NSRegularExpression = {
+            try! NSRegularExpression(pattern: "#([a-zA-Z0-9_]+)", options: [])
+        }()
 
-        static let mention = SafeRegex.compile("@([\\p{L}0-9_]+(?:#[a-fA-F0-9]{4})?)")
+        static let mention: NSRegularExpression = {
+            try! NSRegularExpression(pattern: "@([\\p{L}0-9_]+(?:#[a-fA-F0-9]{4})?)", options: [])
+        }()
 
-        static let cashu = SafeRegex.compile("\\bcashu[AB][A-Za-z0-9._-]{40,}\\b")
+        static let cashu: NSRegularExpression = {
+            try! NSRegularExpression(pattern: "\\bcashu[AB][A-Za-z0-9._-]{40,}\\b", options: [])
+        }()
 
-        static let bolt11 = SafeRegex.compile("(?i)\\bln(bc|tb|bcrt)[0-9][a-z0-9]{50,}\\b")
+        static let bolt11: NSRegularExpression = {
+            try! NSRegularExpression(pattern: "(?i)\\bln(bc|tb|bcrt)[0-9][a-z0-9]{50,}\\b", options: [])
+        }()
 
-        static let lnurl = SafeRegex.compile("(?i)\\blnurl1[a-z0-9]{20,}\\b")
+        static let lnurl: NSRegularExpression = {
+            try! NSRegularExpression(pattern: "(?i)\\blnurl1[a-z0-9]{20,}\\b", options: [])
+        }()
 
-        static let lightningScheme = SafeRegex.compile("(?i)\\blightning:[^\\s]+")
+        static let lightningScheme: NSRegularExpression = {
+            try! NSRegularExpression(pattern: "(?i)\\blightning:[^\\s]+", options: [])
+        }()
 
         static let linkDetector: NSDataDetector? = {
             try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
         }()
 
-        static let quickCashuPresence = SafeRegex.compile("\\bcashu[AB][A-Za-z0-9._-]{40,}\\b")
+        static let quickCashuPresence: NSRegularExpression = {
+            try! NSRegularExpression(pattern: "\\bcashu[AB][A-Za-z0-9._-]{40,}\\b", options: [])
+        }()
     }
 
     // MARK: - Match Types
@@ -110,12 +124,11 @@ final class MessageFormattingEngine {
             )
 
             // Format content
-            let myNickname = context.nickname.normalizedNickname
             let contentResult = formatContent(
                 message.content,
                 baseColor: baseColor,
                 isSelf: isSelf,
-                isMentioned: message.mentions?.contains { $0.normalizedNickname == myNickname } ?? false
+                isMentioned: message.mentions?.contains(context.nickname) ?? false
             )
             result.append(contentResult)
 
@@ -238,9 +251,9 @@ final class MessageFormattingEngine {
         isSelf: Bool,
         isMentioned: Bool
     ) -> AttributedString {
-        // For very long content, use plain formatting to avoid expensive
-        // regex/detector work. Cashu presence must not disable this guard.
-        if content.isOversizedForRichFormatting() {
+        // For very long content without special tokens, use plain formatting
+        let containsCashu = containsCashuToken(content)
+        if (content.count > 4000 || content.hasVeryLongToken(threshold: 1024)) && !containsCashu {
             return formatPlainContent(content, baseColor: baseColor, isSelf: isSelf)
         }
 

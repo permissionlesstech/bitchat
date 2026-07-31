@@ -7,6 +7,8 @@ struct BLEOutboundFragmentTransferRequest {
     let maxChunk: Int?
     let directedPeer: PeerID?
     let transferId: String?
+    let fragmentTrainId: String?
+    let reportsTransferProgress: Bool
     let requireDirectPeerLink: Bool
     let requireNoiseAuthenticatedPeerLink: Bool
 
@@ -16,6 +18,8 @@ struct BLEOutboundFragmentTransferRequest {
         maxChunk: Int?,
         directedPeer: PeerID?,
         transferId: String?,
+        fragmentTrainId: String? = nil,
+        reportsTransferProgress: Bool = true,
         requireDirectPeerLink: Bool = false,
         requireNoiseAuthenticatedPeerLink: Bool = false
     ) {
@@ -24,14 +28,18 @@ struct BLEOutboundFragmentTransferRequest {
         self.maxChunk = maxChunk
         self.directedPeer = directedPeer
         self.transferId = transferId
+        self.fragmentTrainId = fragmentTrainId
+        self.reportsTransferProgress = reportsTransferProgress
         self.requireDirectPeerLink = requireDirectPeerLink
         self.requireNoiseAuthenticatedPeerLink = requireNoiseAuthenticatedPeerLink
     }
 
     var resolvedTransferId: String? {
-        if let transferId { return transferId }
+        if let fragmentTrainId {
+            return fragmentTrainId
+        }
         guard packet.type == MessageType.fileTransfer.rawValue else { return nil }
-        return packet.payload.sha256Hex()
+        return transferId ?? packet.payload.sha256Hex()
     }
 
     /// Content identity independent of the caller-chosen transfer ID: the
@@ -261,6 +269,8 @@ struct BLEOutboundFragmentTransferScheduler {
                 continue
             }
 
+            availableSlots -= 1
+
             guard activeTransfers.count < maxConcurrentTransfers else {
                 pendingTransfers.insert(request, at: 0)
                 results.append(.queued(request: request, transferId: transferId, position: .front))
@@ -268,17 +278,11 @@ struct BLEOutboundFragmentTransferScheduler {
             }
 
             guard activeTransfers[transferId] == nil else {
-                // Blocked on an already-active copy of this content: leave
-                // the slot budget untouched so a later, unrelated pending
-                // transfer can still start in this same pass instead of
-                // being starved until some other transfer happens to
-                // complete.
                 blockedFront.append(request)
                 results.append(.queued(request: request, transferId: transferId, position: .front))
                 continue
             }
 
-            availableSlots -= 1
             activeTransfers[transferId] = ActiveTransferState(
                 totalFragments: 0,
                 sentFragments: 0,

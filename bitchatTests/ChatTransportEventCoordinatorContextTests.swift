@@ -133,17 +133,11 @@ private final class MockChatTransportEventContext: ChatTransportEventContext {
     // Delivery status
     var applyMessageDeliveryStatusResult = true
     var deliveryStatusesByMessageID: [String: DeliveryStatus] = [:]
-    private(set) var appliedDeliveryStatuses: [
-        (messageID: String, status: DeliveryStatus, peerIDAliases: Set<PeerID>)
-    ] = []
+    private(set) var appliedDeliveryStatuses: [(messageID: String, status: DeliveryStatus)] = []
 
     @discardableResult
-    func applyAcknowledgedMessageDeliveryStatus(
-        _ messageID: String,
-        status: DeliveryStatus,
-        from peerIDAliases: Set<PeerID>
-    ) -> Bool {
-        appliedDeliveryStatuses.append((messageID, status, peerIDAliases))
+    func applyMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) -> Bool {
+        appliedDeliveryStatuses.append((messageID, status))
         return applyMessageDeliveryStatusResult
     }
 
@@ -187,6 +181,13 @@ private final class MockChatTransportEventContext: ChatTransportEventContext {
     func handleVoiceFramePayload(from peerID: PeerID, payload: Data, timestamp: Date) {
         voiceFramePayloads.append((peerID, payload, timestamp))
     }
+
+    // Private file-transfer payloads
+    private(set) var privateFileTransferPayloads: [(peerID: PeerID, payload: Data, timestamp: Date)] = []
+
+    func handlePrivateFileTransferPayload(from peerID: PeerID, payload: Data, timestamp: Date) {
+        privateFileTransferPayloads.append((peerID, payload, timestamp))
+    }
 }
 
 // MARK: - Helpers
@@ -226,85 +227,26 @@ struct ChatTransportEventCoordinatorContextTests {
     func didReceiveMessage_routesPrivateAndPublic_skipsBlockedAndEmpty() async {
         let context = MockChatTransportEventContext()
         let coordinator = ChatTransportEventCoordinator(context: context)
-        let peerID = PeerID(str: "1122334455667788")
 
         // Blocked messages are dropped before any handling.
-        context.blockedMessageIDs = ["blocked", "blocked-private"]
+        context.blockedMessageIDs = ["blocked"]
         coordinator.didReceiveMessage(makeMessage(id: "blocked"))
-        coordinator.didReceiveMessage(makeMessage(
-            id: "blocked-private",
-            isPrivate: true,
-            senderPeerID: peerID
-        ))
         // Empty public content is dropped too.
         coordinator.didReceiveMessage(makeMessage(id: "empty", content: "   "))
         await drainMainActorTasks()
         #expect(context.handledPublicMessages.isEmpty)
         #expect(context.handledPrivateMessages.isEmpty)
         #expect(context.mentionCheckedMessageIDs.isEmpty)
-        #expect(context.meshDeliveryAcks.isEmpty)
 
         // Private goes to the private handler, public to the public handler;
-        // both get mention checks and haptics. Stable-media ACK authorization
-        // belongs to BLEFileTransferHandler after its durable commit and this
-        // synchronous acceptance result, not to the generic UI coordinator.
-        let stableMediaID = "media-\(String(repeating: "a", count: 32))"
-        coordinator.didReceiveMessage(makeMessage(
-            id: stableMediaID,
-            isPrivate: true,
-            senderPeerID: peerID
-        ))
-        coordinator.didReceiveMessage(makeMessage(
-            id: "legacy-media",
-            isPrivate: true,
-            senderPeerID: peerID
-        ))
-        coordinator.didReceiveMessage(makeMessage(id: "pm-missing-sender", isPrivate: true))
+        // both get mention checks and haptics.
+        coordinator.didReceiveMessage(makeMessage(id: "pm", isPrivate: true))
         coordinator.didReceiveMessage(makeMessage(id: "pub"))
         await drainMainActorTasks()
-        #expect(context.handledPrivateMessages.map(\.id) == [
-            stableMediaID,
-            "legacy-media",
-            "pm-missing-sender"
-        ])
+        #expect(context.handledPrivateMessages.map(\.id) == ["pm"])
         #expect(context.handledPublicMessages.map(\.id) == ["pub"])
-        #expect(context.mentionCheckedMessageIDs == [
-            stableMediaID,
-            "legacy-media",
-            "pm-missing-sender",
-            "pub"
-        ])
-        #expect(context.hapticMessageIDs == [
-            stableMediaID,
-            "legacy-media",
-            "pm-missing-sender",
-            "pub"
-        ])
-        #expect(context.meshDeliveryAcks.isEmpty)
-    }
-
-    @Test @MainActor
-    func synchronousMessageDeliveryReportsAcceptanceForAckGating() {
-        let context = MockChatTransportEventContext()
-        let coordinator = ChatTransportEventCoordinator(context: context)
-        let peerID = PeerID(str: "1122334455667788")
-        let blocked = makeMessage(
-            id: "blocked-private-media",
-            isPrivate: true,
-            senderPeerID: peerID
-        )
-        context.blockedMessageIDs = [blocked.id]
-
-        #expect(coordinator.didReceiveMessageSynchronously(blocked) == false)
-        #expect(context.handledPrivateMessages.isEmpty)
-
-        let accepted = makeMessage(
-            id: "accepted-private-media",
-            isPrivate: true,
-            senderPeerID: peerID
-        )
-        #expect(coordinator.didReceiveMessageSynchronously(accepted) == true)
-        #expect(context.handledPrivateMessages.map(\.id) == [accepted.id])
+        #expect(context.mentionCheckedMessageIDs == ["pm", "pub"])
+        #expect(context.hapticMessageIDs == ["pm", "pub"])
     }
 
     @Test @MainActor
@@ -361,32 +303,6 @@ struct ChatTransportEventCoordinatorContextTests {
     }
 
     @Test @MainActor
-    func synchronousConnectAndDisconnect_applyBeforeReturning() {
-        let context = MockChatTransportEventContext()
-        let coordinator = ChatTransportEventCoordinator(context: context)
-        let peerID = PeerID(str: "2233445566778899")
-        let incoming = makeMessage(
-            id: "incoming-receipt",
-            isPrivate: true,
-            senderPeerID: peerID
-        )
-        context.privateChats[peerID] = [incoming]
-
-        coordinator.didConnectToPeerSynchronously(peerID)
-
-        #expect(context.isConnected)
-        #expect(context.registeredEphemeralSessions == [peerID])
-        #expect(context.flushedOutboxPeerIDs == [peerID])
-        #expect(context.courierRetryPeerIDs == [peerID])
-
-        coordinator.didDisconnectFromPeerSynchronously(peerID)
-
-        #expect(context.removedEphemeralSessions == [peerID])
-        #expect(context.unmarkedReadReceiptBatches == [[incoming.id]])
-        #expect(context.notifyUIChangedCount == 2)
-    }
-
-    @Test @MainActor
     func didDisconnect_whileViewingChat_migratesConversationToStablePeerID() async {
         let context = MockChatTransportEventContext()
         let coordinator = ChatTransportEventCoordinator(context: context)
@@ -423,10 +339,6 @@ struct ChatTransportEventCoordinatorContextTests {
         let peerID = PeerID(str: "99aabbccddeeff00")
         let noiseKey = Data(repeating: 0x44, count: 32)
         context.peersByID[peerID] = BitchatPeer(peerID: peerID, noisePublicKey: noiseKey, nickname: "alice")
-        let stablePeerID = PeerID(hexData: noiseKey)
-        let staleStablePeerID = PeerID(hexData: Data(repeating: 0x55, count: 32))
-        context.cacheStablePeerID(staleStablePeerID, for: peerID)
-        context.noiseSessionKeysByPeerID[peerID] = noiseKey
 
         // Inbound private message: decoded, handled, and delivery-acked.
         let packet = PrivateMessagePacket(messageID: "pm-1", content: "hi there")
@@ -448,8 +360,6 @@ struct ChatTransportEventCoordinatorContextTests {
         await drainMainActorTasks()
         #expect(context.appliedDeliveryStatuses.count == 2)
         #expect(context.appliedDeliveryStatuses[0].messageID == "m-1")
-        #expect(context.appliedDeliveryStatuses[0].peerIDAliases == [peerID, stablePeerID])
-        #expect(!context.appliedDeliveryStatuses[0].peerIDAliases.contains(staleStablePeerID))
         if case .delivered(let to, _) = context.appliedDeliveryStatuses[0].status {
             #expect(to == "alice")
         } else {

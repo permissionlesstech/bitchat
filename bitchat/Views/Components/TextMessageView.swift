@@ -23,7 +23,7 @@ struct TextMessageView: View {
     /// SAME instance would otherwise compare "unchanged" and this row's body
     /// would be skipped even though the parent list re-rendered. Snapshotting
     /// the enum makes the change visible to SwiftUI's structural diff.
-    private let deliveryStatus: DeliveryStatus
+    private let deliveryStatus: DeliveryStatus?
     @State private var expandedMessageIDs: Set<String> = []
     @State private var showDeliveryDetail = false
 
@@ -41,7 +41,7 @@ struct TextMessageView: View {
             // first text line; a fixed top padding left the lock's solid body
             // hanging below the line's visual center.
             HStack(alignment: .firstTextBaseline, spacing: 0) {
-                let isLong = message.content.isLongForDisplay()
+                let isLong = (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuLinks.isEmpty
                 let isExpanded = expandedMessageIDs.contains(message.id)
                 if message.isPrivate {
                     Image(systemName: "lock.fill")
@@ -68,11 +68,11 @@ struct TextMessageView: View {
                 // .help() tooltips only exist on macOS, so iOS users get the
                 // explanation as a caption under the row instead.
                 if message.isPrivate && conversationUIModel.isSentByCurrentUser(message),
-                   deliveryStatus != .notSentYet {
+                   let status = deliveryStatus {
                     Button {
                         showDeliveryDetail.toggle()
                     } label: {
-                        DeliveryStatusView(status: deliveryStatus)
+                        DeliveryStatusView(status: status)
                             .padding(.leading, 4)
                             .contentShape(Rectangle())
                     }
@@ -86,15 +86,15 @@ struct TextMessageView: View {
             // Failure reasons stay visible without a tap; other statuses
             // reveal on demand.
             if message.isPrivate && conversationUIModel.isSentByCurrentUser(message),
-               deliveryStatus != .notSentYet {
-                if case .failed = deliveryStatus {
-                    Text(verbatim: deliveryStatus.bitchatDescription)
+               let status = deliveryStatus {
+                if case .failed = status {
+                    Text(verbatim: status.bitchatDescription)
                         .bitchatFont(size: 11)
                         .foregroundColor(Color.red.opacity(0.9))
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 2)
                 } else if showDeliveryDetail {
-                    Text(verbatim: deliveryStatus.bitchatDescription)
+                    Text(verbatim: status.bitchatDescription)
                         .bitchatFont(size: 11)
                         .foregroundColor(palette.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -103,7 +103,7 @@ struct TextMessageView: View {
             }
             
             // Expand/Collapse for very long messages
-            if message.content.isLongForDisplay() {
+            if (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuLinks.isEmpty {
                 let isExpanded = expandedMessageIDs.contains(message.id)
                 let labelKey = isExpanded ? LocalizedStringKey("content.message.show_less") : LocalizedStringKey("content.message.show_more")
                 Button(labelKey) {

@@ -357,18 +357,8 @@ struct NoiseProtocolTests {
     
     @Test func peerRestartDetection() throws {
         // Establish initial sessions
-        // This test explicitly drives the three synchronous XX messages and
-        // does not exercise the transport's delayed collision recovery.
-        let aliceManager = NoiseSessionManager(
-            localStaticKey: aliceKey,
-            keychain: mockKeychain,
-            recentInitiatorCompletionGracePeriod: 0
-        )
-        let bobManager = NoiseSessionManager(
-            localStaticKey: bobKey,
-            keychain: mockKeychain,
-            recentInitiatorCompletionGracePeriod: 0
-        )
+        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey, keychain: mockKeychain)
+        let bobManager = NoiseSessionManager(localStaticKey: bobKey, keychain: mockKeychain)
         
         try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
         
@@ -387,24 +377,15 @@ struct NoiseProtocolTests {
         let newHandshake1 = try bobManagerRestarted.initiateHandshake(with: bobPeerID)
         
         // Alice should accept the new handshake (clearing old session)
-        let newHandshake2 = try #require(
-            try aliceManager.handleIncomingHandshake(
-                from: alicePeerID,
-                message: newHandshake1
-            )
-        )
+        let newHandshake2 = try aliceManager.handleIncomingHandshake(
+            from: alicePeerID, message: newHandshake1)
+        #expect(newHandshake2 != nil)
         
         // Complete the new handshake
-        let newHandshake3 = try #require(
-            try bobManagerRestarted.handleIncomingHandshake(
-                from: bobPeerID,
-                message: newHandshake2
-            )
-        )
-        _ = try aliceManager.handleIncomingHandshake(
-            from: alicePeerID,
-            message: newHandshake3
-        )
+        let newHandshake3 = try bobManagerRestarted.handleIncomingHandshake(
+            from: bobPeerID, message: newHandshake2!)
+        #expect(newHandshake3 != nil)
+        _ = try aliceManager.handleIncomingHandshake(from: alicePeerID, message: newHandshake3!)
         
         // Should be able to exchange messages with new sessions
         let testMessage = Data("After restart".utf8)
@@ -562,18 +543,8 @@ struct NoiseProtocolTests {
     
     @Test func nonceDesynchronizationCausesRehandshake() throws {
         // Test that nonce desynchronization leads to proper re-handshake
-        // This test explicitly drives the three synchronous XX messages and
-        // does not exercise the transport's delayed collision recovery.
-        let aliceManager = NoiseSessionManager(
-            localStaticKey: aliceKey,
-            keychain: mockKeychain,
-            recentInitiatorCompletionGracePeriod: 0
-        )
-        let bobManager = NoiseSessionManager(
-            localStaticKey: bobKey,
-            keychain: mockKeychain,
-            recentInitiatorCompletionGracePeriod: 0
-        )
+        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey, keychain: mockKeychain)
+        let bobManager = NoiseSessionManager(localStaticKey: bobKey, keychain: mockKeychain)
         
         // Establish sessions
         try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
@@ -601,25 +572,15 @@ struct NoiseProtocolTests {
         let rehandshake1 = try bobManager.initiateHandshake(with: bobPeerID)
         
         // Alice should accept despite having a "valid" (but desynced) session
-        let rehandshake2 = try #require(
-            try aliceManager.handleIncomingHandshake(
-                from: alicePeerID,
-                message: rehandshake1
-            ),
-            "Alice should accept handshake to fix desync"
-        )
+        let rehandshake2 = try aliceManager.handleIncomingHandshake(
+            from: alicePeerID, message: rehandshake1)
+        #expect(rehandshake2 != nil, "Alice should accept handshake to fix desync")
         
         // Complete handshake
-        let rehandshake3 = try #require(
-            try bobManager.handleIncomingHandshake(
-                from: bobPeerID,
-                message: rehandshake2
-            )
-        )
-        _ = try aliceManager.handleIncomingHandshake(
-            from: alicePeerID,
-            message: rehandshake3
-        )
+        let rehandshake3 = try bobManager.handleIncomingHandshake(
+            from: bobPeerID, message: rehandshake2!)
+        #expect(rehandshake3 != nil)
+        _ = try aliceManager.handleIncomingHandshake(from: alicePeerID, message: rehandshake3!)
         
         // Verify communication works again
         let testResynced = Data("Resynced".utf8)

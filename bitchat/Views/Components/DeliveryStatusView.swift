@@ -15,8 +15,6 @@ extension DeliveryStatus {
     /// the glyphs alone are unexplained 10pt icons.
     var bitchatDescription: String {
         switch self {
-        case .notSentYet:
-            return String(localized: "content.delivery.not_sent_yet", defaultValue: "Not sent yet", comment: "Delivery status description for a message that has not entered any send pipeline")
         case .sending:
             return String(localized: "content.delivery.sending", comment: "Delivery status description while a private message is being sent")
         case .sent:
@@ -74,13 +72,6 @@ struct DeliveryStatusView: View {
     @ViewBuilder
     private var statusGlyph: some View {
         switch status {
-        case .notSentYet:
-            // Normally hidden by callers; shown as a hollow dotted circle if
-            // it ever surfaces so the state is visible rather than invisible.
-            Image(systemName: "circle.dotted")
-                .font(.bitchatSystem(size: 10))
-                .foregroundColor(secondaryTextColor.opacity(0.6))
-
         case .sending:
             Image(systemName: "circle")
                 .font(.bitchatSystem(size: 10))
@@ -134,7 +125,6 @@ struct DeliveryStatusView: View {
 
 #Preview {
     let statuses: [DeliveryStatus] = [
-        .notSentYet,
         .sending,
         .sent,
         .carried,

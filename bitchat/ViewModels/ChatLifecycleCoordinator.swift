@@ -106,8 +106,8 @@ extension ChatViewModel: ChatLifecycleContext {
     }
 
     func refreshBluetoothState() {
-        if let radio = meshService as? BluetoothStateReporting {
-            updateBluetoothState(radio.getCurrentBluetoothState())
+        if let bleService = meshService as? BLEService {
+            updateBluetoothState(bleService.getCurrentBluetoothState())
         }
     }
 
@@ -360,9 +360,9 @@ private extension ChatLifecycleCoordinator {
         }
     }
 
-    func deliveryStatusRank(_ status: DeliveryStatus) -> Int {
+    func deliveryStatusRank(_ status: DeliveryStatus?) -> Int {
+        guard let status else { return 0 }
         switch status {
-        case .notSentYet: return 0
         case .failed: return 1
         case .sending: return 2
         case .sent: return 3

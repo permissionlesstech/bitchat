@@ -9,7 +9,6 @@
 import struct Foundation.Date
 
 public enum DeliveryStatus: Codable, Equatable, Hashable {
-    case notSentYet  // Created but not yet handed to any transport
     case sending
     case sent  // Left our device
     case carried  // Sealed envelope handed to a courier; best-effort physical delivery
@@ -20,8 +19,6 @@ public enum DeliveryStatus: Codable, Equatable, Hashable {
 
     public var displayText: String {
         switch self {
-        case .notSentYet:
-            return "Not sent yet"
         case .sending:
             return "Sending..."
         case .sent:

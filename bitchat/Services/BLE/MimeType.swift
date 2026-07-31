@@ -22,6 +22,8 @@ extension UTType {
 enum MimeType: CaseIterable, Hashable {
     case jpeg
     case jpg
+    case heic
+    case heif
     case png
     case gif
     case webp
@@ -39,6 +41,8 @@ enum MimeType: CaseIterable, Hashable {
     var utType: UTType {
         switch self {
         case .jpeg, .jpg:   .jpeg
+        case .heic:         .heic
+        case .heif:         .heif
         case .png:          .png
         case .gif:          .gif
         case .webp:         .webP
@@ -55,7 +59,7 @@ enum MimeType: CaseIterable, Hashable {
     
     var category: Category {
         switch self {
-        case .jpeg, .jpg, .png, .gif, .webp:
+        case .jpeg, .jpg, .heic, .heif, .png, .gif, .webp:
             return .image
         case .aac, .m4a, .mp4Audio, .mpeg, .mp3, .wav, .xWav, .ogg:
             return .audio
@@ -68,6 +72,8 @@ enum MimeType: CaseIterable, Hashable {
     var mimeString: String {
         switch self {
         case .jpeg, .jpg:   "image/jpeg"
+        case .heic:         "image/heic"
+        case .heif:         "image/heif"
         case .png:          "image/png"
         case .gif:          "image/gif"
         case .webp:         "image/webp"
@@ -87,6 +93,8 @@ enum MimeType: CaseIterable, Hashable {
     var defaultExtension: String {
         switch self {
         case .jpeg, .jpg:           "jpg"
+        case .heic:                 "heic"
+        case .heif:                 "heif"
         case .png:                  "png"
         case .webp:                 "webp"
         case .gif:                  "gif"
@@ -100,7 +108,7 @@ enum MimeType: CaseIterable, Hashable {
     }
 
     static var allowed: Set<MimeType> = [
-        .jpeg, .jpg, .png, .gif, .webp,
+        .jpeg, .jpg, .heic, .heif, .png, .gif, .webp,
         .mp4Audio, .m4a, .aac, .mpeg, .mp3,
         .wav, .xWav, .ogg,
         .pdf, .octetStream
@@ -120,6 +128,9 @@ enum MimeType: CaseIterable, Hashable {
         switch self {
         case .jpeg, .jpg:
             return data.count >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF
+
+        case .heic, .heif:
+            return matchesISOBaseMediaImage(data)
 
         case .png:
             return data.count >= 8 &&
@@ -162,6 +173,19 @@ enum MimeType: CaseIterable, Hashable {
         default:
             return false
         }
+    }
+
+    private func matchesISOBaseMediaImage(_ data: Data) -> Bool {
+        guard data.count >= 12,
+              data[4] == 0x66, data[5] == 0x74, data[6] == 0x79, data[7] == 0x70 else {
+            return false
+        }
+
+        let compatibleBrands = stride(from: 8, to: data.count - 3, by: 4).prefix(8).map {
+            String(decoding: data[$0..<$0 + 4], as: UTF8.self)
+        }
+        let heicBrands: Set<String> = ["heic", "heix", "hevc", "hevx", "heim", "heis", "hevm", "hevs", "mif1", "msf1"]
+        return compatibleBrands.contains { heicBrands.contains($0) }
     }
 
     // MARK: - Convenience Initializers

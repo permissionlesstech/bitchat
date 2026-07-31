@@ -45,9 +45,6 @@ final class GeohashPresenceService: ObservableObject {
 
     private var subscriptions = Set<AnyCancellable>()
     private var heartbeatTimer: GeohashPresenceTimerProtocol?
-    private var pendingBroadcastTasks: [UUID: Task<Void, Never>] = [:]
-    private var heartbeatGeneration: UInt64 = 0
-    private var started = false
     private let availableChannelsProvider: () -> [GeohashChannel]
     private let locationChanges: AnyPublisher<[GeohashChannel], Never>
     private let torReadyPublisher: AnyPublisher<Void, Never>
@@ -150,23 +147,8 @@ final class GeohashPresenceService: ObservableObject {
     
     /// Start the service (safe to call multiple times)
     func start() {
-        guard !started else { return }
-        started = true
-        heartbeatGeneration &+= 1
         SecureLogger.info("Presence: service starting...", category: .session)
         scheduleNextHeartbeat()
-    }
-
-    /// Stops the timer and every decorrelation task synchronously at the panic
-    /// boundary. Generation checks also protect against custom sleepers that
-    /// ignore task cancellation and return later.
-    func stopForPanic() {
-        started = false
-        heartbeatGeneration &+= 1
-        heartbeatTimer?.invalidate()
-        heartbeatTimer = nil
-        pendingBroadcastTasks.values.forEach { $0.cancel() }
-        pendingBroadcastTasks.removeAll(keepingCapacity: false)
     }
 
     private func setupObservers() {
@@ -187,26 +169,20 @@ final class GeohashPresenceService: ObservableObject {
     }
 
     func handleLocationChange() {
-        guard started else { return }
         // When location changes, we trigger an immediate (but slightly delayed) heartbeat
         // to announce presence in the new zone, then reset the loop.
         SecureLogger.debug("Presence: location changed, scheduling update", category: .session)
         heartbeatTimer?.invalidate()
         
         // Small delay to allow location state to settle
-        let generation = heartbeatGeneration
         heartbeatTimer = scheduleTimer(5.0) { [weak self] in
             Task { @MainActor [weak self] in
-                guard let self,
-                      self.started,
-                      self.heartbeatGeneration == generation else { return }
-                self.performHeartbeat()
+                self?.performHeartbeat()
             }
         }
     }
     
     func handleConnectivityChange() {
-        guard started else { return }
         SecureLogger.debug("Presence: connectivity restored, triggering heartbeat", category: .session)
         // If we were waiting for network, do it now
         if heartbeatTimer == nil || !heartbeatTimer!.isValid {
@@ -215,29 +191,18 @@ final class GeohashPresenceService: ObservableObject {
     }
 
     func scheduleNextHeartbeat() {
-        guard started else { return }
         heartbeatTimer?.invalidate()
         let interval = TimeInterval.random(in: loopMinInterval...loopMaxInterval)
-        let generation = heartbeatGeneration
         heartbeatTimer = scheduleTimer(interval) { [weak self] in
             Task { @MainActor [weak self] in
-                guard let self,
-                      self.started,
-                      self.heartbeatGeneration == generation else { return }
-                self.performHeartbeat()
+                self?.performHeartbeat()
             }
         }
     }
 
     func performHeartbeat() {
-        guard started else { return }
-        let generation = heartbeatGeneration
         // Always schedule next loop first ensures continuity even if this one fails/skips
-        defer {
-            if started, heartbeatGeneration == generation {
-                scheduleNextHeartbeat()
-            }
-        }
+        defer { scheduleNextHeartbeat() }
 
         // 1. Check preconditions
         guard torIsReady() else {
@@ -263,27 +228,14 @@ final class GeohashPresenceService: ObservableObject {
             }
             
             // Launch independent task for each channel's delay
-            let taskID = UUID()
-            let sleeper = self.sleeper
-            let delay = TimeInterval.random(
-                in: burstMinDelay...burstMaxDelay
-            )
-            let nanoseconds = UInt64(delay * 1_000_000_000)
-            let task = Task { @MainActor [weak self] in
+            Task { @MainActor in
                 // Random delay for decorrelation
-                await sleeper(nanoseconds)
-
-                guard let self else { return }
-                guard !Task.isCancelled,
-                      self.started,
-                      self.heartbeatGeneration == generation else {
-                    self.pendingBroadcastTasks.removeValue(forKey: taskID)
-                    return
-                }
-                self.pendingBroadcastTasks.removeValue(forKey: taskID)
+                let delay = TimeInterval.random(in: self.burstMinDelay...self.burstMaxDelay)
+                let nanoseconds = UInt64(delay * 1_000_000_000)
+                await self.sleeper(nanoseconds)
+                
                 self.broadcastPresence(for: channel.geohash)
             }
-            pendingBroadcastTasks[taskID] = task
         }
     }
 

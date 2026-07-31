@@ -320,7 +320,7 @@ struct SecureIdentityStateManagerVouchTests {
     // MARK: - Helpers
 
     private func waitUntil(
-        timeout: TimeInterval = TestConstants.settleTimeout,
+        timeout: TimeInterval = 1.0,
         condition: @escaping () -> Bool
     ) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)

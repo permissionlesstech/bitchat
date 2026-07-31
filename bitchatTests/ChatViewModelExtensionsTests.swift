@@ -366,11 +366,31 @@ struct ChatViewModelNostrExtensionTests {
         #expect(!viewModel.messages.contains { $0.content == "Blocked" })
     }
 
-    // NOTE: Tampered-signature rejection is enforced once, off the main
-    // actor, at the relay boundary (events only reach the inbound pipeline
-    // after verification) — see NostrRelayManagerTests
-    // `test_receiveEvent_invalidSignatureDoesNotPoisonDuplicateCache` and
-    // `test_receiveGiftWrap_tamperedSignatureIsDroppedAndDoesNotPoisonDedup`.
+    @Test @MainActor
+    func handleNostrEvent_rejectsInvalidSignature() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let geohash = "u4pruydq"
+        let identity = try NostrIdentity.generate()
+
+        viewModel.switchLocationChannel(to: .location(GeohashChannel(level: .city, geohash: geohash)))
+
+        let event = NostrEvent(
+            pubkey: identity.publicKeyHex,
+            createdAt: Date(),
+            kind: .ephemeralEvent,
+            tags: [["g", geohash]],
+            content: "Valid"
+        )
+        var signed = try event.sign(with: identity.schnorrSigningKey())
+        signed.id = "deadbeef"
+
+        viewModel.handleNostrEvent(signed)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        viewModel.publicMessagePipeline.flushIfNeeded()
+
+        #expect(!viewModel.messages.contains { $0.content == "Tampered" })
+    }
 
     @Test @MainActor
     func subscribeGiftWrap_rejectsOversizedEmbeddedPacket() async throws {
@@ -559,14 +579,9 @@ struct ChatViewModelNostrExtensionTests {
 
         viewModel.handleGiftWrap(giftWrap, id: recipient)
 
-        // Gift-wrap decryption runs off the main actor; wait for the ack
-        // (sent even for blocked senders) to know processing finished.
-        let didAck = await TestHelpers.waitUntil(
-            { viewModel.sentGeoDeliveryAcks.contains(messageID) },
-            timeout: 5.0
-        )
-        #expect(didAck)
+        try? await Task.sleep(nanoseconds: 50_000_000)
         #expect(viewModel.privateChats[convKey] == nil)
+        #expect(viewModel.sentGeoDeliveryAcks.contains(messageID))
     }
 
     @Test @MainActor
@@ -1034,89 +1049,6 @@ struct ChatViewModelMediaTransferTests {
     }
 
     @Test @MainActor
-    func legacyPrivateMediaConsentRequestsArePerSendAndQueued() async throws {
-        let (viewModel, _) = makeTestableViewModel()
-        let firstPeer = PeerID(str: "1111111111111111")
-        let secondPeer = PeerID(str: "2222222222222222")
-        var decisions: [Bool] = []
-
-        viewModel.enqueueLegacyPrivateMediaConsent(
-            for: firstPeer,
-            transferId: "transfer-1",
-            messageID: "message-1"
-        ) { decisions.append($0) }
-        viewModel.enqueueLegacyPrivateMediaConsent(
-            for: secondPeer,
-            transferId: "transfer-2",
-            messageID: "message-2"
-        ) { decisions.append($0) }
-
-        #expect(viewModel.legacyPrivateMediaConsentRequest?.peerID == firstPeer)
-        let firstRequestID = try #require(viewModel.legacyPrivateMediaConsentRequest?.id)
-        viewModel.resolveLegacyPrivateMediaConsent(requestID: firstRequestID, approved: true)
-        let showedSecond = await TestHelpers.waitUntil(
-            { viewModel.legacyPrivateMediaConsentRequest?.peerID == secondPeer },
-            timeout: TestConstants.longTimeout
-        )
-        #expect(showedSecond)
-        let secondRequestID = try #require(viewModel.legacyPrivateMediaConsentRequest?.id)
-
-        // A button action and the dialog binding may both resolve the first
-        // ID. The stale second callback must not consume the queued request.
-        viewModel.resolveLegacyPrivateMediaConsent(requestID: firstRequestID, approved: false)
-        #expect(decisions == [true])
-        #expect(viewModel.legacyPrivateMediaConsentRequest?.id == secondRequestID)
-
-        viewModel.resolveLegacyPrivateMediaConsent(requestID: secondRequestID, approved: false)
-
-        #expect(decisions == [true, false])
-        #expect(viewModel.legacyPrivateMediaConsentRequest == nil)
-    }
-
-    @Test @MainActor
-    func invalidatingPresentedLegacyConsentAdvancesQueueAndStaleResolutionNoops() async throws {
-        let (viewModel, _) = makeTestableViewModel()
-        let firstPeer = PeerID(str: "3333333333333333")
-        let secondPeer = PeerID(str: "4444444444444444")
-        var decisions: [String] = []
-
-        viewModel.enqueueLegacyPrivateMediaConsent(
-            for: firstPeer,
-            transferId: "transfer-cancelled",
-            messageID: "message-cancelled"
-        ) { decisions.append("first:\($0)") }
-        viewModel.enqueueLegacyPrivateMediaConsent(
-            for: secondPeer,
-            transferId: "transfer-kept",
-            messageID: "message-kept"
-        ) { decisions.append("second:\($0)") }
-
-        let cancelledRequestID = try #require(viewModel.legacyPrivateMediaConsentRequest?.id)
-        viewModel.invalidateLegacyPrivateMediaConsent(
-            transferId: "transfer-cancelled",
-            messageID: "message-cancelled"
-        )
-        let advanced = await TestHelpers.waitUntil(
-            { viewModel.legacyPrivateMediaConsentRequest?.peerID == secondPeer },
-            timeout: TestConstants.longTimeout
-        )
-        #expect(advanced)
-        #expect(decisions.isEmpty, "Invalidation drops the request rather than resolving its send")
-
-        viewModel.resolveLegacyPrivateMediaConsent(
-            requestID: cancelledRequestID,
-            approved: true
-        )
-        #expect(viewModel.legacyPrivateMediaConsentRequest?.peerID == secondPeer)
-        #expect(decisions.isEmpty)
-
-        let keptRequestID = try #require(viewModel.legacyPrivateMediaConsentRequest?.id)
-        viewModel.resolveLegacyPrivateMediaConsent(requestID: keptRequestID, approved: true)
-        #expect(decisions == ["second:true"])
-        #expect(viewModel.legacyPrivateMediaConsentRequest == nil)
-    }
-
-    @Test @MainActor
     func sendVoiceNote_oversizedFileFailsAndDeletesTempFile() async throws {
         let (viewModel, transport) = makeTestableViewModel()
         let peerID = PeerID(str: "3333333333333333333333333333333333333333333333333333333333333333")
@@ -1135,20 +1067,47 @@ struct ChatViewModelMediaTransferTests {
     }
 
     @Test @MainActor
-    func sendImage_privateChatProcessesAndTransfersImage() async throws {
+    func processThenSendImageFromPhotoLibrary_privateChatPreservesOriginalAndUsesEncryptedImagePath() async throws {
         let (viewModel, transport) = makeTestableViewModel()
         let peerID = PeerID(str: "4444444444444444444444444444444444444444444444444444444444444444")
         let sourceURL = try makeTemporaryImageURL()
         defer { try? FileManager.default.removeItem(at: sourceURL) }
+        let sourceData = try Data(contentsOf: sourceURL)
 
         viewModel.selectedPrivateChatPeer = peerID
-        viewModel.sendImage(from: sourceURL)
+        viewModel.processThenSendImage(from: sourceURL)
 
-        let didSend = await TestHelpers.waitUntil({ transport.sentPrivateFiles.count == 1 }, timeout: TestConstants.longTimeout)
+        let didSend = await TestHelpers.waitUntil({ transport.sentOriginalPrivateImages.count == 1 }, timeout: TestConstants.longTimeout)
         #expect(didSend)
-        #expect(transport.sentPrivateFiles.first?.peerID == peerID)
-        #expect(transport.sentPrivateFiles.first?.packet.mimeType == "image/jpeg")
+        #expect(transport.sentOriginalPrivateImages.first?.peerID == peerID)
+        #expect(transport.sentOriginalPrivateImages.first?.packet.mimeType == "image/png")
+        #expect(transport.sentOriginalPrivateImages.first?.packet.content == sourceData)
+        #expect(transport.sentPrivateFiles.isEmpty)
+        #expect(transport.sentBroadcastFiles.isEmpty)
         #expect(viewModel.privateChats[peerID]?.last?.content.contains("[image]") == true)
+        #expect(viewModel.messageIDToTransferId.count == 1)
+    }
+
+    @Test @MainActor
+    func processThenSendImageFromPhotoLibrary_publicChatUsesCompressedBroadcastPath() async throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let sourceURL = try makeTemporaryImageURL()
+        defer { try? FileManager.default.removeItem(at: sourceURL) }
+        let sourceData = try Data(contentsOf: sourceURL)
+
+        viewModel.selectedPrivateChatPeer = nil
+        viewModel.processThenSendImage(from: sourceURL)
+
+        let didSend = await TestHelpers.waitUntil({ transport.sentBroadcastFiles.count == 1 }, timeout: TestConstants.longTimeout)
+        #expect(didSend)
+        #expect(transport.sentBroadcastFiles.first?.packet.mimeType == "image/jpeg")
+        #expect(transport.sentBroadcastFiles.first?.packet.content != sourceData)
+        #expect(transport.sentOriginalPrivateImages.isEmpty)
+        #expect(transport.sentPrivateFiles.isEmpty)
+        let didAppendImageMessage = await TestHelpers.waitUntil({
+            viewModel.messages.contains { $0.content.contains("[image]") }
+        }, timeout: TestConstants.longTimeout)
+        #expect(didAppendImageMessage)
         #expect(viewModel.messageIDToTransferId.count == 1)
     }
 
@@ -1373,38 +1332,4 @@ private func makeImageData() throws -> Data {
     }
     return data
     #endif
-}
-
-// MARK: - Tor Extension Tests
-
-struct ChatViewModelTorExtensionTests {
-
-    /// Turning Tor off mid-bootstrap must not read as "the network is
-    /// blocking tor": `torEnforced` is a compile-time constant, so the stall
-    /// handler has to consult the runtime preference before announcing.
-    @Test @MainActor
-    func bootstrapStall_withTorPreferenceOff_announcesNothing() async {
-        let key = NetworkActivationService.torPreferenceKey
-        let previous = UserDefaults.standard.object(forKey: key)
-        defer {
-            if let previous {
-                UserDefaults.standard.set(previous, forKey: key)
-            } else {
-                UserDefaults.standard.removeObject(forKey: key)
-            }
-        }
-        let (viewModel, _) = makeTestableViewModel()
-
-        UserDefaults.standard.set(false, forKey: key)
-        viewModel.handleTorBootstrapDidStall()
-        try? await Task.sleep(nanoseconds: 50_000_000)
-        #expect(viewModel.torStallAnnounced == false)
-
-        // The same stall with the preference on (the persisted default) is
-        // exactly what must still be announced.
-        UserDefaults.standard.set(true, forKey: key)
-        viewModel.handleTorBootstrapDidStall()
-        try? await Task.sleep(nanoseconds: 50_000_000)
-        #expect(viewModel.torStallAnnounced == true)
-    }
 }

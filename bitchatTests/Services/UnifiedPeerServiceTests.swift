@@ -266,11 +266,6 @@ private final class TestIdentityManager: SecureIdentityStateManagerProtocol {
         verified.removeAll()
     }
 
-    func markPrivateMediaCapable(fingerprint: String) {}
-    func hasObservedPrivateMediaCapability(fingerprint: String) -> Bool { false }
-    func bindAuthenticatedSigningPublicKey(_ signingPublicKey: Data, fingerprint: String) {}
-    func authenticatedSigningPublicKey(forFingerprint fingerprint: String) -> Data? { nil }
-
     func removeEphemeralSession(peerID: PeerID) {}
 
     func setVerified(fingerprint: String, verified: Bool) {

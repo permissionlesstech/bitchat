@@ -18,6 +18,8 @@ struct MimeTypeTests {
     @Test(arguments: [
         ("image/jpeg", MimeType.jpeg, "jpg"),
         ("image/jpg", MimeType.jpeg, "jpg"),
+        ("image/heic", MimeType.heic, "heic"),
+        ("image/heif", MimeType.heif, "heif"),
         ("image/png", MimeType.png, "png"),
         ("image/gif", MimeType.gif, "gif"),
         ("image/webp", MimeType.webp, "webp"),
@@ -52,6 +54,12 @@ struct MimeTypeTests {
     @Test(arguments: [
         // === Image types ===
         (MimeType.jpeg, [0xFF, 0xD8, 0xFF]),
+        (MimeType.heic, [0x00, 0x00, 0x00, 0x18,
+                         0x66, 0x74, 0x79, 0x70,
+                         0x68, 0x65, 0x69, 0x63]),            // "....ftypheic"
+        (MimeType.heif, [0x00, 0x00, 0x00, 0x18,
+                         0x66, 0x74, 0x79, 0x70,
+                         0x6D, 0x69, 0x66, 0x31]),            // "....ftypmif1"
         (MimeType.png, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
         (MimeType.gif, [0x47, 0x49, 0x46, 0x38, 0x39, 0x61]), // "GIF89a"
         (MimeType.webp, [0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00,

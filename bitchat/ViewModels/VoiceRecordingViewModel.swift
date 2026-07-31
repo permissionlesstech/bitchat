@@ -188,25 +188,8 @@ final class VoiceRecordingViewModel: ObservableObject {
 
         Task {
             let finalDuration = Date().timeIntervalSince(startDate)
-            if let url = await session.finish() {
-                // Panic and a newer hold both invalidate this completion.
-                // Never route an old recording using a post-panic target.
-                guard generation == holdGeneration else {
-                    try? FileManager.default.removeItem(at: url)
-                    return
-                }
-                guard isValidRecording(
-                    at: url,
-                    duration: finalDuration
-                ) else {
-                    guard state == .idle else { return }
-                    state = .error(
-                        message: finalDuration < VoiceRecorder.minRecordingDuration
-                        ? "Recording is too short."
-                        : "Recording failed to save."
-                    )
-                    return
-                }
+            if let url = await session.finish(),
+               isValidRecording(at: url, duration: finalDuration) {
                 completion(url)
             } else {
                 guard generation == holdGeneration, state == .idle else { return }
@@ -221,17 +204,6 @@ final class VoiceRecordingViewModel: ObservableObject {
 
     func cancel() {
         finish(completion: nil)
-    }
-
-    /// Invalidates in-flight permission/start/finalize callbacks and tears
-    /// down an active microphone before the panic transaction continues.
-    func panicWipe() {
-        holdGeneration &+= 1
-        let session = activeSession
-        activeSession = nil
-        state = .idle
-        isLiveStreaming = false
-        session?.panicCancelSynchronously()
     }
 
     private func isValidRecording(at url: URL, duration: TimeInterval) -> Bool {

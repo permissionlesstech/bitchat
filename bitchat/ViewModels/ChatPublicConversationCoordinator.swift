@@ -44,9 +44,6 @@ protocol ChatPublicConversationContext: AnyObject {
     func removePublicMessages(fromGeohash geohash: String, where predicate: (BitchatMessage) -> Bool)
     /// Empties a public conversation's timeline (`/clear`).
     func clearPublicConversation(_ conversationID: ConversationID)
-    /// Erases the on-disk archive of carried public mesh messages, so clearing
-    /// the mesh timeline deletes that history instead of only hiding it.
-    func purgeArchivedPublicMessages()
     /// Queues a system message for the next geohash channel visit.
     func queueGeohashSystemMessage(_ content: String)
 
@@ -292,14 +289,12 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
         context.clearPublicConversation(ConversationID(channelID: context.activeChannel))
 
         // Clearing the mesh timeline also dismisses its archived echoes for
-        // good: the watermark stops the next launch from re-seeding them, the
-        // archive on disk is erased so the cleared history is actually gone
-        // rather than merely hidden, and the dedup keys go so a cleared
-        // message arriving live shows again.
+        // good: the watermark stops the next launch from re-seeding them
+        // (the archive itself keeps carrying the messages for peers), and
+        // the dedup keys go so a cleared message arriving live shows again.
         if case .mesh = context.activeChannel {
             MeshEchoSettings.clearedThrough = Date()
             archivedEchoKeys.removeAll()
-            context.purgeArchivedPublicMessages()
         }
 
         // The SPM test process shares the real Application Support tree, so this
@@ -506,15 +501,14 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
     }
 
     func checkForMentions(_ message: BitchatMessage) {
-        let myNickname = context.nickname.normalizedNickname
-        var myTokens: Set<String> = [myNickname]
+        var myTokens: Set<String> = [context.nickname]
         let meshPeers = context.meshPeerNicknames()
-        let collisions = meshPeers.values.filter { $0.normalizedNickname.hasPrefix(myNickname + "#") }
+        let collisions = meshPeers.values.filter { $0.hasPrefix(context.nickname + "#") }
         if !collisions.isEmpty {
             let suffix = "#" + String(context.myPeerID.id.prefix(4))
-            myTokens = [myNickname + suffix]
+            myTokens = [context.nickname + suffix]
         }
-        let isMentioned = message.mentions?.contains { myTokens.contains($0.normalizedNickname) } ?? false
+        let isMentioned = message.mentions?.contains(where: myTokens.contains) ?? false
 
         if isMentioned && message.sender != context.nickname {
             SecureLogger.info("🔔 Mention from \(message.sender)", category: .session)
