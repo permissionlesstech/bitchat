@@ -10,10 +10,41 @@ import Foundation
 import Testing
 @testable import bitchat
 
+/// One-shot event that bridges synchronous production seams to async tests
+/// without blocking a shared dispatch worker while waiting for the seam.
+private final class VoiceRecorderAsyncEvent: @unchecked Sendable {
+    private let lock = NSLock()
+    private var isSignaled = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            let resumeImmediately = lock.withLock { () -> Bool in
+                guard !isSignaled else { return true }
+                waiters.append(continuation)
+                return false
+            }
+            if resumeImmediately {
+                continuation.resume()
+            }
+        }
+    }
+
+    func signal() {
+        let continuations = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
+            guard !isSignaled else { return [] }
+            isSignaled = true
+            defer { waiters.removeAll() }
+            return waiters
+        }
+        continuations.forEach { $0.resume() }
+    }
+}
+
 private final class VoiceRecorderTestSession: SessionApplying, @unchecked Sendable {
     private let lock = NSLock()
     private let activationGate = DispatchSemaphore(value: 0)
-    private let activationBeganGate = DispatchSemaphore(value: 0)
+    private let activationBegan = VoiceRecorderAsyncEvent()
     private let shouldGateFirstActivation: Bool
     private var gatedFirstActivation = false
     private var _activationCalls: [Bool] = []
@@ -34,23 +65,13 @@ private final class VoiceRecorderTestSession: SessionApplying, @unchecked Sendab
             return true
         }
         if shouldWait {
-            activationBeganGate.signal()
+            activationBegan.signal()
             activationGate.wait()
         }
     }
 
-    func waitUntilActivationBegan(
-        timeout: DispatchTimeInterval = .seconds(5)
-    ) async -> Bool {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                continuation.resume(
-                    returning: self.activationBeganGate.wait(
-                        timeout: DispatchTime.now() + timeout
-                    ) == .success
-                )
-            }
-        }
+    func waitUntilActivationBegan() async {
+        await activationBegan.wait()
     }
 
     func resumeActivation() {
@@ -155,7 +176,7 @@ private final class TestVoiceAudioRecorderFactory: VoiceAudioRecorderCreating {
 /// this remains deterministic when the full test suite saturates the executor.
 private final class VoiceRecorderPaddingGate: @unchecked Sendable {
     private let lock = NSLock()
-    private let enteredGate = DispatchSemaphore(value: 0)
+    private let entered = VoiceRecorderAsyncEvent()
     private var isOpen = false
     private var openWaiters: [CheckedContinuation<Void, Never>] = []
 
@@ -166,25 +187,15 @@ private final class VoiceRecorderPaddingGate: @unchecked Sendable {
                 openWaiters.append(continuation)
                 return false
             }
-            enteredGate.signal()
+            entered.signal()
             if resumeImmediately {
                 continuation.resume()
             }
         }
     }
 
-    func waitUntilEntered(
-        timeout: DispatchTimeInterval = .seconds(5)
-    ) async -> Bool {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                continuation.resume(
-                    returning: self.enteredGate.wait(
-                        timeout: DispatchTime.now() + timeout
-                    ) == .success
-                )
-            }
-        }
+    func waitUntilEntered() async {
+        await entered.wait()
     }
 
     func open() {
@@ -223,7 +234,7 @@ struct VoiceRecorderTests {
         let owner = VoiceRecorder.RecordingOwner()
 
         let startTask = Task { try await voiceRecorder.startRecording(owner: owner) }
-        #expect(await session.waitUntilActivationBegan())
+        await session.waitUntilActivationBegan()
 
         await voiceRecorder.cancelRecording(owner: owner)
         session.resumeActivation()
@@ -321,7 +332,7 @@ struct VoiceRecorderTests {
         try await finishingHold.start()
         let firstURL = try #require(factory.urls.first)
         let finishTask = Task { await finishingHold.finish() }
-        #expect(await paddingGate.waitUntilEntered())
+        await paddingGate.waitUntilEntered()
 
         await #expect(throws: VoiceRecorder.RecorderError.recordingInProgress) {
             try await rejectedHold.start()
