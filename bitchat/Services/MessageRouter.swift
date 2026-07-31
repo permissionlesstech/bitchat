@@ -35,10 +35,19 @@ final class MessageRouter {
     typealias QueuedMessage = MessageOutboxStore.QueuedMessage
 
     private struct PeerMessageKey: Hashable {
-        // Both properties are read directly now — `peerID` by the alias-scoped
-        // sweep in `flushOutbox(forAliases:)`, `messageID` throughout — so the
-        // ignore directive this once carried (for reads visible only through
-        // the synthesized Hashable conformance) would itself be flagged.
+        // periphery:ignore - read only via the synthesized Hashable
+        // conformance (dictionary-key identity), which the indexer
+        // cannot attribute; see retain_codable_properties in .periphery.yml
+        // for the same class of false positive.
+        //
+        // The alias-scoped sweep in `flushOutbox(forAliases:)` used to read
+        // this directly, which is why the suppression was dropped in a450204.
+        // That sweep was the bug: it derived the flush's skip set from every
+        // `secureTransmissions` entry under the aliases with no liveness
+        // check, so removing it brought the false positive back. Do not delete
+        // the property to satisfy the scanner — it is what scopes
+        // `secureTransmissions` and `dropMessage` per peer, and collapsing it
+        // would let one alias's drop clear its twin under the other.
         let peerID: PeerID
         let messageID: String
     }
