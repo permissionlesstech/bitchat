@@ -20,10 +20,16 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 - **Decentralized Mesh Network**: Automatic peer discovery and multi-hop message relay over Bluetooth LE
 - **Privacy First**: No accounts, no phone numbers, no persistent identifiers
 - **Private Message End-to-End Encryption**: [Noise Protocol](https://noiseprotocol.org) for mesh, NIP-17 for Nostr
+- **Original-Quality Private Media**: Photos and files sent in private chats go out as unmodified original bytes — no resizing or recompression — while still fully end-to-end encrypted; images sent in public/broadcast chat remain compressed to protect mesh bandwidth
 - **IRC-Style Commands**: Familiar `/slap`, `/msg`, `/who` style interface
 - **Universal App**: Native support for iOS and macOS
 - **Emergency Wipe**: Triple-tap to instantly clear all data
 - **Performance Optimizations**: LZ4 message compression, adaptive battery modes, and optimized networking
+
+## Requirements
+
+- iOS 16.0+ or macOS 13.0+
+- Xcode, with the project buildable via the `.xcodeproj`, XcodeGen, or Swift Package Manager
 
 ## [Technical Architecture](https://deepwiki.com/permissionlesstech/bitchat)
 
@@ -87,6 +93,12 @@ Private messages use **intelligent transport selection**:
    - Messages queued until transport becomes available
    - Automatic delivery when connection established
 
+### Private Media Transfer
+
+- **Original Bytes, Not Recompressed**: Private image and file sends preserve the exact original bytes — no resize, no recompression — verified end-to-end via a SHA-256 check before the file is saved on the receiving side
+- **Chunked Noise Encryption**: Large private media is split into Noise-encrypted chunks rather than raising the underlying message-size limit, so existing encryption strength and memory/DoS guards stay unchanged
+- **Public Chat Stays Compressed**: Images sent in public/broadcast chat continue through the existing resize-and-compress pipeline, since an uncompressed broadcast would burden the whole mesh, not just one recipient
+
 For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.md).
 
 ## Setup
@@ -114,9 +126,37 @@ For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.m
 Want to try this on macos: `just run` will set it up and run from source.
 Run `just clean` afterwards to restore things to original state for mobile app building and development.
 
+## Testing
+
+   ```bash
+   # macOS debug build without signing
+   xcodebuild -project bitchat.xcodeproj -scheme "bitchat (macOS)" \
+     -configuration Debug CODE_SIGNING_ALLOWED=NO build
+
+   # Full SwiftPM test suite
+   swift test
+
+   # iOS simulator tests
+   xcodebuild -project bitchat.xcodeproj -scheme "bitchat (iOS)" \
+     -sdk iphonesimulator \
+     -destination 'platform=iOS Simulator,name=iPhone 17' test
+   ```
+
+If iPhone 17 isn't available as a simulator, list what you have installed with `xcodebuild -showdestinations -project bitchat.xcodeproj -scheme "bitchat (iOS)"` and swap in one of those.
+
+`just build` and `just run` use the current `bitchat (macOS)` scheme and keep build output in the ignored `.DerivedData/` directory, without touching source, project, configuration, or entitlement files. `just clean` only removes `.DerivedData/` and `.build/` — it doesn't touch git or revert tracked files, so uncommitted work is preserved. `just test` and `just test-ios` run the SwiftPM suite and the iPhone 17 simulator suite, respectively.
+
 ## Localization
 
 - Base app resources live under `bitchat/Localization/Base.lproj/`. Add new copy to `Localizable.strings` and plural rules to `Localizable.stringsdict`.
 - Share extension strings are separate in `bitchatShareExtension/Localization/Base.lproj/Localizable.strings`.
 - Prefer keys that describe intent (`app_info.features.offline.title`) and reuse existing ones where possible.
 - Run `xcodebuild -project bitchat.xcodeproj -scheme "bitchat (macOS)" -configuration Debug CODE_SIGNING_ALLOWED=NO build` to compile-check any localization updates.
+
+## Contributing
+
+- Fork the repo and branch off `main`.
+- Keep changes focused and scoped — small, reviewable PRs over large ones.
+- Run `swift test` and the relevant `xcodebuild`/`just` build commands above before opening a PR; all existing tests should stay green.
+- Match the existing code style in the files you touch rather than introducing new patterns.
+- Open a PR with a clear description of what changed and why.
