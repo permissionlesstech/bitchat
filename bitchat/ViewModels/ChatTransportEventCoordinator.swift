@@ -280,12 +280,18 @@ final class ChatTransportEventCoordinator {
         context.registerEphemeralSession(peerID: peerID)
         context.notifyUIChanged()
 
-        // Resolve the stable key robustly: unified-peer state may not be
-        // populated yet at connect time, so fall back to the live noise
-        // session key and only then to the cache. Order matters — short BLE
-        // IDs are ephemeral and get recycled, so a cache entry left by a
-        // previous owner of this ID would name the wrong peer, while the
-        // session key is the identity of the link we just brought up.
+        // Resolve the stable key from evidence about *this* link only:
+        // unified-peer state, or the live noise session key. Both name the peer
+        // we just brought up.
+        //
+        // Deliberately no cache fallback. Short BLE IDs are ephemeral and get
+        // recycled, so a cache entry left by a previous owner of this ID names
+        // the wrong peer — and reaching the fallback means both live sources
+        // were absent, which is exactly when there is nothing to catch the
+        // mistake. Flushing `[shortID, wrongStableID]` would drain a stranger's
+        // queue and silently skip the right one. When neither live source has
+        // resolved yet, the short-ID flush below still runs, and authentication
+        // flushes both aliases once the identity is known.
         var stablePeerID: PeerID?
         if let peer = context.unifiedPeer(for: peerID) {
             let resolved = PeerID(hexData: peer.noisePublicKey)
@@ -295,8 +301,6 @@ final class ChatTransportEventCoordinator {
             let derived = PeerID(hexData: key)
             context.cacheStablePeerID(derived, for: peerID)
             stablePeerID = derived
-        } else if let cached = context.cachedStablePeerID(for: peerID) {
-            stablePeerID = cached
         }
 
         // Flush the short ID and the stable 64-hex key together. `flushOutbox`

@@ -525,20 +525,25 @@ struct ChatTransportEventCoordinatorContextTests {
 
     /// The stable key must still resolve when unified-peer state has not been
     /// populated yet at connect time — otherwise the flush silently no-ops in
-    /// exactly the case it is for. Falls back to the cache, then to the Noise
-    /// session key.
+    /// exactly the case it is for. It resolves from the live Noise session key,
+    /// never from the cache alone.
     @Test @MainActor
     func didConnectToPeer_resolvesTheStableKeyWithoutUnifiedPeerState() {
         let shortPeerID = PeerID(str: "1122334455667788")
         let noiseKey = Data((0..<32).map { UInt8(0xC0 &+ $0) })
         let stablePeerID = PeerID(hexData: noiseKey)
 
-        // Cache only.
+        // Cache only, with no live evidence for this link. Short BLE IDs are
+        // recycled, so the entry may belong to a previous owner of this ID —
+        // flushing it would drain a stranger's queue and skip the right one.
         let viaCache = MockChatTransportEventContext()
         viaCache.cacheStablePeerID(stablePeerID, for: shortPeerID)
         ChatTransportEventCoordinator(context: viaCache)
             .didConnectToPeerSynchronously(shortPeerID)
-        #expect(viaCache.flushedOutboxPeerIDs.contains(stablePeerID))
+        #expect(
+            viaCache.flushedOutboxPeerIDs == [shortPeerID],
+            "a cache entry with no live corroboration named the stable peer"
+        )
 
         // Noise session key only.
         let viaSession = MockChatTransportEventContext()
