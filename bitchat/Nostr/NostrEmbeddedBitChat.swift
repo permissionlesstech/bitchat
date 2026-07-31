@@ -3,6 +3,8 @@ import BitFoundation
 
 // MARK: - BitChat-over-Nostr Adapter
 
+/// Embeds BitChat packets in Nostr DM/geohash envelopes as `bitchat1:` payloads.
+/// Binary framing stays in BitFoundation; base64url uses `Base64URLCoding` (#642).
 struct NostrEmbeddedBitChat {
     /// Build a `bitchat1:` base64url-encoded BitChat packet carrying a private message for Nostr DMs.
     static func encodePMForNostr(content: String, messageID: String, recipientPeerID: PeerID, senderPeerID: PeerID) -> String? {
