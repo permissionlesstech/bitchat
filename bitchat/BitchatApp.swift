@@ -45,6 +45,9 @@ struct BitchatApp: App {
                 .onAppear {
                     appDelegate.runtime = runtime
                     runtime.start()
+                    #if os(iOS)
+                    AlternateAppIconSettings.applyStoredPreference()
+                    #endif
                 }
                 .onOpenURL { url in
                     runtime.handleOpenURL(url)
