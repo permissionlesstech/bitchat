@@ -506,14 +506,15 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
     }
 
     func checkForMentions(_ message: BitchatMessage) {
-        var myTokens: Set<String> = [context.nickname]
+        let myNickname = context.nickname.normalizedNickname
+        var myTokens: Set<String> = [myNickname]
         let meshPeers = context.meshPeerNicknames()
-        let collisions = meshPeers.values.filter { $0.hasPrefix(context.nickname + "#") }
+        let collisions = meshPeers.values.filter { $0.normalizedNickname.hasPrefix(myNickname + "#") }
         if !collisions.isEmpty {
             let suffix = "#" + String(context.myPeerID.id.prefix(4))
-            myTokens = [context.nickname + suffix]
+            myTokens = [myNickname + suffix]
         }
-        let isMentioned = message.mentions?.contains(where: myTokens.contains) ?? false
+        let isMentioned = message.mentions?.contains { myTokens.contains($0.normalizedNickname) } ?? false
 
         if isMentioned && message.sender != context.nickname {
             SecureLogger.info("🔔 Mention from \(message.sender)", category: .session)

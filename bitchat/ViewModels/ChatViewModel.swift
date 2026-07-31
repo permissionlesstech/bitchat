@@ -176,10 +176,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     var networkActivationAllowed: Bool { !panicRecoveryBlocked }
     @Published var nickname: String = "" {
         didSet {
-            // Trim whitespace whenever nickname is set; whitespace-only becomes ""
-            let trimmed = nickname.trimmedOrNilIfEmpty ?? ""
-            if trimmed != nickname {
-                nickname = trimmed
+            // Canonicalize whenever nickname is set: trim whitespace
+            // (whitespace-only becomes "") and apply Unicode NFC so accented
+            // names match regardless of how they were typed.
+            let cleaned = (nickname.trimmedOrNilIfEmpty ?? "").normalizedNickname
+            if cleaned != nickname {
+                nickname = cleaned
                 return
             }
             // Update mesh service nickname if it's initialized

@@ -7,8 +7,8 @@ struct BLERedundantLinkPolicyTests {
     private let peer = PeerID(str: "1122334455667788")
     private let otherPeer = PeerID(str: "8877665544332211")
 
-    private func link(_ uuid: String, _ peerID: PeerID?, connected: Bool = true, writable: Bool = true) -> BLERedundantLinkPolicy.PeripheralLink {
-        BLERedundantLinkPolicy.PeripheralLink(uuid: uuid, peerID: peerID, isConnected: connected, hasCharacteristic: writable)
+    private func link(_ uuid: String, _ peerID: PeerID?, connected: Bool = true, writable: Bool = true, connectedAt: Date? = nil) -> BLERedundantLinkPolicy.PeripheralLink {
+        BLERedundantLinkPolicy.PeripheralLink(uuid: uuid, peerID: peerID, isConnected: connected, hasCharacteristic: writable, lastConnectedAt: connectedAt)
     }
 
     @Test
@@ -130,5 +130,145 @@ struct BLERedundantLinkPolicyTests {
             keeping: ""
         )
         #expect(Set(retiring) == Set(["p-stale-1", "p-stale-2"]))
+    }
+
+    // MARK: Connect-recency preference (the July 31 retire↔reconnect fix)
+
+    @Test
+    func newestConnectionWinsOverIngressAndBindingAnchors() {
+        // Field oscillation: the restored old-address link (no connect
+        // timestamp) carried the announce ingress AND the binding, so it
+        // kept winning — and the cancelled fresh-address link kept getting
+        // rediscovered and reconnected. Physical connect recency must beat
+        // both announce anchors.
+        let now = Date()
+        let kept = BLERedundantLinkPolicy.keptPeripheralUUID(
+            ingressPeripheralUUID: "p-restored",
+            mostRecentlyBoundUUID: "p-restored",
+            links: [
+                link("p-restored", peer),
+                link("p-fresh", peer, connectedAt: now)
+            ],
+            peerID: peer
+        )
+        #expect(kept == "p-fresh")
+    }
+
+    @Test
+    func amongTimestampedLinksTheNewestWins() {
+        let now = Date()
+        let kept = BLERedundantLinkPolicy.keptPeripheralUUID(
+            ingressPeripheralUUID: "p-older",
+            mostRecentlyBoundUUID: "p-older",
+            links: [
+                link("p-older", peer, connectedAt: now.addingTimeInterval(-30)),
+                link("p-newer", peer, connectedAt: now)
+            ],
+            peerID: peer
+        )
+        #expect(kept == "p-newer")
+    }
+
+    @Test
+    func newestLinkMidDiscoveryDefersInsteadOfKeepingOlderWritable() {
+        // The fresh connection hasn't finished service discovery, so it is
+        // not writable yet. Keeping the older writable (restored) link now
+        // would cancel the one connection on the currently advertised
+        // address and recreate the oscillation — defer to a later announce.
+        let now = Date()
+        let kept = BLERedundantLinkPolicy.keptPeripheralUUID(
+            ingressPeripheralUUID: "p-writable",
+            mostRecentlyBoundUUID: "p-writable",
+            links: [
+                link("p-writable", peer, connectedAt: now.addingTimeInterval(-30)),
+                link("p-fresh-bare", peer, writable: false, connectedAt: now)
+            ],
+            peerID: peer
+        )
+        #expect(kept == nil)
+    }
+
+    @Test
+    func restoredWritableAnchorAlsoDefersToFreshUnwritableLink() {
+        // Same discovery window as above, but the writable duplicate is a
+        // restored link with no connect timestamp at all — the exact field
+        // topology. It must not win just because the fresh link is bare.
+        let kept = BLERedundantLinkPolicy.keptPeripheralUUID(
+            ingressPeripheralUUID: "p-restored",
+            mostRecentlyBoundUUID: "p-restored",
+            links: [
+                link("p-restored", peer),
+                link("p-fresh-bare", peer, writable: false, connectedAt: Date())
+            ],
+            peerID: peer
+        )
+        #expect(kept == nil)
+    }
+
+    @Test
+    func coNewestWritableLinkStillWinsOverBareTwin() {
+        // Two links share the newest timestamp and one is writable: no
+        // discovery window to wait out — the writable co-newest survives.
+        let now = Date()
+        let kept = BLERedundantLinkPolicy.keptPeripheralUUID(
+            ingressPeripheralUUID: nil,
+            mostRecentlyBoundUUID: nil,
+            links: [
+                link("p-bare", peer, writable: false, connectedAt: now),
+                link("p-writable", peer, connectedAt: now)
+            ],
+            peerID: peer
+        )
+        #expect(kept == "p-writable")
+    }
+
+    @Test
+    func allUnwritableDuplicatesConsolidateByConnectRecency() {
+        // No writable link exists at all: nothing can be stranded, so the
+        // newest connection consolidates immediately.
+        let now = Date()
+        let kept = BLERedundantLinkPolicy.keptPeripheralUUID(
+            ingressPeripheralUUID: "p-older",
+            mostRecentlyBoundUUID: "p-older",
+            links: [
+                link("p-older", peer, writable: false, connectedAt: now.addingTimeInterval(-30)),
+                link("p-newer", peer, writable: false, connectedAt: now)
+            ],
+            peerID: peer
+        )
+        #expect(kept == "p-newer")
+    }
+
+    @Test
+    func allRestoredLinksFallBackToAnnounceAnchors() {
+        // No connect timestamps at all (every link restored): the legacy
+        // ingress-then-binding preference still decides.
+        let kept = BLERedundantLinkPolicy.keptPeripheralUUID(
+            ingressPeripheralUUID: "p-ingress",
+            mostRecentlyBoundUUID: "p-bound",
+            links: [link("p-ingress", peer), link("p-bound", peer)],
+            peerID: peer
+        )
+        #expect(kept == "p-ingress")
+    }
+
+    @Test
+    func timestampTiesBreakByAnchorsThenDeterministically() {
+        let now = Date()
+        let anchored = BLERedundantLinkPolicy.keptPeripheralUUID(
+            ingressPeripheralUUID: "p-b",
+            mostRecentlyBoundUUID: nil,
+            links: [link("p-a", peer, connectedAt: now), link("p-b", peer, connectedAt: now)],
+            peerID: peer
+        )
+        #expect(anchored == "p-b")
+
+        let unanchored = BLERedundantLinkPolicy.keptPeripheralUUID(
+            ingressPeripheralUUID: nil,
+            mostRecentlyBoundUUID: nil,
+            links: [link("p-b", peer, connectedAt: now), link("p-a", peer, connectedAt: now)],
+            peerID: peer
+        )
+        #expect(unanchored == "p-a")
     }
 }

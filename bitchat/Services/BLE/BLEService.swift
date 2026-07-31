@@ -2943,7 +2943,7 @@ extension BLEService: GossipSyncManager.Delegate {
 
     func sendPacket(to peerID: PeerID, packet: BitchatPacket) {
         onEngine {
-            sendPacketDirected(packet, to: peerID)
+            _ = sendPacketDirected(packet, to: peerID)
         }
     }
 
@@ -3199,6 +3199,14 @@ extension BLEService {
         onEngine { linkBindings.peer(forCentralUUID: centralUUID) }
     }
 
+    func _test_linkBinding(_ link: BLEIngressLinkID) -> PeerID? {
+        onEngine { linkBindings.boundPeer(for: link) }
+    }
+
+    func _test_knownPeerIDs() -> [PeerID] {
+        peerRegistry.peerIDs
+    }
+
     func _test_markNoiseAuthenticatedCentral(_ centralUUID: String, to peerID: PeerID) {
         onEngine {
             guard linkBindings.peer(forCentralUUID: centralUUID) == peerID else { return }
@@ -3328,9 +3336,12 @@ extension BLEService {
     }
 
     func _test_drainPrivateMediaSendPipeline() async {
+        // Capture only the (Sendable) queue, not self, so the @Sendable
+        // dispatch closures carry no non-Sendable state.
+        let queue = messageQueue
         await withCheckedContinuation { continuation in
-            self.messageQueue.async { [weak self] in
-                self?.messageQueue.async {
+            queue.async {
+                queue.async {
                     continuation.resume()
                 }
             }
@@ -3349,9 +3360,10 @@ extension BLEService {
     }
 
     func _test_drainNoiseMessagePipeline() async {
+        let queue = messageQueue
         await withCheckedContinuation { continuation in
-            self.messageQueue.async {
-                self.messageQueue.async {
+            queue.async {
+                queue.async {
                     continuation.resume()
                 }
             }
@@ -6241,10 +6253,53 @@ extension BLEService {
         // them now instead of leaving ghost links that spray duplicate
         // traffic until the inactivity timeout.
         cancelBoundPeripheralLinks(to: previousPeerID, keeping: linkUUID)
-        // Retire the rotated-away ID only once its last link is gone; a
-        // remaining stale link heals the same way or ages out.
-        guard linkBindings.links(to: previousPeerID).isEmpty else { return }
+        // Links we cannot cancel (the remote owns its central connections)
+        // must still stop claiming the dead identity, or it lingers as a
+        // ghost peer that the NEW identity's own traffic keeps refreshing
+        // (issue #1538).
+        releaseLinksBoundToRotatedPeer(previousPeerID)
         retireRotatedPeer(previousPeerID)
+    }
+
+    /// Unbinds every link still bound to an identity a verified direct
+    /// announce just rotated away from, and retires those links' Noise
+    /// proofs.
+    ///
+    /// Release, deliberately not rebind: a rotation announce proves only
+    /// that *its own* link's device now presents as the new ID, so binding
+    /// a different link to that ID on this evidence is exactly what the
+    /// #1401 containment rule ("never steal an identity another live link
+    /// already owns") forbids — and that rule stays intact. Unbinding is
+    /// strictly less trusting than any binding, and it is correct under
+    /// both readings of a second link bound to the retired ID: either it is
+    /// the same physical device (dual links to one phone, the field case),
+    /// or one of the two links is a spoofer holding a forged binding —
+    /// since a peer ID is derived from a Noise key fingerprint, two devices
+    /// cannot both legitimately own it. Dropping the binding is right in
+    /// the first case and a win in the second.
+    ///
+    /// Released links then converge through the ordinary unbound-link path:
+    /// the next raw direct announce on the link binds it to whoever it
+    /// actually carries. Until then the link's frames attribute to their
+    /// claimed sender rather than to a dead ID.
+    ///
+    /// Residual (unchanged in kind from what the containment already
+    /// accepts): an attacker who has bound their own link to X — possible
+    /// by replaying X's raw announce onto an unbound link — can drive a
+    /// rebind on it and so evict X's registry entry. X's next announce
+    /// re-binds its real links and restores presence, and the per-link
+    /// rebind cooldown bounds the repetition rate.
+    private func releaseLinksBoundToRotatedPeer(_ peerID: PeerID) {
+        for link in linkBindings.links(to: peerID) {
+            linkAuth.retireLink(link)
+            switch link {
+            case .peripheral(let peripheralUUID):
+                // No survivor: every link this peer holds is being released.
+                _ = linkBindings.peripheralRemoved(peripheralUUID) { _ in nil }
+            case .central(let centralUUID):
+                _ = linkBindings.centralRemoved(centralUUID)
+            }
+        }
     }
 
     /// After a restore relaunch the same phone can reappear under a fresh
@@ -6325,7 +6380,8 @@ extension BLEService {
             store.peripheralStates.map {
                 (uuid: $0.peripheral.identifier.uuidString,
                  isConnected: $0.isConnected,
-                 hasCharacteristic: $0.characteristic != nil)
+                 hasCharacteristic: $0.characteristic != nil,
+                 lastConnectedAt: $0.lastConnectedAt)
             }
         }
         return physical.map {
@@ -6333,7 +6389,8 @@ extension BLEService {
                 uuid: $0.uuid,
                 peerID: linkBindings.peer(forPeripheralID: $0.uuid),
                 isConnected: $0.isConnected,
-                hasCharacteristic: $0.hasCharacteristic
+                hasCharacteristic: $0.hasCharacteristic,
+                lastConnectedAt: $0.lastConnectedAt
             )
         }
     }

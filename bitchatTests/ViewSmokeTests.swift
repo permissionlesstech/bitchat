@@ -542,6 +542,9 @@ struct ViewSmokeTests {
         ])
         try? await Task.sleep(nanoseconds: 50_000_000)
 
+        // ContentView + people sheet must mount with the full feature-model
+        // set (peerList / publicChat / privateInbox included). Missing any of
+        // those crashes the NavigationStack sheet on some iOS versions (#1558).
         _ = mount(installSmokeEnvironment(ContentView(), featureModels: featureModels))
         _ = mount(installSmokeEnvironment(ContentPeopleSheetHarness(), featureModels: featureModels))
 

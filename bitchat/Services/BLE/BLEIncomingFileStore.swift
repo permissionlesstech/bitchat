@@ -140,6 +140,20 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     /// orphans a previous session left behind.
     static let liveCapturePrefix = "voice_live_"
 
+    /// Media payloads follow the same at-rest posture as the app's other
+    /// persistence layers (courier, outbox, receipt index): protected until
+    /// first unlock, so the launch-time retention sweep can still run after
+    /// a reboot. Applied to the media directories so recordings that save
+    /// as they go (live captures, `AVAudioRecorder`) inherit it, and stated
+    /// explicitly at the payload write site like every other store.
+    static var mediaProtectionAttributes: [FileAttributeKey: Any]? {
+        #if os(iOS)
+        return [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
+        #else
+        return nil
+        #endif
+    }
+
     /// Exposed so callers that write progressively into the store's
     /// directories (live voice captures) share the same file manager.
     let fileManager: FileManager
@@ -223,7 +237,7 @@ struct BLEIncomingFileStore: @unchecked Sendable {
                         isDirectory: true
                     ),
                     withIntermediateDirectories: true,
-                    attributes: nil
+                    attributes: Self.mediaProtectionAttributes
                 )
             }
         } catch {
@@ -268,7 +282,7 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     /// write progressively instead of via `save` (live voice captures).
     func incomingDirectory(subdirectory: String) throws -> URL {
         let directory = try filesDirectory().appendingPathComponent(subdirectory, isDirectory: true)
-        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: Self.mediaProtectionAttributes)
         return directory
     }
 
@@ -284,7 +298,7 @@ struct BLEIncomingFileStore: @unchecked Sendable {
 
         do {
             let base = try filesDirectory().appendingPathComponent(subdirectory, isDirectory: true)
-            try fileManager.createDirectory(at: base, withIntermediateDirectories: true, attributes: nil)
+            try fileManager.createDirectory(at: base, withIntermediateDirectories: true, attributes: Self.mediaProtectionAttributes)
             let sanitized = sanitizedFileName(
                 preferredName,
                 defaultName: "\(defaultPrefix)_\(Self.timestampString(from: dateProvider()))",
@@ -306,7 +320,11 @@ struct BLEIncomingFileStore: @unchecked Sendable {
                 ),
                 forceRandomizedName: reservedPaths == nil
             )
-            try data.write(to: destination, options: .atomic)
+            var options: Data.WritingOptions = [.atomic]
+            #if os(iOS)
+            options.insert(.completeFileProtectionUntilFirstUserAuthentication)
+            #endif
+            try data.write(to: destination, options: options)
             payloadCoordination.pendingDeliveryPaths.insert(
                 destination.standardizedFileURL.path
             )
@@ -650,9 +668,90 @@ struct BLEIncomingFileStore: @unchecked Sendable {
         return removed
     }
 
+    /// Stamps the media directories and any resident payloads with the
+    /// explicit protection class, covering files written by builds that
+    /// relied on the container default. Runs every launch: re-stamping an
+    /// equal class is a metadata no-op, and anything carrying a stronger
+    /// class is left alone, so repetition is cheap and can never downgrade.
+    /// In-flight live captures are skipped for symmetry with the retention
+    /// sweep; they receive the class at creation and need no repair.
+    /// Best-effort like the sweep it runs alongside; a file that cannot be
+    /// stamped is logged, not fatal, and the migration moves on to the next
+    /// item. Returns the number of items stamped so the launch path and
+    /// tests can observe coverage.
+    @discardableResult
+    func migrateFileProtectionIfNeeded() -> Int {
+        #if os(iOS)
+        guard let attributes = Self.mediaProtectionAttributes else { return 0 }
+        var stamped = 0
+        guard let base = try? filesDirectory() else { return 0 }
+        for subdirectory in Self.mediaSubdirectories {
+            let dir = base.appendingPathComponent(subdirectory, isDirectory: true)
+            guard fileManager.fileExists(atPath: dir.path) else { continue }
+            let files = (try? fileManager.contentsOfDirectory(
+                at: dir,
+                includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey, .fileProtectionKey],
+                options: [.skipsHiddenFiles]
+            )) ?? []
+            stamped += stampProtectionIfWeaker(dir, requireRegularFile: false, attributes: attributes)
+            for fileURL in files {
+                guard !fileURL.lastPathComponent.hasPrefix(Self.liveCapturePrefix) else { continue }
+                stamped += stampProtectionIfWeaker(fileURL, requireRegularFile: true, attributes: attributes)
+            }
+        }
+        return stamped
+        #else
+        return 0
+        #endif
+    }
+
+    #if os(iOS)
+    /// Applies the class to one item, but only when the item currently sits
+    /// at the container default or weaker. The list names the classes that
+    /// are safe to replace; anything else, including classes added in later
+    /// iOS versions, is left alone. Only regular files are stamped when
+    /// `requireRegularFile` is set (and only real directories otherwise),
+    /// matching the caution the legacy-file removal path applies; symlinks
+    /// and other non-regular files are left untouched.
+    private func stampProtectionIfWeaker(
+        _ itemURL: URL,
+        requireRegularFile: Bool,
+        attributes: [FileAttributeKey: Any]
+    ) -> Int {
+        let values = try? itemURL.resourceValues(
+            forKeys: [.isRegularFileKey, .isDirectoryKey, .fileProtectionKey]
+        )
+        if requireRegularFile {
+            guard values?.isRegularFile == true else { return 0 }
+        } else {
+            guard values?.isDirectory == true else { return 0 }
+        }
+        if let current = values?.fileProtection,
+           current != .none,
+           current != .completeUntilFirstUserAuthentication {
+            return 0
+        }
+        do {
+            try fileManager.setAttributes(attributes, ofItemAtPath: itemURL.path)
+            return 1
+        } catch let error as CocoaError where error.code == .fileNoSuchFile {
+            // Quota eviction or a deletion commit on another store instance
+            // can delete an item out from under this migration; that is not
+            // a failure.
+            return 0
+        } catch {
+            SecureLogger.warning(
+                "⚠️ Failed to migrate media file protection: \(error)",
+                category: .security
+            )
+            return 0
+        }
+    }
+    #endif
+
     private func filesDirectory() throws -> URL {
         let filesDir = try rootDirectory().appendingPathComponent("files", isDirectory: true)
-        try fileManager.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: nil)
+        try fileManager.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: Self.mediaProtectionAttributes)
         return filesDir
     }
 
