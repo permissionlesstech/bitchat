@@ -36,9 +36,9 @@
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users.</string>
+	<string>bitchat uses Bluetooth to create a secure mesh with nearby users. While backgrounded, a nearby peer may ask iOS to reopen bitchat so the mesh can reach you — that system prompt is expected.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>bitchat uses Bluetooth to discover and connect with other bitchat users nearby.</string>
+	<string>bitchat uses Bluetooth to discover and connect with nearby users. Background reconnects can show an iOS “accessory would like to open bitchat” prompt; allow it to stay reachable, or dismiss if you prefer not to wake.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>bitchat uses the camera to scan QR codes to verify peers.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
