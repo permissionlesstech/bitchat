@@ -28,9 +28,20 @@ struct BitchatApp: App {
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
     }
 
+    /// iOS presents the chat root inside a bottom tab bar; macOS keeps the
+    /// single-window chat root, where a tab bar would be wrong chrome.
+    @ViewBuilder
+    private var rootView: some View {
+        #if os(iOS)
+        RootTabView()
+        #else
+        ContentView()
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            rootView
                 .environment(\.appTheme, AppTheme(rawValue: appThemeRawValue) ?? .matrix)
                 .environmentObject(runtime.publicChatModel)
                 .environmentObject(runtime.privateInboxModel)
