@@ -460,7 +460,8 @@ struct ChatPrivateConversationCoordinatorContextTests {
         context.displayNamesByPubkey[senderPubkey] = "bob#5678"
         let payloadData = PrivateMessagePacket(messageID: "geo-1", content: "hi there").encode()!
         let payload = NoisePayload(type: .privateMessage, data: payloadData)
-        // Old timestamp: not "recent", so no unread marking (and no notification).
+        // An old timestamp suppresses the notification but not the unread
+        // badge: recency gates only the alert.
         let oldTimestamp = Date().addingTimeInterval(-120)
 
         coordinator.handlePrivateMessage(
@@ -476,7 +477,7 @@ struct ChatPrivateConversationCoordinatorContextTests {
         #expect(context.sentGeoDeliveryAcks == ["geo-1"])
         #expect(context.privateChats[convKey]?.map(\.id) == ["geo-1"])
         #expect(context.privateChats[convKey]?.first?.sender == "bob#5678")
-        #expect(context.unreadPrivateMessages.isEmpty)
+        #expect(context.unreadPrivateMessages == [convKey])
         #expect(context.notifyUIChangedCount == 1)
 
         // Redelivery: ack is deduplicated and the message is not appended twice.
@@ -489,6 +490,91 @@ struct ChatPrivateConversationCoordinatorContextTests {
         )
         #expect(context.geoDeliveryAcks.count == 1)
         #expect(context.privateChats[convKey]?.count == 1)
+    }
+
+    /// A DM sent while the app was closed reaches this path through the
+    /// gift-wrap lookback, so it is minutes or hours old by the time it is
+    /// handled. The conversation still has to show as unread or the message
+    /// is unfindable; only the notification is gated on recency.
+    @Test @MainActor
+    func geoPrivateMessage_marksUnreadForAnOldMessageWithoutNotifying() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let convKey = PeerID(str: "nostr_abcdef12")
+        let senderPubkey = "feedface00112233"
+        context.displayNamesByPubkey[senderPubkey] = "bob#5678"
+        let payloadData = PrivateMessagePacket(
+            messageID: "offline-1",
+            content: "sent while you were away"
+        ).encode()!
+        let payload = NoisePayload(type: .privateMessage, data: payloadData)
+
+        coordinator.handlePrivateMessage(
+            payload,
+            senderPubkey: senderPubkey,
+            convKey: convKey,
+            id: MockChatPrivateConversationContext.dummyIdentity,
+            messageTimestamp: Date().addingTimeInterval(-3600)
+        )
+
+        #expect(context.privateChats[convKey]?.map(\.id) == ["offline-1"])
+        #expect(context.unreadPrivateMessages == [convKey])
+        #expect(context.privateMessageNotifications.isEmpty)
+    }
+
+    /// The recency window still does its job: a message that arrives while
+    /// the person is elsewhere in the app both badges and notifies.
+    @Test @MainActor
+    func geoPrivateMessage_notifiesForARecentMessage() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let convKey = PeerID(str: "nostr_abcdef12")
+        let senderPubkey = "feedface00112233"
+        context.displayNamesByPubkey[senderPubkey] = "bob#5678"
+        let payloadData = PrivateMessagePacket(
+            messageID: "fresh-1",
+            content: "just sent"
+        ).encode()!
+        let payload = NoisePayload(type: .privateMessage, data: payloadData)
+
+        coordinator.handlePrivateMessage(
+            payload,
+            senderPubkey: senderPubkey,
+            convKey: convKey,
+            id: MockChatPrivateConversationContext.dummyIdentity,
+            messageTimestamp: Date()
+        )
+
+        #expect(context.unreadPrivateMessages == [convKey])
+        #expect(context.privateMessageNotifications.map(\.peerID) == [convKey])
+    }
+
+    /// Opening the conversation is what clears it: a message that arrives
+    /// while the chat is on screen is neither badged nor notified.
+    @Test @MainActor
+    func geoPrivateMessage_doesNotMarkUnreadWhileTheChatIsOpen() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let convKey = PeerID(str: "nostr_abcdef12")
+        let senderPubkey = "feedface00112233"
+        context.displayNamesByPubkey[senderPubkey] = "bob#5678"
+        context.selectedPrivateChatPeer = convKey
+        let payloadData = PrivateMessagePacket(
+            messageID: "viewing-1",
+            content: "you are looking at this"
+        ).encode()!
+        let payload = NoisePayload(type: .privateMessage, data: payloadData)
+
+        coordinator.handlePrivateMessage(
+            payload,
+            senderPubkey: senderPubkey,
+            convKey: convKey,
+            id: MockChatPrivateConversationContext.dummyIdentity,
+            messageTimestamp: Date()
+        )
+
+        #expect(context.unreadPrivateMessages.isEmpty)
+        #expect(context.privateMessageNotifications.isEmpty)
     }
 
     @Test @MainActor
