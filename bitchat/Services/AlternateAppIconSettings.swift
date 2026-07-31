@@ -35,6 +35,8 @@ enum AlternateAppIconSettings {
             }
         }
 
+        // periphery:ignore - read from the iOS App Info icon picker; the macOS
+        // Periphery scheme cannot see that use site (#1447).
         var title: String {
             switch self {
             case .primary:
@@ -65,6 +67,8 @@ enum AlternateAppIconSettings {
         }
     }
 
+    // periphery:ignore - convenience for iOS settings; storage APIs below are
+    // what panic wipe and tests exercise on the macOS scan.
     static var selected: Icon {
         get { selected(in: .standard) }
         set { setSelected(newValue, in: .standard, applySystem: true) }
