@@ -8,6 +8,7 @@ Last reviewed: July 2026
 - Nostr private fallback, bridge courier drops, mesh bridging, geohash channels, and notices
 - CoreLocation and reverse geocoding
 - Local persistence, panic wipe, logging, and App Store privacy manifests
+- Distribution trust (App Store vs unverifiable sideloads, including the #1097 `.dmg` ask) — see docs/VERIFYING-A-BUILD.md
 
 The user-facing contract is `PRIVACY_POLICY.md`. This document records implementation-level behavior and residual risks that should be re-audited when storage or transport semantics change.
 
