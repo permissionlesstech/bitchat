@@ -547,10 +547,26 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     /// conversation insertion. Before this callback, a deletion transaction
     /// may not infer ownership from a stale bubble that names the same path.
     func finishIncomingFileDelivery(at storedURL: URL) {
+        endEvictionProtection(for: storedURL)
+    }
+
+    /// Registers `url` in the same exclusion set as pending deliveries so
+    /// quota eviction / age expiry cannot unlink a file an outgoing capture
+    /// is still writing (`voice_<…>.m4a` is not covered by `voice_live_`).
+    /// Pair with `endEvictionProtection` on stop, cancel, or start failure.
+    func beginEvictionProtection(for url: URL) {
+        payloadCoordination.lock.lock()
+        defer { payloadCoordination.lock.unlock() }
+        payloadCoordination.pendingDeliveryPaths.insert(
+            url.standardizedFileURL.path
+        )
+    }
+
+    func endEvictionProtection(for url: URL) {
         payloadCoordination.lock.lock()
         defer { payloadCoordination.lock.unlock() }
         payloadCoordination.pendingDeliveryPaths.remove(
-            storedURL.standardizedFileURL.path
+            url.standardizedFileURL.path
         )
     }
 

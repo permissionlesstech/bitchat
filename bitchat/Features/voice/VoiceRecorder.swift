@@ -76,6 +76,9 @@ actor VoiceRecorder {
     /// Held outgoing quota headroom for the in-flight capture; released on
     /// stop, cancel, start failure, and panic cancel.
     private var quotaReservation: BLEIncomingFileStore.QuotaByteReservation?
+    /// Path registered with the shared store so concurrent quota eviction
+    /// cannot delete the file this session is still recording.
+    private var protectedCaptureURL: URL?
 
     init(
         sessionCoordinator: AudioSessionCoordinator = .shared,
@@ -174,7 +177,7 @@ actor VoiceRecorder {
             return newURL
         } catch {
             releaseSessionToken()
-            releaseQuotaReservation()
+            releaseCaptureGuards()
             recorder = nil
             currentURL = nil
             activeOwner = nil
@@ -193,14 +196,14 @@ actor VoiceRecorder {
         if startInFlight {
             activeOwner = nil
             startInFlight = false
-            releaseQuotaReservation()
+            releaseCaptureGuards()
             return nil
         }
 
         guard let activeRecorder = recorder else {
             let sessionURL = currentURL
             releaseSessionToken()
-            releaseQuotaReservation()
+            releaseCaptureGuards()
             currentURL = nil
             activeOwner = nil
             return sessionURL
@@ -227,7 +230,7 @@ actor VoiceRecorder {
             activeRecorder.stop()
         }
         releaseSessionToken()
-        releaseQuotaReservation()
+        releaseCaptureGuards()
         self.recorder = nil
         currentURL = nil
         activeOwner = nil
@@ -247,7 +250,7 @@ actor VoiceRecorder {
             recorder.stop()
         }
         releaseSessionToken()
-        releaseQuotaReservation()
+        releaseCaptureGuards()
         if let currentURL {
             try? FileManager.default.removeItem(at: currentURL)
         }
@@ -308,32 +311,48 @@ actor VoiceRecorder {
         let fileName = "voice_\(formatter.string(from: Date()))_\(UUID().uuidString).m4a"
 
         let baseDirectory: URL
+        let shouldGuardCapture: Bool
         if let outputDirectory {
             baseDirectory = outputDirectory
+            shouldGuardCapture = false
         } else {
             // Reserve worst-case note size for the whole capture. Released on
             // stop / cancel / start failure so a abandoned hold cannot keep
             // the outgoing budget permanently tighter.
-            releaseQuotaReservation()
+            releaseCaptureGuards()
             quotaReservation = BLEIncomingFileStore.shared.reserveQuotaBytes(
                 FileTransferLimits.maxVoiceNoteBytes,
                 scope: .outgoing
             )
             baseDirectory = try applicationFilesDirectory()
                 .appendingPathComponent("voicenotes/outgoing", isDirectory: true)
+            shouldGuardCapture = true
         }
         try FileManager.default.createDirectory(
             at: baseDirectory,
             withIntermediateDirectories: true,
             attributes: BLEIncomingFileStore.mediaProtectionAttributes
         )
-        return baseDirectory.appendingPathComponent(fileName)
+        let url = baseDirectory.appendingPathComponent(fileName)
+        if shouldGuardCapture {
+            // `voice_<ts>_<uuid>.m4a` is not covered by the live-capture
+            // prefix; register the path so a concurrent outgoing eviction
+            // cannot unlink the open recorder file.
+            BLEIncomingFileStore.shared.beginEvictionProtection(for: url)
+            protectedCaptureURL = url
+        }
+        return url
     }
 
-    private func releaseQuotaReservation() {
-        guard let quotaReservation else { return }
-        BLEIncomingFileStore.shared.releaseQuotaReservation(quotaReservation)
-        self.quotaReservation = nil
+    private func releaseCaptureGuards() {
+        if let protectedCaptureURL {
+            BLEIncomingFileStore.shared.endEvictionProtection(for: protectedCaptureURL)
+            self.protectedCaptureURL = nil
+        }
+        if let quotaReservation {
+            BLEIncomingFileStore.shared.releaseQuotaReservation(quotaReservation)
+            self.quotaReservation = nil
+        }
     }
 
     private func applicationFilesDirectory() throws -> URL {

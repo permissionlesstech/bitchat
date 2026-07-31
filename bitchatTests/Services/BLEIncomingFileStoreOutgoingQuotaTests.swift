@@ -58,6 +58,60 @@ struct BLEIncomingFileStoreOutgoingQuotaTests {
         #expect(FileManager.default.fileExists(atPath: outgoingNew.path))
     }
 
+    @Test func outgoingQuotaReservingBytesDecidesEviction() throws {
+        // 98 MB sits under the 100 MB cap with reservingBytes: 0, but must
+        // yield when reservingBytes: 10 MB drops the target to 90 MB — so
+        // the test fails if the reservation argument is ignored.
+        let (store, root, cleanup) = try makeTempStore()
+        defer { cleanup() }
+
+        let only = root.appendingPathComponent("files/images/outgoing/only.jpg")
+        try writeBytes(
+            98 * 1024 * 1024,
+            to: only,
+            modified: Date(timeIntervalSinceNow: -3600)
+        )
+
+        store.enforceOutgoingQuota(reservingBytes: 0)
+        #expect(FileManager.default.fileExists(atPath: only.path))
+
+        store.enforceOutgoingQuota(reservingBytes: 10 * 1024 * 1024)
+        #expect(!FileManager.default.fileExists(atPath: only.path))
+    }
+
+    @Test func outgoingQuotaSkipsProtectedInProgressCapture() throws {
+        // Actively recorded outgoing notes use `voice_<…>.m4a`, not the
+        // live-capture prefix. Protection must keep them even when they are
+        // the oldest file and eviction needs the space.
+        let (store, root, cleanup) = try makeTempStore()
+        defer { cleanup() }
+
+        let inProgressCapture = root.appendingPathComponent(
+            "files/voicenotes/outgoing/voice_aabbccddeeff0011.m4a"
+        )
+        let unprotectedNewer = root.appendingPathComponent(
+            "files/images/outgoing/newer.jpg"
+        )
+        try writeBytes(
+            50 * 1024 * 1024,
+            to: inProgressCapture,
+            modified: Date(timeIntervalSinceNow: -7200)
+        )
+        try writeBytes(
+            55 * 1024 * 1024,
+            to: unprotectedNewer,
+            modified: Date(timeIntervalSinceNow: -60)
+        )
+
+        store.beginEvictionProtection(for: inProgressCapture)
+        defer { store.endEvictionProtection(for: inProgressCapture) }
+
+        store.enforceOutgoingQuota(reservingBytes: 10 * 1024 * 1024)
+
+        #expect(FileManager.default.fileExists(atPath: inProgressCapture.path))
+        #expect(!FileManager.default.fileExists(atPath: unprotectedNewer.path))
+    }
+
     @Test func outgoingQuotaHonorsPendingDeliveryReservationAndLiveCapturePrefix() throws {
         let (store, root, cleanup) = try makeTempStore()
         defer { cleanup() }
@@ -237,18 +291,19 @@ struct BLEIncomingFileStoreOutgoingQuotaTests {
         let (store, root, cleanup) = try makeTempStore()
         defer { cleanup() }
 
-        let oldURL = root.appendingPathComponent("files/images/outgoing/old.jpg")
-        let newURL = root.appendingPathComponent("files/images/outgoing/new.jpg")
-        try writeBytes(60 * 1024 * 1024, to: oldURL, modified: Date(timeIntervalSinceNow: -3600))
-        try writeBytes(45 * 1024 * 1024, to: newURL, modified: Date(timeIntervalSinceNow: -60))
+        // 98 MB alone is under quota; a held 10 MB reservation must force
+        // eviction (target 90 MB). Fails if held bytes are ignored.
+        let only = root.appendingPathComponent("files/images/outgoing/only.jpg")
+        try writeBytes(
+            98 * 1024 * 1024,
+            to: only,
+            modified: Date(timeIntervalSinceNow: -3600)
+        )
 
-        // Hold 10 MB without an extra reservingBytes argument — eviction must
-        // still free the oldest file because usage + held exceeds quota.
         let reservation = store.reserveQuotaBytes(10 * 1024 * 1024, scope: .outgoing)
         defer { store.releaseQuotaReservation(reservation) }
 
-        #expect(!FileManager.default.fileExists(atPath: oldURL.path))
-        #expect(FileManager.default.fileExists(atPath: newURL.path))
+        #expect(!FileManager.default.fileExists(atPath: only.path))
         #expect(store.reservedQuotaBytes(for: .outgoing) == 10 * 1024 * 1024)
     }
 }

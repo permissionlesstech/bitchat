@@ -103,6 +103,9 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
     /// Held outgoing quota headroom for this capture; released on finish,
     /// cancel, start failure, and panic cancel.
     private var quotaReservation: BLEIncomingFileStore.QuotaByteReservation?
+    /// Path registered so concurrent outgoing eviction cannot delete the
+    /// file this live session is still writing.
+    private var protectedCaptureURL: URL?
 
     var isLive: Bool { true }
 
@@ -129,6 +132,7 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
     func start() async throws {
         let (outputURL, reservation) = try Self.makeOutputURL(burstID: burstID)
         quotaReservation = reservation
+        protectedCaptureURL = outputURL
         let sendPacket = sendPacket
         let stream = stream
         capture.onFrames = { frames in
@@ -162,7 +166,7 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
             // handed its token back — nothing to retry. A coordinator-side
             // interruption during handoff also cancels acquire, but that is
             // not a successful start and must propagate to the view model.
-            releaseQuotaReservation()
+            releaseCaptureGuards()
             try? FileManager.default.removeItem(at: outputURL)
             guard completed else { throw CancellationError() }
             return
@@ -177,14 +181,14 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
             // user let go, so bail instead of opening a hot mic.
             guard !completed else {
                 capture.cancel()
-                releaseQuotaReservation()
+                releaseCaptureGuards()
                 try? FileManager.default.removeItem(at: outputURL)
                 return
             }
             do {
                 try await capture.start(outputURL: outputURL)
             } catch {
-                releaseQuotaReservation()
+                releaseCaptureGuards()
                 try? FileManager.default.removeItem(at: outputURL)
                 throw error
             }
@@ -196,7 +200,7 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
     func finish() async -> URL? {
         guard !completed else { return nil }
         completed = true
-        defer { releaseQuotaReservation() }
+        defer { releaseCaptureGuards() }
 
         let elapsed = startDate.map { now().timeIntervalSince($0) } ?? 0
         let (url, encodedFrames) = capture.stop()
@@ -232,7 +236,7 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
         // pause), and only capture.cancel() stops the mic and deactivates the
         // session. It is idempotent, so a redundant call is harmless.
         capture.cancel()
-        releaseQuotaReservation()
+        releaseCaptureGuards()
         if !alreadyCompleted {
             sendControlPacket(.canceled)
         }
@@ -243,7 +247,7 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
         // conversation data racing the emergency transport reset.
         completed = true
         capture.cancel()
-        releaseQuotaReservation()
+        releaseCaptureGuards()
     }
 
     private func sendControlPacket(_ kind: VoiceBurstPacket.Kind) {
@@ -251,10 +255,15 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
         sendPacket(packet.encode())
     }
 
-    private func releaseQuotaReservation() {
-        guard let quotaReservation else { return }
-        BLEIncomingFileStore.shared.releaseQuotaReservation(quotaReservation)
-        self.quotaReservation = nil
+    private func releaseCaptureGuards() {
+        if let protectedCaptureURL {
+            BLEIncomingFileStore.shared.endEvictionProtection(for: protectedCaptureURL)
+            self.protectedCaptureURL = nil
+        }
+        if let quotaReservation {
+            BLEIncomingFileStore.shared.releaseQuotaReservation(quotaReservation)
+            self.quotaReservation = nil
+        }
     }
 
     private static func makeOutputURL(burstID: Data) throws -> (URL, BLEIncomingFileStore.QuotaByteReservation) {
@@ -282,6 +291,9 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
             throw error
         }
         let url = directory.appendingPathComponent("voice_\(burstID.hexEncodedString()).m4a")
+        // Outgoing live notes use `voice_<burstID>.m4a`, not the incoming
+        // `voice_live_` prefix — protect the path until finish/cancel.
+        BLEIncomingFileStore.shared.beginEvictionProtection(for: url)
         return (url, reservation)
     }
 }
