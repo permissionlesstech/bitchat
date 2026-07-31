@@ -234,7 +234,7 @@ Mitigation for review: treat a v2 announce as *unverified presence* only, and do
 
 The repo already has the two mechanisms this needs, both proven in production.
 
-**Capability bit.** `PeerCapabilities` is a `UInt64` `OptionSet` with minimal little-endian wire encoding, at least one byte, so "no TLV" and "empty set" stay distinguishable. Crucially `BLEPeerRegistry.capabilitiesWereExplicitlyAdvertised(for:)` distinguishes *old client that sent no TLV* from *new client with the bit off*. Add `peerIDRotation` at the next free bit (bit 11; bit 10 is burned and MUST NOT be reused).
+**Capability bit.** `PeerCapabilities` is a `UInt64` `OptionSet` with minimal little-endian wire encoding, at least one byte, so "no TLV" and "empty set" stay distinguishable. Crucially `BLEPeerRegistry.capabilitiesWereExplicitlyAdvertised(for:)` distinguishes *old client that sent no TLV* from *new client with the bit off*. Add `peerIDRotation` at the next free bit — **bit 14** at the time of writing: bit 10 is burned and MUST NOT be reused, bit 11 is claimed by the Nostr double-ratchet work (#1107), bit 12 by courier spray receipts (#1438), and bit 13 is reserved for stickers (#1544). Re-check the claim table in `PeerCapabilities.swift` before assigning; whichever platform implements first pins the number in a shared test vector.
 
 **Observed-version gating.** `MeshTopologyTracker.recordObservedVersion(_:for:)` records the highest protocol version seen from each node, and `computeRoute(…, requiringVersion:)` refuses paths through nodes not observed at that version. `docs/SOURCE_ROUTING.md` records this as the shipped pattern for a compatible rollout. The same shape applies here.
 
