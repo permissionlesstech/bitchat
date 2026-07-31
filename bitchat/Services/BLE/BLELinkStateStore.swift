@@ -8,6 +8,12 @@ struct BLEPeripheralLinkState {
     var isConnecting: Bool
     var isConnected: Bool
     var lastConnectionAttempt: Date?
+    /// When didConnect last fired for this link. Nil for links restored
+    /// already-connected (their connect predates this process), which is
+    /// exactly the signal redundant-link consolidation needs: a restored
+    /// link lives on an old BLE address the peer no longer advertises,
+    /// so it must never be kept over a freshly connected duplicate.
+    var lastConnectedAt: Date? = nil
     var assembler: NotificationStreamAssembler
 }
 
@@ -112,11 +118,12 @@ final class BLELinkStateStore {
         )
     }
 
-    func markConnected(_ peripheral: CBPeripheral) {
+    func markConnected(_ peripheral: CBPeripheral, at now: Date = Date()) {
         let peripheralID = peripheral.identifier.uuidString
         if updatePeripheral(peripheralID, {
             $0.isConnecting = false
             $0.isConnected = true
+            $0.lastConnectedAt = now
         }) == nil {
             setPeripheralState(
                 BLEPeripheralLinkState(
@@ -125,6 +132,7 @@ final class BLELinkStateStore {
                     isConnecting: false,
                     isConnected: true,
                     lastConnectionAttempt: nil,
+                    lastConnectedAt: now,
                     assembler: NotificationStreamAssembler()
                 ),
                 for: peripheralID

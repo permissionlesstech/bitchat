@@ -21,24 +21,46 @@ enum BLERedundantLinkPolicy {
         /// A link mid-service-rediscovery (didModifyServices cleared it)
         /// must never be kept over a writable duplicate.
         let hasCharacteristic: Bool
+        /// When didConnect last fired for this link in this process. Nil
+        /// for restored links, whose connect predates the relaunch.
+        let lastConnectedAt: Date?
 
-        init(uuid: String, peerID: PeerID?, isConnected: Bool, hasCharacteristic: Bool) {
+        init(
+            uuid: String,
+            peerID: PeerID?,
+            isConnected: Bool,
+            hasCharacteristic: Bool,
+            lastConnectedAt: Date? = nil
+        ) {
             self.uuid = uuid
             self.peerID = peerID
             self.isConnected = isConnected
             self.hasCharacteristic = hasCharacteristic
+            self.lastConnectedAt = lastConnectedAt
         }
     }
 
     /// The link to keep when a peer has several connected bound peripheral
-    /// links, or nil when there is nothing to consolidate. Prefers the
-    /// ingress link of the verified direct announce that triggered the check
-    /// (the strongest liveness proof available), falling back to the peer's
-    /// most recently bound link — but only among writable links while any
-    /// exist: keeping a characteristic-less link and cancelling the writable
-    /// duplicate would strand outbound traffic on the central link until
-    /// rediscovery finishes. When neither anchor is a viable candidate,
-    /// consolidation waits for a later announce rather than guessing.
+    /// links, or nil when there is nothing to consolidate.
+    ///
+    /// Prefers the most recently CONNECTED candidate. Duplicates arise when
+    /// the peer reappears under a fresh BLE address (privacy address
+    /// rotation) while an older connection — typically state-restored —
+    /// lives on: only the newest connection sits on the address the peer
+    /// still advertises. Cancelling that one instead just gets it
+    /// rediscovered and reconnected, a retire↔reconnect oscillation at the
+    /// retirement cooldown (field-observed July 31); the older-address link
+    /// cannot return once cancelled, so consolidation converges immediately.
+    /// Physical connect recency is also a signal an announce replay cannot
+    /// nominate, unlike the previous ingress-link preference — announce
+    /// anchors (ingress, then most recently bound) now only break ties and
+    /// serve links with no connect timestamp at all.
+    ///
+    /// All of it only among writable links while any exist: keeping a
+    /// characteristic-less link and cancelling the writable duplicate would
+    /// strand outbound traffic on the central link until rediscovery
+    /// finishes. When no candidate is identifiable, consolidation waits for
+    /// a later announce rather than guessing.
     static func keptPeripheralUUID(
         ingressPeripheralUUID: String?,
         mostRecentlyBoundUUID: String?,
@@ -51,6 +73,32 @@ enum BLERedundantLinkPolicy {
         let writable = bound.filter(\.hasCharacteristic)
         let candidates = writable.isEmpty ? bound : writable
 
+        if let newestDate = candidates.compactMap(\.lastConnectedAt).max() {
+            let newest = candidates.filter { $0.lastConnectedAt == newestDate }
+            if newest.count == 1 {
+                return newest[0].uuid
+            }
+            return anchoredChoice(
+                among: newest,
+                ingressPeripheralUUID: ingressPeripheralUUID,
+                mostRecentlyBoundUUID: mostRecentlyBoundUUID
+            ) ?? newest.map(\.uuid).min()
+        }
+
+        return anchoredChoice(
+            among: candidates,
+            ingressPeripheralUUID: ingressPeripheralUUID,
+            mostRecentlyBoundUUID: mostRecentlyBoundUUID
+        )
+    }
+
+    /// The pre-timestamp anchors: the verified announce's ingress link,
+    /// then the peer's most recently bound link.
+    private static func anchoredChoice(
+        among candidates: [PeripheralLink],
+        ingressPeripheralUUID: String?,
+        mostRecentlyBoundUUID: String?
+    ) -> String? {
         if let ingressPeripheralUUID, candidates.contains(where: { $0.uuid == ingressPeripheralUUID }) {
             return ingressPeripheralUUID
         }
