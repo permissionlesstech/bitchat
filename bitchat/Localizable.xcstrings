@@ -2470,7 +2470,7 @@
       "shouldTranslate" : false
     },
     "%@ active" : {
-      "comment" : "A label at the bottom of the people list sheet showing the number of active users.",
+      "comment" : "A label at the bottom of the people list sheet showing the number of active people.",
       "extractionState" : "stale",
       "localizations" : {
         "ar" : {
