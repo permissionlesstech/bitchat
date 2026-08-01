@@ -112,10 +112,10 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     /// to `enforceQuota`, this stays charged against the quota until
     /// `releaseQuotaReservation` — so cancel / encode failure / panic must
     /// release it or later writers see a permanently tighter budget.
+    /// Scope and byte count live in `PayloadCoordination.byteReservations`
+    /// keyed by `id`; the token itself is only an opaque handle.
     struct QuotaByteReservation: Sendable {
         fileprivate let id: UUID
-        fileprivate let scope: MediaQuotaScope
-        fileprivate let bytes: Int64
     }
 
     private final class PayloadCoordination: @unchecked Sendable {
@@ -627,11 +627,7 @@ struct BLEIncomingFileStore: @unchecked Sendable {
 
         let clamped = Int64(max(0, bytes))
         enforceQuotaLocked(reservingBytes: Int(clamped), scope: scope)
-        let reservation = QuotaByteReservation(
-            id: UUID(),
-            scope: scope,
-            bytes: clamped
-        )
+        let reservation = QuotaByteReservation(id: UUID())
         payloadCoordination.byteReservations[reservation.id] = (
             scope: scope,
             bytes: clamped
