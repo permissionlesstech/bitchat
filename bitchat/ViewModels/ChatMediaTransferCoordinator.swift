@@ -1899,7 +1899,7 @@ private extension ChatMediaTransferCoordinator {
         try FileManager.default.createDirectory(
             at: filesDirectory,
             withIntermediateDirectories: true,
-            attributes: nil
+            attributes: BLEIncomingFileStore.mediaProtectionAttributes
         )
         return filesDirectory
     }

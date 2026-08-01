@@ -360,9 +360,9 @@ private extension ChatLifecycleCoordinator {
         }
     }
 
-    func deliveryStatusRank(_ status: DeliveryStatus?) -> Int {
-        guard let status else { return 0 }
+    func deliveryStatusRank(_ status: DeliveryStatus) -> Int {
         switch status {
+        case .notSentYet: return 0
         case .failed: return 1
         case .sending: return 2
         case .sent: return 3

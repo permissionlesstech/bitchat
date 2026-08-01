@@ -158,6 +158,39 @@ throughput is nowhere near what one serial queue sustains.
    (it makes no peer decisions); (b) bindings + link-auth migrate to
    the engine, converting `readLinkState` callers; (c) the delegates
    shrink to event emission and move behind the port.
+
+   **(a) and (b) are done.** (a) landed as `BLERadioController`
+   (#1539). (b) landed in two steps: #1540 cohered the loose maps into
+   `BLELinkAuthState` + `BLELinkBindings` (still bleQueue-owned,
+   behavior-identical), and the option-B flip then moved ownership to
+   the engine. Since the flip:
+
+   - `linkAuth`/`linkBindings` are engine-owned behind a DEBUG
+     `dispatchPrecondition` trap; bleQueue code cannot touch them.
+   - The receive path is in its sans-I/O shape: bleQueue decodes
+     frames and hands `(packet, linkID)` up through
+     `ingestDecodedPacket` (which captures the panic lifecycle at the
+     handoff); `attributeAndHandlePacket` resolves the sender binding,
+     admits or rejects the claimed sender, applies raw-announce
+     binding, and records ingress — all on the engine. Per-link frame
+     order is preserved end to end (both queues are serial), which
+     supersedes the old batch-local TOCTOU binding.
+   - The rotation rebind is one engine slot
+     (`rebindLinkAfterVerifiedDirectAnnounce`): containment checks,
+     proof retirement, binding flip, reconnect decision, and
+     rotated-identity retirement, with only CoreBluetooth cancels
+     hopping to bleQueue.
+   - Authenticated-send eligibility (`notifyOrEnqueueIfAccepted`,
+     `writeOrEnqueueIfAccepted`) is checked on the engine — serialized
+     against rebinds by construction — and only the physical admission
+     (updateValue / write / backpressure queues) runs on bleQueue.
+   - Teardown splits: bleQueue delegates do physical work inline
+     (`discardPeripheralLinkPhysical`) and queue the identity half
+     (`retirePeripheralLinkIdentity`, binding survivor repair) to the
+     engine. A binding can briefly outlive its physical link; queries
+     that need liveness join against the physical store via
+     `readLinkState` (the engine→bleQueue sync direction), and the
+     queued retirement converges the two.
 2. **Sans-I/O engine core + simulator.** Make the engine formally
    `handle(event) -> [Effect]`, feed it from a `SimulatedLinkLayer`, and
    move the multi-node E2E suite onto deterministic simulation (no
@@ -167,6 +200,46 @@ throughput is nowhere near what one serial queue sustains.
    (courier, board, prekey, voice, file, group handlers out of the
    packet switch) ride this seam as handler-registered modules instead
    of getting closure-environment extractions now.
+
+   **The simulator half is done — simulator-first.** Because the B2
+   receive path already hands `(packet, linkID)` up through one choke
+   point, `SimulatedMesh` (bitchatTests/Simulation/) wires real
+   CB-free `BLEService` engines edge-to-edge through the outbound tap
+   and `_test_ingestFrame` (the production attribution path), with
+   per-edge synthetic link IDs and manual-scheduler time. Five
+   deterministic multi-node tests run in ~40ms: announce/bind
+   convergence, end-to-end Noise establishment, line-topology relay
+   within a TTL/frame budget, duplicate-flood dedup, and the panic
+   rotation single-slot rebind + containment — the scenario that
+   previously required two phones. Fidelity boundary: no physical
+   links, so fanout planning/backpressure is not exercised; protocol
+   behavior is. On its first day the simulator found a real bug: the
+   forced-announce throttle survived panic, so a rotation within
+   `bleForceAnnounceMinIntervalSeconds` of the last announce left the
+   new identity invisible until the next maintenance cycle
+   (`BLEAnnounceThrottle.reset()` now runs in the panic slot).
+   **The upward port is named and the delegates live behind it.**
+   `BLELinkEvent` (frameDecoded + the four physical lifecycle
+   transitions) is the enumerable bleQueue→engine surface; every
+   crossing goes through `emitLinkEvent` into one engine consumer
+   (`handleLinkEvent`), and the simulated mesh drives lifecycle events
+   through the identical enum a radio does (see
+   `linkDropEventRetiresBindingAndReconnectHeals`). The CoreBluetooth
+   delegate extensions moved to their own files —
+   `BLEService+LinkLayerCentralRole.swift` /
+   `BLEService+LinkLayerPeripheralRole.swift` — as physical
+   bookkeeping plus event emission; the physical-domain members they
+   share are `internal` with the queue contract enforced by the
+   existing traps and grep guards rather than access control.
+
+   **Deliberately not done:** a formal `handle(event) -> [Effect]`
+   effect system, and splitting the engine-domain feature handlers
+   into more files. Both would flip the engine's private state
+   (noiseService, peerRegistry, the identity domain) to internal for
+   purely cosmetic file counts — the domains are already uniform
+   (one queue, one rule set) and mechanically guarded. The effect
+   formalization should ride actual feature-module extractions when a
+   feature earns its own module, not precede them.
 
 ## What this is not
 
