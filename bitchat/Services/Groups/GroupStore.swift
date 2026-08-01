@@ -77,14 +77,17 @@ final class GroupStore: ObservableObject {
               !group.members.isEmpty,
               group.members.count <= BitchatGroup.maxMembers,
               group.creator != nil else { return false }
-        // A group keeps the creator it was created with. `applyGroupState`
-        // checks the sender is the creator the state NAMES, but never against
-        // the creator already stored, so a peer naming themselves creator of a
-        // known groupID at a higher epoch replaces the roster and key wholesale.
-        // Pinned here, the one point every write goes through.
+        // A group keeps the creator it was created with. A peer naming
+        // themselves creator of a known groupID at a higher epoch would
+        // otherwise replace the roster and key wholesale. `applyGroupState`
+        // pins this before its removal branch; here is the one point every
+        // write goes through.
         if let existing = groups.first(where: { $0.groupID == group.groupID }),
            existing.creatorFingerprint != group.creatorFingerprint {
-            SecureLogger.warning("Refusing group state that changes the creator of an existing group", category: .security)
+            SecureLogger.warning(
+                "Refusing group state: creator \(group.creatorFingerprint.prefix(8))… does not match stored creator \(existing.creatorFingerprint.prefix(8))…",
+                category: .security
+            )
             return false
         }
         guard keychain.saveIdentityKey(key, forKey: Self.keychainKey(for: group.groupID)) else {
