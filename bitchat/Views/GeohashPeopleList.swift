@@ -35,10 +35,14 @@ struct GeohashPeopleList: View {
                     .padding(.top, 12)
             }
         } else {
-            let people = peerListModel.geohashPeople.filter {
+            let allPeople = peerListModel.geohashPeople
+            // Sticky order must track the unfiltered roster — filtering before
+            // `currentIDs` would prune orderedIDs and reshuffle on clear (#1589 Codex).
+            let allIDs = allPeople.map(\.id)
+            let filterActive = !nameFilter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let people = allPeople.filter {
                 PeopleNameFilter.matches($0.displayName, query: nameFilter)
             }
-            let filterActive = !nameFilter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             if people.isEmpty && filterActive {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(Strings.noMatches)
@@ -47,14 +51,26 @@ struct GeohashPeopleList: View {
                         .padding(.horizontal)
                         .padding(.top, 12)
                 }
+                .onAppear {
+                    orderedIDs = allIDs
+                }
+                .onChange(of: allIDs) { ids in
+                    var newOrder = orderedIDs
+                    newOrder.removeAll { !ids.contains($0) }
+                    for id in ids where !newOrder.contains(id) { newOrder.append(id) }
+                    if newOrder != orderedIDs { orderedIDs = newOrder }
+                }
             } else {
-            let currentIDs = people.map(\.id)
+            let currentIDs = allIDs
 
             let displayIDs = orderedIDs.filter { currentIDs.contains($0) } + currentIDs.filter { !orderedIDs.contains($0) }
-            let nonTele = displayIDs.filter { id in
+            let visibleIDs = displayIDs.filter { id in
+                people.contains(where: { $0.id == id })
+            }
+            let nonTele = visibleIDs.filter { id in
                 !(people.first(where: { $0.id == id })?.isTeleported ?? false)
             }
-            let tele = displayIDs.filter { id in
+            let tele = visibleIDs.filter { id in
                 people.first(where: { $0.id == id })?.isTeleported ?? false
             }
             let finalOrder: [String] = nonTele + tele
@@ -157,7 +173,8 @@ struct GeohashPeopleList: View {
                     }
                 }
             }
-            // Seed and update order outside result builder
+            // Seed and update order outside result builder — always from the
+            // full unfiltered ID list so search does not reshuffle sticky order.
             .onAppear {
                 orderedIDs = currentIDs
             }
