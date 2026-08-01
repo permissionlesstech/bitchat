@@ -489,14 +489,23 @@ struct ContentView: View {
     }
 
     private var headerView: some View {
-        ContentHeaderView(
-            showSidebar: $showSidebar,
-            showVerifySheet: $showVerifySheet,
-            isNicknameFieldFocused: $isNicknameFieldFocused,
-            headerHeight: headerHeight,
-            headerPeerIconSize: headerPeerIconSize,
-            headerPeerCountFontSize: headerPeerCountFontSize
-        )
+        VStack(spacing: 0) {
+            ContentHeaderView(
+                showSidebar: $showSidebar,
+                showVerifySheet: $showVerifySheet,
+                isNicknameFieldFocused: $isNicknameFieldFocused,
+                headerHeight: headerHeight,
+                headerPeerIconSize: headerPeerIconSize,
+                headerPeerCountFontSize: headerPeerCountFontSize
+            )
+
+            if let issue = ConnectivityIssue.resolve(
+                bluetoothState: appChromeModel.bluetoothState,
+                torBlocked: appChromeModel.torBlocked
+            ) {
+                ConnectivityStatusBanner(issue: issue)
+            }
+        }
     }
 
     private var publicMessageList: some View {

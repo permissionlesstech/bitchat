@@ -2047,6 +2047,750 @@
         }
       }
     },
+    "content.banner.bluetooth_denied" : {
+      "comment" : "Persistent banner while Bluetooth permission is denied; tapping opens system settings",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم رفض الوصول إلى البلوتوث — الشبكة غير متصلة. انقر لفتح الإعدادات."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ব্লুটুথ অ্যাক্সেস অস্বীকৃত — মেশ অফলাইন। সেটিংস খুলতে ট্যাপ করুন।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth-zugriff verweigert — mesh ist offline. tippen, um die einstellungen zu öffnen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth access denied — mesh is offline. tap to open settings."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "acceso a bluetooth denegado — la malla está desconectada. toca para abrir ajustes."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "دسترسی بلوتوث رد شد — مش آفلاین است. برای باز کردن تنظیمات بزنید."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tinanggihan ang access sa bluetooth — offline ang mesh. i-tap para buksan ang settings."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "accès bluetooth refusé — le mesh est hors ligne. touchez pour ouvrir les réglages."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הגישה לבלוטות' נדחתה — הרשת לא מקוונת. הקישו לפתיחת ההגדרות."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ब्लूटूथ की अनुमति नहीं है — मेश ऑफ़लाइन है। सेटिंग्स खोलने के लिए टैप करें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "akses bluetooth ditolak — mesh offline. ketuk untuk membuka pengaturan."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "accesso bluetooth negato — la mesh è offline. tocca per aprire le impostazioni."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth へのアクセスが拒否されています — メッシュはオフラインです。タップして設定を開きます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "블루투스 접근이 거부되었습니다 — 메시가 오프라인입니다. 탭하여 설정을 여세요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "akses bluetooth ditolak — mesh di luar talian. ketik untuk membuka tetapan."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ब्लुटुथ पहुँच अस्वीकृत — मेश अफलाइन छ। सेटिङ खोल्न ट्याप गर्नुहोस्।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth-toegang geweigerd — mesh is offline. tik om instellingen te openen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "odmowa dostępu do bluetooth — sieć mesh jest offline. stuknij, aby otworzyć ustawienia."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "acesso ao bluetooth negado — a mesh está offline. toca para abrir as definições."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "acesso ao bluetooth negado — a mesh está offline. toque para abrir os ajustes."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "доступ к bluetooth запрещён — mesh-сеть недоступна. нажмите, чтобы открыть настройки."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth-åtkomst nekad — mesh är offline. tryck för att öppna inställningar."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "புளூடூத் அணுகல் மறுக்கப்பட்டது — மெஷ் ஆஃப்லைனில் உள்ளது. அமைப்புகளைத் திறக்கத் தட்டவும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "การเข้าถึงบลูทูธถูกปฏิเสธ — เมชออฟไลน์ แตะเพื่อเปิดการตั้งค่า"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth erişimi reddedildi — mesh çevrimdışı. ayarları açmak için dokunun."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "доступ до bluetooth заборонено — mesh-мережа офлайн. торкніться, щоб відкрити налаштування."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بلوٹوتھ رسائی مسترد — میش آف لائن ہے۔ سیٹنگز کھولنے کے لیے ٹیپ کریں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "quyền truy cập bluetooth bị từ chối — mesh đang ngoại tuyến. chạm để mở cài đặt."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "蓝牙权限被拒绝 — 网状网络已离线。点按打开设置。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "藍牙權限遭拒 — 網狀網路已離線。點按開啟設定。"
+          }
+        }
+      }
+    },
+    "content.banner.bluetooth_off" : {
+      "comment" : "Persistent banner while Bluetooth is switched off; tapping opens system settings",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "البلوتوث مطفأ — لا يمكن لمن حولك الوصول إليك. انقر للإصلاح."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ব্লুটুথ বন্ধ — কাছের কেউ আপনার সঙ্গে যোগাযোগ করতে পারবে না। ঠিক করতে ট্যাপ করুন।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth ist aus — niemand in der nähe kann dich erreichen. zum beheben tippen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth is off — nobody nearby can reach you. tap to fix."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth está apagado — nadie cerca puede contactarte. toca para arreglarlo."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بلوتوث خاموش است — هیچ‌کس در نزدیکی نمی‌تواند به شما برسد. برای رفع مشکل بزنید."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "naka-off ang bluetooth — walang makakaabot sa iyo na kalapit. i-tap para ayusin."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "le bluetooth est désactivé — personne à proximité ne peut vous joindre. touchez pour corriger."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הבלוטות' כבוי — אף אחד בסביבה לא יכול להגיע אליך. הקישו לתיקון."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ब्लूटूथ बंद है — आस-पास का कोई आप तक नहीं पहुँच सकता। ठीक करने के लिए टैप करें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth mati — tidak ada orang di sekitar yang dapat menghubungi anda. ketuk untuk memperbaiki."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "il bluetooth è spento — nessuno nelle vicinanze può raggiungerti. tocca per risolvere."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth がオフです — 近くの人と通信できません。タップして設定へ。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "블루투스가 꺼져 있습니다 — 주변 누구와도 연결할 수 없습니다. 탭하여 해결하세요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth dimatikan — tiada sesiapa berdekatan boleh menghubungi anda. ketik untuk membaiki."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ब्लुटुथ बन्द छ — नजिकको कोही तपाईंसम्म पुग्न सक्दैन। मिलाउन ट्याप गर्नुहोस्।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth staat uit — niemand in de buurt kan je bereiken. tik om dit op te lossen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth jest wyłączony — nikt w pobliżu nie może się z tobą połączyć. stuknij, aby naprawić."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "o bluetooth está desligado — ninguém por perto te consegue alcançar. toca para corrigir."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "o bluetooth está desligado — ninguém por perto consegue te alcançar. toque para corrigir."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth выключен — никто поблизости не может с вами связаться. нажмите, чтобы исправить."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth är av — ingen i närheten kan nå dig. tryck för att åtgärda."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "புளூடூத் அணைக்கப்பட்டுள்ளது — அருகிலுள்ள யாரும் உங்களை அடைய முடியாது. சரிசெய்யத் தட்டவும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "บลูทูธปิดอยู่ — คนใกล้เคียงติดต่อคุณไม่ได้ แตะเพื่อแก้ไข"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth kapalı — yakınınızdaki hiç kimse size ulaşamaz. düzeltmek için dokunun."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth вимкнено — ніхто поблизу не може з вами зв'язатися. торкніться, щоб виправити."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بلوٹوتھ بند ہے — قریب کا کوئی آپ تک نہیں پہنچ سکتا۔ ٹھیک کرنے کے لیے ٹیپ کریں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth đang tắt — không ai gần bạn có thể liên lạc với bạn. chạm để khắc phục."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "蓝牙已关闭 — 附近的人无法联系到你。点按以修复。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "藍牙已關閉 — 附近的人無法聯繫到你。點按以修復。"
+          }
+        }
+      }
+    },
+    "content.banner.bluetooth_unsupported" : {
+      "comment" : "Persistent banner on devices without Bluetooth support",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا يوجد بلوتوث على هذا الجهاز — الشبكة غير متاحة. قنوات الموقع لا تزال تعمل عبر الإنترنت."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "এই ডিভাইসে ব্লুটুথ নেই — মেশ অনুপলব্ধ। লোকেশন চ্যানেল এখনও ইন্টারনেটে কাজ করে।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kein bluetooth auf diesem gerät — mesh ist nicht verfügbar. standortkanäle funktionieren weiter übers internet."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no bluetooth on this device — mesh is unavailable. location channels still work over the internet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "este dispositivo no tiene bluetooth — la malla no está disponible. los canales de ubicación siguen funcionando por internet."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "این دستگاه بلوتوث ندارد — مش در دسترس نیست. کانال‌های مکان همچنان از طریق اینترنت کار می‌کنند."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "walang bluetooth ang device na ito — hindi available ang mesh. gumagana pa rin ang mga location channel sa internet."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pas de bluetooth sur cet appareil — le mesh est indisponible. les canaux de localisation fonctionnent toujours via internet."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אין בלוטות' במכשיר הזה — הרשת לא זמינה. ערוצי מיקום עדיין עובדים דרך האינטרנט."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "इस डिवाइस में ब्लूटूथ नहीं है — मेश अनुपलब्ध है। लोकेशन चैनल अब भी इंटरनेट पर काम करते हैं।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "perangkat ini tidak memiliki bluetooth — mesh tidak tersedia. kanal lokasi tetap berfungsi lewat internet."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "questo dispositivo non ha il bluetooth — la mesh non è disponibile. i canali di posizione funzionano comunque via internet."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この端末に bluetooth がありません — メッシュは利用できません。ロケーションチャンネルはインターネット経由で利用できます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 기기에는 블루투스가 없습니다 — 메시를 사용할 수 없습니다. 위치 채널은 인터넷으로 계속 사용할 수 있습니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tiada bluetooth pada peranti ini — mesh tidak tersedia. saluran lokasi masih berfungsi melalui internet."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "यो यन्त्रमा ब्लुटुथ छैन — मेश उपलब्ध छैन। स्थान च्यानलहरू अझै इन्टरनेटमा चल्छन्।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "geen bluetooth op dit apparaat — mesh is niet beschikbaar. locatiekanalen werken nog via internet."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "brak bluetooth w tym urządzeniu — sieć mesh jest niedostępna. kanały lokalizacji nadal działają przez internet."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "este dispositivo não tem bluetooth — a mesh está indisponível. os canais de localização continuam a funcionar pela internet."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "este dispositivo não tem bluetooth — a mesh está indisponível. os canais de localização continuam funcionando pela internet."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "на этом устройстве нет bluetooth — mesh-сеть недоступна. каналы мест по-прежнему работают через интернет."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ingen bluetooth på den här enheten — mesh är inte tillgängligt. platskanaler fungerar fortfarande via internet."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இந்தச் சாதனத்தில் புளூடூத் இல்லை — மெஷ் கிடைக்காது. இருப்பிடச் சேனல்கள் இணையம் வழியாக இயங்கும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "อุปกรณ์นี้ไม่มีบลูทูธ — ใช้เมชไม่ได้ ช่องตำแหน่งยังใช้งานผ่านอินเทอร์เน็ตได้"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bu cihazda bluetooth yok — mesh kullanılamıyor. konum kanalları internet üzerinden çalışmaya devam ediyor."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "на цьому пристрої немає bluetooth — mesh-мережа недоступна. канали місць далі працюють через інтернет."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اس ڈیوائس میں بلوٹوتھ نہیں — میش دستیاب نہیں۔ لوکیشن چینلز انٹرنیٹ پر بدستور کام کرتے ہیں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "thiết bị này không có bluetooth — mesh không khả dụng. các kênh vị trí vẫn hoạt động qua internet."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此设备没有蓝牙 — 网状网络不可用。位置频道仍可通过互联网使用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此裝置沒有藍牙 — 網狀網路無法使用。位置頻道仍可透過網際網路使用。"
+          }
+        }
+      }
+    },
+    "content.banner.tor_blocked" : {
+      "comment" : "Persistent banner while Tor bootstrap has stalled, likely because the network blocks it",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يتعذر على tor الاتصال — ميزات الإنترنت متوقفة مؤقتًا. الشبكة لا تزال تعمل."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor সংযোগ করতে পারছে না — ইন্টারনেট ফিচার স্থগিত। মেশ এখনও কাজ করছে।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor kann sich nicht verbinden — internetfunktionen pausieren. mesh funktioniert weiter."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor can't connect — internet features are paused. mesh still works."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor no puede conectarse — las funciones de internet están en pausa. la malla sigue funcionando."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor نمی‌تواند متصل شود — قابلیت‌های اینترنتی متوقف‌اند. مش همچنان کار می‌کند."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hindi makakonekta ang tor — naka-pause ang mga internet feature. gumagana pa rin ang mesh."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor ne peut pas se connecter — les fonctions internet sont en pause. le mesh fonctionne toujours."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor לא מצליח להתחבר — תכונות האינטרנט מושהות. הרשת עדיין עובדת."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor कनेक्ट नहीं हो पा रहा — इंटरनेट सुविधाएँ रुकी हैं। मेश अब भी काम करता है।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor tidak dapat terhubung — fitur internet dijeda. mesh tetap berfungsi."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor non riesce a connettersi — le funzioni internet sono in pausa. la mesh continua a funzionare."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor が接続できません — インターネット機能は一時停止中です。メッシュは引き続き使えます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor가 연결되지 않습니다 — 인터넷 기능이 일시 중지되었습니다. 메시는 계속 작동합니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor tidak dapat bersambung — ciri internet dijeda. mesh masih berfungsi."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor जडान हुन सकेन — इन्टरनेट सुविधाहरू रोकिएका छन्। मेश अझै चल्छ।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor kan geen verbinding maken — internetfuncties zijn gepauzeerd. mesh werkt nog."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor nie może się połączyć — funkcje internetowe są wstrzymane. sieć mesh nadal działa."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "o tor não consegue ligar-se — as funções de internet estão em pausa. a mesh continua a funcionar."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "o tor não consegue se conectar — os recursos de internet estão pausados. a mesh continua funcionando."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor не может подключиться — интернет-функции приостановлены. mesh-сеть продолжает работать."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor kan inte ansluta — internetfunktioner är pausade. mesh fungerar fortfarande."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor இணைக்க முடியவில்லை — இணைய அம்சங்கள் இடைநிறுத்தப்பட்டுள்ளன. மெஷ் தொடர்ந்து இயங்குகிறது."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor เชื่อมต่อไม่ได้ — ฟีเจอร์อินเทอร์เน็ตหยุดชั่วคราว เมชยังใช้งานได้"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor bağlanamıyor — internet özellikleri duraklatıldı. mesh çalışmaya devam ediyor."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor не може під'єднатися — інтернет-функції призупинено. mesh-мережа далі працює."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor منسلک نہیں ہو پا رہا — انٹرنیٹ فیچرز رکے ہوئے ہیں۔ میش بدستور کام کرتا ہے۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor không thể kết nối — các tính năng internet tạm dừng. mesh vẫn hoạt động."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor 无法连接 — 互联网功能已暂停。网状网络仍可使用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor 無法連線 — 網際網路功能已暫停。網狀網路仍可使用。"
+          }
+        }
+      }
+    },
     "content.system.media_delete_refused" : {
       "comment" : "System message shown in the affected chat when an explicit media delete or /clear was refused and bubbles/files were kept",
       "extractionState" : "manual",
