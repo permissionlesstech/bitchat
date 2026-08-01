@@ -551,7 +551,11 @@ final class ChatMediaTransferCoordinator {
         guard context.canSendMediaInCurrentContext else {
             SecureLogger.info("Voice note blocked outside mesh/private context", category: .session)
             try? FileManager.default.removeItem(at: url)
-            context.addSystemMessage("Voice notes are only available in mesh chats.")
+            context.addSystemMessage(String(
+                localized: "media.system.voice_mesh_only",
+                defaultValue: "Voice notes are only available in mesh chats.",
+                comment: "System message when the user tries to send a voice note outside a mesh chat"
+            ))
             return
         }
 
@@ -694,7 +698,11 @@ final class ChatMediaTransferCoordinator {
         guard context.canSendMediaInCurrentContext else {
             SecureLogger.info("Image send blocked outside mesh/private context", category: .session)
             cleanup?()
-            context.addSystemMessage("Images are only available in mesh chats.")
+            context.addSystemMessage(String(
+                localized: "media.system.image_mesh_only",
+                defaultValue: "Images are only available in mesh chats.",
+                comment: "System message when the user tries to send an image outside a mesh chat"
+            ))
             return
         }
 
@@ -705,7 +713,11 @@ final class ChatMediaTransferCoordinator {
             try ImageUtils.validateImageSource(at: sourceURL)
         } catch {
             SecureLogger.error("Image send preparation failed: \(error)", category: .session)
-            context.addSystemMessage("Failed to prepare image for sending.")
+            context.addSystemMessage(String(
+                localized: "media.system.image_prepare_failed",
+                defaultValue: "Failed to prepare image for sending.",
+                comment: "System message when an image cannot be prepared for sending"
+            ))
             return
         }
 
@@ -764,7 +776,11 @@ final class ChatMediaTransferCoordinator {
                           barrier.isCurrent(generation) else {
                         return
                     }
-                    self.context.addSystemMessage("Image is too large to send.")
+                    self.context.addSystemMessage(String(
+                        localized: "media.system.image_too_large",
+                        defaultValue: "Image is too large to send.",
+                        comment: "System message when a selected image exceeds the send size limit"
+                    ))
                 }
             } catch {
                 SecureLogger.error("Image send preparation failed: \(error)", category: .session)
@@ -773,7 +789,11 @@ final class ChatMediaTransferCoordinator {
                           barrier.isCurrent(generation) else {
                         return
                     }
-                    self.context.addSystemMessage("Failed to prepare image for sending.")
+                    self.context.addSystemMessage(String(
+                        localized: "media.system.image_prepare_failed",
+                        defaultValue: "Failed to prepare image for sending.",
+                        comment: "System message when an image cannot be prepared for sending"
+                    ))
                 }
             }
         }
