@@ -49,7 +49,7 @@ BitChat uses a **hybrid messaging architecture** with two complementary transpor
 
 ### Nostr Protocol (Internet)
 
-- **Global Reach**: Connect with users worldwide via internet relays
+- **Global Reach**: Connect with people worldwide via internet relays
 - **Location Channels**: Geographic chat rooms using geohash coordinates
 - **440+ Relay Network**: Distributed across the globe for reliability
 - **BitChat Private Envelopes**: App-specific encrypted private messages over Nostr relays
