@@ -18,6 +18,10 @@ import Foundation
 enum BLEProximityWakeSettings {
     private static let enabledKey = "ble.proximityWakeEnabled"
 
+    /// Posted when the standard-store preference changes so BLE can cancel
+    /// any in-flight pending connects that would still wake the app.
+    static let didChangeNotification = Notification.Name("bitchat.bleProximityWakeSettingsDidChange")
+
     /// When false, bitchat will not arm pending background connects.
     static var enabled: Bool {
         get { enabled(in: .standard) }
@@ -32,11 +36,18 @@ enum BLEProximityWakeSettings {
 
     static func setEnabled(_ enabled: Bool, in defaults: UserDefaults) {
         defaults.set(enabled, forKey: enabledKey)
+        // Only the live preference store drives BLE wake behaviour.
+        if defaults === UserDefaults.standard {
+            NotificationCenter.default.post(name: didChangeNotification, object: nil)
+        }
     }
 
     /// Panic-wipe hook. Removing the key restores the on-by-default
     /// mesh-reachability preference of a fresh install.
     static func reset(in defaults: UserDefaults = .standard) {
         defaults.removeObject(forKey: enabledKey)
+        if defaults === UserDefaults.standard {
+            NotificationCenter.default.post(name: didChangeNotification, object: nil)
+        }
     }
 }
