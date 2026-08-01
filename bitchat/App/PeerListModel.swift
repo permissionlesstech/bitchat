@@ -39,12 +39,27 @@ struct GroupChatRow: Identifiable, Equatable {
     var id: String { peerID.id }
 }
 
+/// A direct conversation whose person is NOT in any roster above it. Without
+/// this section, a DM from a passerby became unreachable the moment they went
+/// offline: the roster filters to connected/reachable/mutual-favorite, the
+/// header envelope only exists while unread, and /msg can't resolve offline
+/// strangers — the thread was still in memory with no row anywhere in the UI.
+struct RecentChatRow: Identifiable, Equatable {
+    let peerID: PeerID
+    let displayName: String
+    let hasUnread: Bool
+    let lastActivity: Date
+
+    var id: String { peerID.id }
+}
+
 @MainActor
 final class PeerListModel: ObservableObject {
     @Published private(set) var allPeers: [BitchatPeer] = []
     @Published private(set) var meshRows: [MeshPeerRow] = []
     @Published private(set) var geohashPeople: [GeohashPersonRow] = []
     @Published private(set) var groupRows: [GroupChatRow] = []
+    @Published private(set) var recentChatRows: [RecentChatRow] = []
     @Published private(set) var reachableMeshPeerCount = 0
     @Published private(set) var connectedMeshPeerCount = 0
     @Published private(set) var visibleGeohashPeerCount = 0
@@ -139,6 +154,17 @@ final class PeerListModel: ObservableObject {
         conversations.$unreadConversations
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
+                self?.refresh()
+            }
+            .store(in: &cancellables)
+
+        // Direct-conversation changes reorder or create recent-chat rows.
+        // Filtered to `.direct` so public-timeline traffic (every mesh or
+        // geohash message emits a change) doesn't rebuild the sheet.
+        conversations.changes
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] change in
+                guard case .direct = Self.changedConversationID(change) else { return }
                 self?.refresh()
             }
             .store(in: &cancellables)
@@ -239,6 +265,7 @@ final class PeerListModel: ObservableObject {
 
         let geohashPeople = buildGeohashPeople()
         let groupRows = buildGroupRows()
+        let recentChatRows = buildRecentChatRows(meshRows: meshRows)
 
         self.meshRows = meshRows
         reachableMeshPeerCount = meshCounts.reachable
@@ -246,6 +273,7 @@ final class PeerListModel: ObservableObject {
         self.geohashPeople = geohashPeople
         visibleGeohashPeerCount = geohashPeople.count
         self.groupRows = groupRows
+        self.recentChatRows = recentChatRows
         renderID = (
             meshRows.map {
                 "\($0.id)-\($0.displayName)-\($0.isConnected)-\($0.isReachable)-\($0.hasUnread)-\($0.isFavorite)-\($0.isBlocked)"
@@ -255,8 +283,80 @@ final class PeerListModel: ObservableObject {
             } +
             groupRows.map {
                 "group:\($0.id)-\($0.name)-\($0.memberCount)-\($0.hasUnread)"
+            } +
+            recentChatRows.map {
+                "chat:\($0.id)-\($0.displayName)-\($0.hasUnread)"
             }
         ).joined(separator: "|")
+    }
+
+    /// Direct conversations with people absent from the rosters above:
+    /// the offline passerby DM, the geoDM from a channel since left. Rows
+    /// mirrored under both an ephemeral and a stable peer ID collapse to
+    /// one row per identity (newest activity wins), matching how the
+    /// private-chat coordinators consolidate on open.
+    private func buildRecentChatRows(meshRows: [MeshPeerRow]) -> [RecentChatRow] {
+        // A conversation can be keyed by the stable Noise peer ID while the
+        // roster lists the ephemeral one — compare fingerprints too.
+        var visibleIdentities = Set<String>()
+        for row in meshRows {
+            visibleIdentities.insert(row.peerID.id)
+            if let fingerprint = chatViewModel.getFingerprint(for: row.peerID) {
+                visibleIdentities.insert(fingerprint)
+            }
+        }
+
+        struct Candidate {
+            let peerID: PeerID
+            let lastActivity: Date
+        }
+        var bestByIdentity: [String: Candidate] = [:]
+
+        for (id, conversation) in conversations.conversationsByID {
+            guard case .direct(let handle) = id else { continue }
+            let peerID = handle.routingPeerID
+            // Groups have their own section; blocked people get no row.
+            guard !peerID.isGroup else { continue }
+            guard let lastMessage = conversation.messages.last else { continue }
+            guard !chatViewModel.isPeerBlocked(peerID) else { continue }
+
+            let fingerprint = chatViewModel.getFingerprint(for: peerID)
+            if visibleIdentities.contains(peerID.id) { continue }
+            if let fingerprint, visibleIdentities.contains(fingerprint) { continue }
+
+            let identityKey = fingerprint ?? peerID.id
+            if let existing = bestByIdentity[identityKey],
+               existing.lastActivity >= lastMessage.timestamp {
+                continue
+            }
+            bestByIdentity[identityKey] = Candidate(peerID: peerID, lastActivity: lastMessage.timestamp)
+        }
+
+        return bestByIdentity.values
+            .sorted { $0.lastActivity > $1.lastActivity }
+            .map { candidate in
+                RecentChatRow(
+                    peerID: candidate.peerID,
+                    displayName: chatViewModel.resolveNickname(for: candidate.peerID),
+                    hasUnread: chatViewModel.hasUnreadMessages(for: candidate.peerID),
+                    lastActivity: candidate.lastActivity
+                )
+            }
+    }
+
+    private static func changedConversationID(_ change: ConversationChange) -> ConversationID {
+        switch change {
+        case .appended(let id, _),
+             .updated(let id, _),
+             .statusChanged(let id, _, _),
+             .messageRemoved(let id, _),
+             .cleared(let id),
+             .removed(let id),
+             .unreadChanged(let id, _):
+            return id
+        case .migrated(_, let to):
+            return to
+        }
     }
 
     private func buildGroupRows() -> [GroupChatRow] {

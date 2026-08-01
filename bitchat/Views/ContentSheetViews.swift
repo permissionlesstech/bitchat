@@ -365,6 +365,16 @@ private struct ContentPeopleListView: View {
                                 showSidebar = true
                             }
                         )
+                        // Direct conversations survive channel switches; the
+                        // geoDM someone opened from another cell must stay
+                        // reachable here too.
+                        RecentChatList(
+                            chats: peerListModel.recentChatRows,
+                            onTapChat: { peerID in
+                                peerListModel.startConversation(with: peerID)
+                                showSidebar = true
+                            }
+                        )
                     } else {
                         PeopleSectionHeader(
                             icon: "antenna.radiowaves.left.and.right",
@@ -396,6 +406,16 @@ private struct ContentPeopleListView: View {
                         GroupChatList(
                             groups: peerListModel.groupRows,
                             onTapGroup: { peerID in
+                                peerListModel.startConversation(with: peerID)
+                                showSidebar = true
+                            }
+                        )
+                        // Conversations with people no roster above lists
+                        // anymore — without this, a read DM from an offline
+                        // non-favorite had no row anywhere in the UI.
+                        RecentChatList(
+                            chats: peerListModel.recentChatRows,
+                            onTapChat: { peerID in
                                 peerListModel.startConversation(with: peerID)
                                 showSidebar = true
                             }
