@@ -47,6 +47,8 @@ Terms below are defined once here and used consistently across every chapter; a 
 - **fragment** — one piece of a packet that exceeded the transport's MTU and was split for independent relay and reassembly at the receiving node.
 - **Noise session** — a live, bidirectional encrypted channel between two connected peers, established with the Noise `XX` handshake pattern.
 - **courier envelope** — an opaque, one-way-sealed message (Noise `X` pattern) handed to an intermediate peer for physical carriage to a recipient who is not currently reachable.
+- **prekey** — a one-time Curve25519 key pair a device generates and publishes in a `prekey bundle`; consumed by exactly one courier envelope seal, then discarded, so that seal retains forward secrecy where sealing to a static key does not.
+- **prekey bundle** — a device's signed, gossiped batch of current prekeys, letting another peer seal a courier envelope to a one-time key without a live session.
 - **rotating recipient tag** — the opaque, day-rotating addressing tag on a courier envelope, computable only by parties who already know the recipient's static key.
 - **trust tier** — the deposit quota a courier extends to a sender, based on whether the sender is a mutual favorite or merely signature-verified.
 - **spray-and-wait** — the copy-budget scheme by which a courier envelope diffuses across couriers who encounter each other, rather than riding a single carrier.

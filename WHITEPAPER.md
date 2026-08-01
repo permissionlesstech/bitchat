@@ -74,11 +74,11 @@ Signed announcements propagate multi-hop: every 4 s while isolated, backing off 
 
 ### 5.1 Live Sessions: Noise XX
 
-Connected peers establish sessions with the Noise `XX` pattern (Curve25519 / ChaCha20-Poly1305 / SHA-256), providing mutual authentication and forward secrecy. All private payloads — messages, delivery acks, read receipts — ride inside the session as typed ciphertext. Intermediate relays see only opaque `noiseEncrypted` packets.
+The `XX` handshake pattern, its message sequence, and the post-handshake transport and application-payload framing are specified byte-exactly in [Noise](spec/03-noise.md).
 
 ### 5.2 Offline Seals: Noise X
 
-Courier envelopes are sealed to the recipient's *static* key with the one-way Noise `X` pattern; the sender's identity is authenticated inside the ciphertext. **This path has no forward secrecy** — compromise of the recipient's static key exposes sealed-but-undelivered mail. A prekey scheme is future work.
+The one-way `X` pattern used to seal courier envelopes — including the forward-secret prekey variant — is specified byte-exactly in [Noise](spec/03-noise.md).
 
 ### 5.3 Nostr Path
 
