@@ -458,6 +458,56 @@ struct AppArchitectureTests {
         #expect(chromeModel.showingFingerprintFor == nil)
     }
 
+    @Test("Recent chats list direct conversations with people absent from the rosters")
+    @MainActor
+    func peerListModelSurfacesRecentChatsForAbsentPeers() async {
+        let viewModel = makeArchitectureViewModel()
+        let offlinePeerID = PeerID(str: "00000000000000aa")
+        let groupPeerID = PeerID(groupID: Data(repeating: 0xAB, count: 16))
+
+        // A DM thread from a passerby who has since gone offline: not in
+        // allPeers, not a favorite — previously unreachable once read.
+        viewModel.seedPrivateChat([
+            BitchatMessage(
+                id: "dm-1",
+                sender: "passerby",
+                content: "hello from the train",
+                timestamp: Date(timeIntervalSince1970: 100),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "me",
+                senderPeerID: offlinePeerID
+            )
+        ], for: offlinePeerID)
+        // Group threads have their own section and must not duplicate here.
+        viewModel.seedPrivateChat([
+            BitchatMessage(
+                id: "gm-1",
+                sender: "member",
+                content: "group hello",
+                timestamp: Date(timeIntervalSince1970: 200),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "me",
+                senderPeerID: groupPeerID
+            )
+        ], for: groupPeerID)
+
+        let peerListModel = PeerListModel(
+            chatViewModel: viewModel,
+            conversations: viewModel.conversations
+        )
+
+        await waitUntil {
+            peerListModel.recentChatRows.contains { $0.peerID == offlinePeerID }
+        }
+
+        #expect(peerListModel.recentChatRows.map(\.peerID) == [offlinePeerID])
+        #expect(peerListModel.recentChatRows.first?.lastActivity == Date(timeIntervalSince1970: 100))
+        // The roster doesn't list this peer — that's exactly why the row exists.
+        #expect(!peerListModel.meshRows.contains { $0.peerID == offlinePeerID })
+    }
+
     @Test("PrivateConversationModel resolves canonical header state for the selected DM")
     @MainActor
     func privateConversationModelResolvesSelectedHeaderState() async {
