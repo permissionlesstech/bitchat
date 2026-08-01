@@ -1771,6 +1771,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             panicNetworkLifecycle.restart()
         }
 
+        // In a duress scenario "did it work?" must not be a guess — the
+        // natural response to uncertainty is to trigger the wipe again.
+        // The failure case surfaces separately via `panicRecoveryBlocked`.
+        addMeshOnlySystemMessage(
+            String(localized: "system.panic.completed", defaultValue: "all data wiped — new identity created", comment: "System message confirming a successful panic wipe")
+        )
+
         return true
     }
 
