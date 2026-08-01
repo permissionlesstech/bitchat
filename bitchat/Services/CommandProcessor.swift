@@ -105,7 +105,7 @@ final class CommandProcessor {
     @MainActor
     func process(_ command: String) -> CommandResult {
         let parts = command.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
-        guard let cmd = parts.first else { return .error(message: "Invalid command") }
+        guard let cmd = parts.first else { return .error(message: Strings.invalidCommand) }
         let args = parts.count > 1 ? String(parts[1]) : ""
         
         // Geohash context: disable favoriting in public geohash or GeoDM
@@ -133,52 +133,35 @@ final class CommandProcessor {
         case "/unblock":
             return handleUnblock(args)
         case "/group":
-            if inGeoPublic || inGeoDM { return .error(message: "groups are only for mesh peers in #mesh") }
+            if inGeoPublic || inGeoDM { return .error(message: Strings.groupsMeshOnly) }
             return handleGroup(args)
         case "/fav":
-            if inGeoPublic || inGeoDM { return .error(message: "favorites are only for mesh peers in #mesh") }
+            if inGeoPublic || inGeoDM { return .error(message: Strings.favoritesMeshOnly) }
             return handleFavorite(args, add: true)
         case "/unfav":
-            if inGeoPublic || inGeoDM { return .error(message: "favorites are only for mesh peers in #mesh") }
+            if inGeoPublic || inGeoDM { return .error(message: Strings.favoritesMeshOnly) }
             return handleFavorite(args, add: false)
         case "/ping":
-            if inGeoPublic || inGeoDM { return .error(message: "ping only works for mesh peers in #mesh") }
+            if inGeoPublic || inGeoDM { return .error(message: Strings.pingMeshOnly) }
             return handlePing(args)
         case "/trace":
-            if inGeoPublic || inGeoDM { return .error(message: "trace only works for mesh peers in #mesh") }
+            if inGeoPublic || inGeoDM { return .error(message: Strings.traceMeshOnly) }
             return handleTrace(args)
         case "/pay":
             return handlePay(args)
         case "/drop":
             return handleDrop(args)
         case "/help":
-            return .success(message: Self.helpText)
+            return .success(message: Strings.helpText)
         default:
-            return .error(message: "unknown command: \(cmd) — type /help for commands")
+            return .error(message: Strings.unknownCommand(String(cmd)))
         }
     }
 
     /// Local-only command reference, printed as a system message. The
     /// suggestion panel hides once arguments are typed, and typos used to
     /// dead-end in a bare "unknown command" — this is the way out.
-    static let helpText = """
-    commands:
-    /msg @name [message] — start a private chat
-    /who — list who's here
-    /clear — clear this chat
-    /hug @name — send a hug
-    /slap @name — slap with a large trout
-    /block @name · /unblock @name
-    /fav @name · /unfav @name — favorites (mesh only)
-    /group create <name> — start an encrypted group
-    /group invite @name · /group remove @name — manage members (creator)
-    /group leave · /group list — leave or list your groups
-    /ping @name — measure round-trip time (mesh only)
-    /trace @name — estimated mesh path (mesh only)
-    /pay <token> — send a cashu ecash token in this chat
-    /drop <message> — pin a note to this place for 24h (needs location)
-    /help — this list
-    """
+    static var helpText: String { Strings.helpText }
 
     /// /drop <text> — a dead drop: pins a note to the current building-level
     /// geohash with a 24h NIP-40 expiry. Anyone who passes through here and
@@ -186,28 +169,28 @@ final class CommandProcessor {
     /// reads it.
     private func handleDrop(_ args: String) -> CommandResult {
         guard LocationNotesSettings.enabled else {
-            return .error(message: "location notes are off — enable them in the info screen")
+            return .error(message: Strings.dropNotesOff)
         }
         guard let content = args.trimmedOrNilIfEmpty else {
-            return .error(message: "usage: /drop <message>")
+            return .error(message: Strings.dropUsage)
         }
         let location = LocationChannelManager.shared
         guard location.permissionState == .authorized else {
-            return .error(message: "leaving a note needs location — enable it in the info screen")
+            return .error(message: Strings.dropNeedsLocation)
         }
         guard let geohash = location.availableChannels.first(where: { $0.level == .building })?.geohash else {
             location.refreshChannels()
-            return .error(message: "still finding this place — try again in a moment")
+            return .error(message: Strings.dropFindingPlace)
         }
         guard let nickname = contextProvider?.nickname,
               LocationNotesManager.postDrop(content: content, nickname: nickname, geohash: geohash) else {
-            return .error(message: "no geo relays reachable — note not left")
+            return .error(message: Strings.dropNoRelays)
         }
         // Leaving a note is an explicit notes act: it unlocks the passive
         // nearby-notes counter (tap-to-reveal) so the sender sees their own
         // drop counted on the timeline.
         NearbyNotesCounter.shared.reveal()
-        return .success(message: "📍 note left here — it fades in 24h")
+        return .success(message: Strings.dropLeft)
     }
 
     // MARK: - Command Handlers
@@ -215,14 +198,14 @@ final class CommandProcessor {
     private func handleMessage(_ args: String) -> CommandResult {
         let parts = args.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
         guard !parts.isEmpty else {
-            return .error(message: "usage: /msg @nickname [message]")
+            return .error(message: Strings.msgUsage)
         }
         
         let targetName = String(parts[0])
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
         
         guard let peerID = contextProvider?.getPeerIDForNickname(nickname) else {
-            return .error(message: "'\(nickname)' not found")
+            return .error(message: Strings.msgNotFound(nickname))
         }
 
         contextProvider?.startPrivateChat(with: peerID)
@@ -232,7 +215,7 @@ final class CommandProcessor {
             contextProvider?.sendPrivateMessage(message, to: peerID)
         }
         
-        return .success(message: "started private chat with \(nickname)")
+        return .success(message: Strings.msgStarted(nickname))
     }
     
     private func handleWho() -> CommandResult {
@@ -240,22 +223,22 @@ final class CommandProcessor {
         switch contextProvider?.activeChannel ?? .mesh {
         case .location(let ch):
             // Geohash context: show visible geohash participants (exclude self)
-            guard let vm = contextProvider else { return .success(message: "nobody around") }
+            guard let vm = contextProvider else { return .success(message: Strings.whoNobody) }
             let myHex = (try? vm.idBridge.deriveIdentity(forGeohash: ch.geohash))?.publicKeyHex.lowercased()
             let people = vm.getVisibleGeoParticipants().filter { person in
                 if let me = myHex { return person.id.lowercased() != me }
                 return true
             }
             let names = people.map { $0.displayName }
-            if names.isEmpty { return .success(message: "no one else is online right now") }
-            return .success(message: "online: " + names.sorted().joined(separator: ", "))
+            if names.isEmpty { return .success(message: Strings.whoEmpty) }
+            return .success(message: Strings.whoOnline(names.sorted().joined(separator: ", ")))
         case .mesh:
             // Mesh context: show connected peer nicknames
             guard let peers = meshService?.getPeerNicknames(), !peers.isEmpty else {
-                return .success(message: "no one else is online right now")
+                return .success(message: Strings.whoEmpty)
             }
             let onlineList = peers.values.sorted().joined(separator: ", ")
-            return .success(message: "online: \(onlineList)")
+            return .success(message: Strings.whoOnline(onlineList))
         }
     }
     
@@ -271,16 +254,17 @@ final class CommandProcessor {
     private func handleEmote(_ args: String, command: String, action: String, emoji: String, suffix: String = "") -> CommandResult {
         let targetName = args.trimmed
         guard !targetName.isEmpty else {
-            return .error(message: "usage: /\(command) <nickname>")
+            return .error(message: Strings.namedUsage(command))
         }
         
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
         
         guard let targetPeerID = contextProvider?.getPeerIDForNickname(nickname),
               let myNickname = contextProvider?.nickname else {
-            return .error(message: "cannot \(command) \(nickname): not found")
+            return .error(message: Strings.emoteNotFound(command: command, nickname: nickname))
         }
         
+        // Emote mesh content stays English — it is chat/wire-visible protocol text.
         let emoteContent = "* \(emoji) \(myNickname) \(action) \(nickname)\(suffix) *"
         
         if contextProvider?.selectedPrivateChatPeer != nil {
@@ -343,9 +327,10 @@ final class CommandProcessor {
                 }
             }
 
-            let meshList = blockedNicknames.isEmpty ? "none" : blockedNicknames.sorted().joined(separator: ", ")
-            let geoList = geoNames.isEmpty ? "none" : geoNames.sorted().joined(separator: ", ")
-            return .success(message: "blocked peers: \(meshList) | geohash blocks: \(geoList)")
+            let none = Strings.listNone
+            let meshList = blockedNicknames.isEmpty ? none : blockedNicknames.sorted().joined(separator: ", ")
+            let geoList = geoNames.isEmpty ? none : geoNames.sorted().joined(separator: ", ")
+            return .success(message: Strings.blockList(mesh: meshList, geo: geoList))
         }
         
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
@@ -353,7 +338,7 @@ final class CommandProcessor {
         if let peerID = contextProvider?.getPeerIDForNickname(nickname),
            let fingerprint = meshService?.getFingerprint(for: peerID) {
             if identityManager.isBlocked(fingerprint: fingerprint) {
-                return .success(message: "\(nickname) is already blocked")
+                return .success(message: Strings.blockAlready(nickname))
             }
             // Block the user (mesh/noise identity)
             if var identity = identityManager.getSocialIdentity(for: fingerprint) {
@@ -375,24 +360,24 @@ final class CommandProcessor {
             // Scrub their carried public messages now, while the peerID is
             // resolvable, so they can't resurface as archived echoes.
             meshArchive?.purgeArchivedPublicMessages(from: peerID)
-            return .success(message: "blocked \(nickname). you will no longer receive messages from them")
+            return .success(message: Strings.blockMesh(nickname))
         }
         // Mesh lookup failed; try geohash (Nostr) participant by display name
         if let pub = contextProvider?.nostrPubkeyForDisplayName(nickname) {
             if identityManager.isNostrBlocked(pubkeyHexLowercased: pub) {
-                return .success(message: "\(nickname) is already blocked")
+                return .success(message: Strings.blockAlready(nickname))
             }
             identityManager.setNostrBlocked(pub, isBlocked: true)
-            return .success(message: "blocked \(nickname) in geohash chats")
+            return .success(message: Strings.blockGeohash(nickname))
         }
         
-        return .error(message: "cannot block \(nickname): not found or unable to verify identity")
+        return .error(message: Strings.blockNotFound(nickname))
     }
     
     private func handleUnblock(_ args: String) -> CommandResult {
         let targetName = args.trimmed
         guard !targetName.isEmpty else {
-            return .error(message: "usage: /unblock <nickname>")
+            return .error(message: Strings.unblockUsage)
         }
         
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
@@ -400,23 +385,23 @@ final class CommandProcessor {
         if let peerID = contextProvider?.getPeerIDForNickname(nickname),
            let fingerprint = meshService?.getFingerprint(for: peerID) {
             if !identityManager.isBlocked(fingerprint: fingerprint) {
-                return .success(message: "\(nickname) is not blocked")
+                return .success(message: Strings.unblockNotBlocked(nickname))
             }
             identityManager.setBlocked(fingerprint, isBlocked: false)
-            return .success(message: "unblocked \(nickname)")
+            return .success(message: Strings.unblockMesh(nickname))
         }
         // Try geohash unblock
         if let pub = contextProvider?.nostrPubkeyForDisplayName(nickname) {
             if !identityManager.isNostrBlocked(pubkeyHexLowercased: pub) {
-                return .success(message: "\(nickname) is not blocked")
+                return .success(message: Strings.unblockNotBlocked(nickname))
             }
             identityManager.setNostrBlocked(pub, isBlocked: false)
-            return .success(message: "unblocked \(nickname) in geohash chats")
+            return .success(message: Strings.unblockGeohash(nickname))
         }
-        return .error(message: "cannot unblock \(nickname): not found")
+        return .error(message: Strings.unblockNotFound(nickname))
     }
     
-    private static let groupUsage = "usage: /group create <name> · invite @name · remove @name · leave · list"
+    private static var groupUsage: String { Strings.groupUsage }
 
     private func handleGroup(_ args: String) -> CommandResult {
         let parts = args.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
@@ -454,12 +439,12 @@ final class CommandProcessor {
     private func resolveMeshPeer(_ args: String, command: String) -> MeshPeerResolution {
         let targetName = args.trimmed
         guard !targetName.isEmpty else {
-            return .failed(.error(message: "usage: /\(command) <nickname>"))
+            return .failed(.error(message: Strings.namedUsage(command)))
         }
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
         guard let peerID = contextProvider?.getPeerIDForNickname(nickname),
               !peerID.isGeoDM, !peerID.isGeoChat else {
-            return .failed(.error(message: "cannot \(command) \(nickname): not found on mesh"))
+            return .failed(.error(message: Strings.meshNotFound(command: command, nickname: nickname)))
         }
         return .resolved(peerID: peerID, nickname: nickname)
     }
@@ -480,15 +465,15 @@ final class CommandProcessor {
         meshDiagnostics?.sendMeshPing(to: target.peerID) { [weak currentProvider] result in
             let provider = currentProvider
             guard let result else {
-                provider?.addCommandOutput("no reply from \(nickname)", to: destination)
+                provider?.addCommandOutput(Strings.pingNoReply(nickname), to: destination)
                 return
             }
             let hopText: String = result.hops.map { hops in
-                hops == 1 ? " · direct (1 hop)" : " · \(hops) hops"
+                hops == 1 ? Strings.pingHopDirect : Strings.pingHopMany(hops)
             } ?? ""
-            provider?.addCommandOutput("pong from \(nickname): \(result.rttMs) ms\(hopText)", to: destination)
+            provider?.addCommandOutput(Strings.pingPong(nickname: nickname, rttMs: result.rttMs, hopText: hopText), to: destination)
         }
-        return .success(message: "pinging \(nickname)…")
+        return .success(message: Strings.pingPinging(nickname))
     }
 
     private func handleTrace(_ args: String) -> CommandResult {
@@ -500,7 +485,7 @@ final class CommandProcessor {
 
         guard let mesh = meshService,
               let intermediates = meshDiagnostics?.computeMeshPath(to: target.peerID) else {
-            return .success(message: "no known path to \(target.nickname)")
+            return .success(message: Strings.traceNoPath(target.nickname))
         }
         // Graph-derived from gossiped neighbor claims, not route-recorded —
         // present it as an estimate.
@@ -509,7 +494,7 @@ final class CommandProcessor {
         }
         let chain = (["you"] + hopNames + [target.nickname]).joined(separator: " → ")
         let hops = intermediates.count + 1
-        return .success(message: "estimated path: \(chain) (\(hops) hop\(hops == 1 ? "" : "s"))")
+        return .success(message: Strings.tracePath(chain: chain, hops: hops))
     }
 
     /// `/pay <cashu-token>` — validates the token decodes, then sends it as
@@ -520,44 +505,44 @@ final class CommandProcessor {
     private func handlePay(_ args: String) -> CommandResult {
         var parts = args.trimmed.split(separator: " ").map(String.init)
         guard !parts.isEmpty else {
-            return .success(message: "usage: /pay <token> — paste a cashu token: /pay cashuA…")
+            return .success(message: Strings.payUsage)
         }
 
         let confirmedPublic = parts.count > 1 && parts.last?.lowercased() == "public"
         if confirmedPublic { parts.removeLast() }
 
         guard parts.count == 1, let token = CashuTokenDecoder.bareToken(from: parts[0]) else {
-            return .error(message: "that doesn't look like a cashu token — expected cashuA… or cashuB…")
+            return .error(message: Strings.payNotToken)
         }
         guard let info = CashuTokenDecoder.decode(token, strict: true) else {
-            return .error(message: "invalid cashu token — it doesn't decode to a known token with an amount, not sending it")
+            return .error(message: Strings.payInvalid)
         }
 
         let summary = info.displayAmount ?? "a cashu token"
 
         if let peerID = contextProvider?.selectedPrivateChatPeer {
             contextProvider?.sendPrivateMessage(token, to: peerID)
-            return .success(message: "sent \(summary) — cashu is a bearer token; whoever redeems it first gets the funds")
+            return .success(message: Strings.paySentPrivate(summary))
         }
 
         guard confirmedPublic else {
-            return .error(message: "this is a public channel — anyone reading it can redeem the token. send anyway: /pay <token> public")
+            return .error(message: Strings.payPublicConfirm)
         }
 
         contextProvider?.sendPublicMessage(token)
-        return .success(message: "sent \(summary) to the public channel — anyone here can redeem it")
+        return .success(message: Strings.paySentPublic(summary))
     }
 
     private func handleFavorite(_ args: String, add: Bool) -> CommandResult {
         let targetName = args.trimmed
         guard !targetName.isEmpty else {
-            return .error(message: "usage: /\(add ? "fav" : "unfav") <nickname>")
+            return .error(message: Strings.namedUsage(add ? "fav" : "unfav"))
         }
 
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
 
         guard let peerID = contextProvider?.getPeerIDForNickname(nickname) else {
-            return .error(message: "can't find peer: \(nickname)")
+            return .error(message: Strings.favoriteNotFound(nickname))
         }
 
         // Resolve current state by the peer's real noise key. The resolved
@@ -571,13 +556,322 @@ final class CommandProcessor {
         }
 
         guard add != isCurrentlyFavorite else {
-            return .success(message: add ? "\(nickname) is already a favorite" : "\(nickname) is not a favorite")
+            return .success(message: add ? Strings.favoriteAlready(nickname) : Strings.favoriteNotFavorite(nickname))
         }
 
         // toggleFavorite persists by the real noise key and notifies the peer.
         contextProvider?.toggleFavorite(peerID: peerID)
 
-        return .success(message: add ? "added \(nickname) to favorites" : "removed \(nickname) from favorites")
+        return .success(message: add ? Strings.favoriteAdded(nickname) : Strings.favoriteRemoved(nickname))
     }
-    
+
+    // MARK: - Localized strings
+
+    /// Local-only command result / help copy. Emote mesh content is intentionally
+    /// left in English so wire-visible text stays protocol-stable.
+    enum Strings {
+        static var invalidCommand: String {
+            String(localized: "command.error.invalid", defaultValue: "Invalid command", comment: "Returned when the command string has no leading token")
+        }
+        static var groupsMeshOnly: String {
+            String(localized: "command.error.groups.mesh_only", defaultValue: "groups are only for mesh peers in #mesh", comment: "Returned when /group is used outside mesh context")
+        }
+        static var favoritesMeshOnly: String {
+            String(localized: "command.error.favorites.mesh_only", defaultValue: "favorites are only for mesh peers in #mesh", comment: "Returned when /fav or /unfav is used outside mesh context")
+        }
+        static var pingMeshOnly: String {
+            String(localized: "command.error.ping.mesh_only", defaultValue: "ping only works for mesh peers in #mesh", comment: "Returned when /ping is used outside mesh context")
+        }
+        static var traceMeshOnly: String {
+            String(localized: "command.error.trace.mesh_only", defaultValue: "trace only works for mesh peers in #mesh", comment: "Returned when /trace is used outside mesh context")
+        }
+        static func unknownCommand(_ cmd: String) -> String {
+            String(
+                format: String(localized: "command.error.unknown", defaultValue: "unknown command: %@ — type /help for commands", comment: "Returned for an unrecognized slash command; %@ is the command token"),
+                locale: .current,
+                cmd
+            )
+        }
+        static var helpText: String {
+            String(localized: "command.help.text", defaultValue: """
+            commands:
+            /msg @name [message] — start a private chat
+            /who — list who's here
+            /clear — clear this chat
+            /hug @name — send a hug
+            /slap @name — slap with a large trout
+            /block @name · /unblock @name
+            /fav @name · /unfav @name — favorites (mesh only)
+            /group create <name> — start an encrypted group
+            /group invite @name · /group remove @name — manage members (creator)
+            /group leave · /group list — leave or list your groups
+            /ping @name — measure round-trip time (mesh only)
+            /trace @name — estimated mesh path (mesh only)
+            /pay <token> — send a cashu ecash token in this chat
+            /drop <message> — pin a note to this place for 24h (needs location)
+            /help — this list
+            """, comment: "Full /help command reference printed as a system message")
+        }
+        static var dropNotesOff: String {
+            String(localized: "command.error.drop.notes_off", defaultValue: "location notes are off — enable them in the info screen", comment: "Returned by /drop when location notes are disabled")
+        }
+        static var dropUsage: String {
+            String(localized: "command.usage.drop", defaultValue: "usage: /drop <message>", comment: "Usage hint when /drop has no message argument")
+        }
+        static var dropNeedsLocation: String {
+            String(localized: "command.error.drop.needs_location", defaultValue: "leaving a note needs location — enable it in the info screen", comment: "Returned by /drop when location permission is not authorized")
+        }
+        static var dropFindingPlace: String {
+            String(localized: "command.error.drop.finding_place", defaultValue: "still finding this place — try again in a moment", comment: "Returned by /drop when building-level geohash is not yet available")
+        }
+        static var dropNoRelays: String {
+            String(localized: "command.error.drop.no_relays", defaultValue: "no geo relays reachable — note not left", comment: "Returned by /drop when posting to geo relays fails")
+        }
+        static var dropLeft: String {
+            String(localized: "command.success.drop.left", defaultValue: "📍 note left here — it fades in 24h", comment: "Success confirmation after leaving a location note via /drop")
+        }
+        static var msgUsage: String {
+            String(localized: "command.usage.msg", defaultValue: "usage: /msg @nickname [message]", comment: "Usage hint when /msg has no nickname argument")
+        }
+        static func msgNotFound(_ nickname: String) -> String {
+            String(
+                format: String(localized: "command.error.msg.not_found", defaultValue: "'%@' not found", comment: "Returned by /msg when the nickname cannot be resolved; %@ is the nickname"),
+                locale: .current,
+                nickname
+            )
+        }
+        static func msgStarted(_ nickname: String) -> String {
+            String(
+                format: String(localized: "command.success.msg.started", defaultValue: "started private chat with %@", comment: "Success after starting a private chat via /msg; %@ is the nickname"),
+                locale: .current,
+                nickname
+            )
+        }
+        static var whoNobody: String {
+            String(localized: "command.success.who.nobody", defaultValue: "nobody around", comment: "Returned by /who in geohash when context provider is missing")
+        }
+        static var whoEmpty: String {
+            String(localized: "command.success.who.empty", defaultValue: "no one else is online right now", comment: "Returned by /who when no other peers are online")
+        }
+        static func whoOnline(_ list: String) -> String {
+            String(
+                format: String(localized: "command.success.who.online", defaultValue: "online: %@", comment: "Returned by /who listing online names; %@ is the comma-separated name list"),
+                locale: .current,
+                list
+            )
+        }
+        static func namedUsage(_ command: String) -> String {
+            String(
+                format: String(localized: "command.usage.named", defaultValue: "usage: /%@ <nickname>", comment: "Usage for commands that take a nickname; %@ is the command name without slash"),
+                locale: .current,
+                command
+            )
+        }
+        static func emoteNotFound(command: String, nickname: String) -> String {
+            String(
+                format: String(localized: "command.error.emote.not_found", defaultValue: "cannot %@ %@: not found", comment: "Returned by /hug or /slap when target is not found; first %@ is command, second %@ is nickname"),
+                locale: .current,
+                command,
+                nickname
+            )
+        }
+        static var listNone: String {
+            String(localized: "command.list.none", defaultValue: "none", comment: "Placeholder when a /block listing has no entries")
+        }
+        static func blockList(mesh: String, geo: String) -> String {
+            String(
+                format: String(localized: "command.success.block.list", defaultValue: "blocked peers: %@ | geohash blocks: %@", comment: "Returned by /block with no args; first %@ is mesh list, second %@ is geohash list"),
+                locale: .current,
+                mesh,
+                geo
+            )
+        }
+        static func blockAlready(_ nickname: String) -> String {
+            String(
+                format: String(localized: "command.success.block.already", defaultValue: "%@ is already blocked", comment: "Returned when blocking someone already blocked; %@ is the nickname"),
+                locale: .current,
+                nickname
+            )
+        }
+        static func blockMesh(_ nickname: String) -> String {
+            String(
+                format: String(localized: "command.success.block.mesh", defaultValue: "blocked %@. you will no longer receive messages from them", comment: "Success after blocking a mesh peer; %@ is the nickname"),
+                locale: .current,
+                nickname
+            )
+        }
+        static func blockGeohash(_ nickname: String) -> String {
+            String(
+                format: String(localized: "command.success.block.geohash", defaultValue: "blocked %@ in geohash chats", comment: "Success after blocking a geohash participant; %@ is the nickname"),
+                locale: .current,
+                nickname
+            )
+        }
+        static func blockNotFound(_ nickname: String) -> String {
+            String(
+                format: String(localized: "command.error.block.not_found", defaultValue: "cannot block %@: not found or unable to verify identity", comment: "Returned when /block target cannot be resolved; %@ is the nickname"),
+                locale: .current,
+                nickname
+            )
+        }
+        static var unblockUsage: String {
+            String(localized: "command.usage.unblock", defaultValue: "usage: /unblock <nickname>", comment: "Usage hint when /unblock has no nickname argument")
+        }
+        static func unblockNotBlocked(_ nickname: String) -> String {
+            String(
+                format: String(localized: "command.success.unblock.not_blocked", defaultValue: "%@ is not blocked", comment: "Returned when unblocking someone who is not blocked; %@ is the nickname"),
+                locale: .current,
+                nickname
+            )
+        }
+        static func unblockMesh(_ nickname: String) -> String {
+            String(
+                format: String(localized: "command.success.unblock.mesh", defaultValue: "unblocked %@", comment: "Success after unblocking a mesh peer; %@ is the nickname"),
+                locale: .current,
+                nickname
+            )
+        }
+        static func unblockGeohash(_ nickname: String) -> String {
+            String(
+                format: String(localized: "command.success.unblock.geohash", defaultValue: "unblocked %@ in geohash chats", comment: "Success after unblocking a geohash participant; %@ is the nickname"),
+                locale: .current,
+                nickname
+            )
+        }
+        static func unblockNotFound(_ nickname: String) -> String {
+            String(
+                format: String(localized: "command.error.unblock.not_found", defaultValue: "cannot unblock %@: not found", comment: "Returned when /unblock target cannot be resolved; %@ is the nickname"),
+                locale: .current,
+                nickname
+            )
+        }
+        static var groupUsage: String {
+            String(localized: "command.usage.group", defaultValue: "usage: /group create <name> · invite @name · remove @name · leave · list", comment: "Usage for /group when subcommand is missing or unknown")
+        }
+        static func meshNotFound(command: String, nickname: String) -> String {
+            String(
+                format: String(localized: "command.error.mesh.not_found", defaultValue: "cannot %@ %@: not found on mesh", comment: "Returned by /ping or /trace when peer is not found on mesh; first %@ is command, second %@ is nickname"),
+                locale: .current,
+                command,
+                nickname
+            )
+        }
+        static func pingPinging(_ nickname: String) -> String {
+            String(
+                format: String(localized: "command.success.ping.pinging", defaultValue: "pinging %@…", comment: "Immediate success after sending a mesh ping; %@ is the nickname"),
+                locale: .current,
+                nickname
+            )
+        }
+        static func pingNoReply(_ nickname: String) -> String {
+            String(
+                format: String(localized: "command.success.ping.no_reply", defaultValue: "no reply from %@", comment: "Async ping timeout output; %@ is the nickname"),
+                locale: .current,
+                nickname
+            )
+        }
+        static func pingPong(nickname: String, rttMs: Int, hopText: String) -> String {
+            String(
+                format: String(localized: "command.success.ping.pong", defaultValue: "pong from %@: %lld ms%@", comment: "Async ping success output; %@ is nickname, %lld is RTT ms, %2$@ is hop suffix"),
+                locale: .current,
+                nickname,
+                Int64(rttMs),
+                hopText
+            )
+        }
+        static var pingHopDirect: String {
+            String(localized: "command.success.ping.hop_direct", defaultValue: " · direct (1 hop)", comment: "Hop suffix for a direct 1-hop pong")
+        }
+        static func pingHopMany(_ hops: Int) -> String {
+            String(
+                format: String(localized: "command.success.ping.hop_many", defaultValue: " · %lld hops", comment: "Hop suffix for multi-hop pong; %lld is hop count"),
+                locale: .current,
+                Int64(hops)
+            )
+        }
+        static func traceNoPath(_ nickname: String) -> String {
+            String(
+                format: String(localized: "command.success.trace.no_path", defaultValue: "no known path to %@", comment: "Returned by /trace when no mesh path is known; %@ is the nickname"),
+                locale: .current,
+                nickname
+            )
+        }
+        static func tracePath(chain: String, hops: Int) -> String {
+            if hops == 1 {
+                return String(
+                    format: String(localized: "command.success.trace.path_one", defaultValue: "estimated path: %@ (%lld hop)", comment: "Estimated mesh path with one hop; %@ is chain, %lld is hop count"),
+                    locale: .current,
+                    chain,
+                    Int64(hops)
+                )
+            }
+            return String(
+                format: String(localized: "command.success.trace.path_other", defaultValue: "estimated path: %@ (%lld hops)", comment: "Estimated mesh path with multiple hops; %@ is chain, %lld is hop count"),
+                locale: .current,
+                chain,
+                Int64(hops)
+            )
+        }
+        static var payUsage: String {
+            String(localized: "command.usage.pay", defaultValue: "usage: /pay <token> — paste a cashu token: /pay cashuA…", comment: "Usage/help returned by /pay with no token argument")
+        }
+        static var payNotToken: String {
+            String(localized: "command.error.pay.not_token", defaultValue: "that doesn't look like a cashu token — expected cashuA… or cashuB…", comment: "Returned when /pay argument does not look like a cashu token")
+        }
+        static var payInvalid: String {
+            String(localized: "command.error.pay.invalid", defaultValue: "invalid cashu token — it doesn't decode to a known token with an amount, not sending it", comment: "Returned when /pay token fails to decode")
+        }
+        static func paySentPrivate(_ summary: String) -> String {
+            String(
+                format: String(localized: "command.success.pay.sent_private", defaultValue: "sent %@ — cashu is a bearer token; whoever redeems it first gets the funds", comment: "Success after sending a cashu token privately; %@ is amount summary"),
+                locale: .current,
+                summary
+            )
+        }
+        static var payPublicConfirm: String {
+            String(localized: "command.error.pay.public_confirm", defaultValue: "this is a public channel — anyone reading it can redeem the token. send anyway: /pay <token> public", comment: "Returned when /pay is used publicly without confirmation suffix")
+        }
+        static func paySentPublic(_ summary: String) -> String {
+            String(
+                format: String(localized: "command.success.pay.sent_public", defaultValue: "sent %@ to the public channel — anyone here can redeem it", comment: "Success after sending a cashu token publicly; %@ is amount summary"),
+                locale: .current,
+                summary
+            )
+        }
+        static func favoriteNotFound(_ nickname: String) -> String {
+            String(
+                format: String(localized: "command.error.favorite.not_found", defaultValue: "can't find peer: %@", comment: "Returned by /fav or /unfav when peer cannot be resolved; %@ is the nickname"),
+                locale: .current,
+                nickname
+            )
+        }
+        static func favoriteAlready(_ nickname: String) -> String {
+            String(
+                format: String(localized: "command.success.favorite.already", defaultValue: "%@ is already a favorite", comment: "Returned by /fav when already favorited; %@ is the nickname"),
+                locale: .current,
+                nickname
+            )
+        }
+        static func favoriteNotFavorite(_ nickname: String) -> String {
+            String(
+                format: String(localized: "command.success.favorite.not_favorite", defaultValue: "%@ is not a favorite", comment: "Returned by /unfav when not a favorite; %@ is the nickname"),
+                locale: .current,
+                nickname
+            )
+        }
+        static func favoriteAdded(_ nickname: String) -> String {
+            String(
+                format: String(localized: "command.success.favorite.added", defaultValue: "added %@ to favorites", comment: "Success after adding a favorite; %@ is the nickname"),
+                locale: .current,
+                nickname
+            )
+        }
+        static func favoriteRemoved(_ nickname: String) -> String {
+            String(
+                format: String(localized: "command.success.favorite.removed", defaultValue: "removed %@ from favorites", comment: "Success after removing a favorite; %@ is the nickname"),
+                locale: .current,
+                nickname
+            )
+        }
+    }
 }
