@@ -82,8 +82,8 @@ struct ContentComposerView: View {
                 #endif
                 .submitLabel(.send)
                 .modifier(AutocompleteKeyboardNavigationModifier(
-                    isActive: conversationUIModel.showAutocomplete
-                        && !conversationUIModel.autocompleteSuggestions.isEmpty,
+                    isActive: { conversationUIModel.showAutocomplete
+                        && !conversationUIModel.autocompleteSuggestions.isEmpty },
                     onMove: { delta in
                         conversationUIModel.moveAutocompleteSelection(by: delta)
                     },
@@ -413,7 +413,13 @@ private extension ContentComposerView {
 /// same reason command suggestions (#1504) use an `NSEvent` local monitor.
 /// Mentions follow that mechanism on macOS and keep `.onKeyPress` for iOS 17+.
 private struct AutocompleteKeyboardNavigationModifier: ViewModifier {
-    let isActive: Bool
+    /// Live activity check, not a captured Bool. The macOS monitor closure is
+    /// registered once for the view's lifetime; a plain `Bool` would freeze
+    /// the value captured at install time (this is a value type), so a panel
+    /// that opens after the monitor installs would never intercept a key.
+    /// The provider closes over the reference-typed model and reads current
+    /// state on every event.
+    let isActive: () -> Bool
     let onMove: (Int) -> Void
     let onAccept: () -> Bool
     let onDismiss: () -> Void
@@ -425,36 +431,27 @@ private struct AutocompleteKeyboardNavigationModifier: ViewModifier {
     func body(content: Content) -> some View {
         #if os(macOS)
         content
-            .onChange(of: isActive) { active in
-                if active {
-                    installKeyMonitor()
-                } else {
-                    removeKeyMonitor()
-                }
-            }
-            .onAppear {
-                if isActive { installKeyMonitor() }
-            }
+            .onAppear { installKeyMonitor() }
             .onDisappear { removeKeyMonitor() }
         #else
         if #available(iOS 17.0, *) {
             content
                 .onKeyPress(.upArrow) {
-                    guard isActive else { return .ignored }
+                    guard isActive() else { return .ignored }
                     onMove(-1)
                     return .handled
                 }
                 .onKeyPress(.downArrow) {
-                    guard isActive else { return .ignored }
+                    guard isActive() else { return .ignored }
                     onMove(1)
                     return .handled
                 }
                 .onKeyPress(.tab) {
-                    guard isActive else { return .ignored }
+                    guard isActive() else { return .ignored }
                     return onAccept() ? .handled : .ignored
                 }
                 .onKeyPress(.escape) {
-                    guard isActive else { return .ignored }
+                    guard isActive() else { return .ignored }
                     onDismiss()
                     return .handled
                 }
@@ -484,7 +481,7 @@ private struct AutocompleteKeyboardNavigationModifier: ViewModifier {
     /// consumes the event so return completes instead of sending while the
     /// list is up. Inactive monitors pass everything through.
     private func handleKeyDown(_ event: NSEvent) -> NSEvent? {
-        guard isActive,
+        guard isActive(),
               event.modifierFlags.intersection([.command, .option, .control]).isEmpty else {
             return event
         }
