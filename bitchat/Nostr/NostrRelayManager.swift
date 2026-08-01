@@ -72,6 +72,12 @@ struct NostrRelayManagerDependencies {
     var awaitTorReady: (@escaping (Bool) -> Void) -> Void
     var makeSession: () -> NostrRelaySessionProtocol
     var scheduleAfter: @Sendable (TimeInterval, @escaping @Sendable () -> Void) -> Void
+    /// Where a dial's handshake deadline is scheduled. Its own knob rather than
+    /// `scheduleAfter` because one of these is armed per dial, and a test that
+    /// steps through relay backoff should not have to walk past them first.
+    var scheduleHandshakeDeadline: @Sendable (TimeInterval, @escaping @Sendable () -> Void) -> Void = { delay, action in
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: action)
+    }
     var now: () -> Date
     /// Uniform random value in [0, 1) used to jitter reconnect backoff.
     /// Injectable so tests can pin or sweep the jitter deterministically.
@@ -147,6 +153,10 @@ final class NostrRelayManager: ObservableObject {
         var messagesSent: Int = 0
         var messagesReceived: Int = 0
         var reconnectAttempts: Int = 0
+        /// Failures this relay can actually be blamed for, as opposed to the
+        /// ones it shared with every other relay because the transport was
+        /// down. Only these count toward giving up on it.
+        var attributedFailures: Int = 0
         var lastDisconnectedAt: Date?
         var nextReconnectTime: Date?
     }
@@ -220,6 +230,8 @@ final class NostrRelayManager: ObservableObject {
     private var recentInboundEventKeyOrder: [InboundEventKey] = []
     private var duplicateInboundEventDropCount = 0
     private var duplicateInboundEventDropCountBySubscription: [String: Int] = [:]
+    private var unhandledInboundEventCount = 0
+    private var unhandledInboundEventCountBySubscription: [String: Int] = [:]
     private var inboundEventLogCount = 0
     // Coalesce duplicate subscribe requests for the same id within a short window.
     private let subscribeCoalesceInterval: TimeInterval = 1.0
@@ -370,6 +382,32 @@ final class NostrRelayManager: ObservableObject {
                 self.applyDefaultRelayPolicy(force: true)
             }
             .store(in: &cancellables)
+        // Reconnect once a route is actually usable, not only when the app is
+        // foregrounded. Switching transport stops Arti's SOCKS listener before
+        // `isReady` turns false, so the reconnect that the dropped sockets
+        // trigger still reads Tor as ready and dials a proxy that is already
+        // gone. Those doomed dials register in `connections` before their
+        // handshake resolves, and the failure can take a minute to surface, so
+        // they linger as zombies that make the reconnect below find no targets
+        // and return silently. Tor cannot become ready without its listener
+        // having been down, so every proxied socket is already dead here: drop
+        // them first, then redial. Subscriptions replay from
+        // `subscriptionRequestState`, which `disconnect()` keeps.
+        dependencies.notificationCenter
+            .publisher(for: .TorDidBecomeReady)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                // Only when routing over Tor, and only when there is something
+                // stale: an empty pool means a first bootstrap, where
+                // `disconnect()` would fire parked EOSE callbacks for
+                // subscriptions that are about to be sent.
+                if self.shouldUseTor && !self.connections.isEmpty {
+                    self.disconnect()
+                }
+                self.connect()
+            }
+            .store(in: &cancellables)
     }
 
     deinit {
@@ -499,6 +537,8 @@ final class NostrRelayManager: ObservableObject {
         recentInboundEventKeyOrder.removeAll()
         duplicateInboundEventDropCount = 0
         duplicateInboundEventDropCountBySubscription.removeAll()
+        unhandledInboundEventCount = 0
+        unhandledInboundEventCountBySubscription.removeAll()
         inboundEventLogCount = 0
         Self.pendingGiftWrapIDs.removeAll()
         confirmedSends.removeAll()
@@ -522,6 +562,7 @@ final class NostrRelayManager: ObservableObject {
                 relays[index].messagesSent = 0
                 relays[index].messagesReceived = 0
                 relays[index].reconnectAttempts = 0
+                relays[index].attributedFailures = 0
             } else {
                 relays[index].lastDisconnectedAt = now
             }
@@ -689,10 +730,32 @@ final class NostrRelayManager: ObservableObject {
         }
     }
 
+    /// True for an event whose moment has passed while it sat in the queue.
+    ///
+    /// Ephemeral kinds (20000-29999) describe a point in time. After a long Tor
+    /// outage a queued one is worthless: relays reject it as "ephemeral event
+    /// expired", so the only thing sending it achieves is a burst of
+    /// provably-stale events on reconnect, which is a pattern worth not
+    /// emitting. Durable kinds carry real messages and are never aged out here.
+    private func isStaleEphemeral(_ event: NostrEvent) -> Bool {
+        guard (20000..<30000).contains(event.kind) else { return false }
+        let age = Date().timeIntervalSince1970 - TimeInterval(event.created_at)
+        return age > TransportConfig.nostrEphemeralSendMaxAgeSeconds
+    }
+
     /// Try to flush any queued messages for relays that are now connected.
     private func flushMessageQueue(for relayUrl: String? = nil) {
         messageQueueLock.lock()
         defer { messageQueueLock.unlock() }
+        guard !messageQueue.isEmpty else { return }
+        let staleCount = messageQueue.filter { isStaleEphemeral($0.event) }.count
+        if staleCount > 0 {
+            messageQueue.removeAll { isStaleEphemeral($0.event) }
+            SecureLogger.debug(
+                "📤 Dropped \(staleCount) expired ephemeral event(s) instead of sending them",
+                category: .session
+            )
+        }
         guard !messageQueue.isEmpty else { return }
         if let target = relayUrl {
             // Flush only for a specific relay
@@ -873,6 +936,7 @@ final class NostrRelayManager: ObservableObject {
         messageHandlers.removeValue(forKey: id)
         removeRecentInboundEvents(forSubscriptionID: id)
         duplicateInboundEventDropCountBySubscription.removeValue(forKey: id)
+        unhandledInboundEventCountBySubscription.removeValue(forKey: id)
         // Allow immediate re-subscription by clearing coalescer timestamp
         subscribeCoalesce.removeValue(forKey: id)
         subscriptionRequestState.removeValue(forKey: id)
@@ -1113,6 +1177,28 @@ final class NostrRelayManager: ObservableObject {
         return true
     }
 
+    /// Counts events that arrived for a subscription with no handler.
+    ///
+    /// The common cause is benign: `unsubscribe(id:)` drops the handler before
+    /// the CLOSE reaches the relay, so the relay's in-flight tail lands here.
+    /// Logging each one put a warning per event on the main actor, which turned
+    /// a channel switch in a busy geohash into roughly 150 lines in a second.
+    /// Sampled like the duplicate-drop path, with totals so a subscription that
+    /// never registers a handler at all is still visible.
+    private func recordUnhandledInboundEvent(subscriptionID: String) {
+        unhandledInboundEventCount += 1
+        let subscriptionCount = (unhandledInboundEventCountBySubscription[subscriptionID] ?? 0) + 1
+        unhandledInboundEventCountBySubscription[subscriptionID] = subscriptionCount
+
+        if unhandledInboundEventCount == 1 ||
+            unhandledInboundEventCount.isMultiple(of: TransportConfig.nostrDuplicateEventLogInterval) {
+            SecureLogger.warning(
+                "⚠️ No handler for inbound Nostr events total=\(unhandledInboundEventCount) sub=\(subscriptionID) sub_total=\(subscriptionCount)",
+                category: .session
+            )
+        }
+    }
+
     private func recordDuplicateInboundEventDrop(subscriptionID: String) {
         duplicateInboundEventDropCount += 1
         let subscriptionCount = (duplicateInboundEventDropCountBySubscription[subscriptionID] ?? 0) + 1
@@ -1202,6 +1288,39 @@ final class NostrRelayManager: ObservableObject {
                         connection: task
                     )
                 }
+            }
+        }
+
+        // That callback is the only thing that resolves a dial, and URLSession
+        // does not always deliver it. When Arti accepts the SOCKS connection but
+        // the connect behind it fails — a relay whose exit never answers — the
+        // task waits with no error and no pong, so the socket sits in
+        // `connections` indefinitely and every later attempt filters this relay
+        // out as one that already holds a connection. Bound the wait: a
+        // handshake that has not landed by the deadline is not going to, and
+        // failing it by hand puts the relay back on the normal backoff path.
+        let dialGeneration = connectionGeneration
+        let dialID = ObjectIdentifier(task)
+        dependencies.scheduleHandshakeDeadline(TransportConfig.nostrRelayHandshakeTimeoutSeconds) { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                guard dialGeneration == self.connectionGeneration else { return }
+                // Only this dial's own socket, and only while it is still
+                // unresolved: a relay that connected or was already replaced has
+                // nothing to time out.
+                guard let current = self.connections[urlString],
+                      ObjectIdentifier(current) == dialID,
+                      self.relays.first(where: { $0.url == urlString })?.isConnected != true else { return }
+                SecureLogger.warning(
+                    "⌛️ Nostr relay \(urlString) never finished its handshake - dropping the socket",
+                    category: .session
+                )
+                current.cancel(with: .goingAway, reason: nil)
+                self.handleDisconnection(
+                    relayUrl: urlString,
+                    error: URLError(.timedOut),
+                    connection: current
+                )
             }
         }
     }
@@ -1317,7 +1436,7 @@ final class NostrRelayManager: ObservableObject {
         if let handler = self.messageHandlers[subId] {
             handler(event)
         } else {
-            SecureLogger.warning("⚠️ No handler for subscription \(subId)", category: .session)
+            recordUnhandledInboundEvent(subscriptionID: subId)
         }
     }
 
@@ -1402,6 +1521,7 @@ final class NostrRelayManager: ObservableObject {
             relays[index].lastError = error
             if isConnected {
                 relays[index].reconnectAttempts = 0  // Reset on successful connection
+                relays[index].attributedFailures = 0
                 relays[index].nextReconnectTime = nil
             } else {
                 relays[index].lastDisconnectedAt = dependencies.now()
@@ -1490,6 +1610,7 @@ final class NostrRelayManager: ObservableObject {
             if let index = relays.firstIndex(where: { $0.url == relayUrl }) {
                 relays[index].lastError = error
                 relays[index].reconnectAttempts = maxReconnectAttempts
+                relays[index].attributedFailures = maxReconnectAttempts
                 relays[index].nextReconnectTime = nil
             }
             pendingSubscriptions[relayUrl] = nil
@@ -1500,9 +1621,18 @@ final class NostrRelayManager: ObservableObject {
         guard let index = relays.firstIndex(where: { $0.url == relayUrl }) else { return }
         
         relays[index].reconnectAttempts += 1
-        
+        // A failure only says something about this relay when the rest of the
+        // pool is working. With nothing connected the transport is what failed:
+        // Tor that never finishes its directory fails every dial identically,
+        // and counting those would blacklist the whole pool for an outage it is
+        // about to recover from. `updateRelayStatus` above already cleared this
+        // relay's own flag, so this asks about the others.
+        if relays.contains(where: { $0.isConnected }) {
+            relays[index].attributedFailures += 1
+        }
+
         // Stop attempting after max attempts
-        if relays[index].reconnectAttempts >= maxReconnectAttempts {
+        if relays[index].attributedFailures >= maxReconnectAttempts {
             SecureLogger.warning("Max reconnection attempts (\(maxReconnectAttempts)) reached for \(relayUrl)", category: .session)
             return
         }
@@ -1551,6 +1681,7 @@ final class NostrRelayManager: ObservableObject {
         
         // Reset reconnection attempts
         relays[index].reconnectAttempts = 0
+        relays[index].attributedFailures = 0
         relays[index].nextReconnectTime = nil
         relays[index].lastError = nil
         
@@ -1610,6 +1741,14 @@ final class NostrRelayManager: ObservableObject {
         duplicateInboundEventDropCountBySubscription[subscriptionID] ?? 0
     }
 
+    var debugUnhandledInboundEventCount: Int {
+        unhandledInboundEventCount
+    }
+
+    func debugUnhandledInboundEventCount(forSubscriptionID subscriptionID: String) -> Int {
+        unhandledInboundEventCountBySubscription[subscriptionID] ?? 0
+    }
+
     func debugFlushMessageQueue() {
         flushMessageQueue(for: nil)
     }
@@ -1623,6 +1762,7 @@ final class NostrRelayManager: ObservableObject {
         // Reset all relay states
         for index in relays.indices {
             relays[index].reconnectAttempts = 0
+            relays[index].attributedFailures = 0
             relays[index].nextReconnectTime = nil
             relays[index].lastError = nil
         }
@@ -1641,7 +1781,7 @@ final class NostrRelayManager: ObservableObject {
            dependencies.now().timeIntervalSince(lastDisconnect) >= TransportConfig.nostrRelayFailureCooldownSeconds {
             return false
         }
-        if r.reconnectAttempts >= maxReconnectAttempts { return true }
+        if r.attributedFailures >= maxReconnectAttempts { return true }
         if let ns = r.lastError as NSError?, ns.domain == NSURLErrorDomain {
             if ns.code == NSURLErrorBadServerResponse || ns.code == NSURLErrorCannotFindHost {
                 return true

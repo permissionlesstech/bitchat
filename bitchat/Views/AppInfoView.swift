@@ -1,4 +1,5 @@
 import SwiftUI
+import Tor
 
 /// The sheet behind the "bitchat/" logo: a segmented Settings/Info surface.
 /// Settings gathers every user preference (appearance, voice, connectivity
@@ -10,6 +11,13 @@ struct AppInfoView: View {
     @AppStorage(AppTheme.storageKey) private var appThemeRawValue = AppTheme.matrix.rawValue
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @ObservedObject private var bridgeService = BridgeService.shared
+    // Cross-platform on purpose: a panic wipe can park the network on macOS
+    // too, and the notice that unparks it needs this to exist there. Only the
+    // transport picker below is iOS-only.
+    @ObservedObject private var torTransportSettings = TorTransportSettings.shared
+    #if os(iOS)
+    @ObservedObject private var torManager = TorManager.shared
+    #endif
 
     /// Supplies the mesh topology map data. Nil (previews, missing wiring)
     /// hides the topology row entirely.
@@ -34,6 +42,10 @@ struct AppInfoView: View {
     /// The override changed this session; localization resolves at process
     /// start, so surface the restart hint.
     @State private var showLanguageRestartNote = false
+    #if os(iOS)
+    @State private var obfs4BridgeInput = ""
+    @State private var obfs4BridgeError: String?
+    #endif
 
     private enum Pane: String {
         case settings
@@ -89,6 +101,15 @@ struct AppInfoView: View {
             // switching it off.
             static let torSubtitle = String(localized: "app_info.settings.tor.subtitle", defaultValue: "sends internet traffic through tor, so relay operators see tor's address instead of yours. covers location channels and private messages delivered over the internet. recommended: on.", comment: "Subtitle for the tor routing toggle in settings, explaining what it covers")
             static let torOffWarning = String(localized: "app_info.settings.tor.off_warning", defaultValue: "tor is off: every relay you connect to can see your IP address, including relays carrying your private messages.", comment: "Warning shown under the tor toggle while tor is switched off, stating that relay operators can see the device IP address")
+            static let torTransportTitle = String(localized: "app_info.settings.tor.transport.title", defaultValue: "censorship resistance", comment: "Label for the advanced Tor transport picker")
+            static let torTransportSubtitle = String(localized: "app_info.settings.tor.transport.subtitle", defaultValue: "auto tries direct tor, your obfs4 bridges, then snowflake. app traffic never falls back outside tor.", comment: "Explanation of automatic Tor transport fallback")
+            static let torBridgePlaceholder = String(localized: "app_info.settings.tor.bridges.placeholder", defaultValue: "paste obfs4 bridge lines", comment: "Placeholder in the multiline obfs4 bridge editor")
+            static let torBridgeInvalid = String(localized: "app_info.settings.tor.bridges.invalid", defaultValue: "check the bridge lines and try again", comment: "Error shown when pasted obfs4 bridge lines are invalid")
+            static let torBridgeStorageUnavailable = String(localized: "app_info.settings.tor.bridges.storage_unavailable", defaultValue: "secure bridge storage is unavailable while the device is locked", comment: "Warning shown when obfs4 bridges cannot be read from the device-only keychain")
+            static let torRetry = String(localized: "app_info.settings.tor.transport.retry", defaultValue: "retry tor transports", comment: "Button that restarts the selected Tor transport sequence after it failed")
+            static let torSelectionRequiredTitle = String(localized: "app_info.settings.tor.selection_required.title", defaultValue: "networking is paused", comment: "Title of the notice shown after a panic wipe erased the chosen Tor transport, while the app keeps every internet connection closed")
+            static let torSelectionRequiredBody = String(localized: "app_info.settings.tor.selection_required.body", defaultValue: "the panic wipe erased the bridges your censorship-resistance setting was using, so bitchat keeps every connection closed until you choose a route again. resuming continues over direct tor.", comment: "Explanation under the paused-networking notice, stating why nothing connects and what resuming will use")
+            static let torSelectionRequiredAction = String(localized: "app_info.settings.tor.selection_required.action", defaultValue: "resume over direct tor", comment: "Button that clears the post-panic-wipe gate and lets the app use the network again over direct Tor")
 
             static let relaysTitle = String(localized: "app_info.settings.relays.title", defaultValue: "private message relays", comment: "Title of the relay list editor in settings")
             static let relaysSubtitle = String(localized: "app_info.settings.relays.subtitle", defaultValue: "when the mesh can't reach someone, private messages travel through these relays. the built-in ones are well-known addresses that a network filter can block, so you can add your own — including .onion addresses.", comment: "Subtitle explaining what the relay list is for and why someone would add a relay")
@@ -459,6 +480,43 @@ struct AppInfoView: View {
                     }
                 }
 
+                // A panic wipe that destroyed a chosen transport parks every
+                // internet activation until a route is chosen again. Say so,
+                // and carry the way back: this notice is deliberately outside
+                // both conditions below it, because on macOS the picker does
+                // not exist and on iOS it is hidden whenever tor is off, and a
+                // panic wipe is reachable in both of those states.
+                if torTransportSettings.requiresTransportSelection {
+                    settingsCard {
+                        Text(verbatim: Strings.Settings.torSelectionRequiredTitle)
+                            .bitchatFont(size: 12, weight: .semibold)
+                            .foregroundColor(palette.alertRed)
+                        Text(verbatim: Strings.Settings.torSelectionRequiredBody)
+                            .bitchatFont(size: 11)
+                            .foregroundColor(secondaryTextColor)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button {
+                            torTransportSettings.confirmTransportSelection()
+                        } label: {
+                            Text(verbatim: Strings.Settings.torSelectionRequiredAction)
+                                .bitchatFont(size: 12)
+                                .foregroundColor(palette.accent)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                                .background(palette.accent.opacity(0.12))
+                                .cornerRadius(6)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                #if os(iOS)
+                if locationChannelsModel.userTorEnabled {
+                    torTransportSettingsCard
+                }
+                #endif
+
                 relaySettingsCard
 
                 // Location notes / dead drops (merged from main's flat
@@ -603,6 +661,237 @@ struct AppInfoView: View {
             set: { bridgeService.setEnabled($0) }
         )
     }
+
+    #if os(iOS)
+    @ViewBuilder
+    private var torTransportSettingsCard: some View {
+        settingsCard {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: Strings.Settings.torTransportTitle)
+                    .bitchatFont(size: 12, weight: .semibold)
+                    .foregroundColor(textColor)
+                Text(verbatim: Strings.Settings.torTransportSubtitle)
+                    .bitchatFont(size: 11)
+                    .foregroundColor(secondaryTextColor)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(spacing: 6) {
+                ForEach(TorTransportMode.allCases, id: \.self) { mode in
+                    let isSelected = torTransportSettings.mode == mode
+                    Button {
+                        torTransportSettings.setMode(mode)
+                    } label: {
+                        Text(verbatim: torTransportLabel(mode))
+                            .bitchatFont(size: 11, weight: isSelected ? .semibold : .regular)
+                            .foregroundColor(isSelected ? palette.accent : secondaryTextColor)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(palette.accent.opacity(isSelected ? 0.18 : 0.04))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(
+                                        palette.accent.opacity(isSelected ? 0.35 : 0.15),
+                                        lineWidth: 1
+                                    )
+                            )
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+                }
+            }
+
+            if let active = torManager.transportStatus.transport {
+                Text(verbatim: "\(torLifecycleLabel(torManager.transportStatus.lifecycle)): \(active.rawValue)")
+                    .bitchatFont(size: 11)
+                    .foregroundColor(
+                        torManager.transportStatus.lifecycle == .failed
+                            || torManager.transportStatus.lifecycle == .stalled
+                            ? palette.alertRed
+                            : secondaryTextColor
+                    )
+            }
+
+            if let diagnostic = torManager.transportDiagnostic {
+                Text(verbatim: torDiagnosticText(diagnostic))
+                    .bitchatFont(size: 11)
+                    .foregroundColor(
+                        torManager.transportStatus.lifecycle == .failed
+                            || torManager.transportStatus.lifecycle == .stalled
+                            ? palette.alertRed
+                            : secondaryTextColor
+                    )
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if torManager.transportStatus.lifecycle == .failed
+                || torManager.transportStatus.lifecycle == .stalled {
+                Button {
+                    torManager.retryTransportSequence()
+                } label: {
+                    Text(verbatim: Strings.Settings.torRetry)
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(palette.accent)
+            }
+
+            if !torTransportSettings.bridgeStorageAvailable {
+                Text(verbatim: Strings.Settings.torBridgeStorageUnavailable)
+                    .bitchatFont(size: 11)
+                    .foregroundColor(palette.alertRed)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if torTransportSettings.mode == .obfs4
+                || torTransportSettings.mode == .auto {
+                ZStack(alignment: .topLeading) {
+                    if obfs4BridgeInput.isEmpty {
+                        Text(verbatim: Strings.Settings.torBridgePlaceholder)
+                            .bitchatFont(size: 11)
+                            .foregroundColor(secondaryTextColor.opacity(0.7))
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 14)
+                            .allowsHitTesting(false)
+                    }
+                    TextEditor(text: $obfs4BridgeInput)
+                        .bitchatFont(size: 11)
+                        .frame(minHeight: 84)
+                        .scrollContentBackground(.hidden)
+                        .padding(6)
+                        .background(Color.clear)
+                        .accessibilityLabel(Strings.Settings.torBridgePlaceholder)
+                }
+                .background(palette.secondary.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(secondaryTextColor.opacity(0.35), lineWidth: 1)
+                )
+
+                HStack {
+                    Button("app_info.settings.relays.add") {
+                        saveObfs4Bridges()
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(palette.accent)
+                    .disabled(
+                        obfs4BridgeInput
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                            .isEmpty
+                    )
+
+                    if !torTransportSettings.obfs4BridgeLines.isEmpty {
+                        Text(verbatim: "\(torTransportSettings.obfs4BridgeLines.count) obfs4")
+                            .bitchatFont(size: 11)
+                            .foregroundColor(secondaryTextColor)
+                        Spacer()
+                        Button("app_info.settings.relays.remove") {
+                            torTransportSettings.clearObfs4Bridges()
+                            obfs4BridgeInput = ""
+                            obfs4BridgeError = nil
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(palette.alertRed)
+                    }
+                }
+
+                if let obfs4BridgeError {
+                    Text(verbatim: obfs4BridgeError)
+                        .bitchatFont(size: 11)
+                        .foregroundColor(palette.alertRed)
+                }
+            }
+        }
+    }
+
+    private func torTransportLabel(_ mode: TorTransportMode) -> String {
+        switch mode {
+        case .direct:
+            return String(localized: "app_info.settings.tor.transport.mode.direct", defaultValue: "direct tor", comment: "Transport picker option for reaching Tor without a pluggable transport")
+        case .auto:
+            return String(localized: "app_info.settings.tor.transport.mode.auto", defaultValue: "auto", comment: "Transport picker option that tries each way of reaching Tor in turn")
+        case .obfs4:
+            return String(localized: "app_info.settings.tor.transport.mode.obfs4", defaultValue: "obfs4", comment: "Transport picker option naming the obfs4 pluggable transport; obfs4 is a protocol name and is normally left untranslated")
+        case .snowflake:
+            return String(localized: "app_info.settings.tor.transport.mode.snowflake", defaultValue: "snowflake", comment: "Transport picker option naming the Snowflake pluggable transport; Snowflake is a protocol name and is normally left untranslated")
+        }
+    }
+
+    /// The route's current state, in the reader's language.
+    ///
+    /// `rawValue` reached the screen directly before this, which put English
+    /// state names in front of every non-English reader and left the strings
+    /// where the localization coverage test could not see them.
+    private func torLifecycleLabel(_ lifecycle: TorTransportLifecycle) -> String {
+        switch lifecycle {
+        case .idle:
+            return String(localized: "app_info.settings.tor.transport.lifecycle.idle", defaultValue: "idle", comment: "Tor transport state: nothing is being attempted")
+        case .starting:
+            return String(localized: "app_info.settings.tor.transport.lifecycle.starting", defaultValue: "starting", comment: "Tor transport state: an attempt to reach Tor is under way")
+        case .ready:
+            return String(localized: "app_info.settings.tor.transport.lifecycle.ready", defaultValue: "ready", comment: "Tor transport state: the route is carrying traffic")
+        case .stalled:
+            return String(localized: "app_info.settings.tor.transport.lifecycle.stalled", defaultValue: "stalled", comment: "Tor transport state: the attempt stopped making progress and was given up on")
+        case .failed:
+            return String(localized: "app_info.settings.tor.transport.lifecycle.failed", defaultValue: "failed", comment: "Tor transport state: the attempt ended without reaching Tor")
+        }
+    }
+
+    /// Renders what `TorManager` reports about the route it is building.
+    ///
+    /// The mapping lives here rather than in the Arti package because that
+    /// package has no access to this catalog: it publishes a value, and the app
+    /// owns the sentence and the language it is written in.
+    private func torDiagnosticText(_ diagnostic: TorTransportDiagnostic) -> String {
+        func withTransport(_ format: String, _ transport: TorTransport) -> String {
+            String(format: format, locale: .current, transport.rawValue)
+        }
+
+        switch diagnostic {
+        case .routeMismatch:
+            return String(localized: "app_info.settings.tor.diagnostic.route_mismatch", defaultValue: "internal route mismatch; tor was not started", comment: "Tor status line shown when the app refused to start a route that did not match the selected transport mode")
+        case .notReadyBeforeTimeout:
+            return String(localized: "app_info.settings.tor.diagnostic.not_ready_before_timeout", defaultValue: "tor did not become ready before the timeout", comment: "Tor status line shown when an attempt ran out of time before Tor could carry traffic")
+        case .configurationFailed:
+            return String(localized: "app_info.settings.tor.diagnostic.configuration_failed", defaultValue: "tor configuration failed", comment: "Tor status line shown when Tor rejected its configuration")
+        case .socksListenerFailed:
+            return String(localized: "app_info.settings.tor.diagnostic.socks_listener_failed", defaultValue: "the local tor proxy could not start", comment: "Tor status line shown when the on-device proxy that app traffic goes through could not be opened")
+        case .bootstrapFailed:
+            return String(localized: "app_info.settings.tor.diagnostic.bootstrap_failed", defaultValue: "tor bootstrap failed", comment: "Tor status line shown when Tor could not finish connecting to the network")
+        case .stoppedBeforeReady:
+            return String(localized: "app_info.settings.tor.diagnostic.stopped_before_ready", defaultValue: "tor stopped before becoming ready", comment: "Tor status line shown when Tor exited before it could carry traffic")
+        case .listenerReady(let transport):
+            return withTransport(String(localized: "app_info.settings.tor.diagnostic.listener_ready", defaultValue: "%@ listener ready; configuring tor handoff", comment: "Tor status line; %@ is a transport name such as obfs4 or snowflake, whose local listener is now up"), transport)
+        case .handoffConfigured(let transport):
+            return withTransport(String(localized: "app_info.settings.tor.diagnostic.handoff_configured", defaultValue: "tor handoff to %@ configured; waiting for proxy connection", comment: "Tor status line; %@ is a transport name such as obfs4 or snowflake that Tor has been pointed at"), transport)
+        case .proxyOpened(let transport):
+            return withTransport(String(localized: "app_info.settings.tor.diagnostic.proxy_opened", defaultValue: "tor opened %@; connecting to its local listener", comment: "Tor status line; %@ is a transport name such as obfs4 or snowflake that Tor has just launched"), transport)
+        case .bridgeRequestSent(let transport):
+            return withTransport(String(localized: "app_info.settings.tor.diagnostic.bridge_request_sent", defaultValue: "%@ received tor's bridge request; finding a proxy", comment: "Tor status line; %@ is a transport name such as obfs4 or snowflake that is now looking for a way through"), transport)
+        case .proxyConnected(let transport):
+            return withTransport(String(localized: "app_info.settings.tor.diagnostic.proxy_connected", defaultValue: "%@ proxy connected; bootstrapping tor", comment: "Tor status line; %@ is a transport name such as obfs4 or snowflake that has found a working proxy"), transport)
+        case .proxyRetrying(let transport):
+            return withTransport(String(localized: "app_info.settings.tor.diagnostic.proxy_retrying", defaultValue: "%@ could not connect to a proxy; retrying", comment: "Tor status line; %@ is a transport name such as obfs4 or snowflake that failed to find a proxy and is trying again"), transport)
+        case .routeStopped(let transport):
+            return withTransport(String(localized: "app_info.settings.tor.diagnostic.route_stopped", defaultValue: "%@ stopped unexpectedly", comment: "Tor status line; %@ is a transport name such as obfs4 or snowflake that exited on its own"), transport)
+        }
+    }
+
+    private func saveObfs4Bridges() {
+        switch torTransportSettings.saveObfs4BridgeInput(obfs4BridgeInput) {
+        case .success:
+            obfs4BridgeInput = ""
+            obfs4BridgeError = nil
+        case .failure:
+            obfs4BridgeError = Strings.Settings.torBridgeInvalid
+        }
+    }
+    #endif
 
     /// Relay list editor. The built-in relays are four well-known hostnames, so
     /// a filter blocking four names ends internet-delivered private messages;

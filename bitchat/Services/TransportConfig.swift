@@ -251,6 +251,13 @@ enum TransportConfig {
     // Sample interval for the send-queue overflow warning (first + every Nth
     // dropped event). Drops are ephemeral presence/geo traffic — log-only.
     static let nostrPendingSendDropLogInterval: Int = 10
+    // How stale a queued ephemeral event may be before the flush drops it
+    // instead of sending it. Ephemeral kinds describe a moment (presence,
+    // geohash chatter), so after a long Tor outage they are worthless: relays
+    // answer them with "invalid: ephemeral event expired", and sending a burst
+    // of provably-old events is a distinguishable pattern for no benefit.
+    // Durable kinds are never dropped by age.
+    static let nostrEphemeralSendMaxAgeSeconds: TimeInterval = 120.0
     // Pending (not-yet-flushed) REQs are bounded per relay: oldest-by-insertion
     // eviction at the cap, plus an age sweep on connect attempts. Durable
     // subscription intent survives in subscriptionRequestState either way.
@@ -264,6 +271,14 @@ enum TransportConfig {
     static let nostrConfirmedSendAckTimeoutSeconds: TimeInterval = 10.0
     // After this long, a relay marked permanently failed gets another chance.
     static let nostrRelayFailureCooldownSeconds: TimeInterval = 600.0
+    // A dial resolves only when its ping callback fires, and URLSession can
+    // withhold that indefinitely when the proxy accepts the socket but the
+    // connect behind it never completes. Past this the dial counts as failed so
+    // it stops holding the relay's slot. The clock starts when the SOCKS port
+    // begins listening, which on a cold start is well before Arti has a circuit,
+    // so the budget has to cover both: about 25s of bootstrap plus the ~9s a
+    // healthy relay takes to handshake over a pluggable transport.
+    static let nostrRelayHandshakeTimeoutSeconds: TimeInterval = 45.0
 
     // Geo relay directory
     static let geoRelayFetchIntervalSeconds: TimeInterval = 60 * 60 * 24

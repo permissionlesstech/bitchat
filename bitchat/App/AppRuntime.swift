@@ -225,7 +225,7 @@ final class AppRuntime: ObservableObject {
 
             if shouldRefreshNostrConnections && TorManager.shared.isAutoStartAllowed() {
                 Task.detached {
-                    let _ = await TorManager.shared.awaitReady(timeout: 60)
+                    let _ = await TorManager.shared.awaitReady()
                     await MainActor.run {
                         TorURLSession.shared.rebuild()
                         NostrRelayManager.shared.resetAllConnections()

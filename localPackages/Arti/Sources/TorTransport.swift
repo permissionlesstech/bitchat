@@ -1,0 +1,578 @@
+import Foundation
+
+#if os(iOS) && canImport(IPtProxy)
+import IPtProxy
+#endif
+
+public enum TorTransportMode: String, Codable, CaseIterable, Sendable {
+    case direct
+    case auto
+    case obfs4
+    case snowflake
+}
+
+public enum TorTransportStorageKeys {
+    public static let mode = "tor.transport.mode"
+    public static let lastSuccessfulTransport = "tor.transport.lastSuccessful"
+    /// Survives relaunch: a panic wipe must not be undone by restarting.
+    public static let transportSelectionRequired = "tor.transport.selectionRequired"
+}
+
+public enum TorTransport: String, Codable, CaseIterable, Sendable {
+    case direct
+    case obfs4
+    case snowflake
+
+    /// Upper bound on a bootstrap attempt. This is a ceiling, not a budget:
+    /// `TorManager` gives up earlier when progress stops advancing. Snowflake
+    /// pulls the directory over a lossy WebRTC hop and needs minutes on a cold
+    /// cache, so a tight ceiling killed attempts that were still working.
+    public var bootstrapDeadline: TimeInterval {
+        switch self {
+        case .direct: 45
+        case .obfs4: 120
+        case .snowflake: 300
+        }
+    }
+
+    /// Seconds without forward progress before the route is called blocked.
+    ///
+    /// Each transport keeps its own directory cache, so a bridged route
+    /// downloads the whole Tor directory on every cold start. That download
+    /// plateaus while circuits are retried, and the plateau is longer the
+    /// slower the hop, so a single shared window read healthy Snowflake
+    /// attempts as failures.
+    public var bootstrapStallWindow: Int {
+        switch self {
+        case .direct: 30
+        case .obfs4: 90
+        case .snowflake: 120
+        }
+    }
+
+    /// Wall time a full auto sequence can take before every route has been
+    /// tried, including the bounded stop/start between them.
+    ///
+    /// Derived rather than written down. The ceilings moved once already and
+    /// left a hardcoded caller-side wait behind that expired mid-sequence,
+    /// which abandons the route most likely to get through a block.
+    public static let fullSequenceDeadline: TimeInterval = allCases
+        .reduce(0) { $0 + $1.bootstrapDeadline } + TimeInterval(allCases.count) * 10
+}
+
+public enum TorTransportLifecycle: String, Codable, Sendable {
+    case idle
+    case starting
+    case ready
+    case stalled
+    case failed
+}
+
+public struct TorTransportStatus: Equatable, Sendable {
+    public let transport: TorTransport?
+    public let lifecycle: TorTransportLifecycle
+    public let attempted: [TorTransport]
+
+    public init(
+        transport: TorTransport?,
+        lifecycle: TorTransportLifecycle,
+        attempted: [TorTransport]
+    ) {
+        self.transport = transport
+        self.lifecycle = lifecycle
+        self.attempted = attempted
+    }
+
+    public static let idle = TorTransportStatus(
+        transport: nil,
+        lifecycle: .idle,
+        attempted: []
+    )
+}
+
+enum TorForegroundRecoveryAction: Equatable {
+    case none
+    case continueCurrentAttempt
+    case deferUntilShutdownCompletes
+    case restart
+}
+
+enum TorLifecyclePolicy {
+    static func foregroundRecoveryAction(
+        autoStartAllowed: Bool,
+        isForeground: Bool,
+        isReady: Bool,
+        isRestarting: Bool,
+        shutdownInFlight: Bool,
+        artiIsRunning: Bool
+    ) -> TorForegroundRecoveryAction {
+        guard autoStartAllowed, isForeground, !isRestarting else {
+            return .none
+        }
+        // Readiness is only believed while the runtime it describes is still
+        // there. Backgrounding now preserves the attempt instead of tearing it
+        // down, so nothing clears `isReady` when iOS reclaims Arti during a
+        // long suspension: taking the flag at face value returned `.none` for
+        // a route whose SOCKS listener was gone, and the app went on reporting
+        // a working Tor until traffic failed against it.
+        if isReady && artiIsRunning {
+            return .none
+        }
+        if shutdownInFlight {
+            return .deferUntilShutdownCompletes
+        }
+        if artiIsRunning {
+            return .continueCurrentAttempt
+        }
+        return .restart
+    }
+}
+
+/// Whether the Arti slice linked into this build publishes fractional
+/// bootstrap progress.
+///
+/// Only the iOS slices were rebuilt to report it. The macOS slice still stores
+/// 0 until the client finishes bootstrapping and then 100, so on that build
+/// "progress stopped advancing" is indistinguishable from "progress has not
+/// started yet" and carries no information about whether a route is blocked.
+enum TorBootstrapProgressGranularity {
+    #if os(iOS)
+    static let sliceReportsFractionalProgress = true
+    #else
+    static let sliceReportsFractionalProgress = false
+    #endif
+}
+
+/// How long one bootstrap attempt gets, and whether standing still may end it.
+///
+/// Split from `TorTransport` because the answer depends on the linked slice,
+/// not on the route: applying the per-transport stall windows to a slice that
+/// only reports 0 or 100 declares every cold start slower than the direct
+/// window a blocked network, and shortens the ceiling that build used to have.
+struct TorBootstrapBudget: Equatable {
+    let deadline: TimeInterval
+    /// `nil` when progress carries no information, leaving the ceiling as the
+    /// only thing that can end the attempt.
+    let stallWindow: Int?
+
+    /// The wait a coarse-progress build keeps: the fixed ceiling that preceded
+    /// per-transport budgets. Nothing shortens it, because there is no progress
+    /// signal that could justify giving up sooner.
+    static let coarseProgressDeadline: TimeInterval = 75
+
+    static func forRoute(
+        _ route: TorTransport,
+        reportsFractionalProgress: Bool
+    ) -> TorBootstrapBudget {
+        guard reportsFractionalProgress else {
+            return TorBootstrapBudget(
+                deadline: max(coarseProgressDeadline, route.bootstrapDeadline),
+                stallWindow: nil
+            )
+        }
+        return TorBootstrapBudget(
+            deadline: route.bootstrapDeadline,
+            stallWindow: route.bootstrapStallWindow
+        )
+    }
+}
+
+enum TorBootstrapWaitOutcome: Equatable {
+    case ready
+    case keepWaiting
+    /// Progress stood still long enough to call the route blocked.
+    case stalled
+    /// Still advancing, but out of time.
+    case ceilingReached
+}
+
+enum TorBootstrapWaitPolicy {
+    /// Decides whether to keep waiting on a bootstrap that has not finished.
+    ///
+    /// Separating "stopped advancing" from "ran out of time" is the point.
+    /// Snowflake fetches the directory over a lossy hop and retries visibly,
+    /// so elapsed time alone says nothing about whether a route is blocked.
+    static func outcome(
+        progress: Int,
+        highWaterProgress: Int,
+        secondsSinceProgress: Int,
+        remainingSeconds: Int,
+        stallWindow: Int?
+    ) -> TorBootstrapWaitOutcome {
+        if progress >= 100 { return .ready }
+        if progress > highWaterProgress { return .keepWaiting }
+        if let stallWindow, secondsSinceProgress >= stallWindow { return .stalled }
+        return remainingSeconds > 0 ? .keepWaiting : .ceilingReached
+    }
+}
+
+enum TorReadinessPolicy {
+    /// Resolves readiness from the two writers that can land in either order:
+    /// the once-a-second bootstrap poll and the SOCKS probe.
+    ///
+    /// Deciding on the published percentage alone left a working route
+    /// permanently not-ready whenever the probe won the race, because nothing
+    /// refreshed that copy afterwards and the app fails closed.
+    static func resolve(
+        socksReady: Bool,
+        publishedProgress: Int,
+        liveProgress: () -> Int
+    ) -> (isReady: Bool, progress: Int) {
+        guard socksReady else { return (false, publishedProgress) }
+        guard publishedProgress < 100 else { return (true, publishedProgress) }
+        // Arti binds the SOCKS listener only after bootstrap returns, so a
+        // listener that answers means the published number is behind rather
+        // than that the route is unfinished.
+        let progress = liveProgress()
+        return (progress >= 100, progress)
+    }
+}
+
+enum TorTransportEventOutcome: Equatable {
+    case ignore
+    case proxyConnected
+    case proxyRetrying
+    case ignoreStopWhileArtiOwnsRoute
+    case routeStopped
+}
+
+enum TorTransportEventPolicy {
+    /// Folds IPtProxy's per-attempt event stream into one route state.
+    ///
+    /// Snowflake reports an event per WebRTC peer, so a failure can arrive
+    /// after a sibling attempt already connected. Once any attempt connects,
+    /// the aggregate must stay connected while Arti bootstraps over it.
+    static func outcome(
+        for event: PluggableTransportEvent,
+        activeTransport: TorTransport?,
+        isStarting: Bool,
+        isReady: Bool,
+        hasConnectedProxy: Bool,
+        artiIsRunning: Bool
+    ) -> TorTransportEventOutcome {
+        let eventTransport: TorTransport
+        switch event {
+        case .connected(let value),
+             .recoverableFailure(let value),
+             .stopped(let value):
+            eventTransport = value
+        }
+        guard eventTransport == activeTransport, isStarting || isReady else {
+            return .ignore
+        }
+
+        switch event {
+        case .connected:
+            return isStarting ? .proxyConnected : .ignore
+        case .recoverableFailure:
+            return isStarting && !hasConnectedProxy ? .proxyRetrying : .ignore
+        case .stopped:
+            return artiIsRunning ? .ignoreStopWhileArtiOwnsRoute : .routeStopped
+        }
+    }
+}
+
+enum TorRouteFailureOutcome: Equatable {
+    /// Nothing was in flight to fail, so there is no route to move on from and
+    /// nothing to delay.
+    case noRouteInFlight
+    /// The sequence has an untried candidate left. Advancing is what carries a
+    /// blocked direct route to obfs4, so it is never delayed.
+    case advance(from: TorTransport, to: TorTransport)
+    /// Every route this mode permits has been tried, so the next start would
+    /// repeat the attempt that just failed. It waits instead.
+    case exhausted(route: TorTransport, retryDelay: TimeInterval)
+}
+
+/// Decides what happens when a bootstrap attempt gives up.
+///
+/// Two rules meet here and neither is visible from the failed route on its own.
+/// Only `auto` may move the user to a different transport: every other mode is
+/// a choice the user made, and silently answering it with a weaker route is the
+/// thing this feature must never do. And only a sequence with nothing left to
+/// try may delay the next attempt, because delaying an advance would spend the
+/// censored-network budget doing nothing.
+///
+/// Getting the delay wrong is loud rather than slow. Every observer of "Tor is
+/// not ready" calls `startIfNeeded()` again, so without a backoff a failing
+/// obfs4 route restarted 15 times in 105 seconds, twice within 149 ms — which
+/// hammers the user's own bridge in a distinctive pattern.
+enum TorRouteFailurePolicy {
+    /// Delay after one exhausted sequence, doubled per consecutive failure so a
+    /// transient outage recovers in seconds.
+    static let baseRetryDelay: TimeInterval = 5
+    /// Ceiling on the doubling. A genuinely blocked network settles into an
+    /// occasional retry instead of a hot loop, and still recovers by itself
+    /// once the block lifts.
+    static let maximumRetryDelay: TimeInterval = 120
+
+    static func outcome(
+        mode: TorTransportMode,
+        candidates: [TorTransport],
+        index: Int,
+        priorConsecutiveFailures: Int
+    ) -> TorRouteFailureOutcome {
+        guard candidates.indices.contains(index) else { return .noRouteInFlight }
+        let failed = candidates[index]
+        if mode == .auto, candidates.indices.contains(index + 1) {
+            return .advance(from: failed, to: candidates[index + 1])
+        }
+        return .exhausted(
+            route: failed,
+            retryDelay: retryDelay(afterConsecutiveFailures: priorConsecutiveFailures + 1)
+        )
+    }
+
+    static func retryDelay(afterConsecutiveFailures failures: Int) -> TimeInterval {
+        guard failures > 0 else { return 0 }
+        // The count needs no bound of its own. An app left on a blocked network
+        // reaches exponents where `pow` saturates to infinity, and `min`
+        // resolves that to the ceiling like any other oversized value.
+        return min(maximumRetryDelay, baseRetryDelay * pow(2, Double(failures - 1)))
+    }
+}
+
+public struct TorRouteConfiguration: Equatable, Sendable {
+    public var mode: TorTransportMode
+    public var obfs4BridgeLines: [String]
+    public var lastSuccessfulTransport: TorTransport?
+
+    public init(
+        mode: TorTransportMode = .direct,
+        obfs4BridgeLines: [String] = [],
+        lastSuccessfulTransport: TorTransport? = nil
+    ) {
+        self.mode = mode
+        self.obfs4BridgeLines = obfs4BridgeLines
+        self.lastSuccessfulTransport = lastSuccessfulTransport
+    }
+}
+
+public enum TorRoutePlanner {
+    public static func candidates(
+        for configuration: TorRouteConfiguration
+    ) -> [TorTransport] {
+        switch configuration.mode {
+        case .direct:
+            return [.direct]
+        case .obfs4:
+            return configuration.obfs4BridgeLines.isEmpty ? [] : [.obfs4]
+        case .snowflake:
+            return [.snowflake]
+        case .auto:
+            var ordered: [TorTransport] = []
+            let available: [TorTransport] = configuration.obfs4BridgeLines.isEmpty
+                ? [.direct, .snowflake]
+                : [.direct, .obfs4, .snowflake]
+            if let last = configuration.lastSuccessfulTransport,
+               available.contains(last) {
+                ordered.append(last)
+            }
+            for transport in available where !ordered.contains(transport) {
+                ordered.append(transport)
+            }
+            return ordered
+        }
+    }
+}
+
+struct ArtiTransportConfiguration: Encodable {
+    let version = 1
+    let transport: TorTransport
+    let bridgeLines: [String]
+    let ptSocksAddress: String?
+}
+
+enum PluggableTransportError: Error {
+    case unavailable
+    case stateDirectory
+    case initialization
+    case start
+    case localAddress
+}
+
+enum PluggableTransportEvent: Sendable {
+    case connected(TorTransport)
+    case recoverableFailure(TorTransport)
+    case stopped(TorTransport)
+}
+
+@MainActor
+protocol PluggableTransportControlling: AnyObject {
+    var eventHandler: ((PluggableTransportEvent) -> Void)? { get set }
+    func start(_ transport: TorTransport, stateDirectory: URL) throws -> String
+    func stop()
+}
+
+#if os(iOS) && canImport(IPtProxy)
+private final class IPtProxyEventSink: NSObject, IPtProxyOnTransportEventsProtocol, @unchecked Sendable {
+    private let lock = NSLock()
+    private let handler: @Sendable (PluggableTransportEvent) -> Void
+    private var activeTransport: TorTransport?
+
+    init(handler: @escaping @Sendable (PluggableTransportEvent) -> Void) {
+        self.handler = handler
+    }
+
+    func activate(_ transport: TorTransport) {
+        lock.lock()
+        activeTransport = transport
+        lock.unlock()
+    }
+
+    func deactivate() {
+        lock.lock()
+        activeTransport = nil
+        lock.unlock()
+    }
+
+    func connected(_ name: String?) {
+        guard let transport = currentTransport() else { return }
+        handler(.connected(transport))
+    }
+
+    func error(_ name: String?, error: Error?) {
+        guard let transport = currentTransport() else { return }
+        handler(.recoverableFailure(transport))
+    }
+
+    func stopped(_ name: String?, error: Error?) {
+        let transport = currentTransport()
+        guard let transport else { return }
+        handler(.stopped(transport))
+    }
+
+    private func currentTransport() -> TorTransport? {
+        lock.lock()
+        defer { lock.unlock() }
+        return activeTransport
+    }
+}
+
+@MainActor
+final class IPtProxyTransportController: PluggableTransportControlling {
+    // IPtProxy initializes Lyrebird's transport registry process-wide. A
+    // second Controller constructor returns a nil Go object that gomobile can
+    // still wrap as nonnil Objective-C, and calling it raises an NSException.
+    // Keep the one valid controller for the lifetime of this Swift wrapper.
+    private var controller: IPtProxyController?
+    private var controllerStateDirectory: URL?
+    private var activeMethod: String?
+    var eventHandler: ((PluggableTransportEvent) -> Void)?
+    private lazy var eventSink = IPtProxyEventSink { [weak self] event in
+        Task { @MainActor [weak self] in
+            self?.eventHandler?(event)
+        }
+    }
+
+    func start(_ transport: TorTransport, stateDirectory: URL) throws -> String {
+        stop()
+        guard transport != .direct else { throw PluggableTransportError.unavailable }
+
+        let normalizedStateDirectory = stateDirectory.standardizedFileURL
+        try FileManager.default.createDirectory(
+            at: normalizedStateDirectory,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
+        var resourceValues = URLResourceValues()
+        resourceValues.isExcludedFromBackup = true
+        var mutableDirectory = normalizedStateDirectory
+        try? mutableDirectory.setResourceValues(resourceValues)
+
+        let activeController: IPtProxyController
+        if let controller {
+            guard controllerStateDirectory == normalizedStateDirectory else {
+                throw PluggableTransportError.stateDirectory
+            }
+            activeController = controller
+        } else {
+            guard let newController = IPtProxyController(
+                normalizedStateDirectory.path,
+                enableLogging: false,
+                unsafeLogging: false,
+                logLevel: "ERROR",
+                transportEvents: eventSink
+            ) else {
+                throw PluggableTransportError.initialization
+            }
+            controller = newController
+            controllerStateDirectory = normalizedStateDirectory
+            activeController = newController
+        }
+
+        let method: String
+        switch transport {
+        case .direct:
+            throw PluggableTransportError.unavailable
+        case .obfs4:
+            method = IPtProxyObfs4
+        case .snowflake:
+            method = IPtProxySnowflake
+            activeController.snowflakeBrokerUrl = SnowflakeDefaults.brokerURL
+            activeController.snowflakeFrontDomains = SnowflakeDefaults.frontDomains
+            activeController.snowflakeIceServers = SnowflakeDefaults.iceServers
+            activeController.snowflakeMaxPeers = SnowflakeDefaults.maxPeers
+        }
+
+        eventSink.activate(transport)
+        do {
+            try activeController.start(method, proxy: "")
+        } catch {
+            eventSink.deactivate()
+            throw error
+        }
+        activeMethod = method
+        let address = activeController.localAddress(method)
+        guard !address.isEmpty else {
+            stop()
+            throw PluggableTransportError.localAddress
+        }
+        return address
+    }
+
+    func stop() {
+        guard let activeMethod else { return }
+        self.activeMethod = nil
+        eventSink.deactivate()
+        controller?.stop(activeMethod)
+    }
+}
+#else
+@MainActor
+final class IPtProxyTransportController: PluggableTransportControlling {
+    var eventHandler: ((PluggableTransportEvent) -> Void)?
+
+    func start(_ transport: TorTransport, stateDirectory: URL) throws -> String {
+        throw PluggableTransportError.unavailable
+    }
+
+    func stop() {}
+}
+#endif
+
+enum SnowflakeDefaults {
+    // Tor Project Snowflake client defaults, pinned from:
+    // gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake
+    // commit cd33fc638ac03343197eb944a611df29f554be88.
+    // Its recommended torrc enables these two CDN77 bridges. Other rendezvous
+    // methods are alternatives, not additional bridges to enable in parallel.
+    static let brokerURL = "https://1098762253.rsc.cdn77.org/"
+    static let frontDomains = "www.cdn77.com,www.phpmyadmin.net"
+    static let maxPeers: Int = 1
+    static let iceServers = [
+        "stun:stun.antisip.com:3478",
+        "stun:stun.epygi.com:3478",
+        "stun:stun.uls.co.za:3478",
+        "stun:stun.voipgate.com:3478",
+        "stun:stun.mixvoip.com:3478",
+        "stun:stun.nextcloud.com:3478",
+        "stun:stun.bethesda.net:3478",
+        "stun:stun.nextcloud.com:443"
+    ].joined(separator: ",")
+
+    static let bridgeLines = [
+        "Bridge snowflake 192.0.2.4:80 8838024498816A039FCBBAB14E6F40A0843051FA fingerprint=8838024498816A039FCBBAB14E6F40A0843051FA url=https://1098762253.rsc.cdn77.org/ fronts=www.cdn77.com,www.phpmyadmin.net ice=\(iceServers) utls-imitate=hellorandomizedalpn",
+        "Bridge snowflake 192.0.2.3:80 2B280B23E1107BB62ABFC40DDCC8824814F80A72 fingerprint=2B280B23E1107BB62ABFC40DDCC8824814F80A72 url=https://1098762253.rsc.cdn77.org/ fronts=www.cdn77.com,www.phpmyadmin.net ice=\(iceServers) utls-imitate=hellorandomizedalpn"
+    ]
+}

@@ -18,6 +18,29 @@ private final class NWPathMonitor {
 @_silgen_name("arti_start")
 private func arti_start(_ dataDir: UnsafePointer<CChar>, _ socksPort: UInt16) -> Int32
 
+#if os(iOS)
+    @_silgen_name("arti_start_with_config")
+    private func arti_start_with_config(
+        _ dataDir: UnsafePointer<CChar>,
+        _ socksPort: UInt16,
+        _ configJSON: UnsafePointer<CChar>
+    ) -> Int32
+
+    @_silgen_name("arti_validate_transport_config")
+    private func arti_validate_transport_config(
+        _ configJSON: UnsafePointer<CChar>
+    ) -> Int32
+
+    @_silgen_name("arti_set_diagnostics_enabled")
+    private func arti_set_diagnostics_enabled(_ enabled: Int32) -> Int32
+
+    @_silgen_name("arti_next_diagnostic")
+    private func arti_next_diagnostic(
+        _ buf: UnsafeMutablePointer<CChar>,
+        _ len: Int32
+    ) -> Int32
+#endif
+
 @_silgen_name("arti_stop")
 private func arti_stop() -> Int32
 
@@ -29,6 +52,29 @@ private func arti_bootstrap_progress() -> Int32
 
 @_silgen_name("arti_bootstrap_summary")
 private func arti_bootstrap_summary(_ buf: UnsafeMutablePointer<CChar>, _ len: Int32) -> Int32
+
+/// One-shot gate for the SOCKS probe's continuation.
+///
+/// The connection's state handler and the probe's own timeout both run on the
+/// global concurrent queue, so the plain flag they used to share could let both
+/// of them resume the same continuation. Resuming a checked continuation twice
+/// traps, which turns a probe answering at the wrong moment into a crash.
+private final class ProbeContinuationGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Bool, Never>?
+
+    init(_ continuation: CheckedContinuation<Bool, Never>) {
+        self.continuation = continuation
+    }
+
+    func resume(_ value: Bool) {
+        lock.lock()
+        let pending = continuation
+        continuation = nil
+        lock.unlock()
+        pending?.resume(returning: value)
+    }
+}
 
 /// Arti-based Tor integration for BitChat.
 /// - Boots a local Arti client and exposes a SOCKS5 proxy
@@ -47,7 +93,9 @@ public final class TorManager: ObservableObject {
     @Published private(set) var isStarting: Bool = false
     @Published private(set) var lastError: Error?
     @Published private(set) var bootstrapProgress: Int = 0
-    @Published private(set) var bootstrapSummary: String = ""
+    @Published private(set) public var bootstrapSummary: String = ""
+    @Published private(set) public var transportDiagnostic: TorTransportDiagnostic?
+    @Published private(set) public var transportStatus: TorTransportStatus = .idle
     /// True once a bootstrap attempt has spent its whole deadline without
     /// completing.
     ///
@@ -61,6 +109,12 @@ public final class TorManager: ObservableObject {
     // Internal readiness trackers
     private var socksReady: Bool = false { didSet { recomputeReady() } }
     private var restarting: Bool = false
+    private var routeConfiguration = TorRouteConfiguration()
+    private var routeCandidates: [TorTransport] = []
+    private var routeIndex = 0
+    private var attemptedTransports: [TorTransport] = []
+    private var hasConnectedTransportProxy = false
+    private let pluggableTransportController: PluggableTransportControlling
 
     // Whether the app must enforce Tor for all connections (fail-closed).
     public var torEnforced: Bool {
@@ -92,24 +146,192 @@ public final class TorManager: ObservableObject {
     private var isAppForeground: Bool = true
     private var lastRestartAt: Date? = nil
     private var startedAt: Date? = nil  // Tracks initial startup time for grace period
+    // A route that has run out of transports stops on its own, but every
+    // observer of "tor is not ready" calls startIfNeeded() again. Failures back
+    // off on the curve in `TorRouteFailurePolicy`; success clears both.
+    private var consecutiveRouteFailures = 0
+    private var routeRetryNotBefore: Date? = nil
+    /// How long the panic wipe waits for Arti to stop before deleting anyway.
+    private static let panicShutdownWait: TimeInterval = 2
     private(set) var allowAutoStart: Bool = false
 
-    private init() {}
+    private init() {
+        let controller = IPtProxyTransportController()
+        pluggableTransportController = controller
+        controller.eventHandler = { [weak self] event in
+            self?.handlePluggableTransportEvent(event)
+        }
+        enableArtiDiagnosticsInDebugBuilds()
+    }
+
+    /// Arti's own log output is otherwise discarded, which makes a bootstrap
+    /// that hangs indistinguishable from one that never started. Debug builds
+    /// only: the bridge is compiled into the library but stays off unless it
+    /// is switched on here, so release builds never emit it.
+    private func enableArtiDiagnosticsInDebugBuilds() {
+        #if os(iOS) && DEBUG
+        _ = arti_set_diagnostics_enabled(1)
+        #endif
+    }
+
+    /// Drain the sanitized lines Arti produced since the last tick.
+    ///
+    /// Rust keeps only each event's target, level, and leading plain words, so
+    /// no bridge line, relay identity, or peer address reaches the log.
+    private func drainArtiDiagnostics() {
+        #if os(iOS) && DEBUG
+        var buf = [CChar](repeating: 0, count: 256)
+        // Bounded so a chatty second cannot monopolize the poll loop.
+        for _ in 0..<64 {
+            guard arti_next_diagnostic(&buf, Int32(buf.count)) > 0 else { return }
+            SecureLogger.debug("Arti: \(String(cString: buf))", category: .session)
+        }
+        #endif
+    }
 
     // MARK: - Public API
+
+    public func configureTransport(_ configuration: TorRouteConfiguration) {
+        guard configuration != routeConfiguration else { return }
+        // A deliberate change of route is not the failing route retrying.
+        clearRouteBackoff()
+        routeConfiguration = configuration
+        routeCandidates.removeAll()
+        routeIndex = 0
+        attemptedTransports.removeAll()
+
+        guard didStart || isStarting || isReady else {
+            transportStatus = .idle
+            return
+        }
+
+        // A transport change is a full Tor boundary: old circuits and relay
+        // sockets must not survive onto a newly selected route.
+        startPendingAfterShutdown = allowAutoStart && isAppForeground
+        shutdownCompletely(preserveRouteRestart: true)
+    }
+
+    public func resetTransportForPanic() {
+        clearRouteBackoff()
+        routeConfiguration = TorRouteConfiguration()
+        routeCandidates.removeAll()
+        routeIndex = 0
+        attemptedTransports.removeAll()
+        transportStatus = .idle
+        pluggableTransportController.stop()
+        // Arti's own directories go too, not just IPtProxy's. A bridged route
+        // caches the bridge descriptors it fetched keyed by the bridge line
+        // that produced them, so leaving those behind left the user's private
+        // obfs4 bridges recoverable from disk after a wipe meant to remove
+        // them. Removing the parent covers direct Tor's guard state as well,
+        // which is its own linkable record of who this device is.
+        //
+        // Arti is asked to stop first so it is not writing the files back out
+        // as they go. A shutdown already in flight owns the stop, so this
+        // narrows that window rather than closing it.
+        _ = arti_stop()
+        waitForArtiToStop()
+        for directory in [dataDirectoryURL(), pluggableTransportStateDirectoryURL()] {
+            guard let directory else { continue }
+            try? FileManager.default.removeItem(at: directory)
+        }
+    }
+
+    /// Block until Arti's owning task has actually exited.
+    ///
+    /// `arti_stop()` does wait for that task, but only for whichever caller
+    /// holds the handle. A shutdown already in flight takes it first, so the
+    /// panic path's own call returns immediately with the runtime still
+    /// tearing down. On device that unlinked `dir.sqlite3` underneath a live
+    /// Arti, which iOS reported as an integrity violation, and Arti then tried
+    /// to flush. That flush failing is the only reason pre-panic guard state
+    /// was not written back into the directory the wipe had just destroyed:
+    /// the guard sample is a linkable record of this device, and removing it
+    /// is the whole point of the wipe.
+    ///
+    /// Bounded, and the delete proceeds either way. Blocking the panic button
+    /// indefinitely is worse than a rare unclean delete, and an undeleted
+    /// directory is worse than both.
+    private func waitForArtiToStop() {
+        guard arti_is_running() != 0 else { return }
+        let limit = Date().addingTimeInterval(Self.panicShutdownWait)
+        while arti_is_running() != 0 && Date() < limit {
+            Thread.sleep(forTimeInterval: 0.01)
+        }
+        if arti_is_running() != 0 {
+            SecureLogger.error(
+                "TorManager: wiping tor state while Arti is still stopping after \(Int(Self.panicShutdownWait))s",
+                category: .session
+            )
+        }
+    }
+
+    public func retryTransportSequence() {
+        guard allowAutoStart, isAppForeground else { return }
+        // The user asked for this one, so it is never subject to the backoff
+        // that automatic restarts are.
+        clearRouteBackoff()
+        routeCandidates.removeAll()
+        routeIndex = 0
+        attemptedTransports.removeAll()
+        if didStart || arti_is_running() != 0 {
+            startPendingAfterShutdown = true
+            shutdownCompletely(preserveRouteRestart: true)
+        } else {
+            transportStatus = .idle
+            startIfNeeded()
+        }
+    }
 
     public func startIfNeeded() {
         guard allowAutoStart else { return }
         guard isAppForeground else { return }
+        if let notBefore = routeRetryNotBefore, Date() < notBefore {
+            SecureLogger.debug(
+                "TorManager: startIfNeeded() suppressed - route backoff for \(Int(notBefore.timeIntervalSinceNow))s after \(consecutiveRouteFailures) failures",
+                category: .session
+            )
+            return
+        }
         if shutdownsInFlight > 0 {
             SecureLogger.debug("TorManager: startIfNeeded() deferred - shutdown in flight", category: .session)
             startPendingAfterShutdown = true
             return
         }
         guard !didStart else { return }
+        if routeCandidates.isEmpty {
+            routeCandidates = TorRoutePlanner.candidates(for: routeConfiguration)
+            routeIndex = 0
+            attemptedTransports.removeAll()
+        }
+        guard routeCandidates.indices.contains(routeIndex) else {
+            isStarting = false
+            transportStatus = TorTransportStatus(
+                transport: nil,
+                lifecycle: .failed,
+                attempted: attemptedTransports
+            )
+            return
+        }
+        // The route the app actually took is otherwise only inferable from
+        // which listener logged, which made a direct start in obfs4 mode look
+        // identical to a missing log line. Naming the mode and the plan here
+        // is what identifies whoever rewrites the configuration.
+        SecureLogger.info(
+            "TorManager: starting mode=\(routeConfiguration.mode.rawValue) plan=\(routeCandidates.map(\.rawValue).joined(separator: ",")) index=\(routeIndex) bridges=\(routeConfiguration.obfs4BridgeLines.count)",
+            category: .session
+        )
         didStart = true
         isStarting = true
         bootstrapDidStall = false
+        transportDiagnostic = nil
+        hasConnectedTransportProxy = false
+        let transport = routeCandidates[routeIndex]
+        transportStatus = TorTransportStatus(
+            transport: transport,
+            lifecycle: .starting,
+            attempted: attemptedTransports
+        )
         startedAt = Date()  // Track startup time for grace period
         SecureLogger.debug("TorManager: startIfNeeded() - startedAt set", category: .session)
         lastError = nil
@@ -126,9 +348,12 @@ public final class TorManager: ObservableObject {
     public func isForeground() -> Bool { isAppForeground }
 
     nonisolated
-    // Default matches the bootstrap monitor deadline (75s); a shorter wait here
-    // reports "not ready" while Arti is still legitimately bootstrapping.
-    public func awaitReady(timeout: TimeInterval = 75.0) async -> Bool {
+    // The default covers one complete Auto sequence plus the bounded
+    // stop/start transitions between its routes, and is derived from the same
+    // ceilings the manager enforces so the two cannot drift apart. Callers
+    // remain fail-closed while the manager changes transports, so expiring
+    // early buys nothing and abandons a bootstrap that is still working.
+    public func awaitReady(timeout: TimeInterval = TorTransport.fullSequenceDeadline) async -> Bool {
         await MainActor.run {
             if self.isAppForeground { self.startIfNeeded() }
         }
@@ -143,7 +368,7 @@ public final class TorManager: ObservableObject {
 
     // MARK: - Filesystem
 
-    func dataDirectoryURL() -> URL? {
+    func dataDirectoryURL(for transport: TorTransport? = nil) -> URL? {
         do {
             let base = try FileManager.default.url(
                 for: .applicationSupportDirectory,
@@ -152,7 +377,28 @@ public final class TorManager: ObservableObject {
                 create: true
             )
             let dir = base.appendingPathComponent("bitchat/arti", isDirectory: true)
-            return dir
+            switch transport {
+            case .obfs4:
+                return dir.appendingPathComponent("obfs4", isDirectory: true)
+            case .snowflake:
+                return dir.appendingPathComponent("snowflake", isDirectory: true)
+            case .direct, .none:
+                return dir
+            }
+        } catch {
+            return nil
+        }
+    }
+
+    func pluggableTransportStateDirectoryURL() -> URL? {
+        do {
+            let base = try FileManager.default.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            return base.appendingPathComponent("bitchat/pt_state", isDirectory: true)
         } catch {
             return nil
         }
@@ -162,62 +408,289 @@ public final class TorManager: ObservableObject {
         guard let dir = dataDirectoryURL() else { return }
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            // Direct Tor's guard sample lives here, and a bridged route caches
+            // its bridge lines beside the directory it downloads. `pt_state` is
+            // already kept out of backups; this is the directory holding the
+            // more sensitive of the two, so it does not belong in one either.
+            //
+            // No file protection class is set on purpose. Tor has to read this
+            // while the device is locked, so anything stricter than the default
+            // would break the app in the background.
+            var excludedFromBackup = URLResourceValues()
+            excludedFromBackup.isExcludedFromBackup = true
+            var mutableDirectory = dir
+            try? mutableDirectory.setResourceValues(excludedFromBackup)
         } catch {
             // Non-fatal; Arti will surface errors during start if paths are missing
+        }
+    }
+
+    /// Give a pluggable-transport route the directory Tor has already downloaded.
+    ///
+    /// Every transport gets its own Arti directory, so a route that has never
+    /// run starts with no consensus and has to fetch one through the transport
+    /// itself. On device that is the whole difference between working and not:
+    /// direct Tor loads a cached directory and reaches SOCKS in about three
+    /// seconds, while Snowflake starting cold never got there at all across
+    /// runs of 132s, 92s and 82s, because volunteer proxies drop mid-download
+    /// and each attempt dies as `Retiring circuit because of directory failure`.
+    ///
+    /// What gets copied is the public Tor directory: the consensus, authority
+    /// certificates and microdescriptors that every Tor client on the planet
+    /// downloads identically. Arti checks the authority signatures when it
+    /// loads them, so handing them to another route reveals nothing about this
+    /// device and cannot be used to steer it.
+    ///
+    /// Copied rather than shared, deliberately. A shared directory would put
+    /// two Arti instances on one SQLite lock, turning three independent routes
+    /// into a single failure domain, and would write the bridge lines a bridged
+    /// route caches into the directory a plain Tor user owns.
+    func seedDirectoryCacheIfNeeded(for transport: TorTransport, into dataDirectory: URL) {
+        // Only ever fills a bridged route's directory from the direct one.
+        // Seeding in the other direction would move descriptors fetched through
+        // a bridge into the route that has no bridges.
+        guard transport != .direct, let directDirectory = dataDirectoryURL(for: .direct) else { return }
+        let fileManager = FileManager.default
+        let source = directDirectory.appendingPathComponent("cache", isDirectory: true)
+        let destination = dataDirectory.appendingPathComponent("cache", isDirectory: true)
+        // A route that already has a directory keeps it, including one further
+        // along than direct's. This closes a gap, it does not overwrite.
+        guard fileManager.fileExists(atPath: source.path),
+              !fileManager.fileExists(atPath: destination.path) else { return }
+
+        // Staged, then moved, so an interrupted copy cannot leave a half-written
+        // directory in the place Arti is about to open.
+        let staging = dataDirectory.appendingPathComponent("cache.seeding", isDirectory: true)
+        do {
+            try fileManager.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
+            try? fileManager.removeItem(at: staging)
+            try fileManager.copyItem(at: source, to: staging)
+            try fileManager.moveItem(at: staging, to: destination)
+            SecureLogger.info(
+                "TorManager: seeded \(transport.rawValue) directory cache from the direct route",
+                category: .session
+            )
+        } catch {
+            // Leaving this undone puts the route back in the state it would have
+            // started in anyway, so a failure here is not worth failing over.
+            try? fileManager.removeItem(at: staging)
         }
     }
 
     // MARK: - Arti Integration
 
     private func startArti() {
-        guard let dir = dataDirectoryURL()?.path else {
-            isStarting = false
-            lastError = NSError(domain: "TorManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "No data directory"])
+        guard routeCandidates.indices.contains(routeIndex) else {
+            failCurrentTransport(
+                NSError(domain: "TorManager", code: -15, userInfo: [NSLocalizedDescriptionKey: "No transport available"]),
+                stalled: false
+            )
             return
         }
+        let transport = routeCandidates[routeIndex]
+        // Fail closed on a route the user did not choose. A device run in
+        // obfs4 mode started Arti with no pluggable transport at all, which is
+        // plain Tor on a network the user had already told us to hide from.
+        // The planner cannot produce that (`TorRoutePlanner.candidates`), so
+        // something else rewrote the route; until that writer is identified,
+        // refusing here is what keeps the promise the mode makes.
+        guard TorRoutePlanner.candidates(for: routeConfiguration).contains(transport) else {
+            SecureLogger.error(
+                "TorManager: refusing to start \(transport.rawValue) - not permitted by \(routeConfiguration.mode.rawValue) mode",
+                category: .session
+            )
+            transportDiagnostic = .routeMismatch
+            failCurrentTransport(
+                NSError(
+                    domain: "TorManager",
+                    code: -19,
+                    userInfo: [NSLocalizedDescriptionKey: "Route not permitted by selected transport mode"]
+                ),
+                stalled: false
+            )
+            return
+        }
+        guard let dataDirectory = dataDirectoryURL(for: transport) else {
+            failCurrentTransport(
+                NSError(domain: "TorManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "No data directory"]),
+                stalled: false
+            )
+            return
+        }
+        let dir = dataDirectory.path
 
         // Check if already running
         if arti_is_running() != 0 {
             SecureLogger.info("TorManager: Arti already running", category: .session)
-            startBootstrapMonitor()
+            beginBootstrapObservation(for: transport)
             return
         }
 
-        let result = dir.withCString { dptr in
-            arti_start(dptr, UInt16(socksPort))
+        // Past the running check so the directory being copied has no live
+        // writer: Arti is the only thing that writes it, and it is stopped.
+        seedDirectoryCacheIfNeeded(for: transport, into: dataDirectory)
+
+        let result: Int32
+        switch transport {
+        case .direct:
+            pluggableTransportController.stop()
+            result = dir.withCString { dptr in
+                arti_start(dptr, UInt16(socksPort))
+            }
+
+        case .obfs4, .snowflake:
+            #if os(iOS)
+            guard let ptDirectory = pluggableTransportStateDirectoryURL() else {
+                failCurrentTransport(PluggableTransportError.stateDirectory, stalled: false)
+                return
+            }
+            do {
+                let ptAddress = try pluggableTransportController.start(
+                    transport,
+                    stateDirectory: ptDirectory
+                )
+                transportDiagnostic = .listenerReady(transport)
+                SecureLogger.info(
+                    "TorManager: \(transport.rawValue) listener started",
+                    category: .session
+                )
+                let bridgeLines = transport == .obfs4
+                    ? routeConfiguration.obfs4BridgeLines
+                    : SnowflakeDefaults.bridgeLines
+                let configuration = ArtiTransportConfiguration(
+                    transport: transport,
+                    bridgeLines: bridgeLines,
+                    ptSocksAddress: ptAddress
+                )
+                let encoded = try JSONEncoder().encode(configuration)
+                guard let json = String(data: encoded, encoding: .utf8) else {
+                    throw PluggableTransportError.start
+                }
+                result = dir.withCString { dptr in
+                    json.withCString { configPointer in
+                        guard arti_validate_transport_config(configPointer) == 0 else {
+                            return -5
+                        }
+                        return arti_start_with_config(
+                            dptr,
+                            UInt16(socksPort),
+                            configPointer
+                        )
+                    }
+                }
+            } catch {
+                pluggableTransportController.stop()
+                failCurrentTransport(error, stalled: false)
+                return
+            }
+            #else
+            failCurrentTransport(PluggableTransportError.unavailable, stalled: false)
+            return
+            #endif
         }
 
         if result != 0 {
             SecureLogger.error("TorManager: arti_start failed rc=\(result)", category: .session)
-            isStarting = false
-            lastError = NSError(domain: "TorManager", code: Int(result), userInfo: [NSLocalizedDescriptionKey: "Arti start failed"])
+            pluggableTransportController.stop()
+            failCurrentTransport(
+                NSError(domain: "TorManager", code: Int(result), userInfo: [NSLocalizedDescriptionKey: "Arti start failed"]),
+                stalled: false
+            )
             return
         }
 
-        SecureLogger.info("TorManager: arti_start OK (SOCKS \(socksHost):\(socksPort))", category: .session)
+        SecureLogger.info(
+            "TorManager: Arti task launched; waiting for SOCKS \(socksHost):\(socksPort)",
+            category: .session
+        )
+        beginBootstrapObservation(for: transport)
+    }
+
+    /// Watch the attempt that was just launched.
+    ///
+    /// Both halves belong together: the poll loop reports progress and decides
+    /// whether a route is blocked, and the probe decides when the SOCKS
+    /// listener is actually carrying traffic. Starting the monitor without the
+    /// probe leaves readiness with no writer at all.
+    private func beginBootstrapObservation(for transport: TorTransport) {
         startBootstrapMonitor()
 
         // Start SOCKS readiness probe
+        let generation = bootstrapGeneration
+        // Deliberately past the poll loop's ceiling so that loop is the one
+        // that reports the outcome: it can tell a route that stopped advancing
+        // from one that is merely slow, and a bare probe timeout cannot.
+        let probeTimeout = TorBootstrapBudget.forRoute(
+            transport,
+            reportsFractionalProgress: TorBootstrapProgressGranularity
+                .sliceReportsFractionalProgress
+        ).deadline + 5
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
-            let ready = await self.waitForSocksReady(timeout: 60.0)
+            let ready = await self.waitForSocksReady(
+                timeout: probeTimeout,
+                generation: generation
+            )
             await MainActor.run {
+                guard generation == self.bootstrapGeneration else { return }
                 self.socksReady = ready
                 if ready {
                     SecureLogger.info("TorManager: SOCKS ready at \(self.socksHost):\(self.socksPort)", category: .session)
                 } else {
-                    self.lastError = NSError(domain: "TorManager", code: -14, userInfo: [NSLocalizedDescriptionKey: "SOCKS not reachable"])
                     SecureLogger.error("TorManager: SOCKS not reachable (timeout)", category: .session)
+                    if self.transportDiagnostic == nil {
+                        self.transportDiagnostic = .notReadyBeforeTimeout
+                    }
+                    self.failCurrentTransport(
+                        NSError(
+                            domain: "TorManager",
+                            code: -14,
+                            userInfo: [NSLocalizedDescriptionKey: "SOCKS not reachable"]
+                        ),
+                        stalled: true
+                    )
                 }
             }
         }
     }
 
-    private func waitForSocksReady(timeout: TimeInterval) async -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if await probeSocksOnce() { return true }
-            try? await Task.sleep(nanoseconds: 250_000_000)
+    private func waitForSocksReady(
+        timeout: TimeInterval,
+        generation: Int
+    ) async -> Bool {
+        // Arti binds the listener only once bootstrap has returned, so every
+        // probe before that is a guaranteed refusal. Skipping them removes a
+        // rejected loopback connection every couple of seconds for the whole
+        // bootstrap and leaves room to poll four times as often once the
+        // listener can exist, which is what turns readiness around in half a
+        // second rather than up to three.
+        let pollInterval: TimeInterval = 0.5
+        var remainingForegroundTime = timeout
+        while remainingForegroundTime > 0 {
+            let state = await MainActor.run {
+                (
+                    isCurrent: generation == self.bootstrapGeneration,
+                    isForeground: self.isAppForeground
+                )
+            }
+            guard state.isCurrent, !Task.isCancelled else { return false }
+            if !state.isForeground {
+                do {
+                    try await Task.sleep(nanoseconds: 500_000_000)
+                } catch {
+                    return false
+                }
+                continue
+            }
+            if arti_bootstrap_progress() >= 100, await probeSocksOnce() { return true }
+            remainingForegroundTime -= pollInterval
+            do {
+                try await Task.sleep(
+                    nanoseconds: UInt64(pollInterval * 1_000_000_000)
+                )
+            } catch {
+                return false
+            }
         }
         return false
     }
@@ -234,13 +707,8 @@ public final class TorManager: ObservableObject {
             let endpoint = NWEndpoint.hostPort(host: host, port: port)
             let conn = NWConnection(to: endpoint, using: params)
 
-            var resumed = false
-            let resumeOnce: (Bool) -> Void = { value in
-                if !resumed {
-                    resumed = true
-                    cont.resume(returning: value)
-                }
-            }
+            let gate = ProbeContinuationGate(cont)
+            let resumeOnce: (Bool) -> Void = { gate.resume($0) }
 
             conn.stateUpdateHandler = { state in
                 switch state {
@@ -280,23 +748,110 @@ public final class TorManager: ObservableObject {
     }
 
     private func bootstrapPollLoop(generation: Int) async {
-        let deadline = Date().addingTimeInterval(75)
+        let activeRoute = routeCandidates.indices.contains(routeIndex)
+            ? routeCandidates[routeIndex]
+            : .direct
+        let budget = TorBootstrapBudget.forRoute(
+            activeRoute,
+            reportsFractionalProgress: TorBootstrapProgressGranularity
+                .sliceReportsFractionalProgress
+        )
+        var remainingForegroundSeconds = Int(budget.deadline.rounded(.up))
         var didComplete = false
-        while Date() < deadline {
+        // A bootstrap that is still advancing is not a stall. Snowflake pulls
+        // the directory over a lossy WebRTC hop and can take minutes on a cold
+        // cache, so the ceiling above only bounds the wait; giving up early is
+        // driven by progress standing still.
+        var secondsSinceProgress = 0
+        var highWaterProgress = -1
+        var stoppedAdvancing = false
+        while true {
             guard generation == bootstrapGeneration else { return }
-            let progress = Int(arti_bootstrap_progress())
+            if !isAppForeground {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                continue
+            }
+            drainArtiDiagnostics()
             let summary = getBootstrapSummary()
+            if arti_is_running() == 0 {
+                self.bootstrapSummary = summary
+                let diagnostic = sanitizedBootstrapDiagnostic(summary)
+                self.transportDiagnostic = diagnostic
+                SecureLogger.error(
+                    "TorManager: Arti stopped during bootstrap (\(diagnostic.logDescription))",
+                    category: .session
+                )
+                failCurrentTransport(
+                    NSError(
+                        domain: "TorManager",
+                        code: -16,
+                        userInfo: [NSLocalizedDescriptionKey: diagnostic.logDescription]
+                    ),
+                    stalled: false
+                )
+                return
+            }
+            let progress = Int(arti_bootstrap_progress())
+            let summaryChanged = self.bootstrapSummary != summary
 
             self.bootstrapProgress = progress
             self.bootstrapSummary = summary
+            // Stage text describes a bootstrap still in progress, so publishing
+            // it after readiness is always wrong. The SOCKS probe can flip
+            // `isReady` between two ticks of this loop, and `recomputeReady`
+            // clears the diagnostic only on that transition; without this
+            // guard the next tick wrote a stale stage back over the cleared
+            // value and then broke out, leaving the UI reporting "finding a
+            // proxy" for the whole life of a working route.
+            if summaryChanged,
+               !isReady,
+               let diagnostic = transportStageDiagnostic(summary) {
+                self.transportDiagnostic = diagnostic
+                SecureLogger.info(
+                    "TorManager: \(diagnostic.logDescription)",
+                    category: .session
+                )
+            }
             if progress >= 100 { self.isStarting = false }
             self.recomputeReady()
 
-            if progress >= 100 {
+            // A route that is already carrying traffic is finished, whatever
+            // the reported percentage says. Without this, any failure to
+            // observe completion tears down a working Tor, which is a far
+            // worse outcome than a stall that goes unreported. Reading Arti's
+            // counter first is what makes this exit publish a completed
+            // bootstrap instead of leaving the last stale percentage behind,
+            // which held the app fail-closed over a live SOCKS listener.
+            if socksReady {
                 didComplete = true
                 break
             }
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
+
+            switch TorBootstrapWaitPolicy.outcome(
+                progress: progress,
+                highWaterProgress: highWaterProgress,
+                secondsSinceProgress: secondsSinceProgress,
+                remainingSeconds: remainingForegroundSeconds,
+                stallWindow: budget.stallWindow
+            ) {
+            case .ready:
+                didComplete = true
+            case .stalled:
+                stoppedAdvancing = true
+            case .ceilingReached:
+                break
+            case .keepWaiting:
+                if progress > highWaterProgress {
+                    highWaterProgress = progress
+                    secondsSinceProgress = 0
+                } else {
+                    secondsSinceProgress += 1
+                }
+                remainingForegroundSeconds -= 1
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                continue
+            }
+            break
         }
 
         // Running out the deadline is a reportable outcome, not silence. The
@@ -305,14 +860,67 @@ public final class TorManager: ObservableObject {
         // shutdown mid-bootstrap is not a stall, hence the generation check.
         if !didComplete {
             guard generation == bootstrapGeneration else { return }
-            self.isStarting = false
-            self.bootstrapDidStall = true
-            SecureLogger.warning(
-                "TorManager: bootstrap did not complete within its deadline (progress=\(self.bootstrapProgress)); network may be blocking Tor",
-                category: .session
+            // The last second before the deadline is the most informative one.
+            drainArtiDiagnostics()
+            // Naming which of the two happened matters: a bootstrap killed at
+            // the ceiling while still climbing is a slow route, not a blocked
+            // one, and saying "network may be blocking Tor" for it sends the
+            // reader after the wrong problem.
+            if stoppedAdvancing, let stallWindow = budget.stallWindow {
+                SecureLogger.warning(
+                    "TorManager: bootstrap stopped advancing at \(self.bootstrapProgress)% for \(stallWindow)s; network may be blocking Tor",
+                    category: .session
+                )
+            } else {
+                SecureLogger.warning(
+                    "TorManager: bootstrap reached its \(Int(budget.deadline))s ceiling while still advancing (progress=\(self.bootstrapProgress)%)",
+                    category: .session
+                )
+            }
+            if transportDiagnostic == nil {
+                transportDiagnostic = .notReadyBeforeTimeout
+            }
+            failCurrentTransport(
+                NSError(
+                    domain: "TorManager",
+                    code: -17,
+                    userInfo: [NSLocalizedDescriptionKey: "Tor bootstrap stalled"]
+                ),
+                stalled: true
             )
-            NotificationCenter.default.post(name: .TorBootstrapDidStall, object: nil)
+            return
         }
+
+        await steadyStateDiagnosticsLoop(generation: generation)
+    }
+
+    /// Keep draining Arti's log after readiness, at a lower rate.
+    ///
+    /// The bootstrap loop breaks the moment SOCKS is up, which is exactly when
+    /// stream failures start to matter: a `SOCKS connect status 5` seen by the
+    /// client is Arti refusing to open a stream, and the reason is only ever
+    /// written to the diagnostic ring. With the drain stopped, the ring
+    /// overwrote every one of those reasons unread, so a run could show failed
+    /// relay connections with nothing at all to explain them.
+    ///
+    /// Slower than the bootstrap tick because a ready Tor is quiet, and the
+    /// ring drops its oldest line rather than blocking, so falling behind
+    /// costs old context and never Arti's progress.
+    private func steadyStateDiagnosticsLoop(generation: Int) async {
+        #if os(iOS) && DEBUG
+        while true {
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            guard generation == bootstrapGeneration else { return }
+            guard arti_is_running() != 0 else { return }
+            guard isAppForeground else { continue }
+            drainArtiDiagnostics()
+        }
+        #endif
+    }
+
+    private func clearRouteBackoff() {
+        consecutiveRouteFailures = 0
+        routeRetryNotBefore = nil
     }
 
     private func getBootstrapSummary() -> String {
@@ -324,60 +932,242 @@ public final class TorManager: ObservableObject {
         return ""
     }
 
+    private func sanitizedBootstrapDiagnostic(
+        _ summary: String
+    ) -> TorTransportDiagnostic {
+        switch summary {
+        case "Error: Tor configuration failed":
+            return .configurationFailed
+        case "Error: local SOCKS listener failed":
+            return .socksListenerFailed
+        case "Error: Tor bootstrap failed":
+            return .bootstrapFailed
+        default:
+            return .stoppedBeforeReady
+        }
+    }
+
+    private func transportStageDiagnostic(
+        _ summary: String
+    ) -> TorTransportDiagnostic? {
+        guard routeCandidates.indices.contains(routeIndex) else { return nil }
+        let transport = routeCandidates[routeIndex]
+        guard transport != .direct else { return nil }
+
+        switch summary {
+        case "Transport proxy configured":
+            return .handoffConfigured(transport)
+        case "Tor opened transport proxy":
+            return .proxyOpened(transport)
+        case "Connected to transport listener":
+            return .bridgeRequestSent(transport)
+        default:
+            return nil
+        }
+    }
+
+    private func handlePluggableTransportEvent(_ event: PluggableTransportEvent) {
+        let transport: TorTransport
+        switch event {
+        case .connected(let value),
+             .recoverableFailure(let value),
+             .stopped(let value):
+            transport = value
+        }
+        let activeTransport = routeCandidates.indices.contains(routeIndex)
+            ? routeCandidates[routeIndex]
+            : nil
+
+        switch TorTransportEventPolicy.outcome(
+            for: event,
+            activeTransport: activeTransport,
+            isStarting: isStarting,
+            isReady: isReady,
+            hasConnectedProxy: hasConnectedTransportProxy,
+            artiIsRunning: arti_is_running() != 0
+        ) {
+        case .ignore:
+            return
+        case .proxyConnected:
+            hasConnectedTransportProxy = true
+            transportDiagnostic = .proxyConnected(transport)
+            SecureLogger.info(
+                "TorManager: \(transport.rawValue) proxy connected",
+                category: .session
+            )
+        case .proxyRetrying:
+            let diagnostic = TorTransportDiagnostic.proxyRetrying(transport)
+            guard transportDiagnostic != diagnostic else { return }
+            transportDiagnostic = diagnostic
+            SecureLogger.warning(
+                "TorManager: \(transport.rawValue) proxy discovery failed; retrying",
+                category: .session
+            )
+        case .ignoreStopWhileArtiOwnsRoute:
+            // IPtProxy delivers transport callbacks on its own thread. A
+            // delayed stop from the previous use of the process-wide
+            // controller is indistinguishable from a stop for a new use of the
+            // same method. Arti remains the lifecycle authority: if the active
+            // transport really stopped, its task exits or its bounded
+            // bootstrap deadline expires.
+            SecureLogger.debug(
+                "TorManager: ignored \(transport.rawValue) stop callback while Arti owns the active route",
+                category: .session
+            )
+        case .routeStopped:
+            let diagnostic = TorTransportDiagnostic.routeStopped(transport)
+            transportDiagnostic = diagnostic
+            SecureLogger.error(
+                "TorManager: \(transport.rawValue) stopped unexpectedly",
+                category: .session
+            )
+            failCurrentTransport(
+                NSError(
+                    domain: "TorManager",
+                    code: -18,
+                    userInfo: [NSLocalizedDescriptionKey: diagnostic.logDescription]
+                ),
+                stalled: false
+            )
+        }
+    }
+
+    private func failCurrentTransport(_ error: Error, stalled: Bool) {
+        lastError = error
+
+        switch TorRouteFailurePolicy.outcome(
+            mode: routeConfiguration.mode,
+            candidates: routeCandidates,
+            index: routeIndex,
+            priorConsecutiveFailures: consecutiveRouteFailures
+        ) {
+        case .noRouteInFlight:
+            isStarting = false
+            transportStatus = TorTransportStatus(
+                transport: nil,
+                lifecycle: .failed,
+                attempted: attemptedTransports
+            )
+
+        case .advance(let failedTransport, let next):
+            recordAttempt(failedTransport)
+            bootstrapDidStall = stalled
+            routeIndex += 1
+            transportStatus = TorTransportStatus(
+                transport: next,
+                lifecycle: .starting,
+                attempted: attemptedTransports
+            )
+            startPendingAfterShutdown = true
+            shutdownCompletely(preserveRouteRestart: true)
+
+        case .exhausted(let failedTransport, let retryDelay):
+            recordAttempt(failedTransport)
+            bootstrapDidStall = stalled
+            consecutiveRouteFailures += 1
+            routeRetryNotBefore = Date().addingTimeInterval(retryDelay)
+            SecureLogger.warning(
+                "TorManager: route failed \(consecutiveRouteFailures)x; next attempt in \(Int(retryDelay))s",
+                category: .session
+            )
+            isStarting = false
+            transportStatus = TorTransportStatus(
+                transport: failedTransport,
+                lifecycle: stalled ? .stalled : .failed,
+                attempted: attemptedTransports
+            )
+            startPendingAfterShutdown = false
+            if stalled {
+                NotificationCenter.default.post(name: .TorBootstrapDidStall, object: nil)
+            }
+            shutdownCompletely(preserveRouteRestart: true)
+        }
+    }
+
+    /// A route that fails twice in a row is one attempt from the user's side,
+    /// so the status they see must not list it twice.
+    private func recordAttempt(_ transport: TorTransport) {
+        guard attemptedTransports.last != transport else { return }
+        attemptedTransports.append(transport)
+    }
+
     // MARK: - Foreground/Background
 
     public func ensureRunningOnForeground() {
-        if !allowAutoStart { return }
-        SecureLogger.debug("TorManager: ensureRunningOnForeground() started", category: .session)
-        Task.detached(priority: .userInitiated) { [weak self] in
-            guard let self = self else { return }
-            let claimed: Bool = await MainActor.run {
-                if self.isStarting || self.restarting { return false }
-                self.restarting = true
-                return true
+        let action = TorLifecyclePolicy.foregroundRecoveryAction(
+            autoStartAllowed: allowAutoStart,
+            isForeground: isAppForeground,
+            isReady: isReady,
+            isRestarting: restarting,
+            shutdownInFlight: shutdownsInFlight > 0,
+            artiIsRunning: arti_is_running() != 0
+        )
+        switch action {
+        case .none:
+            return
+        case .continueCurrentAttempt:
+            SecureLogger.debug(
+                "TorManager: foreground resumed existing Arti attempt",
+                category: .session
+            )
+        case .deferUntilShutdownCompletes:
+            startPendingAfterShutdown = true
+            SecureLogger.debug(
+                "TorManager: foreground start deferred until shutdown completes",
+                category: .session
+            )
+        case .restart:
+            SecureLogger.debug(
+                "TorManager: foreground found no active Arti attempt; restarting",
+                category: .session
+            )
+            restarting = true
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                await self.restartArti()
+                self.restarting = false
             }
-            if !claimed { return }
-
-            // Check if already ready
-            let alreadyReady = await MainActor.run { self.isReady }
-            if alreadyReady {
-                await MainActor.run { self.restarting = false }
-                return
-            }
-
-            // Arti doesn't support dormant/wake (it's a no-op stub), so always do full restart
-            await self.restartArti()
-            await MainActor.run { self.restarting = false }
         }
     }
 
     public func goDormantOnBackground() {
-        // Arti doesn't support real dormant mode, so just mark as not ready.
-        // iOS will suspend the runtime anyway. On foreground we do a full restart.
-        // Clear isStarting so foreground recovery can proceed if bootstrap was interrupted.
-        SecureLogger.debug("TorManager: goDormantOnBackground() called", category: .session)
-        Task { @MainActor in
-            self.bootstrapGeneration += 1
-            self.isReady = false
-            self.socksReady = false
-            self.isStarting = false
-        }
+        // iOS suspends the in-process Arti and IPtProxy runtimes together. Keep
+        // their shared attempt intact so a quick app switch cannot stop only
+        // the pluggable transport and strand Arti in bootstrap.
+        SecureLogger.debug(
+            "TorManager: backgrounded; preserving active Tor attempt",
+            category: .session
+        )
     }
 
     public func shutdownCompletely() {
+        shutdownCompletely(preserveRouteRestart: false)
+    }
+
+    private func shutdownCompletely(preserveRouteRestart: Bool) {
         SecureLogger.debug("TorManager: shutdownCompletely() called", category: .session)
-        startPendingAfterShutdown = false
+        if !preserveRouteRestart {
+            startPendingAfterShutdown = false
+            routeCandidates.removeAll()
+            routeIndex = 0
+            attemptedTransports.removeAll()
+            transportStatus = .idle
+            transportDiagnostic = nil
+        }
         bootstrapGeneration += 1
+        if shutdownsInFlight > 0 {
+            SecureLogger.debug(
+                "TorManager: shutdown already in flight; coalescing request",
+                category: .session
+            )
+            return
+        }
         shutdownsInFlight += 1
         Task.detached { [weak self] in
             guard let self = self else { return }
             _ = arti_stop()
-
-            // Wait for shutdown
-            var waited = 0
-            while arti_is_running() != 0 && waited < 50 {
-                try? await Task.sleep(nanoseconds: 100_000_000)
-                waited += 1
+            await MainActor.run {
+                self.pluggableTransportController.stop()
             }
 
             await MainActor.run {
@@ -386,9 +1176,13 @@ public final class TorManager: ObservableObject {
                 self.bootstrapProgress = 0
                 self.bootstrapSummary = ""
                 self.isStarting = false
+                self.hasConnectedTransportProxy = false
                 self.didStart = false
                 self.restarting = false
                 self.bootstrapMonitorStarted = false
+                if !preserveRouteRestart {
+                    self.transportStatus = .idle
+                }
                 // Note: Don't clear startedAt here - it will be set fresh on next startIfNeeded()
                 // Clearing it here races with startup and defeats the grace period
                 self.shutdownsInFlight -= 1
@@ -412,16 +1206,15 @@ public final class TorManager: ObservableObject {
             self.bootstrapSummary = ""
             self.isStarting = true
             self.bootstrapDidStall = false
+            self.hasConnectedTransportProxy = false
             self.lastRestartAt = Date()
         }
 
-        _ = arti_stop()
-
-        // Wait for stop
-        var waited = 0
-        while arti_is_running() != 0 && waited < 40 {
-            try? await Task.sleep(nanoseconds: 100_000_000)
-            waited += 1
+        _ = await Task.detached(priority: .userInitiated) {
+            arti_stop()
+        }.value
+        await MainActor.run {
+            self.pluggableTransportController.stop()
         }
 
         await MainActor.run {
@@ -433,13 +1226,36 @@ public final class TorManager: ObservableObject {
     }
 
     private func recomputeReady() {
-        let ready = socksReady && bootstrapProgress >= 100
+        let resolved = TorReadinessPolicy.resolve(
+            socksReady: socksReady,
+            publishedProgress: bootstrapProgress,
+            liveProgress: { Int(arti_bootstrap_progress()) }
+        )
+        if bootstrapProgress != resolved.progress {
+            bootstrapProgress = resolved.progress
+        }
+        let ready = resolved.isReady
         if ready != isReady {
             if !ready {
                 SecureLogger.debug("TorManager: isReady -> false (socksReady=\(socksReady), bootstrap=\(bootstrapProgress))", category: .session)
             }
             isReady = ready
             if ready {
+                clearRouteBackoff()
+                transportDiagnostic = nil
+                if routeCandidates.indices.contains(routeIndex) {
+                    let transport = routeCandidates[routeIndex]
+                    routeConfiguration.lastSuccessfulTransport = transport
+                    UserDefaults.standard.set(
+                        transport.rawValue,
+                        forKey: TorTransportStorageKeys.lastSuccessfulTransport
+                    )
+                    transportStatus = TorTransportStatus(
+                        transport: transport,
+                        lifecycle: .ready,
+                        attempted: attemptedTransports
+                    )
+                }
                 NotificationCenter.default.post(name: .TorDidBecomeReady, object: nil)
             }
         }
@@ -479,6 +1295,11 @@ public final class TorManager: ObservableObject {
             return
         }
         if isReady { return }
+        if transportStatus.lifecycle == .failed || transportStatus.lifecycle == .stalled {
+            routeCandidates.removeAll()
+            routeIndex = 0
+            attemptedTransports.removeAll()
+        }
         SecureLogger.debug("TorManager: pokeTorOnPathChange() - Arti not ready, initiating recovery", category: .session)
         ensureRunningOnForeground()
     }

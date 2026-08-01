@@ -22,6 +22,16 @@ export RUSTC="$(rustup which --toolchain "$RUST_TOOLCHAIN" rustc)"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Absolute build paths reach the archive through panic locations and debug
+# info, so the slices this script produces differed between machines and
+# carried the builder's home directory. Remapping the two roots that vary --
+# this crate and the registry its dependencies unpack into -- makes the output
+# depend on source alone. Kept identical to build-arti-ios-device.sh so a slice
+# built here and one built there agree on the same remapped prefixes.
+CARGO_HOME_PATH="${CARGO_HOME:-$HOME/.cargo}"
+REMAP_FLAGS="--remap-path-prefix=$SCRIPT_DIR=/arti-bitchat"
+REMAP_FLAGS="$REMAP_FLAGS --remap-path-prefix=$CARGO_HOME_PATH=/cargo"
+
 # Configuration
 CRATE_NAME="arti-bitchat"
 LIB_NAME="libarti_bitchat.a"
@@ -95,7 +105,7 @@ setup_rustflags() {
     local target="$1"
 
     # Base flags for size optimization
-    export RUSTFLAGS="-C opt-level=z -C lto=fat -C codegen-units=1 -C panic=abort -C strip=symbols"
+    export RUSTFLAGS="-C opt-level=z -C lto=fat -C codegen-units=1 -C panic=abort -C strip=symbols $REMAP_FLAGS"
 
     # Set deployment targets to suppress linker warnings about version mismatches
     case "$target" in

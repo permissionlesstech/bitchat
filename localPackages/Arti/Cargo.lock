@@ -118,6 +118,8 @@ dependencies = [
  "arti-client",
  "libc",
  "once_cell",
+ "serde",
+ "serde_json",
  "tokio",
  "tor-rtcompat",
  "tracing",
@@ -168,6 +170,7 @@ dependencies = [
  "tor-persist",
  "tor-proto",
  "tor-protover",
+ "tor-ptmgr",
  "tor-rtcompat",
  "tracing",
  "void",
@@ -3837,6 +3840,7 @@ dependencies = [
  "tor-netdoc",
  "tor-persist",
  "tor-proto",
+ "tor-protover",
  "tor-relay-selection",
  "tor-rtcompat",
  "tor-units",
@@ -4221,6 +4225,33 @@ dependencies = [
  "thiserror 2.0.17",
  "tor-basic-utils",
  "tor-bytes",
+]
+
+[[package]]
+name = "tor-ptmgr"
+version = "0.38.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a75d98ac684eb01431e26f031cf6f629843a397e9dc33ffbe5c4fc6e706ffe91"
+dependencies = [
+ "async-trait",
+ "cfg-if",
+ "derive_builder_fork_arti",
+ "fs-mistrust",
+ "futures",
+ "itertools 0.14.0",
+ "oneshot-fused-workaround",
+ "serde",
+ "thiserror 2.0.17",
+ "tor-async-utils",
+ "tor-basic-utils",
+ "tor-chanmgr",
+ "tor-config",
+ "tor-config-path",
+ "tor-error",
+ "tor-linkspec",
+ "tor-rtcompat",
+ "tor-socksproto",
+ "tracing",
 ]
 
 [[package]]

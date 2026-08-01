@@ -1,4 +1,5 @@
 import Combine
+import Tor
 import XCTest
 @testable import bitchat
 
@@ -31,6 +32,10 @@ final class NetworkActivationServiceTests: XCTestCase {
         XCTAssertEqual(context.torController.startIfNeededCallCount, 1)
         XCTAssertEqual(context.relayController.connectCallCount, 1)
         XCTAssertEqual(context.relayController.disconnectCallCount, 0)
+        XCTAssertEqual(
+            context.torController.configurations,
+            [TorRouteConfiguration()]
+        )
     }
 
     func test_start_respectsStoredTorPreferenceForDirectMode() {
@@ -124,6 +129,74 @@ final class NetworkActivationServiceTests: XCTestCase {
             context.torController.startIfNeededCallCount,
             startCountAfterStop
         )
+        XCTAssertEqual(context.torController.resetTransportForPanicCallCount, 1)
+        XCTAssertEqual(context.transportResetRecorder.callCount, 1)
+    }
+
+    func test_transportSelectionRequiredBlocksAllNetworkActivation() async {
+        let selectionRequired = TransportResetRecorder()
+        selectionRequired.callCount = 1
+        let context = makeService(
+            permission: .authorized,
+            favorites: [],
+            transportSelectionRequired: { selectionRequired.callCount > 0 }
+        )
+
+        context.service.start()
+
+        // A wipe destroys the bridges the chosen transport needed, so nothing
+        // is allowed out until the user picks a route. Gating only Tor would
+        // leave activation on with Tor off, which is a clearnet path.
+        XCTAssertFalse(context.service.activationAllowed)
+        XCTAssertEqual(context.relayController.connectCallCount, 0)
+        XCTAssertEqual(context.torController.startIfNeededCallCount, 0)
+        // Tor is down, but the session stays pointed at the proxy so a stray
+        // request fails closed instead of leaving in the open.
+        XCTAssertNotEqual(context.proxyController.proxyModes.last, false)
+        XCTAssertGreaterThanOrEqual(context.torController.shutdownCompletelyCallCount, 1)
+
+        selectionRequired.callCount = 0
+        context.reachability.set(true)
+        let recovered = await waitUntil { context.service.activationAllowed }
+
+        XCTAssertTrue(recovered)
+        XCTAssertGreaterThan(context.relayController.connectCallCount, 0)
+    }
+
+    func test_transportChangeReconfiguresTorAndCyclesRelaySockets() async {
+        var configuration = TorRouteConfiguration(mode: .direct)
+        let context = makeService(
+            permission: .authorized,
+            favorites: [],
+            transportConfigurationProvider: { configuration }
+        )
+        context.service.start()
+        let disconnectsBefore = context.relayController.disconnectCallCount
+        let connectsBefore = context.relayController.connectCallCount
+        let startsBefore = context.torController.startIfNeededCallCount
+
+        configuration = TorRouteConfiguration(mode: .snowflake)
+        context.notificationCenter.post(
+            name: TorTransportSettings.didChangeNotification,
+            object: nil
+        )
+
+        let applied = await waitUntil {
+            context.torController.configurations.last == configuration
+        }
+        XCTAssertTrue(applied)
+        XCTAssertGreaterThan(
+            context.relayController.disconnectCallCount,
+            disconnectsBefore
+        )
+        XCTAssertGreaterThan(
+            context.relayController.connectCallCount,
+            connectsBefore
+        )
+        XCTAssertGreaterThan(
+            context.torController.startIfNeededCallCount,
+            startsBefore
+        )
     }
 
     func test_start_afterPanicStop_reestablishesSubscriptions() {
@@ -198,7 +271,11 @@ final class NetworkActivationServiceTests: XCTestCase {
         permission: LocationChannelManager.PermissionState,
         favorites: Set<Data>,
         selectedChannel: ChannelID = .mesh,
-        selectedChannelSubject: CurrentValueSubject<ChannelID, Never>? = nil
+        selectedChannelSubject: CurrentValueSubject<ChannelID, Never>? = nil,
+        transportConfigurationProvider: @escaping () -> TorRouteConfiguration = {
+            TorRouteConfiguration()
+        },
+        transportSelectionRequired: @escaping () -> Bool = { false }
     ) -> NetworkActivationTestContext {
         let suiteName = "NetworkActivationServiceTests-\(UUID().uuidString)"
         let storage = UserDefaults(suiteName: suiteName)!
@@ -212,6 +289,7 @@ final class NetworkActivationServiceTests: XCTestCase {
         let relayController = MockNetworkActivationRelayController()
         let proxyController = MockNetworkActivationProxyController()
         let reachability = MockNetworkActivationReachability()
+        let transportResetRecorder = TransportResetRecorder()
         let notificationCenter = NotificationCenter()
         let service = NetworkActivationService(
             storage: storage,
@@ -228,6 +306,11 @@ final class NetworkActivationServiceTests: XCTestCase {
             torController: torController,
             relayController: relayController,
             proxyController: proxyController,
+            transportConfigurationProvider: transportConfigurationProvider,
+            transportSettingsReset: {
+                transportResetRecorder.callCount += 1
+            },
+            transportSelectionRequiredProvider: transportSelectionRequired,
             notificationCenter: notificationCenter
         )
         return NetworkActivationTestContext(
@@ -238,6 +321,7 @@ final class NetworkActivationServiceTests: XCTestCase {
             torController: torController,
             relayController: relayController,
             proxyController: proxyController,
+            transportResetRecorder: transportResetRecorder,
             notificationCenter: notificationCenter
         )
     }
@@ -266,7 +350,13 @@ private struct NetworkActivationTestContext {
     let torController: MockNetworkActivationTorController
     let relayController: MockNetworkActivationRelayController
     let proxyController: MockNetworkActivationProxyController
+    let transportResetRecorder: TransportResetRecorder
     let notificationCenter: NotificationCenter
+}
+
+@MainActor
+private final class TransportResetRecorder {
+    var callCount = 0
 }
 
 @MainActor
@@ -296,9 +386,15 @@ private final class MockNetworkActivationReachability:
 
 @MainActor
 private final class MockNetworkActivationTorController: NetworkActivationTorControlling {
+    private(set) var configurations: [TorRouteConfiguration] = []
     private(set) var autoStartAllowedValues: [Bool] = []
     private(set) var startIfNeededCallCount = 0
     private(set) var shutdownCompletelyCallCount = 0
+    private(set) var resetTransportForPanicCallCount = 0
+
+    func configureTransport(_ configuration: TorRouteConfiguration) {
+        configurations.append(configuration)
+    }
 
     func setAutoStartAllowed(_ allowed: Bool) {
         autoStartAllowedValues.append(allowed)
@@ -310,6 +406,10 @@ private final class MockNetworkActivationTorController: NetworkActivationTorCont
 
     func shutdownCompletely() {
         shutdownCompletelyCallCount += 1
+    }
+
+    func resetTransportForPanic() {
+        resetTransportForPanicCallCount += 1
     }
 }
 

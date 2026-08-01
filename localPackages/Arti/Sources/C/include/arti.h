@@ -21,6 +21,24 @@ extern "C" {
 int32_t arti_start(const char *data_dir, uint16_t socks_port);
 
 /**
+ * Start Arti with a versioned JSON transport configuration.
+ *
+ * @return 0 on success, -5 for invalid transport configuration
+ */
+int32_t arti_start_with_config(
+    const char *data_dir,
+    uint16_t socks_port,
+    const char *config_json
+);
+
+/**
+ * Validate transport JSON and bridge lines without starting network work.
+ *
+ * @return 0 when valid, -5 when invalid
+ */
+int32_t arti_validate_transport_config(const char *config_json);
+
+/**
  * Stop Arti gracefully.
  *
  * @return 0 on success, -1 if not running

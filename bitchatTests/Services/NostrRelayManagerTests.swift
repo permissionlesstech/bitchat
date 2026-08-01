@@ -1,4 +1,5 @@
 import Combine
+import Tor
 import XCTest
 @testable import bitchat
 
@@ -854,6 +855,44 @@ final class NostrRelayManagerTests: XCTestCase {
         )
     }
 
+    func test_receiveEvent_afterUnsubscribeCountsInsteadOfLoggingEachEvent() async throws {
+        // A channel switch unsubscribes before the relay's CLOSE takes effect,
+        // so the relay's in-flight tail arrives with no handler. Those events
+        // must be counted, not delivered, and must not log once apiece.
+        let relayURL = "wss://unhandled-tail.example"
+        let context = makeContext(permission: .denied)
+        var receivedIDs: [String] = []
+
+        context.manager.subscribe(
+            filter: makeFilter(),
+            id: "geo",
+            relayUrls: [relayURL]
+        ) { event in
+            receivedIDs.append(event.id)
+        }
+        let subscriptionSent = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?.sentStrings.count == 1
+        }
+        XCTAssertTrue(subscriptionSent)
+
+        context.manager.unsubscribe(id: "geo")
+
+        let tail = try (0..<3).map { try makeSignedEvent(content: "tail-\($0)") }
+        for event in tail {
+            try context.sessionFactory.latestConnection(for: relayURL)?.emitEventMessage(
+                subscriptionID: "geo",
+                event: event
+            )
+        }
+
+        let counted = await waitUntil {
+            context.manager.debugUnhandledInboundEventCount == tail.count
+        }
+        XCTAssertTrue(counted)
+        XCTAssertEqual(receivedIDs, [])
+        XCTAssertEqual(context.manager.debugUnhandledInboundEventCount(forSubscriptionID: "geo"), tail.count)
+    }
+
     func test_receiveEvent_invalidSignatureDoesNotPoisonDuplicateCache() async throws {
         let firstRelayURL = "wss://invalid-first-one.example"
         let secondRelayURL = "wss://invalid-first-two.example"
@@ -1354,6 +1393,78 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertTrue(retried)
     }
 
+    /// A dial that fails while nothing else is connected says the transport is
+    /// down, not that the relay is bad. Tor that never finishes its directory
+    /// fails every relay identically, and giving up on the pool for that would
+    /// leave the app silent for the whole cooldown after Tor recovers.
+    func test_poolWideOutage_doesNotGiveUpOnRelays() async {
+        let relayA = "wss://outage-a.example"
+        let relayB = "wss://outage-b.example"
+        let context = makeContext(permission: .denied)
+        context.sessionFactory.pingErrorByURL[relayA] = NSError(domain: NSURLErrorDomain, code: NSURLErrorTimedOut)
+        context.sessionFactory.pingErrorByURL[relayB] = NSError(domain: NSURLErrorDomain, code: NSURLErrorTimedOut)
+
+        context.manager.ensureConnections(to: [relayA, relayB])
+
+        // Well past the point where a relay is normally given up on.
+        let rounds = TransportConfig.nostrRelayMaxReconnectAttempts + 2
+        for round in 1...rounds {
+            let scheduled = await waitUntil { context.scheduler.scheduled.count == 2 }
+            XCTAssertTrue(scheduled, "round \(round) scheduled no reconnect")
+            context.scheduler.runNext()
+            context.scheduler.runNext()
+        }
+
+        let keptDialing = await waitUntil {
+            context.sessionFactory.requestedURLs.count == 2 * (rounds + 1)
+        }
+        XCTAssertTrue(keptDialing, "an outage must not stop the relays being retried")
+        for url in [relayA, relayB] {
+            XCTAssertEqual(
+                context.manager.relays.first(where: { $0.url == url })?.attributedFailures,
+                0,
+                "\(url) was blamed for a transport-wide outage"
+            )
+        }
+    }
+
+    /// The rest of the pool working is what makes a failure the relay's own
+    /// fault, so a relay that keeps failing beside healthy neighbours is still
+    /// given up on.
+    func test_relayFailingBesideAHealthyPoolIsStillGivenUpOn() async {
+        let healthy = "wss://healthy.example"
+        let broken = "wss://broken.example"
+        let context = makeContext(permission: .denied)
+        context.sessionFactory.pingErrorByURL[broken] = NSError(domain: NSURLErrorDomain, code: NSURLErrorTimedOut)
+
+        context.manager.ensureConnections(to: [healthy, broken])
+        let healthyUp = await waitUntil {
+            context.manager.relays.first(where: { $0.url == healthy })?.isConnected == true
+        }
+        XCTAssertTrue(healthyUp)
+
+        // The dial that fails on entry is strike one, so one fewer reconnect
+        // takes it to the limit.
+        for round in 1...(TransportConfig.nostrRelayMaxReconnectAttempts - 1) {
+            let scheduled = await waitUntil { !context.scheduler.scheduled.isEmpty }
+            XCTAssertTrue(scheduled, "round \(round) scheduled no reconnect")
+            context.scheduler.runNext()
+        }
+
+        let gaveUp = await waitUntil {
+            context.manager.relays.first(where: { $0.url == broken })?.attributedFailures
+                == TransportConfig.nostrRelayMaxReconnectAttempts
+        }
+        XCTAssertTrue(gaveUp, "a relay failing against a healthy pool must still be dropped")
+
+        let countBefore = context.sessionFactory.requestedURLs.count
+        context.manager.ensureConnections(to: [broken])
+        let redialed = await waitUntil(timeout: TestConstants.negativeWaitWindow) {
+            context.sessionFactory.requestedURLs.count > countBefore
+        }
+        XCTAssertFalse(redialed, "a relay we gave up on must not be dialed again")
+    }
+
     func test_receiveFailure_schedulesReconnectWithBackoff() async {
         let relayURL = "wss://retry.example"
         let context = makeContext(permission: .denied)
@@ -1827,6 +1938,121 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertTrue(context.manager.relays.contains { $0.url == "wss://nos.lol" })
     }
 
+    // MARK: - Tor readiness
+
+    /// Switching transport stops the SOCKS listener before Tor reports itself
+    /// not-ready, so the reconnect the dropped sockets trigger dials a proxy
+    /// that is already gone and every relay fails. App foreground used to be
+    /// the only thing that tried again, which left someone who changed route
+    /// and then waited connected to no relays at all.
+    func test_torDidBecomeReady_connectsRelaysWithoutWaitingForForeground() async {
+        let center = NotificationCenter()
+        let context = makeContext(
+            permission: .authorized,
+            activationAllowed: false,
+            notificationCenter: center
+        )
+
+        XCTAssertTrue(context.sessionFactory.requestedURLs.isEmpty)
+        context.activationAllowed.value = true
+
+        center.post(name: .TorDidBecomeReady, object: nil)
+
+        let connected = await waitUntil {
+            context.sessionFactory.requestedURLs.count == self.expectedDefaultRelayCount
+        }
+        XCTAssertTrue(connected)
+    }
+
+    /// Sockets dialed at a listener that was going down register before their
+    /// handshake resolves and can take a minute to report failure. While they
+    /// sit there the reconnect finds no targets and returns silently, so the
+    /// app ends up on a working route with no relays. Tor cannot become ready
+    /// without its listener having been down, so these must be replaced.
+    func test_torDidBecomeReady_replacesSocketsStrandedByTheRouteChange() async {
+        let center = NotificationCenter()
+        let context = makeContext(
+            permission: .authorized,
+            userTorEnabled: true,
+            notificationCenter: center
+        )
+        context.manager.connect()
+
+        let dialed = await waitUntil {
+            context.sessionFactory.requestedURLs.count == self.expectedDefaultRelayCount
+        }
+        XCTAssertTrue(dialed)
+
+        center.post(name: .TorDidBecomeReady, object: nil)
+
+        let redialed = await waitUntil {
+            context.sessionFactory.requestedURLs.count == self.expectedDefaultRelayCount * 2
+        }
+        XCTAssertTrue(redialed, "ready must replace sockets the route change stranded")
+    }
+
+    /// The teardown above is only sound because Tor owns the socket. A relay
+    /// reached without Tor survives the route change, so redialing it would
+    /// drop its subscriptions for nothing.
+    func test_torDidBecomeReady_leavesNonTorConnectionsAlone() async {
+        let center = NotificationCenter()
+        let context = makeContext(
+            permission: .authorized,
+            notificationCenter: center
+        )
+        context.manager.connect()
+
+        let dialed = await waitUntil {
+            context.sessionFactory.requestedURLs.count == self.expectedDefaultRelayCount
+        }
+        XCTAssertTrue(dialed)
+
+        center.post(name: .TorDidBecomeReady, object: nil)
+
+        let churned = await waitUntil(timeout: TestConstants.negativeWaitWindow) {
+            context.sessionFactory.requestedURLs.count > self.expectedDefaultRelayCount
+        }
+        XCTAssertFalse(churned, "a non-Tor socket survives the route change")
+    }
+
+    /// A dial is resolved only by its ping callback, and URLSession can withhold
+    /// that indefinitely when the proxy accepts the socket but the connect
+    /// behind it fails. Such a socket would hold the relay's slot for the life
+    /// of the process, and every later attempt would skip that relay as one that
+    /// already has a connection.
+    func test_dialThatNeverAnswersIsDroppedSoTheRelayCanBeRetried() async {
+        let context = makeContext(permission: .authorized, deferPingCompletions: true)
+        context.manager.connect()
+
+        let dialed = await waitUntil {
+            context.sessionFactory.requestedURLs.count == self.expectedDefaultRelayCount
+        }
+        XCTAssertTrue(dialed)
+
+        // While the dials hang, the relays are unreachable and unretryable.
+        context.manager.connect()
+        let retriedWhileStalled = await waitUntil(timeout: TestConstants.negativeWaitWindow) {
+            context.sessionFactory.requestedURLs.count > self.expectedDefaultRelayCount
+        }
+        XCTAssertFalse(retriedWhileStalled)
+
+        // One handshake deadline was armed per dial.
+        XCTAssertEqual(context.handshakeScheduler.scheduled.count, expectedDefaultRelayCount)
+        for _ in 0..<expectedDefaultRelayCount {
+            context.handshakeScheduler.runNext()
+        }
+        let droppedSockets = await waitUntil {
+            context.sessionFactory.allConnections.allSatisfy { $0.cancelCallCount == 1 }
+        }
+        XCTAssertTrue(droppedSockets, "an unanswered dial must give up its socket")
+
+        context.manager.connect()
+        let redialed = await waitUntil {
+            context.sessionFactory.requestedURLs.count == self.expectedDefaultRelayCount * 2
+        }
+        XCTAssertTrue(redialed, "a timed-out dial must leave the relay retryable")
+    }
+
     private func makeContext(
         permission: LocationChannelManager.PermissionState,
         favorites: Set<Data> = [],
@@ -1837,12 +2063,17 @@ final class NostrRelayManagerTests: XCTestCase {
         torIsForeground: Bool = true,
         notificationCenter: NotificationCenter = NotificationCenter(),
         customRelays: MutableRelayList = MutableRelayList(urls: []),
-        jitterUnit: @escaping () -> Double = { 0.5 } // 0.5 -> jitter factor 1.0 (no jitter)
+        jitterUnit: @escaping () -> Double = { 0.5 }, // 0.5 -> jitter factor 1.0 (no jitter)
+        // Applied before the manager is built: it dials the default relays from
+        // its own initializer, so a flag set afterwards would miss them.
+        deferPingCompletions: Bool = false
     ) -> RelayManagerTestContext {
         let permissionSubject = CurrentValueSubject<LocationChannelManager.PermissionState, Never>(permission)
         let favoritesSubject = CurrentValueSubject<Set<Data>, Never>(favorites)
         let sessionFactory = MockRelaySessionFactory()
+        sessionFactory.deferPingCompletions = deferPingCompletions
         let scheduler = MockRelayScheduler()
+        let handshakeScheduler = MockRelayScheduler()
         let clock = MutableClock(now: Date(timeIntervalSince1970: 1_700_000_000))
         let torWaiter = MockTorWaiter(isReady: torIsReady)
         let torForeground = MutableBool(value: torIsForeground)
@@ -1863,6 +2094,9 @@ final class NostrRelayManagerTests: XCTestCase {
                 scheduleAfter: { delay, action in
                     scheduler.schedule(delay: delay, action: action)
                 },
+                scheduleHandshakeDeadline: { delay, action in
+                    handshakeScheduler.schedule(delay: delay, action: action)
+                },
                 now: { clock.now },
                 jitterUnit: jitterUnit,
                 notificationCenter: notificationCenter,
@@ -1874,6 +2108,7 @@ final class NostrRelayManagerTests: XCTestCase {
             permissionSubject: permissionSubject,
             sessionFactory: sessionFactory,
             scheduler: scheduler,
+            handshakeScheduler: handshakeScheduler,
             clock: clock,
             activationAllowed: activationFlag,
             torWaiter: torWaiter,
@@ -1927,6 +2162,7 @@ private struct RelayManagerTestContext {
     let permissionSubject: CurrentValueSubject<LocationChannelManager.PermissionState, Never>
     let sessionFactory: MockRelaySessionFactory
     let scheduler: MockRelayScheduler
+    let handshakeScheduler: MockRelayScheduler
     let clock: MutableClock
     let activationAllowed: MutableBool
     let torWaiter: MockTorWaiter
@@ -2019,6 +2255,9 @@ private final class MockRelaySessionFactory: NostrRelaySessionProtocol {
     private(set) var connectionsByURL: [String: [MockRelayConnection]] = [:]
     var pingErrorByURL: [String: Error?] = [:]
     var sendErrorByURL: [String: Error?] = [:]
+    /// Models a socket the proxy accepted but whose connect never completed:
+    /// URLSession delivers neither a pong nor an error.
+    var deferPingCompletions = false
 
     var allConnections: [MockRelayConnection] {
         connectionsByURL.values.flatMap { $0 }
@@ -2029,7 +2268,8 @@ private final class MockRelaySessionFactory: NostrRelaySessionProtocol {
         let connection = MockRelayConnection(
             url: url.absoluteString,
             pingError: pingErrorByURL[url.absoluteString] ?? nil,
-            sendError: sendErrorByURL[url.absoluteString] ?? nil
+            sendError: sendErrorByURL[url.absoluteString] ?? nil,
+            deferPing: deferPingCompletions
         )
         connectionsByURL[url.absoluteString, default: []].append(connection)
         return connection
@@ -2058,9 +2298,12 @@ private final class MockRelayConnection: NostrRelayConnectionProtocol {
         }
     }
 
-    init(url _: String, pingError: Error? = nil, sendError: Error? = nil) {
+    private let deferPing: Bool
+
+    init(url _: String, pingError: Error? = nil, sendError: Error? = nil, deferPing: Bool = false) {
         self.pingError = pingError
         self.sendError = sendError
+        self.deferPing = deferPing
     }
 
     func resume() {
@@ -2100,6 +2343,7 @@ private final class MockRelayConnection: NostrRelayConnectionProtocol {
     }
 
     func sendPing(pongReceiveHandler: @escaping (Error?) -> Void) {
+        guard !deferPing else { return }
         pongReceiveHandler(pingError)
     }
 

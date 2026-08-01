@@ -4,7 +4,7 @@ no_includes = true
 sys_includes = ["stdint.h", "stdbool.h"]
 
 [export]
-include = ["arti_start", "arti_stop", "arti_is_running", "arti_bootstrap_progress", "arti_bootstrap_summary", "arti_go_dormant", "arti_wake"]
+include = ["arti_start", "arti_start_with_config", "arti_validate_transport_config", "arti_stop", "arti_is_running", "arti_bootstrap_progress", "arti_bootstrap_summary", "arti_go_dormant", "arti_wake"]
 
 [fn]
 args = "Auto"

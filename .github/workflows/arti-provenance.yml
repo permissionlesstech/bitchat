@@ -1,9 +1,9 @@
-name: Arti Binary Provenance
+name: Tor Binary Provenance
 
-# The Arti xcframework is a vendored binary; these checks turn the policy in
+# The Arti and IPtProxy xcframeworks are vendored binaries. These checks turn the policy in
 # docs/ARTI-BINARY-PROVENANCE.md into an enforced gate:
-#  1. The checked-in binary must match the hash manifest in the provenance doc.
-#  2. A PR that changes the binary must also change at least one provenance
+#  1. The checked-in binaries and IPtProxy license must match the hash manifest.
+#  2. A PR that changes a binary must also change at least one provenance
 #     input (Rust source, lockfile, build script, or the doc itself).
 
 on:
@@ -20,7 +20,7 @@ on:
 
 jobs:
   verify-hashes:
-    name: Verify xcframework hashes against provenance doc
+    name: Verify Tor artifact hashes against provenance doc
     runs-on: ubuntu-latest
 
     steps:
@@ -33,7 +33,7 @@ jobs:
           doc="docs/ARTI-BINARY-PROVENANCE.md"
 
           # Extract the manifest: lines of "<sha256>  <path>" from the doc.
-          grep -E '^[0-9a-f]{64}  localPackages/Arti/Frameworks/arti\.xcframework/' "$doc" \
+          grep -E '^[0-9a-f]{64}  localPackages/Arti/(Frameworks/(arti|IPtProxy)\.xcframework/|IPTPROXY-LICENSE\.txt)' "$doc" \
             | sort -k2 > expected.txt
 
           if [ ! -s expected.txt ]; then
@@ -42,11 +42,16 @@ jobs:
           fi
 
           # Hash the same file set the doc documents.
-          find localPackages/Arti/Frameworks/arti.xcframework -maxdepth 3 -type f -print0 \
-            | sort -z | xargs -0 sha256sum | sed 's/  \.\//  /' | sort -k2 > actual.txt
+          {
+            find localPackages/Arti/Frameworks/arti.xcframework -maxdepth 3 -type f \
+              -exec sha256sum {} +
+            find localPackages/Arti/Frameworks/IPtProxy.xcframework -maxdepth 6 -type f \
+              -exec sha256sum {} +
+            sha256sum localPackages/Arti/IPTPROXY-LICENSE.txt
+          } | sort -k2 > actual.txt
 
           if ! diff -u expected.txt actual.txt; then
-            echo "::error::Checked-in arti.xcframework does not match the manifest in $doc. If the binary change is intentional, rebuild per the doc and update the manifest in the same PR."
+            echo "::error::Checked-in Tor artifacts do not match the manifest in $doc. If the change is intentional, rebuild per the doc and update the manifest in the same PR."
             exit 1
           fi
           echo "All $(wc -l < actual.txt) artifact hashes match the provenance manifest."
@@ -71,15 +76,15 @@ jobs:
           echo "Changed files:"
           echo "$changed"
 
-          if ! echo "$changed" | grep -q '^localPackages/Arti/Frameworks/arti\.xcframework/'; then
+          if ! echo "$changed" | grep -Eq '^localPackages/Arti/Frameworks/(arti|IPtProxy)\.xcframework/'; then
             echo "No binary artifact changes; nothing to verify."
             exit 0
           fi
 
-          if echo "$changed" | grep -Eq '^(localPackages/Arti/(Cargo\.(toml|lock)|build-ios\.sh|arti-bitchat/)|docs/ARTI-BINARY-PROVENANCE\.md)'; then
+          if echo "$changed" | grep -Eq '^(localPackages/Arti/(Cargo\.(toml|lock)|build(-arti|-iptproxy)?-ios(-device)?\.sh|IPTPROXY-LICENSE\.txt|arti-bitchat/)|docs/ARTI-BINARY-PROVENANCE\.md)'; then
             echo "Binary change is accompanied by provenance inputs."
             exit 0
           fi
 
-          echo "::error::arti.xcframework changed without matching source, lockfile, build-script, or provenance-doc changes. See docs/ARTI-BINARY-PROVENANCE.md (\"Do not accept an xcframework-only update\")."
+          echo "::error::A Tor xcframework changed without matching source, lockfile, build-script, license, or provenance-doc changes. See docs/ARTI-BINARY-PROVENANCE.md."
           exit 1

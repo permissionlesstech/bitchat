@@ -22,12 +22,18 @@ let package = Package(
             name: "Tor",
             dependencies: [
                 "arti",
+                .target(
+                    name: "IPtProxy",
+                    condition: .when(platforms: [.iOS])
+                ),
                 .product(name: "BitLogger", package: "BitLogger")
             ],
             path: "Sources",
             exclude: ["C"],
             sources: [
                 "TorManager.swift",
+                "TorTransport.swift",
+                "TorTransportDiagnostic.swift",
                 "TorURLSession.swift",
                 "TorNotifications.swift"
             ],
@@ -42,6 +48,12 @@ let package = Package(
         .binaryTarget(
             name: "arti",
             path: "Frameworks/arti.xcframework"
+        ),
+        // Contains iOS device and simulator slices only. Pluggable transports
+        // are not built for macOS, and the Swift callers compile only on iOS.
+        .binaryTarget(
+            name: "IPtProxy",
+            path: "Frameworks/IPtProxy.xcframework"
         )
     ]
 )
