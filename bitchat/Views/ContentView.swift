@@ -397,7 +397,7 @@ struct ContentView: View {
                 ImagePreviewView(url: url)
             }
         }
-        .alert("Recording Error", isPresented: rootVoiceAlertBinding, actions: {
+        .alert("content.voice.recording_error_title", isPresented: rootVoiceAlertBinding, actions: {
             Button("common.ok", role: .cancel) {}
             if voiceRecordingVM.state == .permissionDenied {
                 Button("location_channels.action.open_settings") {

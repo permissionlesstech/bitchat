@@ -29,7 +29,12 @@ final class VoiceRecordingViewModel: ObservableObject {
         var alertMessage: String {
             switch self {
             case .error(let message): message
-            case .permissionDenied: "Microphone access is required to record voice notes."
+            case .permissionDenied:
+                String(
+                    localized: "content.voice.permission_denied",
+                    defaultValue: "Microphone access is required to record voice notes.",
+                    comment: "Alert message when microphone permission is denied for voice notes"
+                )
             case .idle, .requestingPermission, .preparing, .recording: ""
             }
         }
@@ -156,7 +161,11 @@ final class VoiceRecordingViewModel: ObservableObject {
                     }
                 }
                 activeSession = nil
-                state = .error(message: "Could not start recording.")
+                state = .error(message: String(
+                    localized: "content.voice.start_failed",
+                    defaultValue: "Could not start recording.",
+                    comment: "Alert message when voice recording fails to start for a non-permission reason"
+                ))
             }
         }
     }
