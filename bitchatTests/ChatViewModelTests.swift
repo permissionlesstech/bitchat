@@ -1209,6 +1209,44 @@ struct ChatViewModelPanicTests {
 
         #expect(viewModel.privateChats[peerID] == nil)
     }
+
+    @Test @MainActor
+    func panicClearAllData_synchronouslyWipesMediaFilesWhenCallerTaskIsCancelled() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let testRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("panic-media-wipe-\(UUID().uuidString)", isDirectory: true)
+        let filesDir = testRoot.appendingPathComponent("files", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: testRoot) }
+
+        let sensitiveURLs = [
+            filesDir.appendingPathComponent("images/outgoing/original-with-exif.heic"),
+            filesDir.appendingPathComponent("images/incoming/received-original.heic"),
+            filesDir.appendingPathComponent("files/outgoing/public-original.bin")
+        ]
+
+        for url in sensitiveURLs {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true,
+                attributes: nil
+            )
+            try Data("sensitive media".utf8).write(to: url, options: .atomic)
+            #expect(FileManager.default.fileExists(atPath: url.path))
+        }
+
+        let trigger = Task { @MainActor in
+            viewModel.panicClearAllData(mediaFilesDirectoryOverride: filesDir)
+        }
+        trigger.cancel()
+        await trigger.value
+
+        for url in sensitiveURLs {
+            #expect(!FileManager.default.fileExists(atPath: url.path))
+        }
+        #expect(FileManager.default.fileExists(atPath: filesDir.appendingPathComponent("images/outgoing", isDirectory: true).path))
+        #expect(FileManager.default.fileExists(atPath: filesDir.appendingPathComponent("images/incoming", isDirectory: true).path))
+        #expect(FileManager.default.fileExists(atPath: filesDir.appendingPathComponent("files/outgoing", isDirectory: true).path))
+    }
 }
 
 // MARK: - Service Lifecycle Tests

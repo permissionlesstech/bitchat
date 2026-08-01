@@ -1153,7 +1153,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
 
     // PANIC: Emergency data clearing for activist safety
     @MainActor
-    func panicClearAllData() {
+    func panicClearAllData(mediaFilesDirectoryOverride: URL? = nil) {
         // Messages are processed immediately - nothing to flush
 
         // Clear all messages (public timelines and private chats live in the
@@ -1279,42 +1279,16 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
             }
         }
 
-        // Delete ALL media files (incoming and outgoing) in background
-        Task.detached(priority: .utility) {
-            // Skipped under tests: the test process shares the user's real
-            // ~/Library/Application Support/files tree, and this detached
-            // utility-priority wipe fires at a nondeterministic time —
-            // deleting media that concurrently running tests (e.g. the
-            // sendImage flow) just wrote there, and the developer's real
-            // app data with it.
-            guard !TestEnvironment.isRunningTests else { return }
-            do {
-                let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-                let filesDir = base.appendingPathComponent("files", isDirectory: true)
-
-                // Delete the entire files directory and recreate it
-                if FileManager.default.fileExists(atPath: filesDir.path) {
-                    try FileManager.default.removeItem(at: filesDir)
-                    SecureLogger.info("🗑️ Deleted all media files during panic clear", category: .session)
-                }
-
-                // Recreate empty directory structure
-                try FileManager.default.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: nil)
-                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("voicenotes/incoming", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
-                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("voicenotes/outgoing", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
-                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("images/incoming", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
-                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("images/outgoing", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
-                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("files/incoming", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
-                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("files/outgoing", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
-            } catch {
-                SecureLogger.error("Failed to clear media files during panic: \(error)", category: .session)
-            }
-
-            // BCH-01-013: Clear iOS app switcher snapshots
-            // These are stored in Library/Caches/Snapshots/<bundle_id>/
-            #if os(iOS)
-            Self.clearAppSwitcherSnapshots()
-            #endif
+        // Delete ALL media files (incoming and outgoing) synchronously. Panic
+        // wipe is safety-critical: returning before the disk wipe completes
+        // leaves original private images interruptible by app suspend/kill.
+        // Tests skip the real Application Support tree unless a scoped
+        // temporary override is provided.
+        if !TestEnvironment.isRunningTests || mediaFilesDirectoryOverride != nil {
+            Self.panicWipeMediaFiles(
+                filesDirectory: mediaFilesDirectoryOverride,
+                clearSnapshots: !TestEnvironment.isRunningTests
+            )
         }
 
         // Force immediate UI update for panic mode
@@ -1325,6 +1299,46 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     /// BCH-01-013: Clear iOS app switcher snapshots during panic mode
     /// iOS stores preview screenshots in Library/Caches/Snapshots/<bundle_id>/
     /// These could reveal sensitive information visible in the app at the time
+    private nonisolated static func panicWipeMediaFiles(filesDirectory override: URL? = nil, clearSnapshots: Bool = true) {
+        do {
+            let filesDir: URL
+            if let override {
+                filesDir = override
+            } else {
+                let base = try FileManager.default.url(
+                    for: .applicationSupportDirectory,
+                    in: .userDomainMask,
+                    appropriateFor: nil,
+                    create: true
+                )
+                filesDir = base.appendingPathComponent("files", isDirectory: true)
+            }
+
+            // Delete the entire files directory and recreate it before panic
+            // control returns to the caller.
+            if FileManager.default.fileExists(atPath: filesDir.path) {
+                try FileManager.default.removeItem(at: filesDir)
+                SecureLogger.info("🗑️ Deleted all media files during panic clear", category: .session)
+            }
+
+            try FileManager.default.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: nil)
+            try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("voicenotes/incoming", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
+            try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("voicenotes/outgoing", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
+            try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("images/incoming", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
+            try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("images/outgoing", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
+            try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("files/incoming", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
+            try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("files/outgoing", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
+        } catch {
+            SecureLogger.error("Failed to clear media files during panic: \(error)", category: .session)
+        }
+
+        #if os(iOS)
+        if clearSnapshots {
+            clearAppSwitcherSnapshots()
+        }
+        #endif
+    }
+
     #if os(iOS)
     private nonisolated static func clearAppSwitcherSnapshots() {
         do {
