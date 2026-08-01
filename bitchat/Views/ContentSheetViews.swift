@@ -270,7 +270,7 @@ struct ContentPeopleSheetView: View {
             }
         }
         #endif
-        .alert("Recording Error", isPresented: voiceAlertBinding, actions: {
+        .alert("content.voice.recording_error_title", isPresented: voiceAlertBinding, actions: {
             Button("common.ok", role: .cancel) {}
             if voiceRecordingVM.state == .permissionDenied {
                 Button("location_channels.action.open_settings") {

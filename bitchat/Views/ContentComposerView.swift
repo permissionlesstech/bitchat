@@ -220,17 +220,32 @@ private extension ContentComposerView {
             TimelineView(.periodic(from: .now, by: 0.05)) { context in
                 // Live streaming means audio is heard as you speak — the HUD
                 // must make that unmistakable, not just show a timer.
+                let duration = voiceRecordingVM.formattedDuration(for: context.date)
                 if voiceRecordingVM.isLiveStreaming {
                     Text(
-                        "live \(voiceRecordingVM.formattedDuration(for: context.date))",
-                        comment: "Recording HUD label while a voice message streams live to the recipient"
+                        String(
+                            format: String(
+                                localized: "content.voice.hud.live",
+                                defaultValue: "live %@",
+                                comment: "Recording HUD label while a voice message streams live; %@ is the elapsed duration"
+                            ),
+                            locale: .current,
+                            duration
+                        )
                     )
                     .bitchatFont(size: 13, weight: .bold)
                     .foregroundColor(.red)
                 } else {
                     Text(
-                        "recording \(voiceRecordingVM.formattedDuration(for: context.date))",
-                        comment: "Voice note recording duration indicator"
+                        String(
+                            format: String(
+                                localized: "content.voice.hud.recording",
+                                defaultValue: "recording %@",
+                                comment: "Recording HUD label for a classic voice note; %@ is the elapsed duration"
+                            ),
+                            locale: .current,
+                            duration
+                        )
                     )
                     .bitchatFont(size: 13)
                     .foregroundColor(.red)
@@ -238,7 +253,7 @@ private extension ContentComposerView {
             }
             Spacer()
             Button(action: voiceRecordingVM.cancel) {
-                Label("Cancel", systemImage: "xmark.circle")
+                Label("common.cancel", systemImage: "xmark.circle")
                     .labelStyle(.iconOnly)
                     .font(.bitchatSystem(size: 18))
                     .foregroundColor(.red)
