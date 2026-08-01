@@ -231,6 +231,15 @@ final class ConversationUIModel: ObservableObject {
                 self?.refreshComputedState()
             }
             .store(in: &cancellables)
+
+        // Verify/unverify while a DM is open must repaint existing rows —
+        // showsVerifiedSeal is computed per render, so forward the store change.
+        chatViewModel.peerIdentityStore.$verifiedFingerprints
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
     }
 
     private func refreshComputedState() {
