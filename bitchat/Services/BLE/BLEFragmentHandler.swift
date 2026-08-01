@@ -48,6 +48,13 @@ final class BLEFragmentHandler {
             return
         }
 
+        // Archiving and relay stay deliberately independent of our local
+        // assembly state. A fragment we reject as conflicting may well be the
+        // honest one — we cannot tell, only that it lost the race here — so
+        // suppressing it would censor it for every downstream peer, including
+        // those that never saw the injected variant, and drop it from
+        // REQUEST_SYNC recovery. Local first-wins protects this node's
+        // reassembly; it is not evidence for the rest of the mesh.
         if header.isBroadcastFragment {
             env.trackPacketSeen(packet)
         }
@@ -94,7 +101,24 @@ final class BLEFragmentHandler {
         case let .oversized(header, projectedSize, limit, started):
             logStartedIfNeeded(header: header, started: started)
             SecureLogger.warning(
-                "🚫 Fragment assembly exceeds size limit (\(projectedSize) bytes > \(limit)), evicting. Type=\(header.originalType) Index=\(header.index)/\(header.total)",
+                "🚫 Fragment rejected: assembly would exceed size limit (\(projectedSize) bytes > \(limit)). Type=\(header.originalType) Index=\(header.index)/\(header.total)",
+                category: .security
+            )
+
+        case let .conflicting(header, reason):
+            let detail: String
+            switch reason {
+            case let .total(expected, actual):
+                detail = "total expected=\(expected) actual=\(actual)"
+            case let .originalType(expected, actual):
+                detail = "type expected=\(expected) actual=\(actual)"
+            case let .broadcastScope(expected, actual):
+                detail = "broadcast expected=\(expected) actual=\(actual)"
+            case let .fragmentData(index):
+                detail = "different bytes for index=\(index)"
+            }
+            SecureLogger.warning(
+                "🚫 Conflicting fragment ignored. Stream=\(header.idLogString) \(detail)",
                 category: .security
             )
         }
