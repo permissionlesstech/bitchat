@@ -71,7 +71,18 @@ final class NotificationServiceTests: XCTestCase {
         service.sendPrivateMessageNotification(from: "Alice", message: "hi", peerID: peerID)
 
         let request = deliverer.requests.singleValue
-        XCTAssertEqual(request?.content.title, "🔒 DM from Alice")
+        XCTAssertEqual(
+            request?.content.title,
+            String(
+                format: String(
+                    localized: "notification.dm.title",
+                    defaultValue: "🔒 DM from %@",
+                    comment: "Lock-screen notification title for a direct message; %@ is the sender nickname"
+                ),
+                locale: .current,
+                "Alice"
+            )
+        )
         XCTAssertEqual(request?.content.body, "hi")
         XCTAssertEqual(request?.content.userInfo["peerID"] as? String, peerID.id)
         XCTAssertEqual(request?.content.userInfo["senderName"] as? String, "Alice")
@@ -114,7 +125,18 @@ final class NotificationServiceTests: XCTestCase {
         XCTAssertTrue(deliverer.requests[0].identifier.hasPrefix("geo-activity-87yv-"))
         XCTAssertEqual(deliverer.requests[1].identifier, "network-available")
         XCTAssertEqual(deliverer.requests[1].content.interruptionLevel, .timeSensitive)
-        XCTAssertEqual(deliverer.requests[1].content.body, "2 people around")
+        XCTAssertEqual(
+            deliverer.requests[1].content.body,
+            String(
+                format: String(
+                    localized: "notification.nearby.body.other",
+                    defaultValue: "%lld people around",
+                    comment: "Lock-screen notification body when multiple mesh peers are nearby; %lld is the peer count"
+                ),
+                locale: .current,
+                2
+            )
+        )
     }
 }
 
