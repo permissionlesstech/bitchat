@@ -45,4 +45,14 @@ Comments in `PeerIDRotationTests` mark fixed hex digests with `VECTOR:` and expl
 
 ## Quick check
 
-From the repo root, BitFoundation’s suite (including vectors) runs as part of the normal SwiftPM / `just test` path used by CI.
+BitFoundation’s suite (including golden vectors) is a nested package. From the
+repo root run:
+
+```sh
+swift test --package-path localPackages/BitFoundation
+```
+
+(or `cd localPackages/BitFoundation && swift test`). Root `just test` /
+`swift test` only builds the app target and does **not** execute
+`BitFoundationTests` — CI runs the package path separately
+(`.github/workflows/swift-tests.yml`).
