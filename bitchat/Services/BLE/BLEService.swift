@@ -568,6 +568,12 @@ final class BLEService: NSObject {
             name: UIApplication.didEnterBackgroundNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(proximityWakeSettingDidChange),
+            name: BLEProximityWakeSettings.didChangeNotification,
+            object: nil
+        )
         #endif
         
         // Tag BLE queue for re-entrancy detection
@@ -5225,6 +5231,14 @@ extension BLEService {
         logBluetoothStatus("entered-background")
         scheduleBluetoothStatusSample(after: 15.0, context: "background-15s")
         // No Local Name; nothing to refresh for advertising policy
+    }
+
+    @objc private func proximityWakeSettingDidChange() {
+        // Opt-out must drop already-armed / in-flight wake connects so the
+        // accessory-open prompt cannot fire after the user turned the setting
+        // off in App Info (#1512 Codex).
+        guard !BLEProximityWakeSettings.enabled else { return }
+        radio.cancelPendingWakeConnects()
     }
     #endif
     

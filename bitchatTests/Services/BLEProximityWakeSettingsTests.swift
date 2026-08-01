@@ -34,4 +34,22 @@ struct BLEProximityWakeSettingsTests {
         BLEProximityWakeSettings.reset(in: defaults)
         #expect(BLEProximityWakeSettings.enabled(in: defaults))
     }
+
+    @Test
+    func standardStoreChangePostsNotification() async {
+        let previous = BLEProximityWakeSettings.enabled
+        defer { BLEProximityWakeSettings.enabled = previous }
+
+        await confirmation("didChangeNotification fires for standard store") { confirm in
+            let observer = NotificationCenter.default.addObserver(
+                forName: BLEProximityWakeSettings.didChangeNotification,
+                object: nil,
+                queue: nil
+            ) { _ in
+                confirm()
+            }
+            defer { NotificationCenter.default.removeObserver(observer) }
+            BLEProximityWakeSettings.enabled = !previous
+        }
+    }
 }
