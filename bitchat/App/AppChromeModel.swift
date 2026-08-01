@@ -71,7 +71,13 @@ final class AppChromeModel: ObservableObject {
         showingFingerprintFor = nil
     }
 
-    func presentAppInfo() {
+    /// Presents the App Info sheet. Pass a pane when the launching control
+    /// promises one (the header gear is labeled "settings"); nil keeps the
+    /// sheet's own sticky last-used pane.
+    func presentAppInfo(pane: AppInfoView.Pane? = nil) {
+        if let pane {
+            AppInfoView.setSelectedPane(pane)
+        }
         isAppInfoPresented = true
     }
 
