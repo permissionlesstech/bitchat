@@ -43,6 +43,7 @@ Terms below are defined once here and used consistently across every chapter; a 
 - **static key** — a device's long-term Curve25519 key pair, used for Noise key agreement. Its SHA-256 fingerprint is the peer's stable identity.
 - **signing key** — a device's long-term Ed25519 key pair, used to sign packets and announcements.
 - **announcement** — a signed packet a device broadcasts to identify itself, carrying its nickname, static key, and signing key in cleartext, plus a short list of direct-neighbor peer IDs.
+- **board post** — a signed, persistent bulletin-board notice broadcast to the mesh or to a Nostr Bridge geohash region; deleted by a matching signed tombstone from the same author.
 - **source route** — an explicit, ordered list of peer IDs a version-2 packet may carry, directing it along a known path instead of relying on flooding.
 - **fragment** — one piece of a packet that exceeded the transport's MTU and was split for independent relay and reassembly at the receiving node.
 - **Noise session** — a live, bidirectional encrypted channel between two connected peers, established with the Noise `XX` handshake pattern.
@@ -54,6 +55,8 @@ Terms below are defined once here and used consistently across every chapter; a 
 - **spray-and-wait** — the copy-budget scheme by which a courier envelope diffuses across couriers who encounter each other, rather than riding a single carrier.
 - **sender outbox** — the persistent, per-peer retry queue a sender holds for private messages that have not yet been delivered or acknowledged.
 - **favorite** / **mutual favorite** — a pinned trust relationship between two devices' static keys; when mutual, it unlocks Nostr-path delivery and a larger courier deposit quota.
+- **private group** — a creator-managed set of up to 16 members sharing a rotating symmetric key, distributed and rotated over Noise sessions with the creator's signature.
+- **vouch** — a signed, transitive statement that the sender of the enclosing Noise session has independently verified a third party's identity.
 - **gossip sync** — the periodic reconciliation of cached public broadcast history between peers, so a peer that missed messages can catch up from another peer's cache.
 - **panic wipe** — the operation that erases all local identity, keys, and persisted protocol state.
 - **relay** (verb) — a BLE mesh node forwarding a packet it did not originate, toward other links.

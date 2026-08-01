@@ -123,7 +123,7 @@ Bare local counters (deposits, handovers, sprays, opens, outbox flushes and drop
 * **Private chat** — end-to-end encrypted messages with delivery and read receipts, over mesh, courier, or Nostr.
 * **Location channels** — geohash-scoped public rooms carried over Nostr relays for regional chat beyond radio range.
 * **Favorites** — the mutual-trust relationship that unlocks Nostr delivery and the larger courier quota.
-* **Media** — files and images fragment over the mesh (1 MiB cap, explicit accept before anything touches disk); couriers carry text only.
+* **Media** — files and images fragment over the mesh, with explicit accept before anything touches disk; couriers carry text only. Size ceilings are specified byte-exactly in [Payloads](spec/04-payloads.md).
 * **Panic wipe** — clears identity keys, favorites, carried courier mail, the sealed outbox, archived public history, and metrics.
 
 ## 8. Security Considerations
