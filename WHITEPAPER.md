@@ -46,9 +46,7 @@ Signed announcements additionally carry the nickname, the Noise static public ke
 
 ### 4.1 Packet Format
 
-A compact binary header (version, type, TTL, timestamp, flags) is followed by an 8-byte sender ID, an optional 8-byte recipient ID, the payload, and an optional Ed25519 signature. Version 2 packets may carry an explicit source route. Signatures exclude the TTL byte so relays can decrement it without invalidating them.
-
-Only `noiseEncrypted` and `noiseHandshake` packets are padded, toward 256/512/1024/2048-byte buckets; every other type — public messages, announcements, board posts, group messages, fragments, files, and voice frames — goes out at its natural length. Padding is PKCS#7-style with pad bytes equal to the pad length, and because that length must fit one byte, a frame needing more than 255 bytes to reach its bucket is emitted unpadded. Payload length is therefore observable for most traffic.
+The packet header, byte offsets, flags, TLV encodings, and padding scheme are specified byte-exactly in [Wire Format](spec/01-wire-format.md).
 
 ### 4.2 Flood Control
 
