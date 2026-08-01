@@ -4,6 +4,8 @@
 
 **Date: July 6, 2026**
 
+> A normative, byte-level protocol specification is being drafted in [`spec/`](spec/README.md). As each spec chapter lands, this document is trimmed of the byte-exact detail that chapter now owns, in favor of a cross-link to it; this whitepaper remains the architecture and design-goals overview.
+
 ---
 
 ## Abstract
