@@ -10,7 +10,7 @@ struct GeohashPeopleList: View {
     private enum Strings {
         static let noneNearby: LocalizedStringKey = "geohash_people.none_nearby"
         static let youSuffix: LocalizedStringKey = "geohash_people.you_suffix"
-        static let blockedTooltip = String(localized: "geohash_people.tooltip.blocked", comment: "Tooltip shown next to users blocked in geohash channels")
+        static let blockedTooltip = String(localized: "geohash_people.tooltip.blocked", comment: "Tooltip shown next to people blocked in geohash channels")
         static let unblock: LocalizedStringKey = "geohash_people.action.unblock"
         static let block: LocalizedStringKey = "geohash_people.action.block"
         static let unblockText = String(localized: "geohash_people.action.unblock", comment: "Context menu action to unblock a person")
