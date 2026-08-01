@@ -99,6 +99,10 @@ final class PeerListModel: ObservableObject {
     func toggleNearbyNotificationMute(peerID: PeerID) {
         let muted = !chatViewModel.isNearbyNotificationMuted(for: peerID)
         chatViewModel.setNearbyNotificationMuted(for: peerID, muted: muted)
+        // Mute lives on the identity manager — PeerListModel's publishers
+        // do not observe it, so refresh now or the row's bell / menu label
+        // stay stale until some unrelated peer update (#1541 Codex).
+        refresh()
     }
 
     func openGeohashDirectMessage(with pubkeyHex: String) {
