@@ -64,7 +64,7 @@ Announcements carry up to 10 direct-neighbor IDs, giving each node a shallow top
 
 ### 4.4 Fragmentation
 
-Packets exceeding the link MTU split into ~469-byte fragments (8-byte fragment ID, index/total header) that relay independently and reassemble at each receiving node (128 concurrent assemblies, 30 s timeout, 1 MiB cap).
+The GATT service/characteristic, MTU-driven chunk sizing, fragment header layout, and advertising behavior are specified byte-exactly in [BLE Transport](spec/02-ble-transport.md).
 
 ### 4.5 Presence
 
