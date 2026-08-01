@@ -433,6 +433,16 @@ private extension AppRuntime {
             return
         }
 
+        // Screenshots are never announced to public channels (see
+        // ChatLifecycleCoordinator.handleScreenshotCaptured). A geohash
+        // timeline screenshot still reveals a place, so warn the person
+        // taking it — locally, the same alert the channel sheet uses.
+        if chatViewModel.selectedPrivateChatPeer == nil,
+           case .location = chatViewModel.activeChannel {
+            appChromeModel.triggerScreenshotPrivacyWarning()
+            return
+        }
+
         chatViewModel.handleScreenshotCaptured()
     }
 

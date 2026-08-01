@@ -7,12 +7,10 @@
 // `ChatDeliveryCoordinatorContextTests` /
 // `ChatPrivateConversationCoordinatorContextTests` exemplars.
 //
-// Scope note: the geohash-screenshot branch publishes via
-// `NostrRelayManager.shared` / `GeoRelayDirectory.shared`; that stays covered
-// by the full view-model tests. The GeoDM read pass, the favorites-backed
-// mesh/Nostr read-receipt branch (favorites are injected through the
-// context), message merging, screenshot notices, and lifecycle persistence
-// flows are covered here.
+// Scope note: the GeoDM read pass, the favorites-backed mesh/Nostr
+// read-receipt branch (favorites are injected through the context), message
+// merging, DM screenshot notices, and lifecycle persistence flows are
+// covered here. Screenshots are never announced to public channels.
 //
 
 import Testing
@@ -42,7 +40,6 @@ private final class MockChatLifecycleContext: ChatLifecycleContext {
     var nostrKeyMapping: [PeerID: String] = [:]
     private(set) var ownerLevelReadPasses: [PeerID] = []
     private(set) var managerReadMarks: [PeerID] = []
-    private(set) var systemMessages: [String] = []
 
     // Conversation store intents
     @discardableResult
@@ -79,8 +76,6 @@ private final class MockChatLifecycleContext: ChatLifecycleContext {
         work()
     }
 
-    func addSystemMessage(_ content: String) { systemMessages.append(content) }
-
     // Peers & sessions
     var nicknamesByPeerID: [PeerID: String] = [:]
     var peersByID: [PeerID: BitchatPeer] = [:]
@@ -99,7 +94,6 @@ private final class MockChatLifecycleContext: ChatLifecycleContext {
     // Routing & receipts
     private(set) var routedPrivateMessages: [(content: String, peerID: PeerID, recipientNickname: String)] = []
     private(set) var routedReadReceipts: [(messageID: String, peerID: PeerID)] = []
-    private(set) var meshBroadcasts: [String] = []
     private(set) var geoReadReceipts: [(messageID: String, recipientHex: String)] = []
 
     func routePrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
@@ -112,20 +106,12 @@ private final class MockChatLifecycleContext: ChatLifecycleContext {
         return routeReadReceiptResult
     }
 
-    func sendMeshMessage(_ content: String, mentions: [String], messageID: String, timestamp: Date) {
-        meshBroadcasts.append(content)
-    }
-
     func sendGeohashReadReceipt(_ messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity) {
         geoReadReceipts.append((messageID, recipientHex))
     }
 
     // Nostr & geohash
-    var isTeleported = false
-    private(set) var recordedGeoParticipants: [String] = []
-
     func deriveNostrIdentity(forGeohash geohash: String) throws -> NostrIdentity { Self.dummyIdentity }
-    func recordGeoParticipant(pubkeyHex: String) { recordedGeoParticipants.append(pubkeyHex) }
 
     // Favorites
     var favoriteRelationshipsByNoiseKey: [Data: FavoritesPersistenceService.FavoriteRelationship] = [:]
@@ -264,40 +250,39 @@ struct ChatLifecycleCoordinatorContextTests {
     }
 
     @Test @MainActor
-    func handleScreenshotCaptured_privateChat_appendsNoticeAndRoutesWhenEstablished() async {
+    func handleScreenshotCaptured_privateChat_echoesOnlyWhenPeerWasNotified() async {
         let context = MockChatLifecycleContext()
         let coordinator = ChatLifecycleCoordinator(context: context)
         let peerID = PeerID(str: "1122334455667788")
         context.selectedPrivateChatPeer = peerID
         context.nicknamesByPeerID[peerID] = "alice"
 
-        // No established session: local notice only, no network send.
+        // No established session: nothing goes out, so nothing is echoed —
+        // a local "you took a screenshot" would imply the peer was told.
         coordinator.handleScreenshotCaptured()
         #expect(context.routedPrivateMessages.isEmpty)
-        #expect(context.privateChats[peerID]?.map(\.content) == ["you took a screenshot"])
-        #expect(context.privateChats[peerID]?.first?.sender == "system")
+        #expect(context.privateChats.isEmpty)
 
-        // Established session: the peer is notified too.
+        // Established session: the peer is notified and the echo appears.
         context.noiseSessionStates[peerID] = .established
         coordinator.handleScreenshotCaptured()
         #expect(context.routedPrivateMessages.count == 1)
         #expect(context.routedPrivateMessages.first?.content == "* me took a screenshot *")
         #expect(context.routedPrivateMessages.first?.recipientNickname == "alice")
-        #expect(context.privateChats[peerID]?.count == 2)
-        // The public-channel system message is not used for private chats.
-        #expect(context.systemMessages.isEmpty)
-        #expect(context.meshBroadcasts.isEmpty)
+        #expect(context.privateChats[peerID]?.map(\.content) == ["you took a screenshot"])
+        #expect(context.privateChats[peerID]?.first?.sender == "system")
     }
 
     @Test @MainActor
-    func handleScreenshotCaptured_meshChannel_broadcastsAndConfirmsLocally() async {
+    func handleScreenshotCaptured_publicChannel_staysSilent() async {
         let context = MockChatLifecycleContext()
         let coordinator = ChatLifecycleCoordinator(context: context)
 
+        // No DM selected: screenshots must never announce presence to a
+        // public channel (mesh broadcast or Nostr relays).
         coordinator.handleScreenshotCaptured()
 
-        #expect(context.meshBroadcasts == ["* me took a screenshot *"])
-        #expect(context.systemMessages == ["you took a screenshot"])
+        #expect(context.routedPrivateMessages.isEmpty)
         #expect(context.privateChats.isEmpty)
     }
 
