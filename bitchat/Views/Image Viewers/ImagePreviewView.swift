@@ -33,16 +33,19 @@ struct ImagePreviewView: View {
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .padding()
+                        .accessibilityLabel(Text("image_preview.accessibility.image"))
                     #else
                     Image(nsImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .padding()
+                        .accessibilityLabel(Text("image_preview.accessibility.image"))
                     #endif
                 } else {
                     ProgressView()
                         .progressViewStyle(.circular)
                         .tint(.white)
+                        .accessibilityLabel(Text("image_preview.accessibility.image"))
                 }
                 Spacer()
                 HStack {
@@ -54,6 +57,7 @@ struct ImagePreviewView: View {
                             .padding(.vertical, 8)
                             .background(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.5), lineWidth: 1))
                     }
+                    .accessibilityLabel(Text("image_preview.accessibility.close"))
                     Spacer()
                     Button(action: saveCopy) {
                         Text("save", comment: "Button to save media to device")
@@ -63,6 +67,7 @@ struct ImagePreviewView: View {
                             .padding(.vertical, 8)
                             .background(RoundedRectangle(cornerRadius: 12).fill(Color.blue.opacity(0.6)))
                     }
+                    .accessibilityLabel(Text("image_preview.accessibility.save"))
                 }
                 .padding([.horizontal, .bottom], 24)
             }
@@ -96,7 +101,9 @@ struct ImagePreviewView: View {
             let panel = NSSavePanel()
             panel.canCreateDirectories = true
             panel.nameFieldStringValue = url.lastPathComponent
-            panel.prompt = "save"
+            // SwiftUI Text("save") resolves via the catalog; NSSavePanel.prompt
+            // is a plain String and must be localized explicitly.
+            panel.prompt = String(localized: "save", defaultValue: "save", comment: "Button to save media to device")
             if panel.runModal() == .OK, let destination = panel.url {
                 do {
                     if FileManager.default.fileExists(atPath: destination.path) {
