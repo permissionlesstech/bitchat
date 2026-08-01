@@ -458,6 +458,30 @@ struct AppArchitectureTests {
         #expect(chromeModel.showingFingerprintFor == nil)
     }
 
+    @Test("Triple-tap panic entry point only raises the confirmation dialog")
+    @MainActor
+    func requestPanicWipeAsksBeforeDestroying() {
+        let viewModel = makeArchitectureViewModel()
+        let privateInboxModel = PrivateInboxModel(conversations: ConversationStore())
+        let chromeModel = AppChromeModel(chatViewModel: viewModel, privateInboxModel: privateInboxModel)
+        viewModel.seedPublicMessages([
+            BitchatMessage(
+                id: "keep-1",
+                sender: "Tester",
+                content: "still here",
+                timestamp: Date(),
+                isRelay: false
+            )
+        ])
+
+        chromeModel.requestPanicWipe()
+
+        // The gesture must never wipe directly — a fumbled tap on the logo
+        // (single-tap opens App Info) cannot be allowed to destroy identity.
+        #expect(chromeModel.showPanicConfirmation)
+        #expect(viewModel.messages.map(\.id) == ["keep-1"])
+    }
+
     @Test("PrivateConversationModel resolves canonical header state for the selected DM")
     @MainActor
     func privateConversationModelResolvesSelectedHeaderState() async {

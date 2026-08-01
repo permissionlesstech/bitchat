@@ -489,14 +489,20 @@ struct ContentView: View {
     }
 
     private var headerView: some View {
-        ContentHeaderView(
-            showSidebar: $showSidebar,
-            showVerifySheet: $showVerifySheet,
-            isNicknameFieldFocused: $isNicknameFieldFocused,
-            headerHeight: headerHeight,
-            headerPeerIconSize: headerPeerIconSize,
-            headerPeerCountFontSize: headerPeerCountFontSize
-        )
+        VStack(spacing: 0) {
+            ContentHeaderView(
+                showSidebar: $showSidebar,
+                showVerifySheet: $showVerifySheet,
+                isNicknameFieldFocused: $isNicknameFieldFocused,
+                headerHeight: headerHeight,
+                headerPeerIconSize: headerPeerIconSize,
+                headerPeerCountFontSize: headerPeerCountFontSize
+            )
+
+            if appChromeModel.panicWipeBlocked {
+                PanicWipeBlockedBanner()
+            }
+        }
     }
 
     private var publicMessageList: some View {

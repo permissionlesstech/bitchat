@@ -2261,7 +2261,9 @@ struct ChatViewModelPanicTests {
 
         // After panic, emergency disconnect should be called
         #expect(transport.emergencyDisconnectCallCount == 1)
-        #expect(viewModel.messages.isEmpty)
+        // Pre-panic content is gone; the only survivor is the system message
+        // confirming the wipe (in duress, "did it work?" must not be a guess).
+        #expect(viewModel.messages.map(\.sender) == ["system"])
         #expect(viewModel.privateChats.isEmpty)
         #expect(viewModel.unreadPrivateMessages.isEmpty)
         #expect(viewModel.selectedPrivateChatPeer == nil)

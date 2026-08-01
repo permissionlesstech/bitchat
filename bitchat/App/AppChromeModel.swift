@@ -18,6 +18,12 @@ final class AppChromeModel: ObservableObject {
     @Published var bluetoothAlertMessage = ""
     @Published var bluetoothState: CBManagerState = .unknown
     @Published var showScreenshotPrivacyWarning = false
+    /// Triple-tapping the logo asks first; the dialog lives on the header.
+    @Published var showPanicConfirmation = false
+    /// Mirrors `ChatViewModel.panicRecoveryBlocked` for the chrome: a wipe
+    /// that did not commit must be visible, not just logged — the person who
+    /// triggered it needs to know data may remain on the device.
+    @Published private(set) var panicWipeBlocked = false
 
     private let chatViewModel: ChatViewModel
     private let onPanicWipe: () -> Void
@@ -111,6 +117,13 @@ final class AppChromeModel: ObservableObject {
         prepareForPanic = preparation
     }
 
+    /// Entry point for the header triple-tap: confirm before destroying.
+    /// The Settings-pane button has always confirmed; the gesture now goes
+    /// through the same dialog so a mis-tap can't wipe the device.
+    func requestPanicWipe() {
+        showPanicConfirmation = true
+    }
+
     func panicClearAllData() {
         prepareForPanic?()
         onPanicWipe()
@@ -144,6 +157,10 @@ final class AppChromeModel: ObservableObject {
         chatViewModel.$bluetoothState
             .receive(on: DispatchQueue.main)
             .assign(to: &$bluetoothState)
+
+        chatViewModel.$panicRecoveryBlocked
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$panicWipeBlocked)
 
         hasUnreadPrivateMessages = !privateInboxModel.unreadPeerIDs.isEmpty
     }
