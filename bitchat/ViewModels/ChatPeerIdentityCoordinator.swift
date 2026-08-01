@@ -440,7 +440,13 @@ final class ChatPeerIdentityCoordinator {
             return cachedStatus
         }
 
-        let hasEverEstablishedSession = getFingerprint(for: peerID) != nil
+        // The status must reflect the LIVE session, never history. The old
+        // mapping returned secured/verified for any peer whose fingerprint was
+        // ever persisted — so after a cold launch or a handshake FAILURE the
+        // DM header still showed a solid lock and the composer still claimed
+        // "end-to-end encrypted" with no secure session in existence. A
+        // remembered fingerprint changes what an established session upgrades
+        // to (verified vs secured); it must not conjure a lock on its own.
         let sessionState = context.noiseSessionState(for: peerID)
 
         let status: EncryptionStatus
@@ -448,11 +454,11 @@ final class ChatPeerIdentityCoordinator {
         case .established:
             status = verifiedEncryptionStatus(for: peerID)
         case .handshaking, .handshakeQueued:
-            status = hasEverEstablishedSession ? verifiedEncryptionStatus(for: peerID) : .noiseHandshaking
+            status = .noiseHandshaking
         case .none:
-            status = hasEverEstablishedSession ? verifiedEncryptionStatus(for: peerID) : .noHandshake
+            status = .noHandshake
         case .failed:
-            status = hasEverEstablishedSession ? verifiedEncryptionStatus(for: peerID) : .none
+            status = .none
         }
 
         context.setCachedEncryptionStatus(status, for: peerID)
