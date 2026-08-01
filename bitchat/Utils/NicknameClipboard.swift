@@ -14,6 +14,9 @@ import AppKit
 #endif
 
 /// Pasteboard writes for people-sheet nickname / display-name copy actions.
+///
+/// Callers pass the full `displayName` (including any `#abcd` suffix) so a
+/// pasted `/msg` target matches what the roster shows.
 enum NicknameClipboard {
     static func copy(_ string: String) {
         #if os(iOS)
