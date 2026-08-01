@@ -615,7 +615,9 @@ private struct ContentPrivateChatSheetView: View {
         // Geohash DMs use BitChat's private-envelope encryption over Nostr —
         // always end-to-end encrypted,
         // even though they carry no Noise session status. Mesh DMs earn the
-        // "encrypted" claim only once the Noise handshake has secured.
+        // "encrypted" claim only once the Noise handshake has secured — or
+        // when the peer is reachable only over Nostr, where delivery is
+        // gift-wrapped end-to-end without a Noise session.
         let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true
         let noiseSecured: Bool = {
             switch privateConversationModel.selectedHeaderState?.encryptionStatus {
@@ -623,7 +625,8 @@ private struct ContentPrivateChatSheetView: View {
             default: return false
             }
         }()
-        if isGeoDM || noiseSecured {
+        let nostrTransport = privateConversationModel.selectedHeaderState?.availability == .nostrAvailable
+        if isGeoDM || noiseSecured || nostrTransport {
             return String(localized: "content.private.caption_encrypted", comment: "Caption above the private chat composer once the session is end-to-end encrypted")
         }
         return String(localized: "content.private.caption", comment: "Caption above the private chat composer before encryption is established")
