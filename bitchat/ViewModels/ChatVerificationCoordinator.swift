@@ -332,7 +332,11 @@ final class ChatVerificationCoordinator {
                 maybeSendMutualVerificationNotification(
                     fingerprint: fingerprint,
                     peerID: peerID,
-                    title: "Mutual verification",
+                    title: String(
+                        localized: "verification.notification.mutual.title",
+                        defaultValue: "Mutual verification",
+                        comment: "Notification title when both peers have verified each other"
+                    ),
                     bodyName: context.unifiedPeer(for: peerID)?.nickname
                         ?? context.resolveNickname(for: peerID),
                     notificationPrefix: "verify-mutual"
@@ -374,8 +378,20 @@ final class ChatVerificationCoordinator {
         let peerName = context.unifiedPeer(for: peerID)?.nickname
             ?? context.resolveNickname(for: peerID)
         context.postLocalNotification(
-            title: "Verified",
-            body: "You verified \(peerName)",
+            title: String(
+                localized: "verification.notification.success.title",
+                defaultValue: "Verified",
+                comment: "Notification title after the user successfully verifies a peer"
+            ),
+            body: String(
+                format: String(
+                    localized: "verification.notification.success.body",
+                    defaultValue: "You verified %@",
+                    comment: "Notification body after verifying a peer; %@ is the peer nickname"
+                ),
+                locale: .current,
+                peerName
+            ),
             identifier: "verify-success-\(peerID)-\(UUID().uuidString)"
         )
 
@@ -384,7 +400,11 @@ final class ChatVerificationCoordinator {
             maybeSendMutualVerificationNotification(
                 fingerprint: fingerprint,
                 peerID: peerID,
-                title: "Mutual verification",
+                title: String(
+                    localized: "verification.notification.mutual.title",
+                    defaultValue: "Mutual verification",
+                    comment: "Notification title when both peers have verified each other"
+                ),
                 bodyName: peerName,
                 notificationPrefix: "verify-mutual"
             )
@@ -411,7 +431,15 @@ private extension ChatVerificationCoordinator {
         lastMutualToastAt[fingerprint] = now
         context.postLocalNotification(
             title: title,
-            body: "You and \(bodyName) verified each other",
+            body: String(
+                format: String(
+                    localized: "verification.notification.mutual.body",
+                    defaultValue: "You and %@ verified each other",
+                    comment: "Notification body when mutual verification completes; %@ is the peer nickname"
+                ),
+                locale: .current,
+                bodyName
+            ),
             identifier: "\(notificationPrefix)-\(peerID)-\(UUID().uuidString)"
         )
     }
