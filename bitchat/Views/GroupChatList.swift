@@ -8,6 +8,8 @@ struct GroupChatList: View {
 
     let groups: [GroupChatRow]
     let onTapGroup: (PeerID) -> Void
+    /// People-sheet search query; empty means show every row.
+    var nameFilter: String = ""
 
     private enum Strings {
         static let header = String(localized: "groups.section.header", comment: "Section header above the private groups list")
@@ -19,7 +21,8 @@ struct GroupChatList: View {
     }
 
     var body: some View {
-        if !groups.isEmpty {
+        let visible = groups.filter { PeopleNameFilter.matches($0.name, query: nameFilter) }
+        if !visible.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 // Same glyph+label header shape as #mesh / across the bridge.
                 PeopleSectionHeader(
@@ -28,7 +31,7 @@ struct GroupChatList: View {
                     title: Strings.header
                 )
 
-                ForEach(groups) { group in
+                ForEach(visible) { group in
                     HStack(spacing: 4) {
                         Text("#\(group.name)")
                             .bitchatFont(size: 14)
