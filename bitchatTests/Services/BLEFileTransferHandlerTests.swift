@@ -24,6 +24,7 @@ struct BLEFileTransferHandlerTests {
         var finishedIncomingFileDeliveries: [URL] = []
         var lastSeenUpdates: [PeerID] = []
         var deliveryAcks: [(messageID: String, peerID: PeerID)] = []
+        var decodeFailures: [(PrivateMediaDecodeFailureReason, PeerID)] = []
         var deliveredMessages: [BitchatMessage] = []
         var shouldAcceptDelivery = true
         var deliveryOutcome = TransportEventDeliveryOutcome.accepted
@@ -188,6 +189,9 @@ struct BLEFileTransferHandlerTests {
                 }
                 outcome = .accepted
                 completion()
+            },
+            reportPrivateMediaDecodeFailure: { reason, peerID in
+                recorder.decodeFailures.append((reason, peerID))
             }
         )
         return BLEFileTransferHandler(environment: environment)
