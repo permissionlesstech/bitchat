@@ -30306,6 +30306,42 @@
         }
       }
     },
+    "conversation.accessibility.mark_read" : {
+      "comment" : "Accessibility label for clearing unread on the open conversation",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mark conversation as read"
+          }
+        }
+      }
+    },
+    "conversation.action.mark_read" : {
+      "comment" : "Context menu action that clears the unread badge for one conversation",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mark as read"
+          }
+        }
+      }
+    },
+    "conversation.tooltip.mark_read" : {
+      "comment" : "Tooltip for clearing unread on the open conversation",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "clear unread badge without sending read receipts"
+          }
+        }
+      }
+    },
     "content.commands.block" : {
       "extractionState" : "manual",
       "localizations" : {
