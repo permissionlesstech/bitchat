@@ -2133,6 +2133,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         )
     }
 
+    func didFailPrivateMediaDecode(from peerID: PeerID, reason: PrivateMediaDecodeFailureReason) {
+        addLocalPrivateSystemMessage(reason.localizedSystemMessage, to: peerID)
+    }
+
     func didReceiveGroupMessage(payload: Data, timestamp: Date) {
         Task { @MainActor [weak self] in
             self?.groupCoordinator.handleGroupMessagePayload(payload, timestamp: timestamp)
