@@ -30306,6 +30306,42 @@
         }
       }
     },
+    "thread.search.accessibility.label" : {
+      "comment" : "Accessibility label for in-thread message search",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "search messages in this conversation"
+          }
+        }
+      }
+    },
+    "thread.search.no_results" : {
+      "comment" : "Empty state when in-thread search finds no matching messages",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no messages match your search"
+          }
+        }
+      }
+    },
+    "thread.search.placeholder" : {
+      "comment" : "Placeholder for the in-thread message search field",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "search this conversation"
+          }
+        }
+      }
+    },
     "content.commands.block" : {
       "extractionState" : "manual",
       "localizations" : {
