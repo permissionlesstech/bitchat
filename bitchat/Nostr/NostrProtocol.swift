@@ -34,6 +34,10 @@ struct NostrProtocol {
         /// recipient tag (`#x`). Regular (stored) kind so it survives until
         /// its NIP-40 expiration — the whole point is store-and-forward.
         case courierDrop = 1401
+        /// Sonar sticker-pack addressable events and the replaceable
+        /// installed-pack list (sonar-sticker-pack-v1). See docs/SONAR-STICKERS.md.
+        case stickerPack = 30031
+        case stickerPackList = 10031
     }
 
     /// Bound work before Base64-decoding either encrypted layer of an inbound
@@ -792,6 +796,28 @@ struct NostrEvent: Codable {
         self.sig = nil
         self.id = "" // Will be set during signing
     }
+
+    /// Construct an event with a raw integer kind (for kinds outside the
+    /// EventKind enum, e.g. outbound kind-30031/10031 sticker events and unit
+    /// tests). Does NOT enforce inbound tag limits; the security gate stays on
+    /// init(from:) for untrusted relay input.
+    init(
+        id: String = "",
+        pubkey: String,
+        createdAt: Int,
+        kind: Int,
+        tags: [[String]],
+        content: String,
+        sig: String? = nil
+    ) {
+        self.id = id
+        self.pubkey = pubkey
+        self.created_at = createdAt
+        self.kind = kind
+        self.tags = tags
+        self.content = content
+        self.sig = sig
+    }
     
     init(from dict: [String: Any]) throws {
         guard let pubkey = dict["pubkey"] as? String,
@@ -802,7 +828,7 @@ struct NostrEvent: Codable {
             throw NostrError.invalidEvent
         }
 
-        guard Self.isWithinInboundTagLimits(tags) else {
+        guard Self.isWithinInboundTagLimits(kind: kind, tags: tags) else {
             throw NostrError.invalidEvent
         }
         
@@ -818,7 +844,20 @@ struct NostrEvent: Codable {
     /// Bounds untrusted relay tag arrays so attackers cannot force large
     /// allocations or expensive joins on the inbound hot path.
     static func isWithinInboundTagLimits(_ tags: [[String]]) -> Bool {
-        guard tags.count <= TransportConfig.nostrMaxEventTags else { return false }
+        isWithinInboundTagLimits(kind: nil, tags: tags)
+    }
+
+    /// Kind-aware variant: Sonar sticker-pack kinds (30031/10031) may carry up
+    /// to ~200 sticker tags, so they get nostrMaxStickerPackEventTags.
+    static func isWithinInboundTagLimits(kind: Int?, tags: [[String]]) -> Bool {
+        let stickerKinds: Set<Int> = [
+            NostrProtocol.EventKind.stickerPack.rawValue,
+            NostrProtocol.EventKind.stickerPackList.rawValue
+        ]
+        let maxTags = (kind.map { stickerKinds.contains($0) } ?? false)
+            ? TransportConfig.nostrMaxStickerPackEventTags
+            : TransportConfig.nostrMaxEventTags
+        guard tags.count <= maxTags else { return false }
 
         for tag in tags {
             guard tag.count <= TransportConfig.nostrMaxEventTagValues else { return false }
