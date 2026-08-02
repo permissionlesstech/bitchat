@@ -183,6 +183,7 @@ final class PrivateConversationModel: ObservableObject {
     func toggleSelectedConversationNotificationMute() {
         guard let peerID = selectedPeerID else { return }
         let fingerprint = chatViewModel.getFingerprint(for: peerID)
+            ?? chatViewModel.peerIDToPublicKeyFingerprint[peerID]
         let scope = ConversationNotificationMuteStore.Scope.direct(
             fingerprint: fingerprint,
             peerID: peerID.id
@@ -254,6 +255,7 @@ final class PrivateConversationModel: ObservableObject {
         }
         if let peerID = selectedPeerID {
             let fingerprint = chatViewModel.getFingerprint(for: peerID)
+                ?? chatViewModel.peerIDToPublicKeyFingerprint[peerID]
             let scope = ConversationNotificationMuteStore.Scope.direct(
                 fingerprint: fingerprint,
                 peerID: peerID.id
