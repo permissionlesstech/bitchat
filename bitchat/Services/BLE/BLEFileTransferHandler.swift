@@ -223,6 +223,13 @@ final class BLEFileTransferHandler {
             filePacket = acceptance.filePacket
             mime = acceptance.mime
         case .failure(let rejection):
+            if isPrivate, env.isPrivateMediaSenderBlocked(peerID) {
+                SecureLogger.debug(
+                    "🚫 Dropping private media from blocked peer \(peerID.id.prefix(8))… before decode failure UX",
+                    category: .security
+                )
+                return true
+            }
             if isPrivate {
                 let reason = PrivateMediaDecodeFailureReason.from(rejection)
                 SecureLogger.error(

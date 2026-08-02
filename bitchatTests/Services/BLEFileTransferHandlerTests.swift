@@ -934,6 +934,21 @@ struct BLEFileTransferHandlerTests {
     }
 
     @Test
+    func blockedPrivateMediaDecodeFailureDoesNotPostSystemLine() {
+        let recorder = Recorder()
+        recorder.blockedPeers = [remotePeerID]
+        let handler = makeHandler(recorder: recorder)
+        let payload = Data([0x00])
+
+        #expect(handler.handlePrivatePayload(
+            payload,
+            from: remotePeerID,
+            timestamp: Date(timeIntervalSince1970: 1_234)
+        ))
+        #expect(recorder.decodeFailures.isEmpty)
+    }
+
+    @Test
     func decryptedPrivateFileOverPayloadCapIsRejectedBeforeQuotaOrDiskWrite() {
         let recorder = Recorder()
         let handler = makeHandler(recorder: recorder)
