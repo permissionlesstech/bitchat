@@ -126,3 +126,5 @@ Known gaps, so nobody assumes more protection than exists:
 - **No published public TestFlight link yet.** [#966](https://github.com/permissionlesstech/bitchat/issues/966) is rescoped to that single remaining distribution ask; when maintainers publish a link, add it under "App Store fallbacks (TestFlight)" above.
 - **No notarized Developer ID `.dmg` on Releases yet.** [#1097](https://github.com/permissionlesstech/bitchat/issues/1097) tracks that ask; see "macOS Developer ID / notarized `.dmg`" above.
 - **No non-GitHub source mirror.** Every remote for this project is on the platform the takedown demands were served to. A mirror on independent infrastructure, published before it is needed, would mean a takedown does not remove the ability to verify.
+- **App Store iOS builds can lag Android private-media fixes.** See [docs/MEDIA-INTEROP.md](MEDIA-INTEROP.md) and [#1518](https://github.com/permissionlesstech/bitchat/issues/1518) before treating silent Android→iOS image drops as MIME bugs. App Store **1.7.1** includes the July private-media stack (#1434/#1466/#1467); **1.7.0** already included #1402.
+
