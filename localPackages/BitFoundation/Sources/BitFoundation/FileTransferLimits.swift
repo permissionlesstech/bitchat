@@ -7,15 +7,8 @@ public enum FileTransferLimits {
     /// Compressed images after downscaling should comfortably fit under this budget.
     public static let maxImageBytes: Int = 512 * 1024 // 512 KiB
     /// Worst-case size once TLV metadata and binary packet framing are included for the largest payloads.
-    public static let maxFramedFileBytes: Int = {
-        let maxMetadataBytes = Int(UInt16.max) * 2 // fileName + mimeType TLVs
-        let tlvEnvelopeOverhead = 18 + maxMetadataBytes // TLV tags + lengths + metadata bytes
-        let binaryEnvelopeOverhead = BinaryProtocol.v2HeaderSize
-            + BinaryProtocol.senderIDSize
-            + BinaryProtocol.recipientIDSize
-            + BinaryProtocol.signatureSize
-        return maxPayloadBytes + tlvEnvelopeOverhead + binaryEnvelopeOverhead
-    }()
+    /// MUST stay in sync with AppConstants.Protocol.MAX_PAYLOAD_LENGTH in the Android repo (issue #1618).
+    public static let maxFramedFileBytes: Int = 10_485_760
 
     public static func isValidPayload(_ size: Int) -> Bool {
         size <= maxPayloadBytes
