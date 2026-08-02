@@ -1,6 +1,7 @@
 import BitFoundation
 import Foundation
 import Testing
+@testable import bitchat
 
 struct ChatPlaintextExporterTests {
     private static let fixedDate = Date(timeIntervalSince1970: 1_700_000_000)
