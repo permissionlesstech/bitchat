@@ -94,6 +94,22 @@ What remains as a product decision — not something a random mirror can invent 
 
 Android sideloading (signed APKs) lives in the [bitchat-android](https://github.com/permissionlesstech/bitchat-android) project and is out of scope for this iOS/macOS repository.
 
+## macOS Developer ID / notarized `.dmg` (#1097)
+
+A notarized Developer ID `.dmg` attached to GitHub Releases would give macOS
+people a sideload path that still carries Apple's signature chain — stronger
+than an unsigned forum binary, weaker than the App Store for verification
+storytelling, and useful when the store is unreachable.
+
+Status on main today:
+
+- Tagged releases already ship an **attested source manifest** (build from
+  verified source remains the supported non–App Store path).
+- There is **no** published notarized `.dmg` yet — that needs release-signing
+  infrastructure and a maintainer decision on key custody.
+- Until that lands, treat any third-party `.dmg` / `.app` the same as other
+  unverifiable compiled builds above.
+
 ## For maintainers
 
 Cutting a release:
@@ -101,10 +117,12 @@ Cutting a release:
 - Push the tag. `source-manifest.yml` runs and attaches `SOURCE-MANIFEST.txt` to the release; if the release does not exist yet, collect the manifest from the workflow artifact and attach it when you publish.
 - Sign the tag (`git tag -s`). A signed tag lets anyone verify the release came from a key you control, independent of GitHub. This needs a published key fingerprint to be useful — see the gap below.
 - Note the commit hash somewhere outside this repository. If the repository is taken down, a hash recorded elsewhere is what lets people verify a mirror.
+- If/when notarized Developer ID `.dmg` artifacts exist, attach them to the same release as `SOURCE-MANIFEST.txt` and link them from the "macOS Developer ID" section above.
 
 Known gaps, so nobody assumes more protection than exists:
 
 - **No published signing key.** Tags are not currently verifiable against a known key. Publishing a fingerprint through channels independent of GitHub, and signing tags with it from then on, is the missing piece.
 - **No verifiable compiled builds outside the App Store.** Closing this needs either a signed-and-notarized release pipeline or a reproducible build, and until one exists the guidance above stands.
 - **No published public TestFlight link yet.** [#966](https://github.com/permissionlesstech/bitchat/issues/966) is rescoped to that single remaining distribution ask; when maintainers publish a link, add it under "App Store fallbacks (TestFlight)" above.
+- **No notarized Developer ID `.dmg` on Releases yet.** [#1097](https://github.com/permissionlesstech/bitchat/issues/1097) tracks that ask; see "macOS Developer ID / notarized `.dmg`" above.
 - **No non-GitHub source mirror.** Every remote for this project is on the platform the takedown demands were served to. A mirror on independent infrastructure, published before it is needed, would mean a takedown does not remove the ability to verify.
