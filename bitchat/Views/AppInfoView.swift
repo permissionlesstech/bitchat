@@ -79,25 +79,12 @@ struct AppInfoView: View {
             }
             static let bridgeNoCell = String(localized: "app_info.settings.bridge.no_cell", defaultValue: "no rendezvous cell yet — needs location access or a nearby bridge peer", comment: "Caption under the mesh bridge toggle when the bridge is on but has no geohash cell to meet on")
             static func bridgeStatusSummary(enabled: Bool, cell: String?, bridgedCount: Int, nearbyOnly: Bool) -> String {
-                if !enabled {
-                    return String(localized: "app_info.settings.bridge.status.off", defaultValue: "bridge off — only radio-range mesh traffic", comment: "Bridge status line when the mesh bridge toggle is off")
-                }
-                let cellPart = cell.map {
-                    String(
-                        format: String(localized: "app_info.settings.bridge.status.cell", defaultValue: "rendezvous #%@", comment: "Bridge status fragment showing rendezvous cell; %@ is geohash"),
-                        locale: .current,
-                        $0
-                    )
-                } ?? String(localized: "app_info.settings.bridge.status.no_cell", defaultValue: "no rendezvous cell", comment: "Bridge status fragment when no cell is active")
-                let peoplePart = String(
-                    format: String(localized: "app_info.settings.bridge.status.people", defaultValue: "%lld people via bridge", comment: "Bridge status fragment counting bridged participants; %lld is count"),
-                    locale: .current,
-                    bridgedCount
+                BridgeStatusSummary.formatted(
+                    enabled: enabled,
+                    cell: cell,
+                    bridgedCount: bridgedCount,
+                    nearbyOnly: nearbyOnly
                 )
-                let composePart = nearbyOnly
-                    ? String(localized: "app_info.settings.bridge.status.compose_nearby", defaultValue: "compose: nearby only", comment: "Bridge status fragment when outgoing mesh messages stay on radio")
-                    : String(localized: "app_info.settings.bridge.status.compose_bridged", defaultValue: "compose: bridged", comment: "Bridge status fragment when outgoing mesh messages cross the bridge")
-                return [cellPart, peoplePart, composePart].joined(separator: " · ")
             }
 
             // Moved from LocationChannelsSheet; keys unchanged. (The former
