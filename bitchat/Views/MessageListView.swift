@@ -39,6 +39,9 @@ struct MessageListView: View {
 
     @State private var showMessageActions = false
     @State private var showClearConfirmation = false
+    @State private var showExportConfirmation = false
+    @State private var showExportSheet = false
+    @State private var exportPlaintext = ""
     @State private var lastScrollTime: Date = .distantPast
     @State private var scrollThrottleTimer: Timer?
     @State private var unseenCount = 0
@@ -187,6 +190,11 @@ struct MessageListView: View {
                     jumpToLatestPill(proxy: proxy)
                 }
             }
+            .overlay(alignment: .bottomLeading) {
+                if !messageItems.isEmpty {
+                    exportChatButton()
+                }
+            }
             .onOpenURL(perform: handleOpenURL)
             .onTapGesture(count: 3) {
                 showClearConfirmation = true
@@ -200,6 +208,21 @@ struct MessageListView: View {
                     conversationUIModel.clearCurrentConversation()
                 }
                 Button("common.cancel", role: .cancel) {}
+            }
+            .confirmationDialog(
+                String(localized: "chat.export.confirm_title", comment: "Title of the confirmation shown before exporting chat history as plaintext"),
+                isPresented: $showExportConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button(String(localized: "chat.export.confirm_action", comment: "Confirms exporting chat history after the sealing warning")) {
+                    beginExport(messages: messages)
+                }
+                Button("common.cancel", role: .cancel) {}
+            } message: {
+                Text(String(localized: "chat.export.confirm_message", comment: "Body of the export confirmation explaining the file is readable by anyone who gets a copy"))
+            }
+            .sheet(isPresented: $showExportSheet) {
+                ShareActivityView(text: exportPlaintext)
             }
             .onAppear {
                 scrollToBottom(on: proxy)
@@ -728,6 +751,58 @@ private extension MessageListView {
 
     func privateMessageCount(for privatePeer: PeerID?) -> Int {
         conversationMessages(for: privatePeer).count
+    }
+
+    func exportChatButton() -> some View {
+        Button {
+            showExportConfirmation = true
+        } label: {
+            Image(systemName: "square.and.arrow.up")
+                .font(.bitchatSystem(size: 11, weight: .semibold))
+                .foregroundColor(palette.primary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(palette.background.opacity(0.92))
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(palette.secondary.opacity(0.35), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .padding(.leading, 12)
+        .padding(.bottom, 8)
+        .accessibilityLabel(
+            String(localized: "chat.export.accessibility", comment: "Accessibility label for the export-chat control")
+        )
+    }
+
+    func beginExport(messages: [BitchatMessage]) {
+        exportPlaintext = ChatPlaintextExporter.exportText(
+            messages: messages,
+            context: ChatPlaintextExporter.Context(scopeTitle: exportScopeTitle())
+        )
+        showExportSheet = true
+    }
+
+    func exportScopeTitle() -> String {
+        if privatePeer != nil {
+            let name = privateConversationModel.selectedHeaderState?.displayName
+                ?? conversationMessages(for: privatePeer).last(where: { $0.sender != "system" })?.sender
+                ?? privatePeer!.id
+            return String(
+                format: String(localized: "chat.export.scope.dm", comment: "Export header naming a private conversation; %@ is the peer nickname"),
+                locale: .current,
+                name
+            )
+        }
+        switch locationChannelsModel.selectedChannel {
+        case .mesh:
+            return String(localized: "chat.export.scope.mesh", comment: "Export header for the public mesh channel")
+        case .location(let channel):
+            return String(
+                format: String(localized: "chat.export.scope.geohash", comment: "Export header for a location channel; %@ is the geohash"),
+                locale: .current,
+                channel.geohash
+            )
+        }
     }
 }
 
