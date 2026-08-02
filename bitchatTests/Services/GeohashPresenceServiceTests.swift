@@ -227,7 +227,7 @@ final class GeohashPresenceServiceTests: XCTestCase {
     }
 
     private func waitUntil(
-        timeout: TimeInterval = 1.0,
+        timeout: TimeInterval = TestConstants.settleTimeout,
         condition: @escaping @MainActor () -> Bool
     ) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)

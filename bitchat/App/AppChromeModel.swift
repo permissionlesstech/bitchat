@@ -94,7 +94,8 @@ final class AppChromeModel: ObservableObject {
     /// neighbor claim but never announced to us) fall back to a short ID.
     func meshTopologyDisplayModel() -> MeshTopologyDisplayModel {
         let mesh = chatViewModel.meshService
-        guard let snapshot = mesh.currentMeshTopology() else { return .empty }
+        guard let diagnostics = mesh as? MeshDiagnosing,
+              let snapshot = diagnostics.currentMeshTopology() else { return .empty }
         let nicknames = mesh.getPeerNicknames()
 
         let nodes = snapshot.nodes.map { peerID -> MeshTopologyDisplayModel.Node in

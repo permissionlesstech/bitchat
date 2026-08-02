@@ -176,10 +176,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     var networkActivationAllowed: Bool { !panicRecoveryBlocked }
     @Published var nickname: String = "" {
         didSet {
-            // Trim whitespace whenever nickname is set; whitespace-only becomes ""
-            let trimmed = nickname.trimmedOrNilIfEmpty ?? ""
-            if trimmed != nickname {
-                nickname = trimmed
+            // Canonicalize whenever nickname is set: trim whitespace
+            // (whitespace-only becomes "") and apply Unicode NFC so accented
+            // names match regardless of how they were typed.
+            let cleaned = (nickname.trimmedOrNilIfEmpty ?? "").normalizedNickname
+            if cleaned != nickname {
+                nickname = cleaned
                 return
             }
             // Update mesh service nickname if it's initialized
@@ -1069,7 +1071,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     }
 
     func purgeArchivedPublicMessages() {
-        meshService.purgeAllArchivedPublicMessages()
+        (meshService as? MeshPublicArchiving)?.purgeAllArchivedPublicMessages()
     }
 
     /// Queues a system message for the next geohash channel visit. (Tiny
@@ -1580,8 +1582,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
         // Quiesce the mesh before clearing stores. Identity replacement below
         // deliberately stays stopped until media deletion and marker commit.
-        if let bleService = meshService as? BLEService {
-            bleService.suspendForPanicReset()
+        if let panicTransport = meshService as? PanicResettingTransport {
+            panicTransport.suspendForPanicReset()
         } else {
             meshService.emergencyDisconnectAll()
         }
@@ -1730,8 +1732,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
         // Replace the BLE identity while keeping the radio stopped. It may
         // reopen only after the durable panic transaction commits.
-        if let bleService = meshService as? BLEService {
-            bleService.resetIdentityForPanic(
+        if let panicTransport = meshService as? PanicResettingTransport {
+            panicTransport.resetIdentityForPanic(
                 currentNickname: nickname,
                 restartServices: false
             )
@@ -1776,18 +1778,19 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
         guard panicCompleted else { return false }
 
-        if let bleService = meshService as? BLEService {
+        if let panicTransport = meshService as? PanicResettingTransport {
             // Startup recovery reopens admission but leaves actual service
             // start to the bootstrapper immediately after this method.
-            bleService.completePanicReset(
+            panicTransport.completePanicReset(
                 restartServices: restartServices
             )
         }
 
         if restartServices {
             // All persistent state and media are gone. Bring each service back
-            // only now, under the new identity.
-            if !(meshService is BLEService) {
+            // only now, under the new identity — a panic-resetting transport
+            // owns its own restart sequencing above.
+            if !(meshService is PanicResettingTransport) {
                 meshService.startServices()
             }
 

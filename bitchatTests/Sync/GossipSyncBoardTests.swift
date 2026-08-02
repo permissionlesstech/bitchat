@@ -48,7 +48,7 @@ struct GossipSyncBoardTests {
         let request = RequestSyncPacket(p: 4, m: 1, data: Data(), types: .board)
         manager.handleRequestSync(from: PeerID(str: "FFFFFFFFFFFFFFFF"), request: request)
 
-        try await TestHelpers.waitFor({ delegate.packets.count == 1 }, timeout: TestConstants.shortTimeout)
+        try await TestHelpers.waitFor({ delegate.packets.count == 1 }, timeout: TestConstants.settleTimeout)
         let sent = try #require(delegate.packets.first)
         #expect(sent.type == MessageType.boardPost.rawValue)
         #expect(sent.isRSR)
@@ -69,7 +69,7 @@ struct GossipSyncBoardTests {
         let boardRequest = RequestSyncPacket(p: 4, m: 1, data: Data(), types: .board)
         manager.handleRequestSync(from: PeerID(str: "FFFFFFFFFFFFFFFF"), request: boardRequest)
 
-        try await TestHelpers.waitFor({ delegate.packets.count == 1 }, timeout: TestConstants.shortTimeout)
+        try await TestHelpers.waitFor({ delegate.packets.count == 1 }, timeout: TestConstants.settleTimeout)
         #expect(delegate.packets.count == 1)
         #expect(delegate.packets.first?.type == MessageType.boardPost.rawValue)
     }

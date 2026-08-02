@@ -13,6 +13,58 @@ import BitFoundation
 
 struct BLEServiceCoreTests {
 
+    /// Records ping completions (delivered on the main actor) so the
+    /// injected-clock test can assert from its own thread.
+    private final class MeshPingResultCollector: @unchecked Sendable {
+        private let lock = NSLock()
+        private var recorded: [MeshPingResult?] = []
+        var results: [MeshPingResult?] { lock.withLock { recorded } }
+        func record(_ result: MeshPingResult?) {
+            lock.withLock { recorded.append(result) }
+        }
+    }
+
+    /// The ping deadline asserted on an injected clock: the real 10s
+    /// product constant, no wall-clock in the loop. This is the pattern
+    /// for every engine deadline — the timeout must not fire early, must
+    /// fire exactly once at the deadline, and must stay consumed after.
+    @Test
+    func meshPingTimesOutOnTheInjectedClockExactlyOnce() async throws {
+        let scheduler = BLEEngineManualScheduler()
+        let ble = makeService(engineScheduler: scheduler)
+        let peer = PeerID(str: "aabbccdd00112233")
+        ble._test_seedConnectedPeer(peer, nickname: "Alice")
+
+        let collector = MeshPingResultCollector()
+        ble.sendMeshPing(to: peer) { result in
+            collector.record(result)
+        }
+        // The probe registers and its deadline schedules on the engine;
+        // fence that submission before touching the clock.
+        await ble._test_drainNoiseMessagePipeline()
+        #expect(scheduler.pendingCount == 1)
+
+        // A hair before the deadline nothing may fire.
+        scheduler.advance(by: TransportConfig.meshPingTimeoutSeconds - 0.01)
+        await ble._test_drainNoiseMessagePipeline()
+        #expect(collector.results.isEmpty)
+
+        // Crossing the deadline expires the probe: nil, exactly once, on
+        // the main actor.
+        scheduler.advance(by: 0.02)
+        let completed = await TestHelpers.waitUntil(
+            { collector.results.count == 1 },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(completed)
+        #expect(collector.results == [nil])
+
+        // The deadline is consumed — more time cannot re-fire it.
+        scheduler.advance(by: TransportConfig.meshPingTimeoutSeconds * 2)
+        await ble._test_drainNoiseMessagePipeline()
+        #expect(collector.results.count == 1)
+    }
+
     @Test
     func duplicatePacket_isDeduped() async throws {
         let ble = makeService()
@@ -39,7 +91,7 @@ struct BLEServiceCoreTests {
         ble._test_handlePacket(packet, fromPeerID: sender, signingPublicKey: signingKey)
         let receivedDuplicate = await TestHelpers.waitUntil(
             { delegate.publicMessagesSnapshot().count > 1 },
-            timeout: TestConstants.shortTimeout
+            timeout: TestConstants.negativeWaitWindow
         )
         #expect(!receivedDuplicate)
 
@@ -117,7 +169,7 @@ struct BLEServiceCoreTests {
 
         let unsignedRelayed = await TestHelpers.waitUntil(
             { outbound.count(ofType: .leave) > 0 },
-            timeout: TestConstants.shortTimeout
+            timeout: TestConstants.negativeWaitWindow
         )
         #expect(!unsignedRelayed)
         #expect(ble.currentPeerSnapshots().contains { $0.peerID == alicePeerID })
@@ -133,7 +185,7 @@ struct BLEServiceCoreTests {
 
         let badSignatureRelayed = await TestHelpers.waitUntil(
             { outbound.count(ofType: .leave) > 0 },
-            timeout: TestConstants.shortTimeout
+            timeout: TestConstants.negativeWaitWindow
         )
         #expect(!badSignatureRelayed)
         #expect(ble.currentPeerSnapshots().contains { $0.peerID == alicePeerID })
@@ -502,26 +554,19 @@ struct BLEServiceCoreTests {
         )
         let replay = try #require(victim.signPacket(unsigned), "Failed to sign replayed announce")
         #expect(ble._test_recordIngressIfNew(packet: replay, linkID: attackerLink))
-        let rebindGate = VerifiedDirectRebindGate()
-        ble._test_afterVerifiedDirectRebindEnqueued = rebindGate.pause
-        defer {
-            rebindGate.release()
-            ble._test_afterVerifiedDirectRebindEnqueued = nil
-        }
         ble._test_handlePacket(replay, fromPeerID: victimPeerID, preseedPeer: false)
 
-        let announcePaused = await TestHelpers.waitUntil(
-            { rebindGate.hasPaused },
+        // The rebind, its Noise-proof retirement, and the ordinary
+        // reconnect preparation are one engine slot: no observer can see
+        // the new binding while the victim's stale sending keys are still
+        // available. Once the binding is visible, the keys must already be
+        // gone.
+        let rebound = await TestHelpers.waitUntil(
+            { ble._test_centralBinding(attackerLink) == victimPeerID },
             timeout: TestConstants.longTimeout
         )
-        try #require(announcePaused)
-
-        // Rebind and ordinary reconnect preparation are one bleQueue
-        // critical section. Once the binding is visible, stale sending keys
-        // must already be unavailable.
-        #expect(ble._test_centralBinding(attackerLink) == victimPeerID)
+        try #require(rebound)
         #expect(!ble.canDeliverSecurely(to: victimPeerID))
-        rebindGate.release()
 
         let outbound = OutboundPacketTap()
         ble._test_onOutboundPacket = { outbound.record($0) }
@@ -908,6 +953,17 @@ struct BLEServiceCoreTests {
         // old generation the remote may no longer be able to read.
         #expect(outbound.count(ofType: .noiseEncrypted) == 0)
 
+        // The capability-proof watchdog armed at the original authentication
+        // is still live and can genuinely reach its real 5s deadline here on
+        // a stalled CI runner. Fire it deterministically: its drain must
+        // respect the deferred-until-convergence state instead of encrypting
+        // the parked queues under the restored keys (the exact silent loss
+        // the defer path exists to prevent). The retry below then still
+        // finds the queues parked.
+        ble._test_forcePrivateMediaProofTimeout(for: alicePeerID)
+        await ble._test_drainNoiseMessagePipeline()
+        #expect(outbound.count(ofType: .noiseEncrypted) == 0)
+
         // Release the mandatory convergence retry: it retires the restored
         // session and starts a fresh XX exchange with the live peer.
         recoveryGate.release()
@@ -1209,7 +1265,7 @@ struct BLEServiceCoreTests {
         let didObservePanicClosure = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 let didObserveClosure = panicIngressObserver.waitUntilClosed(
-                    timeout: TestConstants.defaultTimeout
+                    timeout: TestConstants.settleTimeout
                 )
                 gate.release()
                 continuation.resume(returning: didObserveClosure)
@@ -1340,7 +1396,7 @@ struct BLEServiceCoreTests {
         // rotated sender IDs never bought a sixth response.
         let exceededBudget = await TestHelpers.waitUntil(
             { outbound.count(ofType: .pong) > budget },
-            timeout: TestConstants.shortTimeout
+            timeout: TestConstants.negativeWaitWindow
         )
         #expect(!exceededBudget)
         #expect(outbound.count(ofType: .pong) == budget)
@@ -1403,35 +1459,6 @@ private final class SessionReconcileCounter: @unchecked Sendable {
     func count(for peerID: PeerID) -> Int {
         lock.lock(); defer { lock.unlock() }
         return reconciles.filter { $0 == peerID }.count
-    }
-}
-
-private final class VerifiedDirectRebindGate: @unchecked Sendable {
-    private let condition = NSCondition()
-    private var paused = false
-    private var released = false
-
-    var hasPaused: Bool {
-        condition.lock()
-        defer { condition.unlock() }
-        return paused
-    }
-
-    func pause() {
-        condition.lock()
-        paused = true
-        condition.broadcast()
-        while !released {
-            condition.wait()
-        }
-        condition.unlock()
-    }
-
-    func release() {
-        condition.lock()
-        released = true
-        condition.broadcast()
-        condition.unlock()
     }
 }
 
@@ -1499,7 +1526,8 @@ private final class PanicIngressObserver: @unchecked Sendable {
 
 private func makeService(
     noiseResponderHandshakeTimeout: TimeInterval =
-        NoiseSecurityConstants.ordinaryResponderHandshakeTimeout
+        NoiseSecurityConstants.ordinaryResponderHandshakeTimeout,
+    engineScheduler: BLEEngineScheduling = BLEEngineDispatchScheduler()
 ) -> BLEService {
     let keychain = MockKeychain()
     let identityManager = MockIdentityManager(keychain)
@@ -1509,7 +1537,8 @@ private func makeService(
         idBridge: idBridge,
         identityManager: identityManager,
         initializeBluetoothManagers: false,
-        noiseResponderHandshakeTimeout: noiseResponderHandshakeTimeout
+        noiseResponderHandshakeTimeout: noiseResponderHandshakeTimeout,
+        engineScheduler: engineScheduler
     )
 }
 

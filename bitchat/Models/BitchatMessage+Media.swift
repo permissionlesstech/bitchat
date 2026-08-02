@@ -24,7 +24,7 @@ extension BitchatMessage {
             do {
                 let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
                 let filesDir = base.appendingPathComponent("files", isDirectory: true)
-                try FileManager.default.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: nil)
+                try FileManager.default.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: BLEIncomingFileStore.mediaProtectionAttributes)
                 self.filesDir = filesDir
             } catch {
                 filesDir = nil
