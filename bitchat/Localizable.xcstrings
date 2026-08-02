@@ -16925,6 +16925,936 @@
         }
       }
     },
+    "channel.share.action" : {
+      "comment" : "Context-menu / accessibility / button label that shares a location-channel invite",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مشاركة القناة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "চ্যানেল শেয়ার করুন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kanal teilen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "share channel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "compartir canal"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اشتراک‌گذاری کانال"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "i-share ang channel"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "partager le canal"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שתף ערוץ"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "चैनल साझा करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bagikan kanal"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "condividi canale"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "チャンネルを共有"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "채널 공유"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kongsi saluran"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "च्यानल सेयर गर्नुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kanaal delen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "udostępnij kanał"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "partilhar canal"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "compartilhar canal"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "поделиться каналом"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dela kanal"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "சேனலைப் பகிர்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "แชร์ช่อง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kanalı paylaş"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "поділитися каналом"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "چینل شیئر کریں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chia sẻ kênh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享频道"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享頻道"
+          }
+        }
+      }
+    },
+    "channel.share.payload" : {
+      "comment" : "Plain-text share payload for a location channel; %1$@ is the geohash, %2$@ is the App Store URL",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انضم إلى قناة #%1$@ على bitchat: bitchat://geohash/%1$@ — جديد على bitchat؟ حمّله من %2$@ ثم اكتب #%1$@ ضمن قنوات الموقع."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat-এ #%1$@ চ্যানেলে যোগ দিন: bitchat://geohash/%1$@ — bitchat-এ নতুন? %2$@ থেকে নিন, তারপর লোকেশন চ্যানেলে #%1$@ টাইপ করুন।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tritt dem #%1$@-kanal auf bitchat bei: bitchat://geohash/%1$@ — neu bei bitchat? hole es unter %2$@ und tippe dann #%1$@ unter standort-kanäle."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "join the #%1$@ channel on bitchat: bitchat://geohash/%1$@ — new to bitchat? get it at %2$@ then type #%1$@ under location channels."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "únete al canal #%1$@ en bitchat: bitchat://geohash/%1$@ — ¿nuevo en bitchat? consíguelo en %2$@ y luego escribe #%1$@ en canales de ubicación."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "به کانال #%1$@ در bitchat بپیوندید: bitchat://geohash/%1$@ — تازه‌واردید؟ از %2$@ بگیرید و سپس #%1$@ را در کانال‌های موقعیت وارد کنید."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sumali sa #%1$@ channel sa bitchat: bitchat://geohash/%1$@ — bago sa bitchat? kunin ito sa %2$@ tapos i-type ang #%1$@ sa mga channel ng lokasyon."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "rejoins le canal #%1$@ sur bitchat : bitchat://geohash/%1$@ — nouveau sur bitchat ? télécharge-le sur %2$@ puis saisis #%1$@ dans les canaux localisation."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הצטרף לערוץ #%1$@ ב-bitchat: bitchat://geohash/%1$@ — חדש ב-bitchat? הורד מ-%2$@ ואז הקלד #%1$@ תחת ערוצי מיקום."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat पर #%1$@ चैनल से जुड़ें: bitchat://geohash/%1$@ — bitchat नए हैं? %2$@ से पाएँ, फिर लोकेशन चैनल में #%1$@ टाइप करें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gabung ke kanal #%1$@ di bitchat: bitchat://geohash/%1$@ — baru di bitchat? unduh di %2$@ lalu ketik #%1$@ di kanal lokasi."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "entra nel canale #%1$@ su bitchat: bitchat://geohash/%1$@ — nuovo su bitchat? scaricalo da %2$@ e poi digita #%1$@ nei canali posizione."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchatの#%1$@チャンネルに参加: bitchat://geohash/%1$@ — はじめてですか？ %2$@ から入手し、ロケーションチャンネルで #%1$@ と入力してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat의 #%1$@ 채널에 참여하세요: bitchat://geohash/%1$@ — bitchat이 처음이신가요? %2$@에서 받은 뒤 위치 채널에서 #%1$@을(를) 입력하세요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sertai saluran #%1$@ di bitchat: bitchat://geohash/%1$@ — baharu di bitchat? dapatkannya di %2$@ kemudian taip #%1$@ di bawah kanal lokasi."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat मा #%1$@ च्यानलमा सामेल हुनुहोस्: bitchat://geohash/%1$@ — bitchat मा नयाँ? %2$@ बाट लिनुहोस्, त्यसपछि स्थान च्यानलमा #%1$@ टाइप गर्नुहोस्।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "doe mee met het #%1$@-kanaal op bitchat: bitchat://geohash/%1$@ — nieuw bij bitchat? haal het op %2$@ en typ daarna #%1$@ onder locatiekanalen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dołącz do kanału #%1$@ w bitchat: bitchat://geohash/%1$@ — nowość w bitchat? pobierz z %2$@, a potem wpisz #%1$@ w kanałach lokalizacji."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "junta-te ao canal #%1$@ no bitchat: bitchat://geohash/%1$@ — novo no bitchat? obtém-no em %2$@ e depois escreve #%1$@ em canais de localização."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "entre no canal #%1$@ no bitchat: bitchat://geohash/%1$@ — novo no bitchat? baixe em %2$@ e depois digite #%1$@ em canais de localização."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "присоединяйся к каналу #%1$@ в bitchat: bitchat://geohash/%1$@ — впервые в bitchat? скачай на %2$@, затем введи #%1$@ в каналах локации."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gå med i #%1$@-kanalen på bitchat: bitchat://geohash/%1$@ — ny på bitchat? hämta den på %2$@ och skriv sedan #%1$@ under platskanaler."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat-இல் #%1$@ சேனலில் சேரவும்: bitchat://geohash/%1$@ — bitchat புதியவரா? %2$@ இல் பெற்று, பின்னர் இட சேனல்களில் #%1$@ என தட்டச்சு செய்யவும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เข้าร่วมช่อง #%1$@ บน bitchat: bitchat://geohash/%1$@ — ใหม่กับ bitchat? ดาวน์โหลดที่ %2$@ แล้วพิมพ์ #%1$@ ในช่องตามตำแหน่ง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat'te #%1$@ kanalına katıl: bitchat://geohash/%1$@ — bitchat'te yeni misin? %2$@ adresinden indir, sonra konum kanallarında #%1$@ yaz."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "приєднуйся до каналу #%1$@ у bitchat: bitchat://geohash/%1$@ — вперше в bitchat? завантаж на %2$@, потім введи #%1$@ у каналах локації."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat پر #%1$@ چینل میں شامل ہوں: bitchat://geohash/%1$@ — bitchat نئے ہیں؟ %2$@ سے حاصل کریں، پھر لوکیشن چینلز میں #%1$@ ٹائپ کریں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tham gia kênh #%1$@ trên bitchat: bitchat://geohash/%1$@ — mới dùng bitchat? tải tại %2$@ rồi nhập #%1$@ trong kênh vị trí."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加入 bitchat 上的 #%1$@ 频道：bitchat://geohash/%1$@ — 初次使用 bitchat？前往 %2$@ 获取，然后在位置频道中输入 #%1$@。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加入 bitchat 上的 #%1$@ 頻道：bitchat://geohash/%1$@ — 初次使用 bitchat？前往 %2$@ 取得，然後在位置頻道中輸入 #%1$@。"
+          }
+        }
+      }
+    },
+    "channel.share.precision_warning.confirm" : {
+      "comment" : "Confirms sharing a fine-precision location channel after the OpSec warning",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المشاركة على أي حال"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "তবুও শেয়ার করুন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "trotzdem teilen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "share anyway"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "compartir de todos modos"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "باز هم اشتراک‌گذاری"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "i-share pa rin"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "partager quand même"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שתף בכל זאת"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "फिर भी साझा करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bagikan saja"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "condividi comunque"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "それでも共有"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "그래도 공유"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kongsi juga"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "तैपनि सेयर गर्नुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "toch delen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "udostępnij mimo to"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "partilhar na mesma"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "compartilhar mesmo assim"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "всё равно поделиться"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dela ändå"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இருந்தாலும் பகிர்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "แชร์อยู่ดี"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yine de paylaş"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "все одно поділитися"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پھر بھی شیئر کریں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vẫn chia sẻ"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仍然分享"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仍然分享"
+          }
+        }
+      }
+    },
+    "channel.share.precision_warning.message" : {
+      "comment" : "Body of the confirmation before sharing a fine-precision geohash invite",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تغطي هذه القناة منطقة صغيرة. الدعوة عبر الرسائل أو imessage تظهر لمشغّل الشبكة والجهازين — وتكشف الاهتمام بذلك المكان، وليس فقط أن شخصًا يستخدم bitchat."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "এই চ্যানেলটি ছোট এলাকা জুড়ে। sms বা imessage-এ পাঠানো আমন্ত্রণ ক্যারিয়ার ও দুই হ্যান্ডসেটে দেখা যায় — এতে bitchat ব্যবহারের পাশাপাশি সেই জায়গায় আগ্রহও প্রকাশ পায়।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dieser kanal deckt ein kleines gebiet ab. eine einladung per sms oder imessage ist für den netzanbieter und beide geräte sichtbar — sie verrät interesse an diesem ort, nicht nur dass jemand bitchat nutzt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "this channel covers a small area. an invite sent over sms or imessage is visible to the carrier and both handsets — it discloses interest in that place, not only that someone uses bitchat."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "este canal cubre un área pequeña. una invitación enviada por sms o imessage es visible para el operador y ambos teléfonos — revela interés en ese lugar, no solo que alguien usa bitchat."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "این کانال ناحیه کوچکی را پوشش می‌دهد. دعوت‌نامهٔ sms یا imessage برای اپراتور و هر دو دستگاه دیده می‌شود — علاقه به آن مکان را فاش می‌کند، نه فقط اینکه کسی از bitchat استفاده می‌کند."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "maliit na lugar ang saklaw ng channel na ito. ang invite sa sms o imessage ay makikita ng carrier at ng parehong device — inilalantad nito ang interes sa lugar na iyon, hindi lang na may gumagamit ng bitchat."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ce canal couvre une petite zone. une invitation envoyée par sms ou imessage est visible par l’opérateur et les deux appareils — elle révèle un intérêt pour ce lieu, pas seulement que quelqu’un utilise bitchat."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הערוץ הזה מכסה אזור קטן. הזמנה ב-sms או imessage גלויה לספק ולשני המכשירים — היא חושפת עניין במקום, לא רק שמישהו משתמש ב-bitchat."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "यह चैनल छोटे क्षेत्र को कवर करता है। sms या imessage से भेजा निमंत्रण कैरियर और दोनों हैंडसेट को दिखता है — इससे bitchat इस्तेमाल करने के अलावा उस जगह में रुचि भी ज़ाहिर होती है।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kanal ini mencakup area kecil. undangan lewat sms atau imessage terlihat oleh operator dan kedua perangkat — itu mengungkapkan minat pada tempat itu, bukan hanya bahwa seseorang memakai bitchat."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "questo canale copre un’area piccola. un invito inviato via sms o imessage è visibile all’operatore e a entrambi i telefoni — rivela interesse per quel luogo, non solo che qualcuno usa bitchat."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このチャンネルは狭い範囲をカバーします。smsやimessageで送った招待は通信事業者と双方の端末に見えます — bitchatを使っていることだけでなく、その場所への関心も伝わります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 채널은 좁은 영역을 다룹니다. sms나 imessage로 보낸 초대는 통신사와 양쪽 기기에 보입니다 — bitchat을 쓴다는 사실뿐 아니라 그 장소에 대한 관심도 드러납니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "saluran ini meliputi kawasan kecil. jemputan melalui sms atau imessage kelihatan kepada operator dan kedua-dua peranti — ia mendedahkan minat terhadap tempat itu, bukan hanya bahawa seseorang menggunakan bitchat."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "यो च्यानल सानो क्षेत्र समेट्छ। sms वा imessage मार्फत पठाइएको निमन्त्रणा क्यारियर र दुवै ह्यान्डसेटमा देखिन्छ — यसले bitchat प्रयोग मात्र होइन, त्यो ठाउँप्रति चासो पनि खुलाउँछ।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dit kanaal dekt een klein gebied. een uitnodiging via sms of imessage is zichtbaar voor de provider en beide toestellen — het onthult interesse in die plek, niet alleen dat iemand bitchat gebruikt."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ten kanał obejmuje mały obszar. zaproszenie wysłane sms-em lub imessage jest widoczne dla operatora i obu telefonów — ujawnia zainteresowanie tym miejscem, nie tylko to, że ktoś używa bitchat."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "este canal cobre uma área pequena. um convite enviado por sms ou imessage fica visível para a operadora e ambos os telemóveis — revela interesse nesse local, não só que alguém usa bitchat."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "este canal cobre uma área pequena. um convite enviado por sms ou imessage fica visível para a operadora e ambos os celulares — revela interesse naquele lugar, não só que alguém usa bitchat."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "этот канал покрывает небольшую область. приглашение по sms или imessage видно оператору и обоим устройствам — оно раскрывает интерес к этому месту, а не только то, что кто-то пользуется bitchat."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "denna kanal täcker ett litet område. en inbjudan via sms eller imessage syns för operatören och båda enheterna — den avslöjar intresse för platsen, inte bara att någon använder bitchat."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இந்த சேனல் சிறிய பகுதியை உள்ளடக்குகிறது. sms அல்லது imessage அழைப்பு கேரியருக்கும் இரு சாதனங்களுக்கும் தெரியும் — bitchat பயன்படுத்துவது மட்டுமல்ல, அந்த இடத்தில் ஆர்வமும் வெளிப்படும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ช่องนี้ครอบคลุมพื้นที่เล็ก คำเชิญทาง sms หรือ imessage เปิดเผยต่อผู้ให้บริการและทั้งสองเครื่อง — มันเผยความสนใจในสถานที่นั้น ไม่ใช่แค่การใช้ bitchat"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bu kanal küçük bir alanı kapsar. sms veya imessage ile gönderilen davet operatör ve her iki cihazda görünür — yalnızca birinin bitchat kullandığını değil, o yere ilgiyi de açığa çıkarır."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "цей канал покриває невелику ділянку. запрошення через sms або imessage бачать оператор і обидва пристрої — воно розкриває інтерес до цього місця, а не лише те, що хтось користується bitchat."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "یہ چینل چھوٹے علاقے کا احاطہ کرتا ہے۔ sms یا imessage پر بھیجی گئی دعوت کیریئر اور دونوں ہینڈسیٹس کو نظر آتی ہے — اس سے صرف bitchat کا استعمال نہیں بلکہ اس جگہ میں دلچسپی بھی ظاہر ہوتی ہے۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kênh này phủ một khu vực nhỏ. lời mời gửi qua sms hoặc imessage hiện với nhà mạng và cả hai máy — nó tiết lộ sự quan tâm đến nơi đó, không chỉ việc ai đó dùng bitchat."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此频道覆盖范围很小。通过短信或 iMessage 发送的邀请对运营商和双方设备可见——它会暴露对该地点的兴趣，而不仅是有人在使用 bitchat。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此頻道覆蓋範圍很小。透過簡訊或 iMessage 傳送的邀請對電信商與雙方裝置可見——它會揭露對該地點的興趣，而不只是有人在使用 bitchat。"
+          }
+        }
+      }
+    },
+    "channel.share.precision_warning.title" : {
+      "comment" : "Title of the confirmation before sharing a neighborhood-or-finer geohash invite",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مشاركة قناة موقع دقيقة؟"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "সঠিক লোকেশন চ্যানেল শেয়ার করবেন?"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "präzisen standort-kanal teilen?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "share a precise location channel?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿compartir un canal de ubicación precisa?"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "کانال موقعیت دقیق به اشتراک گذاشته شود؟"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "i-share ang isang precise na location channel?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "partager un canal de localisation précis ?"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לשתף ערוץ מיקום מדויק?"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सटीक लोकेशन चैनल साझा करें?"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bagikan kanal lokasi yang tepat?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "condividere un canale di posizione precisa?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "精密なロケーションチャンネルを共有しますか？"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "정밀한 위치 채널을 공유할까요?"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kongsi saluran lokasi yang tepat?"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सटीक स्थान च्यानल सेयर गर्ने?"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "een precies locatiekanaal delen?"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "udostępnić precyzyjny kanał lokalizacji?"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "partilhar um canal de localização precisa?"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "compartilhar um canal de localização precisa?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "поделиться точным каналом локации?"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dela en precis platskanal?"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "துல்லியமான இட சேனலைப் பகிரவா?"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "แชร์ช่องตำแหน่งที่แม่นยำ?"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hassas bir konum kanalı paylaşılsın mı?"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "поділитися точним каналом локації?"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "درست لوکیشن چینل شیئر کریں؟"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chia sẻ kênh vị trí chính xác?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享精确的位置频道？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享精確的位置頻道？"
+          }
+        }
+      }
+    },
     "close" : {
       "comment" : "Button to dismiss fullscreen media viewer",
       "localizations" : {
@@ -17661,6 +18591,192 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "複製"
+          }
+        }
+      }
+    },
+    "common.done" : {
+      "comment" : "Dismisses a sheet",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "সম্পন্ন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "fertig"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "done"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "listo"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تمام"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tapos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "terminé"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בוצע"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "हो गया"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "selesai"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "fatto"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完了"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "완료"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "selesai"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सम्पन्न"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "klaar"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gotowe"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "concluído"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "concluído"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "готово"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "klart"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "முடிந்தது"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เสร็จสิ้น"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitti"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "готово"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مکمل"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "xong"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完成"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完成"
           }
         }
       }
@@ -25853,6 +26969,191 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "驗證加密"
+          }
+        }
+      }
+    },
+    "content.accessibility.verified_sender" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مرسل موثق"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "যাচাইকৃত প্রেরক"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verifizierter absender"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verified sender"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remitente verificado"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فرستنده تأییدشده"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beripikadong nagpadala"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expéditeur vérifié"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שולח מאומת"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सत्यापित प्रेषक"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pengirim terverifikasi"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mittente verificato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "確認済みの送信者"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "확인된 보낸 사람"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pengirim yang disahkan"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "प्रमाणित प्रेषक"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geverifieerde afzender"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zweryfikowany nadawca"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remetente verificado"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remetente verificado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подтверждённый отправитель"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verifierad avsändare"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "சரிபார்க்கப்பட்ட அனுப்புநர்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ผู้ส่งที่ยืนยันแล้ว"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doğrulanmış gönderen"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Підтверджений відправник"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تصدیق شدہ مرسل"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Người gửi đã xác minh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已验证的发送者"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已驗證的傳送者"
           }
         }
       }
@@ -44954,6 +46255,564 @@
         }
       }
     },
+    "fingerprint.local_alias.hint" : {
+      "comment" : "Explanation under the local alias field",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "على هذا الجهاز فقط. اتركه فارغًا لاستخدام اللقب الذي يدّعونه."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "শুধু এই ডিভাইসে। তাদের দাবিকৃত ডাকনাম ব্যবহার করতে খালি রাখুন।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nur auf diesem gerät. leer lassen, um den beanspruchten nickname zu verwenden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "only on this device. leave blank to use their claimed nickname."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "solo en este dispositivo. déjalo vacío para usar su apodo reclamado."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فقط روی این دستگاه. برای استفاده از نام مستعار اعلام‌شده خالی بگذارید."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sa device na ito lang. iwanang blangko para gamitin ang kanilang claimed nickname."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "uniquement sur cet appareil. laisse vide pour utiliser leur surnom annoncé."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רק במכשיר הזה. השאר ריק כדי להשתמש בכינוי שהם מצהירים עליו."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "केवल इस डिवाइस पर। उनका दावा किया उपनाम इस्तेमाल करने के लिए खाली छोड़ें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hanya di perangkat ini. biarkan kosong untuk memakai nama panggilan yang mereka klaim."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "solo su questo dispositivo. lascia vuoto per usare il nickname dichiarato."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この端末のみ。空欄なら相手の名乗りニックネームを使います。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 기기에만 저장됩니다. 비워 두면 상대가 주장한 닉네임을 씁니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hanya pada peranti ini. biarkan kosong untuk guna nama samaran yang mereka tuntut."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "यस यन्त्रमा मात्र। उनीहरूको दाबी गरिएको उपनाम प्रयोग गर्न खाली छोड्नुहोस्।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alleen op dit apparaat. laat leeg om hun geclaimde bijnaam te gebruiken."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tylko na tym urządzeniu. zostaw puste, by użyć ich deklarowanego nicku."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apenas neste dispositivo. deixa em branco para usar a alcunha reclamada."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "somente neste dispositivo. deixe em branco para usar o apelido declarado."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "только на этом устройстве. оставь пустым, чтобы использовать заявленный ник."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bara på den här enheten. lämna tomt för att använda deras angivna smeknamn."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இந்த சாதனத்தில் மட்டும். அவர்கள் கூறும் புனைபெயரைப் பயன்படுத்த காலியாக விடவும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เฉพาะบนอุปกรณ์นี้ เว้นว่างเพื่อใช้ชื่อเล่นที่พวกเขาอ้าง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yalnızca bu cihazda. iddia edilen takma adı kullanmak için boş bırak."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "лише на цьому пристрої. залиш порожнім, щоб використати їх заявлене ім’я."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صرف اس ڈیوائس پر۔ ان کا دعویٰ کردہ عرفی نام استعمال کرنے کے لیے خالی چھوڑیں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chỉ trên thiết bị này. để trống để dùng biệt danh họ tuyên bố."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅保存在此设备。留空则使用对方声称的昵称。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "僅保存在此裝置。留空則使用對方聲稱的暱稱。"
+          }
+        }
+      }
+    },
+    "fingerprint.local_alias.label" : {
+      "comment" : "Label for the local-only alias field on the fingerprint sheet",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اسم مستعار محلي"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "স্থানীয় উপনাম"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lokaler alias"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "local alias"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alias local"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نام مستعار محلی"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "local na alias"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alias local"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כינוי מקומי"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "स्थानीय उपनाम"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alias lokal"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alias locale"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ローカル別名"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "로컬 별칭"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alias tempatan"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "स्थानीय उपनाम"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lokale alias"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lokalny alias"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alcunha local"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apelido local"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "локальный псевдоним"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lokalt alias"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "உள்ளூர் மாற்றுப்பெயர்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ชื่อเล่นในเครื่อง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yerel takma ad"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "локальний псевдонім"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مقامی عرفی نام"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bí danh cục bộ"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本地别名"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本地別名"
+          }
+        }
+      }
+    },
+    "fingerprint.local_alias.placeholder" : {
+      "comment" : "Placeholder for the local alias field on the fingerprint sheet",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اسم لهذا الشخص"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "এই ব্যক্তির জন্য নাম"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "name für diese person"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "name for this person"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nombre para esta persona"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نام برای این فرد"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pangalan para sa taong ito"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nom pour cette personne"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שם לאדם הזה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "इस व्यक्ति के लिए नाम"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nama untuk orang ini"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nome per questa persona"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この人の名前"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 사람의 이름"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nama untuk orang ini"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "यस व्यक्तिको लागि नाम"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "naam voor deze persoon"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nazwa dla tej osoby"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nome para esta pessoa"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nome para esta pessoa"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "имя для этого человека"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "namn för den här personen"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இந்த நபருக்கான பெயர்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ชื่อสำหรับคนนี้"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bu kişi için ad"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ім’я для цієї людини"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اس شخص کا نام"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tên cho người này"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "给此人的名称"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "給此人的名稱"
+          }
+        }
+      }
+    },
     "fingerprint.message.verified" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -56011,6 +57870,750 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "筆記依賴地理中繼。檢查連線後再試。"
+          }
+        }
+      }
+    },
+    "mac.image_picker.cancel" : {
+      "comment" : "Cancel button for the macOS image picker sheet",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إلغاء"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "বাতিল"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abbrechen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelar"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لغو"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annuler"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ביטול"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "रद्द करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Batal"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annulla"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "キャンセル"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "취소"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Batal"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "रद्द गर्नुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annuleren"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anuluj"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelar"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отмена"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avbryt"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ரத்துசெய்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ยกเลิก"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İptal"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скасувати"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "منسوخ"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hủy"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消"
+          }
+        }
+      }
+    },
+    "mac.image_picker.panel_message" : {
+      "comment" : "Message shown in the macOS NSOpenPanel when picking an image",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اختر صورة لإرسالها"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "পাঠানোর জন্য একটি ছবি বেছে নিন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle ein Bild zum Senden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose an image to send"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige una imagen para enviar"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تصویری برای ارسال انتخاب کنید"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pumili ng larawang ipapadala"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez une image à envoyer"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בחר תמונה לשליחה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "भेजने के लिए एक छवि चुनें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pilih gambar untuk dikirim"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli un'immagine da inviare"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "送信する画像を選択"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "보낼 이미지 선택"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pilih imej untuk dihantar"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पठाउनका लागि एउटा तस्बिर छान्नुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kies een afbeelding om te versturen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wybierz obraz do wysłania"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolher uma imagem para enviar"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolha uma imagem para enviar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите изображение для отправки"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Välj en bild att skicka"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "அனுப்ப ஒரு படத்தைத் தேர்ந்தெடுக்கவும்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เลือกภาพที่จะส่ง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Göndermek için bir görsel seçin"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Виберіть зображення для надсилання"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بھیجنے کے لیے ایک تصویر منتخب کریں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chọn một hình ảnh để gửi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择要发送的图片"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選擇要傳送的圖片"
+          }
+        }
+      }
+    },
+    "mac.image_picker.select" : {
+      "comment" : "Button that opens the macOS open-panel to pick an image",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تحديد صورة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ছবি নির্বাচন করুন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bild auswählen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select Image"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seleccionar imagen"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انتخاب تصویر"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Piliin ang Larawan"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sélectionner une image"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בחר תמונה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "छवि चुनें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pilih Gambar"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seleziona immagine"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "画像を選択"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이미지 선택"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pilih Imej"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "तस्बिर चयन गर्नुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afbeelding selecteren"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wybierz obraz"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selecionar imagem"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selecionar imagem"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выбрать изображение"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Välj bild"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "படத்தைத் தேர்ந்தெடு"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เลือกภาพ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Görsel Seç"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вибрати зображення"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تصویر منتخب کریں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chọn hình ảnh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择图片"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選擇圖片"
+          }
+        }
+      }
+    },
+    "mac.image_picker.title" : {
+      "comment" : "Title shown in the macOS image picker sheet",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اختر صورة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "একটি ছবি বেছে নিন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bild auswählen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose an image"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige una imagen"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "یک تصویر انتخاب کنید"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pumili ng larawan"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisir une image"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בחר תמונה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "एक छवि चुनें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pilih gambar"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli un'immagine"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "画像を選択"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이미지 선택"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pilih imej"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "एउटा तस्बिर छान्नुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kies een afbeelding"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wybierz obraz"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolher uma imagem"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolha uma imagem"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите изображение"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Välj en bild"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ஒரு படத்தைத் தேர்ந்தெடுக்கவும்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เลือกภาพ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bir görsel seçin"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Виберіть зображення"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ایک تصویر منتخب کریں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chọn một hình ảnh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择图片"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選擇圖片"
           }
         }
       }
@@ -74196,6 +76799,192 @@
         }
       }
     },
+    "verification.scan.camera_unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الكاميرا غير متاحة — الصق رمز QR أدناه."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camera unavailable — paste a QR below."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kamera nicht verfügbar — QR unten einfügen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camera unavailable — paste a QR below."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cámara no disponible — pega un QR abajo."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camera unavailable — paste a QR below."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camera unavailable — paste a QR below."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Caméra indisponible — collez un QR ci-dessous."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "המצלמה אינה זמינה — הדבק QR למטה."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "कैमरा उपलब्ध नहीं — नीचे QR पेस्ट करें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kamera tidak tersedia — tempel QR di bawah."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotocamera non disponibile — incolla un QR sotto."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "カメラを利用できません — 下にQRを貼り付けてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "카메라를 사용할 수 없습니다 — 아래에 QR을 붙여넣으세요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camera unavailable — paste a QR below."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camera unavailable — paste a QR below."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camera niet beschikbaar — plak hieronder een QR."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aparat niedostępny — wklej QR poniżej."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Câmara indisponível — cole um QR abaixo."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Câmera indisponível — cole um QR abaixo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Камера недоступна — вставьте QR ниже."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kamera otillgänglig — klistra in en QR nedan."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camera unavailable — paste a QR below."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camera unavailable — paste a QR below."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kamera kullanılamıyor — aşağıya bir QR yapıştırın."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Камера недоступна — вставте QR нижче."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camera unavailable — paste a QR below."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Không dùng được camera — dán mã QR bên dưới."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法使用相机 — 请在下方粘贴二维码。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法使用相機 — 請在下方貼上 QR。"
+          }
+        }
+      }
+    },
+
     "verification.scan.paste_prompt" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -76526,6 +79315,564 @@
         "vi" : { "stringUnit" : { "state" : "needs_review", "value" : "Dùng trong bản nháp" } },
         "zh-Hans" : { "stringUnit" : { "state" : "needs_review", "value" : "用于草稿" } },
         "zh-Hant" : { "stringUnit" : { "state" : "needs_review", "value" : "用於草稿" } }
+      }
+    },
+    "location_channels.quick_join.title" : {
+      "comment" : "Section header in the location channels sheet for the one-tap suggestion of the region channel derived from the device region",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0627\u0646\u0636\u0645\u0627\u0645 \u0633\u0631\u064a\u0639"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u09a6\u09cd\u09b0\u09c1\u09a4 \u09af\u09cb\u0997"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "schnellbeitritt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "quick join"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "acceso r\u00e1pido"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u067e\u06cc\u0648\u0633\u062a\u0646 \u0633\u0631\u06cc\u0639"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mabilis na pagsali"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "acc\u00e8s rapide"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u05d4\u05e6\u05d8\u05e8\u05e4\u05d5\u05ea \u05de\u05d4\u05d9\u05e8\u05d4"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u091d\u091f\u092a\u091f \u091c\u0941\u0921\u093c\u0947\u0902"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gabung cepat"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "accesso rapido"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u30af\u30a4\u30c3\u30af\u53c2\u52a0"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\ube60\ub978 \ucc38\uc5ec"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sertai pantas"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u091b\u093f\u091f\u094b \u0938\u093e\u092e\u0947\u0932"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "snel deelnemen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "szybkie do\u0142\u0105czenie"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "entrada r\u00e1pida"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "entrada r\u00e1pida"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0431\u044b\u0441\u0442\u0440\u044b\u0439 \u0432\u0445\u043e\u0434"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "snabbanslutning"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0bb5\u0bbf\u0bb0\u0bc8\u0bb5\u0bc1 \u0b9a\u0bc7\u0bb0\u0bcd\u0b95\u0bcd\u0b95\u0bc8"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0e40\u0e02\u0e49\u0e32\u0e23\u0e48\u0e27\u0e21\u0e14\u0e48\u0e27\u0e19"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "h\u0131zl\u0131 kat\u0131l\u0131m"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0448\u0432\u0438\u0434\u043a\u0438\u0439 \u0432\u0445\u0456\u0434"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0641\u0648\u0631\u06cc \u0634\u0645\u0648\u0644\u06cc\u062a"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tham gia nhanh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u5feb\u901f\u52a0\u5165"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u5feb\u901f\u52a0\u5165"
+          }
+        }
+      }
+    },
+    "location_channels.quick_join.description" : {
+      "comment" : "Caption under the quick join row; %@ is the localized country/region name. States plainly that the cell is the main population center's (not the person's location), that the channel must be assumed watched, and that quick join is discovery, not circumvention",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0642\u0646\u0627\u0629 \u0627\u0644\u0645\u0646\u0637\u0642\u0629 \u0627\u0644\u062a\u064a \u064a\u062a\u062c\u0645\u0639 \u0641\u064a\u0647\u0627 \u0639\u0627\u062f\u0629\u064b \u0627\u0644\u0646\u0627\u0633 \u0645\u0646 %@ \u2014 \u0627\u0644\u062e\u0644\u064a\u0629 \u0627\u0644\u0648\u0627\u0633\u0639\u0629 \u062d\u0648\u0644 \u0623\u0643\u0628\u0631 \u0645\u0631\u0643\u0632 \u0633\u0643\u0627\u0646\u064a\u060c \u0648\u0644\u064a\u0633\u062a \u0645\u0648\u0642\u0639\u0643. \u0625\u0646\u0647\u0627 \u0639\u0627\u0645\u0629 \u0648\u0645\u0639\u0631\u0648\u0641\u0629 \u0644\u0644\u062c\u0645\u064a\u0639\u060c \u0641\u0627\u0641\u062a\u0631\u0636 \u0623\u0646\u0647\u0627 \u0645\u0631\u0627\u0642\u0628\u0629: \u0627\u0644\u0627\u0646\u0636\u0645\u0627\u0645 \u0627\u0644\u0633\u0631\u064a\u0639 \u064a\u0648\u0641\u0651\u0631 \u0639\u0644\u064a\u0643 \u0643\u062a\u0627\u0628\u0629 \u0627\u0644\u062c\u064a\u0648\u0647\u0627\u0634 \u0641\u0642\u0637\u061b \u0644\u0627 \u064a\u062e\u0641\u064a\u0643 \u0648\u0644\u0627 \u064a\u062a\u062c\u0627\u0648\u0632 \u0627\u0644\u062d\u062c\u0628."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u09af\u09c7 \u0985\u099e\u09cd\u099a\u09b2-\u099a\u09cd\u09af\u09be\u09a8\u09c7\u09b2\u09c7 %@-\u098f\u09b0 \u09ae\u09be\u09a8\u09c1\u09b7 \u09b8\u09be\u09a7\u09be\u09b0\u09a3\u09a4 \u099c\u09a1\u09bc\u09cb \u09b9\u09af\u09bc \u2014 \u09b8\u09ac\u099a\u09c7\u09af\u09bc\u09c7 \u09ac\u09a1\u09bc \u099c\u09a8\u0995\u09c7\u09a8\u09cd\u09a6\u09cd\u09b0\u09c7\u09b0 \u099a\u09be\u09b0\u09aa\u09be\u09b6\u09c7\u09b0 \u09ac\u09bf\u09b8\u09cd\u09a4\u09c3\u09a4 \u09b8\u09c7\u09b2, \u0986\u09aa\u09a8\u09be\u09b0 \u0985\u09ac\u09b8\u09cd\u09a5\u09be\u09a8 \u09a8\u09af\u09bc\u0964 \u098f\u099f\u09bf \u09aa\u09cd\u09b0\u0995\u09be\u09b6\u09cd\u09af \u0993 \u09b8\u09c1\u09aa\u09b0\u09bf\u099a\u09bf\u09a4, \u09a4\u09be\u0987 \u09a7\u09b0\u09c7 \u09a8\u09bf\u09a8 \u098f\u099f\u09bf \u09a8\u099c\u09b0\u09a6\u09be\u09b0\u09bf\u09a4\u09c7 \u0986\u099b\u09c7: \u09a6\u09cd\u09b0\u09c1\u09a4 \u09af\u09cb\u0997 \u09b6\u09c1\u09a7\u09c1 \u099c\u09bf\u0993\u09b9\u09cd\u09af\u09be\u09b6 \u099f\u09be\u0987\u09aa \u0995\u09b0\u09be \u09ac\u09be\u0981\u099a\u09be\u09af\u09bc; \u098f\u099f\u09bf \u0986\u09aa\u09a8\u09be\u0995\u09c7 \u09b2\u09c1\u0995\u09be\u09af\u09bc \u09a8\u09be, \u09ac\u09cd\u09b2\u0995\u0993 \u098f\u09a1\u09bc\u09be\u09af\u09bc \u09a8\u09be\u0964"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "der regionskanal, in dem sich leute aus %@ meist sammeln \u2014 die weite zelle um das gr\u00f6\u00dfte bev\u00f6lkerungszentrum, nicht dein standort. er ist \u00f6ffentlich und allgemein bekannt, geh also davon aus, dass er beobachtet wird: schnellbeitritt spart nur das eintippen des geohash; er versteckt dich nicht und umgeht keine sperren."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the region channel where people from %@ tend to gather \u2014 the wide cell around the main population center, not your location. it's public and well-known, so assume it's watched: quick join saves typing a geohash; it doesn't hide you or bypass blocks."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "el canal de regi\u00f3n donde suele reunirse la gente de %@ \u2014 la celda amplia alrededor del mayor centro de poblaci\u00f3n, no tu ubicaci\u00f3n. es p\u00fablico y conocido, as\u00ed que asume que est\u00e1 vigilado: el acceso r\u00e1pido solo te ahorra escribir el geohash; no te oculta ni evita bloqueos."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u06a9\u0627\u0646\u0627\u0644 \u0645\u0646\u0637\u0642\u0647\u200c\u0627\u06cc \u06a9\u0647 \u0645\u0631\u062f\u0645 %@ \u0645\u0639\u0645\u0648\u0644\u0627\u064b \u062f\u0631 \u0622\u0646 \u062c\u0645\u0639 \u0645\u06cc\u200c\u0634\u0648\u0646\u062f \u2014 \u0633\u0644\u0648\u0644 \u067e\u0647\u0646\u0627\u0648\u0631 \u062f\u0648\u0631 \u0628\u0632\u0631\u06af\u200c\u062a\u0631\u06cc\u0646 \u0645\u0631\u06a9\u0632 \u062c\u0645\u0639\u06cc\u062a\u060c \u0646\u0647 \u0645\u0648\u0642\u0639\u06cc\u062a \u0634\u0645\u0627. \u0639\u0645\u0648\u0645\u06cc \u0648 \u0634\u0646\u0627\u062e\u062a\u0647\u200c\u0634\u062f\u0647 \u0627\u0633\u062a\u060c \u067e\u0633 \u0641\u0631\u0636 \u06a9\u0646\u06cc\u062f \u0632\u06cc\u0631 \u0646\u0638\u0631 \u0627\u0633\u062a: \u067e\u06cc\u0648\u0633\u062a\u0646 \u0633\u0631\u06cc\u0639 \u0641\u0642\u0637 \u062a\u0627\u06cc\u067e \u0698\u0626\u0648\u0647\u0634 \u0631\u0627 \u06a9\u0645 \u0645\u06cc\u200c\u06a9\u0646\u062f\u061b \u0634\u0645\u0627 \u0631\u0627 \u067e\u0646\u0647\u0627\u0646 \u0646\u0645\u06cc\u200c\u06a9\u0646\u062f \u0648 \u0641\u06cc\u0644\u062a\u0631\u0647\u0627 \u0631\u0627 \u062f\u0648\u0631 \u0646\u0645\u06cc\u200c\u0632\u0646\u062f."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ang region channel kung saan karaniwang nagtitipon ang mga tao mula sa %@ \u2014 ang malawak na cell sa paligid ng pinakamalaking sentro ng populasyon, hindi ang iyong lokasyon. pampubliko ito at kilala, kaya ipagpalagay na binabantayan: ang mabilis na pagsali ay nagtitipid lang ng pag-type ng geohash; hindi ka nito itinatago at hindi nito nilalampasan ang mga block."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "le canal de r\u00e9gion o\u00f9 les gens de %@ se retrouvent le plus souvent \u2014 la large cellule autour du principal centre de population, pas votre position. il est public et bien connu : partez du principe qu'il est surveill\u00e9. l'acc\u00e8s rapide \u00e9vite seulement de taper le geohash ; il ne vous cache pas et ne contourne aucun blocage."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u05e2\u05e8\u05d5\u05e5 \u05d4\u05d0\u05d6\u05d5\u05e8 \u05e9\u05d1\u05d5 \u05d0\u05e0\u05e9\u05d9\u05dd \u05de%@ \u05d1\u05d3\u05e8\u05da \u05db\u05dc\u05dc \u05de\u05ea\u05e7\u05d1\u05e6\u05d9\u05dd \u2014 \u05d4\u05ea\u05d0 \u05d4\u05e8\u05d7\u05d1 \u05e1\u05d1\u05d9\u05d1 \u05de\u05e8\u05db\u05d6 \u05d4\u05d0\u05d5\u05db\u05dc\u05d5\u05e1\u05d9\u05d9\u05d4 \u05d4\u05d2\u05d3\u05d5\u05dc \u05d1\u05d9\u05d5\u05ea\u05e8, \u05dc\u05d0 \u05d4\u05de\u05d9\u05e7\u05d5\u05dd \u05e9\u05dc\u05da. \u05d4\u05d5\u05d0 \u05e6\u05d9\u05d1\u05d5\u05e8\u05d9 \u05d5\u05de\u05d5\u05db\u05e8, \u05d0\u05d6 \u05d9\u05e9 \u05dc\u05d4\u05e0\u05d9\u05d7 \u05e9\u05d4\u05d5\u05d0 \u05de\u05e0\u05d5\u05d8\u05e8: \u05d4\u05e6\u05d8\u05e8\u05e4\u05d5\u05ea \u05de\u05d4\u05d9\u05e8\u05d4 \u05e8\u05e7 \u05d7\u05d5\u05e1\u05db\u05ea \u05d4\u05e7\u05dc\u05d3\u05ea geohash; \u05d4\u05d9\u05d0 \u05dc\u05d0 \u05de\u05e1\u05ea\u05d9\u05e8\u05d4 \u05d0\u05d5\u05ea\u05da \u05d5\u05dc\u05d0 \u05e2\u05d5\u05e7\u05e4\u05ea \u05d7\u05e1\u05d9\u05de\u05d5\u05ea."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0935\u0939 \u0915\u094d\u0937\u0947\u0924\u094d\u0930 \u091a\u0948\u0928\u0932 \u091c\u0939\u093e\u0901 %@ \u0915\u0947 \u0932\u094b\u0917 \u0906\u092e\u0924\u094c\u0930 \u092a\u0930 \u091c\u0941\u091f\u0924\u0947 \u0939\u0948\u0902 \u2014 \u0938\u092c\u0938\u0947 \u092c\u0921\u093c\u0947 \u0906\u092c\u093e\u0926\u0940 \u0915\u0947\u0902\u0926\u094d\u0930 \u0915\u0947 \u091a\u093e\u0930\u094b\u0902 \u0913\u0930 \u0915\u0940 \u091a\u094c\u0921\u093c\u0940 \u0938\u0947\u0932, \u0906\u092a\u0915\u0940 \u0932\u094b\u0915\u0947\u0936\u0928 \u0928\u0939\u0940\u0902\u0964 \u092f\u0939 \u0938\u093e\u0930\u094d\u0935\u091c\u0928\u093f\u0915 \u0914\u0930 \u091c\u093e\u0928\u093e-\u092a\u0939\u091a\u093e\u0928\u093e \u0939\u0948, \u0907\u0938\u0932\u093f\u090f \u092e\u093e\u0928 \u0932\u0947\u0902 \u0915\u093f \u0907\u0938 \u092a\u0930 \u0928\u091c\u093c\u0930 \u0939\u0948: \u091d\u091f\u092a\u091f \u091c\u0941\u0921\u093c\u0928\u093e \u0938\u093f\u0930\u094d\u092b\u093c geohash \u091f\u093e\u0907\u092a \u0915\u0930\u0928\u0947 \u0938\u0947 \u092c\u091a\u093e\u0924\u093e \u0939\u0948; \u092f\u0939 \u0906\u092a\u0915\u094b \u091b\u093f\u092a\u093e\u0924\u093e \u0928\u0939\u0940\u0902 \u0914\u0930 \u0928 \u0939\u0940 \u092c\u094d\u0932\u0949\u0915 \u0939\u091f\u093e\u0924\u093e \u0939\u0948\u0964"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "channel wilayah tempat orang-orang dari %@ biasanya berkumpul \u2014 sel luas di sekitar pusat populasi terbesar, bukan lokasimu. channel ini publik dan dikenal luas, jadi anggap saja dipantau: gabung cepat hanya menghemat pengetikan geohash; tidak menyembunyikanmu dan tidak menembus blokir."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "il canale di regione dove di solito si ritrovano le persone di %@ \u2014 la cella ampia attorno al principale centro abitato, non la tua posizione. \u00e8 pubblico e ben noto, quindi dai per scontato che sia sorvegliato: l'accesso rapido ti evita solo di digitare il geohash; non ti nasconde e non aggira i blocchi."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@\u306e\u4eba\u3005\u304c\u96c6\u307e\u308a\u3084\u3059\u3044\u5730\u57df\u30c1\u30e3\u30f3\u30cd\u30eb \u2014 \u6700\u5927\u306e\u4eba\u53e3\u96c6\u4e2d\u5730\u3092\u56f2\u3080\u5e83\u3044\u30bb\u30eb\u3067\u3001\u3042\u306a\u305f\u306e\u4f4d\u7f6e\u3067\u306f\u3042\u308a\u307e\u305b\u3093\u3002\u516c\u958b\u3055\u308c\u3066\u3044\u3066\u8ab0\u3082\u304c\u77e5\u308b\u5834\u6240\u306a\u306e\u3067\u3001\u76e3\u8996\u3055\u308c\u3066\u3044\u308b\u524d\u63d0\u3067\u3002\u30af\u30a4\u30c3\u30af\u53c2\u52a0\u306f\u30b8\u30aa\u30cf\u30c3\u30b7\u30e5\u5165\u529b\u3092\u7701\u304f\u3060\u3051\u3067\u3001\u3042\u306a\u305f\u3092\u96a0\u3057\u305f\u308a\u30d6\u30ed\u30c3\u30af\u3092\u56de\u907f\u3057\u305f\u308a\u306f\u3057\u307e\u305b\u3093\u3002"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ \uc0ac\ub78c\ub4e4\uc774 \uc8fc\ub85c \ubaa8\uc774\ub294 \uc9c0\uc5ed \ucc44\ub110 \u2014 \ucd5c\ub300 \uc778\uad6c \ubc00\uc9d1\uc9c0 \uc8fc\ubcc0\uc758 \ub113\uc740 \uc140\uc774\uba70, \ub2f9\uc2e0\uc758 \uc704\uce58\uac00 \uc544\ub2d9\ub2c8\ub2e4. \uacf5\uac1c\ub418\uc5b4 \uc788\uace0 \ub110\ub9ac \uc54c\ub824\uc838 \uc788\uc73c\ub2c8 \uac10\uc2dc\ub41c\ub2e4\uace0 \uac00\uc815\ud558\uc138\uc694: \ube60\ub978 \ucc38\uc5ec\ub294 \uc9c0\uc624\ud574\uc2dc \uc785\ub825\ub9cc \uc904\uc5ec\uc904 \ubfd0, \ub2f9\uc2e0\uc744 \uc228\uae30\uac70\ub098 \ucc28\ub2e8\uc744 \uc6b0\ud68c\ud558\uc9c0 \uc54a\uc2b5\ub2c8\ub2e4."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "saluran wilayah tempat orang dari %@ biasanya berkumpul \u2014 sel luas di sekitar pusat penduduk terbesar, bukan lokasi anda. ia terbuka dan dikenali ramai, jadi anggap ia dipantau: sertai pantas cuma menjimatkan menaip geohash; ia tidak menyembunyikan anda dan tidak memintas sekatan."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ \u0915\u093e \u092e\u093e\u0928\u093f\u0938\u0939\u0930\u0942 \u092a\u094d\u0930\u093e\u092f\u0903 \u092d\u0947\u0932\u093e \u0939\u0941\u0928\u0947 \u0915\u094d\u0937\u0947\u0924\u094d\u0930 \u091a\u094d\u092f\u093e\u0928\u0932 \u2014 \u0938\u092c\u0948\u092d\u0928\u094d\u0926\u093e \u0920\u0942\u0932\u094b \u091c\u0928\u0938\u0902\u0916\u094d\u092f\u093e \u0915\u0947\u0928\u094d\u0926\u094d\u0930 \u0935\u0930\u093f\u092a\u0930\u093f\u0915\u094b \u092b\u0930\u093e\u0915\u093f\u0932\u094b \u0938\u0947\u0932, \u0924\u092a\u093e\u0908\u0902\u0915\u094b \u0938\u094d\u0925\u093e\u0928 \u0939\u094b\u0907\u0928\u0964 \u092f\u094b \u0938\u093e\u0930\u094d\u0935\u091c\u0928\u093f\u0915 \u0930 \u0938\u092c\u0948\u0932\u093e\u0908 \u0925\u093e\u0939\u093e \u092d\u090f\u0915\u094b \u0939\u0941\u0928\u093e\u0932\u0947 \u0928\u093f\u0917\u0930\u093e\u0928\u0940\u092e\u093e \u091b \u092d\u0928\u0940 \u092e\u093e\u0928\u094d\u0928\u0941\u0939\u094b\u0938\u094d: \u091b\u093f\u091f\u094b \u0938\u093e\u092e\u0947\u0932\u0932\u0947 geohash \u091f\u093e\u0907\u092a \u0917\u0930\u094d\u0928\u092c\u093e\u091f \u092e\u093e\u0924\u094d\u0930 \u091c\u094b\u0917\u093e\u0909\u0901\u091b; \u092f\u0938\u0932\u0947 \u0924\u092a\u093e\u0908\u0902\u0932\u093e\u0908 \u0932\u0941\u0915\u093e\u0909\u0901\u0926\u0948\u0928 \u0930 \u092c\u094d\u0932\u0915 \u091b\u0932\u094d\u0926\u0948\u0928\u0964"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "het regiokanaal waar mensen uit %@ meestal samenkomen \u2014 de brede cel rond het grootste bevolkingscentrum, niet jouw locatie. het is openbaar en algemeen bekend, ga er dus van uit dat er wordt meegekeken: snel deelnemen bespaart alleen het intypen van de geohash; het verbergt je niet en omzeilt geen blokkades."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kana\u0142 regionu, w kt\u00f3rym zwykle zbieraj\u0105 si\u0119 ludzie z %@ \u2014 szeroka kom\u00f3rka wok\u00f3\u0142 najwi\u0119kszego skupiska ludno\u015bci, nie twoja lokalizacja. jest publiczny i powszechnie znany, wi\u0119c za\u0142\u00f3\u017c, \u017ce jest obserwowany: szybkie do\u0142\u0105czenie oszcz\u0119dza tylko wpisywania geohasha; nie ukrywa ci\u0119 i nie omija blokad."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "o canal de regi\u00e3o onde as pessoas de %@ costumam reunir-se \u2014 a c\u00e9lula ampla em torno do maior centro populacional, n\u00e3o a sua localiza\u00e7\u00e3o. \u00e9 p\u00fablico e conhecido, por isso presuma que est\u00e1 vigiado: a entrada r\u00e1pida apenas evita escrever o geohash; n\u00e3o o esconde nem contorna bloqueios."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "o canal de regi\u00e3o onde as pessoas de %@ costumam se reunir \u2014 a c\u00e9lula ampla em torno do maior centro populacional, n\u00e3o a sua localiza\u00e7\u00e3o. \u00e9 p\u00fablico e conhecido, ent\u00e3o presuma que est\u00e1 vigiado: a entrada r\u00e1pida s\u00f3 poupa digitar o geohash; n\u00e3o esconde voc\u00ea nem contorna bloqueios."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0440\u0435\u0433\u0438\u043e\u043d\u0430\u043b\u044c\u043d\u044b\u0439 \u043a\u0430\u043d\u0430\u043b, \u0433\u0434\u0435 \u043e\u0431\u044b\u0447\u043d\u043e \u0441\u043e\u0431\u0438\u0440\u0430\u044e\u0442\u0441\u044f \u043b\u044e\u0434\u0438 \u0438\u0437 %@ \u2014 \u0448\u0438\u0440\u043e\u043a\u0430\u044f \u044f\u0447\u0435\u0439\u043a\u0430 \u0432\u043e\u043a\u0440\u0443\u0433 \u043a\u0440\u0443\u043f\u043d\u0435\u0439\u0448\u0435\u0433\u043e \u0446\u0435\u043d\u0442\u0440\u0430 \u043d\u0430\u0441\u0435\u043b\u0435\u043d\u0438\u044f, \u0430 \u043d\u0435 \u0432\u0430\u0448\u0435 \u043c\u0435\u0441\u0442\u043e\u043f\u043e\u043b\u043e\u0436\u0435\u043d\u0438\u0435. \u043e\u043d \u043f\u0443\u0431\u043b\u0438\u0447\u043d\u044b\u0439 \u0438 \u0432\u0441\u0435\u043c \u0438\u0437\u0432\u0435\u0441\u0442\u043d\u044b\u0439, \u043f\u043e\u044d\u0442\u043e\u043c\u0443 \u0441\u0447\u0438\u0442\u0430\u0439\u0442\u0435, \u0447\u0442\u043e \u0437\u0430 \u043d\u0438\u043c \u043d\u0430\u0431\u043b\u044e\u0434\u0430\u044e\u0442: \u0431\u044b\u0441\u0442\u0440\u044b\u0439 \u0432\u0445\u043e\u0434 \u043b\u0438\u0448\u044c \u0438\u0437\u0431\u0430\u0432\u043b\u044f\u0435\u0442 \u043e\u0442 \u0432\u0432\u043e\u0434\u0430 \u0433\u0435\u043e\u0445\u044d\u0448\u0430; \u043e\u043d \u043d\u0435 \u0441\u043a\u0440\u044b\u0432\u0430\u0435\u0442 \u0432\u0430\u0441 \u0438 \u043d\u0435 \u043e\u0431\u0445\u043e\u0434\u0438\u0442 \u0431\u043b\u043e\u043a\u0438\u0440\u043e\u0432\u043a\u0438."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "regionkanalen d\u00e4r folk fr\u00e5n %@ oftast samlas \u2014 den vida cellen kring det st\u00f6rsta befolkningscentrumet, inte din plats. den \u00e4r offentlig och v\u00e4lk\u00e4nd, s\u00e5 utg\u00e5 fr\u00e5n att den bevakas: snabbanslutning sparar bara geohash-skrivandet; den d\u00f6ljer dig inte och kringg\u00e5r inga blockeringar."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ \u0bae\u0b95\u0bcd\u0b95\u0bb3\u0bcd \u0baa\u0bca\u0ba4\u0bc1\u0bb5\u0bbe\u0b95\u0b95\u0bcd \u0b95\u0bc2\u0b9f\u0bc1\u0bae\u0bcd \u0bae\u0ba3\u0bcd\u0b9f\u0bb2 \u0b9a\u0bc7\u0ba9\u0bb2\u0bcd \u2014 \u0bae\u0bbf\u0b95\u0baa\u0bcd\u0baa\u0bc6\u0bb0\u0bbf\u0baf \u0bae\u0b95\u0bcd\u0b95\u0bb3\u0bcd\u0ba4\u0bca\u0b95\u0bc8 \u0bae\u0bc8\u0baf\u0ba4\u0bcd\u0ba4\u0bc8\u0b9a\u0bcd \u0b9a\u0bc1\u0bb1\u0bcd\u0bb1\u0bbf\u0baf\u0bc1\u0bb3\u0bcd\u0bb3 \u0b85\u0b95\u0ba9\u0bcd\u0bb1 \u0b9a\u0bc6\u0bb2\u0bcd, \u0b89\u0b99\u0bcd\u0b95\u0bb3\u0bcd \u0b87\u0bb0\u0bc1\u0baa\u0bcd\u0baa\u0bbf\u0b9f\u0bae\u0bcd \u0b85\u0bb2\u0bcd\u0bb2. \u0b87\u0ba4\u0bc1 \u0baa\u0bca\u0ba4\u0bc1\u0bb5\u0bbe\u0ba9\u0ba4\u0bc1, \u0ba8\u0ba9\u0bcd\u0b95\u0bc1 \u0b85\u0bb1\u0bbf\u0baf\u0baa\u0bcd\u0baa\u0b9f\u0bcd\u0b9f\u0ba4\u0bc1; \u0b8e\u0ba9\u0bb5\u0bc7 \u0b95\u0ba3\u0bcd\u0b95\u0bbe\u0ba3\u0bbf\u0b95\u0bcd\u0b95\u0baa\u0bcd\u0baa\u0b9f\u0bc1\u0b95\u0bbf\u0bb1\u0ba4\u0bc1 \u0b8e\u0ba9\u0bcd\u0bb1\u0bc7 \u0b95\u0bb0\u0bc1\u0ba4\u0bc1\u0b99\u0bcd\u0b95\u0bb3\u0bcd: \u0bb5\u0bbf\u0bb0\u0bc8\u0bb5\u0bc1 \u0b9a\u0bc7\u0bb0\u0bcd\u0b95\u0bcd\u0b95\u0bc8 geohash \u0ba4\u0b9f\u0bcd\u0b9f\u0b9a\u0bcd\u0b9a\u0bc8 \u0bae\u0b9f\u0bcd\u0b9f\u0bc1\u0bae\u0bc7 \u0ba4\u0bb5\u0bbf\u0bb0\u0bcd\u0b95\u0bcd\u0b95\u0bbf\u0bb1\u0ba4\u0bc1; \u0b89\u0b99\u0bcd\u0b95\u0bb3\u0bc8 \u0bae\u0bb1\u0bc8\u0b95\u0bcd\u0b95\u0bbe\u0ba4\u0bc1, \u0ba4\u0b9f\u0bc8\u0b95\u0bb3\u0bc8\u0baf\u0bc1\u0bae\u0bcd \u0ba4\u0bbe\u0ba3\u0bcd\u0b9f\u0bbe\u0ba4\u0bc1."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0e41\u0e0a\u0e19\u0e41\u0e19\u0e25\u0e20\u0e39\u0e21\u0e34\u0e20\u0e32\u0e04\u0e17\u0e35\u0e48\u0e1c\u0e39\u0e49\u0e04\u0e19\u0e08\u0e32\u0e01 %@ \u0e21\u0e31\u0e01\u0e21\u0e32\u0e23\u0e27\u0e21\u0e01\u0e31\u0e19 \u2014 \u0e40\u0e0b\u0e25\u0e25\u0e4c\u0e01\u0e27\u0e49\u0e32\u0e07\u0e23\u0e2d\u0e1a\u0e28\u0e39\u0e19\u0e22\u0e4c\u0e01\u0e25\u0e32\u0e07\u0e1b\u0e23\u0e30\u0e0a\u0e32\u0e01\u0e23\u0e17\u0e35\u0e48\u0e43\u0e2b\u0e0d\u0e48\u0e17\u0e35\u0e48\u0e2a\u0e38\u0e14 \u0e44\u0e21\u0e48\u0e43\u0e0a\u0e48\u0e15\u0e33\u0e41\u0e2b\u0e19\u0e48\u0e07\u0e02\u0e2d\u0e07\u0e04\u0e38\u0e13 \u0e21\u0e31\u0e19\u0e40\u0e1b\u0e34\u0e14\u0e2a\u0e32\u0e18\u0e32\u0e23\u0e13\u0e30\u0e41\u0e25\u0e30\u0e40\u0e1b\u0e47\u0e19\u0e17\u0e35\u0e48\u0e23\u0e39\u0e49\u0e08\u0e31\u0e01 \u0e43\u0e2b\u0e49\u0e16\u0e37\u0e2d\u0e27\u0e48\u0e32\u0e16\u0e39\u0e01\u0e08\u0e31\u0e1a\u0e15\u0e32\u0e21\u0e2d\u0e07: \u0e40\u0e02\u0e49\u0e32\u0e23\u0e48\u0e27\u0e21\u0e14\u0e48\u0e27\u0e19\u0e41\u0e04\u0e48\u0e0a\u0e48\u0e27\u0e22\u0e43\u0e2b\u0e49\u0e44\u0e21\u0e48\u0e15\u0e49\u0e2d\u0e07\u0e1e\u0e34\u0e21\u0e1e\u0e4c geohash \u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e0b\u0e48\u0e2d\u0e19\u0e15\u0e31\u0e27\u0e04\u0e38\u0e13\u0e41\u0e25\u0e30\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e02\u0e49\u0e32\u0e21\u0e01\u0e32\u0e23\u0e1a\u0e25\u0e47\u0e2d\u0e01"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ insanlar\u0131n\u0131n genellikle topland\u0131\u011f\u0131 b\u00f6lge kanal\u0131 \u2014 en b\u00fcy\u00fck n\u00fcfus merkezinin \u00e7evresindeki geni\u015f h\u00fccre, sizin konumunuz de\u011fil. herkese a\u00e7\u0131k ve iyi bilinir, bu y\u00fczden izlendi\u011fini varsay\u0131n: h\u0131zl\u0131 kat\u0131l\u0131m yaln\u0131zca geohash yazmaktan kurtar\u0131r; sizi gizlemez ve engelleri a\u015fmaz."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0440\u0435\u0433\u0456\u043e\u043d\u0430\u043b\u044c\u043d\u0438\u0439 \u043a\u0430\u043d\u0430\u043b, \u0434\u0435 \u0437\u0430\u0437\u0432\u0438\u0447\u0430\u0439 \u0437\u0431\u0438\u0440\u0430\u044e\u0442\u044c\u0441\u044f \u043b\u044e\u0434\u0438 \u0437 %@ \u2014 \u0448\u0438\u0440\u043e\u043a\u0430 \u043a\u043e\u043c\u0456\u0440\u043a\u0430 \u043d\u0430\u0432\u043a\u043e\u043b\u043e \u043d\u0430\u0439\u0431\u0456\u043b\u044c\u0448\u043e\u0433\u043e \u0446\u0435\u043d\u0442\u0440\u0443 \u043d\u0430\u0441\u0435\u043b\u0435\u043d\u043d\u044f, \u0430 \u043d\u0435 \u0442\u0432\u043e\u0454 \u043c\u0456\u0441\u0446\u0435\u0437\u043d\u0430\u0445\u043e\u0434\u0436\u0435\u043d\u043d\u044f. \u0432\u0456\u043d \u043f\u0443\u0431\u043b\u0456\u0447\u043d\u0438\u0439 \u0456 \u0432\u0441\u0456\u043c \u0432\u0456\u0434\u043e\u043c\u0438\u0439, \u0442\u043e\u0436 \u0432\u0432\u0430\u0436\u0430\u0439, \u0449\u043e \u0437\u0430 \u043d\u0438\u043c \u0441\u0442\u0435\u0436\u0430\u0442\u044c: \u0448\u0432\u0438\u0434\u043a\u0438\u0439 \u0432\u0445\u0456\u0434 \u043b\u0438\u0448\u0435 \u043f\u043e\u0437\u0431\u0430\u0432\u043b\u044f\u0454 \u0432\u0432\u0435\u0434\u0435\u043d\u043d\u044f \u0433\u0435\u043e\u0445\u0435\u0448\u0443; \u0432\u0456\u043d \u043d\u0435 \u0445\u043e\u0432\u0430\u0454 \u0442\u0435\u0431\u0435 \u0439 \u043d\u0435 \u043e\u0431\u0445\u043e\u0434\u0438\u0442\u044c \u0431\u043b\u043e\u043a\u0443\u0432\u0430\u043d\u043d\u044f."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0648\u06c1 \u0639\u0644\u0627\u0642\u0627\u0626\u06cc \u0686\u06cc\u0646\u0644 \u062c\u06c1\u0627\u06ba %@ \u06a9\u06d2 \u0644\u0648\u06af \u0639\u0645\u0648\u0645\u0627\u064b \u062c\u0645\u0639 \u06c1\u0648\u062a\u06d2 \u06c1\u06cc\u06ba \u2014 \u0633\u0628 \u0633\u06d2 \u0628\u0691\u06d2 \u0622\u0628\u0627\u062f\u06cc \u06a9\u06d2 \u0645\u0631\u06a9\u0632 \u06a9\u06d2 \u06af\u0631\u062f \u0648\u0633\u06cc\u0639 \u0633\u06cc\u0644\u060c \u0622\u067e \u06a9\u0627 \u0645\u0642\u0627\u0645 \u0646\u06c1\u06cc\u06ba\u06d4 \u06cc\u06c1 \u0639\u0648\u0627\u0645\u06cc \u0627\u0648\u0631 \u0645\u0639\u0631\u0648\u0641 \u06c1\u06d2\u060c \u0627\u0633 \u0644\u06cc\u06d2 \u0641\u0631\u0636 \u06a9\u0631\u06cc\u06ba \u06a9\u06c1 \u0627\u0633 \u067e\u0631 \u0646\u0638\u0631 \u06c1\u06d2: \u0641\u0648\u0631\u06cc \u0634\u0645\u0648\u0644\u06cc\u062a \u0635\u0631\u0641 geohash \u0679\u0627\u0626\u067e \u06a9\u0631\u0646\u06d2 \u0633\u06d2 \u0628\u0686\u0627\u062a\u06cc \u06c1\u06d2\u061b \u06cc\u06c1 \u0622\u067e \u06a9\u0648 \u0686\u06be\u067e\u0627\u062a\u06cc \u0646\u06c1\u06cc\u06ba \u0627\u0648\u0631 \u0646\u06c1 \u0628\u0646\u062f\u0634\u06cc\u06ba \u0639\u0628\u0648\u0631 \u06a9\u0631\u062a\u06cc \u06c1\u06d2\u06d4"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "k\u00eanh khu v\u1ef1c n\u01a1i m\u1ecdi ng\u01b0\u1eddi t\u1eeb %@ th\u01b0\u1eddng t\u1ee5 h\u1ecdp \u2014 \u00f4 r\u1ed9ng quanh trung t\u00e2m d\u00e2n c\u01b0 l\u1edbn nh\u1ea5t, kh\u00f4ng ph\u1ea3i v\u1ecb tr\u00ed c\u1ee7a b\u1ea1n. k\u00eanh n\u00e0y c\u00f4ng khai v\u00e0 ai c\u0169ng bi\u1ebft, n\u00ean h\u00e3y m\u1eb7c \u0111\u1ecbnh l\u00e0 n\u00f3 b\u1ecb theo d\u00f5i: tham gia nhanh ch\u1ec9 gi\u00fap kh\u1ecfi g\u00f5 geohash; n\u00f3 kh\u00f4ng che gi\u1ea5u b\u1ea1n v\u00e0 kh\u00f4ng v\u01b0\u1ee3t ch\u1eb7n."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@\u7684\u4eba\u4eec\u901a\u5e38\u805a\u96c6\u7684\u533a\u57df\u9891\u9053\u2014\u2014\u56f4\u7ed5\u6700\u5927\u4eba\u53e3\u4e2d\u5fc3\u7684\u5bbd\u9614\u5355\u5143\u683c\uff0c\u800c\u4e0d\u662f\u4f60\u7684\u4f4d\u7f6e\u3002\u5b83\u516c\u5f00\u4e14\u4f17\u6240\u5468\u77e5\uff0c\u8bf7\u9ed8\u8ba4\u5b83\u88ab\u76d1\u89c6\uff1a\u5feb\u901f\u52a0\u5165\u53ea\u662f\u7701\u53bb\u8f93\u5165 geohash\uff1b\u5b83\u4e0d\u4f1a\u9690\u85cf\u4f60\uff0c\u4e5f\u4e0d\u4f1a\u7ed5\u8fc7\u5c01\u9501\u3002"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@\u7684\u4eba\u5011\u901a\u5e38\u805a\u96c6\u7684\u5340\u57df\u983b\u9053\u2014\u2014\u570d\u7e5e\u6700\u5927\u4eba\u53e3\u4e2d\u5fc3\u7684\u5bec\u95ca\u55ae\u5143\u683c\uff0c\u800c\u4e0d\u662f\u4f60\u7684\u4f4d\u7f6e\u3002\u5b83\u516c\u958b\u4e14\u773e\u6240\u5468\u77e5\uff0c\u8acb\u9810\u8a2d\u5b83\u53d7\u5230\u76e3\u8996\uff1a\u5feb\u901f\u52a0\u5165\u53ea\u662f\u7701\u53bb\u8f38\u5165 geohash\uff1b\u5b83\u4e0d\u6703\u96b1\u85cf\u4f60\uff0c\u4e5f\u4e0d\u6703\u7e5e\u904e\u5c01\u9396\u3002"
+          }
+        }
+      }
+    },
+    "location_channels.quick_join.join_label" : {
+      "comment" : "Accessibility label for the quick join row; %@ is the localized country/region name",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0627\u0644\u0627\u0646\u0636\u0645\u0627\u0645 \u0625\u0644\u0649 \u0642\u0646\u0627\u0629 \u0645\u0646\u0637\u0642\u0629 %@"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@-\u098f\u09b0 \u0985\u099e\u09cd\u099a\u09b2-\u099a\u09cd\u09af\u09be\u09a8\u09c7\u09b2\u09c7 \u09af\u09cb\u0997 \u09a6\u09bf\u09a8"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dem regionskanal von %@ beitreten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "join the %@ region channel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unirse al canal de regi\u00f3n de %@"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u067e\u06cc\u0648\u0633\u062a\u0646 \u0628\u0647 \u06a9\u0627\u0646\u0627\u0644 \u0645\u0646\u0637\u0642\u0647\u200c\u0627\u06cc %@"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sumali sa region channel ng %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "rejoindre le canal de r\u00e9gion de %@"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u05d4\u05e6\u05d8\u05e8\u05e4\u05d5\u05ea \u05dc\u05e2\u05e8\u05d5\u05e5 \u05d4\u05d0\u05d6\u05d5\u05e8 \u05e9\u05dc %@"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ \u0915\u0947 \u0915\u094d\u0937\u0947\u0924\u094d\u0930 \u091a\u0948\u0928\u0932 \u0938\u0947 \u091c\u0941\u0921\u093c\u0947\u0902"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gabung ke channel wilayah %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "entra nel canale di regione di %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@\u306e\u5730\u57df\u30c1\u30e3\u30f3\u30cd\u30eb\u306b\u53c2\u52a0"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ \uc9c0\uc5ed \ucc44\ub110 \ucc38\uc5ec"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sertai saluran wilayah %@"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ \u0915\u094b \u0915\u094d\u0937\u0947\u0924\u094d\u0930 \u091a\u094d\u092f\u093e\u0928\u0932\u092e\u093e \u0938\u093e\u092e\u0947\u0932 \u0939\u0941\u0928\u0941\u0939\u094b\u0938\u094d"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "deelnemen aan het regiokanaal van %@"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "do\u0142\u0105cz do kana\u0142u regionu %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "entrar no canal de regi\u00e3o de %@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "entrar no canal de regi\u00e3o de %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0432\u043e\u0439\u0442\u0438 \u0432 \u0440\u0435\u0433\u0438\u043e\u043d\u0430\u043b\u044c\u043d\u044b\u0439 \u043a\u0430\u043d\u0430\u043b %@"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "g\u00e5 med i regionkanalen f\u00f6r %@"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ \u0bae\u0ba3\u0bcd\u0b9f\u0bb2 \u0b9a\u0bc7\u0ba9\u0bb2\u0bbf\u0bb2\u0bcd \u0b9a\u0bc7\u0bb0\u0bcd"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0e40\u0e02\u0e49\u0e32\u0e23\u0e48\u0e27\u0e21\u0e41\u0e0a\u0e19\u0e41\u0e19\u0e25\u0e20\u0e39\u0e21\u0e34\u0e20\u0e32\u0e04\u0e02\u0e2d\u0e07 %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ b\u00f6lge kanal\u0131na kat\u0131l"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0443\u0432\u0456\u0439\u0442\u0438 \u0434\u043e \u0440\u0435\u0433\u0456\u043e\u043d\u0430\u043b\u044c\u043d\u043e\u0433\u043e \u043a\u0430\u043d\u0430\u043b\u0443 %@"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ \u06a9\u06d2 \u0639\u0644\u0627\u0642\u0627\u0626\u06cc \u0686\u06cc\u0646\u0644 \u0645\u06cc\u06ba \u0634\u0627\u0645\u0644 \u06c1\u0648\u06ba"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tham gia k\u00eanh khu v\u1ef1c c\u1ee7a %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u52a0\u5165%@\u7684\u533a\u57df\u9891\u9053"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u52a0\u5165%@\u7684\u5340\u57df\u983b\u9053"
+          }
+        }
       }
     }
   },

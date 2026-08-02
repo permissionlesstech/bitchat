@@ -195,7 +195,8 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             nickname: peerInfo.nickname,
             lastSeen: peerInfo.lastSeen,
             isConnected: peerInfo.isConnected,
-            isReachable: isReachable
+            isReachable: isReachable,
+            localPetname: localPetname(forFingerprint: fingerprint)
         )
         
         // Check for favorite status
@@ -218,7 +219,8 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             nickname: favorite.peerNickname,
             lastSeen: favorite.lastUpdated,
             isConnected: false,
-            isReachable: false
+            isReachable: false,
+            localPetname: localPetname(forFingerprint: favorite.peerNoisePublicKey.sha256Fingerprint())
         )
         
         peer.favoriteStatus = favorite
@@ -227,6 +229,21 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         return peer
     }
     
+    /// Rebuild peer rows after a social-identity write (local alias, etc.) so
+    /// display names update without waiting for a mesh event.
+    func refreshPeers() {
+        updatePeers()
+    }
+
+    private func localPetname(forFingerprint fingerprint: String?) -> String? {
+        guard let fingerprint,
+              let petname = identityManager.getSocialIdentity(for: fingerprint)?.localPetname,
+              !petname.isEmpty else {
+            return nil
+        }
+        return petname
+    }
+
     // MARK: - Public Methods
     
     /// Get peer by ID

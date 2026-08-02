@@ -48,6 +48,15 @@ struct MediaMessageView: View {
                     .padding(.trailing, 4)
                     .accessibilityHidden(true)
             }
+            if conversationUIModel.showsVerifiedSeal(for: message) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.bitchatSystem(size: 8))
+                    .foregroundColor(Color.green.opacity(0.85))
+                    .padding(.trailing, 4)
+                    .accessibilityLabel(
+                        String(localized: "content.accessibility.verified_sender", defaultValue: "Verified sender", comment: "Accessibility label for the seal next to a verified peer's name on a private message")
+                    )
+            }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .center, spacing: 4) {
                     Text(conversationUIModel.formatMessageHeader(message, colorScheme: colorScheme, theme: theme))

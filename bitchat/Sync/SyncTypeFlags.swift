@@ -60,6 +60,11 @@ struct SyncTypeFlags: OptionSet {
         // Courier spray receipts are ephemeral directed acks/declines between
         // trusted peers; replaying them via gossip sync would be meaningless.
         case .courierSprayAck, .courierSprayDecline: return nil
+        // Rotating-ID presence is valid only inside its epoch, and gossiping it
+        // would defeat the point: a synced announce would let a device that was
+        // never in radio range collect tag blocks, turning a local presence
+        // beacon into a network-wide one.
+        case .announceV2: return nil
         // Prekey bundles gossip like board posts. The bitfield is a
         // wire-tolerant little-endian UInt64 (1-8 bytes, unknown high bits
         // ignored by `type(forBit:)`), so bits 8+ need no format change: old

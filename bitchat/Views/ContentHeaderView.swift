@@ -30,6 +30,10 @@ struct ContentHeaderView: View {
     /// timeline is showing) — they should light the pin too.
     @ObservedObject private var nearbyNotes = NearbyNotesCounter.shared
 
+    @State private var pendingShareGeohash: String?
+    @State private var showSharePrecisionWarning = false
+    @State private var activeSharePayload: ChannelSharePayload?
+
     /// The bridged-people count belongs to the mesh channel only.
     private var showBridgedPeerCount: Bool {
         if case .location = locationChannelsModel.selectedChannel { return false }
@@ -213,6 +217,16 @@ struct ContentHeaderView: View {
                             channel.geohash
                         )
                     )
+
+                    Button(action: { requestHeaderShare(forGeohash: channel.geohash) }) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.bitchatSystem(size: 12))
+                            .headerTapTarget()
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(
+                        String(localized: "channel.share.action", defaultValue: "share channel", comment: "Accessibility label for sharing the active location channel")
+                    )
                 }
 
                 Button(action: { appChromeModel.isLocationChannelsSheetPresented = true }) {
@@ -336,7 +350,36 @@ struct ContentHeaderView: View {
         } message: {
             Text("content.alert.screenshot.message")
         }
+        .confirmationDialog(
+            String(localized: "channel.share.precision_warning.title", defaultValue: "share a precise location channel?", comment: "Title of the confirmation before sharing a neighborhood-or-finer geohash invite"),
+            isPresented: $showSharePrecisionWarning,
+            titleVisibility: .visible
+        ) {
+            Button(String(localized: "channel.share.precision_warning.confirm", defaultValue: "share anyway", comment: "Confirms sharing a fine-precision location channel after the OpSec warning")) {
+                if let gh = pendingShareGeohash {
+                    activeSharePayload = ChannelSharePayload(text: ChannelShare.payload(forGeohash: gh))
+                }
+                pendingShareGeohash = nil
+            }
+            Button("common.cancel", role: .cancel) {
+                pendingShareGeohash = nil
+            }
+        } message: {
+            Text(String(localized: "channel.share.precision_warning.message", defaultValue: "this channel covers a small area. an invite sent over sms or imessage is visible to the carrier and both handsets — it discloses interest in that place, not only that someone uses bitchat.", comment: "Body of the confirmation before sharing a fine-precision geohash invite"))
+        }
+        .sheet(item: $activeSharePayload) { payload in
+            ShareActivityView(text: payload.text)
+        }
         .themedChromePanel(edge: .top)
+    }
+
+    private func requestHeaderShare(forGeohash geohash: String) {
+        if ChannelShare.shouldWarn(forGeohash: geohash) {
+            pendingShareGeohash = geohash
+            showSharePrecisionWarning = true
+        } else {
+            activeSharePayload = ChannelSharePayload(text: ChannelShare.payload(forGeohash: geohash))
+        }
     }
 }
 

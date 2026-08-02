@@ -477,15 +477,21 @@ final class ChatPeerIdentityCoordinator {
             return peerID.id
         }
 
+        // Local aliases outrank announced nicknames so a saved petname is
+        // actually visible after the fingerprint sheet dismisses.
+        if let fingerprint = getFingerprint(for: peerID),
+           let identity = context.socialIdentity(forFingerprint: fingerprint),
+           let petname = identity.localPetname,
+           !petname.isEmpty {
+            return petname
+        }
+
         if let nickname = context.meshPeerNicknames()[peerID] {
             return nickname
         }
 
         if let fingerprint = getFingerprint(for: peerID),
            let identity = context.socialIdentity(forFingerprint: fingerprint) {
-            if let petname = identity.localPetname {
-                return petname
-            }
             return identity.claimedNickname
         }
 
