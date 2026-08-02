@@ -1085,6 +1085,10 @@ struct ChatViewModelMediaTransferTests {
         let sourceData = try Data(contentsOf: sourceURL)
 
         viewModel.selectedPrivateChatPeer = peerID
+        transport.peerCapabilitiesByPeerID[peerID] = [
+            .privateFileNoiseEnvelope,
+            .largeNoiseFileCiphertext
+        ]
         viewModel.processThenSendImage(from: sourceURL)
 
         let didSend = await TestHelpers.waitUntil({ transport.sentOriginalPrivateImages.count == 1 }, timeout: TestConstants.longTimeout)

@@ -137,9 +137,18 @@ final class AppRuntime: ObservableObject {
         NetworkActivationService.shared.start()
         GeohashPresenceService.shared.start()
         checkForSharedContent()
+        performMediaMaintenance()
 
         record(.launched)
         record(.startupCompleted)
+    }
+
+    /// Best-effort launch sweep for media that outlived the retention window.
+    /// Detached because startup does not depend on walking the media tree.
+    private func performMediaMaintenance() {
+        Task.detached(priority: .utility) {
+            BLEIncomingFileStore().expireAgedMedia()
+        }
     }
 
     func handleOpenURL(_ url: URL) {

@@ -24,8 +24,9 @@ final class SecureNoiseSession: NoiseSession {
             throw NoiseSecurityError.sessionExhausted
         }
         
-        // Validate message size
-        guard NoiseSecurityValidator.validateMessageSize(plaintext) else {
+        let isPrivateFile = plaintext.first == NoisePayloadType.fileTransfer.rawValue
+            && NoiseSecurityValidator.validatePrivateFileMessageSize(plaintext)
+        guard NoiseSecurityValidator.validateMessageSize(plaintext) || isPrivateFile else {
             throw NoiseSecurityError.messageTooLarge
         }
         
@@ -42,8 +43,11 @@ final class SecureNoiseSession: NoiseSession {
             throw NoiseSecurityError.sessionExpired
         }
         
-        // Validate message size
-        guard NoiseSecurityValidator.validateMessageSize(ciphertext) else {
+        // The payload type is encrypted. Large candidates are bounded here and
+        // `NoiseEncryptionService.decrypt` requires `.fileTransfer` after
+        // authenticated decryption.
+        guard NoiseSecurityValidator.validateCiphertextSize(ciphertext)
+                || NoiseSecurityValidator.validatePrivateFileCiphertextSize(ciphertext) else {
             throw NoiseSecurityError.messageTooLarge
         }
         

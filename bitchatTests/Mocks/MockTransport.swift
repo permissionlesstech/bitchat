@@ -59,6 +59,7 @@ final class MockTransport: Transport {
     var peerNicknames: [PeerID: String] = [:]
     var peerFingerprints: [PeerID: String] = [:]
     var peerNoiseStates: [PeerID: LazyHandshakeState] = [:]
+    var peerCapabilitiesByPeerID: [PeerID: PeerCapabilities] = [:]
     private let mockKeychain = MockKeychain()
 
     // MARK: - Transport Protocol Implementation
@@ -111,6 +112,10 @@ final class MockTransport: Transport {
 
     func getNoiseSessionState(for peerID: PeerID) -> LazyHandshakeState {
         peerNoiseStates[peerID] ?? .none
+    }
+
+    func peerCapabilities(_ peerID: PeerID) -> PeerCapabilities {
+        peerCapabilitiesByPeerID[peerID] ?? []
     }
 
     func triggerHandshake(with peerID: PeerID) {

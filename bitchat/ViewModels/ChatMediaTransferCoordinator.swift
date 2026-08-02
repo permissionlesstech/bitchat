@@ -6,6 +6,12 @@ import Foundation
 import UIKit
 #endif
 
+struct PrivateFileFallbackConsentRequest: Identifiable {
+    let id: UUID
+    let peerID: PeerID
+    let peerNickname: String
+}
+
 /// The narrow surface `ChatMediaTransferCoordinator` needs from its owner.
 ///
 /// Follows the `ChatDeliveryContext` exemplar: the coordinator depends on the
@@ -43,6 +49,13 @@ protocol ChatMediaTransferContext: AnyObject {
     func recordContentKey(_ key: String, timestamp: Date)
 
     // MARK: Mesh file transfer
+    func peerCapabilities(for peerID: PeerID) -> PeerCapabilities
+    func requestUnencryptedPrivateFileFallback(
+        to peerID: PeerID,
+        peerNickname: String,
+        send: @escaping @MainActor () -> Void,
+        cancel: @escaping @MainActor () -> Void
+    )
     func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String)
     func sendOriginalImagePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String)
     func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String)
@@ -84,7 +97,7 @@ final class ChatMediaTransferCoordinator {
 
     private(set) var transferIdToMessageIDs: [String: [String]] = [:]
     private(set) var messageIDToTransferId: [String: String] = [:]
-    private var incomingPrivateFileAssemblies: [String: IncomingPrivateFileAssembly] = [:]
+    private var receivedPrivateFileTransfers: Set<String> = []
 
     init(context: any ChatMediaTransferContext, incomingFileStore: BLEIncomingFileStore = BLEIncomingFileStore()) {
         self.context = context
@@ -208,7 +221,7 @@ final class ChatMediaTransferCoordinator {
                     let transferId = self.makeTransferID(messageID: messageID)
                     self.registerTransfer(transferId: transferId, messageID: messageID)
                     if let peerID = targetPeer {
-                        self.context.sendOriginalImagePrivate(prepared.packet, to: peerID, transferId: transferId)
+                        self.sendPreparedPrivateImage(prepared, to: peerID, transferId: transferId, messageID: messageID)
                     } else {
                         self.context.sendFileBroadcast(prepared.packet, transferId: transferId)
                     }
@@ -360,51 +373,32 @@ final class ChatMediaTransferCoordinator {
     func clearAllTransferStateForPanic() {
         transferIdToMessageIDs.removeAll()
         messageIDToTransferId.removeAll()
-        incomingPrivateFileAssemblies.removeAll()
+        receivedPrivateFileTransfers.removeAll()
         ImageUtils.clearPhotoLibraryStagingDirectory()
     }
 
     func handlePrivateFileTransferPayload(from peerID: PeerID, payload: Data, timestamp: Date) {
-        guard let chunk = PrivateFileTransferChunkPacket.decode(payload),
-              chunk.fileSize <= UInt64(FileTransferLimits.maxImageBytes) else {
-            SecureLogger.warning("🚫 Dropping malformed private file-transfer chunk", category: .security)
+        guard let privatePacket = PrivateFileTransferPacket.decode(payload) else {
+            SecureLogger.warning("🚫 Dropping malformed private file-transfer payload", category: .security)
             return
         }
 
-        let key = "\(peerID.id)-\(chunk.transferID)"
-        var assembly = incomingPrivateFileAssemblies[key] ?? IncomingPrivateFileAssembly(chunk: chunk)
-        guard assembly.accepts(chunk) else {
-            incomingPrivateFileAssemblies.removeValue(forKey: key)
-            SecureLogger.warning("🚫 Dropping inconsistent private file-transfer assembly", category: .security)
+        let transferKey = "\(peerID.id)-\(privatePacket.transferID)"
+        guard !receivedPrivateFileTransfers.contains(transferKey) else {
+            SecureLogger.debug("📷 Dropping duplicate private file transfer \(privatePacket.transferID.prefix(8))…", category: .session)
             return
         }
-        assembly.chunks[chunk.index] = chunk.content
-        incomingPrivateFileAssemblies[key] = assembly
 
-        guard assembly.chunks.count == assembly.total else { return }
-        incomingPrivateFileAssemblies.removeValue(forKey: key)
-
-        let content = (0..<assembly.total).reduce(into: Data()) { result, index in
-            if let chunk = assembly.chunks[index] {
-                result.append(chunk)
-            }
-        }
-        guard UInt64(content.count) == assembly.fileSize,
-              content.sha256Hash() == assembly.fileSHA256 else {
+        let decodedFilePacket = privatePacket.filePacket
+        guard decodedFilePacket.content.sha256Hash() == privatePacket.fileSHA256 else {
             SecureLogger.warning("🚫 Dropping private file transfer with invalid digest or size", category: .security)
             return
         }
         #if DEBUG
-        SecureLogger.debug("📷 Private original image received bytes=\(content.count) sha256=\(content.sha256Hex())", category: .session)
+        SecureLogger.debug("📷 Private original image received bytes=\(decodedFilePacket.content.count) sha256=\(decodedFilePacket.content.sha256Hex())", category: .session)
         #endif
 
-        let packet = BitchatFilePacket(
-            fileName: assembly.fileName,
-            fileSize: assembly.fileSize,
-            mimeType: assembly.mimeType,
-            content: content
-        )
-        guard let encoded = packet.encode() else { return }
+        guard let encoded = decodedFilePacket.encode() else { return }
         let filePacket: BitchatFilePacket
         let mime: MimeType
         switch BLEIncomingFileValidator.validate(payload: encoded) {
@@ -426,6 +420,7 @@ final class ChatMediaTransferCoordinator {
         ) else {
             return
         }
+        receivedPrivateFileTransfers.insert(transferKey)
 
         let senderName = context.nicknameForPeer(peerID)
         let message = BitchatMessage(
@@ -444,35 +439,38 @@ final class ChatMediaTransferCoordinator {
     }
 }
 
-private struct IncomingPrivateFileAssembly {
-    let transferID: String
-    let total: Int
-    let fileName: String?
-    let mimeType: String?
-    let fileSize: UInt64
-    let fileSHA256: Data
-    var chunks: [Int: Data] = [:]
-
-    init(chunk: PrivateFileTransferChunkPacket) {
-        transferID = chunk.transferID
-        total = chunk.total
-        fileName = chunk.fileName
-        mimeType = chunk.mimeType
-        fileSize = chunk.fileSize
-        fileSHA256 = chunk.fileSHA256
-    }
-
-    func accepts(_ chunk: PrivateFileTransferChunkPacket) -> Bool {
-        chunk.transferID == transferID
-            && chunk.total == total
-            && chunk.fileName == fileName
-            && chunk.mimeType == mimeType
-            && chunk.fileSize == fileSize
-            && chunk.fileSHA256 == fileSHA256
-    }
-}
-
 private extension ChatMediaTransferCoordinator {
+    func sendPreparedPrivateImage(
+        _ prepared: ChatPreparedImage,
+        to peerID: PeerID,
+        transferId: String,
+        messageID: String
+    ) {
+        let capabilities = context.peerCapabilities(for: peerID)
+        guard capabilities.supportsPrivateFileNoiseEnvelope else {
+            let peerNickname = context.nicknameForPeer(peerID)
+            context.requestUnencryptedPrivateFileFallback(
+                to: peerID,
+                peerNickname: peerNickname,
+                send: { [weak self] in
+                    guard let self else { return }
+                    self.context.sendFilePrivate(prepared.packet, to: peerID, transferId: transferId)
+                },
+                cancel: { [weak self] in
+                    guard let self else { return }
+                    self.handleMediaSendFailure(
+                        messageID: messageID,
+                        reason: String(localized: "content.delivery.reason.private_file_unsupported", defaultValue: "Peer does not support encrypted original image transfer.", comment: "Failure reason shown when a private image cannot be sent with encrypted original-file support")
+                    )
+                    try? FileManager.default.removeItem(at: prepared.outputURL)
+                }
+            )
+            return
+        }
+
+        context.sendOriginalImagePrivate(prepared.packet, to: peerID, transferId: transferId)
+    }
+
     func applicationFilesDirectory() throws -> URL {
         let base = try FileManager.default.url(
             for: .applicationSupportDirectory,
@@ -487,5 +485,11 @@ private extension ChatMediaTransferCoordinator {
             attributes: nil
         )
         return filesDirectory
+    }
+}
+
+private extension PeerCapabilities {
+    var supportsPrivateFileNoiseEnvelope: Bool {
+        contains(.privateFileNoiseEnvelope) && contains(.largeNoiseFileCiphertext)
     }
 }

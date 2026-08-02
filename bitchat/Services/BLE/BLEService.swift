@@ -974,43 +974,39 @@ final class BLEService: NSObject {
             #if DEBUG
             SecureLogger.debug("📷 Private original image send bytes=\(filePacket.content.count) sha256=\(filePacket.content.sha256Hex())", category: .session)
             #endif
-            guard let chunks = BLENoisePayloadFactory.privateFileTransferChunks(filePacket, transferId: transferId) else {
-                SecureLogger.error("❌ Failed to encode private image chunks", category: .session)
+            guard let typedPayload = BLENoisePayloadFactory.privateFileTransferPayload(filePacket, transferId: transferId) else {
+                SecureLogger.error("❌ Failed to encode private image payload", category: .session)
                 return
             }
 
             guard self.noiseService.hasEstablishedSession(with: recipientID) else {
                 self.collectionsQueue.sync(flags: .barrier) {
-                    for (index, chunk) in chunks.enumerated() {
-                        self.pendingNoiseSessionQueues.appendTypedPayload(
-                            chunk,
-                            for: recipientID,
-                            fragmentTrainId: Self.privateImageFragmentTrainId(transferId: transferId, chunkIndex: index),
-                            reportsTransferProgress: false
-                        )
-                    }
+                    self.pendingNoiseSessionQueues.appendTypedPayload(
+                        typedPayload,
+                        for: recipientID,
+                        fragmentTrainId: transferId,
+                        reportsTransferProgress: false
+                    )
                 }
                 self.initiateNoiseHandshake(with: recipientID)
-                SecureLogger.debug("🤝 Queued \(chunks.count) private image chunk(s) for \(recipientID.id.prefix(8))… until Noise session is ready", category: .session)
+                SecureLogger.debug("🤝 Queued private image payload for \(recipientID.id.prefix(8))… until Noise session is ready", category: .session)
                 return
             }
 
-            TransferProgressManager.shared.start(id: transferId, totalFragments: chunks.count)
-            for (index, chunk) in chunks.enumerated() {
-                do {
-                    let packet = try self.makeEncryptedNoisePacket(chunk, to: recipientID)
-                    self.broadcastPacket(
-                        packet,
-                        transferId: transferId,
-                        fragmentTrainId: Self.privateImageFragmentTrainId(transferId: transferId, chunkIndex: index),
-                        reportsTransferProgress: false
-                    )
-                    TransferProgressManager.shared.recordFragmentSent(id: transferId)
-                } catch {
-                    SecureLogger.error("❌ Failed to encrypt private image chunk: \(error)", category: .encryption)
-                    TransferProgressManager.shared.cancel(id: transferId)
-                    return
-                }
+            TransferProgressManager.shared.start(id: transferId, totalFragments: 1)
+            do {
+                let packet = try self.makeEncryptedNoisePacket(typedPayload, to: recipientID)
+                self.broadcastPacket(
+                    packet,
+                    transferId: transferId,
+                    fragmentTrainId: transferId,
+                    reportsTransferProgress: false
+                )
+                TransferProgressManager.shared.recordFragmentSent(id: transferId)
+            } catch {
+                SecureLogger.error("❌ Failed to encrypt private image payload: \(error)", category: .encryption)
+                TransferProgressManager.shared.cancel(id: transferId)
+                return
             }
         }
     }
@@ -1135,10 +1131,6 @@ final class BLEService: NSObject {
 
     // MARK: - Packet Broadcasting
     
-    private static func privateImageFragmentTrainId(transferId: String, chunkIndex: Int) -> String {
-        "\(transferId)#noise-chunk-\(chunkIndex)"
-    }
-
     private func broadcastPacket(
         _ packet: BitchatPacket,
         transferId: String? = nil,
@@ -3486,7 +3478,9 @@ extension BLEService {
     }
 
     private func makeEncryptedNoisePacket(_ typedPayload: Data, to peerID: PeerID) throws -> BitchatPacket {
-        let encrypted = try noiseService.encrypt(typedPayload, for: peerID)
+        let encrypted = typedPayload.first == NoisePayloadType.fileTransfer.rawValue
+            ? try noiseService.encryptPrivateFilePayload(typedPayload, for: peerID)
+            : try noiseService.encrypt(typedPayload, for: peerID)
         return BitchatPacket(
             type: MessageType.noiseEncrypted.rawValue,
             senderID: myPeerIDData,

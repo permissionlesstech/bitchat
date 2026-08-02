@@ -21,65 +21,37 @@ struct BLEOutboundFragmentTransferSchedulerTests {
     }
 
     @Test
-    func privateImageNoiseChunkTrainsThrottleAtTwoConcurrentAndDoNotSerializeToOne() {
+    func privateImageNoiseTrainUsesOneTransferSlot() {
         var scheduler = BLEOutboundFragmentTransferScheduler()
         let peerID = PeerID(str: "1122334455667788")
         let imageTransferId = "private-image-transfer"
-        var startedTrainIds: [String] = []
-        var queuedTrainIds: [String] = []
-        var maxActiveCount = 0
+        let request = makeRequest(
+            type: MessageType.noiseEncrypted.rawValue,
+            transferId: imageTransferId,
+            payload: "encrypted-private-file",
+            directedPeer: peerID,
+            fragmentTrainId: imageTransferId,
+            reportsTransferProgress: false
+        )
 
-        for index in 0..<9 {
-            let trainId = "\(imageTransferId)#noise-chunk-\(index)"
-            let request = makeRequest(
-                type: MessageType.noiseEncrypted.rawValue,
-                transferId: imageTransferId,
-                payload: "encrypted-chunk-\(index)",
-                directedPeer: peerID,
-                fragmentTrainId: trainId,
-                reportsTransferProgress: false
-            )
-
-            switch scheduler.submit(request, maxConcurrentTransfers: 2) {
-            case let .start(_, reservedTransferId?):
-                startedTrainIds.append(reservedTransferId)
-                _ = scheduler.activateReservedTransfer(id: reservedTransferId, totalFragments: 1, workItems: [])
-            case let .queued(_, transferId?, _):
-                queuedTrainIds.append(transferId)
-            default:
-                Issue.record("Expected private image chunk train to start or queue with a reservation id")
-            }
-            maxActiveCount = max(maxActiveCount, scheduler.activeCount)
-        }
-
-        #expect(startedTrainIds == [
-            "\(imageTransferId)#noise-chunk-0",
-            "\(imageTransferId)#noise-chunk-1"
-        ])
-        #expect(queuedTrainIds.count == 7)
-        #expect(maxActiveCount == 2)
-        #expect(scheduler.activeCount == 2)
-        #expect(scheduler.pendingCount == 7)
-
-        #expect(scheduler.markFragmentSent(transferId: startedTrainIds[0]) == .complete(sentFragments: 1, totalFragments: 1))
-        let starts = scheduler.reservePendingStarts(maxConcurrentTransfers: 2)
-
-        #expect(scheduler.activeCount == 2)
-        #expect(scheduler.pendingCount == 6)
-        if case let .start(request, reservedTransferId?) = starts.first {
-            #expect(request.packet.type == MessageType.noiseEncrypted.rawValue)
-            #expect(request.directedPeer == peerID)
-            #expect(request.transferId == imageTransferId)
-            #expect(request.fragmentTrainId == "\(imageTransferId)#noise-chunk-2")
-            #expect(reservedTransferId == "\(imageTransferId)#noise-chunk-2")
-            #expect(!request.reportsTransferProgress)
+        if case let .start(started, reservedTransferId?) = scheduler.submit(request, maxConcurrentTransfers: 2) {
+            #expect(started.packet.type == MessageType.noiseEncrypted.rawValue)
+            #expect(started.directedPeer == peerID)
+            #expect(started.transferId == imageTransferId)
+            #expect(started.fragmentTrainId == imageTransferId)
+            #expect(reservedTransferId == imageTransferId)
+            #expect(!started.reportsTransferProgress)
+            _ = scheduler.activateReservedTransfer(id: reservedTransferId, totalFragments: 1, workItems: [])
         } else {
-            Issue.record("Expected the next queued private image chunk train to start when a slot frees")
+            Issue.record("Expected private image train to reserve one transfer slot")
         }
+
+        #expect(scheduler.activeCount == 1)
+        #expect(scheduler.pendingCount == 0)
     }
 
     @Test
-    func mixedPublicFileAndPrivateImageChunkTrainsShareOneGlobalTransferPool() {
+    func mixedPublicFileAndPrivateImageTrainShareOneGlobalTransferPool() {
         var scheduler = BLEOutboundFragmentTransferScheduler()
         let peerID = PeerID(str: "1122334455667788")
         let publicRequest = makeRequest(
@@ -87,21 +59,18 @@ struct BLEOutboundFragmentTransferSchedulerTests {
             transferId: "public-file-transfer",
             payload: "public-file"
         )
-        let firstPrivateTrain = makeRequest(
+        let privateTrain = makeRequest(
             type: MessageType.noiseEncrypted.rawValue,
             transferId: "private-image-transfer",
-            payload: "encrypted-chunk-0",
+            payload: "encrypted-private-file",
             directedPeer: peerID,
-            fragmentTrainId: "private-image-transfer#noise-chunk-0",
+            fragmentTrainId: "private-image-transfer",
             reportsTransferProgress: false
         )
-        let secondPrivateTrain = makeRequest(
-            type: MessageType.noiseEncrypted.rawValue,
-            transferId: "private-image-transfer",
-            payload: "encrypted-chunk-1",
-            directedPeer: peerID,
-            fragmentTrainId: "private-image-transfer#noise-chunk-1",
-            reportsTransferProgress: false
+        let nextPublicRequest = makeRequest(
+            type: MessageType.fileTransfer.rawValue,
+            transferId: "next-public-file",
+            payload: "next-public-file"
         )
 
         guard case let .start(_, publicReservation?) = scheduler.submit(publicRequest, maxConcurrentTransfers: 2) else {
@@ -110,17 +79,17 @@ struct BLEOutboundFragmentTransferSchedulerTests {
         }
         _ = scheduler.activateReservedTransfer(id: publicReservation, totalFragments: 1, workItems: [])
 
-        guard case let .start(_, privateReservation?) = scheduler.submit(firstPrivateTrain, maxConcurrentTransfers: 2) else {
-            Issue.record("Expected first private image chunk train to reserve the second slot")
+        guard case let .start(_, privateReservation?) = scheduler.submit(privateTrain, maxConcurrentTransfers: 2) else {
+            Issue.record("Expected private image train to reserve the second slot")
             return
         }
         _ = scheduler.activateReservedTransfer(id: privateReservation, totalFragments: 1, workItems: [])
 
-        let result = scheduler.submit(secondPrivateTrain, maxConcurrentTransfers: 2)
+        let result = scheduler.submit(nextPublicRequest, maxConcurrentTransfers: 2)
 
         if case let .queued(request, transferId, position) = result {
-            #expect(request.packet.type == MessageType.noiseEncrypted.rawValue)
-            #expect(transferId == "private-image-transfer#noise-chunk-1")
+            #expect(request.packet.type == MessageType.fileTransfer.rawValue)
+            #expect(transferId == "next-public-file")
             #expect(position == .back)
             #expect(scheduler.activeCount == 2)
             #expect(scheduler.pendingCount == 1)

@@ -153,6 +153,38 @@ struct NoiseEncryptionServiceTests {
         }
     }
 
+    @Test("Large ciphertext rate limit blocks before session decrypt path")
+    func largeCiphertextRateLimitBlocksBeforeSessionDecryptPath() throws {
+        let service = NoiseEncryptionService(keychain: MockKeychain())
+        let peerID = PeerID(str: "2031425364758697")
+        let largeCiphertext = Data(
+            repeating: 0xAA,
+            count: NoiseSecurityConstants.maxMessageSize
+                + NoiseSecurityConstants.transportCiphertextOverhead
+                + 1
+        )
+
+        for _ in 0..<NoiseSecurityConstants.maxLargeCiphertextsPerSecond {
+            do {
+                _ = try service.decrypt(largeCiphertext, from: peerID)
+                Issue.record("Expected sessionNotEstablished before large limit is exhausted")
+            } catch NoiseEncryptionError.sessionNotEstablished {
+                // Expected: not rate-limited yet, so the call reaches the session gate.
+            } catch {
+                Issue.record("Unexpected error before limit: \(error)")
+            }
+        }
+
+        do {
+            _ = try service.decrypt(largeCiphertext, from: peerID)
+            Issue.record("Expected large ciphertext rate limit")
+        } catch NoiseSecurityError.rateLimitExceeded {
+            // Expected: blocked before the session/decrypt path.
+        } catch {
+            Issue.record("Unexpected error after limit: \(error)")
+        }
+    }
+
     @Test("Clearing persistent identity removes saved keys")
     func clearPersistentIdentityRemovesSavedKeys() {
         let keychain = MockKeychain()

@@ -5,7 +5,7 @@ import Testing
 
 struct PrivateImageNoiseEncryptionTests {
     @Test
-    func privateImageChunksAreNoiseEncryptedOnWireAndReassembleByteIdentical() throws {
+    func privateImagePayloadIsNoiseEncryptedOnWireAndReassemblesByteIdentical() throws {
         let alice = NoiseEncryptionService(keychain: MockKeychain())
         let bob = NoiseEncryptionService(keychain: MockKeychain())
         let alicePeerID = PeerID(str: "0011223344556677")
@@ -22,25 +22,18 @@ struct PrivateImageNoiseEncryptionTests {
             mimeType: "image/png",
             content: imageBytes
         )
-        let plaintextChunks = try #require(BLENoisePayloadFactory.privateFileTransferChunks(filePacket, transferId: "tx-noise"))
+        let plaintext = try #require(BLENoisePayloadFactory.privateFileTransferPayload(filePacket, transferId: "tx-noise"))
 
-        var receivedChunks: [PrivateFileTransferChunkPacket] = []
-        for plaintextChunk in plaintextChunks {
-            let ciphertext = try alice.encrypt(plaintextChunk, for: alicePeerID)
-            #expect(!ciphertext.containsSubsequence(marker))
-            #expect(!ciphertext.containsSubsequence(imageBytes.prefix(64)))
+        let ciphertext = try alice.encryptPrivateFilePayload(plaintext, for: alicePeerID)
+        #expect(!ciphertext.containsSubsequence(marker))
+        #expect(!ciphertext.containsSubsequence(imageBytes.prefix(64)))
 
-            let decrypted = try bob.decrypt(ciphertext, from: bobPeerID)
-            #expect(decrypted.first == NoisePayloadType.fileTransfer.rawValue)
-            let chunk = try #require(PrivateFileTransferChunkPacket.decode(Data(decrypted.dropFirst())))
-            receivedChunks.append(chunk)
-        }
+        let decrypted = try bob.decrypt(ciphertext, from: bobPeerID)
+        #expect(decrypted.first == NoisePayloadType.fileTransfer.rawValue)
+        let decoded = try #require(PrivateFileTransferPacket.decode(Data(decrypted.dropFirst())))
 
-        let reassembled = receivedChunks
-            .sorted { $0.index < $1.index }
-            .reduce(into: Data()) { $0.append($1.content) }
-        #expect(reassembled == imageBytes)
-        #expect(reassembled.sha256Hash() == receivedChunks.first?.fileSHA256)
+        #expect(decoded.filePacket.content == imageBytes)
+        #expect(decoded.filePacket.content.sha256Hash() == decoded.fileSHA256)
     }
 
     @Test
@@ -64,8 +57,8 @@ struct PrivateImageNoiseEncryptionTests {
             mimeType: "image/png",
             content: imageBytes
         )
-        let plaintextChunk = try #require(BLENoisePayloadFactory.privateFileTransferChunks(filePacket, transferId: "tx-wrong-key")?.first)
-        let ciphertext = try alice.encrypt(plaintextChunk, for: alicePeerID)
+        let plaintext = try #require(BLENoisePayloadFactory.privateFileTransferPayload(filePacket, transferId: "tx-wrong-key"))
+        let ciphertext = try alice.encryptPrivateFilePayload(plaintext, for: alicePeerID)
 
         #expect(throws: (any Error).self) {
             _ = try wrongRecipient.decrypt(ciphertext, from: bobPeerID)

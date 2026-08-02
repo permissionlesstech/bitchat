@@ -346,6 +346,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     // Bluetooth state management
     @Published var showBluetoothAlert = false
     @Published var bluetoothAlertMessage = ""
+    @Published var privateFileFallbackConsentRequest: PrivateFileFallbackConsentRequest?
     @Published var bluetoothState: CBManagerState = .unknown
 
     private func performDeliveryUpdate(_ update: @escaping @MainActor (ChatDeliveryCoordinator) -> Void) {
@@ -441,6 +442,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     private var storeAuditLastAppendCount = 0
     // Announce Tor initial readiness once per launch to avoid duplicates
     var torInitialReadyAnnounced: Bool = false
+    private var privateFileFallbackConsentActions: [UUID: (send: @MainActor () -> Void, cancel: @MainActor () -> Void)] = [:]
 
     // Track Nostr pubkey mappings for unknown senders
     // Single-writer: mutate only via `registerNostrKeyMapping` / `removeNostrKeyMappings` below.
@@ -513,6 +515,40 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     @MainActor
     func setPublicBatching(_ isBatching: Bool) {
         isBatchingPublic = isBatching
+    }
+
+    @MainActor
+    func requestUnencryptedPrivateFileFallback(
+        to peerID: PeerID,
+        peerNickname: String,
+        send: @escaping @MainActor () -> Void,
+        cancel: @escaping @MainActor () -> Void
+    ) {
+        let request = PrivateFileFallbackConsentRequest(
+            id: UUID(),
+            peerID: peerID,
+            peerNickname: peerNickname
+        )
+        privateFileFallbackConsentActions[request.id] = (send: send, cancel: cancel)
+        privateFileFallbackConsentRequest = request
+    }
+
+    @MainActor
+    func confirmUnencryptedPrivateFileFallback(_ requestID: UUID) {
+        guard let actions = privateFileFallbackConsentActions.removeValue(forKey: requestID) else { return }
+        if privateFileFallbackConsentRequest?.id == requestID {
+            privateFileFallbackConsentRequest = nil
+        }
+        actions.send()
+    }
+
+    @MainActor
+    func cancelUnencryptedPrivateFileFallback(_ requestID: UUID) {
+        guard let actions = privateFileFallbackConsentActions.removeValue(forKey: requestID) else { return }
+        if privateFileFallbackConsentRequest?.id == requestID {
+            privateFileFallbackConsentRequest = nil
+        }
+        actions.cancel()
     }
 
     @MainActor

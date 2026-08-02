@@ -50,6 +50,27 @@ final class NoiseRateLimiterTests: XCTestCase {
         XCTAssertFalse(limiter.allowMessage(from: peerID))
     }
 
+    func test_allowLargeCiphertext_blocksAfterPerPeerLimit() {
+        let limiter = NoiseRateLimiter()
+        let peerID = makePeerID(11)
+
+        for _ in 0..<NoiseSecurityConstants.maxLargeCiphertextsPerSecond {
+            XCTAssertTrue(limiter.allowLargeCiphertext(from: peerID))
+        }
+
+        XCTAssertFalse(limiter.allowLargeCiphertext(from: peerID))
+    }
+
+    func test_allowLargeCiphertext_blocksAfterGlobalLimitAcrossPeers() {
+        let limiter = NoiseRateLimiter()
+
+        for index in 0..<NoiseSecurityConstants.maxGlobalLargeCiphertextsPerSecond {
+            XCTAssertTrue(limiter.allowLargeCiphertext(from: makePeerID(1_000 + index)))
+        }
+
+        XCTAssertFalse(limiter.allowLargeCiphertext(from: makePeerID(20_000)))
+    }
+
     func test_resetAll_clearsGlobalHandshakeLimit() async {
         let limiter = NoiseRateLimiter()
 

@@ -94,8 +94,37 @@ private final class MockChatMediaTransferContext: ChatMediaTransferContext {
     private(set) var originalPrivateImageSends: [(peerID: PeerID, transferId: String)] = []
     private(set) var broadcastFileSends: [String] = []
     private(set) var cancelledTransfers: [String] = []
+    var capabilitiesByPeerID: [PeerID: PeerCapabilities] = [:]
+    enum PrivateFileFallbackDecision {
+        case pending
+        case cancel
+        case send
+    }
+    var privateFileFallbackDecision: PrivateFileFallbackDecision = .pending
+    private(set) var privateFileFallbackRequests: [(peerID: PeerID, peerNickname: String)] = []
     var sourceURLCheckedDuringOriginalPrivateImageSend: URL?
     private(set) var sourceExistedDuringOriginalPrivateImageSend: Bool?
+
+    func peerCapabilities(for peerID: PeerID) -> PeerCapabilities {
+        capabilitiesByPeerID[peerID] ?? []
+    }
+
+    func requestUnencryptedPrivateFileFallback(
+        to peerID: PeerID,
+        peerNickname: String,
+        send: @escaping @MainActor () -> Void,
+        cancel: @escaping @MainActor () -> Void
+    ) {
+        privateFileFallbackRequests.append((peerID, peerNickname))
+        switch privateFileFallbackDecision {
+        case .pending:
+            break
+        case .cancel:
+            cancel()
+        case .send:
+            send()
+        }
+    }
 
     func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String) {
         privateFileSends.append((peerID, transferId))
@@ -157,6 +186,11 @@ private enum PrivateImageFixtureError: Error {
     case encodingFailed
 }
 
+private let privateFileNoiseSupport: PeerCapabilities = [
+    .privateFileNoiseEnvelope,
+    .largeNoiseFileCiphertext
+]
+
 // MARK: - Coordinator Tests Against Mock Context
 
 /// Exercises `ChatMediaTransferCoordinator` against
@@ -203,15 +237,13 @@ struct ChatMediaTransferCoordinatorContextTests {
             mimeType: "image/png",
             content: sourceData
         )
-        let chunks = try #require(BLENoisePayloadFactory.privateFileTransferChunks(filePacket, transferId: "rx-image"))
+        let typedPayload = try #require(BLENoisePayloadFactory.privateFileTransferPayload(filePacket, transferId: "rx-image"))
 
-        for typedChunk in chunks.reversed() {
-            coordinator.handlePrivateFileTransferPayload(
-                from: peerID,
-                payload: Data(typedChunk.dropFirst()),
-                timestamp: Date(timeIntervalSince1970: 123)
-            )
-        }
+        coordinator.handlePrivateFileTransferPayload(
+            from: peerID,
+            payload: Data(typedPayload.dropFirst()),
+            timestamp: Date(timeIntervalSince1970: 123)
+        )
 
         let message = try #require(context.privateChats[peerID]?.last)
         #expect(message.content.hasPrefix("[image] "))
@@ -223,7 +255,7 @@ struct ChatMediaTransferCoordinatorContextTests {
     }
 
     @Test @MainActor
-    func handlePrivateFileTransferPayload_duplicateChunkIsIdempotent() throws {
+    func handlePrivateFileTransferPayload_duplicatePayloadIsIdempotent() throws {
         let context = MockChatMediaTransferContext()
         let baseDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("private-image-duplicate-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: baseDirectory) }
@@ -240,15 +272,10 @@ struct ChatMediaTransferCoordinatorContextTests {
             mimeType: "image/png",
             content: sourceData
         )
-        let chunks = try #require(BLENoisePayloadFactory.privateFileTransferChunks(filePacket, transferId: "rx-duplicate"))
-        #expect(chunks.count > 1)
-        let duplicate = try #require(chunks.first)
+        let typedPayload = try #require(BLENoisePayloadFactory.privateFileTransferPayload(filePacket, transferId: "rx-duplicate"))
 
-        coordinator.handlePrivateFileTransferPayload(from: peerID, payload: Data(duplicate.dropFirst()), timestamp: Date())
-        coordinator.handlePrivateFileTransferPayload(from: peerID, payload: Data(duplicate.dropFirst()), timestamp: Date())
-        for typedChunk in chunks.dropFirst() {
-            coordinator.handlePrivateFileTransferPayload(from: peerID, payload: Data(typedChunk.dropFirst()), timestamp: Date())
-        }
+        coordinator.handlePrivateFileTransferPayload(from: peerID, payload: Data(typedPayload.dropFirst()), timestamp: Date())
+        coordinator.handlePrivateFileTransferPayload(from: peerID, payload: Data(typedPayload.dropFirst()), timestamp: Date())
 
         let messages = context.privateChats[peerID] ?? []
         #expect(messages.count == 1)
@@ -265,6 +292,7 @@ struct ChatMediaTransferCoordinatorContextTests {
         let coordinator = ChatMediaTransferCoordinator(context: context)
         let peerID = PeerID(str: "3344556677889900")
         context.selectedPrivateChatPeer = peerID
+        context.capabilitiesByPeerID[peerID] = privateFileNoiseSupport
 
         let sourceURL = try makePNGFileURL(name: "private-source-cleanup-\(UUID().uuidString).png")
         context.sourceURLCheckedDuringOriginalPrivateImageSend = sourceURL
@@ -283,6 +311,76 @@ struct ChatMediaTransferCoordinatorContextTests {
         #expect(cleanupCount == 1)
         #expect(context.sourceExistedDuringOriginalPrivateImageSend == false)
         #expect(!FileManager.default.fileExists(atPath: sourceURL.path))
+    }
+
+    @Test @MainActor
+    func sendImage_privatePeerWithoutCapabilitiesRequiresConsentAndCancelSendsNothing() async throws {
+        let context = MockChatMediaTransferContext()
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        let peerID = PeerID(str: "4455667788990011")
+        context.selectedPrivateChatPeer = peerID
+        context.nicknamesByPeerID[peerID] = "alice"
+        context.privateFileFallbackDecision = .cancel
+
+        let sourceURL = try makePNGFileURL(name: "private-unsupported-cancel-\(UUID().uuidString).png")
+
+        coordinator.sendImage(from: sourceURL)
+
+        let didRequest = await TestHelpers.waitUntil({
+            context.privateFileFallbackRequests.count == 1
+        }, timeout: TestConstants.longTimeout)
+
+        #expect(didRequest)
+        #expect(context.privateFileFallbackRequests.first?.peerID == peerID)
+        #expect(context.privateFileFallbackRequests.first?.peerNickname == "alice")
+        #expect(context.originalPrivateImageSends.isEmpty)
+        #expect(context.privateFileSends.isEmpty)
+        #expect(context.deliveryStatusUpdates.count == 1)
+        #expect(!context.privateChats[peerID, default: []].isEmpty)
+    }
+
+    @Test @MainActor
+    func sendImage_privatePeerWithoutCapabilitiesConsentUsesLegacyPrivateFilePath() async throws {
+        let context = MockChatMediaTransferContext()
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        let peerID = PeerID(str: "5566778899001122")
+        context.selectedPrivateChatPeer = peerID
+        context.privateFileFallbackDecision = .send
+
+        let sourceURL = try makePNGFileURL(name: "private-unsupported-send-\(UUID().uuidString).png")
+
+        coordinator.sendImage(from: sourceURL)
+
+        let didSendFallback = await TestHelpers.waitUntil({
+            context.privateFileSends.count == 1
+        }, timeout: TestConstants.longTimeout)
+
+        #expect(didSendFallback)
+        #expect(context.originalPrivateImageSends.isEmpty)
+        #expect(context.privateFileSends.first?.peerID == peerID)
+        #expect(context.privateFileFallbackRequests.count == 1)
+    }
+
+    @Test @MainActor
+    func sendImage_privatePeerMissingLargeCiphertextCapabilityDoesNotUseNoisePath() async throws {
+        let context = MockChatMediaTransferContext()
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        let peerID = PeerID(str: "6677889900112233")
+        context.selectedPrivateChatPeer = peerID
+        context.capabilitiesByPeerID[peerID] = [.privateFileNoiseEnvelope]
+        context.privateFileFallbackDecision = .cancel
+
+        let sourceURL = try makePNGFileURL(name: "private-missing-large-cap-\(UUID().uuidString).png")
+
+        coordinator.sendImage(from: sourceURL)
+
+        let didRequest = await TestHelpers.waitUntil({
+            context.privateFileFallbackRequests.count == 1
+        }, timeout: TestConstants.longTimeout)
+
+        #expect(didRequest)
+        #expect(context.originalPrivateImageSends.isEmpty)
+        #expect(context.privateFileSends.isEmpty)
     }
 
     @Test @MainActor

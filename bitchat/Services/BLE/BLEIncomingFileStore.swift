@@ -4,6 +4,17 @@ import Foundation
 
 struct BLEIncomingFileStore {
     private static let quotaBytes: Int64 = 100 * 1024 * 1024
+    /// How long managed media may stay on disk. Quota bounds incoming media by
+    /// size; this bounds incoming and outgoing media by age.
+    static let defaultMediaRetention: TimeInterval = 7 * 24 * 60 * 60
+    private static let mediaSubdirectories = [
+        "voicenotes/incoming",
+        "voicenotes/outgoing",
+        "images/incoming",
+        "images/outgoing",
+        "files/incoming",
+        "files/outgoing"
+    ]
 
     /// Name prefix of in-flight live voice captures (progressively written by
     /// `ChatLiveVoiceCoordinator`). Quota eviction skips them by pattern —
@@ -110,6 +121,53 @@ struct BLEIncomingFileStore {
         } catch {
             SecureLogger.warning("⚠️ Could not enforce storage quota: \(error)", category: .security)
         }
+    }
+
+    /// Deletes managed media older than `retention` across incoming and
+    /// outgoing media directories. In-flight live captures are skipped by the
+    /// same `voice_live_` guard used by quota eviction.
+    @discardableResult
+    func expireAgedMedia(retention: TimeInterval = Self.defaultMediaRetention) -> Int {
+        guard retention > 0 else { return 0 }
+
+        let cutoff = dateProvider().addingTimeInterval(-retention)
+        var removed = 0
+
+        do {
+            let base = try filesDirectory()
+            for subdirectory in Self.mediaSubdirectories {
+                let dir = base.appendingPathComponent(subdirectory, isDirectory: true)
+                guard fileManager.fileExists(atPath: dir.path) else { continue }
+                guard let contents = try? fileManager.contentsOfDirectory(
+                    at: dir,
+                    includingPropertiesForKeys: [.contentModificationDateKey],
+                    options: [.skipsHiddenFiles]
+                ) else { continue }
+
+                for fileURL in contents {
+                    guard let modified = try? fileURL.resourceValues(
+                        forKeys: [.contentModificationDateKey]
+                    ).contentModificationDate else { continue }
+                    guard modified < cutoff else { continue }
+                    guard !fileURL.lastPathComponent.hasPrefix(Self.liveCapturePrefix) else { continue }
+
+                    do {
+                        try fileManager.removeItem(at: fileURL)
+                        removed += 1
+                    } catch {
+                        SecureLogger.warning("⚠️ Failed to expire aged media file: \(error)", category: .security)
+                    }
+                }
+            }
+        } catch {
+            SecureLogger.warning("⚠️ Could not expire aged media: \(error)", category: .security)
+            return removed
+        }
+
+        if removed > 0 {
+            SecureLogger.info("🗑️ Expired \(removed) media file(s) older than the retention window", category: .security)
+        }
+        return removed
     }
 
     private func filesDirectory() throws -> URL {

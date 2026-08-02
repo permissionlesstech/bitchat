@@ -24,6 +24,12 @@ public struct PeerCapabilities: OptionSet, Equatable, Hashable, Sendable {
     /// (uplink/downlink carriers for mesh-only peers). Advertised alongside
     /// a `bridgeGeohash` TLV carrying the rendezvous cell.
     public static let bridge = PeerCapabilities(rawValue: 1 << 7)
+    /// Understands the fork-local Noise payload `0x09` carrying a
+    /// `PrivateFileTransferPacket` envelope.
+    public static let privateFileNoiseEnvelope = PeerCapabilities(rawValue: 1 << 8)
+    /// Accepts private-file Noise ciphertexts above the standard 64 KiB cap,
+    /// up to this build's private-file ciphertext limit.
+    public static let largeNoiseFileCiphertext = PeerCapabilities(rawValue: 1 << 9)
 
     /// Minimal little-endian byte encoding; always at least one byte so an
     /// empty set is distinguishable from an absent TLV.

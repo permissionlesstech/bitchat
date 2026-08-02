@@ -227,6 +227,22 @@ struct ContentView: View {
         } message: {
             Text(appChromeModel.bluetoothAlertMessage)
         }
+        .alert(item: $appChromeModel.privateFileFallbackConsentRequest) { request in
+            Alert(
+                title: Text(String(localized: "content.alert.private_file_fallback.title", defaultValue: "encrypted image not supported", comment: "Title for the private image fallback confirmation alert")),
+                message: Text(String(
+                    localized: "content.alert.private_file_fallback.message",
+                    defaultValue: "\(request.peerNickname) does not support sending original images with end-to-end encryption. You can send the original image with the older compatibility mode, but mesh relays may be able to read the file.",
+                    comment: "Message warning that private image fallback is not end-to-end encrypted"
+                )),
+                primaryButton: .cancel(Text(String(localized: "content.alert.private_file_fallback.cancel", defaultValue: "Don't Send", comment: "Cancel button for private image fallback"))) {
+                    appChromeModel.cancelUnencryptedPrivateFileFallback(request.id)
+                },
+                secondaryButton: .destructive(Text(String(localized: "content.alert.private_file_fallback.send_unencrypted", defaultValue: "Send without E2EE", comment: "Confirmation button to send a private image without end-to-end encryption"))) {
+                    appChromeModel.confirmUnencryptedPrivateFileFallback(request.id)
+                }
+            )
+        }
         .onDisappear {
             autocompleteDebounceTimer?.invalidate()
         }

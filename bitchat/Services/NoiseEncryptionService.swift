@@ -725,12 +725,38 @@ final class NoiseEncryptionService {
         
         return try sessionManager.encrypt(data, for: peerID)
     }
+
+    /// Encrypt one finalized private-file typed payload. Ordinary Noise
+    /// messages retain the 64 KiB ceiling; this path is the only larger budget.
+    func encryptPrivateFilePayload(_ data: Data, for peerID: PeerID) throws -> Data {
+        guard data.first == NoisePayloadType.fileTransfer.rawValue,
+              NoiseSecurityValidator.validatePrivateFileMessageSize(data) else {
+            throw NoiseSecurityError.messageTooLarge
+        }
+
+        guard rateLimiter.allowMessage(from: peerID) else {
+            throw NoiseSecurityError.rateLimitExceeded
+        }
+
+        guard hasEstablishedSession(with: peerID) else {
+            onHandshakeRequired?(peerID)
+            throw NoiseEncryptionError.handshakeRequired
+        }
+
+        return try sessionManager.encrypt(data, for: peerID)
+    }
     
     /// Decrypt data from a specific peer
     func decrypt(_ data: Data, from peerID: PeerID) throws -> Data {
-        // Validate message size
-        guard NoiseSecurityValidator.validateMessageSize(data) else {
+        let isStandardCiphertext = NoiseSecurityValidator.validateCiphertextSize(data)
+        guard isStandardCiphertext || NoiseSecurityValidator.validatePrivateFileCiphertextSize(data) else {
             throw NoiseSecurityError.messageTooLarge
+        }
+
+        if !isStandardCiphertext {
+            guard rateLimiter.allowLargeCiphertext(from: peerID) else {
+                throw NoiseSecurityError.rateLimitExceeded
+            }
         }
         
         // Check rate limit
@@ -743,7 +769,14 @@ final class NoiseEncryptionService {
             throw NoiseEncryptionError.sessionNotEstablished
         }
         
-        return try sessionManager.decrypt(data, from: peerID)
+        let plaintext = try sessionManager.decrypt(data, from: peerID)
+        if !isStandardCiphertext {
+            guard plaintext.first == NoisePayloadType.fileTransfer.rawValue,
+                  NoiseSecurityValidator.validatePrivateFileMessageSize(plaintext) else {
+                throw NoiseSecurityError.messageTooLarge
+            }
+        }
+        return plaintext
     }
     
     // MARK: - Peer Management

@@ -18,6 +18,7 @@ final class AppChromeModel: ObservableObject {
     @Published var bluetoothAlertMessage = ""
     @Published var bluetoothState: CBManagerState = .unknown
     @Published var showScreenshotPrivacyWarning = false
+    @Published var privateFileFallbackConsentRequest: PrivateFileFallbackConsentRequest?
 
     private let chatViewModel: ChatViewModel
     private var cancellables = Set<AnyCancellable>()
@@ -101,6 +102,14 @@ final class AppChromeModel: ObservableObject {
         chatViewModel.panicClearAllData()
     }
 
+    func confirmUnencryptedPrivateFileFallback(_ requestID: UUID) {
+        chatViewModel.confirmUnencryptedPrivateFileFallback(requestID)
+    }
+
+    func cancelUnencryptedPrivateFileFallback(_ requestID: UUID) {
+        chatViewModel.cancelUnencryptedPrivateFileFallback(requestID)
+    }
+
     private func bind(privateInboxModel: PrivateInboxModel) {
         privateInboxModel.$unreadPeerIDs
             .receive(on: DispatchQueue.main)
@@ -128,6 +137,10 @@ final class AppChromeModel: ObservableObject {
         chatViewModel.$bluetoothState
             .receive(on: DispatchQueue.main)
             .assign(to: &$bluetoothState)
+
+        chatViewModel.$privateFileFallbackConsentRequest
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$privateFileFallbackConsentRequest)
 
         hasUnreadPrivateMessages = !privateInboxModel.unreadPeerIDs.isEmpty
     }

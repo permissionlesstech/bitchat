@@ -6,7 +6,7 @@
 	<true/>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>$(APP_GROUP_ID)</string>
+		<string>group.chat.bitchat.969PX7V5UY</string>
 	</array>
 </dict>
 </plist>

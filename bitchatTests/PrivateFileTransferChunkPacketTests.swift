@@ -3,28 +3,34 @@ import Foundation
 import Testing
 @testable import bitchat
 
-struct PrivateFileTransferChunkPacketTests {
+struct PrivateFileTransferPacketTests {
     @Test
-    func chunkPacketRoundTrips() throws {
-        let packet = PrivateFileTransferChunkPacket(
-            transferID: "transfer-1",
-            index: 1,
-            total: 3,
-            fileName: "original.png",
+    func privateFilePacketRoundTripsAndVerifiesDigest() throws {
+        let original = Data((0..<(150 * 1024)).map { UInt8($0 % 251) })
+        let filePacket = BitchatFilePacket(
+            fileName: "source.png",
+            fileSize: UInt64(original.count),
             mimeType: "image/png",
-            fileSize: 9,
-            fileSHA256: Data(repeating: 0xAB, count: 32),
-            content: Data([0x01, 0x02, 0x03])
+            content: original
+        )
+        let packet = PrivateFileTransferPacket(
+            transferID: "transfer-1",
+            fileSHA256: original.sha256Hash(),
+            filePacket: filePacket
         )
 
         let encoded = try #require(packet.encode())
-        let decoded = try #require(PrivateFileTransferChunkPacket.decode(encoded))
+        let decoded = try #require(PrivateFileTransferPacket.decode(encoded))
 
-        #expect(decoded == packet)
+        #expect(decoded.transferID == "transfer-1")
+        #expect(decoded.fileSHA256 == original.sha256Hash())
+        #expect(decoded.filePacket.fileName == "source.png")
+        #expect(decoded.filePacket.mimeType == "image/png")
+        #expect(decoded.filePacket.content == original)
     }
 
     @Test
-    func factoryChunksRespectNoiseSizeAndReassembleByteIdentical() throws {
+    func privateFilePayloadCarriesOneTypedEnvelope() throws {
         let original = Data((0..<(150 * 1024)).map { UInt8($0 % 251) })
         let filePacket = BitchatFilePacket(
             fileName: "source.png",
@@ -33,21 +39,16 @@ struct PrivateFileTransferChunkPacketTests {
             content: original
         )
 
-        let typedChunks = try #require(BLENoisePayloadFactory.privateFileTransferChunks(filePacket, transferId: "tx-original"))
+        let typedPayload = try #require(BLENoisePayloadFactory.privateFileTransferPayload(filePacket, transferId: "tx-original"))
 
-        #expect(typedChunks.count > 1)
-        #expect(typedChunks.allSatisfy { $0.count <= NoiseSecurityConstants.maxMessageSize })
-        #expect(typedChunks.allSatisfy { $0.first == NoisePayloadType.fileTransfer.rawValue })
+        #expect(typedPayload.first == NoisePayloadType.fileTransfer.rawValue)
+        #expect(typedPayload.count > NoiseSecurityConstants.maxMessageSize)
+        #expect(NoiseSecurityValidator.validatePrivateFileMessageSize(typedPayload))
 
-        let decoded = try typedChunks.map { typed -> PrivateFileTransferChunkPacket in
-            try #require(PrivateFileTransferChunkPacket.decode(Data(typed.dropFirst())))
-        }
-        let reassembled = decoded
-            .sorted { $0.index < $1.index }
-            .reduce(into: Data()) { $0.append($1.content) }
-
-        #expect(reassembled == original)
-        #expect(reassembled.sha256Hash() == decoded.first?.fileSHA256)
+        let decoded = try #require(PrivateFileTransferPacket.decode(Data(typedPayload.dropFirst())))
+        #expect(decoded.transferID == "tx-original")
+        #expect(decoded.filePacket.content == original)
+        #expect(decoded.fileSHA256 == original.sha256Hash())
     }
 
     @Test
@@ -60,6 +61,26 @@ struct PrivateFileTransferChunkPacketTests {
             content: oversized
         )
 
-        #expect(BLENoisePayloadFactory.privateFileTransferChunks(filePacket, transferId: "tx-large") == nil)
+        #expect(BLENoisePayloadFactory.privateFileTransferPayload(filePacket, transferId: "tx-large") == nil)
+    }
+
+    @Test
+    func decodeRejectsDigestMismatch() throws {
+        let original = Data(repeating: 0x41, count: 128)
+        let filePacket = BitchatFilePacket(
+            fileName: "source.png",
+            fileSize: UInt64(original.count),
+            mimeType: "image/png",
+            content: original
+        )
+        let packet = PrivateFileTransferPacket(
+            transferID: "transfer-1",
+            fileSHA256: Data(repeating: 0xAA, count: PrivateFileTransferPacket.sha256Length),
+            filePacket: filePacket
+        )
+
+        let encoded = try #require(packet.encode())
+
+        #expect(PrivateFileTransferPacket.decode(encoded) == nil)
     }
 }

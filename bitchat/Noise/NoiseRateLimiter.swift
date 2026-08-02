@@ -13,10 +13,12 @@ import Foundation
 final class NoiseRateLimiter {
     private var handshakeTimestamps: [PeerID: [Date]] = [:]
     private var messageTimestamps: [PeerID: [Date]] = [:]
+    private var largeCiphertextTimestamps: [PeerID: [Date]] = [:]
     
     // Global rate limiting
     private var globalHandshakeTimestamps: [Date] = []
     private var globalMessageTimestamps: [Date] = []
+    private var globalLargeCiphertextTimestamps: [Date] = []
     
     private let queue = DispatchQueue(label: "chat.bitchat.noise.ratelimit", attributes: .concurrent)
     
@@ -77,11 +79,38 @@ final class NoiseRateLimiter {
             return true
         }
     }
+
+    func allowLargeCiphertext(from peerID: PeerID) -> Bool {
+        return queue.sync(flags: .barrier) {
+            let now = Date()
+            let oneSecondAgo = now.addingTimeInterval(-1)
+
+            globalLargeCiphertextTimestamps = globalLargeCiphertextTimestamps.filter { $0 > oneSecondAgo }
+            if globalLargeCiphertextTimestamps.count >= NoiseSecurityConstants.maxGlobalLargeCiphertextsPerSecond {
+                SecureLogger.warning("Global large ciphertext rate limit exceeded: \(globalLargeCiphertextTimestamps.count)/\(NoiseSecurityConstants.maxGlobalLargeCiphertextsPerSecond) per second", category: .security)
+                return false
+            }
+
+            var timestamps = largeCiphertextTimestamps[peerID] ?? []
+            timestamps = timestamps.filter { $0 > oneSecondAgo }
+
+            if timestamps.count >= NoiseSecurityConstants.maxLargeCiphertextsPerSecond {
+                SecureLogger.warning("Per-peer large ciphertext rate limit exceeded for \(peerID): \(timestamps.count)/\(NoiseSecurityConstants.maxLargeCiphertextsPerSecond) per second", category: .security)
+                return false
+            }
+
+            timestamps.append(now)
+            largeCiphertextTimestamps[peerID] = timestamps
+            globalLargeCiphertextTimestamps.append(now)
+            return true
+        }
+    }
     
     func reset(for peerID: PeerID) {
         queue.async(flags: .barrier) {
             self.handshakeTimestamps.removeValue(forKey: peerID)
             self.messageTimestamps.removeValue(forKey: peerID)
+            self.largeCiphertextTimestamps.removeValue(forKey: peerID)
         }
     }
 
@@ -89,8 +118,10 @@ final class NoiseRateLimiter {
         queue.async(flags: .barrier) {
             self.handshakeTimestamps.removeAll()
             self.messageTimestamps.removeAll()
+            self.largeCiphertextTimestamps.removeAll()
             self.globalHandshakeTimestamps.removeAll()
             self.globalMessageTimestamps.removeAll()
+            self.globalLargeCiphertextTimestamps.removeAll()
         }
     }
 }

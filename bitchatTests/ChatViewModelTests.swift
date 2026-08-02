@@ -1178,7 +1178,7 @@ struct ChatViewModelPanicTests {
     }
 
     @Test @MainActor
-    func panicClearAllData_dropsPartialPrivateImageAssembly() async throws {
+    func panicClearAllData_doesNotRetainMalformedPrivateImagePayload() async throws {
         let (viewModel, _) = makeTestableViewModel()
         let peerID = PeerID(str: "33445566778899aa")
         let sourceData = makeChunkedPNGBytes()
@@ -1188,24 +1188,22 @@ struct ChatViewModelPanicTests {
             mimeType: "image/png",
             content: sourceData
         )
-        let chunks = try #require(BLENoisePayloadFactory.privateFileTransferChunks(filePacket, transferId: "panic-partial"))
-        #expect(chunks.count > 1)
+        let typedPayload = try #require(BLENoisePayloadFactory.privateFileTransferPayload(filePacket, transferId: "panic-partial"))
+        let malformedPayload = Data(typedPayload.dropFirst().prefix(typedPayload.count / 2))
 
         viewModel.handlePrivateFileTransferPayload(
             from: peerID,
-            payload: Data(try #require(chunks.first).dropFirst()),
+            payload: malformedPayload,
             timestamp: Date(timeIntervalSince1970: 10)
         )
 
         viewModel.panicClearAllData()
 
-        for typedChunk in chunks.dropFirst() {
-            viewModel.handlePrivateFileTransferPayload(
-                from: peerID,
-                payload: Data(typedChunk.dropFirst()),
-                timestamp: Date(timeIntervalSince1970: 11)
-            )
-        }
+        viewModel.handlePrivateFileTransferPayload(
+            from: peerID,
+            payload: malformedPayload,
+            timestamp: Date(timeIntervalSince1970: 11)
+        )
 
         #expect(viewModel.privateChats[peerID] == nil)
     }
