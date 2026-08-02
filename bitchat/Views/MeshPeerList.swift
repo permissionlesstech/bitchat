@@ -62,6 +62,15 @@ struct MeshPeerList: View {
                 .foregroundColor(palette.secondary)
                 .padding(.horizontal)
                 .padding(.vertical, 4)
+                .onAppear {
+                    orderedIDs = currentIDs
+                }
+                .onChange(of: currentIDs) { ids in
+                    var newOrder = orderedIDs
+                    newOrder.removeAll { !ids.contains($0) }
+                    for id in ids where !newOrder.contains(id) { newOrder.append(id) }
+                    if newOrder != orderedIDs { orderedIDs = newOrder }
+                }
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(0..<peers.count, id: \.self) { idx in
