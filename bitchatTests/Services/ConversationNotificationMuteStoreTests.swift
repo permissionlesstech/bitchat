@@ -6,13 +6,16 @@
 // For more information, see <https://unlicense.org>
 //
 
+import Foundation
 import Testing
 @testable import bitchat
 
 struct ConversationNotificationMuteStoreTests {
     private func isolatedDefaults() -> UserDefaults {
         let suite = "ConversationNotificationMuteStoreTests-\(UUID().uuidString)"
-        return UserDefaults(suiteName: suite)!
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        return defaults
     }
 
     @Test func directMuteUsesFingerprintWhenPresent() {
