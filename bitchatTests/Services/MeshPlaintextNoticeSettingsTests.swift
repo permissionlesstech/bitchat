@@ -6,6 +6,7 @@
 // For more information, see <https://unlicense.org>
 //
 
+import Foundation
 import Testing
 @testable import bitchat
 
