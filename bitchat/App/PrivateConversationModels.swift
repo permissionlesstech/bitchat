@@ -122,6 +122,7 @@ struct PrivateConversationHeaderState: Equatable {
 final class PrivateConversationModel: ObservableObject {
     @Published private(set) var selectedPeerID: PeerID?
     @Published private(set) var selectedHeaderState: PrivateConversationHeaderState?
+    @Published private(set) var selectedConversationNotificationsMuted = false
 
     private let chatViewModel: ChatViewModel
     private let conversations: ConversationStore
@@ -177,6 +178,18 @@ final class PrivateConversationModel: ObservableObject {
     func toggleFavoriteForSelectedConversation() {
         guard let headerPeerID = selectedHeaderState?.headerPeerID else { return }
         toggleFavorite(peerID: headerPeerID)
+    }
+
+    func toggleSelectedConversationNotificationMute() {
+        guard let peerID = selectedPeerID else { return }
+        let fingerprint = chatViewModel.getFingerprint(for: peerID)
+        let scope = ConversationNotificationMuteStore.Scope.direct(
+            fingerprint: fingerprint,
+            peerID: peerID.id
+        )
+        let next = !ConversationNotificationMuteStore.isMuted(scope)
+        ConversationNotificationMuteStore.setMuted(next, for: scope)
+        selectedConversationNotificationsMuted = next
     }
 
     func markMessagesAsRead(from peerID: PeerID) {
@@ -238,6 +251,16 @@ final class PrivateConversationModel: ObservableObject {
         selectedPeerID = conversations.selectedPrivatePeerID
         selectedHeaderState = selectedPeerID.flatMap { peerID in
             makeHeaderState(for: peerID)
+        }
+        if let peerID = selectedPeerID {
+            let fingerprint = chatViewModel.getFingerprint(for: peerID)
+            let scope = ConversationNotificationMuteStore.Scope.direct(
+                fingerprint: fingerprint,
+                peerID: peerID.id
+            )
+            selectedConversationNotificationsMuted = ConversationNotificationMuteStore.isMuted(scope)
+        } else {
+            selectedConversationNotificationsMuted = false
         }
     }
 
