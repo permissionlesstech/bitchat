@@ -14,6 +14,7 @@
 // For more information, see <https://unlicense.org>
 //
 
+import BitFoundation
 import Foundation
 
 enum CashuTokenDecoder {
@@ -81,7 +82,7 @@ enum CashuTokenDecoder {
     static func decode(_ raw: String, strict: Bool = false) -> TokenInfo? {
         guard let token = bareToken(from: raw) else { return nil }
         let version = String(token[token.index(token.startIndex, offsetBy: 5)])
-        guard let payload = base64URLDecode(String(token.dropFirst(6))), !payload.isEmpty else {
+        guard let payload = Base64URLCoding.decode(String(token.dropFirst(6))), !payload.isEmpty else {
             return nil
         }
         let info: TokenInfo?
@@ -106,20 +107,6 @@ enum CashuTokenDecoder {
             guard let amount = info.amount, amount > 0 else { return nil }
         }
         return info
-    }
-
-    // MARK: - Base64url
-
-    private static func base64URLDecode(_ input: String) -> Data? {
-        var s = input
-            .replacingOccurrences(of: "-", with: "+")
-            .replacingOccurrences(of: "_", with: "/")
-        // Normalize padding (wallets emit both padded and unpadded forms)
-        s = s.replacingOccurrences(of: "=", with: "")
-        let remainder = s.count % 4
-        if remainder == 1 { return nil }
-        if remainder > 0 { s += String(repeating: "=", count: 4 - remainder) }
-        return Data(base64Encoded: s)
     }
 
     // MARK: - V3 (JSON)
