@@ -11,8 +11,9 @@ The honest summary is short. **Source can be verified. Compiled apps cannot, unl
 In order of how much verification is possible:
 
 1. **The App Store.** Apple verifies the developer signature, and the binary cannot be altered without breaking it. This is the only channel where a compiled build is verifiable end to end, and it is the right recommendation for almost everyone.
-2. **Build it yourself from verified source.** See below. Requires a Mac and Xcode, and gives you the strongest guarantee if you can do it.
-3. **A compiled build from anywhere else.** Not verifiable. See "Builds from other sources".
+2. **Build it yourself from verified source.** See below. Requires a Mac and Xcode, and gives you the strongest guarantee against the attested release tree if you can do it.
+3. **Maintainer TestFlight (when published).** Still Apple-signed; see "App Store fallbacks (TestFlight)". Prefer this over forum IPAs when the App Store listing is missing or behind (and you cannot build from source) — TestFlight proves Apple distributed a maintainer upload, but it does not let you check the binary against `SOURCE-MANIFEST.txt`. It still depends on Apple’s delivery path, so it is not a fallback for a wholesale block of Apple services.
+4. **A compiled build from anywhere else.** Not verifiable. See "Builds from other sources".
 
 ## Verifying source
 
@@ -79,6 +80,20 @@ What to do instead, in order of preference: install from the App Store; build fr
 
 Do not rely on the app looking right. A modified build has no reason to look different.
 
+
+## App Store fallbacks (TestFlight)
+
+Issue [#966](https://github.com/permissionlesstech/bitchat/issues/966) tracks a public TestFlight invite for cases where the App Store *listing* is gone or lagging — not a wholesale block of Apple services (TestFlight itself still installs through Apple). The project already ships an attested source manifest so people can **build from verified source** when binaries are untrustworthy (see above).
+
+What remains as a product decision — not something a random mirror can invent — is a **maintained public TestFlight link** as that listing/release fallback:
+
+- TestFlight builds are still Apple-signed and consent-gated; they are closer to the App Store trust model than an unsigned `.ipa` from a forum.
+- The link itself must be published by maintainers (and kept current across beta expiry). This document will not invent a URL.
+- Until a link is published here, treat TestFlight the same as any other sideloaded binary unless you received the invite from a channel you already trust for bitchat releases.
+- If Apple services themselves are unreachable, TestFlight does not help — use verified source builds (or treat any other binary as untrusted).
+
+Android sideloading (signed APKs) lives in the [bitchat-android](https://github.com/permissionlesstech/bitchat-android) project and is out of scope for this iOS/macOS repository.
+
 ## For maintainers
 
 Cutting a release:
@@ -91,4 +106,5 @@ Known gaps, so nobody assumes more protection than exists:
 
 - **No published signing key.** Tags are not currently verifiable against a known key. Publishing a fingerprint through channels independent of GitHub, and signing tags with it from then on, is the missing piece.
 - **No verifiable compiled builds outside the App Store.** Closing this needs either a signed-and-notarized release pipeline or a reproducible build, and until one exists the guidance above stands.
+- **No published public TestFlight link yet.** [#966](https://github.com/permissionlesstech/bitchat/issues/966) is rescoped to that single remaining distribution ask; when maintainers publish a link, add it under "App Store fallbacks (TestFlight)" above.
 - **No non-GitHub source mirror.** Every remote for this project is on the platform the takedown demands were served to. A mirror on independent infrastructure, published before it is needed, would mean a takedown does not remove the ability to verify.
