@@ -50,17 +50,11 @@ The packet header, byte offsets, flags, TLV encodings, and padding scheme are sp
 
 ### 4.2 Flood Control
 
-Relaying is a deterministic controlled flood tuned by local connection degree:
-
-* **TTL:** packets originate with TTL 7. Relays clamp: dense graphs (≥ 6 links) cap broadcast TTL at 5; thin chains (≤ 2 links) relay at full incoming depth.
-* **Deduplication:** an LRU seen-set (1000 entries, 5-minute expiry) keyed by sender, timestamp, type, and a payload digest drops duplicates. A scheduled relay is cancelled when a duplicate arrives first from another relay.
-* **Jitter:** relays wait a random 10–220 ms (wider when dense) so duplicate suppression wins often.
-* **Fanout subsetting:** broadcast messages are re-sent to a deterministic, message-ID-seeded subset of links (~log₂ of degree) rather than all of them; announces, fragments, and sync packets use full fanout. The ingress link is always excluded (split horizon).
-* **Directed traffic** (handshakes, private messages, courier envelopes) relays deterministically with TTL − 1 and tight jitter, and is never subset.
+The TTL/degree clamp, deduplication, jitter, and fanout-subsetting policy that governs mesh relaying are specified in [Store and Forward](spec/05-store-and-forward.md).
 
 ### 4.3 Routing
 
-Announcements carry up to 10 direct-neighbor IDs, giving each node a shallow topology map (60 s freshness). When a bidirectionally-confirmed path exists, packets are source-routed along it; otherwise — and whenever a route fails — delivery falls back to flooding.
+Announcements carry up to 10 direct-neighbor IDs, giving each node a shallow topology map (60 s freshness); this TLV is specified byte-exactly in [Payloads](spec/04-payloads.md). The policy for when a packet is source-routed along a known path versus falling back to flooding is specified in [Store and Forward](spec/05-store-and-forward.md).
 
 ### 4.4 Fragmentation
 
@@ -92,22 +86,15 @@ Four mechanisms cover the "recipient is not here right now" problem. All persist
 
 ### 6.1 Sender Outbox
 
-Private messages without a prompt route are retained per peer (100 messages/peer, 24 h TTL) and re-sent on reconnect events until a delivery or read ack clears them, or a resend cap (8 attempts) drops them with visible failure. The outbox persists to disk sealed under a ChaChaPoly key held only in the Keychain, so queued mail survives an app kill without ever storing plaintext.
+The sender-side retry queue for undelivered private messages — retention limits, retry cap, and persistence — is specified in [Store and Forward](spec/05-store-and-forward.md).
 
 ### 6.2 Couriers
 
-When no transport can deliver promptly, the message is sealed (§5.2) into a **courier envelope** and handed to up to 3 connected peers who may physically encounter the recipient:
-
-* **Opaque addressing.** The only routing information is a 16-byte rotating recipient tag — an HMAC of the recipient's static key and the UTC day — computable solely by parties who already know that key. Couriers learn neither sender, recipient, nor content, and tags do not correlate across days.
-* **Trust tiers.** Mutual favorites may deposit 5 envelopes each; any peer with a signature-verified announce may deposit 2, into a bounded pool (20 of 40 slots) that can never crowd out favorites' mail. Envelopes are capped at 16 KiB and 24 h; overflow evicts oldest verified-tier mail first.
-* **Deposit retry.** Queued messages are re-deposited whenever a new eligible courier connects, until 3 distinct couriers carry the message or it expires.
-* **Spray and wait.** Envelopes carry a copy budget (initially 4, capped at 8). A courier meeting another eligible courier hands over half its remaining budget, so mail diffuses through a moving crowd instead of riding one person. Budgets, spray history, and carried mail persist across app restarts (iOS file protection).
-* **Handover.** On a verified *direct* announce from the recipient, matching envelopes are delivered over the live link and removed. On a verified *relayed* announce, a copy floods toward the recipient as a directed packet while the carried original stays put, throttled to one attempt per envelope per 10 minutes.
-* Receivers dedup by message ID, so redundant copies and the retained outbox original are harmless. Couriered mail from blocked senders is dropped at decryption time.
+The courier envelope wire format, rotating recipient tag, trust-tier deposit quotas, spray-and-wait budget, and handover behavior are specified byte-exactly in [Store and Forward](spec/05-store-and-forward.md).
 
 ### 6.3 Public History (Gossip Sync)
 
-Public broadcast messages are cached (1000 packets) and reconciled between peers every ~15 s using compact GCS filters: each side advertises what it holds, the other returns what is missing. Messages stay sync-able for **6 hours** and the cache persists to disk, so a device that walks between two partitions — or relaunches later — serves the room's recent history to whoever missed it. Fragments and file transfers keep a short 15-minute window.
+The gossip-sync request/response protocol, its Golomb-coded-set filter encoding, sync-round cadence, and per-type cache retention are specified byte-exactly in [Store and Forward](spec/05-store-and-forward.md).
 
 ### 6.4 Nostr Mailboxes
 
@@ -115,7 +102,7 @@ BitChat private envelopes rest on Nostr relays; clients re-subscribe with a 24-h
 
 ### 6.5 Delivery Metrics
 
-Bare local counters (deposits, handovers, sprays, opens, outbox flushes and drops — no identities, message IDs, or timestamps) let delivery behavior be measured on-device. They never leave the device and are cleared by the panic wipe.
+The local-only delivery counters a client may keep are specified in [Store and Forward](spec/05-store-and-forward.md).
 
 ## 7. Application Layer
 
