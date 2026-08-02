@@ -50,8 +50,13 @@ struct MessageListView: View {
     /// Whether this instance holds the nearby-notes counter active (mesh
     /// public timeline only); balanced against activate/deactivate.
     @State private var holdsNotesCounter = false
+    @State private var threadSearchQuery = ""
 
     @ThemedPalette private var palette
+
+    private var isThreadSearching: Bool {
+        !threadSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     var body: some View {
         let currentWindowCount: Int = {
@@ -61,8 +66,13 @@ struct MessageListView: View {
             return windowCountPublic
         }()
 
-        let messages = conversationMessages(for: privatePeer)
-        let windowedMessages = Array(messages.suffix(currentWindowCount))
+        let allMessages = conversationMessages(for: privatePeer)
+        let displayedMessages: [BitchatMessage] = {
+            if isThreadSearching {
+                return ThreadMessageSearch.matchingMessages(in: allMessages, query: threadSearchQuery)
+            }
+            return Array(allMessages.suffix(currentWindowCount))
+        }()
 
         let contextKey: String = {
             if let peer = privatePeer {
@@ -72,7 +82,7 @@ struct MessageListView: View {
             }
         }()
 
-        let messageItems: [MessageDisplayItem] = windowedMessages.compactMap { message in
+        let messageItems: [MessageDisplayItem] = displayedMessages.compactMap { message in
             guard !message.content.trimmed.isEmpty else { return nil }
             return MessageDisplayItem(id: "\(contextKey)|\(message.id)", message: message)
         }
@@ -88,30 +98,33 @@ struct MessageListView: View {
         GeometryReader { geometry in
         ScrollViewReader { proxy in
             ScrollView {
-                if messageItems.isEmpty && privatePeer == nil {
+                if messageItems.isEmpty && privatePeer == nil && !isThreadSearching {
                     publicEmptyState(fillHeight: geometry.size.height)
+                } else if messageItems.isEmpty && isThreadSearching {
+                    threadSearchEmptyState(fillHeight: geometry.size.height)
                 }
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(messageItems) { item in
                         let message = item.message
                         messageRow(for: message)
                             .onAppear {
-                                if message.id == windowedMessages.last?.id {
+                                if message.id == displayedMessages.last?.id {
                                     isAtBottom = true
                                     unseenCount = 0
                                 }
-                                if message.id == windowedMessages.first?.id,
-                                   messages.count > windowedMessages.count {
+                                if !isThreadSearching,
+                                   message.id == displayedMessages.first?.id,
+                                   allMessages.count > displayedMessages.count {
                                     expandWindow(
                                         ifNeededFor: message,
-                                        allMessages: messages,
+                                        allMessages: allMessages,
                                         privatePeer: privatePeer,
                                         proxy: proxy
                                     )
                                 }
                             }
                             .onDisappear {
-                                if message.id == windowedMessages.last?.id {
+                                if message.id == displayedMessages.last?.id {
                                     isAtBottom = false
                                 }
                             }
@@ -277,8 +290,21 @@ struct MessageListView: View {
         }
         .onAppear { updateNotesCounterHold() }
         .onDisappear { releaseNotesCounterHold() }
-        .onChange(of: locationChannelsModel.selectedChannel) { _ in updateNotesCounterHold() }
-        .onChange(of: privatePeer) { _ in updateNotesCounterHold() }
+        .onChange(of: locationChannelsModel.selectedChannel) { _ in
+            threadSearchQuery = ""
+            updateNotesCounterHold()
+        }
+        .onChange(of: privatePeer) { _ in
+            threadSearchQuery = ""
+            updateNotesCounterHold()
+        }
+        .searchable(
+            text: $threadSearchQuery,
+            prompt: Text("thread.search.placeholder")
+        )
+        .accessibilityLabel(
+            String(localized: "thread.search.accessibility.label", comment: "Accessibility label for in-thread message search")
+        )
         .environment(\.openURL, OpenURLAction { url in
             // Intercept custom cashu: links created in attributed text
             if let scheme = url.scheme?.lowercased(), scheme == "cashu" || scheme == "lightning" {
@@ -388,6 +414,17 @@ private extension MessageListView {
         .padding(.horizontal, 12)
         .padding(.top, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    func threadSearchEmptyState(fillHeight: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            emptyStateLine(
+                String(localized: "thread.search.no_results", comment: "Empty state when in-thread search finds no matching messages")
+            )
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 12)
+        .frame(maxWidth: .infinity, minHeight: max(0, fillHeight - 24), alignment: .topLeading)
     }
 
     func emptyStateLine(_ text: String) -> some View {
