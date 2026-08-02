@@ -116,6 +116,39 @@ final class NotificationServiceTests: XCTestCase {
         XCTAssertEqual(deliverer.requests[1].content.interruptionLevel, .timeSensitive)
         XCTAssertEqual(deliverer.requests[1].content.body, "2 people around")
     }
+
+    func test_sendPrivateMessageNotification_skipsWhenConversationMuted() {
+        let deliverer = RecordingNotificationRequestDeliverer()
+        let peerID = PeerID(str: "deadbeefdeadbeef")
+        let scope = ConversationNotificationMuteStore.Scope.direct(fingerprint: "fp1", peerID: peerID.id)
+        let service = NotificationService(
+            isRunningTestsProvider: { false },
+            authorizer: RecordingNotificationAuthorizer(),
+            requestDeliverer: deliverer,
+            conversationMutedProvider: { $0 == scope }
+        )
+
+        service.sendPrivateMessageNotification(from: "Alice", message: "hi", peerID: peerID, fingerprint: "fp1")
+
+        XCTAssertTrue(deliverer.requests.isEmpty)
+    }
+
+    func test_sendGeohashActivityNotification_skipsWhenChannelMuted() {
+        let deliverer = RecordingNotificationRequestDeliverer()
+        let service = NotificationService(
+            isRunningTestsProvider: { false },
+            authorizer: RecordingNotificationAuthorizer(),
+            requestDeliverer: deliverer,
+            conversationMutedProvider: {
+                if case .geohash("u4pru") = $0 { return true }
+                return false
+            }
+        )
+
+        service.sendGeohashActivityNotification(geohash: "u4pru", bodyPreview: "hello")
+
+        XCTAssertTrue(deliverer.requests.isEmpty)
+    }
 }
 
 private final class RecordingNotificationAuthorizer: NotificationAuthorizing {
