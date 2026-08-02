@@ -60,16 +60,18 @@ relays). See `ChatPublicConversationCoordinator.sendPublicRaw`: empty
 Publishers should still prefer proximity selection against the live CSV.
 Default-relay fallback is a last resort when the geo directory failed to load;
 relying on it intentionally will miss clients that *did* load the directory
-and are subscribed only to the nearest five.
+and are subscribed only to up to the nearest five (fewer when the directory
+is thin; none when it is empty — see the fallback above).
 
 ## Sparse cells (stale directory rows)
 
 A "sparse" cell is about **directory freshness**, not geographic remoteness.
-Haversine ranking always returns the nearest five hosts from whatever GPS rows
-the CSV currently has — including for oceans or deserts. When those rows are
-stale or thin for a region (relay moved, GPS never updated, host offline), the
-selected five can be the wrong place for live traffic even though they look
-"close" on paper.
+Haversine ranking returns *up to* the nearest five hosts from whatever GPS
+rows the CSV currently has — including for oceans or deserts — and fewer
+than five when the directory is thin. When those rows are stale or thin for
+a region (relay moved, GPS never updated, host offline), the selected hosts
+can be the wrong place for live traffic even though they look "close" on
+paper.
 
 The channel UI still opens normally — there is no separate "undeliverable"
 banner — but live messages may not round-trip. Treat an empty timeline in those
