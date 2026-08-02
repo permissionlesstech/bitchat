@@ -151,6 +151,25 @@ struct MessageListView: View {
                                     pb.setString(message.content, forType: .string)
                                     #endif
                                 }
+                                Button(String(localized: "message.link.copy", defaultValue: "copy message link", comment: "Context-menu action that copies a bitchat:// deep link to this message")) {
+                                    let scope: MessageDeepLink.Scope = {
+                                        if let peer = privatePeer {
+                                            return .direct(peerID: peer)
+                                        }
+                                        if case .location(let channel) = locationChannelsModel.selectedChannel {
+                                            return .geohash(channel.geohash)
+                                        }
+                                        return .mesh
+                                    }()
+                                    let payload = MessageDeepLink.plainText(for: message.id, scope: scope)
+                                    #if os(iOS)
+                                    UIPasteboard.general.string = payload
+                                    #else
+                                    let pb = NSPasteboard.general
+                                    pb.clearContents()
+                                    pb.setString(payload, forType: .string)
+                                    #endif
+                                }
                                 if isResendableFailedMessage(message) {
                                     Button("content.actions.resend") {
                                         conversationUIModel.resendFailedPrivateMessage(message)
