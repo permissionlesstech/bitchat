@@ -17,7 +17,6 @@ struct IdentityVerificationCard: Equatable {
     let nickname: String
     let npub: String?
     let noiseFingerprint: String
-    let verificationURL: String?
 
     var plainText: String {
         var lines: [String] = [
@@ -59,29 +58,14 @@ struct IdentityVerificationCard: Equatable {
                 )
             )
         }
-        if let verificationURL, !verificationURL.isEmpty {
-            lines.append("")
-            lines.append(
-                String(
-                    format: String(
-                        localized: "identity.card.verify_url",
-                        defaultValue: "scan to verify: %@",
-                        comment: "Verification QR URL line on the public identity card; %@ is the bitchat:// URL"
-                    ),
-                    locale: .current,
-                    verificationURL
-                )
-            )
-        }
         return lines.joined(separator: "\n")
     }
 
-    static func current(nickname: String, npub: String?, noiseFingerprint: String, verificationURL: String?) -> IdentityVerificationCard {
+    static func current(nickname: String, npub: String?, noiseFingerprint: String) -> IdentityVerificationCard {
         IdentityVerificationCard(
             nickname: nickname,
             npub: npub,
-            noiseFingerprint: noiseFingerprint,
-            verificationURL: verificationURL
+            noiseFingerprint: noiseFingerprint
         )
     }
 }

@@ -14,14 +14,13 @@ struct IdentityVerificationCardTests {
         let card = IdentityVerificationCard.current(
             nickname: "alice",
             npub: "npub1test",
-            noiseFingerprint: "abcd1234",
-            verificationURL: "bitchat://verify?nick=alice"
+            noiseFingerprint: "abcd1234"
         )
         let text = card.plainText
         #expect(text.contains("alice"))
         #expect(text.contains("npub1test"))
         #expect(text.contains("abcd1234"))
-        #expect(text.contains("bitchat://verify"))
+        #expect(!text.contains("bitchat://"))
         #expect(!text.lowercased().contains("private key"))
         #expect(!text.lowercased().contains("seed"))
     }

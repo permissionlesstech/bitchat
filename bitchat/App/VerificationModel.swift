@@ -64,12 +64,10 @@ final class VerificationModel: ObservableObject {
     }
 
     func identityVerificationCard() -> IdentityVerificationCard {
-        let qr = myQRString()
-        return IdentityVerificationCard.current(
+        IdentityVerificationCard.current(
             nickname: currentNickname,
             npub: try? chatViewModel.idBridge.getCurrentNostrIdentity()?.npub,
-            noiseFingerprint: chatViewModel.getMyFingerprint(),
-            verificationURL: qr.isEmpty ? nil : qr
+            noiseFingerprint: chatViewModel.getMyFingerprint()
         )
     }
 
