@@ -23,7 +23,11 @@ enum ChatPlaintextExporter {
         ].joined(separator: "\n")
 
         guard !messages.isEmpty else {
-            return header + String(localized: "chat.export.empty", comment: "Line shown when an export contains no messages")
+            return header + String(
+                localized: "chat.export.empty",
+                defaultValue: "(no messages in this conversation)",
+                comment: "Line shown when an export contains no messages"
+            )
         }
 
         let body = messages.map { line(for: $0) }.joined(separator: "\n")
@@ -33,6 +37,7 @@ enum ChatPlaintextExporter {
     private static var warningLine: String {
         String(
             localized: "chat.export.sealing_warning",
+            defaultValue: "warning: this file is unsealed plaintext. anyone with a copy can read it.",
             comment: "Warning that an exported chat file is unsealed plaintext readable by anyone with a copy"
         )
     }
