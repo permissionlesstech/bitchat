@@ -21,3 +21,8 @@ struct BridgeStatusSummaryTests {
         #expect(text.contains("nearby"))
     }
 }
+
+    @Test func enabledWithZeroPeersMentionsBridgeCell() {
+        let text = BridgeStatusSummary.formatted(enabled: true, cell: "u4pruy", bridgedCount: 0, nearbyOnly: false)
+        #expect(text.localizedCaseInsensitiveContains("u4pruy") || text.localizedCaseInsensitiveContains("bridge"))
+    }
