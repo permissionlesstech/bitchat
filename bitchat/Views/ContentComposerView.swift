@@ -33,7 +33,7 @@ struct ContentComposerView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if showsMeshPlaintextNotice {
-                MeshPlaintextNoticeView {
+                MeshPlaintextNoticeView(bridgeEnabled: bridgeService.isEnabled) {
                     meshPlaintextNoticeDismissed = true
                     MeshPlaintextNoticeSettings.isDismissed = true
                 }
@@ -153,6 +153,9 @@ struct ContentComposerView: View {
         .themedChromePanel(edge: .bottom)
         .onDisappear {
             autocompleteDebounceTimer?.invalidate()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .meshPlaintextNoticeSettingsChanged)) { _ in
+            meshPlaintextNoticeDismissed = MeshPlaintextNoticeSettings.isDismissed
         }
     }
 }

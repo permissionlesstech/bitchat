@@ -30,5 +30,12 @@ enum MeshPlaintextNoticeSettings {
 
     static func reset(in defaults: UserDefaults = .standard) {
         defaults.removeObject(forKey: dismissedKey)
+        NotificationCenter.default.post(name: .meshPlaintextNoticeSettingsChanged, object: nil)
     }
+}
+
+extension Notification.Name {
+    static let meshPlaintextNoticeSettingsChanged = Notification.Name(
+        "security.meshPlaintextNoticeSettingsChanged"
+    )
 }

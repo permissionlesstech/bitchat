@@ -23,4 +23,23 @@ struct MeshPlaintextNoticeSettingsTests {
         MeshPlaintextNoticeSettings.reset(in: defaults)
         #expect(!MeshPlaintextNoticeSettings.isDismissed(in: defaults))
     }
+
+    @Test func resetPostsSettingsChangedNotification() {
+        let defaults = isolatedDefaults()
+        var received = false
+        let token = NotificationCenter.default.addObserver(
+            forName: .meshPlaintextNoticeSettingsChanged,
+            object: nil,
+            queue: nil
+        ) { _ in
+            received = true
+        }
+        defer { NotificationCenter.default.removeObserver(token) }
+
+        MeshPlaintextNoticeSettings.setDismissed(true, in: defaults)
+        MeshPlaintextNoticeSettings.reset(in: defaults)
+
+        #expect(received)
+        #expect(!MeshPlaintextNoticeSettings.isDismissed(in: defaults))
+    }
 }

@@ -10,6 +10,7 @@ import SwiftUI
 
 /// Dismissible banner reminding people that #mesh is a plaintext broadcast (#1064).
 struct MeshPlaintextNoticeView: View {
+    var bridgeEnabled: Bool
     var onDismiss: () -> Void
     @ThemedPalette private var palette
 
@@ -19,16 +20,25 @@ struct MeshPlaintextNoticeView: View {
             defaultValue: "mesh is a public broadcast",
             comment: "Title of the dismissible notice above the mesh composer"
         )
-        static let body = String(
+        static let bodyNearbyOnly = String(
             localized: "security.mesh_plaintext.body",
-            defaultValue: "anything you type in #mesh can be read by every device within radio range. for private conversation, open someone from the people list or switch to a location channel.",
+            defaultValue: "anything you type in #mesh can be read by every device within radio range. for an encrypted direct message, open someone from the people list.",
             comment: "Body of the dismissible notice explaining mesh is unencrypted"
+        )
+        static let bodyBridged = String(
+            localized: "security.mesh_plaintext.body.bridged",
+            defaultValue: "anything you type in #mesh can be read by nearby devices and, when the bridge is on, may also reach people via Nostr relays in this area. for an encrypted direct message, open someone from the people list.",
+            comment: "Body of the mesh plaintext notice when the mesh bridge is enabled"
         )
         static let dismiss = String(
             localized: "security.mesh_plaintext.dismiss",
             defaultValue: "dismiss",
             comment: "Button that hides the mesh plaintext notice until reinstall"
         )
+    }
+
+    private var bodyText: String {
+        bridgeEnabled ? Strings.bodyBridged : Strings.bodyNearbyOnly
     }
 
     var body: some View {
@@ -41,7 +51,7 @@ struct MeshPlaintextNoticeView: View {
                 Text(verbatim: Strings.title)
                     .bitchatFont(size: 12, weight: .semibold)
                     .foregroundColor(palette.primary)
-                Text(verbatim: Strings.body)
+                Text(verbatim: bodyText)
                     .bitchatFont(size: 11)
                     .foregroundColor(palette.secondary)
                     .fixedSize(horizontal: false, vertical: true)
