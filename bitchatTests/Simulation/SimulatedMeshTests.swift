@@ -57,7 +57,7 @@ struct SimulatedMeshTests {
 
         mesh.announceAll()
         mesh.advanceTime(by: 2)
-        let baseline = mesh.deliveredFrameCount
+        let baseline = mesh.deliveredFrameCount(ofType: .message)
 
         let capture = TransportEventCapture()
         c.service.eventDelegate = capture
@@ -70,9 +70,15 @@ struct SimulatedMeshTests {
 
         let arrived = await capture.drainedPublicMessageCount(content: "hello line") == 1
         #expect(arrived)
-        // Storm bound: a single public message across one relay hop must
-        // not multiply into more than a handful of frames.
-        #expect(mesh.deliveredFrameCount - baseline <= 12)
+        // Storm bound: a single public message across one relay hop must not
+        // multiply into more than a handful of frames. Counted per type — the
+        // whole-mesh total also carries announces, whose admission runs on
+        // wall clock rather than scheduler time, so a budget written against
+        // it fails on a starved runner for reasons that have nothing to do
+        // with relaying. Measured with 0.2s of wall clock burned mid-test:
+        // announce deliveries go 24 → 30 and the total 10 → 16, while the
+        // message count stays at 4 either way.
+        #expect(mesh.deliveredFrameCount(ofType: .message) - baseline <= 8)
     }
 
     @Test
