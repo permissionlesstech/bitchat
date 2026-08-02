@@ -74,7 +74,7 @@ enum PrivateMediaDecodeFailureReason: Equatable {
         case .unsupportedMime(let mimeType, _):
             return .unsupportedMime(mimeType: mimeType)
         case .magicMismatch(let mime, _, let prefixHex):
-            return .magicMismatch(mime: mime.rawValue, prefixHex: prefixHex)
+            return .magicMismatch(mime: mime.mimeString, prefixHex: prefixHex)
         }
     }
 }
