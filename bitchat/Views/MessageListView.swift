@@ -594,6 +594,14 @@ private extension MessageListView {
             guard (2...12).contains(gh.count), gh.allSatisfy({ allowed.contains($0) }) else { return }
             locationChannelsModel.openLocationChannel(for: gh)
 
+        case "dm":
+            let id = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            let peerID = PeerID(str: id.removingPercentEncoding ?? id)
+            privateConversationModel.openConversation(for: peerID)
+            withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                showSidebar = true
+            }
+
         default:
             return
         }
