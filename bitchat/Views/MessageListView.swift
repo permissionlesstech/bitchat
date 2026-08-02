@@ -594,6 +594,13 @@ private extension MessageListView {
             guard (2...12).contains(gh.count), gh.allSatisfy({ allowed.contains($0) }) else { return }
             locationChannelsModel.openLocationChannel(for: gh)
 
+        case "mesh":
+            privateConversationModel.endConversation()
+            locationChannelsModel.select(.mesh)
+            withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                showSidebar = false
+            }
+
         case "dm":
             let id = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
             let peerID = PeerID(str: id.removingPercentEncoding ?? id)

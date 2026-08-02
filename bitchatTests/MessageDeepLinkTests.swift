@@ -34,4 +34,11 @@ struct MessageDeepLinkTests {
         #expect(text.contains("bitchat://"))
         #expect(text.contains("mid=mid"))
     }
+
+    @Test func meshURLUsesMeshHostAndMessageQuery() throws {
+        let url = try #require(MessageDeepLink.url(for: "msg-42", scope: .mesh))
+        #expect(url.host == "mesh")
+        let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        #expect(components.queryItems?.first(where: { $0.name == "mid" })?.value == "msg-42")
+    }
 }
