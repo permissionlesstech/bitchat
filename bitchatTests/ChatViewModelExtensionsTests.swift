@@ -19,7 +19,9 @@ import BitFoundation
 // MARK: - Test Helpers
 
 @MainActor
-private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: MockTransport) {
+private func makeTestableViewModel(
+    locationManager: LocationChannelManager = .shared
+) -> (viewModel: ChatViewModel, transport: MockTransport) {
     let keychain = MockKeychain()
     let keychainHelper = MockKeychainHelper()
     let idBridge = NostrIdentityBridge(keychain: keychainHelper)
@@ -30,10 +32,18 @@ private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: Mo
         keychain: keychain,
         idBridge: idBridge,
         identityManager: identityManager,
-        transport: transport
+        transport: transport,
+        locationManager: locationManager
     )
 
     return (viewModel, transport)
+}
+
+private func makeIsolatedLocationManager() -> LocationChannelManager {
+    let suiteName = "ChatViewModelExtensionsTests-\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suiteName)!
+    defaults.removePersistentDomain(forName: suiteName)
+    return LocationChannelManager(storage: defaults)
 }
 
 // MARK: - Private Chat Extension Tests
@@ -997,7 +1007,7 @@ struct ChatViewModelMediaTransferTests {
 
     @Test @MainActor
     func sendVoiceNote_outsideAllowedContextDeletesTempFile() async throws {
-        let (viewModel, _) = makeTestableViewModel()
+        let (viewModel, _) = makeTestableViewModel(locationManager: makeIsolatedLocationManager())
         let geohash = "u4pruydq"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("voice-\(UUID().uuidString).m4a")
 
@@ -1007,12 +1017,12 @@ struct ChatViewModelMediaTransferTests {
         viewModel.sendVoiceNote(at: url)
 
         #expect(!FileManager.default.fileExists(atPath: url.path))
-        #expect(viewModel.messages.contains(where: { $0.sender == "system" }))
+        #expect(viewModel.publicMessages(for: .location(GeohashChannel(level: .city, geohash: geohash))).contains(where: { $0.sender == "system" }))
     }
 
     @Test @MainActor
     func sendImage_outsideAllowedContextRunsCleanup() async {
-        let (viewModel, _) = makeTestableViewModel()
+        let (viewModel, _) = makeTestableViewModel(locationManager: makeIsolatedLocationManager())
         let geohash = "u4pruydq"
         var cleanupCalled = false
 
@@ -1022,7 +1032,7 @@ struct ChatViewModelMediaTransferTests {
         }
 
         #expect(cleanupCalled)
-        #expect(viewModel.messages.contains(where: { $0.sender == "system" }))
+        #expect(viewModel.publicMessages(for: .location(GeohashChannel(level: .city, geohash: geohash))).contains(where: { $0.sender == "system" }))
     }
 
     @Test @MainActor
@@ -1090,7 +1100,7 @@ struct ChatViewModelMediaTransferTests {
 
     @Test @MainActor
     func processThenSendImageFromPhotoLibrary_publicChatUsesCompressedBroadcastPath() async throws {
-        let (viewModel, transport) = makeTestableViewModel()
+        let (viewModel, transport) = makeTestableViewModel(locationManager: makeIsolatedLocationManager())
         let sourceURL = try makeTemporaryImageURL()
         defer { try? FileManager.default.removeItem(at: sourceURL) }
         let sourceData = try Data(contentsOf: sourceURL)
@@ -1105,7 +1115,7 @@ struct ChatViewModelMediaTransferTests {
         #expect(transport.sentOriginalPrivateImages.isEmpty)
         #expect(transport.sentPrivateFiles.isEmpty)
         let didAppendImageMessage = await TestHelpers.waitUntil({
-            viewModel.messages.contains { $0.content.contains("[image]") }
+            viewModel.publicMessages(for: .mesh).contains { $0.content.contains("[image]") }
         }, timeout: TestConstants.longTimeout)
         #expect(didAppendImageMessage)
         #expect(viewModel.messageIDToTransferId.count == 1)
@@ -1113,7 +1123,7 @@ struct ChatViewModelMediaTransferTests {
 
     @Test @MainActor
     func sendImage_invalidSourceAddsFailureSystemMessage() async throws {
-        let (viewModel, transport) = makeTestableViewModel()
+        let (viewModel, transport) = makeTestableViewModel(locationManager: makeIsolatedLocationManager())
         let peerID = PeerID(str: "5555555555555555555555555555555555555555555555555555555555555555")
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("invalid-\(UUID().uuidString).jpg")
         try Data("not-an-image".utf8).write(to: url, options: .atomic)
@@ -1123,7 +1133,7 @@ struct ChatViewModelMediaTransferTests {
         viewModel.sendImage(from: url)
 
         let didNotify = await TestHelpers.waitUntil({
-            viewModel.messages.contains(where: { $0.sender == "system" && $0.content.contains("Failed to prepare image") })
+            viewModel.publicMessages(for: .mesh).contains(where: { $0.sender == "system" && $0.content.contains("Failed to prepare image") })
         }, timeout: TestConstants.longTimeout)
         #expect(didNotify)
         #expect(transport.sentPrivateFiles.isEmpty)
