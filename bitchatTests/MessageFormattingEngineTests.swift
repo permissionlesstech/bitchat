@@ -349,6 +349,32 @@ struct MessageFormattingEngineTests {
 
         #expect(String(formatted.characters) == "<@alice> \(longContent) [\(message.formattedTimestamp)]")
     }
+
+    @MainActor
+    @Test func formatMessage_urlContainingCashuTokenIsNotDuplicated() {
+        // Bug: a URL match and a Cashu match are never cross-checked for
+        // overlap, only each independently against mentions. A URL whose
+        // path embeds a "cashuA..."-shaped segment (a perfectly ordinary
+        // mint redemption link) produces two overlapping matches; the
+        // single linear rendering pass then re-renders the nested cashu
+        // substring a second time and, because it walks `lastEnd` backwards,
+        // re-renders the URL's own trailing segment a third time.
+        let context = MockMessageFormattingContext(nickname: "carol")
+        let cashuToken = "cashuA" + String(repeating: "a", count: 44)
+        let url = "https://mint.example.com/redeem/\(cashuToken)/confirm"
+        let content = "redeem link \(url) now"
+        let message = BitchatMessage(
+            id: "url-cashu",
+            sender: "alice",
+            content: content,
+            timestamp: Date(timeIntervalSince1970: 1_700_001_111),
+            isRelay: false
+        )
+
+        let formatted = MessageFormattingEngine.formatMessage(message, context: context, colorScheme: .light)
+
+        #expect(String(formatted.characters) == "<@alice> \(content) [\(message.formattedTimestamp)]")
+    }
 }
 
 @MainActor

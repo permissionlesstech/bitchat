@@ -368,8 +368,25 @@ final class MessageFormattingEngine {
             allMatches.append(ContentMatch(range: match.range(at: 0), type: .lnurl))
         }
 
-        // Sort by position
-        return allMatches.sorted { $0.range.location < $1.range.location }
+        // Sort by position, then drop any match that overlaps one already
+        // kept. The per-type checks above only guard specific known pairs
+        // (e.g. bolt11/lnurl against url/lightning) -- they don't cover every
+        // combination, so an ordinary message can still produce overlapping
+        // matches of two OTHER types the checks never compared (e.g. a URL
+        // whose path embeds a "cashuA..."-shaped token). formatContent's
+        // single linear pass assumes non-overlapping, strictly-increasing
+        // ranges; without this pass a nested match re-renders already-shown
+        // text and can walk `lastEnd` backwards, duplicating a trailing
+        // slice of content a second time.
+        let sorted = allMatches.sorted { $0.range.location < $1.range.location }
+        var resolved: [ContentMatch] = []
+        var occupiedUntil = 0
+        for match in sorted {
+            guard match.range.location >= occupiedUntil else { continue }
+            resolved.append(match)
+            occupiedUntil = match.range.location + match.range.length
+        }
+        return resolved
     }
 
     private static func formatPlainContent(_ content: String, baseColor: Color, isSelf: Bool) -> AttributedString {
