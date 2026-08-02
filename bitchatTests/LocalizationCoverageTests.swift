@@ -69,4 +69,28 @@ struct LocalizationCoverageTests {
         let missing = main.allLocales.subtracting(shareExt.allLocales).sorted()
         #expect(missing.isEmpty, "share extension is missing locales: \(missing.joined(separator: ", "))")
     }
+
+    /// Every `String(localized:)` key in app sources must exist in the catalog
+    /// so `defaultValue:` fallbacks cannot silently ship in production (#1391).
+    @Test func catalogContainsEveryStringLocalizedKeyInProductionSources() throws {
+        let refs = try LocalizationKeyScanner.scanProductionSources(repoRoot: Self.repoRoot)
+        #expect(!refs.isEmpty, "expected at least one String(localized:) reference")
+
+        let main = try Self.loadCatalog("bitchat/Localizable.xcstrings")
+        let shareExt = try Self.loadCatalog("bitchatShareExtension/Localization/Localizable.xcstrings")
+
+        var missingMain: [String] = []
+        var missingShare: [String] = []
+        for ref in refs {
+            if ref.file.hasPrefix("bitchatShareExtension/") {
+                if !shareExt.coverage.keys.contains(ref.key) {
+                    missingShare.append("\(ref.key) (\(ref.file):\(ref.line))")
+                }
+            } else if !main.coverage.keys.contains(ref.key) {
+                missingMain.append("\(ref.key) (\(ref.file):\(ref.line))")
+            }
+        }
+        #expect(missingMain.isEmpty, "main catalog missing String(localized:) keys: \(missingMain.joined(separator: ", "))")
+        #expect(missingShare.isEmpty, "share extension catalog missing String(localized:) keys: \(missingShare.joined(separator: ", "))")
+    }
 }
