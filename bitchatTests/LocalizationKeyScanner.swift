@@ -39,6 +39,7 @@ enum LocalizationKeyScanner {
         for case let fileURL as URL in enumerator {
             guard fileURL.pathExtension == "swift" else { continue }
             let relative = fileURL.path.replacingOccurrences(of: repoRoot.path + "/", with: "")
+            if relative.contains("/_PreviewHelpers/") { continue }
             let lines = try String(contentsOf: fileURL, encoding: .utf8).split(separator: "\n", omittingEmptySubsequences: false)
             for (index, lineSub) in lines.enumerated() {
                 let line = String(lineSub)
