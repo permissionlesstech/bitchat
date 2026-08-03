@@ -116,6 +116,9 @@ final class ChatComposerCoordinator {
     }
 
     func parseMentions(from content: String) -> [String] {
+        // Canonicalize before matching so NFD typed text and NFC peer tokens
+        // share one codepoint sequence (regex also accepts combining marks).
+        let content = content.precomposedStringWithCanonicalMapping
         let regex = ChatViewModel.Patterns.mention
         let nsContent = content as NSString
         let matches = regex.matches(
