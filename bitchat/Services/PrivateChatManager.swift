@@ -87,7 +87,7 @@ final class PrivateChatManager: ObservableObject {
     /// This ensures messages from stable Noise keys and temporary Nostr peer IDs are merged.
     /// - Parameters:
     ///   - peerID: The target peer ID to consolidate messages into
-    ///   - peerNickname: The peer's display name (lowercased for matching)
+    ///   - peerNickname: The peer's display name (NFC + lowercased for matching)
     ///   - persistedReadReceipts: The persisted read receipts set from ChatViewModel (UserDefaults-backed)
     /// - Returns: True if any unread messages were found during consolidation
     @MainActor
@@ -140,13 +140,17 @@ final class PrivateChatManager: ObservableObject {
             }
         }
 
-        // 2. Consolidate from temporary Nostr peer IDs (nostr_* prefixed)
-        let normalizedNickname = peerNickname.lowercased()
+        // 2. Consolidate from temporary Nostr peer IDs (nostr_* prefixed).
+        // Match on NFC so a wire sender typed with combining accents still
+        // merges into the stored peer nickname (precomposed after #1502).
+        let normalizedNickname = peerNickname.normalizedNickname.lowercased()
         var tempPeerIDsToConsolidate: [PeerID] = []
 
         for (storedPeerID, messages) in privateChats {
             if storedPeerID.isGeoDM && storedPeerID != peerID {
-                let nicknamesMatch = messages.allSatisfy { $0.sender.lowercased() == normalizedNickname }
+                let nicknamesMatch = messages.allSatisfy {
+                    $0.sender.normalizedNickname.lowercased() == normalizedNickname
+                }
                 if nicknamesMatch && !messages.isEmpty {
                     tempPeerIDsToConsolidate.append(storedPeerID)
                 }

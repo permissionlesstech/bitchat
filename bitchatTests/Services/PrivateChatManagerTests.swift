@@ -259,6 +259,44 @@ struct PrivateChatManagerTests {
     }
 
     @Test @MainActor
+    func consolidateMessages_movesTemporaryGeoDMHistoryByCanonicalNickname() async {
+        // Wire sender can arrive NFD while the peer nickname is stored NFC
+        // (#1502). Consolidation must still merge the temp geo DM thread.
+        let transport = MockTransport()
+        let (manager, store) = Self.makeManager(transport: transport)
+        let peerID = PeerID(str: "0011223344556677")
+        let tempPeerID = PeerID(nostr_: "0000000000000000000000000000000000000000000000000000000000000042")
+        let decomposed = "cafe\u{0301}"
+        let precomposed = "caf\u{00E9}"
+
+        store.append(
+            BitchatMessage(
+                id: "geo-nfc-msg",
+                sender: decomposed,
+                content: "Geo hello",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "Me",
+                senderPeerID: tempPeerID
+            ),
+            to: .directPeer(tempPeerID)
+        )
+        store.markUnread(.directPeer(tempPeerID))
+
+        let hadUnread = manager.consolidateMessages(
+            for: peerID,
+            peerNickname: precomposed,
+            persistedReadReceipts: []
+        )
+
+        #expect(hadUnread)
+        #expect(manager.privateChats[tempPeerID] == nil)
+        #expect(manager.privateChats[peerID]?.count == 1)
+        #expect(manager.unreadMessages.contains(peerID))
+    }
+
+    @Test @MainActor
     func syncReadReceiptsForSentMessages_onlyCopiesDeliveredAndRead() async {
         let transport = MockTransport()
         let (manager, store) = Self.makeManager(transport: transport)
