@@ -3,6 +3,7 @@ import Testing
 @testable import bitchat
 import BitFoundation
 
+@Suite(.serialized)
 struct ComposerDraftStoreTests {
     /// Isolate each test from leftover in-memory drafts.
     private func withCleanStore(_ body: () throws -> Void) rethrows {
