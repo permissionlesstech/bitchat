@@ -7,6 +7,7 @@ public enum FileTransferLimits {
     /// Compressed images after downscaling should comfortably fit under this budget.
     public static let maxImageBytes: Int = 512 * 1024 // 512 KiB
     /// Worst-case size once TLV metadata and binary packet framing are included for the largest payloads.
+    /// Note: This is now a hard expanded-size ceiling rather than the old tlv+frame formula.
     /// MUST stay in sync with AppConstants.Protocol.MAX_PAYLOAD_LENGTH in the Android repo (issue #1618).
     public static let maxFramedFileBytes: Int = 10_485_760
 

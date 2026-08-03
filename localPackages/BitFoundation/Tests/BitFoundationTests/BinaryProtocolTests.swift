@@ -354,7 +354,7 @@ struct BinaryProtocolTests {
     func payloadSizeBetweenOldAndNewLimit() throws {
         let payloadSize = 2_000_000
         let payload = Data(repeating: 0x41, count: payloadSize)
-        let packet = TestHelpers.createTestPacket(payload: payload)
+        let packet = TestHelpers.createTestPacket(payload: payload, version: 2)
         
         let encodedData = try #require(BinaryProtocol.encode(packet), "Failed to encode packet")
         let decodedPacket = try #require(BinaryProtocol.decode(encodedData), "Failed to decode packet")
