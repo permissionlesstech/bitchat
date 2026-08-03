@@ -14,6 +14,8 @@ struct FingerprintView: View {
     let peerID: PeerID
     @Environment(\.dismiss) var dismiss
     @ThemedPalette private var palette
+    @State private var aliasDraft: String = ""
+    @State private var didLoadAlias = false
 
     private var textColor: Color { palette.primary }
 
@@ -26,6 +28,21 @@ struct FingerprintView: View {
         static let verifiedBadge: LocalizedStringKey = "fingerprint.badge.verified"
         static let notVerifiedBadge: LocalizedStringKey = "fingerprint.badge.not_verified"
         static let verifiedMessage: LocalizedStringKey = "fingerprint.message.verified"
+        static let localAlias = String(
+            localized: "fingerprint.local_alias.label",
+            defaultValue: "local alias",
+            comment: "Label for the local-only alias field on the fingerprint sheet"
+        )
+        static let localAliasPlaceholder = String(
+            localized: "fingerprint.local_alias.placeholder",
+            defaultValue: "name for this person",
+            comment: "Placeholder for the local alias field on the fingerprint sheet"
+        )
+        static let localAliasHint = String(
+            localized: "fingerprint.local_alias.hint",
+            defaultValue: "only on this device. leave blank to use their claimed nickname.",
+            comment: "Explanation under the local alias field"
+        )
         static func verifyHint(_ nickname: String) -> String {
             String(
                 format: String(localized: "fingerprint.message.verify_hint", comment: "Instruction to compare fingerprints with a named peer"),
@@ -85,6 +102,26 @@ struct FingerprintView: View {
                 .padding()
                 .background(palette.secondary.opacity(0.1))
                 .cornerRadius(8)
+
+                if fingerprintState.canEditLocalAlias {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(verbatim: Strings.localAlias)
+                            .bitchatFont(size: 12, weight: .bold)
+                            .foregroundColor(textColor.opacity(0.7))
+
+                        TextField(Strings.localAliasPlaceholder, text: $aliasDraft)
+                            .bitchatFont(size: 14)
+                            .foregroundColor(textColor)
+                            .padding(10)
+                            .background(palette.secondary.opacity(0.1))
+                            .cornerRadius(8)
+                            .onSubmit { commitAlias() }
+
+                        Text(verbatim: Strings.localAliasHint)
+                            .bitchatFont(size: 11)
+                            .foregroundColor(textColor.opacity(0.6))
+                    }
+                }
                 
                 // Their fingerprint
                 VStack(alignment: .leading, spacing: 8) {
@@ -248,6 +285,37 @@ struct FingerprintView: View {
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .themedSheetBackground()
+        .onAppear {
+            syncAliasDraft(from: fingerprintState, force: true)
+        }
+        .onChange(of: fingerprintState.theirFingerprint) { _ in
+            // Fingerprint can arrive after the sheet opens; load (or reload)
+            // the saved alias then, otherwise an empty draft looks like a clear.
+            syncAliasDraft(from: fingerprintState, force: false)
+        }
+        .onDisappear {
+            commitAlias()
+        }
+    }
+
+    /// Populate `aliasDraft` from the persisted petname once we know the
+    /// fingerprint. `force` reloads even if we already loaded (onAppear).
+    private func syncAliasDraft(from state: FingerprintPresentationState, force: Bool) {
+        guard state.canEditLocalAlias else { return }
+        if didLoadAlias && !force { return }
+        aliasDraft = state.localPetname ?? ""
+        didLoadAlias = true
+    }
+
+    private func commitAlias() {
+        let fingerprintState = verificationModel.fingerprintPresentation(for: peerID)
+        guard fingerprintState.canEditLocalAlias else { return }
+        // Don't treat "never loaded a draft" as an intentional clear.
+        guard didLoadAlias else { return }
+        let current = fingerprintState.localPetname ?? ""
+        let draft = aliasDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard draft != current else { return }
+        verificationModel.setLocalPetname(draft.isEmpty ? nil : draft, for: peerID)
     }
     
     private func formatFingerprint(_ fingerprint: String) -> String {

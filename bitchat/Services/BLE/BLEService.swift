@@ -2943,7 +2943,7 @@ extension BLEService: GossipSyncManager.Delegate {
 
     func sendPacket(to peerID: PeerID, packet: BitchatPacket) {
         onEngine {
-            sendPacketDirected(packet, to: peerID)
+            _ = sendPacketDirected(packet, to: peerID)
         }
     }
 
@@ -3336,9 +3336,12 @@ extension BLEService {
     }
 
     func _test_drainPrivateMediaSendPipeline() async {
+        // Capture only the (Sendable) queue, not self, so the @Sendable
+        // dispatch closures carry no non-Sendable state.
+        let queue = messageQueue
         await withCheckedContinuation { continuation in
-            self.messageQueue.async { [weak self] in
-                self?.messageQueue.async {
+            queue.async {
+                queue.async {
                     continuation.resume()
                 }
             }
@@ -3357,9 +3360,10 @@ extension BLEService {
     }
 
     func _test_drainNoiseMessagePipeline() async {
+        let queue = messageQueue
         await withCheckedContinuation { continuation in
-            self.messageQueue.async {
-                self.messageQueue.async {
+            queue.async {
+                queue.async {
                     continuation.resume()
                 }
             }
@@ -5979,7 +5983,16 @@ extension BLEService {
         switch context.messageType {
         case .announce:
             handleAnnounce(packet, from: senderID)
-            
+
+        case .announceV2:
+            // Parsed and ignored on purpose. The wire format and derivations are
+            // implemented and tested (see PeerIDRotation, AnnounceV2Packet), but
+            // consuming presence from it needs the replacement identity binding
+            // and the peer-list policy for unverified presence, both of which are
+            // still open questions in docs/PEER-ID-ROTATION.md. Accepting it now
+            // would add unauthenticated entries to the peer list.
+            break
+
         case .message:
             handleMessage(packet, from: senderID)
             
@@ -6376,7 +6389,8 @@ extension BLEService {
             store.peripheralStates.map {
                 (uuid: $0.peripheral.identifier.uuidString,
                  isConnected: $0.isConnected,
-                 hasCharacteristic: $0.characteristic != nil)
+                 hasCharacteristic: $0.characteristic != nil,
+                 lastConnectedAt: $0.lastConnectedAt)
             }
         }
         return physical.map {
@@ -6384,7 +6398,8 @@ extension BLEService {
                 uuid: $0.uuid,
                 peerID: linkBindings.peer(forPeripheralID: $0.uuid),
                 isConnected: $0.isConnected,
-                hasCharacteristic: $0.hasCharacteristic
+                hasCharacteristic: $0.hasCharacteristic,
+                lastConnectedAt: $0.lastConnectedAt
             )
         }
     }

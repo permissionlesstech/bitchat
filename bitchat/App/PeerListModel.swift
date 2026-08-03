@@ -213,7 +213,7 @@ final class PeerListModel: ObservableObject {
 
             return MeshPeerRow(
                 peerID: peer.peerID,
-                displayName: isMe ? chatViewModel.nickname : peer.nickname,
+                displayName: isMe ? chatViewModel.nickname : peer.displayName,
                 isMe: isMe,
                 hasUnread: chatViewModel.hasUnreadMessages(for: peer.peerID),
                 isBlocked: !isMe && chatViewModel.isPeerBlocked(peer.peerID),
@@ -248,7 +248,7 @@ final class PeerListModel: ObservableObject {
         self.groupRows = groupRows
         renderID = (
             meshRows.map {
-                "\($0.id)-\($0.isConnected)-\($0.isReachable)-\($0.hasUnread)-\($0.isFavorite)-\($0.isBlocked)"
+                "\($0.id)-\($0.displayName)-\($0.isConnected)-\($0.isReachable)-\($0.hasUnread)-\($0.isFavorite)-\($0.isBlocked)"
             } +
             geohashPeople.map {
                 "geo:\($0.id)-\($0.isTeleported)-\($0.isBlocked)-\($0.displayName)"
