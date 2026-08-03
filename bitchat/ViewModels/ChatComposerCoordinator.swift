@@ -116,6 +116,9 @@ final class ChatComposerCoordinator {
     }
 
     func parseMentions(from content: String) -> [String] {
+        // Canonicalize before matching so NFD typed text and NFC peer tokens
+        // share one codepoint sequence (regex also accepts combining marks).
+        let content = content.precomposedStringWithCanonicalMapping
         let regex = ChatViewModel.Patterns.mention
         let nsContent = content as NSString
         let matches = regex.matches(
@@ -125,16 +128,22 @@ final class ChatComposerCoordinator {
         )
 
         let peerNicknames = context.meshPeerNicknames()
-        var validTokens = Set(peerNicknames.values)
-        validTokens.insert(context.nickname)
-        validTokens.insert(context.nickname + "#" + String(context.myPeerID.id.prefix(4)))
+        // Key by NFC so a typed combining-accent form still resolves to the
+        // stored (precomposed) nickname token used on the wire.
+        var tokensByCanonical = [String: String]()
+        for token in peerNicknames.values {
+            tokensByCanonical[token.normalizedNickname] = token
+        }
+        tokensByCanonical[context.nickname.normalizedNickname] = context.nickname
+        let selfSuffix = context.nickname + "#" + String(context.myPeerID.id.prefix(4))
+        tokensByCanonical[selfSuffix.normalizedNickname] = selfSuffix
 
         var mentions: [String] = []
         for match in matches {
             guard let range = Range(match.range(at: 1), in: content) else { continue }
             let mentionedName = String(content[range])
-            if validTokens.contains(mentionedName) {
-                mentions.append(mentionedName)
+            if let canonical = tokensByCanonical[mentionedName.normalizedNickname] {
+                mentions.append(canonical)
             }
         }
 
