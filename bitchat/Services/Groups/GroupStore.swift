@@ -190,8 +190,11 @@ final class GroupStore: ObservableObject {
               let stored = try? JSONDecoder().decode([BitchatGroup].self, from: data) else {
             return
         }
-        // Only groups whose key survived in the keychain are usable.
-        groups = stored.filter { key(forGroupID: $0.groupID) != nil }
+        // Only groups whose key survived in the keychain are usable. Disk bypasses
+        // `upsert`, so re-check the creator invariant to avoid unmatchable creators.
+        groups = stored.filter {
+            !$0.creatorFingerprint.isEmpty && $0.creator != nil && key(forGroupID: $0.groupID) != nil
+        }
     }
 
     private static func defaultFileURL() -> URL? {
