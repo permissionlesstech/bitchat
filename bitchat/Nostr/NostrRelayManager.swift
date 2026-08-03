@@ -153,14 +153,18 @@ final class NostrRelayManager: ObservableObject {
     
     // Built-in relays carry private-message envelopes, so avoid relays known to
     // reject the kinds they use.
-    private static let builtInRelays = [
+    nonisolated private static let builtInRelays = [
         "wss://relay.damus.io",
         "wss://nos.lol",
         "wss://relay.primal.net",
         "wss://offchain.pub"
         // For local testing, you can add: "ws://localhost:8080"
     ]
-    private static let builtInRelaySet = Set(builtInRelays.compactMap { NostrRelayURL.normalized($0) })
+    /// Exposed so the relay settings UI can reject re-adding a built-in.
+    /// `nonisolated` because it is an immutable constant with no actor state.
+    nonisolated static let builtInRelayURLs = Set(
+        builtInRelays.compactMap { NostrRelayURL.normalized($0) }
+    )
 
     /// The relays private messages target: the built-in set plus any added by
     /// hand. Four hardcoded hostnames are four names for a censor to block, so
@@ -182,10 +186,6 @@ final class NostrRelayManager: ObservableObject {
         defaultRelaySet = Set(defaultRelays)
     }
 
-    /// Exposed so the relay settings UI can reject re-adding a built-in.
-    /// `nonisolated` because it is an immutable constant with no actor state.
-    nonisolated static var builtInRelayURLs: Set<String> { builtInRelaySet }
-    
     @Published private(set) var relays: [Relay] = []
     @Published private(set) var isConnected = false
     /// Whether a relay that carries private messages is connected. DMs
@@ -848,6 +848,9 @@ final class NostrRelayManager: ObservableObject {
             }
         }
         messageQueueLock.unlock()
+        // A relay queued while Tor bootstraps would otherwise reconnect when
+        // the queue drains, overriding the explicit removal.
+        pendingTorConnectionURLs.subtract(urls)
         relays.removeAll { urls.contains($0.url) }
         updateConnectionStatus()
     }

@@ -64,6 +64,10 @@ extension ChatViewModel {
     @objc func handleTorBootstrapDidStall() {
         Task { @MainActor in
             guard TorManager.shared.torEnforced else { return }
+            // torEnforced is a compile-time constant in release builds; the
+            // runtime preference is what says whether anyone is waiting on
+            // Tor. Turning Tor off mid-bootstrap must not read as blocking.
+            guard NetworkActivationService.persistedTorPreference() else { return }
             guard !self.torStallAnnounced else { return }
             self.torStallAnnounced = true
             self.addGeohashOnlySystemMessage(

@@ -9,6 +9,14 @@
 import Foundation
 
 extension String {
+    /// Canonical form for nickname storage and comparison (Unicode NFC).
+    /// "café" typed with a combining accent and "café" typed precomposed
+    /// must resolve to the same user wherever nicknames are stored or
+    /// matched (mentions, DM resolution, autocomplete, geo presence).
+    var normalizedNickname: String {
+        precomposedStringWithCanonicalMapping
+    }
+
     /// Splits a nickname into base and `#abcd` suffix when present.
     ///
     /// Mention `@` characters are removed before parsing.

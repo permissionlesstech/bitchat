@@ -321,7 +321,7 @@ struct ChatViewModelCommandTests {
         transport.simulateConnect(peerID, nickname: "Alice")
         let resolved = await TestHelpers.waitUntil({
             viewModel.getPeerIDForNickname("Alice") == peerID
-        }, timeout: TestConstants.defaultTimeout)
+        }, timeout: TestConstants.negativeWaitWindow)
         #expect(resolved)
 
         viewModel.handleCommand("/msg Alice")
@@ -422,7 +422,7 @@ struct ChatViewModelServiceLifecycleTests {
             transport.sentReadReceipts.contains {
                 $0.peerID == peerID && $0.receipt.originalMessageID == "read-1"
             }
-        }, timeout: TestConstants.defaultTimeout)
+        }, timeout: TestConstants.negativeWaitWindow)
 
         #expect(sentReadReceipt)
         #expect(!viewModel.unreadPrivateMessages.contains(peerID))
@@ -506,7 +506,7 @@ struct ChatViewModelReceivingTests {
 
         let found = await TestHelpers.waitUntil({
             viewModel.publicMessages(for: .mesh).contains { $0.content == "Public hello from Bob" }
-        }, timeout: TestConstants.defaultTimeout)
+        }, timeout: TestConstants.settleTimeout)
 
         #expect(found)
     }
@@ -535,11 +535,11 @@ struct ChatViewModelNoisePayloadTests {
 
         let stored = await TestHelpers.waitUntil({
             viewModel.privateChats[peerID]?.contains(where: { $0.id == "pm-noise-1" && $0.content == "Secret hello" }) == true
-        }, timeout: TestConstants.defaultTimeout)
+        }, timeout: TestConstants.settleTimeout)
 
         let acked = await TestHelpers.waitUntil({
             transport.sentDeliveryAcks.contains { $0.messageID == "pm-noise-1" && $0.peerID == peerID }
-        }, timeout: TestConstants.defaultTimeout)
+        }, timeout: TestConstants.settleTimeout)
 
         #expect(stored)
         #expect(acked)
@@ -579,7 +579,7 @@ struct ChatViewModelNoisePayloadTests {
                 return name == "Bob"
             }
             return false
-        }, timeout: TestConstants.defaultTimeout)
+        }, timeout: TestConstants.settleTimeout)
 
         #expect(delivered)
     }
@@ -617,7 +617,7 @@ struct ChatViewModelNoisePayloadTests {
                 return true
             }
             return false
-        }, timeout: TestConstants.defaultTimeout)
+        }, timeout: TestConstants.settleTimeout)
 
         let conversationStoreUpdated = await TestHelpers.waitUntil({
             let messages = viewModel.conversations.conversationsByID[.directPeer(peerID)]?.messages ?? []
@@ -626,7 +626,7 @@ struct ChatViewModelNoisePayloadTests {
                 return true
             }
             return false
-        }, timeout: TestConstants.defaultTimeout)
+        }, timeout: TestConstants.settleTimeout)
 
         #expect(privateChatUpdated)
         #expect(conversationStoreUpdated)
@@ -730,7 +730,7 @@ struct ChatViewModelVerificationTests {
 
         let bound = await TestHelpers.waitUntil({
             viewModel.unifiedPeerService.peers.contains { $0.peerID == peerID }
-        }, timeout: TestConstants.defaultTimeout)
+        }, timeout: TestConstants.settleTimeout)
         #expect(bound)
 
         let qr = VerificationService.VerificationQR(
@@ -982,7 +982,7 @@ struct ChatViewModelPeerTests {
 
         let cleaned = await TestHelpers.waitUntil({
             !viewModel.unreadPrivateMessages.contains(stalePeer)
-        }, timeout: TestConstants.defaultTimeout)
+        }, timeout: TestConstants.settleTimeout)
 
         #expect(cleaned)
     }

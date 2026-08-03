@@ -244,7 +244,7 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
         let directory = base
             .appendingPathComponent("files", isDirectory: true)
             .appendingPathComponent("voicenotes/outgoing", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: BLEIncomingFileStore.mediaProtectionAttributes)
         return directory.appendingPathComponent("voice_\(burstID.hexEncodedString()).m4a")
     }
 }

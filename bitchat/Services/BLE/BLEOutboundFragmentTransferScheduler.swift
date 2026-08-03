@@ -261,8 +261,6 @@ struct BLEOutboundFragmentTransferScheduler {
                 continue
             }
 
-            availableSlots -= 1
-
             guard activeTransfers.count < maxConcurrentTransfers else {
                 pendingTransfers.insert(request, at: 0)
                 results.append(.queued(request: request, transferId: transferId, position: .front))
@@ -270,11 +268,17 @@ struct BLEOutboundFragmentTransferScheduler {
             }
 
             guard activeTransfers[transferId] == nil else {
+                // Blocked on an already-active copy of this content: leave
+                // the slot budget untouched so a later, unrelated pending
+                // transfer can still start in this same pass instead of
+                // being starved until some other transfer happens to
+                // complete.
                 blockedFront.append(request)
                 results.append(.queued(request: request, transferId: transferId, position: .front))
                 continue
             }
 
+            availableSlots -= 1
             activeTransfers[transferId] = ActiveTransferState(
                 totalFragments: 0,
                 sentFragments: 0,

@@ -14,18 +14,25 @@ struct MacImagePickerView: View {
     let completion: (URL?) -> Void
     @Environment(\.dismiss) private var dismiss
 
+    private enum Strings {
+        static let title: LocalizedStringKey = "mac.image_picker.title"
+        static let select = String(localized: "mac.image_picker.select", comment: "Button that opens the macOS open-panel to pick an image")
+        static let panelMessage = String(localized: "mac.image_picker.panel_message", comment: "Message shown in the macOS NSOpenPanel when picking an image")
+        static let cancel = String(localized: "mac.image_picker.cancel", comment: "Cancel button for the macOS image picker sheet")
+    }
+
     var body: some View {
         VStack(spacing: 16) {
-            Text("Choose an image")
+            Text(Strings.title)
                 .font(.headline)
 
-            Button("Select Image") {
+            Button(Strings.select) {
                 let panel = NSOpenPanel()
                 panel.allowsMultipleSelection = false
                 panel.canChooseDirectories = false
                 panel.canChooseFiles = true
                 panel.allowedContentTypes = [.image, .png, .jpeg, .heic]
-                panel.message = "Choose an image to send"
+                panel.message = Strings.panelMessage
 
                 if panel.runModal() == .OK {
                     completion(panel.url)
@@ -35,7 +42,7 @@ struct MacImagePickerView: View {
             }
             .buttonStyle(.borderedProminent)
 
-            Button("Cancel") {
+            Button(Strings.cancel) {
                 completion(nil)
             }
             .buttonStyle(.bordered)

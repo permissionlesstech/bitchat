@@ -44,6 +44,46 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertTrue(context.sessionFactory.allConnections.allSatisfy { $0.cancelCallCount >= 1 })
     }
 
+    /// A relay removed while its connection is queued behind Tor bootstrap
+    /// must stay removed: draining the pending set used to resurrect it,
+    /// because `dropRelays` never touched `pendingTorConnectionURLs` and a
+    /// custom relay is in neither the default set nor the allow-list filter.
+    func test_relayRemovedWhileWaitingForTor_staysRemovedWhenTorBecomesReady() async {
+        let customURL = "wss://custom-removed.example"
+        let center = NotificationCenter()
+        let customRelays = MutableRelayList(urls: [customURL])
+        let context = makeContext(
+            permission: .authorized,
+            userTorEnabled: true,
+            torEnforced: true,
+            torIsReady: false,
+            notificationCenter: center,
+            customRelays: customRelays
+        )
+
+        // Defaults plus the custom relay all queue while Tor bootstraps.
+        context.manager.connect()
+        XCTAssertTrue(context.sessionFactory.requestedURLs.isEmpty)
+        XCTAssertEqual(context.torWaiter.awaitCallCount, 1)
+
+        // The relay is removed by hand before Tor is ready.
+        customRelays.urls = []
+        center.post(name: NostrRelaySettings.didChangeNotification, object: nil)
+        // The settings sink hops through the main queue; let it land.
+        try? await Task.sleep(nanoseconds: 20_000_000)
+
+        context.torWaiter.resolve(true)
+
+        let defaultsConnected = await waitUntil {
+            context.sessionFactory.requestedURLs.count == self.expectedDefaultRelayCount
+        }
+        XCTAssertTrue(defaultsConnected)
+        XCTAssertFalse(
+            context.sessionFactory.requestedURLs.contains(customURL),
+            "a relay removed while Tor was bootstrapping must not reconnect when the pending queue drains"
+        )
+    }
+
     func test_connect_waitsForTorReadinessBeforeCreatingSessions() async {
         let context = makeContext(permission: .authorized, userTorEnabled: true, torEnforced: true, torIsReady: false)
 
@@ -920,7 +960,7 @@ final class NostrRelayManagerTests: XCTestCase {
             try context.sessionFactory.latestConnection(for: relayURL)?.emitEventMessage(subscriptionID: "ordered", event: event)
         }
 
-        let allDelivered = await waitUntil(timeout: 5.0) {
+        let allDelivered = await waitUntil(timeout: TestConstants.settleTimeout) {
             receivedIDs.count == events.count
         }
         XCTAssertTrue(allDelivered)
@@ -966,7 +1006,7 @@ final class NostrRelayManagerTests: XCTestCase {
         }
         try context.sessionFactory.latestConnection(for: quietRelayURL)?.emitEventMessage(subscriptionID: "quiet", event: quietEvent)
 
-        let quietDelivered = await waitUntil(timeout: 5.0) { quietDeliveredAfterBusyCount >= 0 }
+        let quietDelivered = await waitUntil(timeout: TestConstants.settleTimeout) { quietDeliveredAfterBusyCount >= 0 }
         XCTAssertTrue(quietDelivered, "relay B's event was never delivered")
 
         // The signal: B did not have to wait for A's entire backlog. If the two
@@ -979,7 +1019,7 @@ final class NostrRelayManagerTests: XCTestCase {
         )
 
         // Both relays still drain fully and in order.
-        let allDelivered = await waitUntil(timeout: 5.0) {
+        let allDelivered = await waitUntil(timeout: TestConstants.settleTimeout) {
             busyDeliveredCount == busyEvents.count
         }
         XCTAssertTrue(allDelivered)
@@ -1867,7 +1907,7 @@ final class NostrRelayManagerTests: XCTestCase {
     }
 
     private func waitUntil(
-        timeout: TimeInterval = 1.0,
+        timeout: TimeInterval = TestConstants.settleTimeout,
         condition: @escaping @MainActor () -> Bool
     ) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
