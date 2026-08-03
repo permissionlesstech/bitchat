@@ -68,7 +68,8 @@ final class GroupStore: ObservableObject {
     }
 
     /// Inserts or replaces a group and its current key. Rejects rosters over
-    /// the hard cap or groups whose creator is missing from the roster.
+    /// the hard cap, groups whose creator is missing from the roster, and any
+    /// attempt to change the creator of a group we already hold.
     @discardableResult
     func upsert(_ group: BitchatGroup, key: Data) -> Bool {
         guard group.groupID.count == BitchatGroup.groupIDLength,
@@ -76,6 +77,19 @@ final class GroupStore: ObservableObject {
               !group.members.isEmpty,
               group.members.count <= BitchatGroup.maxMembers,
               group.creator != nil else { return false }
+        // A group keeps the creator it was created with. A peer naming
+        // themselves creator of a known groupID at a higher epoch would
+        // otherwise replace the roster and key wholesale. `applyGroupState`
+        // pins this before its removal branch; here is the one point every
+        // write goes through.
+        if let existing = groups.first(where: { $0.groupID == group.groupID }),
+           existing.creatorFingerprint != group.creatorFingerprint {
+            SecureLogger.warning(
+                "Refusing group state: creator \(group.creatorFingerprint.prefix(8))… does not match stored creator \(existing.creatorFingerprint.prefix(8))…",
+                category: .security
+            )
+            return false
+        }
         guard keychain.saveIdentityKey(key, forKey: Self.keychainKey(for: group.groupID)) else {
             SecureLogger.error("Failed to store group key in keychain", category: .security)
             return false
@@ -176,8 +190,11 @@ final class GroupStore: ObservableObject {
               let stored = try? JSONDecoder().decode([BitchatGroup].self, from: data) else {
             return
         }
-        // Only groups whose key survived in the keychain are usable.
-        groups = stored.filter { key(forGroupID: $0.groupID) != nil }
+        // Only groups whose key survived in the keychain are usable. Disk bypasses
+        // `upsert`, so re-check the creator invariant to avoid unmatchable creators.
+        groups = stored.filter {
+            !$0.creatorFingerprint.isEmpty && $0.creator != nil && key(forGroupID: $0.groupID) != nil
+        }
     }
 
     private static func defaultFileURL() -> URL? {

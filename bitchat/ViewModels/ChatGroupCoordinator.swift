@@ -558,6 +558,18 @@ private extension ChatGroupCoordinator {
         let myFingerprint = context.myNoiseFingerprint()
         let existing = context.groupStore.group(withID: state.groupID)
 
+        // A group keeps the creator it was created with. The checks above only
+        // prove the sender is the creator the state names, which an attacker
+        // satisfies by naming themselves. Checked before the removal branch,
+        // which drops the group without ever reaching `upsert`.
+        if let existing, existing.creatorFingerprint != state.creatorFingerprint {
+            SecureLogger.warning(
+                "Dropping group state claiming creator \(state.creatorFingerprint.prefix(8))… for a group created by \(existing.creatorFingerprint.prefix(8))…",
+                category: .security
+            )
+            return
+        }
+
         // A creator-signed roster that no longer includes us is a removal.
         guard state.members.contains(where: { $0.fingerprint == myFingerprint }) else {
             if let existing {
