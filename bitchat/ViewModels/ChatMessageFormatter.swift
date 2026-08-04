@@ -188,25 +188,17 @@ final class ChatMessageFormatter {
                 where !overlapsMention(match.range(at: 0)) && !overlapsOccupied(match.range(at: 0)) {
                     allMatches.append((match.range(at: 0), "lnurl"))
                 }
-                allMatches.sort { $0.range.location < $1.range.location }
 
-                // Drop any match that overlaps one already kept. The
-                // per-type checks above only guard specific known pairs
+                // The per-type checks above only guard specific known pairs
                 // (e.g. bolt11/lnurl against url+lightning); they don't
                 // cover every combination, so an ordinary message can still
                 // produce overlapping matches of two OTHER types (e.g. a URL
                 // whose path embeds a "cashuA..."-shaped token). The render
                 // loop below assumes non-overlapping, strictly-increasing
-                // ranges; without this pass a nested cashu/lightning match
-                // renders as an extra spacer character injected into
-                // already-shown text instead of being skipped.
-                var resolvedMatches: [(range: NSRange, type: String)] = []
-                var occupiedUntil = 0
-                for match in allMatches {
-                    guard match.range.location >= occupiedUntil else { continue }
-                    resolvedMatches.append(match)
-                    occupiedUntil = match.range.location + match.range.length
-                }
+                // ranges; without resolving those first, a nested
+                // cashu/lightning match renders as an extra spacer character
+                // injected into already-shown text instead of being skipped.
+                let resolvedMatches = MessageFormattingEngine.resolveOverlappingMatches(allMatches) { $0.range }
 
                 var lastEnd = content.startIndex
                 let myNickname = viewModel.nickname.normalizedNickname
