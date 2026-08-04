@@ -62,3 +62,10 @@ Terms below are defined once here and used consistently across every chapter; a 
 - **relay** (verb) — a BLE mesh node forwarding a packet it did not originate, toward other links.
 - **relay** (noun, Nostr context) — a Nostr server that stores and forwards signed events; distinct from a BLE mesh relay.
 - **TTL** — the hop-count budget on a BLE mesh packet, decremented by each relay; a packet is not forwarded once it reaches zero.
+- **gift wrap** — the outer layer of a Nostr private-message envelope: a `seal`, encrypted again under a fresh one-time key, hiding the sender's stable identity from relays.
+- **seal** — the middle layer of a Nostr private-message envelope: a `rumor`, encrypted and signed with the sender's long-term Nostr identity key, authenticating the sender.
+- **rumor** — the innermost, unsigned layer of a Nostr private-message envelope, carrying the actual message content.
+- **courier drop** — a `courier envelope` parked on Nostr relays under its rotating recipient tag, so delivery does not require a physical courier encounter.
+- **gateway** — a peer that bridges a geohash channel between the BLE mesh and Nostr relays for mesh-only peers who cannot reach relays directly.
+- **bridge** — a peer that stitches disjoint BLE mesh islands together by routing public mesh traffic through Nostr as a rendezvous.
+- **rendezvous cell** — the geohash-precision-6 cell a `bridge` peer signs and subscribes to when relaying mesh traffic across islands.
