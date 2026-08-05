@@ -40,6 +40,12 @@ Private messages target the built-in relay set plus any relays added by hand (`N
 - The xcframework must include iOS device, iOS simulator, and macOS arm64 slices.
 - Any refresh reviews the Rust source, `Cargo.lock`, generated header, build script, and new hashes together. A binary-only update is not acceptable.
 
+## macOS: stay alive while minimized
+
+On iOS, `AppRuntime` puts Tor dormant when the scene enters the background — the OS will suspend the process anyway. macOS has no equivalent scene-phase dormancy path: Tor is meant to keep running so a docked install can still bridge Nostr for nearby mesh peers.
+
+macOS App Nap can still freeze that work when the window is minimized or another app is focused. `MacAppDelegate` therefore holds a `ProcessInfo` activity for the process lifetime and does not quit when the last window closes (Quit from the menu / Cmd+Q still tears Tor down). See #1593.
+
 ## Known gap: no bridges or pluggable transports
 
 `arti-client` is built with `default-features = false` and features `["tokio", "rustls"]` only — no `pt-client`, no `bridge-client` — and `arti-bitchat/src/lib.rs` bootstraps from stock configuration with no bridge lines and no configurable directory authorities.
