@@ -29,6 +29,7 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 - **Privacy First**: No accounts, no phone numbers, no servers. Note that the mesh does use a persistent per-device identifier derived from your identity key — see [the whitepaper](WHITEPAPER.md) on identity and metadata for what a nearby radio can observe
 - **Private Message End-to-End Encryption**: [Noise Protocol](https://noiseprotocol.org) for mesh, BitChat private envelopes for Nostr fallback
 - **IRC-Style Commands**: Familiar `/slap`, `/msg`, `/who` style interface
+- **People Sheet**: Nearby mesh peers, location-channel presence, and private groups in one place
 - **Universal App**: Native support for iOS and macOS
 - **Emergency Wipe**: Triple-tap to instantly clear all data
 - **Performance Optimizations**: LZ4 message compression, adaptive battery modes, and optimized networking
@@ -49,7 +50,7 @@ BitChat uses a **hybrid messaging architecture** with two complementary transpor
 
 ### Nostr Protocol (Internet)
 
-- **Global Reach**: Connect with users worldwide via internet relays
+- **Global Reach**: Connect with people worldwide via internet relays
 - **Location Channels**: Geographic chat rooms using geohash coordinates
 - **440+ Relay Network**: Distributed across the globe for reliability
 - **BitChat Private Envelopes**: App-specific encrypted private messages over Nostr relays
