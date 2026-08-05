@@ -67,6 +67,12 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.sendMessage("/clear")
     }
 
+    /// Dismisses the unread indicator for a conversation the user has not
+    /// opened; does not emit read receipts.
+    func clearUnread(for peerID: PeerID) {
+        chatViewModel.markPrivateChatRead(peerID)
+    }
+
     func sendHug(to sender: String) {
         chatViewModel.sendMessage("/hug @\(sender)")
     }
