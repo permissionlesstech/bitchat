@@ -116,6 +116,16 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }
+
+    /// Dock / Cmd-click reopen after the last window was closed.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            // SwiftUI WindowGroup will create a window when we activate; make
+            // sure the app comes forward so Tor/BLE stay user-visible again.
+            sender.activate(ignoringOtherApps: true)
+        }
+        return true
+    }
 }
 #endif
 
