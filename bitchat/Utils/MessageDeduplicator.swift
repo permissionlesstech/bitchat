@@ -61,6 +61,7 @@ final class MessageDeduplicator {
             let now = Date()
             entries.append(Entry(id: id, timestamp: now))
             lookup[id] = now
+            trimIfNeeded()
         }
     }
 
