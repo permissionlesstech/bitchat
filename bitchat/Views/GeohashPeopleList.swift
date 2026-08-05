@@ -20,6 +20,7 @@ struct GeohashPeopleList: View {
         static let blockedState = String(localized: "mesh_peers.state.blocked", comment: "State label for a blocked peer")
         static let youState = String(localized: "geohash_people.state.you", comment: "State label marking your own row in the people list")
         static let openDMHint = String(localized: "mesh_peers.accessibility.open_dm_hint", comment: "Accessibility hint on a peer row explaining activation opens a private chat")
+        static let copyNickname = String(localized: "mesh_peers.action.copy_nickname", comment: "Context menu action that copies a peer's display name")
     }
 
     var body: some View {
@@ -102,6 +103,9 @@ struct GeohashPeopleList: View {
                         if person.isMe {
                             EmptyView()
                         } else {
+                            Button(Strings.copyNickname) {
+                                NicknameClipboard.copy(person.displayName)
+                            }
                             if person.isBlocked {
                                 Button(Strings.unblock) {
                                     peerListModel.unblockGeohashUser(
@@ -125,6 +129,9 @@ struct GeohashPeopleList: View {
                     .accessibilityHint(person.isMe ? "" : Strings.openDMHint)
                     .accessibilityActions {
                         if !person.isMe {
+                            Button(Strings.copyNickname) {
+                                NicknameClipboard.copy(person.displayName)
+                            }
                             Button(person.isBlocked ? Strings.unblockText : Strings.blockText) {
                                 if person.isBlocked {
                                     peerListModel.unblockGeohashUser(
