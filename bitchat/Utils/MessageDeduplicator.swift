@@ -57,8 +57,10 @@ final class MessageDeduplicator {
         lock.lock()
         defer { lock.unlock() }
 
+        let now = Date()
+        cleanupOldEntries(before: now.addingTimeInterval(-maxAge))
+
         if lookup[id] == nil {
-            let now = Date()
             entries.append(Entry(id: id, timestamp: now))
             lookup[id] = now
             trimIfNeeded()

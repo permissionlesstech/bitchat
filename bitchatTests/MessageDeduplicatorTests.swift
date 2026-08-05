@@ -25,4 +25,20 @@ struct MessageDeduplicatorTests {
         #expect(deduplicator.contains("d"))
         #expect(deduplicator.contains("e"))
     }
+
+    @Test func markProcessed_cleansExpiredEntriesBeforeCountTrim() async {
+        let deduplicator = MessageDeduplicator(maxAge: 0.1, maxCount: 4)
+
+        deduplicator.markProcessed("expired")
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        for id in ["b", "c", "d", "e"] {
+            deduplicator.markProcessed(id)
+        }
+
+        #expect(deduplicator.contains("b"))
+        #expect(deduplicator.contains("c"))
+        #expect(deduplicator.contains("d"))
+        #expect(deduplicator.contains("e"))
+    }
 }
