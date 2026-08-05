@@ -15,9 +15,21 @@ import Foundation
 /// Thread-safe via @MainActor - all callers are already on main actor.
 @MainActor
 final class LRUDeduplicationCache<Value> {
-    private var map: [String: Value] = [:]
-    private var order: [String] = []
+    private struct StoredEntry {
+        var value: Value
+        let generation: UInt64
+    }
+
+    private struct OrderEntry {
+        let key: String
+        let generation: UInt64
+    }
+
+    private var map: [String: StoredEntry] = [:]
+    private var order: [OrderEntry] = []
     private var head: Int = 0
+    private var staleNodeCount: Int = 0
+    private var nextGeneration: UInt64 = 0
     private let capacity: Int
 
     /// Creates a new LRU cache with the specified capacity.
@@ -29,8 +41,13 @@ final class LRUDeduplicationCache<Value> {
 
     /// Number of active entries in the cache
     var count: Int {
-        order.count - head
+        map.count
     }
+
+    #if DEBUG
+    /// Order-node storage exposed only for bounded-storage regression tests.
+    var _orderStorageCountForTesting: Int { order.count }
+    #endif
 
     /// Checks if a key exists in the cache
     func contains(_ key: String) -> Bool {
@@ -39,22 +56,29 @@ final class LRUDeduplicationCache<Value> {
 
     /// Gets the value for a key, or nil if not present
     func value(for key: String) -> Value? {
-        map[key]
+        map[key]?.value
     }
 
     /// Records a key-value pair, updating if exists or inserting if new
     func record(_ key: String, value: Value) {
-        if map[key] == nil {
-            order.append(key)
+        if let existing = map[key] {
+            map[key] = StoredEntry(value: value, generation: existing.generation)
+        } else {
+            nextGeneration &+= 1
+            let generation = nextGeneration
+            map[key] = StoredEntry(value: value, generation: generation)
+            order.append(OrderEntry(key: key, generation: generation))
         }
-        map[key] = value
+
         trimIfNeeded()
+        compactIfNeeded()
     }
 
     /// Removes a specific key from the cache
     func remove(_ key: String) {
-        map.removeValue(forKey: key)
-        // Note: key remains in order array but will be skipped during eviction
+        guard map.removeValue(forKey: key) != nil else { return }
+        staleNodeCount += 1
+        compactIfNeeded()
     }
 
     /// Clears all entries from the cache
@@ -62,39 +86,53 @@ final class LRUDeduplicationCache<Value> {
         map.removeAll()
         order.removeAll()
         head = 0
+        staleNodeCount = 0
+        nextGeneration = 0
     }
 
     // MARK: - Private
 
     private func trimIfNeeded() {
-        let activeCount = order.count - head
-        guard activeCount > capacity else { return }
-
-        let overflow = activeCount - capacity
-        for _ in 0..<overflow {
-            guard let victim = popOldest() else { break }
-            map.removeValue(forKey: victim)
+        while map.count > capacity {
+            guard popOldest() else { break }
         }
     }
 
-    private func popOldest() -> String? {
-        // Skip keys that were already removed from map
+    private func popOldest() -> Bool {
         while head < order.count {
-            let key = order[head]
+            let candidate = order[head]
             head += 1
 
-            // Periodically compact the backing storage
-            if head >= 32 && head * 2 >= order.count {
-                order.removeFirst(head)
-                head = 0
+            guard let liveEntry = map[candidate.key],
+                  liveEntry.generation == candidate.generation else {
+                if staleNodeCount > 0 {
+                    staleNodeCount -= 1
+                }
+                continue
             }
 
-            // Only return if key is still in map
-            if map[key] != nil {
-                return key
-            }
+            map.removeValue(forKey: candidate.key)
+            return true
         }
-        return nil
+        return false
+    }
+
+    private func compactIfNeeded() {
+        let unconsumedCount = order.count - head
+        let shouldDropConsumedPrefix = head >= 32 && head * 2 >= order.count
+        let shouldRemoveStaleNodes = staleNodeCount >= 32 && staleNodeCount * 2 >= unconsumedCount
+
+        guard shouldDropConsumedPrefix || shouldRemoveStaleNodes else { return }
+
+        if shouldRemoveStaleNodes {
+            order = order[head...].filter { candidate in
+                map[candidate.key]?.generation == candidate.generation
+            }
+            staleNodeCount = 0
+        } else {
+            order.removeFirst(head)
+        }
+        head = 0
     }
 }
 
