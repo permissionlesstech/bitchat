@@ -158,6 +158,20 @@ struct GeohashParticipantTrackerTests {
         #expect(tracker.visiblePeople.isEmpty)
     }
 
+    @Test func recordParticipant_blockedRepeatRemovesStaleVisibleParticipant() {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        tracker.setActiveGeohash("abc123")
+        tracker.recordParticipant(pubkeyHex: "later-blocked")
+
+        context.blockedPubkeys.insert("later-blocked")
+        tracker.recordParticipant(pubkeyHex: "LATER-BLOCKED")
+
+        #expect(tracker.participantCount(for: "abc123") == 0)
+        #expect(tracker.visiblePeople.isEmpty)
+    }
+
     @Test func participantCount_matchesVisiblePeopleWithMixedBlockStatus() {
         let tracker = GeohashParticipantTracker()
         let context = MockParticipantContext()

@@ -80,7 +80,10 @@ final class GeohashParticipantTracker: ObservableObject {
     /// Record activity from a participant in a specific geohash
     func recordParticipant(pubkeyHex: String, geohash: String) {
         let key = pubkeyHex.lowercased()
-        guard context?.isBlocked(key) != true else { return }
+        if context?.isBlocked(key) == true {
+            removeParticipant(pubkeyHex: key)
+            return
+        }
 
         var map = participants[geohash] ?? [:]
         map[key] = Date()
