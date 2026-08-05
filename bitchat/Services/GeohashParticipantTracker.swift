@@ -80,6 +80,8 @@ final class GeohashParticipantTracker: ObservableObject {
     /// Record activity from a participant in a specific geohash
     func recordParticipant(pubkeyHex: String, geohash: String) {
         let key = pubkeyHex.lowercased()
+        guard context?.isBlocked(key) != true else { return }
+
         var map = participants[geohash] ?? [:]
         map[key] = Date()
         participants[geohash] = map
@@ -107,7 +109,9 @@ final class GeohashParticipantTracker: ObservableObject {
     func participantCount(for geohash: String) -> Int {
         let cutoff = Date().addingTimeInterval(activityCutoff)
         let map = participants[geohash] ?? [:]
-        return map.values.filter { $0 >= cutoff }.count
+        return map.filter { key, lastSeen in
+            lastSeen >= cutoff && context?.isBlocked(key) != true
+        }.count
     }
 
     /// Get the visible people list for the active geohash (read-only query)

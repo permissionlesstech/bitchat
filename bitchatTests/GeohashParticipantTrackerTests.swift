@@ -131,6 +131,57 @@ struct GeohashParticipantTrackerTests {
         #expect(people.first?.id == "pubkey1")
     }
 
+    @Test func recordParticipant_ignoresBlockedParticipant() {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        context.blockedPubkeys = ["blocked"]
+        tracker.configure(context: context)
+        tracker.setActiveGeohash("abc123")
+
+        tracker.recordParticipant(pubkeyHex: "BLOCKED")
+
+        #expect(tracker.participantCount(for: "abc123") == 0)
+        #expect(tracker.getVisiblePeople().isEmpty)
+    }
+
+    @Test func participantCount_excludesParticipantBlockedAfterRecording() {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        tracker.setActiveGeohash("abc123")
+        tracker.recordParticipant(pubkeyHex: "later-blocked")
+
+        context.blockedPubkeys.insert("later-blocked")
+        tracker.refresh()
+
+        #expect(tracker.participantCount(for: "abc123") == 0)
+        #expect(tracker.visiblePeople.isEmpty)
+    }
+
+    @Test func participantCount_matchesVisiblePeopleWithMixedBlockStatus() {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        tracker.setActiveGeohash("abc123")
+        tracker.recordParticipant(pubkeyHex: "visible")
+        tracker.recordParticipant(pubkeyHex: "later-blocked")
+
+        context.blockedPubkeys.insert("later-blocked")
+        tracker.refresh()
+
+        #expect(tracker.participantCount(for: "abc123") == 1)
+        #expect(tracker.visiblePeople.count == 1)
+        #expect(tracker.visiblePeople.first?.id == "visible")
+    }
+
+    @Test func participantCount_withoutContext_preservesRecordedParticipants() {
+        let tracker = GeohashParticipantTracker()
+
+        tracker.recordParticipant(pubkeyHex: "participant", geohash: "abc123")
+
+        #expect(tracker.participantCount(for: "abc123") == 1)
+    }
+
     @Test func getVisiblePeople_usesDisplayNameFromContext() async {
         let tracker = GeohashParticipantTracker()
         let context = MockParticipantContext()
