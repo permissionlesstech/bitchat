@@ -306,6 +306,18 @@ private struct ContentPeopleListView: View {
 
     @Binding var showSidebar: Bool
     @Binding var showVerifySheet: Bool
+    @State private var nameFilter = ""
+
+    private enum Strings {
+        static let searchPlaceholder = String(
+            localized: "content.people.search.placeholder",
+            comment: "Placeholder for the people-sheet nickname search field"
+        )
+        static let searchAccessibility = String(
+            localized: "content.people.search.accessibility",
+            comment: "Accessibility label for the people-sheet nickname search field"
+        )
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -348,6 +360,35 @@ private struct ContentPeopleListView: View {
                         .bitchatFont(size: 12)
                         .foregroundColor(palette.locationAccent)
                 }
+
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.bitchatSystem(size: 12))
+                        .foregroundColor(palette.secondary)
+                    TextField(Strings.searchPlaceholder, text: $nameFilter)
+                        .bitchatFont(size: 14)
+                        .textFieldStyle(.plain)
+                        .autocorrectionDisabled()
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        #endif
+                        .accessibilityLabel(Strings.searchAccessibility)
+                    if !nameFilter.isEmpty {
+                        Button {
+                            nameFilter = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.bitchatSystem(size: 12))
+                                .foregroundColor(palette.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(String(localized: "common.clear", comment: "Clear the current text field"))
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(palette.secondary.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
             .padding(.horizontal, 16)
             .padding(.top, 16)
@@ -363,7 +404,8 @@ private struct ContentPeopleListView: View {
                         GeohashPeopleList(
                             onTapPerson: {
                                 showSidebar = true
-                            }
+                            },
+                            nameFilter: nameFilter
                         )
                     } else {
                         PeopleSectionHeader(
@@ -388,17 +430,19 @@ private struct ContentPeopleListView: View {
                                 } else {
                                     conversationUIModel.block(peerID: peer.peerID, displayName: peer.displayName)
                                 }
-                            }
+                            },
+                            nameFilter: nameFilter
                         )
                         // People in this area but beyond radio range, and
                         // private groups: one sheet for the whole room.
-                        BridgePeopleList()
+                        BridgePeopleList(nameFilter: nameFilter)
                         GroupChatList(
                             groups: peerListModel.groupRows,
                             onTapGroup: { peerID in
                                 peerListModel.startConversation(with: peerID)
                                 showSidebar = true
-                            }
+                            },
+                            nameFilter: nameFilter
                         )
                     }
                 }
