@@ -42,7 +42,9 @@ A packet whose encoded size exceeds the link MTU MUST be split into `fragment` (
 
 ### 3.2 Fragment Cap and Lifetime
 
-A sender MUST NOT split a packet into more than 256 fragments; a receiver MAY reject a fragment stream whose `total` exceeds this cap. This ceiling exists because it is a cross-platform contract, not an arbitrary internal limit — implementations that accept larger fragment counts still MUST NOT rely on peers doing the same.
+A receiver MUST reject a fragment stream whose `total` exceeds 10,000; this is the general reassembly ceiling and applies regardless of the fragmented packet's type.
+
+A stricter cap applies to one case: a directed `fileTransfer (0x22)` packet (the legacy migration fallback for private media, used when the recipient has not advertised the `privateMedia` capability — see the Payloads chapter's [§5](04-payloads.md#5-peer-state-and-capabilities)) MUST NOT be split into more than 256 fragments, and a receiver MAY reject such a stream if `total` exceeds that lower cap. This exists as a cross-platform contract with clients whose reassembler enforces a 256-fragment ceiling on that path specifically; implementations that accept larger fragment counts on it still MUST NOT rely on peers doing the same. Public files and capability-gated encrypted private media (carried as `noiseEncrypted` fragments to a peer advertising `privateMedia`) are bound only by the general 10,000-fragment ceiling above.
 
 A receiving node reassembles fragments for a stream by collecting them keyed by `(sender, fragmentID)` until the number received equals `total`, then concatenates them in `index` order to recover the original packet's encoded bytes, which are then decoded per the Wire Format chapter using `originalType`. A stream with no new fragment arriving for 30 seconds is considered stalled; a node SHOULD request the missing fragments (see the Store and Forward chapter's sync mechanism) rather than discarding the stream outright.
 

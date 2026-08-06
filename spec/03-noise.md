@@ -117,6 +117,15 @@ A sender who instead holds one of the recipient's published one-time `prekey`s s
 
 A prekey MUST NOT be reused across more than one seal; once consumed, it MUST be discarded from future `prekeyBundle`s ([§5](#5-prekey-bundles)).
 
+### 4.4 Domain Separation (Prologue)
+
+Both seal types in this section use Noise's `prologue` mechanism — arbitrary bytes mixed into the handshake hash via `MixHash` before the first handshake message, per the Noise specification — to keep an `X`-pattern transcript from ever being confused with the `XX` handshake ([§2](#2-live-sessions-the-xx-pattern), which uses the default empty prologue) or with the other seal type. Because the prologue is mixed into the handshake hash, it participates in every subsequent key derivation; sealing and opening a given envelope MUST use bit-identical prologue bytes or the handshake fails to authenticate.
+
+| Seal type | Prologue bytes |
+|---|---|
+| Courier envelope ([§4.2](#42-courier-envelopes), sealed to the recipient's static key) | ASCII `bitchat-courier-v1` (18 bytes) |
+| Prekey envelope ([§4.3](#43-prekey-envelopes), sealed to a one-time prekey) | ASCII `bitchat-prekey-v1` (17 bytes) followed by the 4-byte big-endian `prekeyID` ([§5.2.1](#521-prekey-entry)) of the prekey being sealed against |
+
 ## 5. Prekey Bundles
 
 A `prekey bundle` is how a device publishes a batch of one-time prekeys for other peers to seal [§4.3](#43-prekey-envelopes) envelopes against.
@@ -132,7 +141,7 @@ A prekey bundle is carried as the payload of a `prekeyBundle (0x24)` packet (see
 | 0x01 | `noiseStaticPublicKey` | 32 | The issuing peer's long-term Curve25519 static public key, included so a recipient can validate the bundle's signature ([§5.3](#53-signature)) without a separate lookup. |
 | 0x02 | `prekeys` | variable | Repeated fixed-size entries (see [§5.2.1](#521-prekey-entry)). A sender MUST NOT include more than 8 entries in a single bundle. |
 | 0x03 | `generatedAt` | 8 | Milliseconds since the Unix epoch at which the bundle was generated. |
-| 0x04 | `signature` | 64 | Ed25519 signature over the preceding fields, using the issuing peer's `signing key`. |
+| 0x04 | `signature` | 64 | Ed25519 signature over the canonical transcript defined in [§5.3](#53-signature), using the issuing peer's `signing key`. |
 
 #### 5.2.1 Prekey Entry
 
@@ -145,4 +154,15 @@ Each entry in the `prekeys` field is 36 bytes, with no further framing between c
 
 ### 5.3 Signature
 
-A recipient MUST verify the `signature` field against the issuing peer's known `signing key` before trusting any prekey the bundle carries, and MUST discard the bundle if verification fails.
+The `signature` field is computed over a canonical byte transcript distinct from the bundle's TLV encoding — not the raw concatenation of the preceding fields' TLV bytes. An encoder or verifier MUST construct this transcript as follows, in order:
+
+| Bytes | Contents |
+|---|---|
+| 1 | Length of the domain string below, as an unsigned 8-bit integer: `24`. |
+| 24 | ASCII domain string `bitchat-prekey-bundle-v1`. |
+| 32 | `noiseStaticPublicKey` ([§5.2](#52-fields)), raw. |
+| 1 | Number of `prekeys` entries, as an unsigned 8-bit integer. |
+| 36 × count | Each `prekeys` entry ([§5.2.1](#521-prekey-entry)) in order: 4-byte big-endian `prekeyID` followed by the 32-byte raw `publicKey` — the same layout as the wire encoding, not separately TLV-framed. |
+| 8 | `generatedAt` ([§5.2](#52-fields)), big-endian. |
+
+A recipient MUST verify the `signature` field against this transcript, using the issuing peer's known `signing key`, before trusting any prekey the bundle carries, and MUST discard the bundle if verification fails.

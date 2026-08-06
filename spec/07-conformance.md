@@ -16,8 +16,8 @@ Chapter 6's items are split by the REQUIRED/capability-gated boundary that chapt
 - [ ] A source route is a 1-byte hop count `N` followed by `N` 8-byte peer IDs; `N` MUST NOT exceed 255, and route bytes are excluded from `payloadLength` ([§4.2](01-wire-format.md#42-source-route)).
 - [ ] When `isCompressed` is set, the payload begins with a 2-byte (v1) or 4-byte (v2) big-endian original-size preamble, itself counted in `payloadLength` ([§4.3](01-wire-format.md#43-payload-and-compression)).
 - [ ] A signature, when `hasSignature` is set, is a 64-byte Ed25519 signature immediately following the payload ([§4.4](01-wire-format.md#44-signature)).
-- [ ] A signature is computed over the packet with its `signature` section omitted, `ttl` fixed to `0`, and `isRSR` excluded; a verifier MUST reconstruct this exact frame ([§5](01-wire-format.md#5-signing)).
-- [ ] Only `noiseHandshake`/`noiseEncrypted` packets are padded, using PKCS#7-style padding over header-through-payload targeting the smallest of the `256/512/1024/2048`-byte buckets ([§6](01-wire-format.md#6-padding)).
+- [ ] A signature is computed over the packet with its `signature` section omitted, `ttl` fixed to `0`, `isRSR` excluded, and the frame always padded per §6 regardless of the message type's wire padding rule; a verifier MUST reconstruct this exact frame ([§5](01-wire-format.md#5-signing)).
+- [ ] Only `noiseHandshake`/`noiseEncrypted` packets are padded **on the wire**; every other type is transmitted at its natural length. This does not apply to the signing transcript, which is always padded (see the item above) ([§6](01-wire-format.md#6-padding)).
 - [ ] A frame needing more than 255 bytes of padding to reach its target bucket MUST be emitted unpadded instead ([§6](01-wire-format.md#6-padding)).
 - [ ] A decoder MUST attempt unpadded decode first and retry with PKCS#7 stripping only on failure ([§6](01-wire-format.md#6-padding)).
 - [ ] The full `type` byte table MUST be supported for dispatch, and a decoder MUST skip (not reject the enclosing packet for) an unrecognized `type` ([§7](01-wire-format.md#7-message-types)).
@@ -28,7 +28,7 @@ Chapter 6's items are split by the REQUIRED/capability-gated boundary that chapt
 - [ ] The service UUID, characteristic UUID, and characteristic properties (notify, write, write-without-response, read) match the defined values, with a single characteristic carrying traffic in both directions ([§1](02-ble-transport.md#1-gatt-service-and-characteristic)).
 - [ ] A packet exceeding the link MTU MUST be split into `fragment (0x20)` packets ([§3](02-ble-transport.md#3-fragmentation)).
 - [ ] The fragment header layout — `fragmentID`(8B), `index`(2B BE), `total`(2B BE), `originalType`(1B), then `fragmentData` — is a 13-byte fixed prefix ([§3.1](02-ble-transport.md#31-fragment-header)).
-- [ ] A sender MUST NOT split a packet into more than 256 fragments; a receiver MAY reject a stream whose `total` exceeds this ([§3.2](02-ble-transport.md#32-fragment-cap-and-lifetime)).
+- [ ] A receiver MUST reject a fragment stream whose `total` exceeds 10,000, regardless of type; a directed `fileTransfer (0x22)` packet (the legacy Android-compatible private-media fallback) is further capped at 256 fragments, MAY be rejected above that by a receiver, and MUST NOT be split above it by a sender ([§3.2](02-ble-transport.md#32-fragment-cap-and-lifetime)).
 - [ ] Reassembly is keyed by `(sender, fragmentID)` and concatenates fragments in `index` order ([§3.2](02-ble-transport.md#32-fragment-cap-and-lifetime)).
 - [ ] A v2 source-routed packet's fragments MAY carry the same route, with per-fragment chunk size MAY shrinking, floored at 64 bytes ([§3.3](02-ble-transport.md#33-route-aware-fragmentation-v2)).
 - [ ] An advertisement (and scan response) MUST carry only the service UUID — MUST NOT carry local name, TX power, peer ID, or any other peer-identifying bytes ([§4.1](02-ble-transport.md#41-advertisement-contents)).
@@ -49,7 +49,9 @@ Chapter 6's items are split by the REQUIRED/capability-gated boundary that chapt
 - [ ] The `X` pattern's single message is `-> e, es, s, ss`, with `e` cleartext (32B) and `es,s,ss` ciphertext+tag (48B) ([§4.1](03-noise.md#41-handshake-message)).
 - [ ] A courier envelope seal uses the recipient's long-term static key, with no forward secrecy ([§4.2](03-noise.md#42-courier-envelopes)).
 - [ ] A prekey MUST NOT be reused across more than one seal, and MUST be discarded from future bundles once consumed ([§4.3](03-noise.md#43-prekey-envelopes)).
+- [ ] The `X` pattern's prologue is non-empty and depends on the seal: ASCII `bitchat-courier-v1` for a courier envelope, ASCII `bitchat-prekey-v1` plus the 4-byte big-endian `prekeyID` for a prekey envelope; sealing and opening a given envelope MUST use bit-identical prologue bytes ([§4.4](03-noise.md#44-domain-separation-prologue)).
 - [ ] The `prekeyBundle (0x24)` packet uses TLV-16 framing, with fields `noiseStaticPublicKey`(32B), `prekeys`(repeated 36B entries, MUST NOT exceed 8), `generatedAt`(8B), `signature`(64B Ed25519) ([§5.1](03-noise.md#51-wire-packet), [§5.2](03-noise.md#52-fields)).
+- [ ] A prekey bundle's `signature` covers the canonical transcript — 1-byte length + 24-byte domain string `bitchat-prekey-bundle-v1`, `noiseStaticPublicKey`, a 1-byte prekey count, each raw `(prekeyID, publicKey)` entry, then `generatedAt` — not the bundle's TLV encoding ([§5.3](03-noise.md#53-signature)).
 - [ ] A recipient MUST verify a prekey bundle's `signature` against the issuer's known signing key before trusting any prekey, and MUST discard the bundle on verification failure ([§5.3](03-noise.md#53-signature)).
 
 ## 4. Payloads
@@ -61,7 +63,7 @@ Chapter 6's items are split by the REQUIRED/capability-gated boundary that chapt
 - [ ] `PeerCapabilities` is little-endian and minimal-byte-length (trailing zero bytes stripped); a decoder keeps only the low 64 bits so unknown high bits round-trip ([§5.1](04-payloads.md#51-peercapabilities-bitfield)).
 - [ ] The full `PeerCapabilities` bit table MUST be supported for dispatch, bit 10 (`nonDestructiveNoiseReplacement`) MUST never be advertised by a conforming encoder, and bits 11-63 MUST be `0` on encode while a decoder MUST preserve (not reject on) an unrecognized set bit ([§5.1](04-payloads.md#51-peercapabilities-bitfield)).
 - [ ] `boardPost (0x23)` is TLV-16; a decoder MUST reject an absent/unrecognized `kind` or a payload missing a field its `kind` requires, and `expiresAt` MUST NOT exceed `createdAt` + 7 days ([§6](04-payloads.md#6-board-posts)).
-- [ ] Board post signatures use context strings `bitchat-board-v1` (post) / `bitchat-board-del-v1` (tombstone) over the defined field concatenation ([§6.1](04-payloads.md#61-signing)).
+- [ ] Board post signatures open with a 1-byte length + context string (`bitchat-board-v1` post / `bitchat-board-del-v1` tombstone), not the bare context string, followed by the defined field concatenation ([§6.1](04-payloads.md#61-signing)).
 - [ ] `groupInvite (0x06)`/`groupKeyUpdate (0x07)` share the `GroupStatePayload` TLV-16 shape; a receiver MUST require the delivering session peer be the group's creator ([§7](04-payloads.md#7-private-groups)).
 - [ ] A private group MUST NOT exceed 16 members; a decoder MUST reject more than 16 roster entries or a `creatorFingerprint` absent from the roster ([§7.2](04-payloads.md#72-roster-encoding)).
 - [ ] Group state signatures use context `bitchat-group-v1`, verified against the roster member matching `creatorFingerprint`; a receiver MUST reject an absent or invalid signature ([§7.1](04-payloads.md#71-signing)).

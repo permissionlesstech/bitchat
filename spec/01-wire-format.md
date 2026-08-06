@@ -79,13 +79,15 @@ When `hasSignature` is set, a 64-byte Ed25519 signature follows the payload sect
 
 ## 5. Signing
 
-The signature, when present, is computed over the packet's encoded bytes with two substitutions: the `signature` section itself is omitted, and `ttl` is fixed to `0` regardless of the packet's actual TTL. `ttl` is excluded because a relay decrementing it in place would otherwise invalidate every signed packet it forwards. `isRSR` is likewise excluded, being set after the packet is signed.
+The signature, when present, is computed over the packet's encoded bytes with three substitutions: the `signature` section itself is omitted, `ttl` is fixed to `0` regardless of the packet's actual TTL, and the frame is always padded per [Padding](#6-padding) — even for a message type that §6 transmits unpadded. `ttl` is excluded because a relay decrementing it in place would otherwise invalidate every signed packet it forwards. `isRSR` is likewise excluded, being set after the packet is signed.
 
-A verifier MUST reconstruct the same fixed-TTL, signature-omitted, RSR-omitted frame before checking a signature against it.
+A verifier MUST reconstruct the same fixed-TTL, signature-omitted, RSR-omitted, **padded** frame before checking a signature against it, regardless of whether the packet as received on the wire carried padding.
 
 ## 6. Padding
 
-Only `noiseHandshake` and `noiseEncrypted` packets are padded; every other message type is encoded at its natural length. Padding is applied to the full encoded frame (header through payload, before the signature section) and is PKCS#7-style: the pad length is appended as that many bytes, each byte equal to the pad length itself.
+This section defines the padding algorithm and states which message types carry padding **on the wire**. The signing transcript is a separate case: it is always padded by this same algorithm regardless of message type (see [Signing](#5-signing)), because the signature is computed before the type-dependent choice of whether to pad the transmitted frame is applied.
+
+Only `noiseHandshake` and `noiseEncrypted` packets are padded on the wire; every other message type is transmitted at its natural length. Padding is applied to the full encoded frame (header through payload, before the signature section) and is PKCS#7-style: the pad length is appended as that many bytes, each byte equal to the pad length itself.
 
 Padding targets the smallest of the block sizes `256`, `512`, `1024`, `2048` bytes that the frame (plus a 16-byte allowance for encryption overhead) fits into. Because the pad length must fit in a single byte, a frame that would need more than 255 bytes of padding to reach its target block is emitted **unpadded** instead of padded to a smaller-than-optimal bucket. A decoder MUST attempt to decode a frame as unpadded first, and only on failure retry after stripping trailing PKCS#7 padding.
 

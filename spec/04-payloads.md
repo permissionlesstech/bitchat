@@ -105,9 +105,11 @@ A decoder MUST reject a payload whose `kind` is absent or unrecognized, or that 
 
 ### 6.1 Signing
 
-A **post**'s `signature` covers, concatenated in this order: the ASCII context string `bitchat-board-v1`; `postID`; `geohash` and `content` each preceded by their own 2-byte big-endian length; `authorSigningKey`; `authorNickname` preceded by its 2-byte big-endian length; `createdAt`; `expiresAt`; and `flags`.
+Both kinds' `signature` open with their ASCII context string preceded by its own 1-byte length (unlike the length-prefixed fields later in the transcript, this length is a single byte, not 2-byte big-endian) — `0x10` (16) + `bitchat-board-v1` for a post, `0x14` (20) + `bitchat-board-del-v1` for a tombstone.
 
-A **tombstone**'s `signature` covers: the ASCII context string `bitchat-board-del-v1`, `postID`, and `deletedAt`. Only the original post's `authorSigningKey` can produce a valid tombstone for it.
+A **post**'s `signature` covers, concatenated in this order: the length-prefixed context string `bitchat-board-v1`; `postID`; `geohash` and `content` each preceded by their own 2-byte big-endian length; `authorSigningKey`; `authorNickname` preceded by its 2-byte big-endian length; `createdAt`; `expiresAt`; and `flags`.
+
+A **tombstone**'s `signature` covers: the length-prefixed context string `bitchat-board-del-v1`, `postID`, and `deletedAt`. Only the original post's `authorSigningKey` can produce a valid tombstone for it.
 
 ## 7. Private Groups
 
