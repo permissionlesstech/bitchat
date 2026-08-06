@@ -152,18 +152,23 @@ final class AppRuntime: ObservableObject {
         NetworkActivationService.shared.start()
         GeohashPresenceService.shared.start()
         checkForSharedContent()
-        expireAgedMedia()
+        performMediaMaintenance()
 
         record(.launched)
         record(.startupCompleted)
     }
 
-    /// Drops media that has outlived the retention window. Off the main thread
-    /// and best-effort: the sweep walks the media tree, and nothing at launch
-    /// depends on its result.
-    private func expireAgedMedia() {
-        Task(priority: .utility) {
-            BLEIncomingFileStore().expireAgedMedia()
+    /// Drops media that has outlived the retention window, then applies the
+    /// explicit protection class to files that older builds wrote without
+    /// one. Expiry runs first so the migration never touches files the
+    /// sweep is about to delete. Detached because `AppRuntime` is
+    /// main-actor and both passes go file by file through the media tree;
+    /// best-effort, nothing at launch depends on their results.
+    private func performMediaMaintenance() {
+        Task.detached(priority: .utility) {
+            let store = BLEIncomingFileStore()
+            store.expireAgedMedia()
+            store.migrateFileProtectionIfNeeded()
         }
     }
 
