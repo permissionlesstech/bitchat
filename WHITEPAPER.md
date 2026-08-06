@@ -4,8 +4,6 @@
 
 **Date: July 6, 2026**
 
-> A normative, byte-level protocol specification is being drafted in [`spec/`](spec/README.md). As each spec chapter lands, this document is trimmed of the byte-exact detail that chapter now owns, in favor of a cross-link to it; this whitepaper remains the architecture and design-goals overview.
-
 ---
 
 ## Abstract
@@ -46,19 +44,27 @@ Signed announcements additionally carry the nickname, the Noise static public ke
 
 ### 4.1 Packet Format
 
-The packet header, byte offsets, flags, TLV encodings, and padding scheme are specified byte-exactly in [Wire Format](spec/01-wire-format.md).
+A compact binary header (version, type, TTL, timestamp, flags) is followed by an 8-byte sender ID, an optional 8-byte recipient ID, the payload, and an optional Ed25519 signature. Version 2 packets may carry an explicit source route. Signatures exclude the TTL byte so relays can decrement it without invalidating them.
+
+Only `noiseEncrypted` and `noiseHandshake` packets are padded, toward 256/512/1024/2048-byte buckets; every other type — public messages, announcements, board posts, group messages, fragments, files, and voice frames — goes out at its natural length. Padding is PKCS#7-style with pad bytes equal to the pad length, and because that length must fit one byte, a frame needing more than 255 bytes to reach its bucket is emitted unpadded. Payload length is therefore observable for most traffic.
 
 ### 4.2 Flood Control
 
-The TTL/degree clamp, deduplication, jitter, and fanout-subsetting policy that governs mesh relaying are specified in [Store and Forward](spec/05-store-and-forward.md).
+Relaying is a deterministic controlled flood tuned by local connection degree:
+
+* **TTL:** packets originate with TTL 7. Relays clamp: dense graphs (≥ 6 links) cap broadcast TTL at 5; thin chains (≤ 2 links) relay at full incoming depth.
+* **Deduplication:** an LRU seen-set (1000 entries, 5-minute expiry) keyed by sender, timestamp, type, and a payload digest drops duplicates. A scheduled relay is cancelled when a duplicate arrives first from another relay.
+* **Jitter:** relays wait a random 10–220 ms (wider when dense) so duplicate suppression wins often.
+* **Fanout subsetting:** broadcast messages are re-sent to a deterministic, message-ID-seeded subset of links (~log₂ of degree) rather than all of them; announces, fragments, and sync packets use full fanout. The ingress link is always excluded (split horizon).
+* **Directed traffic** (handshakes, private messages, courier envelopes) relays deterministically with TTL − 1 and tight jitter, and is never subset.
 
 ### 4.3 Routing
 
-Announcements carry up to 10 direct-neighbor IDs, giving each node a shallow topology map (60 s freshness); this TLV is specified byte-exactly in [Payloads](spec/04-payloads.md). The policy for when a packet is source-routed along a known path versus falling back to flooding is specified in [Store and Forward](spec/05-store-and-forward.md).
+Announcements carry up to 10 direct-neighbor IDs, giving each node a shallow topology map (60 s freshness). When a bidirectionally-confirmed path exists, packets are source-routed along it; otherwise — and whenever a route fails — delivery falls back to flooding.
 
 ### 4.4 Fragmentation
 
-The GATT service/characteristic, MTU-driven chunk sizing, fragment header layout, and advertising behavior are specified byte-exactly in [BLE Transport](spec/02-ble-transport.md).
+Packets exceeding the link MTU split into ~469-byte fragments (8-byte fragment ID, index/total header) that relay independently and reassemble at each receiving node (128 concurrent assemblies, 30 s timeout, 1 MiB cap).
 
 ### 4.5 Presence
 
@@ -68,15 +74,17 @@ Signed announcements propagate multi-hop: every 4 s while isolated, backing off 
 
 ### 5.1 Live Sessions: Noise XX
 
-The `XX` handshake pattern, its message sequence, and the post-handshake transport and application-payload framing are specified byte-exactly in [Noise](spec/03-noise.md).
+Connected peers establish sessions with the Noise `XX` pattern (Curve25519 / ChaCha20-Poly1305 / SHA-256), providing mutual authentication and forward secrecy. All private payloads — messages, delivery acks, read receipts — ride inside the session as typed ciphertext. Intermediate relays see only opaque `noiseEncrypted` packets.
 
 ### 5.2 Offline Seals: Noise X
 
-The one-way `X` pattern used to seal courier envelopes — including the forward-secret prekey variant — is specified byte-exactly in [Noise](spec/03-noise.md).
+Courier envelopes are sealed to the recipient's *static* key with the one-way Noise `X` pattern; the sender's identity is authenticated inside the ciphertext. **This path has no forward secrecy** — compromise of the recipient's static key exposes sealed-but-undelivered mail. A prekey scheme is future work.
 
 ### 5.3 Nostr Path
 
-The private-message envelope — its `gift wrap`/`seal`/`rumor` layers, encryption, and embedded packet — is specified byte-exactly in [Nostr Bridge](spec/06-nostr-bridge.md).
+Private messages to mutual favorites use BitChat's proprietary private-envelope protocol. An unsigned inner message (kind 14) is encrypted and placed in a sender-signed seal (kind 13); that seal is encrypted again inside a public envelope (kind 1059) signed by a one-time key, so relays learn neither the stable sender identity nor the content. Each encrypted content field is `v2:` followed by base64url of a 24-byte nonce, XChaCha20-Poly1305 ciphertext, and its 16-byte tag. Keys come from secp256k1 ECDH and HKDF-SHA256 (the derivation reuses a "nip44-v2" info label but is not the NIP-44 key schedule).
+
+This format reuses NIP-17/NIP-59 kind numbers but is **not NIP-17, NIP-44, or NIP-59 compatible** and interoperates only with BitChat clients. The outer `p` tag exposes the recipient's Nostr public key to relays; the plaintext and stable sender identity remain inside authenticated ciphertext. Public seal and envelope timestamps are randomized by up to ±15 minutes, while the actual message timestamp is encrypted. The protocol does not provide forward secrecy: compromise of the recipient's static Nostr private key can expose stored envelopes addressed to that key.
 
 ## 6. Store and Forward
 
@@ -84,23 +92,30 @@ Four mechanisms cover the "recipient is not here right now" problem. All persist
 
 ### 6.1 Sender Outbox
 
-The sender-side retry queue for undelivered private messages — retention limits, retry cap, and persistence — is specified in [Store and Forward](spec/05-store-and-forward.md).
+Private messages without a prompt route are retained per peer (100 messages/peer, 24 h TTL) and re-sent on reconnect events until a delivery or read ack clears them, or a resend cap (8 attempts) drops them with visible failure. The outbox persists to disk sealed under a ChaChaPoly key held only in the Keychain, so queued mail survives an app kill without ever storing plaintext.
 
 ### 6.2 Couriers
 
-The courier envelope wire format, rotating recipient tag, trust-tier deposit quotas, spray-and-wait budget, and handover behavior are specified byte-exactly in [Store and Forward](spec/05-store-and-forward.md).
+When no transport can deliver promptly, the message is sealed (§5.2) into a **courier envelope** and handed to up to 3 connected peers who may physically encounter the recipient:
+
+* **Opaque addressing.** The only routing information is a 16-byte rotating recipient tag — an HMAC of the recipient's static key and the UTC day — computable solely by parties who already know that key. Couriers learn neither sender, recipient, nor content, and tags do not correlate across days.
+* **Trust tiers.** Mutual favorites may deposit 5 envelopes each; any peer with a signature-verified announce may deposit 2, into a bounded pool (20 of 40 slots) that can never crowd out favorites' mail. Envelopes are capped at 16 KiB and 24 h; overflow evicts oldest verified-tier mail first.
+* **Deposit retry.** Queued messages are re-deposited whenever a new eligible courier connects, until 3 distinct couriers carry the message or it expires.
+* **Spray and wait.** Envelopes carry a copy budget (initially 4, capped at 8). A courier meeting another eligible courier hands over half its remaining budget, so mail diffuses through a moving crowd instead of riding one person. Budgets, spray history, and carried mail persist across app restarts (iOS file protection).
+* **Handover.** On a verified *direct* announce from the recipient, matching envelopes are delivered over the live link and removed. On a verified *relayed* announce, a copy floods toward the recipient as a directed packet while the carried original stays put, throttled to one attempt per envelope per 10 minutes.
+* Receivers dedup by message ID, so redundant copies and the retained outbox original are harmless. Couriered mail from blocked senders is dropped at decryption time.
 
 ### 6.3 Public History (Gossip Sync)
 
-The gossip-sync request/response protocol, its Golomb-coded-set filter encoding, sync-round cadence, and per-type cache retention are specified byte-exactly in [Store and Forward](spec/05-store-and-forward.md).
+Public broadcast messages are cached (1000 packets) and reconciled between peers every ~15 s using compact GCS filters: each side advertises what it holds, the other returns what is missing. Messages stay sync-able for **6 hours** and the cache persists to disk, so a device that walks between two partitions — or relaunches later — serves the room's recent history to whoever missed it. Fragments and file transfers keep a short 15-minute window.
 
 ### 6.4 Nostr Mailboxes
 
-Relay selection and subscription lookback for private-message envelopes and `courier drop`s are specified in [Nostr Bridge](spec/06-nostr-bridge.md), covering the both-devices-offline case for mutual favorites whenever either side touches the internet.
+BitChat private envelopes rest on Nostr relays; clients re-subscribe with a 24-hour lookback on reconnect, covering the both-devices-offline case for mutual favorites whenever either side touches the internet.
 
 ### 6.5 Delivery Metrics
 
-The local-only delivery counters a client may keep are specified in [Store and Forward](spec/05-store-and-forward.md).
+Bare local counters (deposits, handovers, sprays, opens, outbox flushes and drops — no identities, message IDs, or timestamps) let delivery behavior be measured on-device. They never leave the device and are cleared by the panic wipe.
 
 ## 7. Application Layer
 
@@ -108,7 +123,7 @@ The local-only delivery counters a client may keep are specified in [Store and F
 * **Private chat** — end-to-end encrypted messages with delivery and read receipts, over mesh, courier, or Nostr.
 * **Location channels** — geohash-scoped public rooms carried over Nostr relays for regional chat beyond radio range.
 * **Favorites** — the mutual-trust relationship that unlocks Nostr delivery and the larger courier quota.
-* **Media** — files and images fragment over the mesh, with explicit accept before anything touches disk; couriers carry text only. Size ceilings are specified byte-exactly in [Payloads](spec/04-payloads.md).
+* **Media** — files and images fragment over the mesh (1 MiB cap, explicit accept before anything touches disk); couriers carry text only.
 * **Panic wipe** — clears identity keys, favorites, carried courier mail, the sealed outbox, archived public history, and metrics.
 
 ## 8. Security Considerations
