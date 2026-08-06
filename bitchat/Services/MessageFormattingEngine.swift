@@ -385,6 +385,13 @@ final class MessageFormattingEngine {
     /// strictly-increasing ranges; without this resolution a nested match
     /// re-renders already-shown text and can walk the render cursor
     /// backwards, duplicating a trailing slice of content a second time.
+    ///
+    /// Ties break by start position only, not length: whichever match starts
+    /// first wins outright, so an outer match (e.g. a URL) always keeps
+    /// priority over a shorter match nested inside it (e.g. an embedded cashu
+    /// token) rather than the other way around. That's intentional for
+    /// rendering — flip it to prefer the inner match only with a matching
+    /// change to how callers render the dropped outer span.
     static func resolveOverlappingMatches<Match>(
         _ matches: [Match],
         range: (Match) -> NSRange
