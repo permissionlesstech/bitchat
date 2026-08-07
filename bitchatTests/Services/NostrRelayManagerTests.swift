@@ -151,6 +151,117 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertTrue(connected)
     }
 
+    func test_subscribe_offlineRegistersReplayIntentAndFlushesWhenOnline() async {
+        let relayURL = "wss://offline-subscribe.example"
+        let context = makeContext(
+            permission: .denied,
+            userTorEnabled: true,
+            torEnforced: true,
+            torIsReady: false
+        )
+
+        let registered = context.manager.subscribe(
+            filter: makeFilter(),
+            id: "offline-sub",
+            relayUrls: [relayURL],
+            handler: { _ in }
+        )
+
+        XCTAssertTrue(
+            registered,
+            "offline success means the replayable request was registered"
+        )
+        XCTAssertTrue(context.sessionFactory.requestedURLs.isEmpty)
+
+        context.torWaiter.resolve(true)
+
+        let flushed = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?
+                .sentStrings.contains {
+                    $0.contains("offline-sub")
+                } == true
+        }
+        XCTAssertTrue(flushed)
+    }
+
+    func test_ndrHandshakeWhileActivationBlockedRegistersAfterConnectivityWake()
+        throws
+    {
+        let context = makeContext(
+            permission: .authorized,
+            activationAllowed: false
+        )
+        let localIdentity = try NostrIdentity.generate()
+        let remoteIdentity = try NostrIdentity.generate()
+        let localStorage = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "ndr-activation-local-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        let remoteStorage = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "ndr-activation-remote-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        try FileManager.default.createDirectory(
+            at: localStorage,
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: remoteStorage,
+            withIntermediateDirectories: true
+        )
+        defer {
+            try? FileManager.default.removeItem(at: localStorage)
+            try? FileManager.default.removeItem(at: remoteStorage)
+        }
+
+        var scheduledNdrRetries: [@MainActor () -> Void] = []
+        let service = NdrNostrService(
+            relayManager: context.manager,
+            rolloutEnabled: true,
+            storageDirectoryProvider: { localStorage },
+            retryScheduler: { _, operation in
+                scheduledNdrRetries.append(operation)
+            }
+        )
+        let remote = NdrNostrService(
+            relayManager: FakeRelayManager(),
+            rolloutEnabled: true,
+            storageDirectoryProvider: { remoteStorage }
+        )
+        service.configureIfNeeded(identity: localIdentity)
+        remote.configureIfNeeded(identity: remoteIdentity)
+
+        let responseActions = service.processOutOfBandEventJson(
+            try XCTUnwrap(remote.currentInviteEventJson()),
+            expectedPeerPubkeyHex: remoteIdentity.publicKeyHex,
+            persistEstablishedBinding: { true }
+        )
+        XCTAssertFalse(responseActions.isEmpty)
+        for action in responseActions {
+            service.completeOutOfBandAction(action, succeeded: true)
+        }
+        while !scheduledNdrRetries.isEmpty {
+            scheduledNdrRetries.removeFirst()()
+        }
+
+        XCTAssertEqual(
+            context.manager.debugSubscriptionRequestCount,
+            0,
+            "activation policy must reject registration, not falsely ack it"
+        )
+
+        context.activationAllowed.value = true
+        service.retryRelayActions()
+
+        XCTAssertGreaterThan(
+            context.manager.debugSubscriptionRequestCount,
+            0,
+            "the connectivity wake must register the durable native intent"
+        )
+    }
+
     func test_subscribe_unblocksDeferredEOSEWhenTorWaitAttemptsExhausted() async {
         let relayURL = "wss://tor-eose-unblock.example"
         let context = makeContext(permission: .denied, userTorEnabled: true, torEnforced: true, torIsReady: false)
@@ -469,6 +580,48 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertEqual(results, [true])
     }
 
+    func test_sendEventImmediately_duplicateOKCountsAsDurableAcceptanceOnlyForExactPrefix() async throws {
+        let relay = "wss://confirmed-duplicate.example"
+        let context = makeContext(permission: .denied)
+        context.manager.ensureConnections(to: [relay])
+        let connected = await waitUntil {
+            context.manager.relays.first(where: { $0.url == relay })?
+                .isConnected == true
+        }
+        XCTAssertTrue(connected)
+
+        let duplicate = try makeSignedEvent(content: "duplicate")
+        var results: [Bool] = []
+        context.manager.sendEventImmediately(
+            duplicate,
+            to: [relay]
+        ) { results.append($0) }
+        try context.sessionFactory.latestConnection(for: relay)?.emitOK(
+            eventID: duplicate.id,
+            success: false,
+            reason: "duplicate: already stored"
+        )
+        let duplicateSettled = await waitUntil { results.count == 1 }
+        XCTAssertTrue(duplicateSettled)
+        XCTAssertEqual(results, [true])
+
+        let notMachineReadable = try makeSignedEvent(
+            content: "not an exact duplicate prefix"
+        )
+        context.manager.sendEventImmediately(
+            notMachineReadable,
+            to: [relay]
+        ) { results.append($0) }
+        try context.sessionFactory.latestConnection(for: relay)?.emitOK(
+            eventID: notMachineReadable.id,
+            success: false,
+            reason: " duplicate: leading whitespace"
+        )
+        let rejectionSettled = await waitUntil { results.count == 2 }
+        XCTAssertTrue(rejectionSettled)
+        XCTAssertEqual(results, [true, false])
+    }
+
     func test_sendEventImmediately_timeoutFailsAndIgnoresLateWriteAndOK() async throws {
         let relay = "wss://confirmed-timeout.example"
         let context = makeContext(permission: .denied)
@@ -643,6 +796,195 @@ final class NostrRelayManagerTests: XCTestCase {
 
         XCTAssertEqual(context.sessionFactory.latestConnection(for: relayURL)?.sentStrings.count, 1)
         XCTAssertEqual(context.manager.debugPendingSubscriptionCount(for: relayURL), 0)
+    }
+
+    func test_subscribe_changedActiveRequestReplacesSameID() async {
+        let relayURL = "wss://rotating-subscribe.example"
+        let context = makeContext(permission: .denied)
+        let initialFilter = makeFilter()
+
+        context.manager.subscribe(
+            filter: initialFilter,
+            id: "rotating-sub",
+            relayUrls: [relayURL],
+            handler: { _ in }
+        )
+        let firstSent = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?
+                .sentStrings.count == 1
+        }
+        XCTAssertTrue(firstSent)
+
+        var rotatedFilter = initialFilter
+        rotatedFilter.authors = [String(repeating: "a", count: 64)]
+        context.manager.subscribe(
+            filter: rotatedFilter,
+            id: "rotating-sub",
+            relayUrls: [relayURL],
+            handler: { _ in }
+        )
+
+        let replacementSent = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?
+                .sentStrings.count == 2
+        }
+        XCTAssertTrue(
+            replacementSent,
+            "NIP-01 replaces a live subscription atomically when a new REQ reuses its ID"
+        )
+        let messages = context.sessionFactory
+            .latestConnection(for: relayURL)?.sentStrings ?? []
+        XCTAssertTrue(messages.allSatisfy { $0.contains("\"REQ\"") })
+        XCTAssertNotEqual(messages.first, messages.last)
+        let replacementCommitted = await waitUntil {
+            context.manager.debugPendingSubscriptionCount(
+                for: relayURL
+            ) == 0
+        }
+        XCTAssertTrue(replacementCommitted)
+    }
+
+    func test_subscribe_staleCompletionCannotRegressReplacement() async {
+        let relayURL = "wss://subscription-completion-order.example"
+        let context = makeContext(permission: .denied)
+        context.sessionFactory.deferSendCompletions = true
+        let initialFilter = makeFilter()
+
+        context.manager.subscribe(
+            filter: initialFilter,
+            id: "ordered-sub",
+            relayUrls: [relayURL],
+            handler: { _ in }
+        )
+        let firstSent = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?
+                .sentStrings.count == 1
+        }
+        XCTAssertTrue(firstSent)
+
+        var replacementFilter = initialFilter
+        replacementFilter.authors = [String(repeating: "b", count: 64)]
+        context.manager.subscribe(
+            filter: replacementFilter,
+            id: "ordered-sub",
+            relayUrls: [relayURL],
+            handler: { _ in }
+        )
+        let replacementSent = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?
+                .sentStrings.count == 2
+        }
+        XCTAssertTrue(replacementSent)
+
+        let connection = context.sessionFactory.latestConnection(
+            for: relayURL
+        )
+        connection?.flushDeferredSendCompletion(at: 1)
+        let replacementCommitted = await waitUntil {
+            context.manager.debugPendingSubscriptionCount(
+                for: relayURL
+            ) == 0
+        }
+        XCTAssertTrue(replacementCommitted)
+
+        // The first REQ completes last. It must not restore the old logical
+        // generation or make the same replacement look absent.
+        connection?.flushDeferredSendCompletion(at: 0)
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        context.manager.subscribe(
+            filter: replacementFilter,
+            id: "ordered-sub",
+            relayUrls: [relayURL],
+            handler: { _ in }
+        )
+        try? await Task.sleep(nanoseconds: 20_000_000)
+
+        XCTAssertEqual(connection?.sentStrings.count, 2)
+        XCTAssertEqual(
+            context.manager.debugPendingSubscriptionCount(for: relayURL),
+            0
+        )
+    }
+
+    func test_subscribe_reconnectReplaysOnlyLatestReplacement() async {
+        let relayURL = "wss://subscription-reconnect.example"
+        let context = makeContext(permission: .denied)
+        let initialFilter = makeFilter()
+
+        context.manager.subscribe(
+            filter: initialFilter,
+            id: "reconnecting-sub",
+            relayUrls: [relayURL],
+            handler: { _ in }
+        )
+        let oldConnection = context.sessionFactory.latestConnection(
+            for: relayURL
+        )
+        oldConnection?.deferSendCompletions = true
+        let initialSent = await waitUntil {
+            oldConnection?.sentStrings.count == 1
+        }
+        XCTAssertTrue(initialSent)
+
+        var replacementFilter = initialFilter
+        replacementFilter.authors = [String(repeating: "c", count: 64)]
+        context.manager.subscribe(
+            filter: replacementFilter,
+            id: "reconnecting-sub",
+            relayUrls: [relayURL],
+            handler: { _ in }
+        )
+        let replacementSent = await waitUntil {
+            oldConnection?.sentStrings.count == 2
+        }
+        XCTAssertTrue(replacementSent)
+
+        oldConnection?.fail(
+            error: NSError(
+                domain: NSURLErrorDomain,
+                code: NSURLErrorNetworkConnectionLost
+            )
+        )
+        let retryScheduled = await waitUntil {
+            !context.scheduler.scheduled.isEmpty
+        }
+        XCTAssertTrue(retryScheduled)
+        context.scheduler.runNext()
+
+        let replayed = await waitUntil {
+            let connections =
+                context.sessionFactory.connectionsByURL[relayURL] ?? []
+            return connections.count == 2
+                && connections.last?.sentStrings.count == 1
+        }
+        XCTAssertTrue(replayed)
+
+        let connections =
+            context.sessionFactory.connectionsByURL[relayURL] ?? []
+        XCTAssertEqual(
+            connections.last?.sentStrings.first,
+            oldConnection?.sentStrings.last
+        )
+        XCTAssertNotEqual(
+            oldConnection?.sentStrings.first,
+            oldConnection?.sentStrings.last
+        )
+
+        oldConnection?.flushDeferredSendCompletions()
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        context.manager.subscribe(
+            filter: replacementFilter,
+            id: "reconnecting-sub",
+            relayUrls: [relayURL],
+            handler: { _ in }
+        )
+        try? await Task.sleep(nanoseconds: 20_000_000)
+
+        XCTAssertEqual(connections.last?.sentStrings.count, 1)
+        XCTAssertEqual(
+            context.manager.debugPendingSubscriptionCount(for: relayURL),
+            0
+        )
     }
 
     func test_subscribe_waitsForTorReadinessAndPreservesEOSECallback() async throws {
@@ -1043,6 +1385,165 @@ final class NostrRelayManagerTests: XCTestCase {
             context.manager.relays.first(where: { $0.url == relayURL })?.messagesReceived == 1
         }
         XCTAssertTrue(counted)
+    }
+
+    func test_receiveEvent_withoutHandlerDoesNotPoisonFutureSubscriptionReplay() async throws {
+        let relayURL = "wss://future-subscription.example"
+        let context = makeContext(permission: .denied)
+        let event = try makeSignedEvent(content: "future subscription")
+        var barrierEOSECount = 0
+
+        context.manager.subscribe(
+            filter: makeFilter(),
+            id: "barrier",
+            relayUrls: [relayURL],
+            handler: { _ in },
+            onEOSE: { barrierEOSECount += 1 }
+        )
+        let barrierSubscribed = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?
+                .sentStrings.count == 1
+        }
+        XCTAssertTrue(barrierSubscribed)
+
+        let connection = try XCTUnwrap(
+            context.sessionFactory.latestConnection(for: relayURL)
+        )
+        try connection.emitEventMessage(
+            subscriptionID: "future",
+            event: event
+        )
+        // The relay pipeline is serial. Observing this EOSE proves the
+        // unsolicited event ahead of it has finished verification and its
+        // delivery-side bookkeeping before the real subscription is created.
+        try connection.emitEOSE(subscriptionID: "barrier")
+        let unsolicitedSettled = await waitUntil {
+            barrierEOSECount == 1
+                && context.manager.relays.first(where: {
+                    $0.url == relayURL
+                })?.messagesReceived == 1
+        }
+        XCTAssertTrue(unsolicitedSettled)
+
+        var receivedIDs: [String] = []
+        context.manager.subscribe(
+            filter: makeFilter(),
+            id: "future",
+            relayUrls: [relayURL]
+        ) { replayed in
+            receivedIDs.append(replayed.id)
+        }
+        let futureSubscribed = await waitUntil {
+            connection.sentStrings.count == 2
+        }
+        XCTAssertTrue(futureSubscribed)
+
+        try connection.emitEventMessage(
+            subscriptionID: "future",
+            event: event
+        )
+        let replaySettled = await waitUntil {
+            receivedIDs == [event.id]
+                || context.manager
+                    .debugDuplicateInboundEventDropCount(
+                        forSubscriptionID: "future"
+                    ) == 1
+        }
+        XCTAssertTrue(replaySettled)
+        XCTAssertEqual(receivedIDs, [event.id])
+        XCTAssertEqual(
+            context.manager.debugDuplicateInboundEventDropCount(
+                forSubscriptionID: "future"
+            ),
+            0
+        )
+    }
+
+    func test_receiveEvent_fromRetiredSubscriptionCannotReachReplacement() async throws {
+        let relayURL = "wss://retired-subscription.example"
+        let verifier = ControllableEventSignatureVerifier()
+        let context = makeContext(
+            permission: .denied,
+            verifyEventSignature: { verifier.verify($0) }
+        )
+        let event = try makeSignedEvent(content: "retired generation")
+        var retiredReceivedIDs: [String] = []
+
+        context.manager.subscribe(
+            filter: makeFilter(),
+            id: "replaceable",
+            relayUrls: [relayURL]
+        ) { received in
+            retiredReceivedIDs.append(received.id)
+        }
+        let initialSubscriptionSent = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?
+                .sentStrings.count == 1
+        }
+        XCTAssertTrue(initialSubscriptionSent)
+
+        let connection = try XCTUnwrap(
+            context.sessionFactory.latestConnection(for: relayURL)
+        )
+        verifier.blockNextVerification()
+        try connection.emitEventMessage(
+            subscriptionID: "replaceable",
+            event: event
+        )
+        let verificationBlocked = await waitUntil {
+            verifier.isVerificationBlocked
+        }
+        guard verificationBlocked else {
+            verifier.releaseBlockedVerification()
+            XCTFail("Event never reached signature verification")
+            return
+        }
+
+        context.manager.unsubscribe(id: "replaceable")
+        var replacementReceivedIDs: [String] = []
+        var replacementEOSECount = 0
+        context.manager.subscribe(
+            filter: makeFilter(),
+            id: "replaceable",
+            relayUrls: [relayURL],
+            handler: { received in
+                replacementReceivedIDs.append(received.id)
+            },
+            onEOSE: { replacementEOSECount += 1 }
+        )
+        let replacementSubscriptionSent = await waitUntil {
+            connection.sentStrings.count == 3
+        }
+        XCTAssertTrue(replacementSubscriptionSent)
+
+        // The EOSE is queued behind the blocked event on the same serial relay
+        // pipeline, so its callback proves the stale event's delivery phase
+        // completed before assertions or replay.
+        try connection.emitEOSE(subscriptionID: "replaceable")
+        verifier.releaseBlockedVerification()
+        let staleEventSettled = await waitUntil {
+            replacementEOSECount == 1
+        }
+        XCTAssertTrue(staleEventSettled)
+        XCTAssertTrue(retiredReceivedIDs.isEmpty)
+        XCTAssertTrue(
+            replacementReceivedIDs.isEmpty,
+            "An event admitted by the retired subscription reached its replacement"
+        )
+
+        try connection.emitEventMessage(
+            subscriptionID: "replaceable",
+            event: event
+        )
+        let replaySettled = await waitUntil {
+            replacementReceivedIDs == [event.id]
+                || context.manager
+                    .debugDuplicateInboundEventDropCount(
+                        forSubscriptionID: "replaceable"
+                    ) == 1
+        }
+        XCTAssertTrue(replaySettled)
+        XCTAssertEqual(replacementReceivedIDs, [event.id])
     }
 
     func test_noticeAndMalformedMessages_keepReceiveLoopAliveForLaterEvents() async throws {
@@ -1837,6 +2338,9 @@ final class NostrRelayManagerTests: XCTestCase {
         torIsForeground: Bool = true,
         notificationCenter: NotificationCenter = NotificationCenter(),
         customRelays: MutableRelayList = MutableRelayList(urls: []),
+        verifyEventSignature: @escaping @Sendable (NostrEvent) -> Bool = {
+            $0.isValidSignature()
+        },
         jitterUnit: @escaping () -> Double = { 0.5 } // 0.5 -> jitter factor 1.0 (no jitter)
     ) -> RelayManagerTestContext {
         let permissionSubject = CurrentValueSubject<LocationChannelManager.PermissionState, Never>(permission)
@@ -1860,6 +2364,7 @@ final class NostrRelayManagerTests: XCTestCase {
                 torIsForeground: { torForeground.value },
                 awaitTorReady: torWaiter.await(completion:),
                 makeSession: { sessionFactory },
+                verifyEventSignature: verifyEventSignature,
                 scheduleAfter: { delay, action in
                     scheduler.schedule(delay: delay, action: action)
                 },
@@ -1918,6 +2423,45 @@ final class NostrRelayManagerTests: XCTestCase {
             try? await Task.sleep(nanoseconds: 10_000_000)
         }
         return condition()
+    }
+}
+
+private final class ControllableEventSignatureVerifier: @unchecked Sendable {
+    private let lock = NSLock()
+    private let verificationRelease = DispatchSemaphore(value: 0)
+    private var shouldBlockNext = false
+    private var blocked = false
+
+    var isVerificationBlocked: Bool {
+        lock.withLock { blocked }
+    }
+
+    func blockNextVerification() {
+        lock.withLock {
+            shouldBlockNext = true
+        }
+    }
+
+    func releaseBlockedVerification() {
+        verificationRelease.signal()
+    }
+
+    func verify(_ event: NostrEvent) -> Bool {
+        let shouldBlock = lock.withLock {
+            guard shouldBlockNext else { return false }
+            shouldBlockNext = false
+            return true
+        }
+        if shouldBlock {
+            lock.withLock {
+                blocked = true
+            }
+            verificationRelease.wait()
+            lock.withLock {
+                blocked = false
+            }
+        }
+        return event.isValidSignature()
     }
 }
 
@@ -2019,6 +2563,7 @@ private final class MockRelaySessionFactory: NostrRelaySessionProtocol {
     private(set) var connectionsByURL: [String: [MockRelayConnection]] = [:]
     var pingErrorByURL: [String: Error?] = [:]
     var sendErrorByURL: [String: Error?] = [:]
+    var deferSendCompletions = false
 
     var allConnections: [MockRelayConnection] {
         connectionsByURL.values.flatMap { $0 }
@@ -2031,6 +2576,7 @@ private final class MockRelaySessionFactory: NostrRelaySessionProtocol {
             pingError: pingErrorByURL[url.absoluteString] ?? nil,
             sendError: sendErrorByURL[url.absoluteString] ?? nil
         )
+        connection.deferSendCompletions = deferSendCompletions
         connectionsByURL[url.absoluteString, default: []].append(connection)
         return connection
     }
@@ -2089,6 +2635,13 @@ private final class MockRelayConnection: NostrRelayConnectionProtocol {
         pending.forEach {
             $0(sendError)
         }
+    }
+
+    func flushDeferredSendCompletion(at index: Int) {
+        guard deferredSendCompletions.indices.contains(index) else {
+            return
+        }
+        deferredSendCompletions.remove(at: index)(sendError)
     }
 
     func receive(completionHandler: @escaping (Result<URLSessionWebSocketTask.Message, Error>) -> Void) {

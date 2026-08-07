@@ -15,7 +15,8 @@ import BitFoundation
 /// Mock Transport implementation for testing ChatViewModel in isolation.
 /// Records all method calls and allows test code to verify interactions.
 final class MockTransport: Transport, PrivateMediaDeletionPersisting,
-    MeshFileTransferring, MeshVerifying, MeshCourierTransporting,
+    MeshFileTransferring, MeshDoubleRatchetTransporting, MeshVerifying,
+    MeshCourierTransporting,
     MeshDiagnosing, MeshPublicArchiving, MeshVoiceStreaming,
     MeshGroupMessaging, MeshBoardBroadcasting {
 
@@ -48,6 +49,13 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting,
     private(set) var protectedPrivateMediaRelativePaths: [Set<String>] = []
     private(set) var sentVerifyChallenges: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
     private(set) var sentVerifyResponses: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
+    private(set) var sentNdrEvents: [
+        (
+            peerID: PeerID,
+            eventJson: String,
+            expectedTransportState: AuthenticatedPeerTransportState
+        )
+    ] = []
     private(set) var sentCourierMessages: [(content: String, messageID: String, recipientNoiseKey: Data, couriers: [PeerID])] = []
     private(set) var startServicesCallCount = 0
     private(set) var stopServicesCallCount = 0
@@ -69,6 +77,10 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting,
     var peerNoiseStates: [PeerID: LazyHandshakeState] = [:]
     var privateMediaPolicies: [PeerID: PrivateMediaSendPolicy] = [:]
     var privateMediaReceiptSessionGenerations: [PeerID: UUID] = [:]
+    var authenticatedPeerTransportStates: [
+        PeerID: AuthenticatedPeerTransportState
+    ] = [:]
+    var ndrSendResults: [Bool] = []
     var persistDeletedPrivateMediaResult = true
     var deferDeletedPrivateMediaPersistence = false
     private var pendingDeletedPrivateMediaCompletions: [
@@ -133,6 +145,32 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting,
 
     func triggerHandshake(with peerID: PeerID) {
         triggeredHandshakes.append(peerID)
+    }
+
+    func authenticatedPeerTransportState(
+        _ peerID: PeerID
+    ) -> AuthenticatedPeerTransportState? {
+        authenticatedPeerTransportStates[peerID]
+    }
+
+    func sendNdrEvent(
+        to peerID: PeerID,
+        eventJson: String,
+        expectedTransportState: AuthenticatedPeerTransportState,
+        completion: @escaping @MainActor (Bool) -> Void
+    ) {
+        sentNdrEvents.append(
+            (
+                peerID: peerID,
+                eventJson: eventJson,
+                expectedTransportState: expectedTransportState
+            )
+        )
+        let succeeded =
+            ndrSendResults.isEmpty ? false : ndrSendResults.removeFirst()
+        Task { @MainActor in
+            completion(succeeded)
+        }
     }
 
     func purgeArchivedPublicMessages(from peerID: PeerID) {

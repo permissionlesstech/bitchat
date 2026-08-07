@@ -348,6 +348,319 @@ struct PrivateMediaEndToEndTests {
     }
 
     @Test
+    func ndrPublicAnnouncementCannotAuthorizeDarkAuthenticatedPeer() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ndr-public-only-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let alice = makeService(
+            baseDirectory: root.appendingPathComponent("alice", isDirectory: true),
+            doubleRatchetEnabled: true
+        )
+        // Bob models a production-dark build: even if a public announce claims
+        // the bit, his exact authenticated proof cannot contain it.
+        let bob = makeService(
+            baseDirectory: root.appendingPathComponent("bob", isDirectory: true)
+        )
+        let publicClaim = try signedAnnounce(
+            from: bob,
+            capabilities:
+                PeerCapabilities.localSupported.union(.doubleRatchet)
+        )
+        alice._test_handlePacket(
+            publicClaim,
+            fromPeerID: bob.myPeerID,
+            preseedPeer: false
+        )
+        let publicClaimObserved = await TestHelpers.waitUntil(
+            {
+                alice.peerCapabilities(bob.myPeerID).contains(.doubleRatchet)
+            },
+            timeout: TestConstants.longTimeout
+        )
+        try #require(publicClaimObserved)
+
+        let proofs = try await establishSessionCapturingPeerState(
+            alice: alice,
+            bob: bob
+        )
+        alice._test_handlePacket(proofs.bob, fromPeerID: bob.myPeerID)
+        let authenticated = await TestHelpers.waitUntil(
+            {
+                alice.authenticatedPeerTransportState(bob.myPeerID) != nil
+            },
+            timeout: TestConstants.longTimeout
+        )
+        try #require(authenticated)
+        await alice._test_drainNoiseMessagePipeline()
+        let authenticatedState = try #require(
+            alice.authenticatedPeerTransportState(bob.myPeerID)
+        )
+        #expect(!authenticatedState.capabilities.contains(.doubleRatchet))
+        #expect(alice.peerCapabilities(bob.myPeerID).contains(.doubleRatchet))
+        #expect(
+            alice.authenticatedPeerTransportState(bob.myPeerID)
+                == authenticatedState
+        )
+
+        await alice._test_drainNoiseMessagePipeline()
+        let tap = PacketTap()
+        let admission = ReceiptCapabilityRecorder()
+        alice._test_onOutboundPacket = tap.record
+        alice.sendNdrEvent(
+            to: bob.myPeerID,
+            eventJson: #"{"kind":1059}"#,
+            expectedTransportState: authenticatedState,
+            completion: admission.record
+        )
+        await alice._test_drainNoiseMessagePipeline()
+
+        #expect(
+            await TestHelpers.waitUntil(
+                { admission.snapshot() == [false] },
+                timeout: TestConstants.longTimeout
+            )
+        )
+        #expect(
+            tap.snapshot().allSatisfy {
+                $0.type != MessageType.noiseEncrypted.rawValue
+            }
+        )
+        alice._test_onOutboundPacket = nil
+        bob._test_onOutboundPacket = nil
+    }
+
+    @Test
+    func ndrAuthenticatedCurrentCapabilityAcceptsSend() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ndr-authenticated-send-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let alice = makeService(
+            baseDirectory: root.appendingPathComponent("alice", isDirectory: true),
+            doubleRatchetEnabled: true
+        )
+        let bob = makeService(
+            baseDirectory: root.appendingPathComponent("bob", isDirectory: true),
+            doubleRatchetEnabled: true
+        )
+        let proofs = try await establishSessionCapturingPeerState(
+            alice: alice,
+            bob: bob
+        )
+        alice._test_handlePacket(proofs.bob, fromPeerID: bob.myPeerID)
+        let proofAccepted = await TestHelpers.waitUntil(
+            {
+                alice.authenticatedPeerTransportState(bob.myPeerID)?
+                    .capabilities.contains(.doubleRatchet) == true
+            },
+            timeout: TestConstants.longTimeout
+        )
+        try #require(proofAccepted)
+        await alice._test_drainNoiseMessagePipeline()
+        let authenticatedState = try #require(
+            alice.authenticatedPeerTransportState(bob.myPeerID)
+        )
+        #expect(authenticatedState.noisePublicKey == bob.noiseStaticPublicKeyData())
+
+        let tap = PacketTap()
+        let admission = ReceiptCapabilityRecorder()
+        alice._test_onOutboundPacket = tap.record
+        alice.sendNdrEvent(
+            to: bob.myPeerID,
+            eventJson: #"{"kind":1059}"#,
+            expectedTransportState: authenticatedState,
+            completion: admission.record
+        )
+        let sent = await TestHelpers.waitUntil(
+            {
+                tap.snapshot().contains {
+                    $0.type == MessageType.noiseEncrypted.rawValue
+                        && PeerID(hexData: $0.recipientID) == bob.myPeerID
+                }
+            },
+            timeout: TestConstants.longTimeout
+        )
+
+        #expect(sent)
+        #expect(
+            await TestHelpers.waitUntil(
+                { admission.snapshot().count == 1 },
+                timeout: TestConstants.longTimeout
+            )
+        )
+        #expect(
+            tap.snapshot().filter {
+                $0.type == MessageType.noiseEncrypted.rawValue
+            }.count == 1
+        )
+        alice._test_onOutboundPacket = nil
+        bob._test_onOutboundPacket = nil
+    }
+
+    @Test
+    func ndrExpectedOldAuthenticatedStateRejectsAfterReplacement() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ndr-stale-generation-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let bobKeychain = MockKeychain()
+        let alice = makeService(
+            baseDirectory: root.appendingPathComponent("alice", isDirectory: true),
+            doubleRatchetEnabled: true
+        )
+        let bob = makeService(
+            baseDirectory: root.appendingPathComponent("bob", isDirectory: true),
+            keychain: bobKeychain,
+            doubleRatchetEnabled: true
+        )
+        // Alice must be the original responder so Bob's restarted message one
+        // enters the ordinary replacement path instead of the initiator grace
+        // coalescing path.
+        try await establishSession(alice: bob, bob: alice)
+        let oldState = try #require(
+            alice.authenticatedPeerTransportState(bob.myPeerID)
+        )
+
+        // A second engine with Bob's persisted static identity models Bob
+        // restarting and completing an ordinary XX replacement generation.
+        let restartedBob = NoiseEncryptionService(keychain: bobKeychain)
+        #expect(
+            PeerID(publicKey: restartedBob.getStaticPublicKeyData())
+                == bob.myPeerID
+        )
+        let first = try restartedBob.initiateHandshake(with: alice.myPeerID)
+        let second = try #require(
+            try alice._test_noiseProcessHandshakeMessage(
+                from: bob.myPeerID,
+                message: first
+            )
+        )
+        let third = try #require(
+            try restartedBob.processHandshakeMessage(
+                from: alice.myPeerID,
+                message: second
+            )
+        )
+        _ = try alice._test_noiseProcessHandshakeMessage(
+            from: bob.myPeerID,
+            message: third
+        )
+        await alice._test_drainNoiseMessagePipeline()
+
+        let replacementState = AuthenticatedPeerStatePacket(
+            capabilities: PeerCapabilities.localSupported.union(.doubleRatchet),
+            signingPublicKey: restartedBob.getSigningPublicKeyData()
+        )
+        let replacementPlaintext = try #require(
+            BLENoisePayloadFactory.authenticatedPeerState(replacementState)
+        )
+        let replacementCiphertext = try restartedBob.encrypt(
+            replacementPlaintext,
+            for: alice.myPeerID
+        )
+        let replacementProof = BitchatPacket(
+            type: MessageType.noiseEncrypted.rawValue,
+            senderID: Data(hexString: bob.myPeerID.id) ?? Data(),
+            recipientID: Data(hexString: alice.myPeerID.id),
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1_000),
+            payload: replacementCiphertext,
+            signature: nil,
+            ttl: TransportConfig.messageTTLDefault
+        )
+        alice._test_handlePacket(
+            replacementProof,
+            fromPeerID: bob.myPeerID
+        )
+        let replacementAccepted = await TestHelpers.waitUntil(
+            {
+                guard let current =
+                    alice.authenticatedPeerTransportState(bob.myPeerID)
+                else {
+                    return false
+                }
+                return current.sessionGeneration != oldState.sessionGeneration
+                    && current.capabilities.contains(.doubleRatchet)
+            },
+            timeout: TestConstants.longTimeout
+        )
+        try #require(replacementAccepted)
+        await alice._test_drainNoiseMessagePipeline()
+
+        let tap = PacketTap()
+        let admission = ReceiptCapabilityRecorder()
+        alice._test_onOutboundPacket = tap.record
+        alice.sendNdrEvent(
+            to: bob.myPeerID,
+            eventJson: #"{"kind":1059}"#,
+            expectedTransportState: oldState,
+            completion: admission.record
+        )
+        await alice._test_drainNoiseMessagePipeline()
+
+        #expect(
+            await TestHelpers.waitUntil(
+                { admission.snapshot() == [false] },
+                timeout: TestConstants.longTimeout
+            )
+        )
+        #expect(
+            tap.snapshot().allSatisfy {
+                $0.type != MessageType.noiseEncrypted.rawValue
+            }
+        )
+        alice._test_onOutboundPacket = nil
+        bob._test_onOutboundPacket = nil
+    }
+
+    @Test
+    func identicalAuthenticatedNdrProofEmitsOneStateUpdatedEvent() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ndr-proof-idempotence-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let alice = makeService(
+            baseDirectory: root.appendingPathComponent("alice", isDirectory: true),
+            doubleRatchetEnabled: true
+        )
+        let bob = makeService(
+            baseDirectory: root.appendingPathComponent("bob", isDirectory: true),
+            doubleRatchetEnabled: true
+        )
+        let recorder = AuthenticatedTransportStateEventRecorder()
+        alice.eventDelegate = recorder
+        let proofs = try await establishSessionCapturingPeerState(
+            alice: alice,
+            bob: bob
+        )
+
+        alice._test_handlePacket(proofs.bob, fromPeerID: bob.myPeerID)
+        let firstUpdate = await TestHelpers.waitUntil(
+            { recorder.count(for: bob.myPeerID) == 1 },
+            timeout: TestConstants.longTimeout
+        )
+        try #require(firstUpdate)
+
+        let capabilities =
+            PeerCapabilities.localSupported.union(.doubleRatchet)
+        let firstDuplicate = try authenticatedPeerStatePacket(
+            from: bob,
+            to: alice,
+            capabilities: capabilities
+        )
+        let secondDuplicate = try authenticatedPeerStatePacket(
+            from: bob,
+            to: alice,
+            capabilities: capabilities
+        )
+        alice._test_handlePacket(firstDuplicate, fromPeerID: bob.myPeerID)
+        alice._test_handlePacket(secondDuplicate, fromPeerID: bob.myPeerID)
+        await alice._test_drainNoiseMessagePipeline()
+        await MainActor.run {}
+
+        #expect(recorder.count(for: bob.myPeerID) == 1)
+        alice.eventDelegate = nil
+        alice._test_onOutboundPacket = nil
+        bob._test_onOutboundPacket = nil
+    }
+
+    @Test
     func unpinnedExplicitCapabilitiesWithoutPrivateMediaRequireConsent() {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("private-media-explicit-capabilities-\(UUID().uuidString)", isDirectory: true)
@@ -1384,15 +1697,18 @@ struct PrivateMediaEndToEndTests {
 
     private func makeService(
         baseDirectory: URL,
-        identityManager: SecureIdentityStateManagerProtocol? = nil
+        identityManager: SecureIdentityStateManagerProtocol? = nil,
+        keychain providedKeychain: MockKeychain? = nil,
+        doubleRatchetEnabled: Bool = false
     ) -> BLEService {
-        let keychain = MockKeychain()
+        let keychain = providedKeychain ?? MockKeychain()
         return BLEService(
             keychain: keychain,
             idBridge: NostrIdentityBridge(keychain: MockKeychainHelper()),
             identityManager: identityManager ?? MockIdentityManager(keychain),
             initializeBluetoothManagers: false,
-            incomingFileStore: BLEIncomingFileStore(baseDirectory: baseDirectory)
+            incomingFileStore: BLEIncomingFileStore(baseDirectory: baseDirectory),
+            doubleRatchetEnabled: doubleRatchetEnabled
         )
     }
 
@@ -1553,6 +1869,30 @@ private final class PacketTap: @unchecked Sendable {
         guard let first = fragments.first, first.payload.count >= 12 else { return false }
         let total = (Int(first.payload[10]) << 8) | Int(first.payload[11])
         return total > 0 && fragments.count >= total
+    }
+}
+
+private final class AuthenticatedTransportStateEventRecorder:
+    TransportEventDelegate,
+    @unchecked Sendable
+{
+    private let lock = NSLock()
+    private var updatedPeerIDs: [PeerID] = []
+
+    @MainActor
+    func didReceiveTransportEvent(_ event: TransportEvent) {
+        guard case .authenticatedPeerTransportStateUpdated(let peerID) = event else {
+            return
+        }
+        lock.lock()
+        updatedPeerIDs.append(peerID)
+        lock.unlock()
+    }
+
+    func count(for peerID: PeerID) -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return updatedPeerIDs.filter { $0 == peerID }.count
     }
 }
 

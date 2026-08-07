@@ -56,6 +56,22 @@ protocol MeshFileTransferring: AnyObject {
     )
 }
 
+/// Pairwise double-ratchet bootstrap over one exact authenticated Noise
+/// generation. The public announce bit is only a discovery hint; callers use
+/// this surface to obtain the generation-bound proof and to send bootstrap
+/// events on the matching authenticated direct link.
+protocol MeshDoubleRatchetTransporting: AnyObject {
+    func authenticatedPeerTransportState(
+        _ peerID: PeerID
+    ) -> AuthenticatedPeerTransportState?
+    func sendNdrEvent(
+        to peerID: PeerID,
+        eventJson: String,
+        expectedTransportState: AuthenticatedPeerTransportState,
+        completion: @escaping @MainActor (Bool) -> Void
+    )
+}
+
 /// Live voice / push-to-talk: one encoded `VoiceBurstPacket`,
 /// fire-and-forget inside the Noise session (private) or as a signed
 /// ephemeral broadcast (public). Frames are only useful now — the

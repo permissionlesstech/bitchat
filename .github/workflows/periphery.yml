@@ -18,6 +18,21 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - name: Build NdrFfi from pinned source
+        run: |
+          rust_version="$(tr -d '[:space:]' < localPackages/NdrFfi/RUST_TOOLCHAIN)"
+          rustup toolchain install "$rust_version" --profile minimal
+          rustup default "$rust_version"
+          rustup target add \
+            aarch64-apple-darwin \
+            x86_64-apple-darwin \
+            aarch64-apple-ios \
+            aarch64-apple-ios-sim \
+            x86_64-apple-ios
+          ./localPackages/NdrFfi/build-apple.sh
 
       - name: Install Periphery
         # homebrew-core formula; the peripheryapp tap lags years behind.

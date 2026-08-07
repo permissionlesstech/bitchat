@@ -16,6 +16,7 @@ struct BLENoisePacketHandlerTests {
         var decryptResult: Result<Data, Error> = .success(Data())
         var currentDate = Date(timeIntervalSince1970: 1_000)
         var transportGenerationReady = false
+        var authorizeNoisePayload = true
         var forcedServiceDecryptError: Error?
 
         var processedHandshakes: [(peerID: PeerID, message: Data)] = []
@@ -26,6 +27,7 @@ struct BLENoisePacketHandlerTests {
         var decryptCalls: [(payload: Data, peerID: PeerID)] = []
         var clearedSessions: [PeerID] = []
         var authenticatedPeerStates: [(peerID: PeerID, payload: Data, generation: UUID)] = []
+        var authorizationChecks: [(peerID: PeerID, type: NoisePayloadType, generation: UUID)] = []
         var deliveries: [(peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date)] = []
         /// Ordered side-effect log to assert recovery sequencing.
         var events: [String] = []
@@ -84,7 +86,11 @@ struct BLENoisePacketHandlerTests {
             handleAuthenticatedPeerState: { peerID, payload, generation in
                 recorder.authenticatedPeerStates.append((peerID, payload, generation))
             },
-            deliverNoisePayload: { peerID, type, payload, timestamp in
+            authorizeNoisePayload: { peerID, type, generation in
+                recorder.authorizationChecks.append((peerID, type, generation))
+                return recorder.authorizeNoisePayload
+            },
+            deliverNoisePayload: { peerID, type, payload, timestamp, _ in
                 recorder.deliveries.append((peerID, type, payload, timestamp))
             }
         )
@@ -156,8 +162,14 @@ struct BLENoisePacketHandlerTests {
                         (peerID, payload, generation)
                     )
                 },
+                authorizeNoisePayload: { peerID, type, generation in
+                    recorder.authorizationChecks.append(
+                        (peerID, type, generation)
+                    )
+                    return recorder.authorizeNoisePayload
+                },
                 deliverNoisePayload: {
-                    peerID, type, payload, timestamp in
+                    peerID, type, payload, timestamp, _ in
                     recorder.deliveries.append(
                         (peerID, type, payload, timestamp)
                     )
@@ -391,6 +403,30 @@ struct BLENoisePacketHandlerTests {
         #expect(recorder.deliveries.first?.timestamp == sentAt)
         #expect(recorder.clearedSessions.isEmpty)
         #expect(recorder.initiatedHandshakes.isEmpty)
+    }
+
+    @Test
+    func ndrPayloadWithoutProofForDecryptingGenerationIsDropped() {
+        let recorder = Recorder()
+        recorder.authorizeNoisePayload = false
+        recorder.decryptResult = .success(
+            Data([NoisePayloadType.ndrEvent.rawValue]) + Data("invite".utf8)
+        )
+        let handler = makeHandler(recorder: recorder)
+        let packet = makeEncryptedPacket(
+            recipientID: Data(hexString: localPeerID.id)
+        )
+
+        handler.handleEncrypted(packet, from: remotePeerID)
+
+        #expect(recorder.deliveries.isEmpty)
+        #expect(recorder.authorizationChecks.count == 1)
+        #expect(recorder.authorizationChecks.first?.peerID == remotePeerID)
+        #expect(recorder.authorizationChecks.first?.type == .ndrEvent)
+        #expect(
+            recorder.authorizationChecks.first?.generation
+                == recorder.sessionGeneration
+        )
     }
 
     @Test

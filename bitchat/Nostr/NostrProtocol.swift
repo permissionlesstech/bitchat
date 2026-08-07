@@ -868,6 +868,14 @@ struct NostrEvent: Codable {
         let xonly = P256K.Schnorr.XonlyKey(dataRepresentation: pubData)
         return xonly.isValid(signature, for: &messageBytes)
     }
+
+    /// Validate the deterministic Nostr event ID without requiring a
+    /// signature. Ratchet-decrypted kind-14 rumors are intentionally unsigned,
+    /// but their IDs must still commit to their complete contents.
+    func hasValidEventID() -> Bool {
+        guard let (expectedId, _) = try? calculateEventId() else { return false }
+        return expectedId == id
+    }
     
     private func calculateEventId() throws -> (String, Data) {
         let serialized = [

@@ -105,6 +105,26 @@ For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.m
 
 ## Setup
 
+Initialize the pinned Rust source and build its generated Apple framework once
+before opening the project or running `swift test` directly:
+
+```bash
+git submodule update --init --checkout vendor/nostr-double-ratchet
+rustup toolchain install "$(cat localPackages/NdrFfi/RUST_TOOLCHAIN)" --profile minimal
+rustup target add \
+  aarch64-apple-darwin \
+  x86_64-apple-darwin \
+  aarch64-apple-ios \
+  aarch64-apple-ios-sim \
+  x86_64-apple-ios
+./localPackages/NdrFfi/build-apple.sh
+```
+
+The generated XCFramework is ignored; every checkout builds it from the exact
+`nostr-double-ratchet` source revision and locked Rust dependency graph recorded
+in the repository. `just build`, `just run`, and `just test` perform the build
+step automatically.
+
 ### Option 1: Using Xcode
 
 ```bash

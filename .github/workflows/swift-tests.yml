@@ -7,9 +7,56 @@ on:
   pull_request:
 
 jobs:
+  ndr-ffi-apple:
+    name: Build NdrFfi from pinned source
+    runs-on: macos-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code and pinned Rust source
+        uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - name: Install pinned Rust toolchain and Apple targets
+        run: |
+          rust_version="$(tr -d '[:space:]' < localPackages/NdrFfi/RUST_TOOLCHAIN)"
+          rustup toolchain install "$rust_version" --profile minimal
+          rustup default "$rust_version"
+          rustup target add \
+            aarch64-apple-darwin \
+            x86_64-apple-darwin \
+            aarch64-apple-ios \
+            aarch64-apple-ios-sim \
+            x86_64-apple-ios
+
+      - name: Cache Rust build inputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            .cache/ndr-ffi/apple/target
+          key: ndr-ffi-apple-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('localPackages/NdrFfi/RUST_TOOLCHAIN', 'localPackages/NdrFfi/SOURCE_REVISION', 'localPackages/NdrFfi/build-apple.sh', 'vendor/nostr-double-ratchet/rust/Cargo.lock') }}
+
+      - name: Build Apple FFI from source
+        run: ./localPackages/NdrFfi/build-apple.sh
+
+      - name: Verify generated Swift bindings
+        run: git diff --exit-code -- localPackages/NdrFfi/Sources/NdrFfi/NdrFfi.swift
+
+      - name: Upload generated XCFramework
+        uses: actions/upload-artifact@v4
+        with:
+          name: ndr-ffi-xcframework
+          path: localPackages/NdrFfi/Frameworks/NdrFfi.xcframework
+          if-no-files-found: error
+          retention-days: 1
+
   test:
     name: Run Swift Tests (${{ matrix.name }})
     runs-on: macos-latest
+    needs: ndr-ffi-apple
     # A hung test must fail fast, not hold a runner for GitHub's 360-minute
     # default (observed: intermittent app-suite hangs starving the queue).
     # The long steps carry tighter individual bounds (5-minute test watchdog,
@@ -27,10 +74,19 @@ jobs:
             path: localPackages/BitLogger
           - name: BitFoundation
             path: localPackages/BitFoundation
+          - name: NdrFfi
+            path: localPackages/NdrFfi
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+
+      - name: Download source-built NdrFfi
+        if: matrix.name == 'app' || matrix.name == 'NdrFfi'
+        uses: actions/download-artifact@v5
+        with:
+          name: ndr-ffi-xcframework
+          path: localPackages/NdrFfi/Frameworks/NdrFfi.xcframework
 
       # Use the Xcode-bundled Swift toolchain: it always matches the SDK on
       # the runner image. A standalone swift.org toolchain (setup-swift) broke
@@ -138,11 +194,18 @@ jobs:
   ios-build:
     name: Build Release apps (universal)
     runs-on: macos-latest
+    needs: ndr-ffi-apple
     timeout-minutes: 15
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+
+      - name: Download source-built NdrFfi
+        uses: actions/download-artifact@v5
+        with:
+          name: ndr-ffi-xcframework
+          path: localPackages/NdrFfi/Frameworks/NdrFfi.xcframework
 
       - name: Check clean recipe safety
         run: bash scripts/check-just-clean-safety.sh
@@ -184,11 +247,18 @@ jobs:
   ios-tests:
     name: Run iOS simulator tests
     runs-on: macos-latest
+    needs: ndr-ffi-apple
     timeout-minutes: 20
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+
+      - name: Download source-built NdrFfi
+        uses: actions/download-artifact@v5
+        with:
+          name: ndr-ffi-xcframework
+          path: localPackages/NdrFfi/Frameworks/NdrFfi.xcframework
 
       # Some runner images list only placeholder destinations (rows carrying
       # "error:" or "unavailable") or ship the selected Xcode without a

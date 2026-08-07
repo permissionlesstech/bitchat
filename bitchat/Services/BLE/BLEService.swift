@@ -287,6 +287,7 @@ final class BLEService: NSObject {
     /// Fired (off-main) when a signature-verified announce is processed —
     /// the bridge courier watch refreshes its tag set on new arrivals.
     var onVerifiedPeerAnnounce: ((_ peerID: PeerID) -> Void)?
+    private let doubleRatchetEnabled: Bool
 
     #if DEBUG
     // Test-only tap on the outbound pipeline so multi-node tests can ferry
@@ -355,8 +356,9 @@ final class BLEService: NSObject {
     // MARK: - Identity
     
     private var noiseService: NoiseEncryptionService
-    /// Injected so tests can compress the quarantine/rollback window;
-    /// production always passes the security-constant default.
+    /// Injected so tests can isolate bounded handshake windows under load;
+    /// production uses the security-constant defaults.
+    private let noiseHandshakeTimeout: TimeInterval
     private let noiseResponderHandshakeTimeout: TimeInterval
     private let identityManager: SecureIdentityStateManagerProtocol
     private let keychain: KeychainManagerProtocol
@@ -507,6 +509,9 @@ final class BLEService: NSObject {
         initializeBluetoothManagers: Bool = true,
         incomingFileStore: BLEIncomingFileStore = BLEIncomingFileStore(),
         startSuspendedForPanicRecovery: Bool = false,
+        doubleRatchetEnabled: Bool = DoubleRatchetFeature.isEnabled,
+        noiseHandshakeTimeout: TimeInterval =
+            NoiseSecurityConstants.ordinaryHandshakeTimeout,
         noiseResponderHandshakeTimeout: TimeInterval =
             NoiseSecurityConstants.ordinaryResponderHandshakeTimeout,
         engineScheduler: BLEEngineScheduling = BLEEngineDispatchScheduler()
@@ -517,13 +522,21 @@ final class BLEService: NSObject {
         self.incomingFileStore = incomingFileStore
         self.shouldInitializeBluetoothManagers = initializeBluetoothManagers
         self._isPanicSuspended = startSuspendedForPanicRecovery
+        self.doubleRatchetEnabled = doubleRatchetEnabled
+        self.noiseHandshakeTimeout = noiseHandshakeTimeout
         self.noiseResponderHandshakeTimeout = noiseResponderHandshakeTimeout
         noiseService = NoiseEncryptionService(
             keychain: keychain,
+            ordinaryHandshakeTimeout: noiseHandshakeTimeout,
             ordinaryResponderHandshakeTimeout: noiseResponderHandshakeTimeout
         )
         self.identityManager = identityManager
         super.init()
+
+        localIdentityState.setCapability(
+            .doubleRatchet,
+            enabled: doubleRatchetEnabled
+        )
         
         configureNoiseServiceCallbacks(for: noiseService)
         refreshPeerIdentity()
@@ -819,6 +832,7 @@ final class BLEService: NSObject {
 
             let newNoise = NoiseEncryptionService(
                 keychain: keychain,
+                ordinaryHandshakeTimeout: noiseHandshakeTimeout,
                 ordinaryResponderHandshakeTimeout: noiseResponderHandshakeTimeout
             )
             noiseService = newNoise
@@ -1137,6 +1151,51 @@ final class BLEService: NSObject {
     /// Empty for peers that predate the capabilities TLV.
     func peerCapabilities(_ peerID: PeerID) -> PeerCapabilities {
         peerRegistry.capabilities(for: peerID)
+    }
+
+    func authenticatedPeerTransportState(
+        _ peerID: PeerID
+    ) -> AuthenticatedPeerTransportState? {
+        let normalizedPeerID = peerID.toShort()
+        guard let generation = noiseService.sessionGeneration(for: normalizedPeerID),
+              let publicKey = noiseService.getPeerPublicKeyData(normalizedPeerID),
+              let fingerprint = noiseService.getPeerFingerprint(normalizedPeerID),
+              publicKey.sha256Fingerprint().caseInsensitiveCompare(fingerprint) == .orderedSame
+        else {
+            return nil
+        }
+        let session = privateMediaSessions.policyInputs(for: normalizedPeerID)
+        guard session.sessionGeneration == generation,
+              let observation = session.authenticatedState,
+              observation.sessionGeneration == generation,
+              observation.fingerprint.caseInsensitiveCompare(fingerprint)
+                == .orderedSame
+        else {
+            return nil
+        }
+        guard noiseService.sessionGeneration(for: normalizedPeerID) == generation else {
+            return nil
+        }
+        return AuthenticatedPeerTransportState(
+            capabilities: observation.capabilities,
+            sessionGeneration: generation,
+            noisePublicKey: publicKey
+        )
+    }
+
+    private func isNoisePayloadAuthorized(
+        _ type: NoisePayloadType,
+        from peerID: PeerID,
+        sessionGeneration: UUID
+    ) -> Bool {
+        guard type == .ndrEvent else { return true }
+        guard doubleRatchetEnabled,
+              let authenticated = authenticatedPeerTransportState(peerID)
+        else {
+            return false
+        }
+        return authenticated.sessionGeneration == sessionGeneration
+            && authenticated.capabilities.contains(.doubleRatchet)
     }
 
     func authenticatedPrivateMediaReceiptSessionGeneration(
@@ -1968,12 +2027,17 @@ final class BLEService: NSObject {
     private func broadcastPacket(
         _ packet: BitchatPacket,
         transferId: String? = nil,
-        requiresPrivateMediaAdmission: Bool = false
+        requiresPrivateMediaAdmission: Bool = false,
+        requireNoiseAuthenticatedPeerLink: Bool = false,
+        requiredAuthenticatedTransportState:
+            AuthenticatedPeerTransportState? = nil,
+        admissionCompletion: ((Bool) -> Void)? = nil
     ) {
         guard !isPanicSuspended else {
             if requiresPrivateMediaAdmission, let transferId {
                 privateMediaTransferAdmissions.finish(transferId)
             }
+            admissionCompletion?(false)
             return
         }
         if requiresPrivateMediaAdmission {
@@ -1982,12 +2046,33 @@ final class BLEService: NSObject {
                 if let transferId {
                     privateMediaTransferAdmissions.finish(transferId)
                 }
+                admissionCompletion?(false)
+                return
+            }
+        }
+        if let requiredAuthenticatedTransportState {
+            guard requireNoiseAuthenticatedPeerLink,
+                  let recipientPeerID =
+                    PeerID(hexData: packet.recipientID),
+                  BLEAuthenticatedTransportAdmission.isCurrent(
+                    expected: requiredAuthenticatedTransportState,
+                    current: authenticatedPeerTransportState(
+                        recipientPeerID
+                    )
+                  )
+            else {
+                admissionCompletion?(false)
                 return
             }
         }
         // Apply route if recipient exists (centralized route application)
         let packetToSend: BitchatPacket
-        if let recipientPeerID = PeerID(hexData: packet.recipientID) {
+        if requireNoiseAuthenticatedPeerLink {
+            // Durable NDR handoff must remain on the exact authenticated
+            // direct link. Routing or process-local spooling would make a
+            // positive admission result ambiguous.
+            packetToSend = packet
+        } else if let recipientPeerID = PeerID(hexData: packet.recipientID) {
             packetToSend = applyRouteIfAvailable(packet, to: recipientPeerID)
         } else {
             packetToSend = packet
@@ -2043,6 +2128,7 @@ final class BLEService: NSObject {
                 if requiresPrivateMediaAdmission {
                     privateMediaTransferAdmissions.finish(transferId)
                 }
+                admissionCompletion?(false)
                 return
             }
         }
@@ -2056,6 +2142,7 @@ final class BLEService: NSObject {
                 if let transferId {
                     privateMediaTransferAdmissions.finish(transferId)
                 }
+                admissionCompletion?(false)
                 return
             }
         }
@@ -2073,6 +2160,7 @@ final class BLEService: NSObject {
                 transferId: transferId,
                 requiresPrivateMediaAdmission: requiresPrivateMediaAdmission
             )
+            admissionCompletion?(true)
             return
         }
         // App-initiated private media is already one opaque Noise ciphertext.
@@ -2089,6 +2177,7 @@ final class BLEService: NSObject {
                 transferId: transferId,
                 requiresPrivateMediaAdmission: requiresPrivateMediaAdmission
             )
+            admissionCompletion?(true)
             return
         }
         if requiresPrivateMediaAdmission {
@@ -2099,24 +2188,49 @@ final class BLEService: NSObject {
                 "Private media admission reached an unsupported non-directed packet shape",
                 category: .security
             )
+            admissionCompletion?(false)
             return
         }
         guard let data = packetToSend.toBinaryData(padding: padForBLE) else {
             SecureLogger.error("❌ Failed to convert packet to binary data", category: .session)
+            admissionCompletion?(false)
+            return
+        }
+        if requireNoiseAuthenticatedPeerLink {
+            guard packetToSend.type == MessageType.noiseEncrypted.rawValue,
+                  let recipientPeerID =
+                    PeerID(hexData: packetToSend.recipientID)
+            else {
+                admissionCompletion?(false)
+                return
+            }
+            let accepted = sendOnAllLinks(
+                packet: packetToSend,
+                data: data,
+                pad: padForBLE,
+                directedOnlyPeer: recipientPeerID,
+                requireNoiseAuthenticatedPeerLink: true,
+                requiredAuthenticatedTransportState:
+                    requiredAuthenticatedTransportState
+            )
+            admissionCompletion?(accepted)
             return
         }
         if packetToSend.type == MessageType.noiseEncrypted.rawValue {
             sendEncrypted(packetToSend, data: data, pad: padForBLE)
+            admissionCompletion?(true)
             return
         }
         sendGenericBroadcast(packetToSend, data: data, pad: padForBLE)
+        admissionCompletion?(true)
     }
 
     private func sendEncrypted(_ packet: BitchatPacket, data: Data, pad: Bool) {
         guard let recipientPeerID = PeerID(hexData: packet.recipientID) else { return }
         var sentEncrypted = false
 
-        let outboundPriority = BLEOutboundPacketPolicy.priority(for: packet, data: data)
+        let outboundPriority =
+            BLEOutboundPacketPolicy.priority(for: packet, data: data)
 
         // Per-link limits for the specific peer
         let directPeripheralState = snapshotDirectPeripheralState(for: recipientPeerID)
@@ -2226,10 +2340,20 @@ final class BLEService: NSObject {
         centrals: [CBCentral],
         characteristic: CBMutableCharacteristic,
         context: String,
-        requiredAuthenticatedPeer: PeerID?
+        requiredAuthenticatedPeer: PeerID?,
+        requiredAuthenticatedTransportState:
+            AuthenticatedPeerTransportState?
     ) -> Bool {
         let eligible: [CBCentral]
         if let peerID = requiredAuthenticatedPeer {
+            if let requiredAuthenticatedTransportState {
+                guard BLEAuthenticatedTransportAdmission.isCurrent(
+                    expected: requiredAuthenticatedTransportState,
+                    current: authenticatedPeerTransportState(peerID)
+                ) else {
+                    return false
+                }
+            }
             eligible = centrals.filter { central in
                 let link = BLEIngressLinkID.central(central.identifier.uuidString)
                 return linkAuth.isAuthenticated(link, for: peerID)
@@ -2265,9 +2389,24 @@ final class BLEService: NSObject {
         pad: Bool,
         directedOnlyPeer: PeerID?,
         requireDirectPeerLink: Bool = false,
-        requireNoiseAuthenticatedPeerLink: Bool = false
+        requireNoiseAuthenticatedPeerLink: Bool = false,
+        requiredAuthenticatedTransportState:
+            AuthenticatedPeerTransportState? = nil
     ) -> Bool {
         guard !isPanicSuspended else { return false }
+        if let requiredAuthenticatedTransportState {
+            guard requireNoiseAuthenticatedPeerLink,
+                  let directedOnlyPeer,
+                  BLEAuthenticatedTransportAdmission.isCurrent(
+                    expected: requiredAuthenticatedTransportState,
+                    current: authenticatedPeerTransportState(
+                        directedOnlyPeer
+                    )
+                  )
+            else {
+                return false
+            }
+        }
         let ingressRecord = ingressLinks.record(for: packet)
         var excludedPeerLinks = links(to: ingressRecord?.peerID)
         if requireNoiseAuthenticatedPeerLink {
@@ -2277,7 +2416,20 @@ final class BLEService: NSObject {
             guard !authenticatedLinks.isEmpty else { return false }
             excludedPeerLinks.formUnion(boundLinks.subtracting(authenticatedLinks))
         }
-        let outboundPriority = BLEOutboundPacketPolicy.priority(for: packet, data: data)
+        // Once an authenticated OOB fragment is admitted, the native action
+        // may be durably acknowledged. Keep those frames at FIFO-high
+        // priority so later traffic rejects itself instead of evicting an
+        // already-committed fragment from the bounded write queue.
+        let outboundPriority =
+            BLEAuthenticatedTransportAdmission.writePriority(
+                ordinaryPriority:
+                    BLEOutboundPacketPolicy.priority(
+                        for: packet,
+                        data: data
+                    ),
+                requiresExactGeneration:
+                    requireNoiseAuthenticatedPeerLink
+            )
 
         let states = snapshotPeripheralStates()
         // A link without a discovered characteristic cannot be written to
@@ -2320,12 +2472,16 @@ final class BLEService: NSObject {
                 maxChunk: chunk,
                 directedOnlyPeer: directedOnlyPeer,
                 requireDirectPeerLink: requireDirectPeerLink || requireNoiseAuthenticatedPeerLink,
-                requireNoiseAuthenticatedPeerLink: requireNoiseAuthenticatedPeerLink
+                requireNoiseAuthenticatedPeerLink: requireNoiseAuthenticatedPeerLink,
+                requiredAuthenticatedTransportState:
+                    requiredAuthenticatedTransportState
             )
         }
 
         // If directed and we currently have no links to forward on, spool for a short window
-        if let only = plan.directedPeerHint,
+        if !requireDirectPeerLink,
+           !requireNoiseAuthenticatedPeerLink,
+           let only = plan.directedPeerHint,
            plan.shouldSpoolDirectedPacket {
             spoolDirectedPacket(packet, recipientPeerID: only)
         }
@@ -2343,7 +2499,9 @@ final class BLEService: NSObject {
                         to: s.peripheral,
                         characteristic: ch,
                         priority: outboundPriority,
-                        requiredAuthenticatedPeer: requireNoiseAuthenticatedPeerLink ? directedOnlyPeer : nil
+                        requiredAuthenticatedPeer: requireNoiseAuthenticatedPeerLink ? directedOnlyPeer : nil,
+                        requiredAuthenticatedTransportState:
+                            requiredAuthenticatedTransportState
                     ) || acceptedByPhysicalLink
                 } else {
                     writeOrEnqueue(data, to: s.peripheral, characteristic: ch, priority: outboundPriority)
@@ -2360,7 +2518,9 @@ final class BLEService: NSObject {
                         centrals: targets,
                         characteristic: ch,
                         context: "directed",
-                        requiredAuthenticatedPeer: requireNoiseAuthenticatedPeerLink ? directedOnlyPeer : nil
+                        requiredAuthenticatedPeer: requireNoiseAuthenticatedPeerLink ? directedOnlyPeer : nil,
+                        requiredAuthenticatedTransportState:
+                            requiredAuthenticatedTransportState
                     ) || acceptedByPhysicalLink
                 } else {
                     let success = peripheralManager?.updateValue(data, for: ch, onSubscribedCentrals: targets) ?? false
@@ -2383,7 +2543,9 @@ final class BLEService: NSObject {
         _ packet: BitchatPacket,
         to peerID: PeerID,
         requireDirectPeerLink: Bool = false,
-        requireNoiseAuthenticatedPeerLink: Bool = false
+        requireNoiseAuthenticatedPeerLink: Bool = false,
+        requiredAuthenticatedTransportState:
+            AuthenticatedPeerTransportState? = nil
     ) -> Bool {
         #if DEBUG
         _test_onOutboundPacket?(packet)
@@ -2395,7 +2557,9 @@ final class BLEService: NSObject {
             pad: false,
             directedOnlyPeer: peerID,
             requireDirectPeerLink: requireDirectPeerLink,
-            requireNoiseAuthenticatedPeerLink: requireNoiseAuthenticatedPeerLink
+            requireNoiseAuthenticatedPeerLink: requireNoiseAuthenticatedPeerLink,
+            requiredAuthenticatedTransportState:
+                requiredAuthenticatedTransportState
         )
     }
 
@@ -2863,6 +3027,63 @@ final class BLEService: NSObject {
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {
         guard let payload = VerificationService.shared.buildVerifyResponse(noiseKeyHex: noiseKeyHex, nonceA: nonceA) else { return }
         sendNoisePayload(payload, to: peerID)
+    }
+
+    func sendNdrEvent(
+        to peerID: PeerID,
+        eventJson: String,
+        expectedTransportState: AuthenticatedPeerTransportState,
+        completion: @escaping @MainActor (Bool) -> Void
+    ) {
+        guard let data = eventJson.data(using: .utf8),
+              !data.isEmpty,
+              data.count <= NostrProtocol.maximumPrivateEnvelopeCiphertextBytes
+        else {
+            Task { @MainActor in completion(false) }
+            return
+        }
+        let normalizedPeerID = peerID.toShort()
+        messageQueue.async { [weak self] in
+            guard let self else {
+                Task { @MainActor in completion(false) }
+                return
+            }
+            guard self.doubleRatchetEnabled,
+                  let authenticated = self.authenticatedPeerTransportState(normalizedPeerID),
+                  authenticated == expectedTransportState,
+                  authenticated.capabilities.contains(.doubleRatchet)
+            else {
+                SecureLogger.warning(
+                    "NDR: dropping OOB send without the expected authenticated capability proof",
+                    category: .security
+                )
+                Task { @MainActor in completion(false) }
+                return
+            }
+            let typedPayload = NoisePayload(type: .ndrEvent, data: data).encode()
+            do {
+                let packet = try self.makeEncryptedNoisePacket(
+                    typedPayload,
+                    to: normalizedPeerID,
+                    expectedSessionGeneration: authenticated.sessionGeneration
+                )
+                self.broadcastPacket(
+                    packet,
+                    requireNoiseAuthenticatedPeerLink: true,
+                    requiredAuthenticatedTransportState:
+                        expectedTransportState,
+                    admissionCompletion: { accepted in
+                        Task { @MainActor in completion(accepted) }
+                    }
+                )
+            } catch {
+                SecureLogger.warning(
+                    "NDR: dropping OOB send because the authenticated Noise generation changed",
+                    category: .security
+                )
+                Task { @MainActor in completion(false) }
+            }
+        }
     }
 
     // MARK: Vouching over Noise
@@ -4280,10 +4501,19 @@ extension BLEService {
             for: normalizedPeerID,
             expected: generation,
             {
-                () -> (accepted: Bool, completions: [@MainActor (PrivateMediaSendPolicy) -> Void]) in
-                guard privateMediaSessions.currentGeneration(for: normalizedPeerID) == generation else {
-                    return (false, [])
+                () -> (
+                    accepted: Bool,
+                    completions: [@MainActor (PrivateMediaSendPolicy) -> Void],
+                    observationChanged: Bool
+                ) in
+                guard privateMediaSessions.currentGeneration(for: normalizedPeerID)
+                        == generation
+                else {
+                    return (false, [], false)
                 }
+                let previousObservation = privateMediaSessions
+                    .policyInputs(for: normalizedPeerID)
+                    .authenticatedState
 
                 // The generation lease (plus the engine slot this section
                 // holds) prevents rekey/session promotion from interleaving
@@ -4314,9 +4544,19 @@ extension BLEService {
                     generation: generation,
                     capabilities: state.capabilities
                 ) else {
-                    return (false, [])
+                    return (false, [], false)
                 }
-                return (true, completions)
+                let observationChanged = previousObservation.map {
+                    $0.fingerprint.caseInsensitiveCompare(fingerprint)
+                        != .orderedSame
+                        || $0.sessionGeneration != generation
+                        || $0.capabilities != state.capabilities
+                } ?? true
+                return (
+                    true,
+                    completions,
+                    observationChanged
+                )
             }
         ), application.accepted else { return }
 
@@ -4326,6 +4566,13 @@ extension BLEService {
         let policy = privateMediaSendPolicy(to: normalizedPeerID)
         sendPendingNoisePayloadsAfterHandshake(for: normalizedPeerID)
         completePrivateMediaPolicyResolution(application.completions, with: policy)
+        if application.observationChanged {
+            notifyUI { [weak self] in
+                self?.deliverTransportEvent(
+                    .authenticatedPeerTransportStateUpdated(normalizedPeerID)
+                )
+            }
+        }
     }
 
     private func noteNoiseSessionCleared(for peerID: PeerID) {
@@ -4396,7 +4643,8 @@ extension BLEService {
     private func makeEncryptedNoisePacket(
         _ typedPayload: Data,
         to peerID: PeerID,
-        requiresAuthenticatedPrivateMediaReceipts: Bool = false
+        requiresAuthenticatedPrivateMediaReceipts: Bool = false,
+        expectedSessionGeneration: UUID? = nil
     ) throws -> BitchatPacket {
         let encrypted: Data
         let isPrivateFile = NoisePayloadType.isPrivateFile(rawValue: typedPayload.first)
@@ -4412,6 +4660,12 @@ extension BLEService {
                 typedPayload,
                 for: peerID,
                 sessionGeneration: provenGeneration
+            )
+        } else if let expectedSessionGeneration {
+            encrypted = try noiseService.encrypt(
+                typedPayload,
+                for: peerID,
+                sessionGeneration: expectedSessionGeneration
             )
         } else {
             encrypted = try noiseService.encrypt(typedPayload, for: peerID)
@@ -5109,10 +5363,20 @@ extension BLEService {
         to peripheral: CBPeripheral,
         characteristic: CBCharacteristic,
         priority: BLEOutboundWritePriority,
-        requiredAuthenticatedPeer: PeerID?
+        requiredAuthenticatedPeer: PeerID?,
+        requiredAuthenticatedTransportState:
+            AuthenticatedPeerTransportState?
     ) -> Bool {
         let uuid = peripheral.identifier.uuidString
         if let peerID = requiredAuthenticatedPeer {
+            if let requiredAuthenticatedTransportState {
+                guard BLEAuthenticatedTransportAdmission.isCurrent(
+                    expected: requiredAuthenticatedTransportState,
+                    current: authenticatedPeerTransportState(peerID)
+                ) else {
+                    return false
+                }
+            }
             let link = BLEIngressLinkID.peripheral(uuid)
             guard linkBindings.peer(forPeripheralID: uuid) == peerID,
                   linkAuth.isAuthenticated(link, for: peerID) else {
@@ -5426,6 +5690,8 @@ extension BLEService {
         transferId: String? = nil,
         requireDirectPeerLink: Bool = false,
         requireNoiseAuthenticatedPeerLink: Bool = false,
+        requiredAuthenticatedTransportState:
+            AuthenticatedPeerTransportState? = nil,
         requiresPrivateMediaAdmission: Bool = false
     ) -> Bool {
         let request = BLEOutboundFragmentTransferRequest(
@@ -5435,7 +5701,9 @@ extension BLEService {
             directedPeer: directedOnlyPeer,
             transferId: transferId,
             requireDirectPeerLink: requireDirectPeerLink,
-            requireNoiseAuthenticatedPeerLink: requireNoiseAuthenticatedPeerLink
+            requireNoiseAuthenticatedPeerLink: requireNoiseAuthenticatedPeerLink,
+            requiredAuthenticatedTransportState:
+                requiredAuthenticatedTransportState
         )
 
         let result: BLEOutboundFragmentTransferScheduler.SubmitResult? = onEngine {
@@ -5562,12 +5830,30 @@ extension BLEService {
 
         let sendFragment: (BitchatPacket) -> Bool = { [weak self] fragmentPacket in
             guard let self else { return false }
+            if let expected =
+                    request.requiredAuthenticatedTransportState
+            {
+                guard let directedPeer = request.directedPeer,
+                      BLEAuthenticatedTransportAdmission.isCurrent(
+                        expected: expected,
+                        current:
+                            self.authenticatedPeerTransportState(
+                                directedPeer
+                            )
+                      )
+                else {
+                    return false
+                }
+            }
             if request.requireDirectPeerLink, let directedPeer = request.directedPeer {
                 return self.sendPacketDirected(
                     fragmentPacket,
                     to: directedPeer,
                     requireDirectPeerLink: true,
-                    requireNoiseAuthenticatedPeerLink: request.requireNoiseAuthenticatedPeerLink
+                    requireNoiseAuthenticatedPeerLink:
+                        request.requireNoiseAuthenticatedPeerLink,
+                    requiredAuthenticatedTransportState:
+                        request.requiredAuthenticatedTransportState
                 )
             }
             self.broadcastPacket(fragmentPacket)
@@ -6865,7 +7151,14 @@ extension BLEService {
                     sessionGeneration: generation
                 )
             },
-            deliverNoisePayload: { [weak self] peerID, type, payload, timestamp in
+            authorizeNoisePayload: { [weak self] peerID, type, generation in
+                self?.isNoisePayloadAuthorized(
+                    type,
+                    from: peerID,
+                    sessionGeneration: generation
+                ) ?? false
+            },
+            deliverNoisePayload: { [weak self] peerID, type, payload, timestamp, generation in
                 if type == .privateFile {
                     self?.fileTransferHandler.handlePrivatePayload(
                         payload,
@@ -6874,8 +7167,22 @@ extension BLEService {
                     )
                     return
                 }
+                guard self?.isNoisePayloadAuthorized(
+                    type,
+                    from: peerID,
+                    sessionGeneration: generation
+                ) == true else {
+                    return
+                }
                 // Single main-actor hop delivering `.noisePayloadReceived`.
                 self?.notifyUI { [weak self] in
+                    guard self?.isNoisePayloadAuthorized(
+                        type,
+                        from: peerID,
+                        sessionGeneration: generation
+                    ) == true else {
+                        return
+                    }
                     self?.deliverTransportEvent(.noisePayloadReceived(
                         peerID: peerID,
                         type: type,

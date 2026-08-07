@@ -9,6 +9,8 @@ struct BLEOutboundFragmentTransferRequest {
     let transferId: String?
     let requireDirectPeerLink: Bool
     let requireNoiseAuthenticatedPeerLink: Bool
+    let requiredAuthenticatedTransportState:
+        AuthenticatedPeerTransportState?
 
     init(
         packet: BitchatPacket,
@@ -17,7 +19,9 @@ struct BLEOutboundFragmentTransferRequest {
         directedPeer: PeerID?,
         transferId: String?,
         requireDirectPeerLink: Bool = false,
-        requireNoiseAuthenticatedPeerLink: Bool = false
+        requireNoiseAuthenticatedPeerLink: Bool = false,
+        requiredAuthenticatedTransportState:
+            AuthenticatedPeerTransportState? = nil
     ) {
         self.packet = packet
         self.pad = pad
@@ -26,6 +30,8 @@ struct BLEOutboundFragmentTransferRequest {
         self.transferId = transferId
         self.requireDirectPeerLink = requireDirectPeerLink
         self.requireNoiseAuthenticatedPeerLink = requireNoiseAuthenticatedPeerLink
+        self.requiredAuthenticatedTransportState =
+            requiredAuthenticatedTransportState
     }
 
     var resolvedTransferId: String? {
@@ -40,6 +46,22 @@ struct BLEOutboundFragmentTransferRequest {
     var contentKey: String? {
         guard packet.type == MessageType.fileTransfer.rawValue else { return nil }
         return packet.payload.sha256Hex()
+    }
+}
+
+enum BLEAuthenticatedTransportAdmission {
+    static func isCurrent(
+        expected: AuthenticatedPeerTransportState,
+        current: AuthenticatedPeerTransportState?
+    ) -> Bool {
+        current == expected
+    }
+
+    static func writePriority(
+        ordinaryPriority: BLEOutboundWritePriority,
+        requiresExactGeneration: Bool
+    ) -> BLEOutboundWritePriority {
+        requiresExactGeneration ? .high : ordinaryPriority
     }
 }
 

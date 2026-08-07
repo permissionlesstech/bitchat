@@ -1,0 +1,4 @@
+[submodule "vendor/nostr-double-ratchet"]
+	path = vendor/nostr-double-ratchet
+	url = https://github.com/irislib/nostr-double-ratchet.git
+	shallow = true

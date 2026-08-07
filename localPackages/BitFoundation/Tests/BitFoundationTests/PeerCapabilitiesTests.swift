@@ -27,8 +27,10 @@ struct PeerCapabilitiesTests {
                 == Data([0x00, 0x04])
         )
 
-        let high = PeerCapabilities(rawValue: 1 << 11)
-        #expect(high.encoded() == Data([0x00, 0x08]))
+        #expect(
+            PeerCapabilities.doubleRatchet.encoded()
+                == Data([0x00, 0x08])
+        )
 
         let all: PeerCapabilities = [
             .prekeys,
@@ -40,10 +42,15 @@ struct PeerCapabilitiesTests {
             .meshDiagnostics,
             .privateMedia,
             .privateMediaReceipts,
-            .nonDestructiveNoiseReplacement
+            .nonDestructiveNoiseReplacement,
+            .doubleRatchet
         ]
         #expect(PeerCapabilities(encoded: all.encoded()) == all)
-        #expect(PeerCapabilities(encoded: high.encoded()) == high)
+        #expect(
+            PeerCapabilities(
+                encoded: PeerCapabilities.doubleRatchet.encoded()
+            ) == .doubleRatchet
+        )
         #expect(PeerCapabilities(encoded: PeerCapabilities([]).encoded()) == [])
     }
 

@@ -855,10 +855,17 @@ struct BLEServiceCoreTests {
     /// has to wait for the convergence handshake and use its new session.
     @Test
     func timeoutRestoredSessionDefersQueueDrainUntilConvergence() async throws {
-        let ble = makeService(noiseResponderHandshakeTimeout: 0.3)
+        let ble = makeService(
+            noiseHandshakeTimeout: TestConstants.settleTimeout * 2,
+            noiseResponderHandshakeTimeout: 0.3
+        )
         let alice = NoiseEncryptionService(keychain: MockKeychain())
         let mallory = NoiseEncryptionService(keychain: MockKeychain())
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let reconciled = SessionReconcileCounter()
+        ble._test_onPrivateMediaSessionReconciled = reconciled.record
+        let outbound = OutboundPacketTap()
+        ble._test_onOutboundPacket = outbound.record
 
         // Establish BLE as responder so the inbound reconnect below is not
         // coalesced by the initiator-completion grace path.
@@ -881,20 +888,33 @@ struct BLEServiceCoreTests {
         )
         await ble._test_drainNoiseMessagePipeline()
         #expect(ble.canDeliverSecurely(to: alicePeerID))
+        let initialEncryptedFrameSent = await TestHelpers.waitUntil(
+            { outbound.count(ofType: .noiseEncrypted) >= 1 },
+            timeout: TestConstants.settleTimeout
+        )
+        try #require(initialEncryptedFrameSent)
+        #expect(outbound.count(ofType: .noiseEncrypted) == 1)
+        let initialReconcileRan = await TestHelpers.waitUntil(
+            { reconciled.count(for: alicePeerID) == 1 },
+            timeout: TestConstants.settleTimeout
+        )
+        try #require(initialReconcileRan)
+        await ble._test_drainNoiseMessagePipeline()
+        // Keep one tap installed for the service's whole lifetime. After the
+        // explicit initial-frame observation and queue fence, start a fresh,
+        // lock-protected capture epoch so every assertion below measures only
+        // rollback/convergence output under a saturated concurrent suite.
+        outbound.removeAll()
 
         // The convergence retry only prepares for reachable peers.
         ble._test_seedConnectedPeer(alicePeerID, nickname: "Alice")
 
-        let reconciled = SessionReconcileCounter()
-        ble._test_onPrivateMediaSessionReconciled = reconciled.record
         // Park the convergence-recovery callback on its global-queue thread
         // before it can enqueue onto messageQueue: the restore handler
         // deterministically wins the dispatch race this test exercises.
         let recoveryGate = HandshakeRecoveryEnqueueGate()
         defer { recoveryGate.release() }
         ble._test_beforeHandshakeRecoveryEnqueued = { _ in recoveryGate.pause() }
-        let outbound = OutboundPacketTap()
-        ble._test_onOutboundPacket = outbound.record
 
         // Park the traffic the race would lose directly in the pending
         // queues — the same place live sends land during quarantine — so no
@@ -935,7 +955,7 @@ struct BLEServiceCoreTests {
         // convergence retry's message 1 out of the tap until released.)
         let responderReady = await TestHelpers.waitUntil(
             { outbound.count(ofType: .noiseHandshake) >= 1 },
-            timeout: TestConstants.longTimeout
+            timeout: TestConstants.settleTimeout
         )
         try #require(responderReady)
         #expect(outbound.count(ofType: .noiseEncrypted) == 0)
@@ -943,8 +963,8 @@ struct BLEServiceCoreTests {
         // The responder timeout restores the quarantined generation; the
         // gate guarantees its handler runs before the convergence retry.
         let restoreRan = await TestHelpers.waitUntil(
-            { reconciled.count(for: alicePeerID) == 1 },
-            timeout: TestConstants.longTimeout
+            { reconciled.count(for: alicePeerID) == 2 },
+            timeout: TestConstants.settleTimeout
         )
         try #require(restoreRan)
         #expect(ble.canDeliverSecurely(to: alicePeerID))
@@ -976,7 +996,7 @@ struct BLEServiceCoreTests {
                             == NoiseSecurityConstants.xxInitialMessageSize
                 }
             },
-            timeout: TestConstants.longTimeout
+            timeout: TestConstants.settleTimeout
         )
         try #require(retryStarted)
         #expect(outbound.count(ofType: .noiseEncrypted) == 0)
@@ -1012,7 +1032,7 @@ struct BLEServiceCoreTests {
         ble._test_handlePacket(retryPacket, fromPeerID: alicePeerID)
         let drained = await TestHelpers.waitUntil(
             { outbound.count(ofType: .noiseEncrypted) >= 3 },
-            timeout: TestConstants.longTimeout
+            timeout: TestConstants.settleTimeout
         )
         try #require(drained)
         await ble._test_drainNoiseMessagePipeline()
@@ -1421,6 +1441,10 @@ private final class OutboundPacketTap {
         lock.lock(); defer { lock.unlock() }
         return packets
     }
+
+    func removeAll() {
+        lock.lock(); packets.removeAll(); lock.unlock()
+    }
 }
 
 /// Blocks the convergence-recovery callback on its global-queue thread so a
@@ -1525,6 +1549,8 @@ private final class PanicIngressObserver: @unchecked Sendable {
 }
 
 private func makeService(
+    noiseHandshakeTimeout: TimeInterval =
+        NoiseSecurityConstants.ordinaryHandshakeTimeout,
     noiseResponderHandshakeTimeout: TimeInterval =
         NoiseSecurityConstants.ordinaryResponderHandshakeTimeout,
     engineScheduler: BLEEngineScheduling = BLEEngineDispatchScheduler()
@@ -1537,6 +1563,7 @@ private func makeService(
         idBridge: idBridge,
         identityManager: identityManager,
         initializeBluetoothManagers: false,
+        noiseHandshakeTimeout: noiseHandshakeTimeout,
         noiseResponderHandshakeTimeout: noiseResponderHandshakeTimeout,
         engineScheduler: engineScheduler
     )

@@ -118,7 +118,8 @@ struct NostrRelaySettingsTests {
         #expect(NostrRelaySettings.customRelays(in: defaults) == ["wss://good.example.com"])
     }
 
-    @Test func builtInRelaysAreExposedNormalizedForDeduplication() {
+    @Test @MainActor
+    func builtInRelaysAreExposedNormalizedForDeduplication() {
         // The UI rejects re-adding a built-in by comparing against this set, so
         // it has to hold normalized URLs.
         let builtIn = NostrRelayManager.builtInRelayURLs

@@ -40,6 +40,11 @@ public struct PeerCapabilities: OptionSet, Equatable, Hashable, Sendable {
     /// this bit; keep it decodable so the wire assignment is never reused.
     public static let nonDestructiveNoiseReplacement =
         PeerCapabilities(rawValue: 1 << 10)
+    /// Supports double-ratchet relay DMs with invite/response bootstrap carried
+    /// as Noise payload `0x22`. Both the capability and the payload value are
+    /// coordinated with Android before either feature branch can ship.
+    public static let doubleRatchet =
+        PeerCapabilities(rawValue: 1 << 11)
 
     /// Minimal little-endian byte encoding; always at least one byte so an
     /// empty set is distinguishable from an absent TLV.

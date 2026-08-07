@@ -18,6 +18,7 @@ struct ChatViewModelServiceBundle {
         idBridge: NostrIdentityBridge,
         identityManager: SecureIdentityStateManagerProtocol,
         meshService: Transport,
+        ndrService: NdrNostrService,
         outboxStore: MessageOutboxStore? = nil,
         sfMetrics: StoreAndForwardMetrics? = nil
     ) {
@@ -28,7 +29,11 @@ struct ChatViewModelServiceBundle {
             idBridge: idBridge,
             identityManager: identityManager
         )
-        let nostrTransport = NostrTransport(keychain: keychain, idBridge: idBridge)
+        let nostrTransport = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            ndrService: ndrService
+        )
         nostrTransport.senderPeerID = meshService.myPeerID
         let messageRouter = MessageRouter(
             transports: [meshService, nostrTransport],
@@ -79,6 +84,7 @@ final class ChatViewModelBootstrapper {
         configureGateway()
         configureBridge()
         configureBridgeCourier()
+        bindNdrRelayRetry()
         bindTeleportState()
         requestNotifications()
         registerObservers()
@@ -632,6 +638,17 @@ private extension ChatViewModelBootstrapper {
             .store(in: &viewModel.cancellables)
 
         courier.refresh()
+    }
+
+    func bindNdrRelayRetry() {
+        NostrRelayManager.shared.$isDMRelayConnected
+            .removeDuplicates()
+            .filter { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak viewModel] _ in
+                viewModel?.ndrService.retryRelayActions()
+            }
+            .store(in: &viewModel.cancellables)
     }
 
     private static let bridgeSubscriptionID = "bridge-rendezvous"

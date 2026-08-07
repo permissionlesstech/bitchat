@@ -97,6 +97,10 @@ enum NoisePayloadType: UInt8 {
     case verifyResponse  = 0x11     // Verification response
     // Transitive verification (web of trust)
     case vouch = 0x12               // Batch of vouch attestations
+    // Double-ratchet invite/response events exchanged only inside an
+    // authenticated BLE Noise session. 0x12 is already vouch on current
+    // clients, so the unreleased prototype value must not be reused.
+    case ndrEvent = 0x22            // UTF-8 Nostr event JSON or compact invite URL
 
     /// #1434 briefly used 0x09 before release. Accept it while prerelease
     /// builds age out, but never emit it. Decoders canonicalize both values to
@@ -125,6 +129,7 @@ enum NoisePayloadType: UInt8 {
         case .verifyChallenge: return "verifyChallenge"
         case .verifyResponse: return "verifyResponse"
         case .vouch: return "vouch"
+        case .ndrEvent: return "ndrEvent"
         }
     }
 }

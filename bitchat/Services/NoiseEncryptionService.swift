@@ -888,6 +888,27 @@ final class NoiseEncryptionService {
         return try sessionManager.encrypt(data, for: peerID)
     }
 
+    /// Encrypts only under the exact authenticated session generation that
+    /// authorized the caller's capability decision. Rekey/removal between
+    /// proof lookup and encryption fails closed.
+    func encrypt(
+        _ data: Data,
+        for peerID: PeerID,
+        sessionGeneration: UUID
+    ) throws -> Data {
+        guard NoiseSecurityValidator.validateMessageSize(data) else {
+            throw NoiseSecurityError.messageTooLarge
+        }
+        guard rateLimiter.allowMessage(from: peerID) else {
+            throw NoiseSecurityError.rateLimitExceeded
+        }
+        return try sessionManager.encrypt(
+            data,
+            for: peerID,
+            expectedSessionGeneration: sessionGeneration
+        )
+    }
+
     /// Encrypts a finalized private-media packet. Ordinary Noise application
     /// messages retain the 64 KiB ceiling; this purpose-specific path permits
     /// the bounded `BitchatFilePacket` envelope and refuses every other typed

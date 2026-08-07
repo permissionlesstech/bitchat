@@ -318,6 +318,19 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     let meshService: Transport
     let idBridge: NostrIdentityBridge
     let identityManager: SecureIdentityStateManagerProtocol
+    let ndrService: NdrNostrService
+    let favoritesService: FavoritesPersistenceService
+    /// Bounds NDR bootstrap retries to one chain for an exact authenticated
+    /// Noise generation. A changed generation or invite replaces the token.
+    var ndrInviteAttemptTokenByPeer: [PeerID: String] = [:]
+    /// Tracks which Noise generation last claimed durable OOB responses so
+    /// repeated bootstrap triggers cannot reset their retry budget.
+    var ndrOutOfBandGenerationByPeer: [PeerID: UUID] = [:]
+    /// A favorite's authenticated Noise key is the stable binding. If its
+    /// associated Nostr identity changes, retire only that old pairwise peer.
+    var ndrPeerPubkeyByNoiseKey: [Data: String] = [:]
+    var ndrBindingIdentityPubkeyHex: String?
+    private let ndrFavoriteRebindAuthorizationOwner = UUID()
     /// Single source of truth for conversation message state and selection
     /// (docs/CONVERSATION-STORE-DESIGN.md). Owned by `AppRuntime` and passed
     /// through.
@@ -1104,7 +1117,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         conversations: ConversationStore? = nil,
         peerIdentityStore: PeerIdentityStore? = nil,
         locationPresenceStore: LocationPresenceStore? = nil,
-        locationManager: LocationChannelManager = .shared
+        locationManager: LocationChannelManager = .shared,
+        ndrService: NdrNostrService? = nil,
+        favoritesService: FavoritesPersistenceService? = nil
     ) {
         let livePanicRecoveryOperations = PanicRecoveryOperations.live()
         let startSuspendedForRecovery: Bool
@@ -1140,6 +1155,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             idBridge: idBridge,
             identityManager: identityManager,
             transport: meshService,
+            ndrService: ndrService,
+            favoritesService: favoritesService,
             conversations: conversations,
             peerIdentityStore: peerIdentityStore ?? PeerIdentityStore(),
             locationPresenceStore: locationPresenceStore ?? LocationPresenceStore(),
@@ -1159,6 +1176,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         idBridge: NostrIdentityBridge,
         identityManager: SecureIdentityStateManagerProtocol,
         transport: Transport,
+        ndrService: NdrNostrService? = nil,
+        favoritesService: FavoritesPersistenceService? = nil,
         conversations: ConversationStore? = nil,
         peerIdentityStore: PeerIdentityStore? = nil,
         locationPresenceStore: LocationPresenceStore? = nil,
@@ -1173,11 +1192,15 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         let conversations = conversations ?? ConversationStore()
         let peerIdentityStore = peerIdentityStore ?? PeerIdentityStore()
         let locationPresenceStore = locationPresenceStore ?? LocationPresenceStore()
+        let resolvedNdrService = ndrService ?? .shared
+        let resolvedFavoritesService =
+            favoritesService ?? FavoritesPersistenceService.shared
         let services = ChatViewModelServiceBundle(
             keychain: keychain,
             idBridge: idBridge,
             identityManager: identityManager,
             meshService: transport,
+            ndrService: resolvedNdrService,
             outboxStore: outboxStore,
             sfMetrics: sfMetrics
         )
@@ -1189,6 +1212,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         self.groupStore = GroupStore(keychain: keychain)
         self.idBridge = idBridge
         self.identityManager = identityManager
+        self.ndrService = resolvedNdrService
+        self.favoritesService = resolvedFavoritesService
         self.conversations = conversations
         self.peerIdentityStore = peerIdentityStore
         self.locationPresenceStore = locationPresenceStore
@@ -1243,6 +1268,32 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             _ = panicClearAllData(restartServices: false)
         }
 
+        resolvedFavoritesService
+            .installNostrIdentityRebindAuthorization(
+                owner: ndrFavoriteRebindAuthorizationOwner,
+                required: resolvedNdrService.isRolloutEnabled,
+                authorize: { [weak self]
+                    noisePublicKey,
+                    oldNostrPublicKey,
+                    newNostrPublicKey in
+                    self?.authorizeDoubleRatchetFavoriteRebind(
+                        noisePublicKey: noisePublicKey,
+                        oldNostrPublicKey: oldNostrPublicKey,
+                        newNostrPublicKey: newNostrPublicKey
+                    ) ?? false
+                },
+                commit: { [weak self]
+                    noisePublicKey,
+                    oldNostrPublicKey,
+                    newNostrPublicKey in
+                    self?.commitDoubleRatchetFavoriteRebind(
+                    noisePublicKey: noisePublicKey,
+                    oldNostrPublicKey: oldNostrPublicKey,
+                    newNostrPublicKey: newNostrPublicKey
+                    ) ?? false
+                }
+            )
+
         if networkActivationAllowed {
             ChatViewModelBootstrapper(viewModel: self).configure()
         }
@@ -1251,6 +1302,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     // MARK: - Deinitialization
 
     deinit {
+        let owner = ndrFavoriteRebindAuthorizationOwner
+        let favoritesService = favoritesService
+        Task { @MainActor in
+            favoritesService
+                .removeNostrIdentityRebindAuthorization(owner: owner)
+        }
         // No need to force UserDefaults synchronization
     }
 
@@ -1512,6 +1569,17 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
     @objc func handleFavoriteStatusChanged(_ notification: Notification) {
         peerIdentityCoordinator.handleFavoriteStatusChanged(notification)
+        guard let peerPublicKey = notification.userInfo?["peerPublicKey"] as? Data else { return }
+        Task { @MainActor [weak self] in
+            guard let self,
+                  let peer = unifiedPeerService.peers.first(where: {
+                      $0.isConnected && $0.noisePublicKey == peerPublicKey
+                  })
+            else {
+                return
+            }
+            bootstrapDoubleRatchetIfNeeded(for: peer.peerID)
+        }
     }
 
     // MARK: - App Lifecycle
@@ -1580,6 +1648,22 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         queuedPrivateChatClears.removeAll(keepingCapacity: false)
         privateChatClearInFlight = false
 
+        ndrInviteAttemptTokenByPeer.removeAll()
+        ndrOutOfBandGenerationByPeer.removeAll()
+        ndrPeerPubkeyByNoiseKey.removeAll()
+        ndrBindingIdentityPubkeyHex = nil
+        let ndrWipeCompleted: Bool
+        do {
+            try ndrService.resetForPanic()
+            ndrWipeCompleted = true
+        } catch {
+            ndrWipeCompleted = false
+            SecureLogger.error(
+                "Panic double-ratchet storage cleanup incomplete; recovery remains pending: \(error)",
+                category: .security
+            )
+        }
+
         // Deny and release any clear-media confirmations before identities,
         // message state, and local files are wiped.
         cancelAllLegacyPrivateMediaConsents()
@@ -1620,7 +1704,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         publicRateLimiter.reset()
 
         // Clear persistent favorites from keychain
-        FavoritesPersistenceService.shared.clearAllFavorites()
+        favoritesService.clearAllFavorites()
 
         // Drop courier mail carried for third parties (memory and disk),
         // our own queued outbox, the carried public history, and the
@@ -1717,7 +1801,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         let panicCompleted: Bool
         do {
             try panicRecoveryOperations.wipeMedia(recoveryIntent)
-            if keychainWipeCompleted {
+            if keychainWipeCompleted && ndrWipeCompleted {
                 try panicRecoveryOperations.complete()
                 panicCompleted = true
                 SecureLogger.info(
@@ -2101,6 +2185,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
         case .bluetoothStateUpdated(let state):
             updateBluetoothState(state)
+
+        case .authenticatedPeerTransportStateUpdated(let peerID):
+            bootstrapDoubleRatchetIfNeeded(for: peerID)
         }
     }
 

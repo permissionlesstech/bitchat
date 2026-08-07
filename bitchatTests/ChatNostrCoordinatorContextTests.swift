@@ -79,7 +79,15 @@ private final class MockChatNostrContext: ChatNostrContext {
     var selectedPrivateChatPeer: PeerID?
     var nostrKeyMapping: [PeerID: String] = [:]
     func registerNostrKeyMapping(_ pubkey: String, for peerID: PeerID) { nostrKeyMapping[peerID] = pubkey }
-    private(set) var handledPrivateMessages: [(payload: NoisePayload, senderPubkey: String, convKey: PeerID, timestamp: Date)] = []
+    private(set) var handledPrivateMessages: [
+        (
+            payload: NoisePayload,
+            senderPubkey: String,
+            convKey: PeerID,
+            timestamp: Date,
+            source: NostrPrivateMessageSource
+        )
+    ] = []
     private(set) var handledDelivered: [(senderPubkey: String, convKey: PeerID)] = []
     private(set) var handledReadReceipts: [(senderPubkey: String, convKey: PeerID)] = []
     private(set) var startedPrivateChats: [PeerID] = []
@@ -89,9 +97,16 @@ private final class MockChatNostrContext: ChatNostrContext {
         senderPubkey: String,
         convKey: PeerID,
         id: NostrIdentity,
-        messageTimestamp: Date
+        messageTimestamp: Date,
+        source: NostrPrivateMessageSource
     ) {
-        handledPrivateMessages.append((payload, senderPubkey, convKey, messageTimestamp))
+        handledPrivateMessages.append((
+            payload,
+            senderPubkey,
+            convKey,
+            messageTimestamp,
+            source
+        ))
     }
 
     func handleDelivered(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID) {
@@ -213,6 +228,7 @@ private final class MockChatNostrContext: ChatNostrContext {
 
     // Favorites & notifications
     var favoriteRelationshipsByNoiseKey: [Data: FavoritesPersistenceService.FavoriteRelationship] = [:]
+    var acceptsLegacyNostrDM = true
     private(set) var geohashActivityNotifications: [(geohash: String, bodyPreview: String)] = []
 
     func favoriteRelationship(forNoiseKey noiseKey: Data) -> FavoritesPersistenceService.FavoriteRelationship? {
@@ -221,6 +237,10 @@ private final class MockChatNostrContext: ChatNostrContext {
 
     func allFavoriteRelationships() -> [FavoritesPersistenceService.FavoriteRelationship] {
         Array(favoriteRelationshipsByNoiseKey.values)
+    }
+
+    func canAcceptLegacyNostrDM(from _: String) -> Bool {
+        acceptsLegacyNostrDM
     }
 
     func notifyGeohashActivity(geohash: String, bodyPreview: String) {
@@ -362,6 +382,7 @@ struct ChatNostrCoordinatorContextTests {
         #expect(context.nostrKeyMapping[convKey] == sender.publicKeyHex)
         #expect(context.handledPrivateMessages.first?.senderPubkey == sender.publicKeyHex)
         #expect(context.handledPrivateMessages.first?.convKey == convKey)
+        #expect(context.handledPrivateMessages.first?.source == .legacy1059)
 
         // The embedded Noise payload survives the round trip intact.
         let payload = try #require(context.handledPrivateMessages.first?.payload)
@@ -444,6 +465,46 @@ struct ChatNostrCoordinatorContextTests {
 
         await coordinator.inbound.processNostrMessage(giftWrap)
         #expect(context.recordedNostrEventIDs == [giftWrap.id])
+    }
+
+    @Test @MainActor
+    func processNostrMessage_rejectsLegacyDowngradeBeforeDelivery()
+        async throws
+    {
+        let context = MockChatNostrContext()
+        let coordinator = ChatNostrCoordinator(context: context)
+        let recipient = try NostrIdentity.generate()
+        let sender = try NostrIdentity.generate()
+        context.nostrIdentity = recipient
+        context.acceptsLegacyNostrDM = false
+        let embedded = try #require(
+            NostrEmbeddedBitChat.encodePMForNostrNoRecipient(
+                content: "must not downgrade",
+                messageID: "legacy-blocked",
+                senderPeerID: PeerID(str: "aabbccddeeff0011")
+            )
+        )
+        let blockedGiftWrap = try NostrProtocol.createPrivateMessage(
+            content: embedded,
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+
+        await coordinator.inbound.processNostrMessage(blockedGiftWrap)
+
+        #expect(context.handledPrivateMessages.isEmpty)
+        #expect(context.recordedNostrEventIDs == [blockedGiftWrap.id])
+
+        context.acceptsLegacyNostrDM = true
+        let acceptedGiftWrap = try NostrProtocol.createPrivateMessage(
+            content: embedded,
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+        await coordinator.inbound.processNostrMessage(acceptedGiftWrap)
+
+        #expect(context.handledPrivateMessages.count == 1)
+        #expect(context.handledPrivateMessages.first?.source == .legacy1059)
     }
 
     @Test @MainActor
@@ -679,6 +740,133 @@ struct GeoPresenceTrackerTests {
             context.geohashActivityNotifications.last?.bodyPreview
                 == String(repeating: "x", count: TransportConfig.uiGeoNotifySnippetMaxLen) + "…"
         )
+    }
+
+    @Test @MainActor
+    func ndrDelivery_expiredAtFinalMutationDrainsWithoutSideEffects() async throws {
+        let context = MockChatNostrContext()
+        let recipient = try NostrIdentity.generate()
+        let sender = try NostrIdentity.generate()
+        context.nostrIdentity = recipient
+        let senderNoiseKey = Data(repeating: 0xA8, count: 32)
+        context.favoriteRelationshipsByNoiseKey[senderNoiseKey] =
+            FavoritesPersistenceService.FavoriteRelationship(
+                peerNoisePublicKey: senderNoiseKey,
+                peerNostrPublicKey: sender.npub,
+                peerNickname: "expired-peer",
+                isFavorite: true,
+                theyFavoritedUs: true,
+                favoritedAt: Date(timeIntervalSince1970: 0),
+                lastUpdated: Date(timeIntervalSince1970: 0)
+            )
+        let senderPeerID = PeerID(str: "0011223344556677")
+        let embedded = try #require(
+            NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(
+                type: .delivered,
+                messageID: "expired-ndr",
+                senderPeerID: senderPeerID
+            )
+        )
+        let unsigned = NostrEvent(
+            pubkey: sender.publicKeyHex,
+            createdAt: Date(timeIntervalSince1970: 99),
+            kind: .dm,
+            tags: [],
+            content: embedded
+        )
+        var rumor = try unsigned.sign(
+            with: sender.schnorrSigningKey()
+        )
+        rumor.sig = nil
+
+        let presence = GeoPresenceTracker(context: context)
+        let pipeline = NostrInboundPipeline(
+            context: context,
+            presence: presence,
+            now: { Date(timeIntervalSince1970: 100) }
+        )
+        var disposition: NdrDeliveryDisposition?
+        pipeline.handleNdrDecryptedMessage(
+            NdrDecryptedMessage(
+                event: rumor,
+                senderPubkeyHex: sender.publicKeyHex,
+                outerEventID: String(repeating: "a", count: 64),
+                expiresAtSeconds: 100
+            ),
+            completion: { disposition = $0 }
+        )
+        let completed = await TestHelpers.waitUntil(
+            { disposition != nil },
+            timeout: TestConstants.settleTimeout
+        )
+
+        #expect(completed)
+        #expect(disposition == .consumed)
+        #expect(context.nostrKeyMapping.isEmpty)
+        #expect(context.handledDelivered.isEmpty)
+        #expect(context.handledPrivateMessages.isEmpty)
+        #expect(context.handledReadReceipts.isEmpty)
+        #expect(context.recordedNostrEventIDs == [rumor.id])
+    }
+
+    @Test @MainActor
+    func ndrDelivery_marksPrivateMessageAsPairwiseOnly() async throws {
+        let context = MockChatNostrContext()
+        let recipient = try NostrIdentity.generate()
+        let sender = try NostrIdentity.generate()
+        let noiseKey = Data(repeating: 0xA9, count: 32)
+        context.nostrIdentity = recipient
+        context.favoriteRelationshipsByNoiseKey[noiseKey] =
+            FavoritesPersistenceService.FavoriteRelationship(
+                peerNoisePublicKey: noiseKey,
+                peerNostrPublicKey: sender.npub,
+                peerNickname: "pairwise-peer",
+                isFavorite: true,
+                theyFavoritedUs: true,
+                favoritedAt: Date(timeIntervalSince1970: 0),
+                lastUpdated: Date(timeIntervalSince1970: 0)
+            )
+        let embedded = try #require(
+            NostrEmbeddedBitChat.encodePMForNostr(
+                content: "pairwise inbound",
+                messageID: "ndr-inbound-1",
+                recipientPeerID: PeerID(hexData: noiseKey),
+                senderPeerID: PeerID(str: "0011223344556677")
+            )
+        )
+        var rumor = try NostrEvent(
+            pubkey: sender.publicKeyHex,
+            createdAt: Date(timeIntervalSince1970: 99),
+            kind: .dm,
+            tags: [],
+            content: embedded
+        ).sign(with: sender.schnorrSigningKey())
+        rumor.sig = nil
+        let pipeline = NostrInboundPipeline(
+            context: context,
+            presence: GeoPresenceTracker(context: context)
+        )
+        var disposition: NdrDeliveryDisposition?
+
+        pipeline.handleNdrDecryptedMessage(
+            NdrDecryptedMessage(
+                event: rumor,
+                senderPubkeyHex: sender.publicKeyHex,
+                outerEventID: String(repeating: "c", count: 64),
+                expiresAtSeconds: nil
+            ),
+            completion: { disposition = $0 }
+        )
+        let completed = await TestHelpers.waitUntil(
+            { disposition != nil },
+            timeout: TestConstants.settleTimeout
+        )
+
+        #expect(completed)
+        #expect(disposition == .consumed)
+        #expect(context.handledPrivateMessages.count == 1)
+        #expect(context.handledPrivateMessages.first?.convKey == PeerID(hexData: noiseKey))
+        #expect(context.handledPrivateMessages.first?.source == .ndr)
     }
 
 }
