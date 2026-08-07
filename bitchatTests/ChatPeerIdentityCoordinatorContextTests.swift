@@ -383,6 +383,10 @@ struct ChatPeerIdentityCoordinatorContextTests {
         )
         #expect(coordinator.resolveNickname(for: identityPeer) == "bob!")
 
+        // Local alias outranks a live mesh announce for the same peer.
+        context.nicknamesByPeerID[identityPeer] = "bob"
+        #expect(coordinator.resolveNickname(for: identityPeer) == "bob!")
+
         #expect(coordinator.resolveNickname(for: unknownPeer) == "anonfeed")
         #expect(coordinator.getMyFingerprint() == "my-fingerprint")
     }

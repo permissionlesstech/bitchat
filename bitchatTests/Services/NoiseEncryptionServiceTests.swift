@@ -961,15 +961,20 @@ struct NoiseEncryptionServiceTests {
 
     @Test("Immediate legacy restart during completion grace converges once")
     func immediateLegacyRestartDuringCompletionGrace() async throws {
+        // The grace period must still be open when the restart initiation
+        // arrives below. A small value races the wall clock on a starved
+        // runner, so inject one no test run can outlive; the recovery half
+        // is then fired explicitly instead of waiting out the timer.
+        let unlosableGracePeriod: TimeInterval = 600
         let firstKeychain = MockKeychain()
         let secondKeychain = MockKeychain()
         let first = NoiseEncryptionService(
             keychain: firstKeychain,
-            recentInitiatorCompletionGracePeriod: 0.03
+            recentInitiatorCompletionGracePeriod: unlosableGracePeriod
         )
         let second = NoiseEncryptionService(
             keychain: secondKeychain,
-            recentInitiatorCompletionGracePeriod: 0.03
+            recentInitiatorCompletionGracePeriod: unlosableGracePeriod
         )
         let firstPeerID = PeerID(publicKey: first.getStaticPublicKeyData())
         let secondPeerID = PeerID(publicKey: second.getStaticPublicKeyData())
@@ -1034,6 +1039,7 @@ struct NoiseEncryptionServiceTests {
         )
         #expect(lower.hasEstablishedSession(with: higherPeerID))
 
+        lower._test_fireSuppressedInitiationRecovery(for: higherPeerID)
         let requested = await TestHelpers.waitUntil(
             { recovery.messages.count == 1 },
             timeout: TestConstants.longTimeout

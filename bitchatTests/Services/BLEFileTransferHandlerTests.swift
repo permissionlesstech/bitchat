@@ -222,7 +222,7 @@ struct BLEFileTransferHandlerTests {
         #expect(message?.isPrivate == false)
         #expect(message?.senderPeerID == remotePeerID)
         #expect(message?.timestamp == Date(timeIntervalSince1970: 900))
-        #expect(message?.deliveryStatus == nil)
+        #expect(message?.deliveryStatus == .notSentYet)
     }
 
     @Test

@@ -477,15 +477,21 @@ final class ChatPeerIdentityCoordinator {
             return peerID.id
         }
 
+        // Local aliases outrank announced nicknames so a saved petname is
+        // actually visible after the fingerprint sheet dismisses.
+        if let fingerprint = getFingerprint(for: peerID),
+           let identity = context.socialIdentity(forFingerprint: fingerprint),
+           let petname = identity.localPetname,
+           !petname.isEmpty {
+            return petname
+        }
+
         if let nickname = context.meshPeerNicknames()[peerID] {
             return nickname
         }
 
         if let fingerprint = getFingerprint(for: peerID),
            let identity = context.socialIdentity(forFingerprint: fingerprint) {
-            if let petname = identity.localPetname {
-                return petname
-            }
             return identity.claimedNickname
         }
 
@@ -501,6 +507,9 @@ final class ChatPeerIdentityCoordinator {
 
     @MainActor
     func getPeerIDForNickname(_ nickname: String) -> PeerID? {
+        // Queries arrive from typed commands and message content, so bring
+        // them to the same canonical (NFC) form nicknames are stored in.
+        let nickname = nickname.normalizedNickname
         switch context.activeChannel {
         case .location:
             if nickname.contains("#"),

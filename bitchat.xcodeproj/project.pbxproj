@@ -94,7 +94,6 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
-				bitchatShareExtension.entitlements,
 			);
 			target = 57CA17A36A2532A6CFF367BB /* bitchatShareExtension */;
 		};
@@ -382,6 +381,11 @@
 				E0A1B2C3D4E5F6012345678D /* relays/online_relays_gps.csv in Resources */,
 			);
 		};
+		7E9B64F63F93443FB7BA12DF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
 		C5E027A42ECCDFD700BD6012 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
@@ -397,13 +401,6 @@
 			files = (
 				E0A1B2C3D4E5F6012345678E /* relays/online_relays_gps.csv in Resources */,
 			);
-		};
-		7E9B64F63F93443FB7BA12DF /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 

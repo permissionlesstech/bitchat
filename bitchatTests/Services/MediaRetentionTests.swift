@@ -114,4 +114,83 @@ struct MediaRetentionTests {
     func defaultRetentionIsSevenDays() {
         #expect(BLEIncomingFileStore.defaultMediaRetention == 7 * 24 * 60 * 60)
     }
+
+    #if os(iOS)
+    /// Media was the one persistence layer that never stated a protection
+    /// class at its write site, so payloads inherited the container
+    /// default. Saves must survive the added write option,
+    /// and on device the class must read back. The simulator's filesystem
+    /// does not model data protection (the attribute reads back nil there),
+    /// so the readback assertion is device-only.
+    @Test
+    func savedMediaSurvivesExplicitProtectionClass() throws {
+        let root = makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = BLEIncomingFileStore(baseDirectory: root)
+
+        let payload = Data([0xFF, 0xD8, 0xFF, 0xD9])
+        let saved = try #require(store.save(
+            data: payload,
+            preferredName: "note.m4a",
+            subdirectory: "voicenotes/incoming",
+            fallbackExtension: "m4a",
+            defaultPrefix: "voice"
+        ))
+
+        #expect(try Data(contentsOf: saved) == payload)
+        #if !targetEnvironment(simulator)
+        let protection = try FileManager.default.attributesOfItem(
+            atPath: saved.path
+        )[.protectionKey] as? FileProtectionType
+        #expect(protection == .completeUntilFirstUserAuthentication)
+        #endif
+    }
+
+    /// Files written before payloads carried an explicit class are stamped
+    /// by the launch-time migration that follows the retention sweep: the
+    /// directory plus each resident file, without error. In-flight live
+    /// captures are left alone, exactly as the sweep leaves them: the
+    /// coordinator may still be writing to one through an open FileHandle,
+    /// and new captures receive the class at creation. Readback is device-only for the same
+    /// reason as above.
+    @Test
+    func migrationStampsPreexistingMediaAndSkipsLiveCaptures() throws {
+        let root = makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = BLEIncomingFileStore(baseDirectory: root)
+        let incoming = try store.incomingDirectory(subdirectory: "voicenotes/incoming")
+
+        let legacy = try write(
+            "received.m4a",
+            in: incoming,
+            modified: Date(timeIntervalSinceNow: -60)
+        )
+        _ = try write(
+            "\(BLEIncomingFileStore.liveCapturePrefix)00112233445566ff_dm.aac",
+            in: incoming,
+            modified: Date(timeIntervalSinceNow: -60)
+        )
+
+        // Exactly the directory itself plus the legacy file; strict equality
+        // is what proves the live capture was not stamped.
+        #expect(store.migrateFileProtectionIfNeeded() == 2)
+        #expect(FileManager.default.fileExists(atPath: legacy.path))
+        #if !targetEnvironment(simulator)
+        let protection = try FileManager.default.attributesOfItem(
+            atPath: legacy.path
+        )[.protectionKey] as? FileProtectionType
+        #expect(protection == .completeUntilFirstUserAuthentication)
+        #endif
+    }
+
+    /// A store with no media on disk has nothing to stamp.
+    @Test
+    func migrationWithNoMediaIsANoOp() {
+        let root = makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = BLEIncomingFileStore(baseDirectory: root)
+
+        #expect(store.migrateFileProtectionIfNeeded() == 0)
+    }
+    #endif
 }

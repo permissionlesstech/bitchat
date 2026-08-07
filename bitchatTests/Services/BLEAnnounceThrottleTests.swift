@@ -68,6 +68,21 @@ struct BLEAnnounceThrottleTests {
         #expect(accepted.value == 1)
         #expect(throttle.elapsed(since: now.addingTimeInterval(3)) == 3)
     }
+
+    @Test
+    func resetForgetsThrottleDebtSoARotationAnnounceIsNeverSwallowed() {
+        let throttle = BLEAnnounceThrottle(
+            normalMinimumInterval: 1,
+            forcedMinimumInterval: 1
+        )
+        let now = Date()
+        #expect(throttle.shouldSend(force: true, now: now))
+        // A panic inside the forced window would be throttled...
+        #expect(!throttle.shouldSend(force: true, now: now.addingTimeInterval(0.2)))
+        // ...so the rotation resets the debt and announces immediately.
+        throttle.reset()
+        #expect(throttle.shouldSend(force: true, now: now.addingTimeInterval(0.3)))
+    }
 }
 
 private final class LockedCounter: @unchecked Sendable {

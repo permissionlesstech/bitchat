@@ -281,6 +281,7 @@ final class MessageRouter {
         guard remainingSlots > 0 else { return }
 
         for transport in transports {
+            guard let courierTransport = transport as? MeshCourierTransporting else { continue }
             let couriers = eligibleCouriers(
                 on: transport,
                 recipientKey: recipientKey,
@@ -288,7 +289,7 @@ final class MessageRouter {
                 limit: remainingSlots
             )
             guard !couriers.isEmpty else { continue }
-            if transport.sendCourierMessage(entry.content, messageID: messageID, recipientNoiseKey: recipientKey, via: couriers.map(\.peerID)) {
+            if courierTransport.sendCourierMessage(entry.content, messageID: messageID, recipientNoiseKey: recipientKey, via: couriers.map(\.peerID)) {
                 SecureLogger.debug("📦 PM \(messageID.prefix(8))… handed to \(couriers.count) courier(s) for \(peerID.id.prefix(8))…", category: .session)
                 recordCourierDeposit(messageID: messageID, for: peerID, courierKeys: couriers.map(\.noiseKey))
                 onMessageCarried?(messageID, peerID)
@@ -304,6 +305,7 @@ final class MessageRouter {
     /// `maxCouriersPerMessage` distinct couriers or expires.
     func courierBecameAvailable(_ peerID: PeerID) {
         for transport in transports {
+            guard let courierTransport = transport as? MeshCourierTransporting else { continue }
             guard transport.isPeerConnected(peerID),
                   let snapshot = transport.currentPeerSnapshots().first(where: { $0.peerID == peerID && $0.isConnected }),
                   let courierKey = snapshot.noisePublicKey,
@@ -319,7 +321,7 @@ final class MessageRouter {
                     guard message.depositedCourierKeys.count < Self.maxCouriersPerMessage,
                           !message.depositedCourierKeys.contains(courierKey),
                           currentDate.timeIntervalSince(message.timestamp) <= Self.messageTTLSeconds else { continue }
-                    if transport.sendCourierMessage(message.content, messageID: message.messageID, recipientNoiseKey: recipientKey, via: [peerID]) {
+                    if courierTransport.sendCourierMessage(message.content, messageID: message.messageID, recipientNoiseKey: recipientKey, via: [peerID]) {
                         SecureLogger.debug("📦 Deposit retry: PM \(message.messageID.prefix(8))… handed to \(peerID.id.prefix(8))… for \(recipient.id.prefix(8))…", category: .session)
                         recordCourierDeposit(messageID: message.messageID, for: recipient, courierKeys: [courierKey])
                         onMessageCarried?(message.messageID, recipient)

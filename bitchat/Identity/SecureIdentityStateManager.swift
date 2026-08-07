@@ -662,8 +662,8 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     }
     
     func removeEphemeralSession(peerID: PeerID) {
-        _ = queue.sync(flags: .barrier) {
-            self.ephemeralSessions.removeValue(forKey: peerID)
+        queue.sync(flags: .barrier) {
+            _ = self.ephemeralSessions.removeValue(forKey: peerID)
         }
     }
     

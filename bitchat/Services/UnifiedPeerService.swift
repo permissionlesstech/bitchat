@@ -195,7 +195,8 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             nickname: peerInfo.nickname,
             lastSeen: peerInfo.lastSeen,
             isConnected: peerInfo.isConnected,
-            isReachable: isReachable
+            isReachable: isReachable,
+            localPetname: localPetname(forFingerprint: fingerprint)
         )
         
         // Check for favorite status
@@ -218,7 +219,8 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             nickname: favorite.peerNickname,
             lastSeen: favorite.lastUpdated,
             isConnected: false,
-            isReachable: false
+            isReachable: false,
+            localPetname: localPetname(forFingerprint: favorite.peerNoisePublicKey.sha256Fingerprint())
         )
         
         peer.favoriteStatus = favorite
@@ -227,6 +229,21 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         return peer
     }
     
+    /// Rebuild peer rows after a social-identity write (local alias, etc.) so
+    /// display names update without waiting for a mesh event.
+    func refreshPeers() {
+        updatePeers()
+    }
+
+    private func localPetname(forFingerprint fingerprint: String?) -> String? {
+        guard let fingerprint,
+              let petname = identityManager.getSocialIdentity(for: fingerprint)?.localPetname,
+              !petname.isEmpty else {
+            return nil
+        }
+        return petname
+    }
+
     // MARK: - Public Methods
     
     /// Get peer by ID
@@ -236,8 +253,11 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     
     /// Get peer ID for nickname
     func getPeerID(for nickname: String) -> PeerID? {
+        // Normalize both sides: the query may come from typed content and
+        // stored names may predate NFC-at-ingest (e.g. persisted favorites).
+        let target = nickname.normalizedNickname
         for peer in peers {
-            if peer.displayName == nickname || peer.nickname == nickname {
+            if peer.displayName.normalizedNickname == target || peer.nickname.normalizedNickname == target {
                 return peer.peerID
             }
         }
@@ -279,7 +299,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             // Purge while the fingerprint↔peerID mapping is still known: the
             // archived-echo seed filter can't resolve offline strangers, so
             // scrub their carried messages now rather than at relaunch.
-            meshService.purgeArchivedPublicMessages(from: peerID)
+            (meshService as? MeshPublicArchiving)?.purgeArchivedPublicMessages(from: peerID)
         }
         updatePeers()
         return fingerprint

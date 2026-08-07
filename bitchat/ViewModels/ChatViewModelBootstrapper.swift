@@ -201,9 +201,8 @@ private extension ChatViewModelBootstrapper {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak viewModel] in
             guard let viewModel,
-                  let bleService = viewModel.meshService as? BLEService else { return }
-            let state = bleService.getCurrentBluetoothState()
-            viewModel.updateBluetoothState(state)
+                  let radio = viewModel.meshService as? BluetoothStateReporting else { return }
+            viewModel.updateBluetoothState(radio.getCurrentBluetoothState())
         }
 
         viewModel.nostrRelayManager = NostrRelayManager.shared
@@ -225,8 +224,9 @@ private extension ChatViewModelBootstrapper {
     /// right after transport start, so give it a beat before asking.
     private func loadArchivedEchoes() {
         DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiArchivedEchoLoadDelaySeconds) { [weak viewModel] in
-            guard let viewModel else { return }
-            viewModel.meshService.collectArchivedPublicMessages { [weak viewModel] allArchived in
+            guard let viewModel,
+                  let archive = viewModel.meshService as? MeshPublicArchiving else { return }
+            archive.collectArchivedPublicMessages { [weak viewModel] allArchived in
                 guard let viewModel else { return }
                 // A previous /clear dismissed everything heard up to its
                 // watermark; only newer archive entries come back. Blocking a
@@ -337,7 +337,7 @@ private extension ChatViewModelBootstrapper {
     func configureGateway() {
         // Gateway mode bridges BLE mesh <-> Nostr; a mock transport (tests)
         // has no carrier packets to bridge.
-        guard let bleService = viewModel.meshService as? BLEService else { return }
+        guard let bleService = viewModel.meshService as? MeshBridgingTransport else { return }
         let gateway = GatewayService.shared
 
         gateway.publishToRelays = { event, geohash in
@@ -416,7 +416,7 @@ private extension ChatViewModelBootstrapper {
     /// transport, the relay manager, location, and the public timeline. Same
     /// closure-injection style as `configureGateway`.
     func configureBridge() {
-        guard let bleService = viewModel.meshService as? BLEService else { return }
+        guard let bleService = viewModel.meshService as? MeshBridgingTransport else { return }
         let bridge = BridgeService.shared
         let idBridge = viewModel.idBridge
 
@@ -551,7 +551,7 @@ private extension ChatViewModelBootstrapper {
     /// manager, the mesh transport's sealing/opening primitives, the courier
     /// store, and the message router's deposit path.
     func configureBridgeCourier() {
-        guard let bleService = viewModel.meshService as? BLEService else { return }
+        guard let bleService = viewModel.meshService as? MeshBridgingTransport else { return }
         let courier = BridgeCourierService.shared
 
         courier.bridgeEnabled = { BridgeService.shared.isEnabled }

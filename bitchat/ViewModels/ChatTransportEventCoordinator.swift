@@ -176,10 +176,15 @@ extension ChatViewModel: ChatTransportEventContext {
         vouchCoordinator.handleVouchPayload(from: peerID, payload: payload)
     }
 
+    private var ndrTransport: MeshDoubleRatchetTransporting? {
+        meshService as? MeshDoubleRatchetTransporting
+    }
+
     func bootstrapDoubleRatchetIfNeeded(for peerID: PeerID) {
         guard ndrService.isRolloutEnabled,
+              let ndrTransport,
               let authenticated =
-                meshService.authenticatedPeerTransportState(peerID),
+                ndrTransport.authenticatedPeerTransportState(peerID),
               authenticated.capabilities.contains(.doubleRatchet),
               let relationship = favoritesService.getFavoriteStatus(
                 for: authenticated.noisePublicKey
@@ -260,10 +265,11 @@ extension ChatViewModel: ChatTransportEventContext {
 
     func handleNdrEventPayload(from peerID: PeerID, payload: Data) {
         guard ndrService.isRolloutEnabled,
+              let ndrTransport,
               let eventJson = String(data: payload, encoding: .utf8),
               !eventJson.isEmpty,
               let authenticated =
-                meshService.authenticatedPeerTransportState(peerID),
+                ndrTransport.authenticatedPeerTransportState(peerID),
               authenticated.capabilities.contains(.doubleRatchet),
               let relationship = favoritesService.getFavoriteStatus(
                 for: authenticated.noisePublicKey
@@ -342,7 +348,8 @@ extension ChatViewModel: ChatTransportEventContext {
         inviteAttemptToken: String,
         retryAttempt: Int = 0
     ) {
-        guard ndrInviteAttemptTokenByPeer[peerID] == inviteAttemptToken,
+        guard let ndrTransport,
+              ndrInviteAttemptTokenByPeer[peerID] == inviteAttemptToken,
               !ndrService.hasPairwiseSession(with: peerPubkeyHex),
               ndrService.isCurrentInviteAction(invite),
               isCurrentDoubleRatchetBinding(
@@ -357,7 +364,7 @@ extension ChatViewModel: ChatTransportEventContext {
             return
         }
 
-        meshService.sendNdrEvent(
+        ndrTransport.sendNdrEvent(
             to: peerID,
             eventJson: invite.eventJson,
             expectedTransportState: expectedTransportState,
@@ -392,7 +399,8 @@ extension ChatViewModel: ChatTransportEventContext {
         expectedTransportState: AuthenticatedPeerTransportState,
         retryAttempt: Int
     ) {
-        guard action.peerPubkeyHex == peerPubkeyHex,
+        guard let ndrTransport,
+              action.peerPubkeyHex == peerPubkeyHex,
               isCurrentDoubleRatchetBinding(
                 peerID: peerID,
                 expectedTransportState: expectedTransportState,
@@ -407,7 +415,7 @@ extension ChatViewModel: ChatTransportEventContext {
         }
 
         let service = ndrService
-        meshService.sendNdrEvent(
+        ndrTransport.sendNdrEvent(
             to: peerID,
             eventJson: action.eventJson,
             expectedTransportState: expectedTransportState,
@@ -458,7 +466,9 @@ extension ChatViewModel: ChatTransportEventContext {
         expectedTransportState: AuthenticatedPeerTransportState,
         expectedPeerPubkeyHex: String
     ) -> Bool {
-        guard meshService.authenticatedPeerTransportState(peerID) == expectedTransportState,
+        guard let ndrTransport,
+              ndrTransport.authenticatedPeerTransportState(peerID)
+                == expectedTransportState,
               expectedTransportState.capabilities.contains(.doubleRatchet),
               let relationship = favoritesService.getFavoriteStatus(
                 for: expectedTransportState.noisePublicKey
@@ -621,7 +631,7 @@ extension ChatViewModel: ChatTransportEventContext {
             return false
         }
         let reboundPeerIDs = ndrOutOfBandGenerationByPeer.keys.filter {
-            meshService.authenticatedPeerTransportState($0)?
+            ndrTransport?.authenticatedPeerTransportState($0)?
                 .noisePublicKey == noisePublicKey
         }
         for peerID in reboundPeerIDs {

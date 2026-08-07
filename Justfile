@@ -27,7 +27,7 @@ check-clean-safety:
 check: check-clean-safety
     @echo "Checking prerequisites..."
     @command -v xcodebuild >/dev/null 2>&1 || (echo "❌ xcodebuild not found. Install full Xcode." && exit 1)
-    @developer_dir="$$(xcode-select -p 2>/dev/null)"; case "$$developer_dir" in *.app/Contents/Developer) ;; *) echo "❌ Full Xcode is not selected. Run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer"; exit 1;; esac
+    @developer_dir="$(xcode-select -p 2>/dev/null)"; case "$developer_dir" in *.app/Contents/Developer) ;; *) echo "❌ Full Xcode is not selected. Run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer"; exit 1;; esac
     @xcodebuild -version
     @echo "✅ Development environment ready (a signing identity is not required for just build)"
 
@@ -40,7 +40,7 @@ build: check ndr-ffi
     @xcodebuild -project "{{project}}" -scheme "{{macos_scheme}}" -configuration Debug -derivedDataPath "{{derived_data}}" CODE_SIGNING_ALLOWED=NO build
 
 run: build
-    @app="{{derived_data}}/Build/Products/Debug/bitchat.app"; test -d "$$app" || (echo "❌ Built app not found at $$app" && exit 1); open "$$app"
+    @app="{{derived_data}}/Build/Products/Debug/bitchat.app"; test -d "$app" || (echo "❌ Built app not found at $app" && exit 1); open "$app"
 
 # Backward-compatible alias for the old quick-run recipe.
 dev-run: run
