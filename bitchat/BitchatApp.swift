@@ -91,13 +91,40 @@ import AppKit
 
 final class MacAppDelegate: NSObject, NSApplicationDelegate {
     weak var runtime: AppRuntime?
+    /// Holds off App Nap while bitchat is open so Tor + BLE keep serving
+    /// neighbors when the window is minimized or another app is focused (#1593).
+    private var relayActivity: NSObjectProtocol?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        relayActivity = ProcessInfo.processInfo.beginActivity(
+            options: [.userInitiatedAllowingIdleSystemSleep],
+            reason: "Keep Tor and BLE mesh relay alive while bitchat is open"
+        )
+    }
 
     func applicationWillTerminate(_ notification: Notification) {
+        if let relayActivity {
+            ProcessInfo.processInfo.endActivity(relayActivity)
+            self.relayActivity = nil
+        }
         runtime?.applicationWillTerminate()
     }
 
+    /// Closing the last window should leave the dock process running so a
+    /// minimized/hidden macOS install can keep relaying (#1593). Quit via
+    /// the menu / Cmd+Q still tears everything down.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        false
+    }
+
+    /// Dock / Cmd-click reopen after the last window was closed.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            // SwiftUI WindowGroup will create a window when we activate; make
+            // sure the app comes forward so Tor/BLE stay user-visible again.
+            sender.activate(ignoringOtherApps: true)
+        }
+        return true
     }
 }
 #endif
