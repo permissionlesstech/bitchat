@@ -113,6 +113,14 @@ protocol SecureIdentityStateManagerProtocol {
     // MARK: Blocked Users Management
     func isBlocked(fingerprint: String) -> Bool
     func setBlocked(_ fingerprint: String, isBlocked: Bool)
+
+    // MARK: Nearby-notification mute
+    /// Explicit proximity mute (does not include blocked peers).
+    func isNearbyNotificationMuted(fingerprint: String) -> Bool
+    /// True when this fingerprint should not count toward nearby alerts
+    /// (explicit mute or blocked).
+    func suppressesNearbyNotification(fingerprint: String) -> Bool
+    func setNearbyNotificationMuted(_ fingerprint: String, muted: Bool)
     
     // MARK: Geohash (Nostr) Blocking
     func isNostrBlocked(pubkeyHexLowercased: String) -> Bool
@@ -598,6 +606,42 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
                 )
                 self.cache.socialIdentities[fingerprint] = newIdentity
             }
+            self.saveIdentityCache()
+        }
+    }
+
+    // MARK: - Nearby-notification mute
+
+    func isNearbyNotificationMuted(fingerprint: String) -> Bool {
+        queue.sync {
+            cache.nearbyNotificationMutedFingerprints?.contains(fingerprint) == true
+        }
+    }
+
+    /// True when this fingerprint should not contribute to the "bitchatters
+    /// nearby" local notification. Blocked peers are always suppressed;
+    /// additionally, peers the user has explicitly muted for proximity
+    /// alerts (typically their own other devices) are suppressed without a
+    /// full block.
+    func suppressesNearbyNotification(fingerprint: String) -> Bool {
+        queue.sync {
+            if cache.socialIdentities[fingerprint]?.isBlocked == true {
+                return true
+            }
+            return cache.nearbyNotificationMutedFingerprints?.contains(fingerprint) == true
+        }
+    }
+
+    func setNearbyNotificationMuted(_ fingerprint: String, muted: Bool) {
+        guard !fingerprint.isEmpty else { return }
+        queue.sync(flags: .barrier) {
+            var mutedSet = self.cache.nearbyNotificationMutedFingerprints ?? []
+            if muted {
+                mutedSet.insert(fingerprint)
+            } else {
+                mutedSet.remove(fingerprint)
+            }
+            self.cache.nearbyNotificationMutedFingerprints = mutedSet
             self.saveIdentityCache()
         }
     }
