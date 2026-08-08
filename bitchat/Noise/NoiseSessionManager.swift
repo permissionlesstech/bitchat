@@ -1001,8 +1001,7 @@ final class NoiseSessionManager {
             0,
             recentInitiatorCompletionGracePeriod - elapsed
         )
-        let timeout = DispatchWorkItem(flags: .barrier) {
-            [weak self, weak establishedSession] in
+        let timeout = DispatchWorkItem(flags: .barrier) { [weak self, weak establishedSession] in
             guard let self,
                   let establishedSession,
                   let current = self.sessions[peerID],
