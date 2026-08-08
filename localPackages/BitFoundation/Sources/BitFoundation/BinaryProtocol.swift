@@ -366,7 +366,19 @@ public struct BinaryProtocol {
                     guard let rawSize = read16() else { return nil }
                     originalSize = Int(rawSize)
                 }
-                guard originalSize >= 0 && originalSize <= FileTransferLimits.maxFramedFileBytes else { return nil }
+                // Logged, not silent: this is the sibling of the ratio
+                // rejection below and drops the packet just as completely, but
+                // returning `nil` bare left no trace anywhere. A peer whose
+                // ceiling is higher than ours (issue #1618: Android permits a
+                // 10 MiB expanded payload against our ~1.13 MiB) then looks to
+                // both sides like a message that simply never arrived.
+                guard originalSize >= 0 && originalSize <= FileTransferLimits.maxFramedFileBytes else {
+                    SecureLogger.warning(
+                        "🚫 Declared expanded payload \(originalSize) B exceeds the \(FileTransferLimits.maxFramedFileBytes) B ceiling",
+                        category: .security
+                    )
+                    return nil
+                }
                 let compressedSize = payloadLength - lengthFieldBytes
                 guard compressedSize > 0, let compressed = readData(compressedSize) else { return nil }
 
