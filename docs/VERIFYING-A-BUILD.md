@@ -11,8 +11,9 @@ The honest summary is short. **Source can be verified. Compiled apps cannot, unl
 In order of how much verification is possible:
 
 1. **The App Store.** Apple verifies the developer signature, and the binary cannot be altered without breaking it. This is the only channel where a compiled build is verifiable end to end, and it is the right recommendation for almost everyone.
-2. **Build it yourself from verified source.** See below. Requires a Mac and Xcode, and gives you the strongest guarantee if you can do it.
-3. **A compiled build from anywhere else.** Not verifiable. See "Builds from other sources".
+2. **Build it yourself from verified source.** See below. Requires a Mac and Xcode, and gives you the strongest guarantee against the attested release tree if you can do it.
+3. **Maintainer TestFlight (when published).** Still Apple-signed; see "App Store fallbacks (TestFlight)". Prefer this over forum IPAs when the App Store listing is missing or behind (and you cannot build from source) — TestFlight proves Apple distributed a maintainer upload, but it does not let you check the binary against `SOURCE-MANIFEST.txt`. It still depends on Apple’s delivery path, so it is not a fallback for a wholesale block of Apple services.
+4. **A compiled build from anywhere else.** Not verifiable. See "Builds from other sources".
 
 ## Verifying source
 
@@ -79,6 +80,36 @@ What to do instead, in order of preference: install from the App Store; build fr
 
 Do not rely on the app looking right. A modified build has no reason to look different.
 
+
+## App Store fallbacks (TestFlight)
+
+Issue [#966](https://github.com/permissionlesstech/bitchat/issues/966) tracks a public TestFlight invite for cases where the App Store *listing* is gone or lagging — not a wholesale block of Apple services (TestFlight itself still installs through Apple). The project already ships an attested source manifest so people can **build from verified source** when binaries are untrustworthy (see above).
+
+What remains as a product decision — not something a random mirror can invent — is a **maintained public TestFlight link** as that listing/release fallback:
+
+- TestFlight builds are still Apple-signed and consent-gated; they are closer to the App Store trust model than an unsigned `.ipa` from a forum.
+- The link itself must be published by maintainers (and kept current across beta expiry). This document will not invent a URL.
+- Until a link is published here, treat TestFlight the same as any other sideloaded binary unless you received the invite from a channel you already trust for bitchat releases.
+- If Apple services themselves are unreachable, TestFlight does not help — use verified source builds (or treat any other binary as untrusted).
+
+Android sideloading (signed APKs) lives in the [bitchat-android](https://github.com/permissionlesstech/bitchat-android) project and is out of scope for this iOS/macOS repository.
+
+## macOS Developer ID / notarized `.dmg` (#1097)
+
+A notarized Developer ID `.dmg` attached to GitHub Releases would give macOS
+people a sideload path that still carries Apple's signature chain — stronger
+than an unsigned forum binary, weaker than the App Store for verification
+storytelling, and useful when the store is unreachable.
+
+Status on main today:
+
+- Tagged releases already ship an **attested source manifest** (build from
+  verified source remains the supported non–App Store path).
+- There is **no** published notarized `.dmg` yet — that needs release-signing
+  infrastructure and a maintainer decision on key custody.
+- Until that lands, treat any third-party `.dmg` / `.app` the same as other
+  unverifiable compiled builds above.
+
 ## For maintainers
 
 Cutting a release:
@@ -86,9 +117,14 @@ Cutting a release:
 - Push the tag. `source-manifest.yml` runs and attaches `SOURCE-MANIFEST.txt` to the release; if the release does not exist yet, collect the manifest from the workflow artifact and attach it when you publish.
 - Sign the tag (`git tag -s`). A signed tag lets anyone verify the release came from a key you control, independent of GitHub. This needs a published key fingerprint to be useful — see the gap below.
 - Note the commit hash somewhere outside this repository. If the repository is taken down, a hash recorded elsewhere is what lets people verify a mirror.
+- If/when notarized Developer ID `.dmg` artifacts exist, attach them to the same release as `SOURCE-MANIFEST.txt` and link them from the "macOS Developer ID" section above.
 
 Known gaps, so nobody assumes more protection than exists:
 
 - **No published signing key.** Tags are not currently verifiable against a known key. Publishing a fingerprint through channels independent of GitHub, and signing tags with it from then on, is the missing piece.
 - **No verifiable compiled builds outside the App Store.** Closing this needs either a signed-and-notarized release pipeline or a reproducible build, and until one exists the guidance above stands.
+- **No published public TestFlight link yet.** [#966](https://github.com/permissionlesstech/bitchat/issues/966) is rescoped to that single remaining distribution ask; when maintainers publish a link, add it under "App Store fallbacks (TestFlight)" above.
+- **No notarized Developer ID `.dmg` on Releases yet.** [#1097](https://github.com/permissionlesstech/bitchat/issues/1097) tracks that ask; see "macOS Developer ID / notarized `.dmg`" above.
 - **No non-GitHub source mirror.** Every remote for this project is on the platform the takedown demands were served to. A mirror on independent infrastructure, published before it is needed, would mean a takedown does not remove the ability to verify.
+- **App Store iOS builds can lag Android private-media fixes.** See [docs/MEDIA-INTEROP.md](MEDIA-INTEROP.md) and [#1518](https://github.com/permissionlesstech/bitchat/issues/1518) before treating silent Android→iOS image drops as MIME bugs. App Store **1.7.1** includes the July private-media stack (#1434/#1466/#1467); **1.7.0** already included #1402.
+
