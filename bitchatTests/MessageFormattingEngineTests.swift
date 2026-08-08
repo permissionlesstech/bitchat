@@ -349,6 +349,69 @@ struct MessageFormattingEngineTests {
 
         #expect(String(formatted.characters) == "<@alice> \(longContent) [\(message.formattedTimestamp)]")
     }
+
+    @MainActor
+    @Test func formatMessage_urlContainingCashuTokenIsNotDuplicated() {
+        // Bug: a URL match and a Cashu match are never cross-checked for
+        // overlap, only each independently against mentions. A URL whose
+        // path embeds a "cashuA..."-shaped segment (a perfectly ordinary
+        // mint redemption link) produces two overlapping matches; the
+        // single linear rendering pass then re-renders the nested cashu
+        // substring a second time and, because it walks `lastEnd` backwards,
+        // re-renders the URL's own trailing segment a third time.
+        let context = MockMessageFormattingContext(nickname: "carol")
+        let cashuToken = "cashuA" + String(repeating: "a", count: 44)
+        let url = "https://mint.example.com/redeem/\(cashuToken)/confirm"
+        let content = "redeem link \(url) now"
+        let message = BitchatMessage(
+            id: "url-cashu",
+            sender: "alice",
+            content: content,
+            timestamp: Date(timeIntervalSince1970: 1_700_001_111),
+            isRelay: false
+        )
+
+        let formatted = MessageFormattingEngine.formatMessage(message, context: context, colorScheme: .light)
+
+        #expect(String(formatted.characters) == "<@alice> \(content) [\(message.formattedTimestamp)]")
+    }
+
+    // MARK: - resolveOverlappingMatches Tests
+    //
+    // Direct coverage for the shared helper `ChatMessageFormatter` also
+    // calls, since its own match-collection logic (a hand-copy of
+    // findAllMatches above) isn't independently unit-testable without a
+    // live ChatViewModel.
+
+    @Test func resolveOverlappingMatches_dropsANestedOverlap() {
+        let outer = (range: NSRange(location: 0, length: 10), type: "outer")
+        let nested = (range: NSRange(location: 3, length: 2), type: "nested")
+
+        let resolved = MessageFormattingEngine.resolveOverlappingMatches([outer, nested]) { $0.range }
+
+        #expect(resolved.map(\.type) == ["outer"])
+    }
+
+    @Test func resolveOverlappingMatches_keepsNonOverlappingMatchesSortedByStart() {
+        let first = (range: NSRange(location: 0, length: 3), type: "first")
+        let second = (range: NSRange(location: 5, length: 3), type: "second")
+
+        // Passed out of order; the helper must sort internally.
+        let resolved = MessageFormattingEngine.resolveOverlappingMatches([second, first]) { $0.range }
+
+        #expect(resolved.map(\.type) == ["first", "second"])
+    }
+
+    @Test func resolveOverlappingMatches_adjacentNonOverlappingMatchesAreBothKept() {
+        // A match starting exactly where the previous one ends is not an
+        // overlap (NSRange upper bound is exclusive).
+        let first = (range: NSRange(location: 0, length: 5), type: "first")
+        let adjacent = (range: NSRange(location: 5, length: 5), type: "adjacent")
+
+        let resolved = MessageFormattingEngine.resolveOverlappingMatches([first, adjacent]) { $0.range }
+
+        #expect(resolved.map(\.type) == ["first", "adjacent"])
+    }
 }
 
 @MainActor
