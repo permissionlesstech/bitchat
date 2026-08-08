@@ -102,6 +102,8 @@ Private messages use **intelligent transport selection**:
    - Automatic delivery when connection established
 
 For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.md).
+For the byte-exact interoperability contract (wire format, BLE UUIDs, Noise
+mappings), see the versioned [`spec/`](spec/) directory.
 
 ## Setup
 
