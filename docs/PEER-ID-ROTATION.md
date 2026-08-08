@@ -11,6 +11,7 @@
 | Epochs, ID derivation, recognition tags, tag block, binding message | `localPackages/BitFoundation/Sources/BitFoundation/PeerIDRotation.swift` |
 | `announceV2 = 0x2C` wire format | `localPackages/BitFoundation/Sources/BitFoundation/AnnounceV2Packet.swift` |
 | Executable test vectors | `localPackages/BitFoundation/Tests/BitFoundationTests/PeerIDRotationTests.swift` |
+| How to author golden vectors | [`docs/BITFOUNDATION-GOLDEN-VECTORS.md`](BITFOUNDATION-GOLDEN-VECTORS.md) |
 | Wire-format tests | `localPackages/BitFoundation/Tests/BitFoundationTests/AnnounceV2PacketTests.swift` |
 
 The code is deliberately an **opinionated working base, not a finished feature**. Every number and context string in it is a concrete proposal you can disagree with by changing one function and watching a test vector move. What is *not* implemented is the part that carries risk: nothing emits a v2 announce, and `BLEService` parses the type and explicitly ignores it, because consuming it needs both the replacement identity binding (§4.5) and a decision on how unverified presence appears in the peer list (O4).

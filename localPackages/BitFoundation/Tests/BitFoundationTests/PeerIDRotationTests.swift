@@ -5,6 +5,9 @@ import CryptoKit
 
 /// Executable test vectors for peer ID rotation.
 ///
+/// Authoring rules for this pattern (and future BitFoundation surfaces) live in
+/// `docs/BITFOUNDATION-GOLDEN-VECTORS.md`.
+///
 /// These are the numbers the Android implementation must reproduce. Two rules
 /// for keeping them useful:
 ///

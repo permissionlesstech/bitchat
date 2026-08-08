@@ -35,6 +35,8 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 
 ## [Technical Architecture](https://deepwiki.com/permissionlesstech/bitchat)
 
+For cross-platform crypto digests and wire vectors (Android / future SDKs), see [BitFoundation golden vectors](docs/BITFOUNDATION-GOLDEN-VECTORS.md).
+
 BitChat uses a **hybrid messaging architecture** with two complementary transport layers:
 
 ### Bluetooth Mesh Network (Offline)
