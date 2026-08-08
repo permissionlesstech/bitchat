@@ -37,6 +37,11 @@ struct MeshEmptyStateView: View {
 
     private enum Strings {
         static let meshIntro = String(localized: "content.empty.mesh_intro", comment: "First line of the empty mesh timeline explaining what the mesh channel is")
+        static let meshPlaintextHint = String(
+            localized: "content.empty.mesh_plaintext_hint",
+            defaultValue: "mesh messages are not encrypted — anyone in range can read them.",
+            comment: "Empty mesh timeline reminder that the channel is a plaintext broadcast"
+        )
         static let switchHint = String(localized: "content.empty.switch_hint", comment: "Empty timeline hint pointing at the channel switcher and the help screen")
         static let sightingsOne = String(localized: "content.empty.sightings_one", comment: "Empty mesh timeline stat when exactly one device came within range today")
         static let checkNotes = String(localized: "content.empty.check_notes", comment: "Empty mesh timeline action that starts looking for notes left at this place; before tapping, no lookup runs")
@@ -90,6 +95,7 @@ struct MeshEmptyStateView: View {
                 // the narration stays to two lines with the live hint after
                 // them, not wedged in between.
                 narrationLine(Strings.meshIntro)
+                narrationLine(Strings.meshPlaintextHint)
                 narrationLine(Strings.switchHint)
                 if let conversation = nearbyConversation {
                     conversationHint(conversation)
