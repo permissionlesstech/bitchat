@@ -366,7 +366,13 @@ public struct BinaryProtocol {
                     guard let rawSize = read16() else { return nil }
                     originalSize = Int(rawSize)
                 }
-                guard originalSize >= 0 && originalSize <= FileTransferLimits.maxFramedFileBytes else { return nil }
+                guard originalSize >= 0 && originalSize <= FileTransferLimits.maxFramedFileBytes else {
+                    SecureLogger.warning(
+                        "🚫 Oversized compressed payload rejected: declared originalSize=\(originalSize) exceeds maxFramedFileBytes=\(FileTransferLimits.maxFramedFileBytes)",
+                        category: .security
+                    )
+                    return nil
+                }
                 let compressedSize = payloadLength - lengthFieldBytes
                 guard compressedSize > 0, let compressed = readData(compressedSize) else { return nil }
 
