@@ -120,3 +120,21 @@ contract, rather than a guessed byte threshold, stays correct as route overhead
 changes. A future Android client that adopts `0x20` but still caps its
 reassembler would need to negotiate an explicit per-peer fragment limit
 (tracked as a #1434 follow-up).
+
+## Compressed mesh payload ceiling (iOS vs Android)
+
+`FileTransferLimits.maxFramedFileBytes` (~1.13 MiB) is also the pre-decompress
+cap in `BinaryProtocol.decodeCore` for any compressed mesh/public payload, not
+only private media. Android currently allows a 10 MiB expanded size
+(`AppConstants.Protocol.MAX_PAYLOAD_LENGTH`).
+
+That disagreement can drop an otherwise-valid Android→iOS compressed message
+(#1618 / #1629). Closing it by raising the iOS bound is unsafe: decompress
+allocates `originalSize` bytes from the wire-declared field, and the
+50 000:1 compression-ratio guard runs *after* the size check, so a small
+compressed body can already force a ~1.13 MiB allocation — and would force
+~10 MiB if the caps matched Android.
+
+Prefer keeping the tighter iOS ceiling. Visible logging of the reject is
+tracked separately (#1628). Reconciling Android *downward* toward the iOS send
+cap (~1 MiB content) is the memory-safe direction if the constants must meet.
