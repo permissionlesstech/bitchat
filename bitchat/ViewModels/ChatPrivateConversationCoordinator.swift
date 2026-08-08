@@ -223,7 +223,13 @@ extension ChatViewModel: ChatPrivateConversationContext {
     }
 
     func notifyPrivateMessage(from senderName: String, message: String, peerID: PeerID) {
-        NotificationService.shared.sendPrivateMessageNotification(from: senderName, message: message, peerID: peerID)
+        let fingerprint = getFingerprint(for: peerID) ?? storedFingerprint(for: peerID)
+        NotificationService.shared.sendPrivateMessageNotification(
+            from: senderName,
+            message: message,
+            peerID: peerID,
+            fingerprint: fingerprint
+        )
     }
 
     private func makeGeohashNostrTransport() -> NostrTransport {
