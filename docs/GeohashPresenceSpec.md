@@ -94,3 +94,9 @@ The presentation of the participant count depends on the geohash precision level
 *   **Privacy:** High-precision location presence is NOT broadcast. Temporal correlation between different levels is obfuscated via random delays.
 *   **Consistency:** "Online" status is maintained globally while the app is open.
 *   **Transparency:** The UI correctly reflects uncertainty (`?`) when privacy rules prevent accurate passive counting.
+
+## External publishers
+
+Tools that publish kind `20000` / `20001` into a geohash channel must target the
+same proximity-selected relays BitChat clients use, or messages will not arrive.
+See [GEOHASH-PUBLISHER-RELAYS.md](GEOHASH-PUBLISHER-RELAYS.md).
