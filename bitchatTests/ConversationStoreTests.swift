@@ -1419,4 +1419,25 @@ struct ConversationStoreTests {
         store.removeMessage(withID: "dm-1", from: destination)
         #expect(store.appendCount == 4)
     }
+
+    @Test("recentDirectRoutingPeerIDs orders by latest message and skips empty threads")
+    @MainActor
+    func recentDirectRoutingPeerIDsOrdersByActivity() {
+        let store = ConversationStore()
+        let older = makeDirectConversationID("older")
+        let newer = makeDirectConversationID("newer")
+        let empty = makeDirectConversationID("empty")
+
+        store.append(makeMessage(id: "dm-old", timestamp: 10, isPrivate: true), to: older)
+        store.append(makeMessage(id: "dm-new", timestamp: 50, isPrivate: true), to: newer)
+        _ = store.conversation(for: empty) // create empty direct conversation
+
+        let recent = store.recentDirectRoutingPeerIDs(limit: 8)
+        #expect(recent == [
+            PeerID(str: "peer-newer"),
+            PeerID(str: "peer-older"),
+        ])
+        #expect(!recent.contains(PeerID(str: "peer-empty")))
+        #expect(store.recentDirectRoutingPeerIDs(limit: 1) == [PeerID(str: "peer-newer")])
+    }
 }
