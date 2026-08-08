@@ -18,6 +18,11 @@ final class AppChromeModel: ObservableObject {
     @Published var bluetoothAlertMessage = ""
     @Published var bluetoothState: CBManagerState = .unknown
     @Published var showScreenshotPrivacyWarning = false
+    /// Confirmation gate for the triple-tap logo panic shortcut (#152).
+    @Published var showPanicConfirmation = false
+    /// Triple-tap while the gesture is set to off — silent no-op would be
+    /// worse in a panic, so surface that nothing was wiped.
+    @Published var showPanicGestureDisabledAlert = false
 
     private let chatViewModel: ChatViewModel
     private let onPanicWipe: () -> Void
@@ -109,6 +114,32 @@ final class AppChromeModel: ObservableObject {
 
     func setPanicPreparation(_ preparation: (@MainActor () -> Void)?) {
         prepareForPanic = preparation
+    }
+
+    /// Triple-tap entry point. Mode is decided here (not at the gesture site):
+    /// instant wipe by default, optional confirm, or an explicit disabled alert.
+    func requestPanicWipe() {
+        switch PanicWipeSettings.logoShortcutMode {
+        case .instant:
+            panicClearAllData()
+        case .confirm:
+            showPanicConfirmation = true
+        case .off:
+            showPanicGestureDisabledAlert = true
+        }
+    }
+
+    func confirmPanicWipe() {
+        showPanicConfirmation = false
+        panicClearAllData()
+    }
+
+    func cancelPanicWipe() {
+        showPanicConfirmation = false
+    }
+
+    func acknowledgePanicGestureDisabled() {
+        showPanicGestureDisabledAlert = false
     }
 
     func panicClearAllData() {
