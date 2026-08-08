@@ -357,6 +357,13 @@ final class NostrInboundPipeline {
             return
         }
 
+        guard Self.isPlausibleRumorTimestamp(rumorTs) else {
+            if verbose {
+                SecureLogger.warning("GeoDM: dropping gift-wrap with implausible rumor timestamp id=\(giftWrap.id.prefix(8))…", category: .session)
+            }
+            return
+        }
+
         if verbose {
             SecureLogger.debug(
                 "GeoDM: decrypted gift-wrap id=\(giftWrap.id.prefix(16))... from=\(senderPubkey.prefix(8))...",
@@ -444,6 +451,11 @@ final class NostrInboundPipeline {
                 giftWrap: giftWrap,
                 recipientIdentity: currentIdentity
             )
+
+            guard Self.isPlausibleRumorTimestamp(rumorTimestamp) else {
+                SecureLogger.warning("Dropping Nostr DM with implausible rumor timestamp id=\(giftWrap.id.prefix(8))…", category: .session)
+                return
+            }
 
             if content.hasPrefix("verify:") {
                 return
@@ -539,6 +551,22 @@ final class NostrInboundPipeline {
             category: .session
         )
         return nil
+    }
+}
+
+extension NostrInboundPipeline {
+    /// Client-side mirror of the relay-side `since` filter on DM
+    /// subscriptions: a relay that ignores `since` — or replays archived
+    /// events — must not inject stale or future-dated DMs. The inner rumor
+    /// timestamp is the sender's true send time (only the outer gift wrap
+    /// is randomized per NIP-17), so the plausible window is the
+    /// subscription lookback plus tolerated clock skew on both ends.
+    /// Internal (not private) so tests can pin the window directly.
+    static func isPlausibleRumorTimestamp(_ ts: Int, now: Date = Date()) -> Bool {
+        let age = now.timeIntervalSince1970 - TimeInterval(ts)
+        return age >= -TransportConfig.nostrDMMaxClockSkewSeconds
+            && age <= TransportConfig.nostrDMSubscribeLookbackSeconds
+                + TransportConfig.nostrDMMaxClockSkewSeconds
     }
 }
 

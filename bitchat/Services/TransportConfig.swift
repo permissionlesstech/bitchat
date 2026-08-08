@@ -216,6 +216,10 @@ enum TransportConfig {
     static let nostrGeohashSampleLookbackSeconds: TimeInterval = 300
     static let nostrGeohashSampleLimit: Int = 100
     static let nostrDMSubscribeLookbackSeconds: TimeInterval = 86400
+    // Tolerated clock skew for the client-side rumor-timestamp window on
+    // inbound Nostr DMs (senders stamp the inner rumor with real time; only
+    // the outer gift wrap is randomized per NIP-17).
+    static let nostrDMMaxClockSkewSeconds: TimeInterval = 900
     // A sampled chat message this recent means "a conversation is happening
     // there" for the empty-timeline nearby-activity hint.
     static let uiGeohashChatActivityWindowSeconds: TimeInterval = 900
