@@ -1126,8 +1126,8 @@ final class NoiseSessionManager {
 
     /// Mesh handshakes normally use a 16-hex wire ID. Full Noise-key IDs are
     /// also accepted by internal callers when they exactly match the static
-    /// key. Non-wire identifiers remain available to protocol test harnesses;
-    /// BLE packet ingress always supplies a short hexadecimal ID.
+    /// key. Anything else fails closed: an identifier that can't be checked
+    /// against the remote static key must never complete a handshake.
     private func authenticatedRemoteKey(
         _ remoteKey: Curve25519.KeyAgreement.PublicKey,
         matches claimedPeerID: PeerID
@@ -1139,7 +1139,7 @@ final class NoiseSessionManager {
         if let claimedNoiseKey = claimedPeerID.noiseKey {
             return claimedNoiseKey == rawKey
         }
-        return true
+        return false
     }
     
     // MARK: - Encryption/Decryption

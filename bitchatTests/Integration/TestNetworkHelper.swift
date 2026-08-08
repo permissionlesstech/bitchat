@@ -22,15 +22,17 @@ final class TestNetworkHelper {
     // MARK: - Node/Manager management
     
     @discardableResult
-    func createNode(_ name: String, peerID: PeerID) -> MockBLEService {
+    func createNode(_ name: String) -> MockBLEService {
         let node = MockBLEService(bus: bus)
-        node.myPeerID = peerID
+        // Wire IDs must derive from the node's Noise static key: handshake
+        // completion fails closed on IDs the remote key can't vouch for.
+        let key = Curve25519.KeyAgreement.PrivateKey()
+        node.myPeerID = PeerID(publicKey: key.publicKey.rawRepresentation)
         node.mockNickname = name
         nodes[name] = node
-        
+
         // This synchronous helper directly drives all three XX messages and
         // has no transport callback loop for delayed collision recovery.
-        let key = Curve25519.KeyAgreement.PrivateKey()
         noiseManagers[name] = NoiseSessionManager(
             localStaticKey: key,
             keychain: mockKeychain,

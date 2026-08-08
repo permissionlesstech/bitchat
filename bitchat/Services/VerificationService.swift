@@ -84,7 +84,8 @@ final class VerificationService {
         let signKey = transport.noiseSigningPublicKeyData().hexEncodedString()
         let ts = Int64(Date().timeIntervalSince1970)
         var nonce = Data(count: 16)
-        _ = nonce.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
+        let status = nonce.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
+        guard status == errSecSuccess else { return nil }
         let nonceB64 = nonce.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
         let payload = VerificationQR(v: 1, noiseKeyHex: noiseKey, signKeyHex: signKey, npub: npub, nickname: nickname, ts: ts, nonceB64: nonceB64, sigHex: "")
         let msg = payload.canonicalBytes()
