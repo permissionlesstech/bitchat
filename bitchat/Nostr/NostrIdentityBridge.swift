@@ -64,6 +64,80 @@ final class NostrIdentityBridge {
         cacheLock.unlock()
     }
 
+    // MARK: - Identity Backup (export / restore)
+
+    /// Current device seed used for per-geohash derivation (creates one if missing).
+    func exportDeviceSeed() -> Data {
+        getOrCreateDeviceSeed()
+    }
+
+    /// Replace the primary Nostr identity and device seed with restored material.
+    /// Clears derived-identity caches so geohash keys recompute from the new seed.
+    ///
+    /// `keychain.save` is fire-and-forget, so this method always read-backs both
+    /// values and throws if either write did not stick. On failure it attempts
+    /// to restore the previous primary/seed snapshot so Noise and Nostr cannot
+    /// diverge after a half-applied restore.
+    @discardableResult
+    func installRestoredIdentity(privateKey: Data, deviceSeed: Data) throws -> NostrIdentity {
+        guard deviceSeed.count == 32 else {
+            throw IdentityBackupError.invalidKeyMaterial
+        }
+        let identity = try NostrIdentity(privateKeyData: privateKey)
+        let encoded = try JSONEncoder().encode(identity)
+
+        // Snapshot whatever is currently durable so a failed write after wipe
+        // can be rolled back instead of leaving an empty Nostr identity.
+        let previousIdentity = keychain.load(key: currentIdentityKey, service: keychainService)
+        let previousSeed = keychain.load(key: deviceSeedKey, service: keychainService)
+
+        // Drop prior associations/caches first so a partial failure cannot leave
+        // a mix of old seed + new primary (or vice versa).
+        clearAllAssociations()
+
+        keychain.save(
+            key: currentIdentityKey,
+            data: encoded,
+            service: keychainService,
+            accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        )
+        keychain.save(
+            key: deviceSeedKey,
+            data: deviceSeed,
+            service: keychainService,
+            accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        )
+
+        let storedIdentity = keychain.load(key: currentIdentityKey, service: keychainService)
+        let storedSeed = keychain.load(key: deviceSeedKey, service: keychainService)
+        guard storedIdentity == encoded, storedSeed == deviceSeed else {
+            // Best-effort rollback to the pre-restore snapshot.
+            if let previousIdentity {
+                keychain.save(
+                    key: currentIdentityKey,
+                    data: previousIdentity,
+                    service: keychainService,
+                    accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+                )
+            }
+            if let previousSeed {
+                keychain.save(
+                    key: deviceSeedKey,
+                    data: previousSeed,
+                    service: keychainService,
+                    accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+                )
+                deviceSeedCache = previousSeed
+            } else {
+                deviceSeedCache = nil
+            }
+            throw IdentityBackupError.persistenceFailed
+        }
+
+        deviceSeedCache = deviceSeed
+        return identity
+    }
+
     // MARK: - Per-Geohash Identities (Location Channels)
 
     /// Returns a stable device seed used to derive unlinkable per-geohash identities.
