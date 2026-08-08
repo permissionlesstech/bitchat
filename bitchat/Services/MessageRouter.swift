@@ -103,11 +103,12 @@ final class MessageRouter {
         bridgeSweepTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                guard let self = self, !self.outbox.isEmpty else { continue }
                 // Expire stale outbox entries in-session too — otherwise a DM
                 // to a peer that never reconnects sits on "sending" until the
                 // next relaunch instead of surfacing as failed.
-                self?.cleanupExpiredMessages()
-                self?.retryBridgeCourierDeposits()
+                self.cleanupExpiredMessages()
+                self.retryBridgeCourierDeposits()
             }
         }
     }
