@@ -424,26 +424,24 @@ private extension AppRuntime {
     }
 
     func handleScreenshotCaptured() {
-        if appChromeModel.isLocationChannelsSheetPresented {
+        let isLocationChannelActive: Bool = {
+            if case .location = chatViewModel.activeChannel { return true }
+            return false
+        }()
+
+        switch Self.resolveScreenshotResponse(
+            isLocationChannelsSheetPresented: appChromeModel.isLocationChannelsSheetPresented,
+            isAppInfoPresented: appChromeModel.isAppInfoPresented,
+            hasPrivateChatOpen: chatViewModel.selectedPrivateChatPeer != nil,
+            isLocationChannelActive: isLocationChannelActive
+        ) {
+        case .warnLocally:
             appChromeModel.triggerScreenshotPrivacyWarning()
-            return
+        case .ignore:
+            break
+        case .forwardToChat:
+            chatViewModel.handleScreenshotCaptured()
         }
-
-        if appChromeModel.isAppInfoPresented {
-            return
-        }
-
-        // Screenshots are never announced to public channels (see
-        // ChatLifecycleCoordinator.handleScreenshotCaptured). A geohash
-        // timeline screenshot still reveals a place, so warn the person
-        // taking it — locally, the same alert the channel sheet uses.
-        if chatViewModel.selectedPrivateChatPeer == nil,
-           case .location = chatViewModel.activeChannel {
-            appChromeModel.triggerScreenshotPrivacyWarning()
-            return
-        }
-
-        chatViewModel.handleScreenshotCaptured()
     }
 
     func openExternalURL(_ url: URL) {
@@ -458,5 +456,42 @@ private extension AppRuntime {
         Task {
             await events.emit(event)
         }
+    }
+}
+
+// MARK: - Screenshot routing
+
+extension AppRuntime {
+    /// What a screenshot triggers. Nothing on this table sends anything to
+    /// a public channel (see `ChatLifecycleCoordinator.handleScreenshotCaptured`).
+    enum ScreenshotCaptureResponse: Equatable {
+        /// Show the local location-privacy alert; nothing is sent anywhere.
+        case warnLocally
+        /// Do nothing. App Info holds no conversation or location content.
+        case ignore
+        /// Hand to the chat layer: a DM notice goes to the peer when a
+        /// secure session exists; public timelines stay silent. Mesh
+        /// deliberately gets no local alert either — a mesh screenshot
+        /// reveals no place and triggers no send, so there is nothing to
+        /// warn about, and alerting on every screenshot would train people
+        /// to dismiss the one alert that matters (the location one).
+        case forwardToChat
+    }
+
+    /// Pure decision table so the screenshot routing is testable without a
+    /// runtime.
+    nonisolated static func resolveScreenshotResponse(
+        isLocationChannelsSheetPresented: Bool,
+        isAppInfoPresented: Bool,
+        hasPrivateChatOpen: Bool,
+        isLocationChannelActive: Bool
+    ) -> ScreenshotCaptureResponse {
+        if isLocationChannelsSheetPresented { return .warnLocally }
+        if isAppInfoPresented { return .ignore }
+        // A geohash timeline screenshot still reveals a place — warn the
+        // person taking it, locally, with the same alert the channel sheet
+        // uses.
+        if !hasPrivateChatOpen, isLocationChannelActive { return .warnLocally }
+        return .forwardToChat
     }
 }

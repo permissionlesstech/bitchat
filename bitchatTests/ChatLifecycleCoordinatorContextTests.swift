@@ -350,3 +350,59 @@ struct ChatLifecycleCoordinatorContextTests {
     }
 
 }
+
+// MARK: - Screenshot Routing
+
+/// Pins `AppRuntime`'s screenshot decision table: the geohash warn path,
+/// the App Info exemption, and the deliberate mesh silence. Combined with
+/// `handleScreenshotCaptured_publicChannel_staysSilent` above, this proves
+/// location + screenshot → local privacy alert, and nothing sent anywhere.
+struct ScreenshotCaptureRoutingTests {
+
+    @Test("Location channels warn locally; the sheet warns everywhere")
+    func locationScreenshotsWarnLocally() {
+        // Geohash timeline, no DM open: warn the person, tell no one.
+        #expect(AppRuntime.resolveScreenshotResponse(
+            isLocationChannelsSheetPresented: false,
+            isAppInfoPresented: false,
+            hasPrivateChatOpen: false,
+            isLocationChannelActive: true
+        ) == .warnLocally)
+
+        // The channel sheet reveals location regardless of active channel.
+        #expect(AppRuntime.resolveScreenshotResponse(
+            isLocationChannelsSheetPresented: true,
+            isAppInfoPresented: false,
+            hasPrivateChatOpen: true,
+            isLocationChannelActive: false
+        ) == .warnLocally)
+    }
+
+    @Test("App Info is exempt; mesh and DMs forward to the chat layer")
+    func nonLocationScreenshotsForwardOrIgnore() {
+        #expect(AppRuntime.resolveScreenshotResponse(
+            isLocationChannelsSheetPresented: false,
+            isAppInfoPresented: true,
+            hasPrivateChatOpen: false,
+            isLocationChannelActive: true
+        ) == .ignore)
+
+        // Mesh timeline: forwarded, where the coordinator stays silent for
+        // public channels — no local alert either (nothing is sent and no
+        // place is revealed; see ScreenshotCaptureResponse docs).
+        #expect(AppRuntime.resolveScreenshotResponse(
+            isLocationChannelsSheetPresented: false,
+            isAppInfoPresented: false,
+            hasPrivateChatOpen: false,
+            isLocationChannelActive: false
+        ) == .forwardToChat)
+
+        // An open DM keeps its peer notice even from a location channel.
+        #expect(AppRuntime.resolveScreenshotResponse(
+            isLocationChannelsSheetPresented: false,
+            isAppInfoPresented: false,
+            hasPrivateChatOpen: true,
+            isLocationChannelActive: true
+        ) == .forwardToChat)
+    }
+}
