@@ -265,7 +265,7 @@ final class PeerListModel: ObservableObject {
 
         let geohashPeople = buildGeohashPeople()
         let groupRows = buildGroupRows()
-        let recentChatRows = buildRecentChatRows(meshRows: meshRows)
+        let recentChatRows = buildRecentChatRows(meshRows: meshRows, geohashPeople: geohashPeople)
 
         self.meshRows = meshRows
         reachableMeshPeerCount = meshCounts.reachable
@@ -295,7 +295,10 @@ final class PeerListModel: ObservableObject {
     /// mirrored under both an ephemeral and a stable peer ID collapse to
     /// one row per identity (newest activity wins), matching how the
     /// private-chat coordinators consolidate on open.
-    private func buildRecentChatRows(meshRows: [MeshPeerRow]) -> [RecentChatRow] {
+    private func buildRecentChatRows(
+        meshRows: [MeshPeerRow],
+        geohashPeople: [GeohashPersonRow]
+    ) -> [RecentChatRow] {
         // A conversation can be keyed by the stable Noise peer ID while the
         // roster lists the ephemeral one — compare fingerprints too.
         var visibleIdentities = Set<String>()
@@ -304,6 +307,12 @@ final class PeerListModel: ObservableObject {
             if let fingerprint = chatViewModel.getFingerprint(for: row.peerID) {
                 visibleIdentities.insert(fingerprint)
             }
+        }
+        // Someone visible in the geohash section must not also get a chat
+        // row: their GeoDM conversation is keyed by the nostr_ form of the
+        // same pubkey the roster lists.
+        for person in geohashPeople {
+            visibleIdentities.insert(PeerID(nostr_: person.id).id)
         }
 
         struct Candidate {
@@ -337,11 +346,21 @@ final class PeerListModel: ObservableObject {
             .map { candidate in
                 RecentChatRow(
                     peerID: candidate.peerID,
-                    displayName: chatViewModel.resolveNickname(for: candidate.peerID),
+                    displayName: displayName(for: candidate.peerID),
                     hasUnread: chatViewModel.hasUnreadMessages(for: candidate.peerID),
                     lastActivity: candidate.lastActivity
                 )
             }
+    }
+
+    /// GeoDM conversations resolve through the Nostr mapping —
+    /// `resolveNickname` only consults mesh identity sources and would
+    /// render a `nostr_…` key as an opaque `anonnost` fallback.
+    private func displayName(for peerID: PeerID) -> String {
+        if peerID.isGeoDM {
+            return chatViewModel.geohashDisplayName(for: peerID)
+        }
+        return chatViewModel.resolveNickname(for: peerID)
     }
 
     private static func changedConversationID(_ change: ConversationChange) -> ConversationID {

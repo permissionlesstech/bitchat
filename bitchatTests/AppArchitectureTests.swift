@@ -506,6 +506,40 @@ struct AppArchitectureTests {
         #expect(peerListModel.recentChatRows.first?.lastActivity == Date(timeIntervalSince1970: 100))
         // The roster doesn't list this peer — that's exactly why the row exists.
         #expect(!peerListModel.meshRows.contains { $0.peerID == offlinePeerID })
+
+        // A geoDM thread resolves through the Nostr mapping (bare-key
+        // fallback here), never resolveNickname's mesh-only anon fallback.
+        let pubkeyHex = String(repeating: "ab", count: 32)
+        let geoDMPeer = PeerID(nostr_: pubkeyHex)
+        viewModel.seedPrivateChat([
+            BitchatMessage(
+                id: "geo-1",
+                sender: "stranger",
+                content: "hello from another cell",
+                timestamp: Date(timeIntervalSince1970: 300),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "me",
+                senderPeerID: geoDMPeer
+            )
+        ], for: geoDMPeer)
+
+        await waitUntil {
+            peerListModel.recentChatRows.contains { $0.peerID == geoDMPeer }
+        }
+        let geoRow = peerListModel.recentChatRows.first { $0.peerID == geoDMPeer }
+        #expect(geoRow?.displayName == geoDMPeer.bare)
+
+        // While that person is visible in the geohash roster, the chat row
+        // collapses — same absent-from-rosters contract as mesh.
+        viewModel.participantTracker.setActiveGeohash("u4pruy")
+        viewModel.participantTracker.recordParticipant(pubkeyHex: pubkeyHex, geohash: "u4pruy")
+
+        await waitUntil {
+            !peerListModel.recentChatRows.contains { $0.peerID == geoDMPeer }
+        }
+        #expect(!peerListModel.recentChatRows.contains { $0.peerID == geoDMPeer })
+        #expect(peerListModel.recentChatRows.map(\.peerID) == [offlinePeerID])
     }
 
     @Test("PrivateConversationModel resolves canonical header state for the selected DM")
