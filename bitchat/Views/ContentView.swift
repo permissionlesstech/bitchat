@@ -102,7 +102,8 @@ struct ContentView: View {
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.appTheme) private var appTheme
     @Environment(\.scenePhase) private var scenePhase
-    @State private var showSidebar = false
+    // `showSidebar` (the people/conversation-list sheet latch) lives on
+    // `AppChromeModel` so non-view launch code can raise it; see that property.
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: PeerID?
     @FocusState private var isNicknameFieldFocused: Bool
@@ -140,7 +141,7 @@ struct ContentView: View {
     private var usesGlassLayout: Bool { appTheme.usesGlassChrome }
 
     private var isPeopleSheetPresented: Bool {
-        showSidebar || selectedPrivatePeerID != nil
+        appChromeModel.showSidebar || selectedPrivatePeerID != nil
     }
 
     private func rootModalPresentationState(
@@ -255,7 +256,7 @@ struct ContentView: View {
         #endif
         .onChange(of: selectedPrivatePeerID) { newValue in
             if newValue != nil {
-                showSidebar = true
+                appChromeModel.showSidebar = true
             }
             sharedContentImportModel.updateDestination(sharedContentDestination)
         }
@@ -267,7 +268,7 @@ struct ContentView: View {
                 get: { isPeopleSheetPresented },
                 set: { isPresented in
                     if !isPresented {
-                        showSidebar = false
+                        appChromeModel.showSidebar = false
                         // Scene/background and alert-presentation
                         // reconciliation (Bluetooth-off, recording errors)
                         // are not user requests to leave the conversation.
@@ -284,7 +285,7 @@ struct ContentView: View {
         ) {
             #if os(iOS)
             ContentPeopleSheetView(
-                showSidebar: $showSidebar,
+                showSidebar: $appChromeModel.showSidebar,
                 messageText: $messageText,
                 selectedMessageSender: $selectedMessageSender,
                 selectedMessageSenderID: $selectedMessageSenderID,
@@ -313,7 +314,7 @@ struct ContentView: View {
             .environmentObject(privateInboxModel)
             #else
             ContentPeopleSheetView(
-                showSidebar: $showSidebar,
+                showSidebar: $appChromeModel.showSidebar,
                 messageText: $messageText,
                 selectedMessageSender: $selectedMessageSender,
                 selectedMessageSenderID: $selectedMessageSenderID,
@@ -346,7 +347,7 @@ struct ContentView: View {
             .environmentObject(locationChannelsModel)
         }
         .sheet(isPresented: Binding(
-            get: { appChromeModel.showingFingerprintFor != nil && !showSidebar && selectedPrivatePeerID == nil },
+            get: { appChromeModel.showingFingerprintFor != nil && !appChromeModel.showSidebar && selectedPrivatePeerID == nil },
             set: { _ in appChromeModel.clearFingerprint() }
         )) {
             if let peerID = appChromeModel.showingFingerprintFor {
@@ -356,7 +357,7 @@ struct ContentView: View {
         }
         #if os(iOS)
         .fullScreenCover(isPresented: Binding(
-            get: { showImagePicker && !showSidebar && selectedPrivatePeerID == nil },
+            get: { showImagePicker && !appChromeModel.showSidebar && selectedPrivatePeerID == nil },
             set: { newValue in
                 if !newValue {
                     showImagePicker = false
@@ -372,7 +373,7 @@ struct ContentView: View {
         #endif
         #if os(macOS)
         .sheet(isPresented: Binding(
-            get: { showMacImagePicker && !showSidebar && selectedPrivatePeerID == nil },
+            get: { showMacImagePicker && !appChromeModel.showSidebar && selectedPrivatePeerID == nil },
             set: { newValue in
                 if !newValue {
                     showMacImagePicker = false
@@ -461,7 +462,10 @@ struct ContentView: View {
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if selectedPrivatePeerID == nil {
-                        composerView
+                        VStack(spacing: 0) {
+                            meshPrivacyCaption
+                            composerView
+                        }
                     }
                 }
         } else {
@@ -482,15 +486,35 @@ struct ContentView: View {
                 Divider()
 
                 if selectedPrivatePeerID == nil {
+                    meshPrivacyCaption
                     composerView
                 }
             }
         }
     }
 
+    /// Persistent trust caption under the PUBLIC mesh timeline — the parity
+    /// twin of the DM sheet's `privacyCaption` (#1366). Moved here out of the
+    /// header's non-compressible trailing cluster, where its `.fixedSize` text
+    /// overflowed narrow (SE-width) headers. Mesh-only: geohash/location
+    /// channels carry no such caption. Muted rather than orange — orange is the
+    /// DM privacy signal; this surface is deliberately public.
+    @ViewBuilder
+    private var meshPrivacyCaption: some View {
+        if case .mesh = locationChannelsModel.selectedChannel {
+            Text("content.header.public_caption")
+                .bitchatFont(size: 11, weight: .medium)
+                .foregroundColor(palette.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
+                .themedSurface()
+                .accessibilityLabel(Text("content.header.public_caption.a11y"))
+        }
+    }
+
     private var headerView: some View {
         ContentHeaderView(
-            showSidebar: $showSidebar,
+            showSidebar: $appChromeModel.showSidebar,
             showVerifySheet: $showVerifySheet,
             isNicknameFieldFocused: $isNicknameFieldFocused,
             headerHeight: headerHeight,
@@ -509,7 +533,7 @@ struct ContentView: View {
             imagePreviewURL: $imagePreviewURL,
             windowCountPublic: $windowCountPublic,
             windowCountPrivate: $windowCountPrivate,
-            showSidebar: $showSidebar,
+            showSidebar: $appChromeModel.showSidebar,
             isTextFieldFocused: $isTextFieldFocused
         )
     }

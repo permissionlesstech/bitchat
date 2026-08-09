@@ -304,6 +304,48 @@ struct ChatPeerIdentityCoordinatorContextTests {
     }
 
     @Test @MainActor
+    func startPrivateChat_suppressed_blockedPeerEmitsNoSystemMessage() async {
+        // #1064: at launch a now-blocked (e.g. favorited-then-blocked) peer must
+        // reject SILENTLY — no "blocked" line leaked into the public timeline —
+        // while still not opening the chat, so the caller falls back to the list.
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        let peerID = PeerID(str: "1122334455667788")
+        context.blockedPeers = [peerID]
+
+        coordinator.startPrivateChat(with: peerID, suppressSystemMessages: true)
+
+        #expect(context.systemMessages.isEmpty)
+        #expect(context.begunChatSessions.isEmpty)
+        #expect(context.consolidatedPeers.isEmpty)
+        #expect(context.markedReadPeers.isEmpty)
+    }
+
+    @Test @MainActor
+    func startPrivateChat_suppressed_oneWayFavoriteOpensChatSilently() async {
+        // #1064 × #1415: the mutual-favorite gate is gone (store-and-forward
+        // handles offline non-mutual favorites), so a one-way favorite now
+        // opens the chat — and under suppression still emits no system message.
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        let peerID = PeerID(str: "1122334455667788")
+        let noiseKey = Data((0..<32).map(UInt8.init))
+        var peer = BitchatPeer(peerID: peerID, noisePublicKey: noiseKey, nickname: "alice")
+        peer.favoriteStatus = makeFavoriteRelationship(
+            noiseKey: noiseKey,
+            isFavorite: true,
+            theyFavoritedUs: false
+        )
+        context.peersByID[peerID] = peer
+
+        coordinator.startPrivateChat(with: peerID, suppressSystemMessages: true)
+
+        #expect(context.systemMessages.isEmpty)
+        #expect(context.begunChatSessions == [peerID])
+        #expect(context.consolidatedPeers.map(\.peerID) == [peerID])
+    }
+
+    @Test @MainActor
     func updatePrivateChatPeerIfNeeded_migratesChatStateByFingerprint() async {
         let context = MockChatPeerIdentityContext()
         let coordinator = ChatPeerIdentityCoordinator(context: context)

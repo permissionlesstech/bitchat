@@ -1494,10 +1494,26 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
     /// Initiates a private chat session with a peer.
     /// - Parameter peerID: The peer's ID to start chatting with
-    /// - Note: Switches the UI to private chat mode and loads message history
+    /// - Note: Switches the UI to private chat mode and loads message history.
+    ///   This zero-extra-argument signature is the witness for the
+    ///   `CommandProcessor` / `ChatNostrCoordinator` context protocols, so it is
+    ///   kept intact; the launch-restore variant is a separate overload below.
     @MainActor
     func startPrivateChat(with peerID: PeerID) {
         peerIdentityCoordinator.startPrivateChat(with: peerID)
+    }
+
+    /// #1064 launch-restore variant of `startPrivateChat`. When
+    /// `suppressSystemMessages` is `true`, a gate rejection no-ops silently
+    /// instead of emitting a system message into the current (public mesh)
+    /// timeline, so a rejected DM restore falls back to the conversation list
+    /// cleanly. Since #1415 removed the mutual-favorite gate that is exactly
+    /// one message — the blocked one. Kept as a distinct non-defaulted
+    /// overload — a defaulted extra parameter would not satisfy the context
+    /// protocols above and a default would make the plain call ambiguous.
+    @MainActor
+    func startPrivateChat(with peerID: PeerID, suppressSystemMessages: Bool) {
+        peerIdentityCoordinator.startPrivateChat(with: peerID, suppressSystemMessages: suppressSystemMessages)
     }
 
     @MainActor
@@ -1588,6 +1604,20 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         // single-writer ConversationStore; the derived `messages` view and
         // the legacy mirror empty with it)
         conversations.clearAll()
+        // Begin suppressing last-active persistence (#1064). The selection and
+        // channel resets below route through the store's setters, which would
+        // otherwise re-persist a `.mesh` pointer.
+        //
+        // Finished via `defer` rather than a call at the end: this method now
+        // has an early `return false` when the keychain wipe is incomplete, and
+        // suppression that outlives the wipe would silently stop persisting the
+        // last-active conversation for the rest of the process. `defer` also
+        // keeps the ordering the store requires — it runs after every selection
+        // and channel reset below, so no setter can re-persist the pointer
+        // afterwards, and the pointer is removed exactly once, leaving the key
+        // absent so the next launch hits the conversation-list fallback.
+        conversations.beginPanicWipe()
+        defer { conversations.finishPanicWipe() }
         pendingGeohashSystemMessages.removeAll()
 
         // Delete all keychain data (including Noise and Nostr keys)
