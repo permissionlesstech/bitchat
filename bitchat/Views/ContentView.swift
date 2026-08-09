@@ -409,7 +409,10 @@ struct ContentView: View {
         })
         .alert("content.alert.bluetooth_required.title", isPresented: rootBluetoothAlertBinding) {
             Button("content.alert.bluetooth_required.settings") {
-                SystemSettings.bluetooth.open()
+                // Powered-off needs the radio controls, not the privacy pane.
+                (appChromeModel.bluetoothState == .poweredOff
+                    ? SystemSettings.bluetoothPower
+                    : SystemSettings.bluetooth).open()
             }
             Button("common.ok", role: .cancel) {}
         } message: {

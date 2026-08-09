@@ -73,19 +73,22 @@ struct ConnectivityStatusBanner: View {
         }
     }
 
-    /// Bluetooth problems deep-link to settings; the tor stall has no
-    /// in-app remedy (the network is blocking it), so that banner is inert.
-    private var opensSettings: Bool {
+    /// Bluetooth problems deep-link to where the fix actually lives —
+    /// powered-off goes to the radio controls, denied to the privacy
+    /// permission pane. The tor stall has no in-app remedy (the network is
+    /// blocking it), so that banner is inert.
+    private var settingsDestination: SystemSettings? {
         switch issue {
-        case .bluetoothOff, .bluetoothDenied: return true
-        case .bluetoothUnsupported, .torBlocked: return false
+        case .bluetoothOff: return .bluetoothPower
+        case .bluetoothDenied: return .bluetooth
+        case .bluetoothUnsupported, .torBlocked: return nil
         }
     }
 
     var body: some View {
         Group {
-            if opensSettings {
-                Button(action: { SystemSettings.bluetooth.open() }) {
+            if let destination = settingsDestination {
+                Button(action: { destination.open() }) {
                     label
                 }
                 .buttonStyle(.plain)

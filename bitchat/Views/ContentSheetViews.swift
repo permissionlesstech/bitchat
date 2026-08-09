@@ -183,6 +183,18 @@ struct ContentPeopleSheetView: View {
                         .environmentObject(verificationModel)
                 }
             }
+            // This sheet covers the root header where the connectivity
+            // banner lives; a person sitting in the people list or a DM
+            // would otherwise get no persistent signal that the radio is
+            // off or tor is stalled. Mirror it here.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if let issue = ConnectivityIssue.resolve(
+                    bluetoothState: appChromeModel.bluetoothState,
+                    torBlocked: appChromeModel.torBlocked
+                ) {
+                    ConnectivityStatusBanner(issue: issue)
+                }
+            }
         }
         .themedSheetBackground()
         .foregroundColor(palette.primary)
@@ -285,7 +297,10 @@ struct ContentPeopleSheetView: View {
             isPresented: bluetoothAlertBinding
         ) {
             Button("content.alert.bluetooth_required.settings") {
-                SystemSettings.bluetooth.open()
+                // Powered-off needs the radio controls, not the privacy pane.
+                (appChromeModel.bluetoothState == .poweredOff
+                    ? SystemSettings.bluetoothPower
+                    : SystemSettings.bluetooth).open()
             }
             Button("common.ok", role: .cancel) {}
         } message: {

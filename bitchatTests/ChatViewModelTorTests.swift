@@ -165,14 +165,33 @@ struct ChatViewModelTorTests {
         viewModel.torStatusAnnounced = true
         viewModel.torInitialReadyAnnounced = true
         viewModel.torRestartPending = true
+        viewModel.torBlocked = true
 
         // Action
         viewModel.handleTorPreferenceChanged(Notification(name: .init("test")))
         try? await Task.sleep(nanoseconds: 100_000_000)
 
-        // Assert: all flags reset
+        // Assert: all flags reset — torBlocked drives the connectivity
+        // banner; toggling tor off must not leave a stale "tor can't
+        // connect" line for a network nobody is waiting on.
         #expect(!viewModel.torStatusAnnounced)
         #expect(!viewModel.torInitialReadyAnnounced)
         #expect(!viewModel.torRestartPending)
+        #expect(!viewModel.torBlocked)
+    }
+
+    @Test @MainActor
+    func handleTorDidBecomeReady_clearsBlockedBanner() async {
+        let (viewModel, _) = makeTestableViewModel()
+
+        // Setup: a stalled bootstrap raised the banner, then tor got through.
+        viewModel.torBlocked = true
+
+        // Action
+        viewModel.handleTorDidBecomeReady()
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        // Assert
+        #expect(!viewModel.torBlocked)
     }
 }
