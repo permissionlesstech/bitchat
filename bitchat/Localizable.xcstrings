@@ -3535,6 +3535,192 @@
         }
       }
     },
+    "app_info.settings.tor.no_bridges_note" : {
+      "comment" : "Caption shown under the tor toggle while tor is on, disclosing that the bundled tor client ships without bridges or pluggable transports, so a network operator can identify the connection as tor",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا توجد جسور أو وسائل نقل قابلة للتوصيل بعد: يمكن لمشغّل الشبكة أن يرى أنك تستخدم tor، وإن لم يرَ ما ترسله. توخَّ الحذر حيث يكون استخدام tor بحد ذاته خطرًا."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "এখনও ব্রিজ বা প্লাগেবল ট্রান্সপোর্ট নেই: নেটওয়ার্ক অপারেটর দেখতে পায় যে আপনি tor ব্যবহার করছেন, যদিও আপনি কী পাঠাচ্ছেন তা নয়। যেখানে tor ব্যবহার করাই ঝুঁকিপূর্ণ, সেখানে সতর্ক থাকুন।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "noch keine bridges oder pluggable transports: ein netzbetreiber kann sehen, dass du tor benutzt, aber nicht, was du sendest. vorsicht dort, wo schon die nutzung von tor riskant ist."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no bridges or pluggable transports yet: a network operator can see that you use tor, though not what you send. take care where using tor is itself risky."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "todavía sin puentes ni transportes conectables: un operador de red puede ver que usas tor, aunque no lo que envías. ten cuidado donde usar tor ya sea arriesgado."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "هنوز پل یا ترابری اتصال‌پذیر وجود ندارد: اپراتور شبکه می‌تواند ببیند که از tor استفاده می‌کنید، هرچند نه آنچه می‌فرستید. جایی که خودِ استفاده از tor خطرناک است، احتیاط کنید."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wala pang bridges o pluggable transports: makikita ng operator ng network na gumagamit ka ng tor, kahit hindi kung ano ang ipinapadala mo. mag-ingat kung saan mapanganib na ang paggamit mismo ng tor."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pas encore de bridges ni de pluggable transports : un opérateur réseau peut voir que tu utilises tor, mais pas ce que tu envoies. prudence là où utiliser tor est déjà risqué."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "עדיין אין גשרים או תעבורות מתחלפות: מפעיל הרשת יכול לראות שאתה משתמש ב-tor, אך לא מה שאתה שולח. היזהר במקומות שבהם עצם השימוש ב-tor מסוכן."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "अभी ब्रिज या प्लगेबल ट्रांसपोर्ट नहीं हैं: नेटवर्क ऑपरेटर देख सकता है कि आप tor इस्तेमाल कर रहे हैं, हालाँकि यह नहीं कि आप क्या भेज रहे हैं। जहाँ tor का इस्तेमाल ही जोखिम भरा हो, वहाँ सावधानी बरतें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "belum ada bridge atau pluggable transport: operator jaringan dapat melihat bahwa kamu memakai tor, meski tidak apa yang kamu kirim. hati-hati di tempat yang memakai tor saja sudah berisiko."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ancora nessun bridge o pluggable transport: un operatore di rete può vedere che usi tor, anche se non cosa invii. attenzione dove usare tor è già di per sé rischioso."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ブリッジやプラガブルトランスポートはまだありません。ネットワーク事業者は、送信内容までは見えなくても、あなたが tor を使っていることは分かります。tor の使用自体が危険な場所では注意してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "아직 브리지나 플러거블 트랜스포트가 없습니다. 네트워크 운영자는 보내는 내용은 볼 수 없어도 tor를 쓴다는 사실은 알 수 있습니다. tor 사용 자체가 위험한 곳에서는 주의하세요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "belum ada bridge atau pluggable transport: pengendali rangkaian boleh nampak bahawa anda menggunakan tor, walaupun bukan apa yang anda hantar. berhati-hati di tempat yang penggunaan tor itu sendiri berisiko."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "अहिलेसम्म ब्रिज वा प्लगेबल ट्रान्सपोर्ट छैन: तपाईंले के पठाउनुभयो भन्ने नदेखे पनि नेटवर्क सञ्चालकले तपाईंले tor प्रयोग गरेको देख्न सक्छ। जहाँ tor प्रयोग गर्नु नै जोखिमपूर्ण छ, त्यहाँ होसियार हुनुहोस्।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nog geen bridges of pluggable transports: een netwerkbeheerder kan zien dat je tor gebruikt, al niet wat je verstuurt. wees voorzichtig waar het gebruik van tor op zich al riskant is."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "brak jeszcze mostków i pluggable transports: operator sieci widzi, że używasz tora, choć nie to, co wysyłasz. uważaj tam, gdzie samo używanie tora jest ryzykowne."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ainda sem pontes nem transportes conectáveis: um operador de rede consegue ver que usas tor, embora não o que envias. tem cuidado onde usar tor já é arriscado."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ainda sem pontes nem transportes plugáveis: um operador de rede consegue ver que você usa tor, embora não o que você envia. tenha cuidado onde usar tor já é arriscado."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "мостов и подключаемых транспортов пока нет: оператор сети видит, что вы используете tor, хотя и не видит, что вы отправляете. будьте осторожны там, где само использование tor рискованно."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "inga bryggor eller pluggable transports än: en nätverksoperatör kan se att du använder tor, men inte vad du skickar. var försiktig där det redan är riskabelt att använda tor."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இன்னும் பிரிட்ஜ்கள் அல்லது பிளக்கபிள் ட்ரான்ஸ்போர்ட்கள் இல்லை: நீங்கள் எதை அனுப்புகிறீர்கள் என்பதைப் பார்க்க முடியாவிட்டாலும், நீங்கள் tor பயன்படுத்துவதை நெட்வொர்க் இயக்குநர் பார்க்க முடியும். tor பயன்படுத்துவதே ஆபத்தான இடங்களில் கவனமாக இருங்கள்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ยังไม่มีบริดจ์หรือ pluggable transport: ผู้ให้บริการเครือข่ายมองเห็นว่าคุณใช้ tor แม้จะไม่เห็นสิ่งที่คุณส่ง โปรดระวังในที่ซึ่งการใช้ tor เองก็เสี่ยงอยู่แล้ว"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "henüz köprü veya takılabilir taşıma yok: ağ operatörü ne gönderdiğini görmese de tor kullandığını görebilir. tor kullanmanın kendisinin riskli olduğu yerlerde dikkatli ol."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "мостів і підключних транспортів поки немає: оператор мережі бачить, що ви користуєтеся tor, хоча й не бачить, що ви надсилаєте. будьте обережні там, де саме використання tor ризиковане."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ابھی برجز یا پلگ ایبل ٹرانسپورٹس نہیں ہیں: نیٹ ورک آپریٹر دیکھ سکتا ہے کہ آپ tor استعمال کر رہے ہیں، اگرچہ یہ نہیں کہ آپ کیا بھیج رہے ہیں۔ جہاں tor کا استعمال ہی خطرناک ہو، وہاں احتیاط کریں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chưa có cầu nối hay pluggable transport: nhà mạng có thể thấy bạn dùng tor, dù không thấy bạn gửi gì. hãy thận trọng ở nơi mà chỉ riêng việc dùng tor đã rủi ro."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未支持网桥或可插拔传输：网络运营方虽看不到你发送的内容，但能看出你在使用 tor。在使用 tor 本身就有风险的地方请多加小心。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未支援橋接或可插拔傳輸：網路營運方雖看不到你傳送的內容，但能看出你正在使用 tor。在使用 tor 本身就有風險的地方請多加小心。"
+          }
+        }
+      }
+    },
     "app_info.settings.tor.off_warning" : {
       "comment" : "Warning shown under the tor toggle while tor is switched off, stating that relay operators can see the device IP address",
       "extractionState" : "manual",
