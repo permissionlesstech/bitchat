@@ -61,22 +61,10 @@ struct ContentHeaderView: View {
                 .onTapGesture(count: 1) {
                     appChromeModel.presentAppInfo()
                 }
-                .confirmationDialog(
-                    Text(
-                        String(localized: "app_info.settings.danger.panic_confirm_title", defaultValue: "wipe all data?", comment: "Title of the confirmation dialog before a panic wipe")
-                    ),
-                    isPresented: $appChromeModel.showPanicConfirmation,
-                    titleVisibility: .visible
-                ) {
-                    Button(role: .destructive) {
-                        appChromeModel.panicClearAllData()
-                    } label: {
-                        Text(
-                            String(localized: "app_info.settings.danger.panic_confirm_action", defaultValue: "wipe everything", comment: "Destructive confirmation button that performs the panic wipe")
-                        )
-                    }
-                    Button("common.cancel", role: .cancel) {}
-                }
+                // The confirmation dialog itself is hosted on ContentView
+                // (next to the failed-wipe banner), not on this Text: a host
+                // that can be covered or removed could take the pending
+                // dialog down with it.
                 // This is the only entry point to App Info, but it reads as
                 // static text; surface the tap. (The triple-tap panic wipe
                 // stays undiscoverable on purpose — it's destructive.)

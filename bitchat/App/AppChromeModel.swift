@@ -125,6 +125,16 @@ final class AppChromeModel: ObservableObject {
     }
 
     func panicClearAllData() {
+        // A wipe invalidates everything on screen, and its outcome must be
+        // visible: the success message and the failed-wipe banner both live
+        // on the root timeline, so a sheet left up (the App Info danger-zone
+        // path keeps its sheet presented) would hide the one signal that says
+        // whether the wipe worked.
+        isAppInfoPresented = false
+        isLocationChannelsSheetPresented = false
+        isNoticesSheetPresented = false
+        showingFingerprintFor = nil
+
         prepareForPanic?()
         onPanicWipe()
         chatViewModel.panicClearAllData()
