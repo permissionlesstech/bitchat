@@ -1164,7 +1164,11 @@ struct ChatViewModelMediaTransferTests {
         viewModel.sendImage(from: url)
 
         let didNotify = await TestHelpers.waitUntil({
-            viewModel.messages.contains(where: { $0.sender == "system" && $0.content.contains("Failed to prepare image") })
+            viewModel.messages.contains(where: { $0.sender == "system" && $0.content.contains(String(
+                localized: "media.system.image_prepare_failed",
+                defaultValue: "Failed to prepare image for sending.",
+                comment: "System message when an image cannot be prepared for sending"
+            )) })
         }, timeout: TestConstants.longTimeout)
         #expect(didNotify)
         #expect(transport.sentPrivateFiles.isEmpty)

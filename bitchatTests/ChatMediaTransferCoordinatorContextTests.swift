@@ -759,7 +759,11 @@ struct ChatMediaTransferCoordinatorContextTests {
         coordinator.sendVoiceNote(at: url)
 
         #expect(!FileManager.default.fileExists(atPath: url.path))
-        #expect(context.systemMessages == ["Voice notes are only available in mesh chats."])
+        #expect(context.systemMessages == [String(
+            localized: "media.system.voice_mesh_only",
+            defaultValue: "Voice notes are only available in mesh chats.",
+            comment: "System message when the user tries to send a voice note outside a mesh chat"
+        )])
         #expect(context.privateChats.isEmpty)
         #expect(context.appendedPublicMessages.isEmpty)
         #expect(coordinator.transferIdToMessageIDs.isEmpty)
