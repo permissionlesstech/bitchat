@@ -11560,181 +11560,181 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "هوية محلية فقط"
+            "value" : "هوية محفوظة على الجهاز"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "শুধুই স্থানীয় পরিচয়"
+            "value" : "ডিভাইসে থাকা পরিচয়"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "nur lokale identität"
+            "value" : "gerätelokale identität"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "local-only identity"
+            "value" : "device-local identity"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "identidad solo local"
+            "value" : "identidad local del dispositivo"
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "هویت فقط محلی"
+            "value" : "هویت محلی دستگاه"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "pagkakakilanlang lokal lamang"
+            "value" : "pagkakakilanlang nasa device"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "identité locale uniquement"
+            "value" : "identité locale à l'appareil"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "זהות מקומית בלבד"
+            "value" : "זהות מקומית במכשיר"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "केवल-स्थानीय पहचान"
+            "value" : "डिवाइस-स्थानीय पहचान"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "identitas hanya lokal"
+            "value" : "identitas lokal perangkat"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "identità solo locale"
+            "value" : "identità locale al dispositivo"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ローカル限定のアイデンティティ"
+            "value" : "端末ローカルのアイデンティティ"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이 기기에만 있는 신원"
+            "value" : "기기 로컬 신원"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "identiti setempat sahaja"
+            "value" : "identiti setempat peranti"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "स्थानीय-मात्र परिचय"
+            "value" : "यन्त्र-स्थानीय परिचय"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "alleen-lokale identiteit"
+            "value" : "apparaat-lokale identiteit"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tożsamość tylko lokalna"
+            "value" : "tożsamość lokalna urządzenia"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "identidade apenas local"
+            "value" : "identidade local do dispositivo"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "identidade apenas local"
+            "value" : "identidade local do dispositivo"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "идентичность только на устройстве"
+            "value" : "идентичность на устройстве"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "endast lokal identitet"
+            "value" : "enhetslokal identitet"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "உள்ளூர்-மட்டும் அடையாளம்"
+            "value" : "சாதன-உள்ளூர் அடையாளம்"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ตัวตนเฉพาะในเครื่อง"
+            "value" : "ตัวตนในเครื่อง"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "yalnızca yerel kimlik"
+            "value" : "cihaza yerel kimlik"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ідентичність лише на пристрої"
+            "value" : "ідентичність на пристрої"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "صرف مقامی شناخت"
+            "value" : "ڈیوائس مقامی شناخت"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "danh tính chỉ trên thiết bị"
+            "value" : "danh tính cục bộ trên thiết bị"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "仅限本机的身份"
+            "value" : "设备本地身份"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "僅限本機的身分"
+            "value" : "裝置本機身分"
           }
         }
       }
