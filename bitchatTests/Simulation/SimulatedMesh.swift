@@ -77,7 +77,11 @@ final class SimulatedMesh {
             idBridge: idBridge,
             identityManager: identityManager,
             initializeBluetoothManagers: false,
-            engineScheduler: scheduler
+            engineScheduler: scheduler,
+            // Announce admission reads this, so the throttle window moves
+            // with `advanceTime` instead of with however long the runner
+            // took to get here.
+            dateProvider: { scheduler.currentDate }
         )
         let index = nodes.count
         let node = Node(service: service, scheduler: scheduler)
@@ -91,9 +95,8 @@ final class SimulatedMesh {
         // The tap must be live before `setNickname` below: setNickname
         // force-announces asynchronously on the engine, and if that slot
         // ran in the gap before a later tap install, the announce was
-        // emitted invisibly while still stamping the wall-clock announce
-        // throttle — swallowing `announceAll`'s forced announce on a
-        // starved runner (the CI flake this ordering fixes).
+        // emitted invisibly while still stamping the announce throttle —
+        // swallowing `announceAll`'s forced announce.
         service._test_onOutboundPacket = { [weak self] packet in
             // Runs on the sender's engine; only buffer here — delivering
             // inline would nest one engine inside another.
@@ -210,11 +213,12 @@ final class SimulatedMesh {
 
     /// Full discovery round: every node announces, traffic settles.
     ///
-    /// Resets each node's announce throttle first: the throttle window is
-    /// wall-clock, so any announce that already ran (setNickname's, in
-    /// `addNode`) would otherwise swallow this forced one whenever the two
-    /// land within the forced minimum interval — which is always, on any
-    /// runner. `forceAnnounce(from:)` deliberately does NOT reset — the
+    /// Resets each node's announce throttle first: `setNickname`'s announce
+    /// in `addNode` lands at the same simulated instant as this one, well
+    /// inside the forced minimum interval, and would otherwise swallow it.
+    /// (Advancing time would clear the window too, but it would also
+    /// release scheduled work that callers of `announceAll` have not asked
+    /// for yet.) `forceAnnounce(from:)` deliberately does NOT reset — the
     /// panic-rotation tests pin the production reset behavior through it.
     func announceAll() {
         for node in nodes {
