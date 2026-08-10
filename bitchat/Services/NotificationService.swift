@@ -229,7 +229,20 @@ final class NotificationService {
     }
     
     func sendMentionNotification(from sender: String, message: String) {
-        let title = hidePreviews ? Redacted.mentionTitle : "🫵 you were mentioned by \(sender)"
+        let title: String
+        if hidePreviews {
+            title = Redacted.mentionTitle
+        } else {
+            title = String(
+                format: String(
+                    localized: "notification.mention.title",
+                    defaultValue: "🫵 you were mentioned by %@",
+                    comment: "Lock-screen notification title when someone is mentioned; %@ is the sender nickname"
+                ),
+                locale: .current,
+                sender
+            )
+        }
         let body = hidePreviews ? Redacted.body : message
         let identifier = "mention-\(UUID().uuidString)"
 
@@ -237,7 +250,20 @@ final class NotificationService {
     }
 
     func sendPrivateMessageNotification(from sender: String, message: String, peerID: PeerID) {
-        let title = hidePreviews ? Redacted.directMessageTitle : "🔒 DM from \(sender)"
+        let title: String
+        if hidePreviews {
+            title = Redacted.directMessageTitle
+        } else {
+            title = String(
+                format: String(
+                    localized: "notification.dm.title",
+                    defaultValue: "🔒 DM from %@",
+                    comment: "Lock-screen notification title for a direct message; %@ is the sender nickname"
+                ),
+                locale: .current,
+                sender
+            )
+        }
         let body = hidePreviews ? Redacted.body : message
         let identifier = "private-\(UUID().uuidString)"
         // Routing payload, not display copy: `userInfo` never reaches the lock
@@ -260,8 +286,12 @@ final class NotificationService {
     }
 
     func sendNetworkAvailableNotification(peerCount: Int) {
-        let title = "👥 bitchatters nearby!"
-        let body = peerCount == 1 ? "1 person around" : "\(peerCount) people around"
+        let title = String(
+            localized: "notification.nearby.title",
+            defaultValue: "👥 bitchatters nearby!",
+            comment: "Lock-screen notification title when mesh peers are nearby"
+        )
+        let body = Self.nearbyBody(peerCount: peerCount)
         // Fixed identifier so iOS updates the existing notification instead of creating new ones
         let identifier = "network-available"
 
@@ -271,6 +301,18 @@ final class NotificationService {
             identifier: identifier,
             interruptionLevel: .timeSensitive,
             categoryIdentifier: Self.nearbyCategoryID
+        )
+    }
+
+    static func nearbyBody(peerCount: Int) -> String {
+        String(
+            format: String(
+                localized: "notification.nearby.body",
+                defaultValue: "%#@people@",
+                comment: "Lock-screen notification body for mesh peers nearby; %#@people@ is the peer count with plural variations"
+            ),
+            locale: .current,
+            peerCount
         )
     }
 }

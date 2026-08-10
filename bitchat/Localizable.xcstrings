@@ -67171,6 +67171,1469 @@
         }
       }
     },
+    "notification.mention.title" : {
+      "comment" : "Lock-screen notification title when someone is mentioned; %@ is the sender nickname",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 you were mentioned by %@"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 you were mentioned by %@"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 du wurdest von %@ erwähnt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 you were mentioned by %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 te ha mencionado %@"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 you were mentioned by %@"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 you were mentioned by %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 %@ t'a mentionné"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 you were mentioned by %@"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 %@ ने आपका उल्लेख किया"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 you were mentioned by %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 sei stato menzionato da %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 %@さんにメンションされました"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 %@님이 회원님을 언급했습니다"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 you were mentioned by %@"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 you were mentioned by %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 je bent genoemd door %@"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 wspomniał o tobie %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 you were mentioned by %@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 você foi mencionado por %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 вас упомянул(а) %@"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 du nämndes av %@"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 you were mentioned by %@"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 you were mentioned by %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 %@ senden bahsetti"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 you were mentioned by %@"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 you were mentioned by %@"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 you were mentioned by %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 %@ 提到了你"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 %@ 提到了你"
+          }
+        }
+      }
+    },
+
+    "notification.dm.title" : {
+      "comment" : "Lock-screen notification title for a direct message; %@ is the sender nickname",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 DM from %@"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 DM from %@"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 DM von %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 DM from %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 MD de %@"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 DM from %@"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 DM from %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 DM de %@"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 DM from %@"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 %@ से DM"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 DM from %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 DM da %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 %@さんからのDM"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 %@님의 DM"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 DM from %@"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 DM from %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 DM van %@"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 PW od %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 DM from %@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 DM de %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 ЛС от %@"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 DM från %@"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 DM from %@"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 DM from %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 %@ kişisinden DM"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 DM from %@"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 DM from %@"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 DM from %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 来自 %@ 的私信"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 來自 %@ 的私訊"
+          }
+        }
+      }
+    },
+
+    "notification.nearby.body" : {
+      "comment" : "Lock-screen notification body for mesh peers nearby; %#@people@ is the peer count with plural variations",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "few" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                },
+                "many" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                },
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld person around"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                },
+                "two" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                },
+                "zero" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld person around"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld Person in der Nähe"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld Personen in der Nähe"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld person around"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld persona alrededor"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld personas alrededor"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld person around"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld person around"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld personne à proximité"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld personnes à proximité"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "many" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                },
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld person around"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                },
+                "two" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "आसपास 1 व्यक्ति"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "आसपास %lld व्यक्ति"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld person around"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld persona intorno"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld persone intorno"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "周囲に%lld人"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "周囲に%lld人"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "주변에 %lld명"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld person around"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld person around"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld persoon in de buurt"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld personen in de buurt"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld osoba w pobliżu"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld osób w pobliżu"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld person around"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld pessoa por perto"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld pessoas por perto"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "few" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld человек рядом"
+                  }
+                },
+                "many" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld человек рядом"
+                  }
+                },
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld человек рядом"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld человек рядом"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld person i närheten"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld personer i närheten"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld person around"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld person around"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "etrafta 1 kişi"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "etrafta %lld kişi"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "few" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                },
+                "many" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                },
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld person around"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld person around"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld person around"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "%lld people around"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "附近有 %lld 人"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "附近有 %lld 人"
+                  }
+                }
+              }
+            }
+          }
+        }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@people@"
+          },
+        "substitutions" : {
+          "people" : {
+            "argNum" : 1,
+            "formatSpecifier" : "lld",
+            "variations" : {
+              "plural" : {
+                "one" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "附近有 %lld 人"
+                  }
+                },
+                "other" : {
+                  "stringUnit" : {
+                    "state" : "translated",
+                    "value" : "附近有 %lld 人"
+                  }
+                }
+              }
+            }
+          }
+        }
+        }
+      }
+    },
+    "notification.nearby.title" : {
+      "comment" : "Lock-screen notification title when mesh peers are nearby",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 bitchatters nearby!"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 bitchatters nearby!"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 bitchatter in der Nähe!"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 bitchatters nearby!"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 ¡bitchatters cerca!"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 bitchatters nearby!"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 bitchatters nearby!"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 des bitchatters à proximité !"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 bitchatters nearby!"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 पास में bitchatter हैं!"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 bitchatters nearby!"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 bitchatter nelle vicinanze!"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 近くにbitchatterがいます！"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 근처에 bitchatter가 있어요!"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 bitchatters nearby!"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 bitchatters nearby!"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 bitchatters in de buurt!"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 bitchatterzy w pobliżu!"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 bitchatters nearby!"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 bitchatters por perto!"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 рядом есть bitchatters!"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 bitchatters i närheten!"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 bitchatters nearby!"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 bitchatters nearby!"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 yakında bitchatter'lar var!"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 bitchatters nearby!"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 bitchatters nearby!"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 bitchatters nearby!"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 附近有 bitchatter！"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "👥 附近有 bitchatter！"
+          }
+        }
+      }
+    },
+
+
+
     "notification.redacted.body" : {
       "comment" : "Lock-screen notification body shown in place of the message text when message previews are hidden",
       "extractionState" : "manual",
