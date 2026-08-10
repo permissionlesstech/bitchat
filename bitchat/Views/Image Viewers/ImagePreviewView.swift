@@ -57,7 +57,6 @@ struct ImagePreviewView: View {
                             .padding(.vertical, 8)
                             .background(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.5), lineWidth: 1))
                     }
-                    .accessibilityLabel(Text("image_preview.accessibility.close"))
                     Spacer()
                     Button(action: saveCopy) {
                         Text("save", comment: "Button to save media to device")
@@ -67,7 +66,6 @@ struct ImagePreviewView: View {
                             .padding(.vertical, 8)
                             .background(RoundedRectangle(cornerRadius: 12).fill(Color.blue.opacity(0.6)))
                     }
-                    .accessibilityLabel(Text("image_preview.accessibility.save"))
                 }
                 .padding([.horizontal, .bottom], 24)
             }
