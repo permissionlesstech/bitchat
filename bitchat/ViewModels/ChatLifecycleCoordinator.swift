@@ -304,7 +304,7 @@ private extension ChatLifecycleCoordinator {
     func appendPrivateScreenshotNotice(for peerID: PeerID) {
         let notice = BitchatMessage(
             sender: "system",
-            content: "you took a screenshot",
+            content: String(localized: "system.screenshot.you", defaultValue: "you took a screenshot", comment: "Local system line after your screenshot notice was sent to the DM peer"),
             timestamp: Date(),
             isRelay: false,
             originalSender: nil,
