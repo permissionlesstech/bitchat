@@ -584,11 +584,19 @@ struct AppArchitectureTests {
 
         // While that person is visible in the geohash roster, the chat row
         // collapses — same absent-from-rosters contract as mesh.
-        viewModel.participantTracker.setActiveGeohash("u4pruy")
-        viewModel.participantTracker.recordParticipant(pubkeyHex: pubkeyHex, geohash: "u4pruy")
-
+        //
+        // Re-assert the tracker state on every poll: the view model's own
+        // channel binding delivers its initial .mesh selection asynchronously
+        // and resets the active participant geohash when it lands
+        // (GeohashSubscriptionManager.setActiveParticipantGeohash(nil)) — on
+        // a loaded parallel runner that reset arrives AFTER this setup and
+        // the dedup can never happen. Both calls are idempotent, so the
+        // interference heals on the next poll while a genuine dedup failure
+        // still times out.
         await waitUntil {
-            !peerListModel.recentChatRows.contains { $0.peerID == geoDMPeer }
+            viewModel.participantTracker.setActiveGeohash("u4pruy")
+            viewModel.participantTracker.recordParticipant(pubkeyHex: pubkeyHex, geohash: "u4pruy")
+            return !peerListModel.recentChatRows.contains { $0.peerID == geoDMPeer }
         }
         #expect(!peerListModel.recentChatRows.contains { $0.peerID == geoDMPeer })
         #expect(peerListModel.recentChatRows.map(\.peerID) == [offlinePeerID])
