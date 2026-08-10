@@ -21,6 +21,12 @@ final class AppChromeModel: ObservableObject {
     /// connectivity banner. Mirrored from `ChatViewModel.torBlocked`.
     @Published private(set) var torBlocked = false
     @Published var showScreenshotPrivacyWarning = false
+    /// Triple-tapping the logo asks first; the dialog lives on the header.
+    @Published var showPanicConfirmation = false
+    /// Mirrors `ChatViewModel.panicRecoveryBlocked` for the chrome: a wipe
+    /// that did not commit must be visible, not just logged — the person who
+    /// triggered it needs to know data may remain on the device.
+    @Published private(set) var panicWipeBlocked = false
 
     private let chatViewModel: ChatViewModel
     private let onPanicWipe: () -> Void
@@ -114,7 +120,24 @@ final class AppChromeModel: ObservableObject {
         prepareForPanic = preparation
     }
 
+    /// Entry point for the header triple-tap: confirm before destroying.
+    /// The Settings-pane button has always confirmed; the gesture now goes
+    /// through the same dialog so a mis-tap can't wipe the device.
+    func requestPanicWipe() {
+        showPanicConfirmation = true
+    }
+
     func panicClearAllData() {
+        // A wipe invalidates everything on screen, and its outcome must be
+        // visible: the success message and the failed-wipe banner both live
+        // on the root timeline, so a sheet left up (the App Info danger-zone
+        // path keeps its sheet presented) would hide the one signal that says
+        // whether the wipe worked.
+        isAppInfoPresented = false
+        isLocationChannelsSheetPresented = false
+        isNoticesSheetPresented = false
+        showingFingerprintFor = nil
+
         prepareForPanic?()
         onPanicWipe()
         chatViewModel.panicClearAllData()
@@ -151,6 +174,10 @@ final class AppChromeModel: ObservableObject {
         chatViewModel.$torBlocked
             .receive(on: DispatchQueue.main)
             .assign(to: &$torBlocked)
+
+        chatViewModel.$panicRecoveryBlocked
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$panicWipeBlocked)
 
         hasUnreadPrivateMessages = !privateInboxModel.unreadPeerIDs.isEmpty
     }

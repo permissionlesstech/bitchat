@@ -294,7 +294,8 @@ final class ChatVerificationCoordinator {
         }
 
         var nonce = Data(count: 16)
-        _ = nonce.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
+        let status = nonce.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
+        guard status == errSecSuccess else { return false }
         var pending = PendingVerification(
             noiseKeyHex: qr.noiseKeyHex,
             signKeyHex: qr.signKeyHex,

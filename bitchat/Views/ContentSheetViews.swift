@@ -380,6 +380,16 @@ private struct ContentPeopleListView: View {
                                 showSidebar = true
                             }
                         )
+                        // Direct conversations survive channel switches; the
+                        // geoDM someone opened from another cell must stay
+                        // reachable here too.
+                        RecentChatList(
+                            chats: peerListModel.recentChatRows,
+                            onTapChat: { peerID in
+                                peerListModel.startConversation(with: peerID)
+                                showSidebar = true
+                            }
+                        )
                     } else {
                         PeopleSectionHeader(
                             icon: "antenna.radiowaves.left.and.right",
@@ -411,6 +421,16 @@ private struct ContentPeopleListView: View {
                         GroupChatList(
                             groups: peerListModel.groupRows,
                             onTapGroup: { peerID in
+                                peerListModel.startConversation(with: peerID)
+                                showSidebar = true
+                            }
+                        )
+                        // Conversations with people no roster above lists
+                        // anymore — without this, a read DM from an offline
+                        // non-favorite had no row anywhere in the UI.
+                        RecentChatList(
+                            chats: peerListModel.recentChatRows,
+                            onTapChat: { peerID in
                                 peerListModel.startConversation(with: peerID)
                                 showSidebar = true
                             }
@@ -630,7 +650,9 @@ private struct ContentPrivateChatSheetView: View {
         // Geohash DMs use BitChat's private-envelope encryption over Nostr —
         // always end-to-end encrypted,
         // even though they carry no Noise session status. Mesh DMs earn the
-        // "encrypted" claim only once the Noise handshake has secured.
+        // "encrypted" claim only once the Noise handshake has secured — or
+        // when the peer is reachable only over Nostr, where delivery is
+        // gift-wrapped end-to-end without a Noise session.
         let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true
         let noiseSecured: Bool = {
             switch privateConversationModel.selectedHeaderState?.encryptionStatus {
@@ -638,7 +660,8 @@ private struct ContentPrivateChatSheetView: View {
             default: return false
             }
         }()
-        if isGeoDM || noiseSecured {
+        let nostrTransport = privateConversationModel.selectedHeaderState?.availability == .nostrAvailable
+        if isGeoDM || noiseSecured || nostrTransport {
             return String(localized: "content.private.caption_encrypted", comment: "Caption above the private chat composer once the session is end-to-end encrypted")
         }
         return String(localized: "content.private.caption", comment: "Caption above the private chat composer before encryption is established")

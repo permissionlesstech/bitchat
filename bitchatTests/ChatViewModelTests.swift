@@ -429,7 +429,7 @@ struct ChatViewModelServiceLifecycleTests {
     }
 
     @Test @MainActor
-    func handleScreenshotCaptured_privateChatAddsLocalNoticeWithoutSession() async {
+    func handleScreenshotCaptured_privateChatStaysSilentWithoutSession() async {
         let (viewModel, transport) = makeTestableViewModel()
         let peerID = PeerID(str: "0000000000000002")
         transport.simulateConnect(peerID, nickname: "Alice")
@@ -437,8 +437,10 @@ struct ChatViewModelServiceLifecycleTests {
         viewModel.selectedPrivateChatPeer = peerID
         viewModel.handleScreenshotCaptured()
 
+        // No session means no notice went out, so no local echo either —
+        // an echo here would imply Alice was told when she wasn't.
         #expect(transport.sentPrivateMessages.isEmpty)
-        #expect(viewModel.privateChats[peerID]?.last?.content == "you took a screenshot")
+        #expect(viewModel.privateChats[peerID]?.contains { $0.content == "you took a screenshot" } != true)
     }
 }
 
@@ -2261,7 +2263,9 @@ struct ChatViewModelPanicTests {
 
         // After panic, emergency disconnect should be called
         #expect(transport.emergencyDisconnectCallCount == 1)
-        #expect(viewModel.messages.isEmpty)
+        // Pre-panic content is gone; the only survivor is the system message
+        // confirming the wipe (in duress, "did it work?" must not be a guess).
+        #expect(viewModel.messages.map(\.sender) == ["system"])
         #expect(viewModel.privateChats.isEmpty)
         #expect(viewModel.unreadPrivateMessages.isEmpty)
         #expect(viewModel.selectedPrivateChatPeer == nil)

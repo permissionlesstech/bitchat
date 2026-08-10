@@ -84,7 +84,8 @@ final class VerificationService {
         let signKey = transport.noiseSigningPublicKeyData().hexEncodedString()
         let ts = Int64(Date().timeIntervalSince1970)
         var nonce = Data(count: 16)
-        _ = nonce.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
+        let status = nonce.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
+        guard status == errSecSuccess else { return nil }
         let nonceB64 = nonce.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
         let payload = VerificationQR(v: 1, noiseKeyHex: noiseKey, signKeyHex: signKey, npub: npub, nickname: nickname, ts: ts, nonceB64: nonceB64, sigHex: "")
         let msg = payload.canonicalBytes()
@@ -105,9 +106,10 @@ final class VerificationService {
     /// Verify a scanned QR and return the parsed payload if valid (signature + freshness checks)
     func verifyScannedQR(_ urlString: String, maxAge: TimeInterval = TransportConfig.verificationQRMaxAgeSeconds) -> VerificationQR? {
         guard let url = URL(string: urlString), let qr = VerificationQR.fromURL(url) else { return nil }
-        // Freshness
+        // Freshness, in both directions: a future-dated timestamp must not
+        // buy a QR a longer validity window than a fresh one gets.
         let now = Date().timeIntervalSince1970
-        if now - Double(qr.ts) > maxAge { return nil }
+        if abs(now - Double(qr.ts)) > maxAge { return nil }
         // Verify signature using embedded ed25519 signKey
         guard let sig = Data(hexString: qr.sigHex), let signKey = Data(hexString: qr.signKeyHex) else { return nil }
         guard let transport = transport else { return nil }

@@ -357,7 +357,10 @@ final class PrivateConversationModel: ObservableObject {
         }
         if let noiseKey = Data(hexString: headerPeerID.id),
            let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
-           favoriteStatus.isMutual {
+           favoriteStatus.isMutual,
+           // No stored recipient key means no Nostr delivery — and the
+           // "end-to-end encrypted" caption keys off .nostrAvailable.
+           favoriteStatus.peerNostrPublicKey != nil {
             return .nostrAvailable
         }
         if chatViewModel.meshService.isPeerConnected(headerPeerID) || chatViewModel.connectedPeers.contains(headerPeerID) {

@@ -4027,10 +4027,8 @@ extension BLEService {
                 )
             }
         }
-        service.onRekeyHandshakeReady = {
-            [weak self, weak service] peerID, initiation in
-            self?.messageQueue.async {
-                [weak self, weak service] in
+        service.onRekeyHandshakeReady = { [weak self, weak service] peerID, initiation in
+            self?.messageQueue.async { [weak self, weak service] in
                 guard let self,
                       let service,
                       self.noiseService === service else {
@@ -4046,14 +4044,12 @@ extension BLEService {
                 self.broadcastNoiseHandshake(message, to: peerID)
             }
         }
-        service.onHandshakeRecoveryRequired = {
-            [weak self, weak service] request in
+        service.onHandshakeRecoveryRequired = { [weak self, weak service] request in
             guard let self, let service else { return }
             #if DEBUG
             self._test_beforeHandshakeRecoveryEnqueued?(request.peerID)
             #endif
-            self.messageQueue.async {
-                [weak self, weak service] in
+            self.messageQueue.async { [weak self, weak service] in
                 guard let self,
                       let service,
                       self.noiseService === service else {
@@ -5294,8 +5290,7 @@ extension BLEService {
             ) else {
                 return
             }
-            messageQueue.async {
-                [weak self, weak service] in
+            messageQueue.async { [weak self, weak service] in
                 guard let self,
                       let service,
                       self.noiseService === service,

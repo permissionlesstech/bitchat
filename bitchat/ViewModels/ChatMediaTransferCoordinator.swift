@@ -1859,8 +1859,7 @@ private extension ChatMediaTransferCoordinator {
                 TimeInterval(UInt64.max) / 1_000_000_000
             ) * 1_000_000_000
         )
-        reconnectRetryExpiryTasks[messageID] = Task {
-            @MainActor [weak self] in
+        reconnectRetryExpiryTasks[messageID] = Task { @MainActor [weak self] in
             if nanoseconds > 0 {
                 try? await Task.sleep(nanoseconds: nanoseconds)
             }

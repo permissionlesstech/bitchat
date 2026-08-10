@@ -836,8 +836,11 @@ struct NostrEvent: Codable {
         // Sign with Schnorr (BIP-340)
         var messageBytes = [UInt8](eventIdHash)
         var auxRand = [UInt8](repeating: 0, count: 32)
-        _ = auxRand.withUnsafeMutableBytes { ptr in
+        let auxStatus = auxRand.withUnsafeMutableBytes { ptr in
             SecRandomCopyBytes(kSecRandomDefault, 32, ptr.baseAddress!)
+        }
+        guard auxStatus == errSecSuccess else {
+            throw NostrError.cryptographicFailure
         }
         let schnorrSignature = try key.signature(message: &messageBytes, auxiliaryRand: &auxRand)
         
