@@ -291,24 +291,7 @@ final class NotificationService {
             defaultValue: "👥 bitchatters nearby!",
             comment: "Lock-screen notification title when mesh peers are nearby"
         )
-        let body: String
-        if peerCount == 1 {
-            body = String(
-                localized: "notification.nearby.body.one",
-                defaultValue: "1 person around",
-                comment: "Lock-screen notification body when exactly one mesh peer is nearby"
-            )
-        } else {
-            body = String(
-                format: String(
-                    localized: "notification.nearby.body.other",
-                    defaultValue: "%lld people around",
-                    comment: "Lock-screen notification body when multiple mesh peers are nearby; %lld is the peer count"
-                ),
-                locale: .current,
-                peerCount
-            )
-        }
+        let body = Self.nearbyBody(peerCount: peerCount)
         // Fixed identifier so iOS updates the existing notification instead of creating new ones
         let identifier = "network-available"
 
@@ -318,6 +301,18 @@ final class NotificationService {
             identifier: identifier,
             interruptionLevel: .timeSensitive,
             categoryIdentifier: Self.nearbyCategoryID
+        )
+    }
+
+    static func nearbyBody(peerCount: Int) -> String {
+        String(
+            format: String(
+                localized: "notification.nearby.body",
+                defaultValue: "%#@people@",
+                comment: "Lock-screen notification body for mesh peers nearby; %#@people@ is the peer count with plural variations"
+            ),
+            locale: .current,
+            peerCount
         )
     }
 }

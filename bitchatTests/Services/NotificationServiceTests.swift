@@ -127,16 +127,21 @@ final class NotificationServiceTests: XCTestCase {
         XCTAssertEqual(deliverer.requests[1].content.interruptionLevel, .timeSensitive)
         XCTAssertEqual(
             deliverer.requests[1].content.body,
-            String(
-                format: String(
-                    localized: "notification.nearby.body.other",
-                    defaultValue: "%lld people around",
-                    comment: "Lock-screen notification body when multiple mesh peers are nearby; %lld is the peer count"
-                ),
-                locale: .current,
-                2
-            )
+            NotificationService.nearbyBody(peerCount: 2)
         )
+    }
+
+    func test_sendNetworkAvailableNotification_onePeerUsesPluralBody() {
+        let deliverer = RecordingNotificationRequestDeliverer()
+        let service = NotificationService(
+            isRunningTestsProvider: { false },
+            authorizer: RecordingNotificationAuthorizer(),
+            requestDeliverer: deliverer
+        )
+
+        service.sendNetworkAvailableNotification(peerCount: 1)
+
+        XCTAssertEqual(deliverer.requests.singleValue?.content.body, NotificationService.nearbyBody(peerCount: 1))
     }
 }
 
