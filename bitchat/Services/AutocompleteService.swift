@@ -10,9 +10,7 @@ import Foundation
 
 /// Manages autocomplete functionality for chat
 final class AutocompleteService {
-    /// Compiled via `SafeRegex` so a bad pattern logs and disables matching
-    /// instead of silently returning nil forever (`try?` did the latter).
-    private let mentionRegex = SafeRegex.compile("@([\\p{L}0-9_]*)$")
+    private typealias Patterns = MessageFormattingEngine.Patterns
 
     /// Get autocomplete suggestions for current text
     func getSuggestions(for text: String, peers: [String], cursorPosition: Int) -> (suggestions: [String], range: NSRange?) {
@@ -45,7 +43,7 @@ final class AutocompleteService {
 
     private func getMentionSuggestions(_ text: String, peers: [String]) -> ([String], NSRange)? {
         let nsText = text as NSString
-        let matches = mentionRegex.matches(
+        let matches = Patterns.mentionAutocomplete.matches(
             in: text,
             options: [],
             range: NSRange(location: 0, length: nsText.length)
