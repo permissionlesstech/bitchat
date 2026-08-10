@@ -2047,6 +2047,378 @@
         }
       }
     },
+    "chats.accessibility.open_hint" : {
+      "comment" : "Accessibility hint on a recent chat row explaining activation opens the direct conversation",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يفتح هذه المحادثة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "এই কথোপকথন খোলে"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "öffnet diese unterhaltung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "opens this conversation"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abre esta conversación"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "این گفتگو را باز می‌کند"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "binubuksan ang usapang ito"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ouvre cette conversation"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פותח את השיחה הזו"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "यह वार्तालाप खोलता है"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "membuka percakapan ini"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apre questa conversazione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この会話を開きます"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 대화를 엽니다"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "membuka perbualan ini"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "यो वार्तालाप खोल्छ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "opent dit gesprek"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "otwiera tę rozmowę"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abre esta conversa"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abre esta conversa"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "открывает этот разговор"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "öppnar den här konversationen"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இந்த உரையாடலைத் திறக்கும்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เปิดการสนทนานี้"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bu konuşmayı açar"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "відкриває цю розмову"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "یہ گفتگو کھولتا ہے"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mở cuộc trò chuyện này"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开此对话"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "開啟此對話"
+          }
+        }
+      }
+    },
+    "chats.section.header" : {
+      "comment" : "Section header above recent direct conversations in the people sheet",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الدردشات"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "চ্যাট"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chats"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chats"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chats"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "گفتگوها"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mga chat"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "discussions"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "צ'אטים"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "चैट"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "obrolan"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chat"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "チャット"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "채팅"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sembang"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "च्याटहरू"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chats"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "czaty"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "conversas"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "conversas"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "чаты"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chattar"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "அரட்டைகள்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "แชท"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sohbetler"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "чати"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "چیٹس"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "trò chuyện"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "聊天"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "聊天"
+          }
+        }
+      }
+    },
     "content.banner.panic_blocked" : {
       "comment" : "Banner shown when a panic wipe did not fully commit; relaunching the app retries the wipe",
       "extractionState" : "manual",
@@ -11561,181 +11933,181 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "يُولد معرف قرين جديد بانتظام"
+            "value" : "هويتك زوج مفاتيح يُنشأ على هذا الجهاز — المسح الطارئ يستبدلها فورًا"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "নিয়মিত নতুন পিয়ার আইডি তৈরি হয়"
+            "value" : "আপনার পরিচয় এই ডিভাইসে তৈরি একটি কী-জোড়া — প্যানিক ওয়াইপ সঙ্গে সঙ্গে এটি বদলে দেয়"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "neue peer-id wird regelmäßig erzeugt"
+            "value" : "deine identität ist ein schlüsselpaar, das auf diesem gerät erzeugt wird — der panik-löscher ersetzt es sofort"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "new peer ID generated regularly"
+            "value" : "your identity is a keypair created on this device — panic wipe replaces it instantly"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "nuevo ID de peer generado periódicamente"
+            "value" : "tu identidad es un par de claves creado en este dispositivo — el borrado de pánico la reemplaza al instante"
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "شناسهٔ همتای جدید به‌طور منظم ساخته می‌شود"
+            "value" : "هویت شما یک جفت کلید است که روی این دستگاه ساخته می‌شود — پاک‌سازی اضطراری آن را فوراً جایگزین می‌کند"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "regular na lumilikha ng bagong peer ID"
+            "value" : "ang iyong pagkakakilanlan ay isang key pair na ginawa sa device na ito — agad itong pinapalitan ng panic wipe"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "nouvel id de pair généré régulièrement"
+            "value" : "votre identité est une paire de clés créée sur cet appareil — l'effacement d'urgence la remplace instantanément"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "מזהה עמית חדש נוצר באופן קבוע"
+            "value" : "הזהות שלך היא צמד מפתחות שנוצר במכשיר הזה — מחיקת חירום מחליפה אותה מיד"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "नया पीयर आईडी नियमित रूप से बनाया जाता है"
+            "value" : "आपकी पहचान इस डिवाइस पर बनी एक कुंजी-जोड़ी है — पैनिक वाइप इसे तुरंत बदल देता है"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "id peer baru dibuat secara berkala"
+            "value" : "identitas anda adalah pasangan kunci yang dibuat di perangkat ini — panic wipe langsung menggantinya"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "nuovo id peer generato regolarmente"
+            "value" : "la tua identità è una coppia di chiavi creata su questo dispositivo — la cancellazione di emergenza la sostituisce all'istante"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "新しいpeer idが定期的に生成されます"
+            "value" : "アイデンティティはこの端末上で生成される鍵ペアです — パニックワイプで即座に置き換えられます"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "새로운 피어 ID가 주기적으로 생성됩니다"
+            "value" : "신원은 이 기기에서 생성되는 키 쌍입니다 — 패닉 와이프로 즉시 교체됩니다"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "id peer baru dibuat secara berkala"
+            "value" : "identiti anda ialah pasangan kunci yang dicipta pada peranti ini — panic wipe menggantikannya serta-merta"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "नयाँ peer id नियमित रूपमा सिर्जना हुन्छ"
+            "value" : "तपाईंको परिचय यही यन्त्रमा बनेको कुञ्जी-जोडी हो — प्यानिक वाइपले तुरुन्तै बदल्छ"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "nieuw peer-ID wordt regelmatig aangemaakt"
+            "value" : "je identiteit is een sleutelpaar dat op dit apparaat wordt gemaakt — de paniekwis vervangt het direct"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "nowe ID peera generowane regularnie"
+            "value" : "twoja tożsamość to para kluczy utworzona na tym urządzeniu — wymazanie awaryjne natychmiast ją zastępuje"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "novo ID de par gerado regularmente"
+            "value" : "a tua identidade é um par de chaves criado neste dispositivo — a limpeza de pânico substitui-a de imediato"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "novo id de peer gerado regularmente"
+            "value" : "sua identidade é um par de chaves criado neste dispositivo — a limpeza de pânico a substitui na hora"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "новый id пира создаётся регулярно"
+            "value" : "ваша идентичность — пара ключей, созданная на этом устройстве. экстренное стирание мгновенно её заменяет"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "nytt peer-ID skapas regelbundet"
+            "value" : "din identitet är ett nyckelpar som skapas på den här enheten — panikradering ersätter det direkt"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "புதிய peer ID வழக்கமாக உருவாக்கப்படுகிறது"
+            "value" : "உங்கள் அடையாளம் இந்தச் சாதனத்தில் உருவாக்கப்படும் விசை-இணை — பேனிக் அழிப்பு உடனே அதை மாற்றும்"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "สร้างรหัสเพียร์ใหม่เป็นระยะ"
+            "value" : "ตัวตนของคุณคือคู่กุญแจที่สร้างบนเครื่องนี้ — panic wipe จะแทนที่ทันที"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "yeni eş kimliği düzenli olarak oluşturulur"
+            "value" : "kimliğiniz bu cihazda oluşturulan bir anahtar çiftidir — panik silme onu anında değiştirir"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "новий id піра генерується регулярно"
+            "value" : "ваша ідентичність — пара ключів, створена на цьому пристрої. екстрене стирання миттєво її замінює"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "نیا peer ID باقاعدگی سے بنایا جاتا ہے"
+            "value" : "آپ کی شناخت اس ڈیوائس پر بنایا گیا کلیدی جوڑا ہے — پینک وائپ اسے فوراً بدل دیتا ہے"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tạo ID nút mới định kỳ"
+            "value" : "danh tính của bạn là một cặp khoá được tạo trên thiết bị này — panic wipe thay thế nó ngay lập tức"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "定期生成新的 peer id"
+            "value" : "你的身份是在本机生成的密钥对 — 紧急清除会立即更换它"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "定期生成新的 peer id"
+            "value" : "你的身分是在本機產生的金鑰對 — 緊急清除會立即更換它"
           }
         }
       }
@@ -11746,181 +12118,181 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "هوية مؤقتة"
+            "value" : "هوية محفوظة على الجهاز"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "অস্থায়ী পরিচয়"
+            "value" : "ডিভাইসে থাকা পরিচয়"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "flüchtige identität"
+            "value" : "gerätelokale identität"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ephemeral identity"
+            "value" : "device-local identity"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "identidad efímera"
+            "value" : "identidad local del dispositivo"
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "هویت موقت"
+            "value" : "هویت محلی دستگاه"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "panandaliang pagkakakilanlan"
+            "value" : "pagkakakilanlang nasa device"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "identité éphémère"
+            "value" : "identité locale à l'appareil"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "זהות זמנית"
+            "value" : "זהות מקומית במכשיר"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "अस्थायी पहचान"
+            "value" : "डिवाइस-स्थानीय पहचान"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "identitas sementara"
+            "value" : "identitas lokal perangkat"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "identità effimera"
+            "value" : "identità locale al dispositivo"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "一時的なアイデンティティ"
+            "value" : "端末ローカルのアイデンティティ"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "임시 신원"
+            "value" : "기기 로컬 신원"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "identitas sementara"
+            "value" : "identiti setempat peranti"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "क्षणिक पहिचान"
+            "value" : "यन्त्र-स्थानीय परिचय"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tijdelijke identiteit"
+            "value" : "apparaat-lokale identiteit"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tymczasowa tożsamość"
+            "value" : "tożsamość lokalna urządzenia"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "identidade efémera"
+            "value" : "identidade local do dispositivo"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "identidade efêmera"
+            "value" : "identidade local do dispositivo"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "эфемерная личность"
+            "value" : "идентичность на устройстве"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tillfällig identitet"
+            "value" : "enhetslokal identitet"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "தற்காலிக அடையாளம்"
+            "value" : "சாதன-உள்ளூர் அடையாளம்"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ตัวตนชั่วคราว"
+            "value" : "ตัวตนในเครื่อง"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geçici kimlik"
+            "value" : "cihaza yerel kimlik"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ефемерна ідентичність"
+            "value" : "ідентичність на пристрої"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "عارضی شناخت"
+            "value" : "ڈیوائس مقامی شناخت"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "danh tính tạm thời"
+            "value" : "danh tính cục bộ trên thiết bị"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "临时身份"
+            "value" : "设备本地身份"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "臨時身份"
+            "value" : "裝置本機身分"
           }
         }
       }
@@ -11931,181 +12303,181 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "لا خوادم أو حسابات أو جمع بيانات"
+            "value" : "لا حسابات، لا أرقام هواتف، لا جمع بيانات"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "কোনো সার্ভার, অ্যাকাউন্ট বা ডেটা সংগ্রহ নেই"
+            "value" : "কোনো অ্যাকাউন্ট নেই, ফোন নম্বর নেই, ডেটা সংগ্রহ নেই"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "keine server, konten oder datensammlung"
+            "value" : "keine konten, keine telefonnummern, keine datensammlung"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "no servers, accounts, or data collection"
+            "value" : "no accounts, no phone numbers, no data collection"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "sin servidores, cuentas ni recopilación de datos"
+            "value" : "sin cuentas, sin números de teléfono, sin recopilación de datos"
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "بدون سرور، حساب کاربری یا جمع‌آوری داده"
+            "value" : "بدون حساب، بدون شماره تلفن، بدون جمع‌آوری داده"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "walang mga server, account, o pagkuha ng data"
+            "value" : "walang account, walang numero ng telepono, walang pangongolekta ng data"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "sans serveurs, comptes ni collecte de données"
+            "value" : "pas de comptes, pas de numéros de téléphone, pas de collecte de données"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "אין שרתים, חשבונות או איסוף נתונים"
+            "value" : "בלי חשבונות, בלי מספרי טלפון, בלי איסוף נתונים"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "कोई सर्वर, खाते या डेटा संग्रह नहीं"
+            "value" : "कोई खाता नहीं, कोई फ़ोन नंबर नहीं, कोई डेटा संग्रह नहीं"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tanpa server, akun, atau pengumpulan data"
+            "value" : "tanpa akun, tanpa nomor telepon, tanpa pengumpulan data"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "niente server, account o raccolta dati"
+            "value" : "niente account, niente numeri di telefono, nessuna raccolta dati"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "サーバーもアカウントもデータ収集もなし"
+            "value" : "アカウントなし・電話番号なし・データ収集なし"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "서버와 계정이 없으며 데이터를 수집하지 않습니다"
+            "value" : "계정 없음, 전화번호 없음, 데이터 수집 없음"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tanpa server, akun, atau pengumpulan data"
+            "value" : "tiada akaun, tiada nombor telefon, tiada pengumpulan data"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "सर्भर, खाताहरू वा तथ्याङ्क सङ्कलन छैन"
+            "value" : "कुनै खाता छैन, फोन नम्बर छैन, डेटा सङ्कलन छैन"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geen servers, accounts of dataverzameling"
+            "value" : "geen accounts, geen telefoonnummers, geen dataverzameling"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "bez serwerów, kont ani zbierania danych"
+            "value" : "bez kont, bez numerów telefonów, bez zbierania danych"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "sem servidores, contas ou recolha de dados"
+            "value" : "sem contas, sem números de telefone, sem recolha de dados"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "sem servidores, contas ou coleta de dados"
+            "value" : "sem contas, sem números de telefone, sem coleta de dados"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "без серверов, аккаунтов и сбора данных"
+            "value" : "без аккаунтов, без номеров телефона, без сбора данных"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "inga servrar, konton eller datainsamling"
+            "value" : "inga konton, inga telefonnummer, ingen datainsamling"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "சர்வர்கள் இல்லை, கணக்குகள் இல்லை, தரவுச் சேகரிப்பு இல்லை"
+            "value" : "கணக்குகள் இல்லை, தொலைபேசி எண்கள் இல்லை, தரவு சேகரிப்பு இல்லை"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ไม่มีเซิร์ฟเวอร์ บัญชี หรือการเก็บข้อมูล"
+            "value" : "ไม่มีบัญชี ไม่มีเบอร์โทรศัพท์ ไม่มีการเก็บข้อมูล"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "sunucu, hesap veya veri toplama yok"
+            "value" : "hesap yok, telefon numarası yok, veri toplama yok"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "жодних серверів, обліковок чи збору даних"
+            "value" : "без облікових записів, без номерів телефону, без збору даних"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "کوئی سرور، اکاؤنٹس یا ڈیٹا جمع نہیں کیا جاتا"
+            "value" : "نہ اکاؤنٹ، نہ فون نمبر، نہ ڈیٹا اکٹھا کرنا"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "không máy chủ, không tài khoản, không thu thập dữ liệu"
+            "value" : "không tài khoản, không số điện thoại, không thu thập dữ liệu"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "无服务器、无账号、无数据收集"
+            "value" : "无账号、无电话号码、无数据收集"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "無伺服器、無帳號、無數據收集"
+            "value" : "無帳號、無電話號碼、無資料收集"
           }
         }
       }
@@ -27155,6 +27527,191 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "驗證加密"
+          }
+        }
+      }
+    },
+    "content.accessibility.verified_sender" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مرسل موثق"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "যাচাইকৃত প্রেরক"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verifizierter absender"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verified sender"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remitente verificado"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فرستنده تأییدشده"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beripikadong nagpadala"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expéditeur vérifié"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שולח מאומת"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सत्यापित प्रेषक"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pengirim terverifikasi"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mittente verificato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "確認済みの送信者"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "확인된 보낸 사람"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pengirim yang disahkan"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "प्रमाणित प्रेषक"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geverifieerde afzender"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zweryfikowany nadawca"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remetente verificado"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remetente verificado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подтверждённый отправитель"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verifierad avsändare"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "சரிபார்க்கப்பட்ட அனுப்புநர்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ผู้ส่งที่ยืนยันแล้ว"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doğrulanmış gönderen"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Підтверджений відправник"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تصدیق شدہ مرسل"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Người gửi đã xác minh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已验证的发送者"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已驗證的傳送者"
           }
         }
       }
@@ -52663,181 +53220,181 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "تحدث مع أشخاص قريبين عبر قنوات geohash. نشارك geohash تقريبي فقط، وليس gps الدقيق. يتم إخفاء عنوان ip لأن كل المرور يمر عبر tor."
+            "value" : "دردش مع من حولك عبر قنوات geohash. الـ geohash المحدد علني وقد يكشف منطقة تقريبية؛ لا تتم مشاركة إحداثيات GPS الدقيقة أبدًا. مع تشغيل tor (الوضع الافتراضي)، ترى المرحّلات عنوان tor بدلاً من عنوان IP الخاص بك."
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "জিওহ্যাশ চ্যানেল দিয়ে কাছাকাছি অঞ্চলের মানুষের সঙ্গে চ্যাট করুন। শুধুই স্থূল জিওহ্যাশ শেয়ার হয়, কখনো সঠিক GPS নয়। আপনার IP টর দিয়ে সব ট্রাফিক রাউট করে লুকানো থাকে।"
+            "value" : "geohash চ্যানেল ব্যবহার করে কাছের মানুষদের সঙ্গে চ্যাট করুন। নির্বাচিত geohash সর্বজনীন এবং আনুমানিক এলাকা প্রকাশ করতে পারে; সঠিক GPS কখনও শেয়ার হয় না। tor চালু থাকলে (ডিফল্ট), রিলেগুলো আপনার IP-এর বদলে tor-এর ঠিকানা দেখে।"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "chatte mit menschen in deiner nähe über geohash-kanäle. geteilt wird nur ein grober geohash, niemals exakte gps-daten. deine ip bleibt verborgen, weil der gesamte verkehr über tor läuft."
+            "value" : "chatte mit leuten in deiner nähe über geohash-kanäle. der gewählte geohash ist öffentlich und kann ein ungefähres gebiet verraten; exaktes GPS wird nie geteilt. mit eingeschaltetem tor (standard) sehen relays tors adresse statt deiner IP-adresse."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "chat with people near you using geohash channels. the selected geohash is public and may reveal an approximate area; exact GPS is never shared. your IP address is hidden by routing all traffic over tor."
+            "value" : "chat with people near you using geohash channels. the selected geohash is public and may reveal an approximate area; exact GPS is never shared. with tor on (the default), relays see tor's address instead of your IP address."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "chatea con personas cercanas usando canales geohash. Solo se comparte un geohash aproximado, nunca GPS exacto. Tu IP se oculta al enrutar todo el tráfico por Tor."
+            "value" : "chatea con gente cercana usando canales geohash. el geohash seleccionado es público y puede revelar una zona aproximada; el GPS exacto nunca se comparte. con tor activado (el valor predeterminado), los relés ven la dirección de tor en lugar de tu IP."
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "با کانال‌های ژئوهش با افراد نزدیک خود گفتگو کنید. ژئوهش انتخاب‌شده عمومی است و ممکن است منطقهٔ تقریبی شما را نشان دهد؛ GPS دقیق هرگز به اشتراک گذاشته نمی‌شود. با عبور همهٔ ترافیک از Tor، آدرس IP شما پنهان می‌ماند."
+            "value" : "با افراد نزدیک خود از طریق کانال‌های geohash گفتگو کنید. geohash انتخابی عمومی است و ممکن است منطقه‌ای تقریبی را نشان دهد؛ GPS دقیق هرگز به اشتراک گذاشته نمی‌شود. با روشن بودن tor (پیش‌فرض)، رله‌ها به جای IP شما آدرس tor را می‌بینند."
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "makipag-chat sa mga taong malapit sa iyo gamit ang mga geohash channel. coarse na geohash lang ang ibinabahagi, hindi ang eksaktong GPS. tinatago ang iyong IP address sa pagreruta ng lahat ng traffic sa tor."
+            "value" : "makipag-chat sa mga taong malapit sa iyo gamit ang mga geohash channel. pampubliko ang napiling geohash at maaaring magbunyag ng tinatayang lugar; hindi kailanman ibinabahagi ang eksaktong GPS. kapag naka-on ang tor (ang default), ang address ng tor ang nakikita ng mga relay sa halip na ang iyong IP."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "discute avec les personnes proches grâce aux canaux geohash. seul un geohash grossier est partagé, jamais de gps exact. ton ip reste cachée car tout le trafic passe par tor."
+            "value" : "discutez avec les gens autour de vous via les canaux geohash. le geohash choisi est public et peut révéler une zone approximative ; le GPS exact n'est jamais partagé. avec tor activé (par défaut), les relais voient l'adresse de tor au lieu de votre IP."
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "שוחח עם אנשים קרובים בערוצי geohash. משתף רק geohash גס, אף פעם לא gps מדויק. כתובת ה-ip מוסתרת כי כל התעבורה עוברת דרך tor."
+            "value" : "שוחחו עם אנשים בסביבה דרך ערוצי geohash. ה-geohash שנבחר הוא ציבורי ועשוי לחשוף אזור משוער; מיקום GPS מדויק לעולם לא משותף. כש-tor פועל (ברירת המחדל), הממסרים רואים את הכתובת של tor במקום ה-IP שלכם."
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "जियोहैश चैनलों से आसपास के लोगों से चैट करें। केवल मोटा जियोहैश साझा होता है, कभी सटीक GPS नहीं। आपका IP सारा ट्रैफ़िक Tor से रूट कर छिपा रहता है।"
+            "value" : "geohash चैनलों के ज़रिए आस-पास के लोगों से चैट करें। चुना गया geohash सार्वजनिक है और अनुमानित क्षेत्र दिखा सकता है; सटीक GPS कभी साझा नहीं होता। tor चालू होने पर (डिफ़ॉल्ट), रिले आपके IP की जगह tor का पता देखते हैं।"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ngobrol dengan orang terdekat lewat kanal geohash. hanya geohash kasar yang dibagikan, tidak pernah gps tepat. alamat ip-mu tersembunyi karena seluruh trafik lewat tor."
+            "value" : "mengobrol dengan orang di sekitar melalui kanal geohash. geohash yang dipilih bersifat publik dan dapat mengungkap area perkiraan; GPS persis tidak pernah dibagikan. dengan tor aktif (bawaan), relay melihat alamat tor alih-alih IP anda."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "chatta con le persone vicine tramite canali geohash. condividiamo solo geohash approssimativi, mai il gps esatto. il tuo ip resta nascosto perché tutto il traffico passa da tor."
+            "value" : "chatta con chi ti sta vicino usando i canali geohash. il geohash selezionato è pubblico e può rivelare un'area approssimativa; il GPS esatto non viene mai condiviso. con tor attivo (impostazione predefinita), i relay vedono l'indirizzo di tor invece del tuo IP."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geohashチャンネルで近くの人と会話。共有されるのはざっくりしたgeohashだけで正確なgpsは含みません。全トラフィックをtor経由にすることであなたのipを隠します。"
+            "value" : "geohash チャンネルで近くの人とチャットできます。選択した geohash は公開され、おおよそのエリアが分かる場合があります。正確な GPS は決して共有されません。tor が有効（デフォルト）なら、リレーにはあなたの IP ではなく tor のアドレスが見えます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geohash 채널을 사용해 주변 사람들과 대화하세요. 정확한 GPS가 아닌 대략적인 geohash만 공유됩니다. 모든 트래픽을 tor로 라우팅하여 IP 주소를 숨깁니다."
+            "value" : "geohash 채널로 주변 사람들과 대화하세요. 선택한 geohash는 공개되며 대략적인 지역이 드러날 수 있습니다. 정확한 GPS는 절대 공유되지 않습니다. tor가 켜져 있으면(기본값) 릴레이에는 내 IP 대신 tor의 주소가 보입니다."
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ngobrol dengan orang terdekat lewat kanal geohash. hanya geohash kasar yang dibagikan, tidak pernah gps tepat. alamat ip-mu tersembunyi karena seluruh trafik lewat tor."
+            "value" : "berbual dengan orang berdekatan melalui saluran geohash. geohash yang dipilih adalah umum dan mungkin mendedahkan kawasan anggaran; GPS tepat tidak pernah dikongsi. dengan tor dihidupkan (lalai), relay melihat alamat tor dan bukan IP anda."
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geohash च्यानलबाट नजिकका मानिससँग कुरा गर। केवल मोटामो geohash साझा हुन्छ, कहिल्यै सहि gps होइन। सबै ट्राफिक tor मार्फत गएका कारण तिम्रो ip लुकेको हुन्छ।"
+            "value" : "geohash च्यानलहरू प्रयोग गरेर नजिकका मानिसहरूसँग कुराकानी गर्नुहोस्। चयन गरिएको geohash सार्वजनिक हुन्छ र अनुमानित क्षेत्र देखाउन सक्छ; सटीक GPS कहिल्यै साझा हुँदैन। tor खुला हुँदा (पूर्वनिर्धारित), रिलेहरूले तपाईंको IP को सट्टा tor को ठेगाना देख्छन्।"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "chat met mensen bij jou in de buurt via geohash-kanalen. enkel een grove geohash wordt gedeeld, nooit exacte GPS. je IP-adres wordt verborgen doordat al het verkeer via tor wordt gerouteerd."
+            "value" : "chat met mensen in de buurt via geohash-kanalen. de gekozen geohash is openbaar en kan een globaal gebied onthullen; exacte GPS wordt nooit gedeeld. met tor aan (standaard) zien relays het adres van tor in plaats van je IP-adres."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "rozmawiaj z osobami w pobliżu za pomocą kanałów geohash. udostępniany jest tylko zgrubny geohash, nigdy dokładny GPS. twój adres IP jest ukryty przez kierowanie całego ruchu przez tor."
+            "value" : "rozmawiaj z ludźmi w pobliżu przez kanały geohash. wybrany geohash jest publiczny i może zdradzić przybliżony obszar; dokładny GPS nigdy nie jest udostępniany. przy włączonym tor (domyślnie) przekaźniki widzą adres tora zamiast twojego IP."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "conversa com pessoas perto de ti usando canais geohash. apenas um geohash de baixa precisão é partilhado, nunca GPS exato. o teu IP fica oculto ao encaminhar todo o tráfego através do Tor."
+            "value" : "conversa com pessoas por perto através de canais geohash. o geohash selecionado é público e pode revelar uma área aproximada; o GPS exato nunca é partilhado. com o tor ligado (predefinição), os relays veem o endereço do tor em vez do teu IP."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "converse com pessoas próximas usando canais geohash. apenas um geohash grosseiro é compartilhado, nunca gps exato. seu ip fica oculto ao rotear todo o tráfego por tor."
+            "value" : "converse com pessoas por perto usando canais geohash. o geohash selecionado é público e pode revelar uma área aproximada; o GPS exato nunca é compartilhado. com o tor ligado (padrão), os relays veem o endereço do tor em vez do seu IP."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "общайся с людьми рядом через каналы geohash. делится только грубый geohash, без точного gps. твой ip скрывается за счёт маршрутизации трафика через tor."
+            "value" : "общайтесь с людьми поблизости через geohash-каналы. выбранный geohash публичен и может раскрыть примерный район; точные GPS-координаты никогда не передаются. при включённом tor (по умолчанию) релеи видят адрес tor вместо вашего IP."
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "chatta med folk nära dig via geohash-kanaler. endast en grov geohash delas, aldrig exakt GPS. din IP-adress döljs genom att all trafik går via tor."
+            "value" : "chatta med folk i närheten via geohash-kanaler. vald geohash är offentlig och kan avslöja ett ungefärligt område; exakt GPS delas aldrig. med tor på (standard) ser reläer tors adress istället för din IP."
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geohash சேனல்கள் மூலம் அருகிலுள்ளவர்களுடன் உரையாடுங்கள். மிகவும் பொது geohash மட்டுமே பகிரப்படும், துல்லியமான GPS அல்ல. உங்கள் IP, அனைத்து போக்குவரத்தையும் tor வழியாக மாற்றுவதன் மூலம் மறைக்கப்படுகிறது."
+            "value" : "geohash சேனல்கள் மூலம் அருகிலுள்ளவர்களுடன் அரட்டையடிக்கவும். தேர்ந்தெடுத்த geohash பொதுவானது, தோராயமான பகுதியை வெளிப்படுத்தலாம்; துல்லியமான GPS ஒருபோதும் பகிரப்படாது. tor இயக்கத்தில் இருந்தால் (இயல்புநிலை), ரிலேக்கள் உங்கள் IP க்குப் பதிலாக tor இன் முகவரியைக் காண்கின்றன."
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "แชทกับคนใกล้คุณผ่านช่อง geohash แบ่งปันเพียง geohash แบบหยาบ ไม่ใช่ GPS ที่แม่นยำ ที่อยู่ IP ของคุณถูกซ่อนด้วยการส่งข้อมูลผ่าน tor"
+            "value" : "แชทกับผู้คนใกล้ตัวผ่านช่อง geohash โดย geohash ที่เลือกเป็นแบบสาธารณะและอาจเผยพื้นที่โดยประมาณ พิกัด GPS ที่แน่นอนจะไม่ถูกแชร์ เมื่อเปิด tor (ค่าเริ่มต้น) รีเลย์จะเห็นที่อยู่ของ tor แทน IP ของคุณ"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geohash kanallarıyla yakınınızdaki insanlarla sohbet edin. yalnızca kaba bir geohash paylaşılır, tam GPS asla değil. IP adresiniz tüm trafik Tor üzerinden yönlendirilerek gizlenir."
+            "value" : "geohash kanallarıyla yakınınızdaki insanlarla sohbet edin. seçilen geohash herkese açıktır ve yaklaşık bir bölgeyi açığa çıkarabilir; tam GPS asla paylaşılmaz. tor açıkken (varsayılan) röleler IP'niz yerine tor'un adresini görür."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "спілкуйся з людьми поруч у каналах geohash. передається лише грубий geohash, без точного gps. твій ip приховується, бо весь трафік йде через tor."
+            "value" : "спілкуйтеся з людьми поруч через geohash-канали. вибраний geohash є публічним і може розкрити приблизний район; точні GPS-координати ніколи не передаються. з увімкненим tor (типово) релеї бачать адресу tor замість вашого IP."
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "قریب کے لوگوں سے گفتگو کیلئے geohash چینلز استعمال کریں۔ صرف عمومی geohash شیئر کیا جاتا ہے، کبھی درست GPS نہیں۔ آپ کا IP tor کے ذریعے ساری ٹریفک روٹ کر کے چھپایا جاتا ہے۔"
+            "value" : "geohash چینلز کے ذریعے قریبی لوگوں سے چیٹ کریں۔ منتخب geohash عوامی ہے اور تخمینی علاقہ ظاہر کر سکتا ہے؛ درست GPS کبھی شیئر نہیں ہوتا۔ tor آن ہونے پر (ڈیفالٹ)، ریلے آپ کے IP کی بجائے tor کا پتہ دیکھتے ہیں۔"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "trò chuyện với người gần bạn bằng các kênh geohash. chỉ chia sẻ geohash thô, không bao giờ là GPS chính xác. địa chỉ IP của bạn được ẩn bằng cách định tuyến toàn bộ lưu lượng qua tor."
+            "value" : "trò chuyện với những người gần bạn qua các kênh geohash. geohash đã chọn là công khai và có thể tiết lộ khu vực gần đúng; GPS chính xác không bao giờ được chia sẻ. khi bật tor (mặc định), các relay thấy địa chỉ của tor thay vì IP của bạn."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "使用 geohash 频道与附近的人聊天。只会共享粗略 geohash，从不泄露精确 GPS。所有流量通过 tor 路由来隐藏你的 IP。"
+            "value" : "通过 geohash 频道与附近的人聊天。所选 geohash 是公开的，可能暴露大致区域；精确 GPS 绝不会被共享。开启 tor 时（默认），中继看到的是 tor 的地址而不是你的 IP。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "使用 geohash 頻道與附近的人聊天。只會共享粗略 geohash，從不洩露精確 GPS。所有流量透過 tor 路由來隱藏你的 IP。"
+            "value" : "透過 geohash 頻道與附近的人聊天。所選 geohash 是公開的，可能透露大致區域；精確 GPS 絕不會被分享。開啟 tor 時（預設），中繼看到的是 tor 的位址而不是你的 IP。"
           }
         }
       }

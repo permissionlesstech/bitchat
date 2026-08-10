@@ -39,6 +39,19 @@ final class VerificationServiceTests: XCTestCase {
         XCTAssertNil(service.verifyScannedQR(qrString, maxAge: 60))
     }
 
+    func test_verifyScannedQR_rejectsFutureDatedPayload() throws {
+        let (service, noise) = makeService()
+        let futureTimestamp = Int64(Date().addingTimeInterval(3600).timeIntervalSince1970)
+        let qrString = try makeSignedQR(
+            noise: noise,
+            nickname: "future-\(UUID().uuidString)",
+            npub: nil,
+            ts: futureTimestamp
+        )
+
+        XCTAssertNil(service.verifyScannedQR(qrString, maxAge: 60))
+    }
+
     func test_verifyScannedQR_rejectsTamperedSignature() throws {
         let (service, noise) = makeService()
         let badSignature = Data(repeating: 0xAA, count: 64)

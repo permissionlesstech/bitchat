@@ -361,6 +361,37 @@ struct ChatPeerIdentityCoordinatorContextTests {
     }
 
     @Test @MainActor
+    func getEncryptionStatus_reflectsLiveSessionNotHistory() async {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        let peerID = PeerID(str: "8877665544332211")
+
+        // A remembered (even verified) fingerprint must not conjure a lock on
+        // its own: the DM header and "end-to-end encrypted" caption follow
+        // this status, and claiming secured with no live session is the false
+        // security signal this mapping used to produce.
+        context.fingerprintsByPeerID[peerID] = "fp"
+        context.verifiedFingerprintSet = ["fp"]
+
+        #expect(coordinator.getEncryptionStatus(for: peerID) == .noHandshake)
+
+        coordinator.invalidateEncryptionCache(for: peerID)
+        context.noiseSessionStates[peerID] = .handshaking
+        #expect(coordinator.getEncryptionStatus(for: peerID) == .noiseHandshaking)
+
+        // A FAILED handshake is a red lock.slash, not yesterday's seal.
+        struct HandshakeError: Error {}
+        coordinator.invalidateEncryptionCache(for: peerID)
+        context.noiseSessionStates[peerID] = .failed(HandshakeError())
+        #expect(coordinator.getEncryptionStatus(for: peerID) == .none)
+
+        // Only a live established session upgrades to the verified seal.
+        coordinator.invalidateEncryptionCache(for: peerID)
+        context.noiseSessionStates[peerID] = .established
+        #expect(coordinator.getEncryptionStatus(for: peerID) == .noiseVerified)
+    }
+
+    @Test @MainActor
     func resolveNickname_walksMeshIdentityAndAnonFallbacks() async {
         let context = MockChatPeerIdentityContext()
         let coordinator = ChatPeerIdentityCoordinator(context: context)
