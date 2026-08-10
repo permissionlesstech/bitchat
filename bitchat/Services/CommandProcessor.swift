@@ -772,7 +772,7 @@ final class CommandProcessor {
         }
         static func pingPong(nickname: String, rttMs: Int, hopText: String) -> String {
             String(
-                format: String(localized: "command.success.ping.pong", defaultValue: "pong from %@: %lld ms%@", comment: "Async ping success output; %@ is nickname, %lld is RTT ms, %2$@ is hop suffix"),
+                format: String(localized: "command.success.ping.pong", defaultValue: "pong from %1$@: %2$lld ms%3$@", comment: "Async ping success output; %1$@ is nickname, %2$lld is RTT ms, %3$@ is hop suffix"),
                 locale: .current,
                 nickname,
                 Int64(rttMs),
