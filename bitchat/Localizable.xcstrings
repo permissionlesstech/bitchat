@@ -457,8 +457,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "그 릴레이는 이미 목록에 있습니다."
+            "state" : "needs_review",
+            "value" : "이미 목록에 있는 릴레이입니다."
           }
         },
         "ms" : {
@@ -829,8 +829,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "릴레이 주소가 아닌 것 같습니다. wss://host 형식으로 시도하세요."
+            "state" : "needs_review",
+            "value" : "올바른 릴레이 주소가 아닙니다. wss://host 형식으로 입력하세요."
           }
         },
         "ms" : {
@@ -1387,8 +1387,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "mesh로 상대에게 닿지 않으면 비공개 메시지는 이 릴레이를 거칩니다. 기본 릴레이는 널리 알려진 주소여서 네트워크 필터가 차단할 수 있습니다 — 그래서 .onion 주소를 포함해 직접 릴레이를 추가할 수 있습니다."
+            "state" : "needs_review",
+            "value" : "메시로 연결할 수 없는 상대에게는 릴레이를 통해 비공개 메시지를 전달합니다. 기본 릴레이는 네트워크에서 차단될 수 있으며, .onion 주소를 포함한 릴레이를 직접 추가할 수 있습니다."
           }
         },
         "ms" : {
@@ -1759,8 +1759,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor가 꺼져 있습니다: 연결하는 모든 릴레이가 IP 주소를 볼 수 있고, 비공개 메시지를 운반하는 릴레이도 마찬가지입니다."
+            "state" : "needs_review",
+            "value" : "Tor가 꺼져 있습니다. 연결하는 모든 릴레이가 내 IP 주소를 볼 수 있으며, 비공개 메시지를 전달하는 릴레이도 마찬가지입니다."
           }
         },
         "ms" : {
@@ -1945,8 +1945,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "인터넷 트래픽을 tor를 통해 보내므로 릴레이를 운영하는 쪽에는 내 주소가 아니라 tor의 주소가 보입니다. 위치 채널과 인터넷으로 전달되는 비공개 메시지에 적용됩니다. 권장: 켜기."
+            "state" : "needs_review",
+            "value" : "인터넷 트래픽을 Tor로 보내 릴레이 운영자에게 내 주소 대신 Tor 주소가 보이게 합니다. 위치 채널과 인터넷으로 전달되는 비공개 메시지에 적용됩니다. 켜 두는 것을 권장합니다."
           }
         },
         "ms" : {
@@ -3478,8 +3478,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "확인"
+            "state" : "needs_review",
+            "value" : "완료"
           }
         },
         "ms" : {
@@ -3663,8 +3663,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "근처의 mesh 섬들을 인터넷으로 연결해 한 무리가 전파 범위 때문에 갈라지지 않게 합니다"
+            "state" : "needs_review",
+            "value" : "근처의 단절된 메시 네트워크를 인터넷으로 연결해 전파 범위 때문에 대화 상대가 나뉘지 않도록 합니다"
           }
         },
         "ms" : {
@@ -3848,8 +3848,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "mesh 브리징"
+            "state" : "needs_review",
+            "value" : "메시 브리징"
           }
         },
         "ms" : {
@@ -4033,8 +4033,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "비공개 메시지가 노이즈 프로토콜로 암호화됩니다"
+            "state" : "needs_review",
+            "value" : "비공개 메시지는 Noise 프로토콜로 암호화됩니다"
           }
         },
         "ms" : {
@@ -4218,8 +4218,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "종단간 암호화"
+            "state" : "needs_review",
+            "value" : "종단 간 암호화"
           }
         },
         "ms" : {
@@ -5143,8 +5143,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "분산형 익명 릴레이를 통해 geohash 채널에서 주변 지역의 사람들과 대화할 수 있습니다"
+            "state" : "needs_review",
+            "value" : "분산형 익명 릴레이를 통해 지오해시 채널에서 주변 지역 사람들과 대화할 수 있습니다"
           }
         },
         "ms" : {
@@ -5883,8 +5883,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "저전력 bluetooth를 사용하여 인터넷 없이 작동합니다"
+            "state" : "needs_review",
+            "value" : "Bluetooth Low Energy로 인터넷 없이 작동합니다"
           }
         },
         "ms" : {
@@ -6623,8 +6623,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "• 대화를 세 번 탭하여 삭제합니다"
+            "state" : "needs_review",
+            "value" : "• 대화 화면을 세 번 탭하여 내용을 삭제합니다"
           }
         },
         "ms" : {
@@ -7919,8 +7919,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "mesh 브리지를 거쳐 도착한 메시지"
+            "state" : "needs_review",
+            "value" : "메시 브리지를 거쳐 도착한 메시지"
           }
         },
         "ms" : {
@@ -8106,7 +8106,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "종단간 암호화된 세션"
+            "value" : "종단 간 암호화된 세션"
           }
         },
         "ms" : {
@@ -8478,7 +8478,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "즐겨찾기 — 상호 등록 시 nostr를 통해 오프라인 메시지 가능"
+            "value" : "서로 즐겨찾기하면 노스트르를 통해 오프라인 메시지가 전달됩니다."
           }
         },
         "ms" : {
@@ -8850,7 +8850,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "bluetooth로 직접 연결됨"
+            "value" : "Bluetooth로 직접 연결됨"
           }
         },
         "ms" : {
@@ -9036,7 +9036,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "mesh를 통해 도달 가능, 다른 피어가 중계"
+            "value" : "다른 피어의 중계로 메시를 통해 연결 가능"
           }
         },
         "ms" : {
@@ -9222,7 +9222,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "인터넷(nostr)을 통해 도달 가능 — 상호 즐겨찾기만"
+            "value" : "인터넷(노스트르)으로 연결할 수 있습니다. 서로 즐겨찾기한 경우에만 사용할 수 있습니다."
           }
         },
         "ms" : {
@@ -9966,7 +9966,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "읽지 않은 개인 메시지"
+            "value" : "읽지 않은 비공개 메시지"
           }
         },
         "ms" : {
@@ -10337,8 +10337,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "/drop로 장소에 메모를 고정하세요. 24시간 동안 지나가는 누구나 읽을 수 있습니다. 위치 필요."
+            "state" : "needs_review",
+            "value" : "장소에 쪽지를 남기려면 /drop 명령을 사용하세요. 24시간 동안 이곳을 지나는 누구나 읽을 수 있습니다. 위치 권한이 필요합니다."
           }
         },
         "ms" : {
@@ -10896,7 +10896,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "mesh announce에서 학습한 피어와 링크의 지도"
+            "value" : "메시에서 수집한 피어와 연결 정보 지도"
           }
         },
         "ms" : {
@@ -11082,7 +11082,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "mesh 토폴로지 지도를 엽니다"
+            "value" : "메시 연결 구조 지도를 엽니다"
           }
         },
         "ms" : {
@@ -11268,7 +11268,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "mesh 토폴로지"
+            "value" : "메시 연결 구조"
           }
         },
         "ms" : {
@@ -13117,8 +13117,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "근처의 mesh 섬들을 인터넷으로 연결합니다: mesh 채널에서 말한 내용이 이 지역의 전파 범위 밖 사람들에게도 전달되고, 그들의 메시지는 네트워크 기호가 붙어 여기에 표시됩니다. 인터넷이 있는 동안에는 내 기기가 주변의 연결이 없는 휴대폰을 위해 브리지와 위치 채널 트래픽도 전달합니다."
+            "state" : "needs_review",
+            "value" : "근처의 단절된 메시 네트워크를 인터넷으로 연결합니다. 메시 채널의 메시지는 이 지역에서 전파 범위 밖에 있는 사람에게도 전달되고, 상대방의 메시지는 네트워크 기호와 함께 표시됩니다. 인터넷에 연결된 동안 내 기기는 인터넷에 연결되지 않은 주변 휴대폰의 브리지 및 위치 채널 트래픽도 전달합니다."
           }
         },
         "ms" : {
@@ -13302,8 +13302,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "mesh 브리지"
+            "state" : "needs_review",
+            "value" : "메시 브리지"
           }
         },
         "ms" : {
@@ -13672,8 +13672,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "패닉 삭제"
+            "state" : "needs_review",
+            "value" : "데이터 즉시 삭제"
           }
         },
         "ms" : {
@@ -13857,8 +13857,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "모두 지우기"
+            "state" : "needs_review",
+            "value" : "모든 데이터 삭제"
           }
         },
         "ms" : {
@@ -14042,8 +14042,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "모든 데이터를 지울까요?"
+            "state" : "needs_review",
+            "value" : "모든 데이터를 삭제할까요?"
           }
         },
         "ms" : {
@@ -16451,8 +16451,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "당신의 지역에서 브리지를 통해 연결됨"
+            "state" : "needs_review",
+            "value" : "내 지역에서 브리지를 통해 연결되어 있습니다"
           }
         },
         "ms" : {
@@ -17195,8 +17195,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "bitchat의 #%1$@ 채널에 참여하세요: bitchat://geohash/%1$@ — bitchat이 처음이신가요? %2$@에서 받은 뒤 위치 채널에서 #%1$@을(를) 입력하세요."
+            "state" : "needs_review",
+            "value" : "bitchat의 #%1$@ 채널에 참여하세요: bitchat://geohash/%1$@. 처음 사용한다면 %2$@에서 bitchat을 설치한 뒤 위치 채널에 #%1$@ 입력하세요."
           }
         },
         "ms" : {
@@ -17567,8 +17567,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "이 채널은 좁은 영역을 다룹니다. sms나 imessage로 보낸 초대는 통신사와 양쪽 기기에 보입니다 — bitchat을 쓴다는 사실뿐 아니라 그 장소에 대한 관심도 드러납니다."
+            "state" : "needs_review",
+            "value" : "이 채널은 좁은 지역을 대상으로 합니다. SMS나 iMessage로 보낸 초대는 통신사와 양쪽 기기에 노출됩니다. bitchat을 사용한다는 사실뿐 아니라 해당 장소에 관심이 있다는 사실도 드러납니다."
           }
         },
         "ms" : {
@@ -20347,8 +20347,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nostr를 통해 사용 가능"
+            "state" : "needs_review",
+            "value" : "노스트르를 통해 연결할 수 있습니다."
           }
         },
         "ms" : {
@@ -20902,8 +20902,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "mesh 브리지를 거쳐 도착함"
+            "state" : "needs_review",
+            "value" : "메시 브리지를 거쳐 도착한 메시지입니다."
           }
         },
         "ms" : {
@@ -21831,7 +21831,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "인터넷 게이트웨이 활성화됨, 연결을 mesh와 공유 중"
+            "value" : "인터넷 게이트웨이가 활성화되어 있습니다. 인터넷 연결을 메시와 공유하고 있습니다."
           }
         },
         "ms" : {
@@ -24646,8 +24646,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@과(와) 비공개 대화"
+            "state" : "needs_review",
+            "value" : "%@님과의 비공개 대화입니다."
           }
         },
         "ms" : {
@@ -26314,8 +26314,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 님이 말하는 중"
+            "state" : "needs_review",
+            "value" : "%@님이 말하고 있습니다."
           }
         },
         "ms" : {
@@ -26685,8 +26685,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "#%@ 북마크 토글"
+            "state" : "needs_review",
+            "value" : "#%@ 채널의 북마크를 추가하거나 제거합니다."
           }
         },
         "ms" : {
@@ -27611,8 +27611,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "다이렉트 메시지 보내기"
+            "state" : "needs_review",
+            "value" : "비공개 메시지 보내기"
           }
         },
         "ms" : {
@@ -28722,8 +28722,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "bluetooth가 꺼져 있습니다. bitchat을 사용하려면 설정에서 bluetooth를 켜주세요."
+            "state" : "needs_review",
+            "value" : "Bluetooth가 꺼져 있습니다. bitchat을 사용하려면 설정에서 Bluetooth를 켜세요."
           }
         },
         "ms" : {
@@ -28907,8 +28907,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "bitchat은 주변 기기와 연결하기 위해 bluetooth 권한이 필요합니다. 설정에서 bluetooth 접근을 활성화해주세요."
+            "state" : "needs_review",
+            "value" : "bitchat이 주변 기기와 연결하려면 Bluetooth 권한이 필요합니다. 설정에서 Bluetooth 접근을 허용하세요."
           }
         },
         "ms" : {
@@ -29277,8 +29277,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "bluetooth 필요"
+            "state" : "needs_review",
+            "value" : "Bluetooth 필요"
           }
         },
         "ms" : {
@@ -29462,8 +29462,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "이 기기는 bluetooth를 지원하지 않습니다. bitchat이 작동하려면 bluetooth가 필요합니다."
+            "state" : "needs_review",
+            "value" : "이 기기는 Bluetooth를 지원하지 않습니다. bitchat을 사용하려면 Bluetooth가 필요합니다."
           }
         },
         "ms" : {
@@ -29647,8 +29647,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "위치 채널의 스크린샷은 사용자의 위치를 노출할 수 있습니다. 스크린샷을 공개적으로 공유할 때 주의해 주세요."
+            "state" : "needs_review",
+            "value" : "위치 채널의 스크린샷에는 내 위치가 드러납니다. 공개적으로 공유할 때 주의하세요."
           }
         },
         "ms" : {
@@ -29832,8 +29832,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "알림"
+            "state" : "needs_review",
+            "value" : "주의"
           }
         },
         "ms" : {
@@ -30019,7 +30019,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "채팅 지우기"
+            "value" : "대화 내용 삭제"
           }
         },
         "ms" : {
@@ -30205,7 +30205,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "이 채팅을 지울까요?"
+            "value" : "이 대화 내용을 삭제할까요?"
           }
         },
         "ms" : {
@@ -31873,7 +31873,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "이 채팅에서 cashu ecash 토큰 보내기"
+            "value" : "이 대화에서 Cashu ecash 토큰 보내기"
           }
         },
         "ms" : {
@@ -32059,7 +32059,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "mesh 피어까지의 왕복 시간 측정"
+            "value" : "메시 피어까지의 왕복 시간 측정"
           }
         },
         "ms" : {
@@ -32430,7 +32430,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "피어까지의 mesh 경로 추정"
+            "value" : "피어까지의 메시 경로 추정"
           }
         },
         "ms" : {
@@ -34094,8 +34094,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@가 읽음"
+            "state" : "needs_review",
+            "value" : "%@님이 읽음"
           }
         },
         "ms" : {
@@ -36137,7 +36137,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "전송 중..."
+            "value" : "전송 중…"
           }
         },
         "ms" : {
@@ -36323,7 +36323,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "전송됨 — 아직 전송 확인 없음"
+            "value" : "전송됨. 아직 전달 확인 없음"
           }
         },
         "ms" : {
@@ -37253,7 +37253,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "#%@ 에 있습니다 — 인터넷을 통한 공개 위치 채널입니다"
+            "value" : "현재 #%@ 공개 위치 채널에 있습니다"
           }
         },
         "ms" : {
@@ -37439,7 +37439,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "#mesh 에 있습니다 — bluetooth 범위 내의 사람에게 도달합니다"
+            "value" : "현재 #mesh 채널에 있습니다. Bluetooth 범위 안의 사용자와 연결됩니다"
           }
         },
         "ms" : {
@@ -37625,7 +37625,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "아직 범위 내에 아무도 없습니다... 메시지가 여기에 표시됩니다"
+            "value" : "아직 범위 안에 아무도 없습니다. 새 메시지는 여기에 표시됩니다."
           }
         },
         "ms" : {
@@ -38182,8 +38182,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "오늘 기기 %lld대가 범위 안을 지나갔어요"
+            "state" : "needs_review",
+            "value" : "오늘 기기 %lld대가 범위 안을 지나갔습니다"
           }
         },
         "ms" : {
@@ -38368,8 +38368,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "오늘 기기 1대가 범위 안을 지나갔어요"
+            "state" : "needs_review",
+            "value" : "오늘 기기 1대가 범위 안을 지나갔습니다"
           }
         },
         "ms" : {
@@ -38555,7 +38555,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "위의 채널 이름을 탭하여 전환 · bitchat/ 를 탭하여 도움말"
+            "value" : "위의 채널 이름을 탭하여 전환하세요. 도움말을 보려면 bitchat/를 탭하세요"
           }
         },
         "ms" : {
@@ -38741,7 +38741,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "근처 mesh 피어와 인터넷 연결을 공유 중"
+            "value" : "근처 메시 피어와 인터넷 연결을 공유 중"
           }
         },
         "ms" : {
@@ -38926,8 +38926,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "공지: 이 지역과 mesh에 고정된 게시물"
+            "state" : "needs_review",
+            "value" : "공지: 이 지역과 메시 네트워크에 고정된 게시물"
           }
         },
         "ms" : {
@@ -39296,8 +39296,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "인증: 내 QR을 보여주거나 친구의 QR 스캔하기"
+            "state" : "needs_review",
+            "value" : "내 QR을 보여 주거나 친구의 QR을 스캔하여 신원을 확인합니다"
           }
         },
         "ms" : {
@@ -40039,7 +40039,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "#%@ 에 메시지 — 공개"
+            "value" : "#%@ 채널에 공개 메시지 보내기"
           }
         },
         "ms" : {
@@ -40225,7 +40225,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "#mesh 에 메시지 — 공개, 근처"
+            "value" : "#mesh에서 근처 사용자에게 공개 메시지 보내기"
           }
         },
         "ms" : {
@@ -40411,7 +40411,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "%@ 에게 메시지 — 비공개"
+            "value" : "%@님에게 비공개 메시지 보내기"
           }
         },
         "ms" : {
@@ -41337,8 +41337,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "간략히 보기"
+            "state" : "needs_review",
+            "value" : "접기"
           }
         },
         "ms" : {
@@ -41892,8 +41892,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "cashu로 결제"
+            "state" : "needs_review",
+            "value" : "Cashu로 결제"
           }
         },
         "ms" : {
@@ -42263,8 +42263,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "lightning으로 결제"
+            "state" : "needs_review",
+            "value" : "Lightning으로 결제"
           }
         },
         "ms" : {
@@ -43008,7 +43008,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "비공개 · 종단간 암호화"
+            "value" : "비공개 · 종단 간 암호화"
           }
         },
         "ms" : {
@@ -44117,8 +44117,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "암호화 및 인증됨"
+            "state" : "needs_review",
+            "value" : "암호화되어 있으며 신원이 확인되었습니다."
           }
         },
         "ms" : {
@@ -45042,8 +45042,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "암호화 및 인증됨"
+            "state" : "needs_review",
+            "value" : "암호화 및 신원 확인됨"
           }
         },
         "ms" : {
@@ -45227,8 +45227,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "인증됨으로 표시"
+            "state" : "needs_review",
+            "value" : "신원 확인 완료"
           }
         },
         "ms" : {
@@ -45412,8 +45412,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "인증 제거"
+            "state" : "needs_review",
+            "value" : "신원 확인 해제"
           }
         },
         "ms" : {
@@ -45597,8 +45597,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "⚠️ 인증되지 않음"
+            "state" : "needs_review",
+            "value" : "⚠️ 확인되지 않음"
           }
         },
         "ms" : {
@@ -45782,8 +45782,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ 인증됨"
+            "state" : "needs_review",
+            "value" : "✓ 확인됨"
           }
         },
         "ms" : {
@@ -45969,7 +45969,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "✓ 보증됨"
+            "value" : "✓ 신원 보증됨"
           }
         },
         "ms" : {
@@ -46153,8 +46153,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "사용 불가 - 핸드셰이크 진행 중"
+            "state" : "needs_review",
+            "value" : "핸드셰이크가 진행 중이어서 사용할 수 없습니다"
           }
         },
         "ms" : {
@@ -46339,8 +46339,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "이 기기에만 저장됩니다. 비워 두면 상대가 주장한 닉네임을 씁니다."
+            "state" : "needs_review",
+            "value" : "이 기기에만 저장됩니다. 비워 두면 상대방이 제시한 닉네임을 사용합니다."
           }
         },
         "ms" : {
@@ -46896,8 +46896,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "이 사람의 신원을 인증했습니다."
+            "state" : "needs_review",
+            "value" : "이 사람의 신원을 확인했습니다."
           }
         },
         "ms" : {
@@ -47081,8 +47081,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "보안 채널을 통해 이 지문을 %@와 비교하세요."
+            "state" : "needs_review",
+            "value" : "안전한 채널을 통해 %@님과 이 지문을 비교하세요."
           }
         },
         "ms" : {
@@ -47570,7 +47570,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "당신이 확인한 %#@people@이(가) 보증함"
+            "value" : "내가 신원을 확인한 %#@people@이 이 사용자를 보증했습니다"
           },
           "substitutions" : {
             "people" : {
@@ -48293,8 +48293,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "보안 인증"
+            "state" : "needs_review",
+            "value" : "신원 확인"
           }
         },
         "ms" : {
@@ -49776,8 +49776,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "geohash에서 차단됨"
+            "state" : "needs_review",
+            "value" : "지오해시에서 차단됨"
           }
         },
         "ms" : {
@@ -52184,8 +52184,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "내 위치 및 geohashes 가져오기"
+            "state" : "needs_review",
+            "value" : "내 위치와 지오해시 가져오기"
           }
         },
         "ms" : {
@@ -52924,8 +52924,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "잘못된 geohash"
+            "state" : "needs_review",
+            "value" : "잘못된 지오해시"
           }
         },
         "ms" : {
@@ -53480,8 +53480,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "mesh"
+            "state" : "needs_review",
+            "value" : "메시"
           }
         },
         "ms" : {
@@ -54441,8 +54441,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "#%@ • %@"
+            "state" : "needs_review",
+            "value" : "#%1$@ • %2$@"
           }
         },
         "ms" : {
@@ -54996,8 +54996,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor 라우팅"
+            "state" : "needs_review",
+            "value" : "Tor 라우팅"
           }
         },
         "ms" : {
@@ -55921,8 +55921,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "도"
+            "state" : "needs_review",
+            "value" : "시·도"
           }
         },
         "ms" : {
@@ -56847,8 +56847,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "다른 방문자가 볼 수 있도록 이 위치에 짧은 영구적 노트를 추가하세요."
+            "state" : "needs_review",
+            "value" : "다른 방문자가 볼 수 있도록 이 위치에 영구적으로 남는 짧은 쪽지를 추가하세요."
           }
         },
         "ms" : {
@@ -57032,8 +57032,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "노트 전송 실패. %@"
+            "state" : "needs_review",
+            "value" : "쪽지를 보내지 못했습니다. %@"
           }
         },
         "ms" : {
@@ -57217,8 +57217,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "이 위치 근처에 사용 가능한 geo 릴레이가 없습니다. 잠시 후 다시 시도하세요."
+            "state" : "needs_review",
+            "value" : "이 위치 근처에 사용할 수 있는 지오 릴레이가 없습니다. 잠시 후 다시 시도하세요."
           }
         },
         "ms" : {
@@ -57402,8 +57402,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "노트 로딩 중…"
+            "state" : "needs_review",
+            "value" : "쪽지 불러오는 중…"
           }
         },
         "ms" : {
@@ -57587,8 +57587,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "근처에 geo 릴레이가 없습니다"
+            "state" : "needs_review",
+            "value" : "근처에 지오 릴레이가 없습니다"
           }
         },
         "ms" : {
@@ -57772,8 +57772,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "노트는 geo 릴레이를 사용합니다. 연결을 확인하고 다시 시도하세요."
+            "state" : "needs_review",
+            "value" : "쪽지는 지오 릴레이를 사용합니다. 연결을 확인하고 다시 시도하세요."
           }
         },
         "ms" : {
@@ -63536,7 +63536,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "당신이 확인한 사람이 보증함"
+            "value" : "내가 확인한 사용자가 신원을 보증했습니다"
           }
         },
         "ms" : {
@@ -65023,8 +65023,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "mesh"
+            "state" : "needs_review",
+            "value" : "메시"
           }
         },
         "ms" : {
@@ -65209,8 +65209,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "넷"
+            "state" : "needs_review",
+            "value" : "노스트르"
           }
         },
         "ms" : {
@@ -65581,8 +65581,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "mesh"
+            "state" : "needs_review",
+            "value" : "메시"
           }
         },
         "ms" : {
@@ -65953,8 +65953,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "읽으려면 bitchat을 열어보세요"
+            "state" : "needs_review",
+            "value" : "확인하려면 bitchat을 여세요"
           }
         },
         "ms" : {
@@ -66139,8 +66139,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "🔒 새 dm"
+            "state" : "needs_review",
+            "value" : "🔒 새 비공개 메시지"
           }
         },
         "ms" : {
@@ -67623,7 +67623,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "mesh 게이트웨이를 통해 전송됨"
+            "value" : "메시 게이트웨이로 전송됨"
           }
         },
         "ms" : {
@@ -67807,8 +67807,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "geohash 채팅에서 %@을(를) 차단했습니다"
+            "state" : "needs_review",
+            "value" : "%@님을 위치 채널에서 차단했습니다"
           }
         },
         "ms" : {
@@ -67992,8 +67992,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "geohash 채팅에서 %@의 차단을 해제했습니다"
+            "state" : "needs_review",
+            "value" : "%@님의 위치 채널 차단을 해제했습니다"
           }
         },
         "ms" : {
@@ -68178,7 +68178,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "%@ 님은 이미 멤버입니다"
+            "value" : "%@님은 이미 멤버입니다"
           }
         },
         "ms" : {
@@ -68733,7 +68733,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "그룹 '%@' 을(를) 생성했습니다 — /group invite @name 으로 사람을 추가하세요"
+            "value" : "'%@' 그룹을 만들었습니다. /group invite @name 명령으로 멤버를 추가하세요."
           }
         },
         "ms" : {
@@ -69658,7 +69658,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "%1$@ 님을 '%2$@' 에 초대했습니다"
+            "value" : "%1$@님을 '%2$@' 그룹에 초대했습니다"
           }
         },
         "ms" : {
@@ -69843,7 +69843,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "%2$@ 님이 그룹 '%1$@' 에 추가했습니다 — 이제 피플 목록에 표시됩니다"
+            "value" : "%2$@님이 '%1$@' 그룹에 추가했습니다. 이제 사람 목록에 표시됩니다"
           }
         },
         "ms" : {
@@ -70028,7 +70028,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "그룹 '%@' 에서 나갔습니다"
+            "value" : "'%@' 그룹에서 나갔습니다"
           }
         },
         "ms" : {
@@ -70398,7 +70398,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "'%@' 님은 이 그룹의 멤버가 아닙니다"
+            "value" : "'%@'님은 이 그룹의 멤버가 아닙니다"
           }
         },
         "ms" : {
@@ -70768,7 +70768,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "참여 중인 그룹이 없습니다 — /group create <name> 으로 시작하세요"
+            "value" : "참여 중인 그룹이 없습니다. 새 그룹을 만들려면 /group create <name> 명령을 사용하세요"
           }
         },
         "ms" : {
@@ -71138,7 +71138,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "%@ 님의 신원을 아직 확인할 수 없습니다 — announce를 기다리세요"
+            "value" : "%@님의 신원을 아직 확인할 수 없습니다. 피어 알림이 올 때까지 기다리세요"
           }
         },
         "ms" : {
@@ -71323,7 +71323,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "%@ 님을 초대하려면 mesh로 연결되어 있어야 합니다"
+            "value" : "%@님은 메시로 연결되어 있어야 초대할 수 있습니다"
           }
         },
         "ms" : {
@@ -71508,7 +71508,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "'%@' 을(를) 찾을 수 없습니다"
+            "value" : "'%@' 사용자를 찾을 수 없습니다"
           }
         },
         "ms" : {
@@ -71693,7 +71693,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "그룹 '%@' 에서 제거되었습니다"
+            "value" : "'%@' 그룹에서 제외되었습니다"
           }
         },
         "ms" : {
@@ -71878,7 +71878,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "%@ 님을 제거하고 그룹 키를 교체했습니다"
+            "value" : "%@님을 내보내고 그룹 키를 교체했습니다"
           }
         },
         "ms" : {
@@ -73544,7 +73544,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "%@ 님을 차단할 수 없습니다: 찾을 수 없거나 신원을 확인할 수 없습니다"
+            "value" : "%@님을 차단할 수 없습니다. 사용자를 찾지 못했거나 신원을 확인할 수 없습니다"
           }
         },
         "ms" : {
@@ -73730,7 +73730,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "%@ 님을 차단했습니다. 이제 이 사용자의 메시지를 받지 않습니다"
+            "value" : "%@님을 차단했습니다. 이제 이 사용자의 메시지를 받지 않습니다"
           }
         },
         "ms" : {
@@ -73916,7 +73916,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "%@ 님의 차단을 해제할 수 없습니다: 찾을 수 없습니다"
+            "value" : "%@님의 차단을 해제할 수 없습니다. 사용자를 찾을 수 없습니다"
           }
         },
         "ms" : {
@@ -74102,7 +74102,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "%@ 님의 차단을 해제했습니다"
+            "value" : "%@님의 차단을 해제했습니다"
           }
         },
         "ms" : {
@@ -74287,8 +74287,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor가 연결되지 않았습니다 — 이 네트워크가 차단하고 있을 수 있습니다. mesh 메시지는 계속 작동하며, 위치 채널과 인터넷 전달은 tor가 연결될 때까지 멈춥니다."
+            "state" : "needs_review",
+            "value" : "Tor에 연결할 수 없습니다. 이 네트워크에서 Tor를 차단했을 수 있습니다. 메시 대화는 계속 작동하며, 위치 채널과 인터넷 전달은 Tor가 연결될 때까지 중단됩니다."
           }
         },
         "ms" : {
@@ -74657,8 +74657,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor가 다시 시작되었습니다. 네트워크 라우팅이 복원되었습니다."
+            "state" : "needs_review",
+            "value" : "Tor가 다시 시작되었습니다. 네트워크 라우팅이 복원되었습니다."
           }
         },
         "ms" : {
@@ -74842,8 +74842,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "연결 복구를 위해 tor를 다시 시작하는 중..."
+            "state" : "needs_review",
+            "value" : "연결 복구를 위해 Tor를 다시 시작하는 중…"
           }
         },
         "ms" : {
@@ -75027,8 +75027,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor가 시작되었습니다. IP 보호를 위해 모든 대화를 tor를 통해 라우팅합니다."
+            "state" : "needs_review",
+            "value" : "Tor가 시작되었습니다. IP 보호를 위해 모든 대화를 Tor로 라우팅합니다."
           }
         },
         "ms" : {
@@ -75212,8 +75212,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor 시작 중..."
+            "state" : "needs_review",
+            "value" : "Tor 시작 중…"
           }
         },
         "ms" : {
@@ -75399,7 +75399,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "가십으로 전파된 이웃 목록(피어당 최대 10개)에서 추정 — 사용 중인 기기가 강조 표시됨"
+            "value" : "피어가 공유한 연결 정보(피어당 최대 10개)를 기반으로 추정합니다. 내 기기는 강조 표시됩니다."
           }
         },
         "ms" : {
@@ -75585,7 +75585,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "아직 mesh 링크가 없습니다 — 피어 announce가 도착하면 지도가 채워집니다"
+            "value" : "아직 표시할 메시 연결이 없습니다. 피어 알림을 받으면 지도가 채워집니다."
           }
         },
         "ms" : {
@@ -75771,7 +75771,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "토폴로지 새로고침"
+            "value" : "메시 연결 구조 새로고침"
           }
         },
         "ms" : {
@@ -75957,7 +75957,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "피어 %1$ld개 · 링크 %2$ld개"
+            "value" : "피어 %1$ld개 · 연결 %2$ld개"
           }
         },
         "ms" : {
@@ -76143,7 +76143,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "mesh 토폴로지"
+            "value" : "메시 연결 구조"
           }
         },
         "ms" : {
@@ -76327,8 +76327,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "인증 QR 코드"
+            "state" : "needs_review",
+            "value" : "신원 확인 QR 코드"
           }
         },
         "ms" : {
@@ -76512,8 +76512,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "스캔해서 인증하세요"
+            "state" : "needs_review",
+            "value" : "스캔하여 내 신원을 확인하세요"
           }
         },
         "ms" : {
@@ -77068,8 +77068,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "인증을 위해 QR 내용을 붙여넣으세요:"
+            "state" : "needs_review",
+            "value" : "신원 확인을 위해 QR 내용을 붙여넣으세요:"
           }
         },
         "ms" : {
@@ -77808,8 +77808,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@에 대한 인증이 요청되었습니다"
+            "state" : "needs_review",
+            "value" : "%@님의 신원 확인을 요청했습니다"
           }
         },
         "ms" : {
@@ -77993,8 +77993,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "인증하기"
+            "state" : "needs_review",
+            "value" : "확인"
           }
         },
         "ms" : {
@@ -78178,8 +78178,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "인증"
+            "state" : "needs_review",
+            "value" : "신원 확인"
           }
         },
         "ms" : {
@@ -79226,7 +79226,7 @@
         "id" : { "stringUnit" : { "state" : "needs_review", "value" : "Ganti draf untuk %@ dengan konten ini? Tidak ada yang akan dikirim otomatis." } },
         "it" : { "stringUnit" : { "state" : "needs_review", "value" : "Sostituire la bozza per %@ con questo contenuto? Nulla verrà inviato automaticamente." } },
         "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "%@ の下書きをこの内容で置き換えますか？自動的には送信されません。" } },
-        "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "%@의 초안을 이 콘텐츠로 바꾸시겠습니까? 자동으로 전송되지 않습니다." } },
+        "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "%@에 작성 중인 내용을 이 콘텐츠로 바꿀까요? 자동으로 전송되지는 않습니다." } },
         "ms" : { "stringUnit" : { "state" : "needs_review", "value" : "Gantikan draf untuk %@ dengan kandungan ini? Tiada apa-apa akan dihantar secara automatik." } },
         "ne" : { "stringUnit" : { "state" : "needs_review", "value" : "%@ को मस्यौदा यो सामग्रीले बदल्ने? केही पनि स्वचालित रूपमा पठाइने छैन।" } },
         "nl" : { "stringUnit" : { "state" : "needs_review", "value" : "Concept voor %@ vervangen door deze inhoud? Er wordt niets automatisch verzonden." } },
@@ -79262,7 +79262,7 @@
         "id" : { "stringUnit" : { "state" : "needs_review", "value" : "Tinjau konten yang dibagikan" } },
         "it" : { "stringUnit" : { "state" : "needs_review", "value" : "Controlla il contenuto condiviso" } },
         "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "共有コンテンツを確認" } },
-        "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "공유 콘텐츠 검토" } },
+        "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "공유 콘텐츠 확인" } },
         "ms" : { "stringUnit" : { "state" : "needs_review", "value" : "Semak kandungan yang dikongsi" } },
         "ne" : { "stringUnit" : { "state" : "needs_review", "value" : "साझा सामग्री समीक्षा गर्नुहोस्" } },
         "nl" : { "stringUnit" : { "state" : "needs_review", "value" : "Gedeelde inhoud bekijken" } },
@@ -79298,7 +79298,7 @@
         "id" : { "stringUnit" : { "state" : "needs_review", "value" : "Gunakan di draf" } },
         "it" : { "stringUnit" : { "state" : "needs_review", "value" : "Usa nella bozza" } },
         "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "下書きで使用" } },
-        "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "초안에 사용" } },
+        "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "입력창에 사용" } },
         "ms" : { "stringUnit" : { "state" : "needs_review", "value" : "Gunakan dalam draf" } },
         "ne" : { "stringUnit" : { "state" : "needs_review", "value" : "सन्देशको मस्यौदामा प्रयोग गर्नुहोस्" } },
         "nl" : { "stringUnit" : { "state" : "needs_review", "value" : "In concept gebruiken" } },
@@ -79587,8 +79587,8 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ \uc0ac\ub78c\ub4e4\uc774 \uc8fc\ub85c \ubaa8\uc774\ub294 \uc9c0\uc5ed \ucc44\ub110 \u2014 \ucd5c\ub300 \uc778\uad6c \ubc00\uc9d1\uc9c0 \uc8fc\ubcc0\uc758 \ub113\uc740 \uc140\uc774\uba70, \ub2f9\uc2e0\uc758 \uc704\uce58\uac00 \uc544\ub2d9\ub2c8\ub2e4. \uacf5\uac1c\ub418\uc5b4 \uc788\uace0 \ub110\ub9ac \uc54c\ub824\uc838 \uc788\uc73c\ub2c8 \uac10\uc2dc\ub41c\ub2e4\uace0 \uac00\uc815\ud558\uc138\uc694: \ube60\ub978 \ucc38\uc5ec\ub294 \uc9c0\uc624\ud574\uc2dc \uc785\ub825\ub9cc \uc904\uc5ec\uc904 \ubfd0, \ub2f9\uc2e0\uc744 \uc228\uae30\uac70\ub098 \ucc28\ub2e8\uc744 \uc6b0\ud68c\ud558\uc9c0 \uc54a\uc2b5\ub2c8\ub2e4."
+            "state" : "needs_review",
+            "value" : "%@ \uc0ac\ub78c\ub4e4\uc774 \uc8fc\ub85c \ubaa8\uc774\ub294 \uc9c0\uc5ed \ucc44\ub110\uc785\ub2c8\ub2e4. \uc8fc\uc694 \uc778\uad6c \uc911\uc2ec\uc9c0 \uc8fc\ubcc0\uc758 \ub113\uc740 \uc140\uc774\uba70 \ub0b4 \uc704\uce58\ub97c \ub098\ud0c0\ub0b4\uc9c0 \uc54a\uc2b5\ub2c8\ub2e4. \uacf5\uac1c\ub418\uc5b4 \ub110\ub9ac \uc54c\ub824\uc9c4 \ucc44\ub110\uc774\ubbc0\ub85c \uac10\uc2dc\ub41c\ub2e4\uace0 \uac00\uc815\ud558\uc138\uc694. \ube60\ub978 \ucc38\uc5ec\ub294 \uc9c0\uc624\ud574\uc2dc \uc785\ub825\ub9cc \uc904\uc5ec \uc904 \ubfd0, \uc2e0\uc6d0\uc744 \uc228\uae30\uac70\ub098 \uc811\uc18d \ucc28\ub2e8\uc744 \uc6b0\ud68c\ud558\uc9c0 \uc54a\uc2b5\ub2c8\ub2e4."
           }
         },
         "ms" : {
