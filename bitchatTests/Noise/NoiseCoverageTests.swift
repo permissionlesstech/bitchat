@@ -578,6 +578,26 @@ struct NoiseCoverageTests {
         #expect(failingManager.getSession(for: charliePeerID) == nil)
     }
 
+    @Test("Handshake completion fails closed on non-wire peer IDs")
+    func handshakeCompletionRejectsNonWirePeerIDs() throws {
+        let aliceManager = NoiseSessionManager(localStaticKey: aliceStaticKey, keychain: keychain)
+        let bobManager = NoiseSessionManager(localStaticKey: bobStaticKey, keychain: keychain)
+
+        // Alice addresses Bob by an identifier no static key can vouch for:
+        // neither a 16-hex wire ID nor a full Noise-key ID. Completion must
+        // reject it rather than accept any remote static key.
+        let nonWireID = PeerID(str: "not-a-wire-identifier")
+        let msg1 = try aliceManager.initiateHandshake(with: nonWireID)
+        let msg2 = try #require(
+            try bobManager.handleIncomingHandshake(from: bobPeerID, message: msg1)
+        )
+
+        #expect(throws: (any Error).self) {
+            try aliceManager.handleIncomingHandshake(from: nonWireID, message: msg2)
+        }
+        #expect(aliceManager.getSession(for: nonWireID)?.isEstablished() != true)
+    }
+
     @Test("Session manager cleans up initiator sessions after start-handshake failures")
     func sessionManagerCleansUpInitiatorSessionsAfterStartHandshakeFailures() {
         let manager = NoiseSessionManager(

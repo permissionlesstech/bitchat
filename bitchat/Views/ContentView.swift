@@ -409,7 +409,10 @@ struct ContentView: View {
         })
         .alert("content.alert.bluetooth_required.title", isPresented: rootBluetoothAlertBinding) {
             Button("content.alert.bluetooth_required.settings") {
-                SystemSettings.bluetooth.open()
+                // Powered-off needs the radio controls, not the privacy pane.
+                (appChromeModel.bluetoothState == .poweredOff
+                    ? SystemSettings.bluetoothPower
+                    : SystemSettings.bluetooth).open()
             }
             Button("common.ok", role: .cancel) {}
         } message: {
@@ -489,14 +492,47 @@ struct ContentView: View {
     }
 
     private var headerView: some View {
-        ContentHeaderView(
-            showSidebar: $showSidebar,
-            showVerifySheet: $showVerifySheet,
-            isNicknameFieldFocused: $isNicknameFieldFocused,
-            headerHeight: headerHeight,
-            headerPeerIconSize: headerPeerIconSize,
-            headerPeerCountFontSize: headerPeerCountFontSize
-        )
+        VStack(spacing: 0) {
+            ContentHeaderView(
+                showSidebar: $showSidebar,
+                showVerifySheet: $showVerifySheet,
+                isNicknameFieldFocused: $isNicknameFieldFocused,
+                headerHeight: headerHeight,
+                headerPeerIconSize: headerPeerIconSize,
+                headerPeerCountFontSize: headerPeerCountFontSize
+            )
+
+            // Failed-wipe outranks connectivity: "your data may still be
+            // here" matters more than "the radio is off".
+            if appChromeModel.panicWipeBlocked {
+                PanicWipeBlockedBanner()
+            }
+
+            if let issue = ConnectivityIssue.resolve(
+                bluetoothState: appChromeModel.bluetoothState,
+                torBlocked: appChromeModel.torBlocked
+            ) {
+                ConnectivityStatusBanner(issue: issue)
+            }
+        }
+        // Hosted here rather than on the logo Text so the pending dialog
+        // survives whatever happens to the header chrome.
+        .confirmationDialog(
+            Text(
+                String(localized: "app_info.settings.danger.panic_confirm_title", defaultValue: "wipe all data?", comment: "Title of the confirmation dialog before a panic wipe")
+            ),
+            isPresented: $appChromeModel.showPanicConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(role: .destructive) {
+                appChromeModel.panicClearAllData()
+            } label: {
+                Text(
+                    String(localized: "app_info.settings.danger.panic_confirm_action", defaultValue: "wipe everything", comment: "Destructive confirmation button that performs the panic wipe")
+                )
+            }
+            Button("common.cancel", role: .cancel) {}
+        }
     }
 
     private var publicMessageList: some View {

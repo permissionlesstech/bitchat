@@ -40,7 +40,6 @@ protocol ChatLifecycleContext: AnyObject {
     /// Schedules main-actor work after a UI-timing delay. Injected so tests
     /// can run the work synchronously instead of polling wall-clock queues.
     func scheduleOnMainAfter(_ delay: TimeInterval, _ work: @escaping @MainActor () -> Void)
-    func addSystemMessage(_ content: String)
 
     // MARK: Peers & sessions
     func peerNickname(for peerID: PeerID) -> String?
@@ -55,13 +54,10 @@ protocol ChatLifecycleContext: AnyObject {
     func routePrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String)
     @discardableResult
     func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool
-    func sendMeshMessage(_ content: String, mentions: [String], messageID: String, timestamp: Date)
     func sendGeohashReadReceipt(_ messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity)
 
     // MARK: Nostr & geohash
-    var isTeleported: Bool { get }
     func deriveNostrIdentity(forGeohash geohash: String) throws -> NostrIdentity
-    func recordGeoParticipant(pubkeyHex: String)
 
     // MARK: Favorites (shared with `ChatPrivateConversationContext`)
     /// The persisted favorite relationship for the peer's Noise static key, if any.
@@ -80,10 +76,10 @@ extension ChatViewModel: ChatLifecycleContext {
     // `selectedPrivateChatPeer`, `sentReadReceipts`, `nickname`, `myPeerID`,
     // `activeChannel`, `nostrKeyMapping`, `markReadReceiptSent(_:)`,
     // `markPrivateMessagesAsRead(from:)`, `appendPrivateMessage(_:to:)`,
-    // `markPrivateChatRead(_:)`, `addSystemMessage(_:)`,
+    // `markPrivateChatRead(_:)`,
     // `peerNickname(for:)`, `unifiedPeer(for:)`, `noiseSessionState(for:)`,
-    // the routing/ack members, `isTeleported`,
-    // `deriveNostrIdentity(forGeohash:)`, `recordGeoParticipant(pubkeyHex:)`,
+    // the routing/ack members,
+    // `deriveNostrIdentity(forGeohash:)`,
     // and `favoriteRelationship(forNoiseKey:)`
     // are shared requirements with the other contexts or satisfied by
     // existing `ChatViewModel` members. The members below flatten nested
@@ -143,34 +139,21 @@ final class ChatLifecycleCoordinator {
     }
 
     func handleScreenshotCaptured() {
+        // Public channels never announce screenshots. The old broadcast told
+        // everyone in radio range — and, on geohash channels, public Nostr
+        // relays, permanently — that this nickname was present and active
+        // here right now. Documenting something (or someone) is a core use
+        // of a protest app; it must not out the person doing it. Screenshot
+        // notices remain a DM-only courtesy between the two people involved.
+        guard let peerID = context.selectedPrivateChatPeer else { return }
+
         let screenshotMessage = "* \(context.nickname) took a screenshot *"
-
-        if let peerID = context.selectedPrivateChatPeer {
-            sendPrivateScreenshotNotificationIfPossible(
-                screenshotMessage,
-                to: peerID
-            )
+        // Only echo "you took a screenshot" when the peer was actually
+        // notified — the unconditional echo used to imply a notice that
+        // frequently was never sent (no established session).
+        if sendPrivateScreenshotNotificationIfPossible(screenshotMessage, to: peerID) {
             appendPrivateScreenshotNotice(for: peerID)
-            return
         }
-
-        switch context.activeChannel {
-        case .mesh:
-            context.sendMeshMessage(
-                screenshotMessage,
-                mentions: [],
-                messageID: UUID().uuidString,
-                timestamp: Date()
-            )
-
-        case .location(let channel):
-            sendPublicGeohashScreenshotMessage(
-                screenshotMessage,
-                channel: channel
-            )
-        }
-
-        context.addSystemMessage("you took a screenshot")
     }
 
     func saveIdentityState() {
@@ -293,8 +276,10 @@ final class ChatLifecycleCoordinator {
 }
 
 private extension ChatLifecycleCoordinator {
-    func sendPrivateScreenshotNotificationIfPossible(_ message: String, to peerID: PeerID) {
-        guard let peerNickname = context.peerNickname(for: peerID) else { return }
+    /// Returns whether the notice actually went out, so the caller can keep
+    /// the local echo honest.
+    func sendPrivateScreenshotNotificationIfPossible(_ message: String, to peerID: PeerID) -> Bool {
+        guard let peerNickname = context.peerNickname(for: peerID) else { return false }
 
         let sessionState = context.noiseSessionState(for: peerID)
         switch sessionState {
@@ -305,12 +290,14 @@ private extension ChatLifecycleCoordinator {
                 recipientNickname: peerNickname,
                 messageID: UUID().uuidString
             )
+            return true
 
         case .none, .failed, .handshakeQueued, .handshaking:
             SecureLogger.debug(
                 "Skipping screenshot notification to \(peerID) - no established session",
                 category: .security
             )
+            return false
         }
     }
 
@@ -327,37 +314,6 @@ private extension ChatLifecycleCoordinator {
         )
 
         context.appendPrivateMessage(notice, to: peerID)
-    }
-
-    func sendPublicGeohashScreenshotMessage(_ message: String, channel: GeohashChannel) {
-        Task { @MainActor [weak context = self.context] in
-            guard let context else { return }
-
-            do {
-                let identity = try context.deriveNostrIdentity(forGeohash: channel.geohash)
-                let event = try await NostrProtocol.createMinedEphemeralGeohashEvent(
-                    content: message,
-                    geohash: channel.geohash,
-                    senderIdentity: identity,
-                    nickname: context.nickname,
-                    teleported: context.isTeleported
-                )
-
-                let targetRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: channel.geohash, count: 5)
-                if targetRelays.isEmpty {
-                    SecureLogger.warning("Geo: no geohash relays available for \(channel.geohash); not sending", category: .session)
-                } else {
-                    NostrRelayManager.shared.sendEvent(event, to: targetRelays)
-                }
-
-                context.recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
-            } catch {
-                SecureLogger.error("❌ Failed to send geohash screenshot message: \(error)", category: .session)
-                context.addSystemMessage(
-                    String(localized: "system.location.send_failed", comment: "System message when a location channel send fails")
-                )
-            }
-        }
     }
 
     func deliveryStatusRank(_ status: DeliveryStatus) -> Int {

@@ -2047,6 +2047,1308 @@
         }
       }
     },
+    "chats.accessibility.open_hint" : {
+      "comment" : "Accessibility hint on a recent chat row explaining activation opens the direct conversation",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يفتح هذه المحادثة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "এই কথোপকথন খোলে"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "öffnet diese unterhaltung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "opens this conversation"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abre esta conversación"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "این گفتگو را باز می‌کند"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "binubuksan ang usapang ito"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ouvre cette conversation"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פותח את השיחה הזו"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "यह वार्तालाप खोलता है"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "membuka percakapan ini"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apre questa conversazione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この会話を開きます"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 대화를 엽니다"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "membuka perbualan ini"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "यो वार्तालाप खोल्छ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "opent dit gesprek"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "otwiera tę rozmowę"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abre esta conversa"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abre esta conversa"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "открывает этот разговор"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "öppnar den här konversationen"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இந்த உரையாடலைத் திறக்கும்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เปิดการสนทนานี้"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bu konuşmayı açar"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "відкриває цю розмову"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "یہ گفتگو کھولتا ہے"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mở cuộc trò chuyện này"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开此对话"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "開啟此對話"
+          }
+        }
+      }
+    },
+    "chats.section.header" : {
+      "comment" : "Section header above recent direct conversations in the people sheet",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الدردشات"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "চ্যাট"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chats"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chats"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chats"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "گفتگوها"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mga chat"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "discussions"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "צ'אטים"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "चैट"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "obrolan"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chat"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "チャット"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "채팅"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sembang"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "च्याटहरू"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chats"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "czaty"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "conversas"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "conversas"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "чаты"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chattar"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "அரட்டைகள்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "แชท"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sohbetler"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "чати"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "چیٹس"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "trò chuyện"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "聊天"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "聊天"
+          }
+        }
+      }
+    },
+    "content.banner.bluetooth_denied" : {
+      "comment" : "Persistent banner while Bluetooth permission is denied; tapping opens system settings",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم رفض الوصول إلى البلوتوث — الشبكة غير متصلة. انقر لفتح الإعدادات."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ব্লুটুথ অ্যাক্সেস অস্বীকৃত — মেশ অফলাইন। সেটিংস খুলতে ট্যাপ করুন।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth-zugriff verweigert — mesh ist offline. tippen, um die einstellungen zu öffnen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth access denied — mesh is offline. tap to open settings."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "acceso a bluetooth denegado — la malla está desconectada. toca para abrir ajustes."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "دسترسی بلوتوث رد شد — مش آفلاین است. برای باز کردن تنظیمات بزنید."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tinanggihan ang access sa bluetooth — offline ang mesh. i-tap para buksan ang settings."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "accès bluetooth refusé — le mesh est hors ligne. touchez pour ouvrir les réglages."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הגישה לבלוטות' נדחתה — הרשת לא מקוונת. הקישו לפתיחת ההגדרות."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ब्लूटूथ की अनुमति नहीं है — मेश ऑफ़लाइन है। सेटिंग्स खोलने के लिए टैप करें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "akses bluetooth ditolak — mesh offline. ketuk untuk membuka pengaturan."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "accesso bluetooth negato — la mesh è offline. tocca per aprire le impostazioni."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth へのアクセスが拒否されています — メッシュはオフラインです。タップして設定を開きます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "블루투스 접근이 거부되었습니다 — 메시가 오프라인입니다. 탭하여 설정을 여세요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "akses bluetooth ditolak — mesh di luar talian. ketik untuk membuka tetapan."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ब्लुटुथ पहुँच अस्वीकृत — मेश अफलाइन छ। सेटिङ खोल्न ट्याप गर्नुहोस्।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth-toegang geweigerd — mesh is offline. tik om instellingen te openen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "odmowa dostępu do bluetooth — sieć mesh jest offline. stuknij, aby otworzyć ustawienia."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "acesso ao bluetooth negado — a mesh está offline. toca para abrir as definições."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "acesso ao bluetooth negado — a mesh está offline. toque para abrir os ajustes."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "доступ к bluetooth запрещён — mesh-сеть недоступна. нажмите, чтобы открыть настройки."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth-åtkomst nekad — mesh är offline. tryck för att öppna inställningar."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "புளூடூத் அணுகல் மறுக்கப்பட்டது — மெஷ் ஆஃப்லைனில் உள்ளது. அமைப்புகளைத் திறக்கத் தட்டவும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "การเข้าถึงบลูทูธถูกปฏิเสธ — เมชออฟไลน์ แตะเพื่อเปิดการตั้งค่า"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth erişimi reddedildi — mesh çevrimdışı. ayarları açmak için dokunun."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "доступ до bluetooth заборонено — mesh-мережа офлайн. торкніться, щоб відкрити налаштування."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بلوٹوتھ رسائی مسترد — میش آف لائن ہے۔ سیٹنگز کھولنے کے لیے ٹیپ کریں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "quyền truy cập bluetooth bị từ chối — mesh đang ngoại tuyến. chạm để mở cài đặt."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "蓝牙权限被拒绝 — 网状网络已离线。点按打开设置。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "藍牙權限遭拒 — 網狀網路已離線。點按開啟設定。"
+          }
+        }
+      }
+    },
+    "content.banner.bluetooth_off" : {
+      "comment" : "Persistent banner while Bluetooth is switched off; tapping opens system settings",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "البلوتوث مطفأ — لا يمكن لمن حولك الوصول إليك. انقر للإصلاح."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ব্লুটুথ বন্ধ — কাছের কেউ আপনার সঙ্গে যোগাযোগ করতে পারবে না। ঠিক করতে ট্যাপ করুন।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth ist aus — niemand in der nähe kann dich erreichen. zum beheben tippen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth is off — nobody nearby can reach you. tap to fix."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth está apagado — nadie cerca puede contactarte. toca para arreglarlo."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بلوتوث خاموش است — هیچ‌کس در نزدیکی نمی‌تواند به شما برسد. برای رفع مشکل بزنید."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "naka-off ang bluetooth — walang makakaabot sa iyo na kalapit. i-tap para ayusin."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "le bluetooth est désactivé — personne à proximité ne peut vous joindre. touchez pour corriger."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הבלוטות' כבוי — אף אחד בסביבה לא יכול להגיע אליך. הקישו לתיקון."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ब्लूटूथ बंद है — आस-पास का कोई आप तक नहीं पहुँच सकता। ठीक करने के लिए टैप करें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth mati — tidak ada orang di sekitar yang dapat menghubungi anda. ketuk untuk memperbaiki."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "il bluetooth è spento — nessuno nelle vicinanze può raggiungerti. tocca per risolvere."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth がオフです — 近くの人と通信できません。タップして設定へ。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "블루투스가 꺼져 있습니다 — 주변 누구와도 연결할 수 없습니다. 탭하여 해결하세요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth dimatikan — tiada sesiapa berdekatan boleh menghubungi anda. ketik untuk membaiki."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ब्लुटुथ बन्द छ — नजिकको कोही तपाईंसम्म पुग्न सक्दैन। मिलाउन ट्याप गर्नुहोस्।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth staat uit — niemand in de buurt kan je bereiken. tik om dit op te lossen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth jest wyłączony — nikt w pobliżu nie może się z tobą połączyć. stuknij, aby naprawić."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "o bluetooth está desligado — ninguém por perto te consegue alcançar. toca para corrigir."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "o bluetooth está desligado — ninguém por perto consegue te alcançar. toque para corrigir."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth выключен — никто поблизости не может с вами связаться. нажмите, чтобы исправить."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth är av — ingen i närheten kan nå dig. tryck för att åtgärda."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "புளூடூத் அணைக்கப்பட்டுள்ளது — அருகிலுள்ள யாரும் உங்களை அடைய முடியாது. சரிசெய்யத் தட்டவும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "บลูทูธปิดอยู่ — คนใกล้เคียงติดต่อคุณไม่ได้ แตะเพื่อแก้ไข"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth kapalı — yakınınızdaki hiç kimse size ulaşamaz. düzeltmek için dokunun."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth вимкнено — ніхто поблизу не може з вами зв'язатися. торкніться, щоб виправити."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بلوٹوتھ بند ہے — قریب کا کوئی آپ تک نہیں پہنچ سکتا۔ ٹھیک کرنے کے لیے ٹیپ کریں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth đang tắt — không ai gần bạn có thể liên lạc với bạn. chạm để khắc phục."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "蓝牙已关闭 — 附近的人无法联系到你。点按以修复。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "藍牙已關閉 — 附近的人無法聯繫到你。點按以修復。"
+          }
+        }
+      }
+    },
+    "content.banner.bluetooth_unsupported" : {
+      "comment" : "Persistent banner on devices without Bluetooth support",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا يوجد بلوتوث على هذا الجهاز — الشبكة غير متاحة. قنوات الموقع لا تزال تعمل عبر الإنترنت."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "এই ডিভাইসে ব্লুটুথ নেই — মেশ অনুপলব্ধ। লোকেশন চ্যানেল এখনও ইন্টারনেটে কাজ করে।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kein bluetooth auf diesem gerät — mesh ist nicht verfügbar. standortkanäle funktionieren weiter übers internet."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no bluetooth on this device — mesh is unavailable. location channels still work over the internet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "este dispositivo no tiene bluetooth — la malla no está disponible. los canales de ubicación siguen funcionando por internet."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "این دستگاه بلوتوث ندارد — مش در دسترس نیست. کانال‌های مکان همچنان از طریق اینترنت کار می‌کنند."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "walang bluetooth ang device na ito — hindi available ang mesh. gumagana pa rin ang mga location channel sa internet."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pas de bluetooth sur cet appareil — le mesh est indisponible. les canaux de localisation fonctionnent toujours via internet."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אין בלוטות' במכשיר הזה — הרשת לא זמינה. ערוצי מיקום עדיין עובדים דרך האינטרנט."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "इस डिवाइस में ब्लूटूथ नहीं है — मेश अनुपलब्ध है। लोकेशन चैनल अब भी इंटरनेट पर काम करते हैं।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "perangkat ini tidak memiliki bluetooth — mesh tidak tersedia. kanal lokasi tetap berfungsi lewat internet."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "questo dispositivo non ha il bluetooth — la mesh non è disponibile. i canali di posizione funzionano comunque via internet."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この端末に bluetooth がありません — メッシュは利用できません。ロケーションチャンネルはインターネット経由で利用できます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 기기에는 블루투스가 없습니다 — 메시를 사용할 수 없습니다. 위치 채널은 인터넷으로 계속 사용할 수 있습니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tiada bluetooth pada peranti ini — mesh tidak tersedia. saluran lokasi masih berfungsi melalui internet."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "यो यन्त्रमा ब्लुटुथ छैन — मेश उपलब्ध छैन। स्थान च्यानलहरू अझै इन्टरनेटमा चल्छन्।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "geen bluetooth op dit apparaat — mesh is niet beschikbaar. locatiekanalen werken nog via internet."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "brak bluetooth w tym urządzeniu — sieć mesh jest niedostępna. kanały lokalizacji nadal działają przez internet."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "este dispositivo não tem bluetooth — a mesh está indisponível. os canais de localização continuam a funcionar pela internet."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "este dispositivo não tem bluetooth — a mesh está indisponível. os canais de localização continuam funcionando pela internet."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "на этом устройстве нет bluetooth — mesh-сеть недоступна. каналы мест по-прежнему работают через интернет."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ingen bluetooth på den här enheten — mesh är inte tillgängligt. platskanaler fungerar fortfarande via internet."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இந்தச் சாதனத்தில் புளூடூத் இல்லை — மெஷ் கிடைக்காது. இருப்பிடச் சேனல்கள் இணையம் வழியாக இயங்கும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "อุปกรณ์นี้ไม่มีบลูทูธ — ใช้เมชไม่ได้ ช่องตำแหน่งยังใช้งานผ่านอินเทอร์เน็ตได้"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bu cihazda bluetooth yok — mesh kullanılamıyor. konum kanalları internet üzerinden çalışmaya devam ediyor."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "на цьому пристрої немає bluetooth — mesh-мережа недоступна. канали місць далі працюють через інтернет."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اس ڈیوائس میں بلوٹوتھ نہیں — میش دستیاب نہیں۔ لوکیشن چینلز انٹرنیٹ پر بدستور کام کرتے ہیں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "thiết bị này không có bluetooth — mesh không khả dụng. các kênh vị trí vẫn hoạt động qua internet."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此设备没有蓝牙 — 网状网络不可用。位置频道仍可通过互联网使用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此裝置沒有藍牙 — 網狀網路無法使用。位置頻道仍可透過網際網路使用。"
+          }
+        }
+      }
+    },
+    "content.banner.tor_blocked" : {
+      "comment" : "Persistent banner while Tor bootstrap has stalled, likely because the network blocks it",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يتعذر على tor الاتصال — ميزات الإنترنت متوقفة مؤقتًا. الشبكة لا تزال تعمل."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor সংযোগ করতে পারছে না — ইন্টারনেট ফিচার স্থগিত। মেশ এখনও কাজ করছে।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor kann sich nicht verbinden — internetfunktionen pausieren. mesh funktioniert weiter."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor can't connect — internet features are paused. mesh still works."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor no puede conectarse — las funciones de internet están en pausa. la malla sigue funcionando."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor نمی‌تواند متصل شود — قابلیت‌های اینترنتی متوقف‌اند. مش همچنان کار می‌کند."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hindi makakonekta ang tor — naka-pause ang mga internet feature. gumagana pa rin ang mesh."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor ne peut pas se connecter — les fonctions internet sont en pause. le mesh fonctionne toujours."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor לא מצליח להתחבר — תכונות האינטרנט מושהות. הרשת עדיין עובדת."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor कनेक्ट नहीं हो पा रहा — इंटरनेट सुविधाएँ रुकी हैं। मेश अब भी काम करता है।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor tidak dapat terhubung — fitur internet dijeda. mesh tetap berfungsi."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor non riesce a connettersi — le funzioni internet sono in pausa. la mesh continua a funzionare."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor が接続できません — インターネット機能は一時停止中です。メッシュは引き続き使えます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor가 연결되지 않습니다 — 인터넷 기능이 일시 중지되었습니다. 메시는 계속 작동합니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor tidak dapat bersambung — ciri internet dijeda. mesh masih berfungsi."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor जडान हुन सकेन — इन्टरनेट सुविधाहरू रोकिएका छन्। मेश अझै चल्छ।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor kan geen verbinding maken — internetfuncties zijn gepauzeerd. mesh werkt nog."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor nie może się połączyć — funkcje internetowe są wstrzymane. sieć mesh nadal działa."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "o tor não consegue ligar-se — as funções de internet estão em pausa. a mesh continua a funcionar."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "o tor não consegue se conectar — os recursos de internet estão pausados. a mesh continua funcionando."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor не может подключиться — интернет-функции приостановлены. mesh-сеть продолжает работать."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor kan inte ansluta — internetfunktioner är pausade. mesh fungerar fortfarande."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor இணைக்க முடியவில்லை — இணைய அம்சங்கள் இடைநிறுத்தப்பட்டுள்ளன. மெஷ் தொடர்ந்து இயங்குகிறது."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor เชื่อมต่อไม่ได้ — ฟีเจอร์อินเทอร์เน็ตหยุดชั่วคราว เมชยังใช้งานได้"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor bağlanamıyor — internet özellikleri duraklatıldı. mesh çalışmaya devam ediyor."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor не може під'єднатися — інтернет-функції призупинено. mesh-мережа далі працює."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor منسلک نہیں ہو پا رہا — انٹرنیٹ فیچرز رکے ہوئے ہیں۔ میش بدستور کام کرتا ہے۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor không thể kết nối — các tính năng internet tạm dừng. mesh vẫn hoạt động."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor 无法连接 — 互联网功能已暂停。网状网络仍可使用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor 無法連線 — 網際網路功能已暫停。網狀網路仍可使用。"
+          }
+        }
+      }
+    },
+    "content.banner.panic_blocked" : {
+      "comment" : "Banner shown when a panic wipe did not fully commit; relaunching the app retries the wipe",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المسح غير مكتمل — قد تبقى بعض البيانات. أغلق bitchat وأعد فتحه لإعادة المحاولة."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "মুছে ফেলা অসম্পূর্ণ — কিছু ডেটা থেকে যেতে পারে। আবার চেষ্টা করতে bitchat বন্ধ করে আবার খুলুন।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "löschen unvollständig — einige daten könnten übrig sein. bitchat beenden und erneut öffnen, um es noch einmal zu versuchen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wipe incomplete — some data may remain. quit and reopen bitchat to retry."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "borrado incompleto — pueden quedar algunos datos. cierra y vuelve a abrir bitchat para reintentar."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پاک‌سازی ناقص است — ممکن است برخی داده‌ها باقی مانده باشند. برای تلاش دوباره bitchat را ببندید و دوباره باز کنید."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hindi kumpleto ang pagbura — maaaring may natirang data. isara at buksan muli ang bitchat para subukan ulit."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "effacement incomplet — des données peuvent subsister. quittez et rouvrez bitchat pour réessayer."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "המחיקה לא הושלמה — ייתכן שנשארו נתונים. סגרו ופתחו מחדש את bitchat כדי לנסות שוב."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "मिटाना अधूरा रहा — कुछ डेटा बच सकता है। फिर से कोशिश करने के लिए bitchat बंद करके दोबारा खोलें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "penghapusan belum selesai — sebagian data mungkin tersisa. tutup dan buka kembali bitchat untuk mencoba lagi."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cancellazione incompleta — alcuni dati potrebbero rimanere. chiudi e riapri bitchat per riprovare."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "消去が完了していません — データが残っている可能性があります。bitchat を終了して開き直すと再試行します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "삭제가 완료되지 않았습니다 — 일부 데이터가 남아 있을 수 있습니다. bitchat을 종료했다가 다시 열면 재시도합니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pemadaman tidak lengkap — sebahagian data mungkin masih ada. tutup dan buka semula bitchat untuk mencuba lagi."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "मेटाउने काम अधूरो — केही डेटा बाँकी रहन सक्छ। पुनः प्रयास गर्न bitchat बन्द गरेर फेरि खोल्नुहोस्।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wissen onvolledig — er kunnen gegevens achterblijven. sluit bitchat en open het opnieuw om het nogmaals te proberen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wymazywanie niekompletne — część danych może pozostać. zamknij i otwórz bitchat ponownie, aby spróbować jeszcze raz."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "limpeza incompleta — alguns dados podem permanecer. feche e reabra o bitchat para tentar novamente."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "limpeza incompleta — alguns dados podem permanecer. feche e reabra o bitchat para tentar novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "стирание не завершено — часть данных могла остаться. закройте и снова откройте bitchat, чтобы повторить."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "raderingen är ofullständig — viss data kan finnas kvar. avsluta och öppna bitchat igen för att försöka på nytt."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "அழித்தல் முழுமையடையவில்லை — சில தரவு எஞ்சியிருக்கலாம். மீண்டும் முயற்சிக்க bitchat ஐ மூடி மீண்டும் திறக்கவும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "การล้างข้อมูลไม่สมบูรณ์ — อาจมีข้อมูลหลงเหลืออยู่ ปิดแล้วเปิด bitchat ใหม่เพื่อลองอีกครั้ง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "silme tamamlanmadı — bazı veriler kalmış olabilir. yeniden denemek için bitchat'i kapatıp tekrar açın."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "стирання не завершено — частина даних могла залишитися. закрийте та знову відкрийте bitchat, щоб повторити."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مٹانا مکمل نہیں ہوا — کچھ ڈیٹا باقی رہ سکتا ہے۔ دوبارہ کوشش کے لیے bitchat بند کر کے دوبارہ کھولیں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "xoá chưa hoàn tất — một số dữ liệu có thể còn lại. thoát và mở lại bitchat để thử lại."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除未完成 — 可能仍有数据残留。请退出并重新打开 bitchat 重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除未完成 — 可能仍有資料殘留。請結束並重新開啟 bitchat 重試。"
+          }
+        }
+      }
+    },
     "content.system.media_delete_refused" : {
       "comment" : "System message shown in the affected chat when an explicit media delete or /clear was refused and bubbles/files were kept",
       "extractionState" : "manual",
@@ -11375,181 +12677,181 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "يُولد معرف قرين جديد بانتظام"
+            "value" : "هويتك زوج مفاتيح يُنشأ على هذا الجهاز — المسح الطارئ يستبدلها فورًا"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "নিয়মিত নতুন পিয়ার আইডি তৈরি হয়"
+            "value" : "আপনার পরিচয় এই ডিভাইসে তৈরি একটি কী-জোড়া — প্যানিক ওয়াইপ সঙ্গে সঙ্গে এটি বদলে দেয়"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "neue peer-id wird regelmäßig erzeugt"
+            "value" : "deine identität ist ein schlüsselpaar, das auf diesem gerät erzeugt wird — der panik-löscher ersetzt es sofort"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "new peer ID generated regularly"
+            "value" : "your identity is a keypair created on this device — panic wipe replaces it instantly"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "nuevo ID de peer generado periódicamente"
+            "value" : "tu identidad es un par de claves creado en este dispositivo — el borrado de pánico la reemplaza al instante"
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "شناسهٔ همتای جدید به‌طور منظم ساخته می‌شود"
+            "value" : "هویت شما یک جفت کلید است که روی این دستگاه ساخته می‌شود — پاک‌سازی اضطراری آن را فوراً جایگزین می‌کند"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "regular na lumilikha ng bagong peer ID"
+            "value" : "ang iyong pagkakakilanlan ay isang key pair na ginawa sa device na ito — agad itong pinapalitan ng panic wipe"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "nouvel id de pair généré régulièrement"
+            "value" : "votre identité est une paire de clés créée sur cet appareil — l'effacement d'urgence la remplace instantanément"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "מזהה עמית חדש נוצר באופן קבוע"
+            "value" : "הזהות שלך היא צמד מפתחות שנוצר במכשיר הזה — מחיקת חירום מחליפה אותה מיד"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "नया पीयर आईडी नियमित रूप से बनाया जाता है"
+            "value" : "आपकी पहचान इस डिवाइस पर बनी एक कुंजी-जोड़ी है — पैनिक वाइप इसे तुरंत बदल देता है"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "id peer baru dibuat secara berkala"
+            "value" : "identitas anda adalah pasangan kunci yang dibuat di perangkat ini — panic wipe langsung menggantinya"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "nuovo id peer generato regolarmente"
+            "value" : "la tua identità è una coppia di chiavi creata su questo dispositivo — la cancellazione di emergenza la sostituisce all'istante"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "新しいpeer idが定期的に生成されます"
+            "value" : "アイデンティティはこの端末上で生成される鍵ペアです — パニックワイプで即座に置き換えられます"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "새로운 피어 ID가 주기적으로 생성됩니다"
+            "value" : "신원은 이 기기에서 생성되는 키 쌍입니다 — 패닉 와이프로 즉시 교체됩니다"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "id peer baru dibuat secara berkala"
+            "value" : "identiti anda ialah pasangan kunci yang dicipta pada peranti ini — panic wipe menggantikannya serta-merta"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "नयाँ peer id नियमित रूपमा सिर्जना हुन्छ"
+            "value" : "तपाईंको परिचय यही यन्त्रमा बनेको कुञ्जी-जोडी हो — प्यानिक वाइपले तुरुन्तै बदल्छ"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "nieuw peer-ID wordt regelmatig aangemaakt"
+            "value" : "je identiteit is een sleutelpaar dat op dit apparaat wordt gemaakt — de paniekwis vervangt het direct"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "nowe ID peera generowane regularnie"
+            "value" : "twoja tożsamość to para kluczy utworzona na tym urządzeniu — wymazanie awaryjne natychmiast ją zastępuje"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "novo ID de par gerado regularmente"
+            "value" : "a tua identidade é um par de chaves criado neste dispositivo — a limpeza de pânico substitui-a de imediato"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "novo id de peer gerado regularmente"
+            "value" : "sua identidade é um par de chaves criado neste dispositivo — a limpeza de pânico a substitui na hora"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "новый id пира создаётся регулярно"
+            "value" : "ваша идентичность — пара ключей, созданная на этом устройстве. экстренное стирание мгновенно её заменяет"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "nytt peer-ID skapas regelbundet"
+            "value" : "din identitet är ett nyckelpar som skapas på den här enheten — panikradering ersätter det direkt"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "புதிய peer ID வழக்கமாக உருவாக்கப்படுகிறது"
+            "value" : "உங்கள் அடையாளம் இந்தச் சாதனத்தில் உருவாக்கப்படும் விசை-இணை — பேனிக் அழிப்பு உடனே அதை மாற்றும்"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "สร้างรหัสเพียร์ใหม่เป็นระยะ"
+            "value" : "ตัวตนของคุณคือคู่กุญแจที่สร้างบนเครื่องนี้ — panic wipe จะแทนที่ทันที"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "yeni eş kimliği düzenli olarak oluşturulur"
+            "value" : "kimliğiniz bu cihazda oluşturulan bir anahtar çiftidir — panik silme onu anında değiştirir"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "новий id піра генерується регулярно"
+            "value" : "ваша ідентичність — пара ключів, створена на цьому пристрої. екстрене стирання миттєво її замінює"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "نیا peer ID باقاعدگی سے بنایا جاتا ہے"
+            "value" : "آپ کی شناخت اس ڈیوائس پر بنایا گیا کلیدی جوڑا ہے — پینک وائپ اسے فوراً بدل دیتا ہے"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tạo ID nút mới định kỳ"
+            "value" : "danh tính của bạn là một cặp khoá được tạo trên thiết bị này — panic wipe thay thế nó ngay lập tức"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "定期生成新的 peer id"
+            "value" : "你的身份是在本机生成的密钥对 — 紧急清除会立即更换它"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "定期生成新的 peer id"
+            "value" : "你的身分是在本機產生的金鑰對 — 緊急清除會立即更換它"
           }
         }
       }
@@ -11560,181 +12862,181 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "هوية مؤقتة"
+            "value" : "هوية محفوظة على الجهاز"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "অস্থায়ী পরিচয়"
+            "value" : "ডিভাইসে থাকা পরিচয়"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "flüchtige identität"
+            "value" : "gerätelokale identität"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ephemeral identity"
+            "value" : "device-local identity"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "identidad efímera"
+            "value" : "identidad local del dispositivo"
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "هویت موقت"
+            "value" : "هویت محلی دستگاه"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "panandaliang pagkakakilanlan"
+            "value" : "pagkakakilanlang nasa device"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "identité éphémère"
+            "value" : "identité locale à l'appareil"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "זהות זמנית"
+            "value" : "זהות מקומית במכשיר"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "अस्थायी पहचान"
+            "value" : "डिवाइस-स्थानीय पहचान"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "identitas sementara"
+            "value" : "identitas lokal perangkat"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "identità effimera"
+            "value" : "identità locale al dispositivo"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "一時的なアイデンティティ"
+            "value" : "端末ローカルのアイデンティティ"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "임시 신원"
+            "value" : "기기 로컬 신원"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "identitas sementara"
+            "value" : "identiti setempat peranti"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "क्षणिक पहिचान"
+            "value" : "यन्त्र-स्थानीय परिचय"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tijdelijke identiteit"
+            "value" : "apparaat-lokale identiteit"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tymczasowa tożsamość"
+            "value" : "tożsamość lokalna urządzenia"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "identidade efémera"
+            "value" : "identidade local do dispositivo"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "identidade efêmera"
+            "value" : "identidade local do dispositivo"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "эфемерная личность"
+            "value" : "идентичность на устройстве"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tillfällig identitet"
+            "value" : "enhetslokal identitet"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "தற்காலிக அடையாளம்"
+            "value" : "சாதன-உள்ளூர் அடையாளம்"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ตัวตนชั่วคราว"
+            "value" : "ตัวตนในเครื่อง"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geçici kimlik"
+            "value" : "cihaza yerel kimlik"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ефемерна ідентичність"
+            "value" : "ідентичність на пристрої"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "عارضی شناخت"
+            "value" : "ڈیوائس مقامی شناخت"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "danh tính tạm thời"
+            "value" : "danh tính cục bộ trên thiết bị"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "临时身份"
+            "value" : "设备本地身份"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "臨時身份"
+            "value" : "裝置本機身分"
           }
         }
       }
@@ -11745,181 +13047,181 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "لا خوادم أو حسابات أو جمع بيانات"
+            "value" : "لا حسابات، لا أرقام هواتف، لا جمع بيانات"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "কোনো সার্ভার, অ্যাকাউন্ট বা ডেটা সংগ্রহ নেই"
+            "value" : "কোনো অ্যাকাউন্ট নেই, ফোন নম্বর নেই, ডেটা সংগ্রহ নেই"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "keine server, konten oder datensammlung"
+            "value" : "keine konten, keine telefonnummern, keine datensammlung"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "no servers, accounts, or data collection"
+            "value" : "no accounts, no phone numbers, no data collection"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "sin servidores, cuentas ni recopilación de datos"
+            "value" : "sin cuentas, sin números de teléfono, sin recopilación de datos"
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "بدون سرور، حساب کاربری یا جمع‌آوری داده"
+            "value" : "بدون حساب، بدون شماره تلفن، بدون جمع‌آوری داده"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "walang mga server, account, o pagkuha ng data"
+            "value" : "walang account, walang numero ng telepono, walang pangongolekta ng data"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "sans serveurs, comptes ni collecte de données"
+            "value" : "pas de comptes, pas de numéros de téléphone, pas de collecte de données"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "אין שרתים, חשבונות או איסוף נתונים"
+            "value" : "בלי חשבונות, בלי מספרי טלפון, בלי איסוף נתונים"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "कोई सर्वर, खाते या डेटा संग्रह नहीं"
+            "value" : "कोई खाता नहीं, कोई फ़ोन नंबर नहीं, कोई डेटा संग्रह नहीं"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tanpa server, akun, atau pengumpulan data"
+            "value" : "tanpa akun, tanpa nomor telepon, tanpa pengumpulan data"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "niente server, account o raccolta dati"
+            "value" : "niente account, niente numeri di telefono, nessuna raccolta dati"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "サーバーもアカウントもデータ収集もなし"
+            "value" : "アカウントなし・電話番号なし・データ収集なし"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "서버와 계정이 없으며 데이터를 수집하지 않습니다"
+            "value" : "계정 없음, 전화번호 없음, 데이터 수집 없음"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tanpa server, akun, atau pengumpulan data"
+            "value" : "tiada akaun, tiada nombor telefon, tiada pengumpulan data"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "सर्भर, खाताहरू वा तथ्याङ्क सङ्कलन छैन"
+            "value" : "कुनै खाता छैन, फोन नम्बर छैन, डेटा सङ्कलन छैन"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geen servers, accounts of dataverzameling"
+            "value" : "geen accounts, geen telefoonnummers, geen dataverzameling"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "bez serwerów, kont ani zbierania danych"
+            "value" : "bez kont, bez numerów telefonów, bez zbierania danych"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "sem servidores, contas ou recolha de dados"
+            "value" : "sem contas, sem números de telefone, sem recolha de dados"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "sem servidores, contas ou coleta de dados"
+            "value" : "sem contas, sem números de telefone, sem coleta de dados"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "без серверов, аккаунтов и сбора данных"
+            "value" : "без аккаунтов, без номеров телефона, без сбора данных"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "inga servrar, konton eller datainsamling"
+            "value" : "inga konton, inga telefonnummer, ingen datainsamling"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "சர்வர்கள் இல்லை, கணக்குகள் இல்லை, தரவுச் சேகரிப்பு இல்லை"
+            "value" : "கணக்குகள் இல்லை, தொலைபேசி எண்கள் இல்லை, தரவு சேகரிப்பு இல்லை"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ไม่มีเซิร์ฟเวอร์ บัญชี หรือการเก็บข้อมูล"
+            "value" : "ไม่มีบัญชี ไม่มีเบอร์โทรศัพท์ ไม่มีการเก็บข้อมูล"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "sunucu, hesap veya veri toplama yok"
+            "value" : "hesap yok, telefon numarası yok, veri toplama yok"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "жодних серверів, обліковок чи збору даних"
+            "value" : "без облікових записів, без номерів телефону, без збору даних"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "کوئی سرور، اکاؤنٹس یا ڈیٹا جمع نہیں کیا جاتا"
+            "value" : "نہ اکاؤنٹ، نہ فون نمبر، نہ ڈیٹا اکٹھا کرنا"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "không máy chủ, không tài khoản, không thu thập dữ liệu"
+            "value" : "không tài khoản, không số điện thoại, không thu thập dữ liệu"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "无服务器、无账号、无数据收集"
+            "value" : "无账号、无电话号码、无数据收集"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "無伺服器、無帳號、無數據收集"
+            "value" : "無帳號、無電話號碼、無資料收集"
           }
         }
       }
@@ -12115,181 +13417,181 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "اضغط الشعار ثلاث مرات لمسح كل البيانات فوراً"
+            "value" : "انقر ثلاث مرات على الشعار لمسح جميع البيانات (مع تأكيد)"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "লোগোতে তিনবার ট্যাপ করলে সঙ্গে সঙ্গে সব ডেটা মুছে যাবে"
+            "value" : "সব ডেটা মুছতে লোগোতে তিনবার ট্যাপ করুন (নিশ্চিতকরণসহ)"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tippe dreimal auf das logo, um alle daten sofort zu löschen"
+            "value" : "dreimal aufs logo tippen, um alle daten zu löschen (mit bestätigung)"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "triple-tap logo to instantly clear all data"
+            "value" : "triple-tap logo to wipe all data (asks to confirm)"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "toca el logotipo tres veces para borrar todos los datos al instante"
+            "value" : "toca tres veces el logo para borrar todos los datos (con confirmación)"
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "برای پاک کردن فوری همهٔ داده‌ها سه بار روی لوگو بزن"
+            "value" : "برای پاک کردن همه داده‌ها سه بار روی لوگو بزنید (با تأیید)"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "i-tap ang logo nang tatlong beses para agad burahin ang lahat ng data"
+            "value" : "i-tap nang tatlong beses ang logo para burahin ang lahat ng data (may kumpirmasyon)"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tape trois fois sur le logo pour tout effacer instantanément"
+            "value" : "touchez trois fois le logo pour effacer toutes les données (avec confirmation)"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "הקש על הלוגו שלוש פעמים למחיקת כל הנתונים מייד"
+            "value" : "הקישו שלוש פעמים על הלוגו כדי למחוק את כל הנתונים (עם אישור)"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "लोगो पर तीन बार टैप करें और तुरंत सारा डेटा साफ़ करें"
+            "value" : "सारा डेटा मिटाने के लिए लोगो पर तीन बार टैप करें (पुष्टि के साथ)"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ketuk logo tiga kali untuk langsung menghapus semua data"
+            "value" : "ketuk logo tiga kali untuk menghapus semua data (dengan konfirmasi)"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tocca il logo tre volte per cancellare subito tutti i dati"
+            "value" : "tocca tre volte il logo per cancellare tutti i dati (con conferma)"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ロゴを3回タップすると全データを即削除"
+            "value" : "ロゴを3回タップですべてのデータを消去（確認あり）"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "로고를 세 번 탭하여 모든 데이터 즉시 삭제할 수 있습니다"
+            "value" : "로고를 세 번 탭하면 모든 데이터 삭제 (확인 후 진행)"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ketuk logo tiga kali untuk langsung menghapus semua data"
+            "value" : "ketik logo tiga kali untuk memadamkan semua data (dengan pengesahan)"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "लगो तीन पटक ट्याप गर्दा सबै डाटा तुरुन्त मेटिन्छ"
+            "value" : "सबै डेटा मेटाउन लोगोमा तीन पटक ट्याप गर्नुहोस् (पुष्टिसहित)"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tik drie keer op het logo om alle data direct te wissen"
+            "value" : "tik drie keer op het logo om alle gegevens te wissen (met bevestiging)"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "stuknij logo trzy razy, aby natychmiast usunąć wszystkie dane"
+            "value" : "stuknij logo trzy razy, aby wymazać wszystkie dane (z potwierdzeniem)"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "toca três vezes no logótipo para limpar todos os dados de imediato"
+            "value" : "toque três vezes no logótipo para apagar todos os dados (com confirmação)"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "toque o logo três vezes para limpar todos os dados instantaneamente"
+            "value" : "toque três vezes no logo para apagar todos os dados (com confirmação)"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "тройной тап по логотипу мгновенно очищает все данные"
+            "value" : "трижды коснитесь логотипа, чтобы стереть все данные (с подтверждением)"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tryck tre gånger på logotypen för att radera all data direkt"
+            "value" : "trippeltryck på loggan för att radera all data (med bekräftelse)"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "எல்லா தரவையும் உடனடியாக நீக்க லோகோவை மூன்று முறைத் தட்டுங்கள்"
+            "value" : "எல்லா தரவையும் அழிக்க லோகோவை மூன்று முறை தட்டவும் (உறுதிப்படுத்தலுடன்)"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "แตะโลโก้สามครั้งเพื่อลบข้อมูลทั้งหมดทันที"
+            "value" : "แตะโลโก้สามครั้งเพื่อล้างข้อมูลทั้งหมด (มีการยืนยัน)"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "logoya üç kez dokunun, tüm veriler anında silinsin"
+            "value" : "tüm verileri silmek için logoya üç kez dokunun (onaylı)"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "тричі торкни логотип, щоб миттєво стерти всі дані"
+            "value" : "тричі торкніться логотипа, щоб стерти всі дані (з підтвердженням)"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "تمام ڈیٹا فوری صاف کرنے کیلئے لوگو پر تین بار ٹیپ کریں"
+            "value" : "تمام ڈیٹا مٹانے کے لیے لوگو پر تین بار ٹیپ کریں (تصدیق کے ساتھ)"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "chạm logo ba lần để xóa toàn bộ dữ liệu ngay lập tức"
+            "value" : "chạm ba lần vào logo để xoá toàn bộ dữ liệu (có xác nhận)"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "三击标志立即清除全部数据"
+            "value" : "连点三次标志以清除所有数据（需确认）"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "三擊標誌立即清除全部數據"
+            "value" : "連點三次標誌以清除所有資料（需確認）"
           }
         }
       }
@@ -14150,181 +15452,181 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "يمسح كل الرسائل والمفاتيح والهوية. النقر ثلاث مرات على شعار bitchat/ يفعل الشيء نفسه فورًا."
+            "value" : "يمسح جميع الرسائل والمفاتيح والهوية. النقر ثلاث مرات على شعار bitchat/ يفعل الشيء نفسه."
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "সব বার্তা, কী ও পরিচয় মুছে দেয়। bitchat/ লোগোতে তিনবার ট্যাপ করলেও সঙ্গে সঙ্গে একই কাজ হয়।"
+            "value" : "সব বার্তা, কী এবং পরিচয় মুছে ফেলে। bitchat/ লোগোতে তিনবার ট্যাপ করলেও একই কাজ হয়।"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "löscht alle nachrichten, schlüssel und identität. dreimaliges tippen auf das bitchat/-logo macht dasselbe, sofort."
+            "value" : "löscht alle nachrichten, schlüssel und die identität. dreimaliges tippen aufs bitchat/-logo macht dasselbe."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "erases all messages, keys, and identity. triple-tapping the bitchat/ logo does the same, instantly."
+            "value" : "erases all messages, keys, and identity. triple-tapping the bitchat/ logo does the same."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "borra todos los mensajes, claves e identidad. tocar tres veces el logotipo de bitchat/ hace lo mismo, al instante."
+            "value" : "borra todos los mensajes, claves e identidad. tocar tres veces el logo de bitchat/ hace lo mismo."
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "همهٔ پیام‌ها، کلیدها و هویت را پاک می‌کند. سه بار زدن روی لوگوی bitchat/ هم همین کار را فوری انجام می‌دهد."
+            "value" : "همه پیام‌ها، کلیدها و هویت را پاک می‌کند. سه بار زدن روی لوگوی bitchat/ همین کار را می‌کند."
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "binubura ang lahat ng mensahe, key, at pagkakakilanlan. ang pag-tap nang tatlong beses sa logo ng bitchat/ ay pareho ang ginagawa, agad-agad."
+            "value" : "binubura ang lahat ng mensahe, key, at pagkakakilanlan. ganoon din ang mangyayari kapag na-tap nang tatlong beses ang bitchat/ logo."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "efface tous les messages, les clés et l'identité. taper trois fois sur le logo bitchat/ fait la même chose, instantanément."
+            "value" : "efface tous les messages, les clés et l'identité. toucher trois fois le logo bitchat/ fait la même chose."
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "מוחק את כל ההודעות, המפתחות והזהות. הקשה משולשת על הלוגו של bitchat/ עושה את אותו הדבר, מייד."
+            "value" : "מוחק את כל ההודעות, המפתחות והזהות. הקשה משולשת על הלוגו של bitchat/ עושה את אותו הדבר."
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "सभी संदेश, कुंजियाँ और पहचान मिटा देता है। bitchat/ लोगो पर तीन बार टैप करने से भी तुरंत यही होता है।"
+            "value" : "सभी संदेश, कुंजियाँ और पहचान मिटा देता है। bitchat/ लोगो पर तीन बार टैप करने से भी यही होता है।"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "menghapus semua pesan, kunci, dan identitas. mengetuk logo bitchat/ tiga kali melakukan hal yang sama, seketika."
+            "value" : "menghapus semua pesan, kunci, dan identitas. mengetuk logo bitchat/ tiga kali melakukan hal yang sama."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "cancella tutti i messaggi, le chiavi e l'identità. toccare tre volte il logo bitchat/ fa lo stesso, all'istante."
+            "value" : "cancella tutti i messaggi, le chiavi e l'identità. toccare tre volte il logo bitchat/ fa lo stesso."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "すべてのメッセージ、鍵、アイデンティティを消去します。bitchat/ ロゴを3回タップしても同じことが即座に行われます。"
+            "value" : "すべてのメッセージ・鍵・アイデンティティを消去します。bitchat/ ロゴの3回タップでも同じことができます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "모든 메시지, 키, 신원을 지웁니다. bitchat/ 로고를 세 번 탭해도 즉시 같은 동작이 실행됩니다."
+            "value" : "모든 메시지, 키, 신원을 지웁니다. bitchat/ 로고를 세 번 탭해도 동일합니다."
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "menghapus semua pesan, kunci, dan identiti. mengetuk logo bitchat/ tiga kali melakukan perkara yang sama, serta-merta."
+            "value" : "memadamkan semua mesej, kunci dan identiti. mengetik logo bitchat/ tiga kali melakukan perkara yang sama."
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "सबै सन्देश, कुञ्जी र पहिचान मेटाउँछ। bitchat/ लोगोमा तीन पटक ट्याप गर्दा पनि तुरुन्तै त्यही हुन्छ।"
+            "value" : "सबै सन्देश, कुञ्जी र परिचय मेटाउँछ। bitchat/ लोगोमा तीन पटक ट्याप गर्दा पनि त्यही हुन्छ।"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "wist alle berichten, sleutels en identiteit. drie keer tikken op het bitchat/-logo doet hetzelfde, direct."
+            "value" : "wist alle berichten, sleutels en identiteit. drie keer tikken op het bitchat/-logo doet hetzelfde."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "usuwa wszystkie wiadomości, klucze i tożsamość. trzykrotne stuknięcie logo bitchat/ robi to samo, natychmiast."
+            "value" : "wymazuje wszystkie wiadomości, klucze i tożsamość. trzykrotne stuknięcie logo bitchat/ robi to samo."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "apaga todas as mensagens, chaves e identidade. tocar três vezes no logótipo bitchat/ faz o mesmo, de imediato."
+            "value" : "apaga todas as mensagens, chaves e identidade. tocar três vezes no logótipo bitchat/ faz o mesmo."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "apaga todas as mensagens, chaves e identidade. tocar três vezes no logo bitchat/ faz o mesmo, instantaneamente."
+            "value" : "apaga todas as mensagens, chaves e identidade. tocar três vezes no logo bitchat/ faz o mesmo."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "стирает все сообщения, ключи и личность. тройной тап по логотипу bitchat/ делает то же самое, мгновенно."
+            "value" : "стирает все сообщения, ключи и идентичность. тройное касание логотипа bitchat/ делает то же самое."
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "raderar alla meddelanden, nycklar och identitet. att trycka tre gånger på bitchat/-logotypen gör detsamma, direkt."
+            "value" : "raderar alla meddelanden, nycklar och identitet. att trippeltrycka på bitchat/-loggan gör samma sak."
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "எல்லா செய்திகள், சாவிகள், அடையாளத்தையும் அழிக்கிறது. bitchat/ லோகோவை மூன்று முறைத் தட்டினாலும் உடனடியாக அதுவே நடக்கும்."
+            "value" : "எல்லா செய்திகள், விசைகள் மற்றும் அடையாளத்தை அழிக்கிறது. bitchat/ லோகோவை மூன்று முறை தட்டினாலும் இதுவே நடக்கும்."
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ลบข้อความ กุญแจ และตัวตนทั้งหมด การแตะโลโก้ bitchat/ สามครั้งก็ทำแบบเดียวกันทันที"
+            "value" : "ลบข้อความ กุญแจ และตัวตนทั้งหมด การแตะโลโก้ bitchat/ สามครั้งให้ผลเหมือนกัน"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tüm mesajları, anahtarları ve kimliği siler. bitchat/ logosuna üç kez dokunmak da aynısını anında yapar."
+            "value" : "tüm mesajları, anahtarları ve kimliği siler. bitchat/ logosuna üç kez dokunmak da aynısını yapar."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "стирає всі повідомлення, ключі та особистість. потрійний дотик до логотипа bitchat/ робить те саме, миттєво."
+            "value" : "стирає всі повідомлення, ключі та ідентичність. потрійне торкання логотипа bitchat/ робить те саме."
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "تمام پیغامات، کلیدیں اور شناخت مٹا دیتا ہے۔ bitchat/ لوگو پر تین بار ٹیپ کرنے سے بھی فوراً یہی ہوتا ہے۔"
+            "value" : "تمام پیغامات، کلیدیں اور شناخت مٹا دیتا ہے۔ bitchat/ لوگو پر تین بار ٹیپ کرنے سے بھی یہی ہوتا ہے۔"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "xóa toàn bộ tin nhắn, khóa và danh tính. chạm ba lần vào logo bitchat/ cũng làm điều tương tự, ngay lập tức."
+            "value" : "xoá toàn bộ tin nhắn, khoá và danh tính. chạm ba lần vào logo bitchat/ cũng làm điều tương tự."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "抹除所有消息、密钥和身份。三击 bitchat/ 标志也会立即执行相同操作。"
+            "value" : "清除所有消息、密钥和身份。连点三次 bitchat/ 标志效果相同。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "抹除所有訊息、金鑰和身分。三擊 bitchat/ 標誌也會立即執行相同操作。"
+            "value" : "清除所有訊息、金鑰和身分。連點三次 bitchat/ 標誌效果相同。"
           }
         }
       }
@@ -52662,181 +53964,181 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "تحدث مع أشخاص قريبين عبر قنوات geohash. نشارك geohash تقريبي فقط، وليس gps الدقيق. يتم إخفاء عنوان ip لأن كل المرور يمر عبر tor."
+            "value" : "دردش مع من حولك عبر قنوات geohash. الـ geohash المحدد علني وقد يكشف منطقة تقريبية؛ لا تتم مشاركة إحداثيات GPS الدقيقة أبدًا. مع تشغيل tor (الوضع الافتراضي)، ترى المرحّلات عنوان tor بدلاً من عنوان IP الخاص بك."
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "জিওহ্যাশ চ্যানেল দিয়ে কাছাকাছি অঞ্চলের মানুষের সঙ্গে চ্যাট করুন। শুধুই স্থূল জিওহ্যাশ শেয়ার হয়, কখনো সঠিক GPS নয়। আপনার IP টর দিয়ে সব ট্রাফিক রাউট করে লুকানো থাকে।"
+            "value" : "geohash চ্যানেল ব্যবহার করে কাছের মানুষদের সঙ্গে চ্যাট করুন। নির্বাচিত geohash সর্বজনীন এবং আনুমানিক এলাকা প্রকাশ করতে পারে; সঠিক GPS কখনও শেয়ার হয় না। tor চালু থাকলে (ডিফল্ট), রিলেগুলো আপনার IP-এর বদলে tor-এর ঠিকানা দেখে।"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "chatte mit menschen in deiner nähe über geohash-kanäle. geteilt wird nur ein grober geohash, niemals exakte gps-daten. deine ip bleibt verborgen, weil der gesamte verkehr über tor läuft."
+            "value" : "chatte mit leuten in deiner nähe über geohash-kanäle. der gewählte geohash ist öffentlich und kann ein ungefähres gebiet verraten; exaktes GPS wird nie geteilt. mit eingeschaltetem tor (standard) sehen relays tors adresse statt deiner IP-adresse."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "chat with people near you using geohash channels. the selected geohash is public and may reveal an approximate area; exact GPS is never shared. your IP address is hidden by routing all traffic over tor."
+            "value" : "chat with people near you using geohash channels. the selected geohash is public and may reveal an approximate area; exact GPS is never shared. with tor on (the default), relays see tor's address instead of your IP address."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "chatea con personas cercanas usando canales geohash. Solo se comparte un geohash aproximado, nunca GPS exacto. Tu IP se oculta al enrutar todo el tráfico por Tor."
+            "value" : "chatea con gente cercana usando canales geohash. el geohash seleccionado es público y puede revelar una zona aproximada; el GPS exacto nunca se comparte. con tor activado (el valor predeterminado), los relés ven la dirección de tor en lugar de tu IP."
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "با کانال‌های ژئوهش با افراد نزدیک خود گفتگو کنید. ژئوهش انتخاب‌شده عمومی است و ممکن است منطقهٔ تقریبی شما را نشان دهد؛ GPS دقیق هرگز به اشتراک گذاشته نمی‌شود. با عبور همهٔ ترافیک از Tor، آدرس IP شما پنهان می‌ماند."
+            "value" : "با افراد نزدیک خود از طریق کانال‌های geohash گفتگو کنید. geohash انتخابی عمومی است و ممکن است منطقه‌ای تقریبی را نشان دهد؛ GPS دقیق هرگز به اشتراک گذاشته نمی‌شود. با روشن بودن tor (پیش‌فرض)، رله‌ها به جای IP شما آدرس tor را می‌بینند."
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "makipag-chat sa mga taong malapit sa iyo gamit ang mga geohash channel. coarse na geohash lang ang ibinabahagi, hindi ang eksaktong GPS. tinatago ang iyong IP address sa pagreruta ng lahat ng traffic sa tor."
+            "value" : "makipag-chat sa mga taong malapit sa iyo gamit ang mga geohash channel. pampubliko ang napiling geohash at maaaring magbunyag ng tinatayang lugar; hindi kailanman ibinabahagi ang eksaktong GPS. kapag naka-on ang tor (ang default), ang address ng tor ang nakikita ng mga relay sa halip na ang iyong IP."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "discute avec les personnes proches grâce aux canaux geohash. seul un geohash grossier est partagé, jamais de gps exact. ton ip reste cachée car tout le trafic passe par tor."
+            "value" : "discutez avec les gens autour de vous via les canaux geohash. le geohash choisi est public et peut révéler une zone approximative ; le GPS exact n'est jamais partagé. avec tor activé (par défaut), les relais voient l'adresse de tor au lieu de votre IP."
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "שוחח עם אנשים קרובים בערוצי geohash. משתף רק geohash גס, אף פעם לא gps מדויק. כתובת ה-ip מוסתרת כי כל התעבורה עוברת דרך tor."
+            "value" : "שוחחו עם אנשים בסביבה דרך ערוצי geohash. ה-geohash שנבחר הוא ציבורי ועשוי לחשוף אזור משוער; מיקום GPS מדויק לעולם לא משותף. כש-tor פועל (ברירת המחדל), הממסרים רואים את הכתובת של tor במקום ה-IP שלכם."
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "जियोहैश चैनलों से आसपास के लोगों से चैट करें। केवल मोटा जियोहैश साझा होता है, कभी सटीक GPS नहीं। आपका IP सारा ट्रैफ़िक Tor से रूट कर छिपा रहता है।"
+            "value" : "geohash चैनलों के ज़रिए आस-पास के लोगों से चैट करें। चुना गया geohash सार्वजनिक है और अनुमानित क्षेत्र दिखा सकता है; सटीक GPS कभी साझा नहीं होता। tor चालू होने पर (डिफ़ॉल्ट), रिले आपके IP की जगह tor का पता देखते हैं।"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ngobrol dengan orang terdekat lewat kanal geohash. hanya geohash kasar yang dibagikan, tidak pernah gps tepat. alamat ip-mu tersembunyi karena seluruh trafik lewat tor."
+            "value" : "mengobrol dengan orang di sekitar melalui kanal geohash. geohash yang dipilih bersifat publik dan dapat mengungkap area perkiraan; GPS persis tidak pernah dibagikan. dengan tor aktif (bawaan), relay melihat alamat tor alih-alih IP anda."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "chatta con le persone vicine tramite canali geohash. condividiamo solo geohash approssimativi, mai il gps esatto. il tuo ip resta nascosto perché tutto il traffico passa da tor."
+            "value" : "chatta con chi ti sta vicino usando i canali geohash. il geohash selezionato è pubblico e può rivelare un'area approssimativa; il GPS esatto non viene mai condiviso. con tor attivo (impostazione predefinita), i relay vedono l'indirizzo di tor invece del tuo IP."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geohashチャンネルで近くの人と会話。共有されるのはざっくりしたgeohashだけで正確なgpsは含みません。全トラフィックをtor経由にすることであなたのipを隠します。"
+            "value" : "geohash チャンネルで近くの人とチャットできます。選択した geohash は公開され、おおよそのエリアが分かる場合があります。正確な GPS は決して共有されません。tor が有効（デフォルト）なら、リレーにはあなたの IP ではなく tor のアドレスが見えます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geohash 채널을 사용해 주변 사람들과 대화하세요. 정확한 GPS가 아닌 대략적인 geohash만 공유됩니다. 모든 트래픽을 tor로 라우팅하여 IP 주소를 숨깁니다."
+            "value" : "geohash 채널로 주변 사람들과 대화하세요. 선택한 geohash는 공개되며 대략적인 지역이 드러날 수 있습니다. 정확한 GPS는 절대 공유되지 않습니다. tor가 켜져 있으면(기본값) 릴레이에는 내 IP 대신 tor의 주소가 보입니다."
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ngobrol dengan orang terdekat lewat kanal geohash. hanya geohash kasar yang dibagikan, tidak pernah gps tepat. alamat ip-mu tersembunyi karena seluruh trafik lewat tor."
+            "value" : "berbual dengan orang berdekatan melalui saluran geohash. geohash yang dipilih adalah umum dan mungkin mendedahkan kawasan anggaran; GPS tepat tidak pernah dikongsi. dengan tor dihidupkan (lalai), relay melihat alamat tor dan bukan IP anda."
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geohash च्यानलबाट नजिकका मानिससँग कुरा गर। केवल मोटामो geohash साझा हुन्छ, कहिल्यै सहि gps होइन। सबै ट्राफिक tor मार्फत गएका कारण तिम्रो ip लुकेको हुन्छ।"
+            "value" : "geohash च्यानलहरू प्रयोग गरेर नजिकका मानिसहरूसँग कुराकानी गर्नुहोस्। चयन गरिएको geohash सार्वजनिक हुन्छ र अनुमानित क्षेत्र देखाउन सक्छ; सटीक GPS कहिल्यै साझा हुँदैन। tor खुला हुँदा (पूर्वनिर्धारित), रिलेहरूले तपाईंको IP को सट्टा tor को ठेगाना देख्छन्।"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "chat met mensen bij jou in de buurt via geohash-kanalen. enkel een grove geohash wordt gedeeld, nooit exacte GPS. je IP-adres wordt verborgen doordat al het verkeer via tor wordt gerouteerd."
+            "value" : "chat met mensen in de buurt via geohash-kanalen. de gekozen geohash is openbaar en kan een globaal gebied onthullen; exacte GPS wordt nooit gedeeld. met tor aan (standaard) zien relays het adres van tor in plaats van je IP-adres."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "rozmawiaj z osobami w pobliżu za pomocą kanałów geohash. udostępniany jest tylko zgrubny geohash, nigdy dokładny GPS. twój adres IP jest ukryty przez kierowanie całego ruchu przez tor."
+            "value" : "rozmawiaj z ludźmi w pobliżu przez kanały geohash. wybrany geohash jest publiczny i może zdradzić przybliżony obszar; dokładny GPS nigdy nie jest udostępniany. przy włączonym tor (domyślnie) przekaźniki widzą adres tora zamiast twojego IP."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "conversa com pessoas perto de ti usando canais geohash. apenas um geohash de baixa precisão é partilhado, nunca GPS exato. o teu IP fica oculto ao encaminhar todo o tráfego através do Tor."
+            "value" : "conversa com pessoas por perto através de canais geohash. o geohash selecionado é público e pode revelar uma área aproximada; o GPS exato nunca é partilhado. com o tor ligado (predefinição), os relays veem o endereço do tor em vez do teu IP."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "converse com pessoas próximas usando canais geohash. apenas um geohash grosseiro é compartilhado, nunca gps exato. seu ip fica oculto ao rotear todo o tráfego por tor."
+            "value" : "converse com pessoas por perto usando canais geohash. o geohash selecionado é público e pode revelar uma área aproximada; o GPS exato nunca é compartilhado. com o tor ligado (padrão), os relays veem o endereço do tor em vez do seu IP."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "общайся с людьми рядом через каналы geohash. делится только грубый geohash, без точного gps. твой ip скрывается за счёт маршрутизации трафика через tor."
+            "value" : "общайтесь с людьми поблизости через geohash-каналы. выбранный geohash публичен и может раскрыть примерный район; точные GPS-координаты никогда не передаются. при включённом tor (по умолчанию) релеи видят адрес tor вместо вашего IP."
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "chatta med folk nära dig via geohash-kanaler. endast en grov geohash delas, aldrig exakt GPS. din IP-adress döljs genom att all trafik går via tor."
+            "value" : "chatta med folk i närheten via geohash-kanaler. vald geohash är offentlig och kan avslöja ett ungefärligt område; exakt GPS delas aldrig. med tor på (standard) ser reläer tors adress istället för din IP."
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geohash சேனல்கள் மூலம் அருகிலுள்ளவர்களுடன் உரையாடுங்கள். மிகவும் பொது geohash மட்டுமே பகிரப்படும், துல்லியமான GPS அல்ல. உங்கள் IP, அனைத்து போக்குவரத்தையும் tor வழியாக மாற்றுவதன் மூலம் மறைக்கப்படுகிறது."
+            "value" : "geohash சேனல்கள் மூலம் அருகிலுள்ளவர்களுடன் அரட்டையடிக்கவும். தேர்ந்தெடுத்த geohash பொதுவானது, தோராயமான பகுதியை வெளிப்படுத்தலாம்; துல்லியமான GPS ஒருபோதும் பகிரப்படாது. tor இயக்கத்தில் இருந்தால் (இயல்புநிலை), ரிலேக்கள் உங்கள் IP க்குப் பதிலாக tor இன் முகவரியைக் காண்கின்றன."
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "แชทกับคนใกล้คุณผ่านช่อง geohash แบ่งปันเพียง geohash แบบหยาบ ไม่ใช่ GPS ที่แม่นยำ ที่อยู่ IP ของคุณถูกซ่อนด้วยการส่งข้อมูลผ่าน tor"
+            "value" : "แชทกับผู้คนใกล้ตัวผ่านช่อง geohash โดย geohash ที่เลือกเป็นแบบสาธารณะและอาจเผยพื้นที่โดยประมาณ พิกัด GPS ที่แน่นอนจะไม่ถูกแชร์ เมื่อเปิด tor (ค่าเริ่มต้น) รีเลย์จะเห็นที่อยู่ของ tor แทน IP ของคุณ"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geohash kanallarıyla yakınınızdaki insanlarla sohbet edin. yalnızca kaba bir geohash paylaşılır, tam GPS asla değil. IP adresiniz tüm trafik Tor üzerinden yönlendirilerek gizlenir."
+            "value" : "geohash kanallarıyla yakınınızdaki insanlarla sohbet edin. seçilen geohash herkese açıktır ve yaklaşık bir bölgeyi açığa çıkarabilir; tam GPS asla paylaşılmaz. tor açıkken (varsayılan) röleler IP'niz yerine tor'un adresini görür."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "спілкуйся з людьми поруч у каналах geohash. передається лише грубий geohash, без точного gps. твій ip приховується, бо весь трафік йде через tor."
+            "value" : "спілкуйтеся з людьми поруч через geohash-канали. вибраний geohash є публічним і може розкрити приблизний район; точні GPS-координати ніколи не передаються. з увімкненим tor (типово) релеї бачать адресу tor замість вашого IP."
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "قریب کے لوگوں سے گفتگو کیلئے geohash چینلز استعمال کریں۔ صرف عمومی geohash شیئر کیا جاتا ہے، کبھی درست GPS نہیں۔ آپ کا IP tor کے ذریعے ساری ٹریفک روٹ کر کے چھپایا جاتا ہے۔"
+            "value" : "geohash چینلز کے ذریعے قریبی لوگوں سے چیٹ کریں۔ منتخب geohash عوامی ہے اور تخمینی علاقہ ظاہر کر سکتا ہے؛ درست GPS کبھی شیئر نہیں ہوتا۔ tor آن ہونے پر (ڈیفالٹ)، ریلے آپ کے IP کی بجائے tor کا پتہ دیکھتے ہیں۔"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "trò chuyện với người gần bạn bằng các kênh geohash. chỉ chia sẻ geohash thô, không bao giờ là GPS chính xác. địa chỉ IP của bạn được ẩn bằng cách định tuyến toàn bộ lưu lượng qua tor."
+            "value" : "trò chuyện với những người gần bạn qua các kênh geohash. geohash đã chọn là công khai và có thể tiết lộ khu vực gần đúng; GPS chính xác không bao giờ được chia sẻ. khi bật tor (mặc định), các relay thấy địa chỉ của tor thay vì IP của bạn."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "使用 geohash 频道与附近的人聊天。只会共享粗略 geohash，从不泄露精确 GPS。所有流量通过 tor 路由来隐藏你的 IP。"
+            "value" : "通过 geohash 频道与附近的人聊天。所选 geohash 是公开的，可能暴露大致区域；精确 GPS 绝不会被共享。开启 tor 时（默认），中继看到的是 tor 的地址而不是你的 IP。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "使用 geohash 頻道與附近的人聊天。只會共享粗略 geohash，從不洩露精確 GPS。所有流量透過 tor 路由來隱藏你的 IP。"
+            "value" : "透過 geohash 頻道與附近的人聊天。所選 geohash 是公開的，可能透露大致區域；精確 GPS 絕不會被分享。開啟 tor 時（預設），中繼看到的是 tor 的位址而不是你的 IP。"
           }
         }
       }
@@ -66979,6 +68281,192 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "儲存"
+          }
+        }
+      }
+    },
+    "system.panic.completed" : {
+      "comment" : "System message confirming a successful panic wipe",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم مسح جميع البيانات — تم إنشاء هوية جديدة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "সব ডেটা মুছে ফেলা হয়েছে — নতুন পরিচয় তৈরি হয়েছে"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alle daten gelöscht — neue identität erstellt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "all data wiped — new identity created"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "todos los datos borrados — nueva identidad creada"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "همه داده‌ها پاک شد — هویت جدید ساخته شد"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nabura na ang lahat ng data — gumawa ng bagong pagkakakilanlan"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "toutes les données effacées — nouvelle identité créée"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כל הנתונים נמחקו — נוצרה זהות חדשה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सारा डेटा मिटा दिया गया — नई पहचान बनाई गई"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "semua data dihapus — identitas baru dibuat"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tutti i dati cancellati — nuova identità creata"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべてのデータを消去しました — 新しいアイデンティティを作成しました"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "모든 데이터 삭제됨 — 새 신원 생성됨"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "semua data dipadamkan — identiti baharu dicipta"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सबै डेटा मेटाइयो — नयाँ परिचय सिर्जना गरियो"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alle gegevens gewist — nieuwe identiteit aangemaakt"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wszystkie dane wymazane — utworzono nową tożsamość"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "todos os dados apagados — nova identidade criada"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "todos os dados apagados — nova identidade criada"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "все данные стёрты — создана новая идентичность"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "all data raderad — ny identitet skapad"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "எல்லா தரவும் அழிக்கப்பட்டது — புதிய அடையாளம் உருவாக்கப்பட்டது"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ล้างข้อมูลทั้งหมดแล้ว — สร้างตัวตนใหม่แล้ว"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tüm veriler silindi — yeni kimlik oluşturuldu"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "усі дані стерто — створено нову ідентичність"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تمام ڈیٹا مٹا دیا گیا — نئی شناخت بنائی گئی"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "đã xoá toàn bộ dữ liệu — đã tạo danh tính mới"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已清除所有数据 — 已创建新身份"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已清除所有資料 — 已建立新身分"
           }
         }
       }

@@ -482,7 +482,7 @@ private struct AutocompleteKeyboardNavigationModifier: ViewModifier {
     /// list is up. Inactive monitors pass everything through.
     private func handleKeyDown(_ event: NSEvent) -> NSEvent? {
         guard isActive(),
-              event.modifierFlags.intersection([.command, .option, .control]).isEmpty else {
+              event.modifierFlags.isDisjoint(with: [.command, .option, .control]) else {
             return event
         }
 

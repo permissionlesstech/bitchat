@@ -367,6 +367,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     var torRestartPending: Bool = false
     // Announce a stalled bootstrap once per attempt, not once per poll.
     var torStallAnnounced: Bool = false
+    // Live "tor is blocked" state for the connectivity banner. The system
+    // message above only reaches geohash timelines; this is the chrome-level
+    // signal that stays up until tor actually gets through.
+    @Published var torBlocked: Bool = false
     // Ensure we set up DM subscription only once per app session
     var nostrHandlersSetup: Bool = false
     var geoChannelCoordinator: GeoChannelCoordinator?
@@ -1770,6 +1774,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             }
             panicNetworkLifecycle.restart()
         }
+
+        // In a duress scenario "did it work?" must not be a guess — the
+        // natural response to uncertainty is to trigger the wipe again.
+        // The failure case surfaces separately via `panicRecoveryBlocked`.
+        addMeshOnlySystemMessage(
+            String(localized: "system.panic.completed", defaultValue: "all data wiped — new identity created", comment: "System message confirming a successful panic wipe")
+        )
 
         return true
     }
