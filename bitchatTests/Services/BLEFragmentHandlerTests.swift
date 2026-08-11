@@ -112,6 +112,27 @@ struct BLEFragmentHandlerTests {
     }
 
     @Test
+    func conflictingFragmentIsNotReassembledButStillArchivedForSync() {
+        let recorder = Recorder()
+        recorder.appendResult = { header in
+            .conflicting(header: header, reason: .fragmentData(index: header.index))
+        }
+        let handler = makeHandler(recorder: recorder)
+        let packet = makeFragmentPacket(sender: remotePeerID, index: 0, total: 2)
+
+        handler.handle(packet, from: remotePeerID)
+
+        // Losing the race locally is not evidence the fragment is forged, so
+        // archiving stays independent of assembly state: withholding it would
+        // censor a possibly-honest copy from peers that never saw the
+        // conflict, and from REQUEST_SYNC recovery.
+        #expect(recorder.appendedHeaders.count == 1)
+        #expect(recorder.trackedPackets.count == 1)
+        #expect(recorder.ingressChecks.isEmpty)
+        #expect(recorder.reinjectedPackets.isEmpty)
+    }
+
+    @Test
     func completedReassemblyReinjectsAcceptedPacketWithZeroTTL() throws {
         let innerSender = PeerID(str: "99AABBCCDDEEFF00")
         let innerPacket = BitchatPacket(
