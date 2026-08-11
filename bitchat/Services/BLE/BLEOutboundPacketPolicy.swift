@@ -23,7 +23,7 @@ enum BLEOutboundPacketPolicy {
         // width); the residual variation is the capability width and whether a
         // bridge geohash is present. Making those fixed-width would be cheaper
         // than padding. See docs/PEER-ID-ROTATION.md.
-        case .none, .announce, .announceV2, .message, .leave, .requestSync, .fragment, .fileTransfer, .courierEnvelope, .boardPost, .ping, .pong, .nostrCarrier, .prekeyBundle, .groupMessage, .voiceFrame:
+        case .none, .announce, .announceV2, .message, .leave, .requestSync, .fragment, .fileTransfer, .courierEnvelope, .boardPost, .ping, .pong, .nostrCarrier, .prekeyBundle, .groupMessage, .voiceFrame, .courierSprayAck, .courierSprayDecline:
             return false
         }
     }
