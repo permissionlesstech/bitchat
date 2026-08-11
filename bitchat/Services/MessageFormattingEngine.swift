@@ -41,7 +41,9 @@ final class MessageFormattingEngine {
     enum Patterns {
         static let hashtag = SafeRegex.compile("#([a-zA-Z0-9_]+)")
 
-        static let mention = SafeRegex.compile("@([\\p{L}0-9_]+(?:#[a-fA-F0-9]{4})?)")
+        // Include \p{M} so NFD nicknames (base letter + combining mark) still
+        // parse as one mention token; NFC forms are covered by \p{L} alone.
+        static let mention = SafeRegex.compile("@([\\p{L}\\p{M}0-9_]+(?:#[a-fA-F0-9]{4})?)")
 
         static let cashu = SafeRegex.compile("\\bcashu[AB][A-Za-z0-9._-]{40,}\\b")
 
