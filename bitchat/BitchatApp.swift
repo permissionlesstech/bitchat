@@ -23,6 +23,8 @@ struct BitchatApp: App {
     @NSApplicationDelegateAdaptor(MacAppDelegate.self) var appDelegate
     #endif
 
+    @StateObject private var appLock = AppLockModel()
+
     init() {
         _runtime = StateObject(wrappedValue: AppRuntime())
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
@@ -30,7 +32,8 @@ struct BitchatApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ZStack {
+                ContentView()
                 .environment(\.appTheme, AppTheme(rawValue: appThemeRawValue) ?? .matrix)
                 .environmentObject(runtime.publicChatModel)
                 .environmentObject(runtime.privateInboxModel)
@@ -61,6 +64,24 @@ struct BitchatApp: App {
                     runtime.handleMacDidBecomeActiveNotification()
                 }
                 #endif
+
+                // The gate renders above everything: with the lock engaged
+                // the timelines below must be neither readable nor tappable.
+                // iOS re-locks on background (below); macOS locks at launch
+                // only — its windows resign focus constantly, and the
+                // existing PrivacyScreen already covers window snapshots.
+                if appLock.isLocked {
+                    AppLockScreen(model: appLock)
+                        .environment(\.appTheme, AppTheme(rawValue: appThemeRawValue) ?? .matrix)
+                }
+            }
+            #if os(iOS)
+            .onChange(of: scenePhase) { newPhase in
+                if newPhase == .background {
+                    appLock.lockIfEnabled()
+                }
+            }
+            #endif
         }
         #if os(macOS)
         .windowStyle(.hiddenTitleBar)

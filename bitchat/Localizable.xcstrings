@@ -17485,6 +17485,936 @@
         }
       }
     },
+    "app_info.settings.app_lock.subtitle" : {
+      "comment" : "Subtitle explaining the app-lock setting, its passcode requirement, and the fail-open rule",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "طلب Face ID أو Touch ID أو رمز دخول الجهاز لفتح bitchat بعد بقائه في الخلفية. يتطلب وجود رمز دخول على الجهاز — وإذا أُزيل رمز الدخول يومًا، يتوقف القفل من تلقاء نفسه بدلًا من منعك من الدخول."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ব্যাকগ্রাউন্ডে থাকার পর bitchat খুলতে Face ID, Touch ID বা ডিভাইসের পাসকোড লাগবে। ডিভাইসে পাসকোড থাকা জরুরি — পাসকোড কখনও সরিয়ে ফেলা হলে লকটি তোমাকে বাইরে আটকে না রেখে নিজে থেকেই বন্ধ হয়ে যাবে।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "verlange Face ID, Touch ID oder den gerätecode, um bitchat zu öffnen, nachdem es im hintergrund war. braucht einen gerätecode — wird der code jemals entfernt, schaltet sich die sperre von selbst ab, statt dich auszusperren."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "require face id, touch id, or the device passcode to open bitchat after it's been in the background. needs a device passcode — if the passcode is ever removed, the lock turns itself off instead of locking you out."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pide Face ID, Touch ID o el código del dispositivo para abrir bitchat después de haber estado en segundo plano. necesita un código en el dispositivo: si el código se elimina en algún momento, el bloqueo se desactiva solo en vez de dejarte fuera."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "برای باز کردن bitchat بعد از رفتن به پس‌زمینه، Face ID، Touch ID یا رمز دستگاه لازم باشد. به رمز دستگاه نیاز دارد — اگر رمز روزی حذف شود، قفل به‌جای اینکه راهت را ببندد خودش خاموش می‌شود."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hingin ang Face ID, Touch ID, o passcode ng device para buksan ang bitchat pagkatapos nitong mapunta sa background. kailangan ng passcode sa device — kapag tinanggal ang passcode, awtomatikong mag-o-off ang lock sa halip na ma-lock ka sa labas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "exige Face ID, Touch ID ou le code de l'appareil pour ouvrir bitchat après un passage en arrière-plan. nécessite un code sur l'appareil — si le code est un jour supprimé, le verrouillage se désactive tout seul au lieu de te laisser à la porte."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לדרוש Face ID, Touch ID או את קוד הגישה של המכשיר כדי לפתוח את bitchat אחרי שהיה ברקע. נדרש קוד גישה במכשיר — אם הקוד יוסר אי פעם, הנעילה תכבה מעצמה במקום לנעול אותך בחוץ."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "बैकग्राउंड में रहने के बाद bitchat खोलने के लिए Face ID, Touch ID या डिवाइस का पासकोड ज़रूरी होगा। डिवाइस पर पासकोड होना ज़रूरी है — अगर पासकोड कभी हटा दिया जाए, तो लॉक तुम्हें बाहर रोकने के बजाय खुद ही बंद हो जाएगा।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wajibkan Face ID, Touch ID, atau kode sandi perangkat untuk membuka bitchat setelah berada di latar belakang. perlu kode sandi di perangkat — kalau kode sandinya suatu saat dihapus, kuncinya mati sendiri alih-alih menguncimu di luar."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "richiedi Face ID, Touch ID o il codice del dispositivo per aprire bitchat dopo che è stata in background. serve un codice sul dispositivo: se il codice viene rimosso, il blocco si disattiva da solo invece di chiuderti fuori."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バックグラウンドに移動したあと、bitchatを開くときにFace ID、Touch ID、またはデバイスのパスコードを求めます。デバイスのパスコードが必要です。パスコードが削除された場合は、締め出されないようにロックは自動的にオフになります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "백그라운드에 있다가 bitchat을 열 때 Face ID, Touch ID 또는 기기 암호를 요구해요. 기기에 암호가 있어야 해요 — 암호가 삭제되면 밖에 갇히는 일이 없도록 잠금이 스스로 꺼져요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "perlukan Face ID, Touch ID atau kod laluan peranti untuk membuka bitchat selepas berada di latar belakang. memerlukan kod laluan pada peranti — kalau kod laluan itu dibuang, kunci akan mati sendiri dan bukannya mengunci kamu di luar."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ब्याकग्राउन्डमा गएपछि bitchat खोल्न Face ID, Touch ID वा डिभाइसको पासकोड चाहिन्छ। डिभाइसमा पासकोड हुनुपर्छ — पासकोड कहिल्यै हटाइयो भने, तिमीलाई बाहिरै रोक्नुको सट्टा लक आफैँ बन्द हुन्छ।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vereis Face ID, Touch ID of de toegangscode van het apparaat om bitchat te openen nadat het op de achtergrond stond. hiervoor is een toegangscode op het apparaat nodig — wordt de code ooit verwijderd, dan schakelt de vergrendeling zichzelf uit in plaats van je buiten te sluiten."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wymagaj Face ID, Touch ID lub kodu urządzenia, aby otworzyć bitchat po tym, jak był w tle. potrzebny jest kod na urządzeniu — jeśli kod zostanie kiedyś usunięty, blokada wyłączy się sama, zamiast odciąć ci dostęp."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "exige Face ID, Touch ID ou o código do dispositivo para abrir o bitchat depois de estar em segundo plano. precisa de um código no dispositivo — se o código for removido, o bloqueio desativa-se sozinho em vez de te deixar de fora."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "exija Face ID, Touch ID ou o código do aparelho para abrir o bitchat depois que ele ficar em segundo plano. precisa de um código no aparelho — se o código for removido, o bloqueio se desativa sozinho em vez de deixar você de fora."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "требовать Face ID, Touch ID или код-пароль устройства, чтобы открыть bitchat после того, как он был в фоне. нужен код-пароль на устройстве — если код-пароль когда-нибудь удалят, блокировка отключится сама, вместо того чтобы запереть тебя снаружи."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kräv Face ID, Touch ID eller enhetens lösenkod för att öppna bitchat efter att den varit i bakgrunden. kräver en lösenkod på enheten — om lösenkoden någonsin tas bort stänger låset av sig självt i stället för att låsa ute dig."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "பின்னணியில் இருந்த பிறகு bitchat-ஐத் திறக்க Face ID, Touch ID அல்லது சாதனத்தின் கடவுக்குறியீடு தேவைப்படும். சாதனத்தில் கடவுக்குறியீடு இருக்க வேண்டும் — கடவுக்குறியீடு எப்போதாவது நீக்கப்பட்டால், உன்னை வெளியே நிறுத்துவதற்குப் பதிலாக லாக் தானாகவே அணைந்துவிடும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ต้องใช้ Face ID, Touch ID หรือรหัสของเครื่องเพื่อเปิด bitchat หลังจากแอปอยู่ในพื้นหลัง จำเป็นต้องตั้งรหัสบนเครื่อง — ถ้ารหัสถูกลบออกเมื่อไร ล็อกจะปิดตัวเองแทนที่จะล็อกคุณไว้ข้างนอก"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "arka planda kaldıktan sonra bitchat'i açmak için Face ID, Touch ID veya cihaz parolası iste. cihazda parola olması gerekir — parola bir gün kaldırılırsa kilit seni dışarıda bırakmak yerine kendini kapatır."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "вимагати Face ID, Touch ID або код-пароль пристрою, щоб відкрити bitchat після того, як він був у фоні. потрібен код-пароль на пристрої — якщо код-пароль колись видалять, блокування вимкнеться саме, замість того щоб замкнути тебе назовні."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پس منظر میں جانے کے بعد bitchat کھولنے کے لیے Face ID، Touch ID یا ڈیوائس کا پاس کوڈ درکار ہوگا۔ ڈیوائس پر پاس کوڈ ہونا ضروری ہے — اگر پاس کوڈ کبھی ہٹا دیا جائے تو لاک تمہیں باہر روکنے کے بجائے خود ہی بند ہو جائے گا۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yêu cầu Face ID, Touch ID hoặc mật mã của thiết bị để mở bitchat sau khi ứng dụng ở nền. cần có mật mã trên thiết bị — nếu mật mã bị xóa, khóa sẽ tự tắt thay vì chặn bạn ở ngoài."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat 进入后台后，需要 Face ID、Touch ID 或设备密码才能重新打开。需要设备已设置密码——如果密码被移除，锁定会自动关闭，而不会把你锁在外面。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat 進入背景後，需要 Face ID、Touch ID 或裝置密碼才能重新開啟。裝置需要設定密碼——如果密碼被移除，鎖定會自動關閉，而不會把你鎖在外面。"
+          }
+        }
+      }
+    },
+    "app_info.settings.app_lock.title" : {
+      "comment" : "Title of the setting that gates the app behind Face ID/Touch ID/passcode",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قفل التطبيق"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "অ্যাপ লক করো"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "app sperren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lock the app"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bloquear la app"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قفل کردن برنامه"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "i-lock ang app"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "verrouiller l'app"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "נעילת האפליקציה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ऐप लॉक करो"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kunci aplikasi"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "blocca l'app"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アプリをロック"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "앱 잠그기"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kunci aplikasi"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "एप लक गर"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vergrendel de app"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "zablokuj aplikację"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bloquear a app"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bloquear o app"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "блокировать приложение"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lås appen"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ஆப்பை லாக் செய்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ล็อกแอป"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "uygulamayı kilitle"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "блокувати застосунок"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ایپ لاک کرو"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "khóa ứng dụng"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "锁定应用"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "鎖定應用程式"
+          }
+        }
+      }
+    },
+    "app_lock.locked" : {
+      "comment" : "Headline of the app-lock screen",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat مقفل"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat লক করা আছে"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat ist gesperrt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat is locked"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat está bloqueado"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat قفل است"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "naka-lock ang bitchat"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat est verrouillé"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat נעול"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat लॉक है"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat terkunci"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat è bloccata"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchatはロック中"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat이 잠겨 있어요"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat dikunci"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat लक छ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat is vergrendeld"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat jest zablokowany"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "o bitchat está bloqueado"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "o bitchat está bloqueado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat заблокирован"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat är låst"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat லாக் செய்யப்பட்டுள்ளது"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat ถูกล็อกอยู่"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat kilitli"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat заблоковано"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat لاک ہے"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat đang khóa"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat 已锁定"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat 已鎖定"
+          }
+        }
+      }
+    },
+    "app_lock.reason" : {
+      "comment" : "Reason line shown in the system Face ID/Touch ID/passcode prompt",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فتح قفل bitchat"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat আনলক করো"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat entsperren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unlock bitchat"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "desbloquear bitchat"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "باز کردن قفل bitchat"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "i-unlock ang bitchat"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "déverrouiller bitchat"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ביטול הנעילה של bitchat"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat अनलॉक करो"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "buka kunci bitchat"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sblocca bitchat"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchatのロックを解除"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat 잠금 해제"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "buka kunci bitchat"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat अनलक गर्न"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ontgrendel bitchat"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "odblokuj bitchat"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "desbloquear o bitchat"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "desbloquear o bitchat"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "разблокировать bitchat"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lås upp bitchat"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat-ஐ அன்லாக் செய்ய"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ปลดล็อก bitchat"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat kilidini aç"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "розблокувати bitchat"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat ان لاک کرو"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mở khóa bitchat"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "解锁 bitchat"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "解鎖 bitchat"
+          }
+        }
+      }
+    },
+    "app_lock.unlock" : {
+      "comment" : "Button on the app-lock screen that triggers the system authentication prompt",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فتح القفل"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "আনলক করো"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "entsperren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unlock"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "desbloquear"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "باز کردن قفل"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "i-unlock"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "déverrouiller"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ביטול נעילה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "अनलॉक करो"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "buka kunci"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sblocca"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ロック解除"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "잠금 해제"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "buka kunci"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "अनलक गर"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ontgrendel"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "odblokuj"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "desbloquear"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "desbloquear"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "разблокировать"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lås upp"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "அன்லாக் செய்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ปลดล็อก"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kilidi aç"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "розблокувати"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ان لاک کرو"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mở khóa"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "解锁"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "解鎖"
+          }
+        }
+      }
+    },
     "content.delivery.reason.legacy_media_consent_required" : {
       "comment" : "Failure reason when a legacy private-media send lacks per-send consent",
       "extractionState" : "manual",

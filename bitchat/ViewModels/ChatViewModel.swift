@@ -1648,6 +1648,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         NotificationPrivacySettings.reset()
         ReadReceiptSettings.reset()
         FavoriteConsent.reset()
+        AppLockSettings.reset()
         // A hand-added relay names an operator someone chose to route through,
         // which is the kind of trace a wipe should not leave behind.
         NostrRelaySettings.reset()
