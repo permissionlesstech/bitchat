@@ -61,6 +61,9 @@ struct BLEFileTransferHandlerEnvironment {
         _ completion: @escaping () -> Void,
         _ finalization: @escaping (TransportEventDeliveryOutcome) -> Void
     ) -> Void
+    /// Surfaces a local-only system line when authenticated private media
+    /// fails validation on this device (Android interop debugging, #1518).
+    let reportPrivateMediaDecodeFailure: (_ reason: PrivateMediaDecodeFailureReason, _ peerID: PeerID) -> Void
 }
 
 /// Process-lifetime reservation cache for stable private-media IDs.
@@ -219,17 +222,33 @@ final class BLEFileTransferHandler {
         case .success(let acceptance):
             filePacket = acceptance.filePacket
             mime = acceptance.mime
-        case .failure(.malformedPayload):
-            SecureLogger.error("❌ Failed to decode file transfer payload", category: .session)
-            return false
-        case .failure(.payloadTooLarge(let bytes)):
-            SecureLogger.warning("🚫 Dropping file transfer exceeding size cap (\(bytes) bytes)", category: .security)
-            return false
-        case .failure(.unsupportedMime(let mimeType, let bytes)):
-            SecureLogger.warning("🚫 MIME REJECT: '\(mimeType ?? "<empty>")' not supported. Size=\(bytes)b from \(peerID.id.prefix(8))...", category: .security)
-            return false
-        case .failure(.magicMismatch(let mime, let bytes, let prefixHex)):
-            SecureLogger.warning("🚫 MAGIC REJECT: MIME='\(mime)' size=\(bytes)b prefix=[\(prefixHex)] from \(peerID.id.prefix(8))...", category: .security)
+        case .failure(let rejection):
+            if isPrivate, env.isPrivateMediaSenderBlocked(peerID) {
+                SecureLogger.debug(
+                    "🚫 Dropping private media from blocked peer \(peerID.id.prefix(8))… before decode failure UX",
+                    category: .security
+                )
+                return true
+            }
+            if isPrivate {
+                let reason = PrivateMediaDecodeFailureReason.from(rejection)
+                SecureLogger.error(
+                    "❌ Private media decode failed [\(reason.logLabel)] from \(peerID.id.prefix(8))…",
+                    category: .session
+                )
+                env.reportPrivateMediaDecodeFailure(reason, peerID)
+            } else {
+                switch rejection {
+                case .malformedPayload:
+                    SecureLogger.error("❌ Failed to decode file transfer payload", category: .session)
+                case .payloadTooLarge(let bytes):
+                    SecureLogger.warning("🚫 Dropping file transfer exceeding size cap (\(bytes) bytes)", category: .security)
+                case .unsupportedMime(let mimeType, let bytes):
+                    SecureLogger.warning("🚫 MIME REJECT: '\(mimeType ?? "<empty>")' not supported. Size=\(bytes)b from \(peerID.id.prefix(8))...", category: .security)
+                case .magicMismatch(let mime, let bytes, let prefixHex):
+                    SecureLogger.warning("🚫 MAGIC REJECT: MIME='\(mime)' size=\(bytes)b prefix=[\(prefixHex)] from \(peerID.id.prefix(8))...", category: .security)
+                }
+            }
             return false
         }
 

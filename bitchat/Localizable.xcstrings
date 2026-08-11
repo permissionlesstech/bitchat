@@ -13579,6 +13579,936 @@
         }
       }
     },
+    "media.decode.failure.magic_mismatch" : {
+      "comment" : "System message when file magic bytes mismatch MIME; %@ is the MIME",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعذّر فتح ملف الوسائط — المحتوى لا يطابق النوع المعلن (%@)."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "মিডিয়া ফাইল খোলা যায়নি — বিষয়বস্তু ঘোষিত ধরনের সাথে মেলে না (%@)।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "medien-datei ließ sich nicht öffnen — inhalt passt nicht zum angegebenen typ (%@)."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "couldn't open the media file — contents don't match the declared type (%@)."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no se pudo abrir el archivo multimedia — el contenido no coincide con el tipo declarado (%@)."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فایل رسانه باز نشد — محتوا با نوع اعلام‌شده هم‌خوانی ندارد (%@)."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hindi mabuksan ang media file — hindi tugma ang nilalaman sa idineklarang uri (%@)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "impossible d'ouvrir le fichier — le contenu ne correspond pas au type déclaré (%@)."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לא ניתן לפתוח את קובץ המדיה — התוכן אינו תואם לסוג שהוצהר (%@)."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "मीडिया फ़ाइल नहीं खुली — सामग्री घोषित प्रकार से मेल नहीं खाती (%@)।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tidak bisa membuka berkas media — isinya tidak cocok dengan tipe yang dinyatakan (%@)."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "impossibile aprire il file multimediale — il contenuto non corrisponde al tipo dichiarato (%@)."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "メディアファイルを開けませんでした — 中身が申告された形式と一致しません (%@)。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "미디어 파일을 열 수 없습니다 — 내용이 선언된 형식과 다릅니다 (%@)."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tidak dapat membuka fail media — kandungan tidak sepadan dengan jenis yang diisytiharkan (%@)."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "मिडिया फाइल खोल्न सकिएन — सामग्री घोषित प्रकारसँग मिल्दैन (%@)।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kon het mediabestand niet openen — de inhoud komt niet overeen met het opgegeven type (%@)."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nie udało się otworzyć pliku multimedialnego — zawartość nie zgadza się z deklarowanym typem (%@)."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "não foi possível abrir o ficheiro de media — o conteúdo não corresponde ao tipo declarado (%@)."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "não foi possível abrir o arquivo de mídia — o conteúdo não corresponde ao tipo declarado (%@)."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "не удалось открыть медиафайл — содержимое не соответствует заявленному типу (%@)."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kunde inte öppna mediefilen — innehållet stämmer inte med den angivna typen (%@)."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "மீடியா கோப்பைத் திறக்க முடியவில்லை — உள்ளடக்கம் அறிவிக்கப்பட்ட வகையுடன் பொருந்தவில்லை (%@)."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เปิดไฟล์สื่อไม่ได้ — เนื้อหาไม่ตรงกับประเภทที่ระบุ (%@)"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "medya dosyası açılamadı — içerik belirtilen türle uyuşmuyor (%@)."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "не вдалося відкрити медіафайл — вміст не відповідає заявленому типу (%@)."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "میڈیا فائل نہیں کھل سکی — مواد بیان کردہ قسم سے میل نہیں کھاتا (%@)۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "không mở được tệp phương tiện — nội dung không khớp với loại đã khai báo (%@)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法打开媒体文件 — 内容与声明的类型不符 (%@)。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法開啟媒體檔案 — 內容與宣告的類型不符 (%@)。"
+          }
+        }
+      }
+    },
+    "media.decode.failure.malformed" : {
+      "comment" : "System message when a private media payload fails to decode",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعذّر فتح ملف الوسائط — لم تُفكّ شفرة الحمولة. قد يكون المرسل يستخدم إصدارًا يحزم الوسائط بشكل مختلف."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "মিডিয়া ফাইল খোলা যায়নি — পেলোড ডিকোড হয়নি। প্রেরকের অ্যাপ সংস্করণ মিডিয়া অন্যভাবে প্যাক করতে পারে।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "medien-datei ließ sich nicht öffnen — die nutzlast wurde nicht dekodiert. der absender nutzt vielleicht eine version, die medien anders packt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "couldn't open the media file — the payload didn't decode. the sender may be on an app version that packs media differently."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no se pudo abrir el archivo multimedia — el contenido no se decodificó. quien lo envía puede tener una versión que empaqueta los archivos de otra forma."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فایل رسانه باز نشد — محتوا رمزگشایی نشد. شاید فرستنده از نسخه‌ای استفاده می‌کند که رسانه را جور دیگری بسته‌بندی می‌کند."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hindi mabuksan ang media file — hindi na-decode ang payload. baka ibang bersyon ng app ang nagpadala at iba ang pagkakabalot ng media."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "impossible d'ouvrir le fichier — les données ne se décodent pas. l'expéditeur utilise peut-être une version qui empaquette les médias autrement."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לא ניתן לפתוח את קובץ המדיה — לא הצלחנו לפענח את התוכן. ייתכן שהשולח משתמש בגרסה שאורזת מדיה אחרת."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "मीडिया फ़ाइल नहीं खुली — पेलोड डिकोड नहीं हुआ। भेजने वाला शायद ऐसा ऐप संस्करण चला रहा है जो मीडिया अलग तरह से पैक करता है।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tidak bisa membuka berkas media — muatannya gagal didekode. pengirim mungkin memakai versi aplikasi yang mengemas media secara berbeda."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "impossibile aprire il file multimediale — il contenuto non si decodifica. chi lo invia potrebbe avere una versione che impacchetta i media in modo diverso."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "メディアファイルを開けませんでした — データをデコードできません。送信者のアプリはメディアの詰め方が違うバージョンかもしれません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "미디어 파일을 열 수 없습니다 — 페이로드를 디코딩하지 못했습니다. 보낸 사람의 앱 버전이 미디어를 다르게 담을 수 있습니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tidak dapat membuka fail media — muatan gagal dinyahkod. penghantar mungkin menggunakan versi apl yang membungkus media secara berbeza."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "मिडिया फाइल खोल्न सकिएन — पेलोड डिकोड भएन। पठाउनेको एप संस्करणले मिडिया फरक तरिकाले प्याक गर्न सक्छ।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kon het mediabestand niet openen — de payload decodeerde niet. de afzender heeft mogelijk een versie die media anders inpakt."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nie udało się otworzyć pliku multimedialnego — nie zdekodowano zawartości. nadawca może mieć wersję, która inaczej pakuje media."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "não foi possível abrir o ficheiro de media — o conteúdo não descodificou. quem enviou pode ter uma versão que empacota media de outra forma."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "não foi possível abrir o arquivo de mídia — o conteúdo não decodificou. quem enviou pode ter uma versão que empacota mídia de outro jeito."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "не удалось открыть медиафайл — содержимое не декодировалось. у отправителя может быть версия, которая упаковывает медиа иначе."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kunde inte öppna mediefilen — innehållet gick inte att avkoda. avsändaren kan ha en version som paketerar media annorlunda."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "மீடியா கோப்பைத் திறக்க முடியவில்லை — தரவு டிகோட் ஆகவில்லை. அனுப்பியவரின் செயலி மீடியாவை வேறு விதமாக அடைக்கக்கூடும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เปิดไฟล์สื่อไม่ได้ — ถอดรหัสข้อมูลไม่สำเร็จ ผู้ส่งอาจใช้แอปเวอร์ชันที่บรรจุสื่อต่างออกไป"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "medya dosyası açılamadı — veri çözülemedi. gönderen, medyayı farklı paketleyen bir sürüm kullanıyor olabilir."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "не вдалося відкрити медіафайл — вміст не декодувався. у відправника може бути версія, яка пакує медіа інакше."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "میڈیا فائل نہیں کھل سکی — پے لوڈ ڈی کوڈ نہیں ہوا۔ بھیجنے والا شاید ایسا ورژن استعمال کر رہا ہے جو میڈیا مختلف طریقے سے پیک کرتا ہے۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "không mở được tệp phương tiện — dữ liệu không giải mã được. người gửi có thể dùng phiên bản đóng gói phương tiện khác."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法打开媒体文件 — 数据未能解码。发送方的应用版本打包媒体的方式可能不同。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法開啟媒體檔案 — 資料未能解碼。傳送方的應用版本打包媒體的方式可能不同。"
+          }
+        }
+      }
+    },
+    "media.decode.failure.suppressed" : {
+      "comment" : "Appended when repeated media decode failures were rate-limited; %lld is how many were suppressed",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "وسائط إضافية تعذّر فك شفرتها: %lld"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "আরও মিডিয়া ডিকোড হয়নি: %lld"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "weitere medien nicht dekodiert: %lld"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "additional media failed to decode: %lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "otros archivos no se decodificaron: %lld"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رسانه‌های دیگری رمزگشایی نشد: %lld"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iba pang media na hindi na-decode: %lld"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "autres médias non décodés : %lld"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פריטי מדיה נוספים שלא פוענחו: %lld"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "और मीडिया डिकोड नहीं हुई: %lld"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "media lain yang gagal didekode: %lld"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "altri media non decodificati: %lld"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "デコードできなかったメディア: %lld"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "디코딩하지 못한 미디어: %lld"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "media lain yang gagal dinyahkod: %lld"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "थप मिडिया डिकोड भएन: %lld"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "overige media niet gedecodeerd: %lld"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "inne pliki nie zdekodowane: %lld"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "outros ficheiros não descodificados: %lld"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "outros arquivos não decodificados: %lld"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ещё не декодировано медиафайлов: %lld"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ytterligare media som inte avkodades: %lld"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "டிகோட் ஆகாத மேலும் மீடியா: %lld"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "สื่ออื่นที่ถอดรหัสไม่สำเร็จ: %lld"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "çözülemeyen diğer medya: %lld"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ще не декодовано медіафайлів: %lld"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مزید میڈیا ڈی کوڈ نہیں ہوئی: %lld"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "phương tiện khác không giải mã được: %lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "另有媒体未能解码：%lld"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "另有媒體未能解碼：%lld"
+          }
+        }
+      }
+    },
+    "media.decode.failure.too_large" : {
+      "comment" : "System message when an incoming media file is too large",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعذّر حفظ ملف الوسائط — يتجاوز حد الحجم على هذا الجهاز."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "মিডিয়া ফাইল সংরক্ষণ করা যায়নি — এটি এই ডিভাইসের আকারসীমা ছাড়িয়ে গেছে।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "medien-datei ließ sich nicht speichern — sie überschreitet das größenlimit dieses geräts."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "couldn't save the media file — it exceeds this device's size limit."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no se pudo guardar el archivo multimedia — supera el límite de tamaño de este dispositivo."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فایل رسانه ذخیره نشد — از محدودیت حجم این دستگاه بیشتر است."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hindi ma-save ang media file — lumampas ito sa limitasyon ng laki ng device na ito."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "impossible d'enregistrer le fichier — il dépasse la limite de taille de cet appareil."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לא ניתן לשמור את קובץ המדיה — הוא חורג ממגבלת הגודל של המכשיר."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "मीडिया फ़ाइल सहेजी नहीं जा सकी — यह इस डिवाइस की आकार सीमा से बड़ी है।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tidak bisa menyimpan berkas media — melebihi batas ukuran perangkat ini."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "impossibile salvare il file multimediale — supera il limite di dimensione di questo dispositivo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "メディアファイルを保存できませんでした — この端末のサイズ上限を超えています。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "미디어 파일을 저장할 수 없습니다 — 이 기기의 크기 제한을 넘습니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tidak dapat menyimpan fail media — melebihi had saiz peranti ini."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "मिडिया फाइल सुरक्षित गर्न सकिएन — यो यस यन्त्रको आकार सीमा नाघ्छ।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kon het mediabestand niet opslaan — het overschrijdt de groottelimiet van dit apparaat."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nie udało się zapisać pliku multimedialnego — przekracza limit rozmiaru tego urządzenia."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "não foi possível guardar o ficheiro de media — excede o limite de tamanho deste dispositivo."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "não foi possível salvar o arquivo de mídia — excede o limite de tamanho deste dispositivo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "не удалось сохранить медиафайл — он превышает ограничение размера на этом устройстве."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kunde inte spara mediefilen — den överskrider enhetens storleksgräns."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "மீடியா கோப்பைச் சேமிக்க முடியவில்லை — இந்தச் சாதனத்தின் அளவு வரம்பை மீறுகிறது."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "บันทึกไฟล์สื่อไม่ได้ — เกินขีดจำกัดขนาดของอุปกรณ์นี้"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "medya dosyası kaydedilemedi — bu cihazın boyut sınırını aşıyor."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "не вдалося зберегти медіафайл — він перевищує обмеження розміру на цьому пристрої."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "میڈیا فائل محفوظ نہیں ہو سکی — یہ اس ڈیوائس کی سائز کی حد سے زیادہ ہے۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "không lưu được tệp phương tiện — vượt quá giới hạn dung lượng của thiết bị này."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法保存媒体文件 — 超出本设备的大小上限。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法儲存媒體檔案 — 超出本裝置的大小上限。"
+          }
+        }
+      }
+    },
+    "media.decode.failure.unsupported_mime" : {
+      "comment" : "System message when MIME type is unsupported; %@ is the MIME",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعذّر فتح ملف الوسائط — نوع غير مدعوم (%@)."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "মিডিয়া ফাইল খোলা যায়নি — অসমর্থিত ধরন (%@)।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "medien-datei ließ sich nicht öffnen — nicht unterstützter typ (%@)."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "couldn't open the media file — unsupported type (%@)."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no se pudo abrir el archivo multimedia — tipo no compatible (%@)."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فایل رسانه باز نشد — نوع پشتیبانی‌نشده (%@)."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hindi mabuksan ang media file — hindi suportadong uri (%@)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "impossible d'ouvrir le fichier — type non pris en charge (%@)."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לא ניתן לפתוח את קובץ המדיה — סוג לא נתמך (%@)."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "मीडिया फ़ाइल नहीं खुली — असमर्थित प्रकार (%@)।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tidak bisa membuka berkas media — tipe tidak didukung (%@)."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "impossibile aprire il file multimediale — tipo non supportato (%@)."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "メディアファイルを開けませんでした — 未対応の形式 (%@)。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "미디어 파일을 열 수 없습니다 — 지원하지 않는 형식 (%@)."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tidak dapat membuka fail media — jenis tidak disokong (%@)."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "मिडिया फाइल खोल्न सकिएन — असमर्थित प्रकार (%@)।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kon het mediabestand niet openen — niet-ondersteund type (%@)."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nie udało się otworzyć pliku multimedialnego — nieobsługiwany typ (%@)."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "não foi possível abrir o ficheiro de media — tipo não suportado (%@)."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "não foi possível abrir o arquivo de mídia — tipo não suportado (%@)."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "не удалось открыть медиафайл — неподдерживаемый тип (%@)."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kunde inte öppna mediefilen — typen stöds inte (%@)."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "மீடியா கோப்பைத் திறக்க முடியவில்லை — ஆதரிக்கப்படாத வகை (%@)."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เปิดไฟล์สื่อไม่ได้ — ไม่รองรับประเภทนี้ (%@)"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "medya dosyası açılamadı — desteklenmeyen tür (%@)."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "не вдалося відкрити медіафайл — непідтримуваний тип (%@)."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "میڈیا فائل نہیں کھل سکی — غیر معاون قسم (%@)۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "không mở được tệp phương tiện — loại không được hỗ trợ (%@)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法打开媒体文件 — 不支持的类型 (%@)。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法開啟媒體檔案 — 不支援的類型 (%@)。"
+          }
+        }
+      }
+    },
     "notification.nearby.body_many" : {
       "comment" : "Body of the nearby notification; placeholder is the peer count",
       "extractionState" : "manual",
