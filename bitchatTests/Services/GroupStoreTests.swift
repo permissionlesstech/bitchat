@@ -81,6 +81,53 @@ struct GroupStoreTests {
         #expect(store.group(withID: group.groupID)?.members == [creator])
     }
 
+    // MARK: - Creator pinning
+
+    @Test func upsertRefusesToChangeTheCreatorOfAnExistingGroup() throws {
+        let store = GroupStore(keychain: MockKeychain(), persistsToDisk: false)
+        let creator = makeMember(seed: 0xC1, nickname: "creator")
+        let me = makeMember(seed: 0x0E, nickname: "me")
+        let attacker = makeMember(seed: 0xEE, nickname: "attacker")
+        let group = try #require(store.createGroup(named: "trip", creator: creator))
+        #expect(store.updateRoster(groupID: group.groupID, members: [creator, me]) != nil)
+        let realKey = try #require(store.key(forGroupID: group.groupID))
+
+        // Same groupID, same name, higher epoch, attacker as creator. Every
+        // other check in applyGroupState passes for this.
+        let hijack = BitchatGroup(
+            groupID: group.groupID,
+            name: group.name,
+            epoch: group.epoch + 1,
+            members: [attacker, me],
+            creatorFingerprint: attacker.fingerprint
+        )
+
+        #expect(!store.upsert(hijack, key: Data(repeating: 0xAB, count: 32)))
+
+        let stored = try #require(store.group(withID: group.groupID))
+        #expect(stored.creatorFingerprint == creator.fingerprint)
+        #expect(stored.epoch == group.epoch)
+        #expect(store.key(forGroupID: group.groupID) == realKey)
+    }
+
+    @Test func upsertStillAcceptsANewEpochFromTheSameCreator() throws {
+        // The other side of the boundary: pinning the creator must not stop the
+        // real creator rotating the key, or removing a member breaks.
+        let store = GroupStore(keychain: MockKeychain(), persistsToDisk: false)
+        let creator = makeMember(seed: 0xC1, nickname: "creator")
+        let me = makeMember(seed: 0x0E, nickname: "me")
+        let group = try #require(store.createGroup(named: "trip", creator: creator))
+
+        var rotated = group
+        rotated.epoch = group.epoch + 1
+        rotated.members = [creator, me]
+        let newKey = Data(repeating: 0x5A, count: 32)
+
+        #expect(store.upsert(rotated, key: newKey))
+        #expect(store.group(withID: group.groupID)?.epoch == group.epoch + 1)
+        #expect(store.key(forGroupID: group.groupID) == newKey)
+    }
+
     // MARK: - Rotation
 
     @Test func rotateKeyBumpsEpochAndReplacesKey() throws {
