@@ -46,6 +46,10 @@ private final class MockChatPeerIdentityContext: ChatPeerIdentityContext {
         unreadPrivateMessages.remove(peerID)
     }
 
+    func markPrivateChatUnread(_ peerID: PeerID) {
+        unreadPrivateMessages.insert(peerID)
+    }
+
     @discardableResult
     func appendPrivateMessage(_ message: BitchatMessage, to peerID: PeerID) -> Bool {
         var chat = privateChats[peerID] ?? []
@@ -390,6 +394,35 @@ struct ChatPeerIdentityCoordinatorContextTests {
         #expect(notice?.content.contains("identity key changed") == true)
         #expect(notice?.content.contains("alice") == true)
         #expect(context.privateChats[oldPeerID] == nil)
+        // A background security event must surface via the unread indicator.
+        #expect(context.unreadPrivateMessages.contains(newPeerID))
+    }
+
+    @Test @MainActor
+    func migrateNoiseKeyUpdate_namesOfflineFavoritesFromTheRelationship() async {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        let oldPeerID = PeerID(str: "5555555555555555")
+        let newKey = Data(repeating: 0xCD, count: 32)
+        let newPeerID = PeerID(hexData: newKey)
+        // Offline key rotation: no mesh nickname, no social identity for the
+        // unverified new fingerprint — only the favorite relationship knows
+        // who this is.
+        context.favoriteRelationshipsByNoiseKey[newKey] = FavoritesPersistenceService.FavoriteRelationship(
+            peerNoisePublicKey: newKey,
+            peerNostrPublicKey: nil,
+            peerNickname: "carol",
+            isFavorite: true,
+            theyFavoritedUs: true,
+            favoritedAt: Date(timeIntervalSince1970: 0),
+            lastUpdated: Date(timeIntervalSince1970: 0)
+        )
+        context.privateChats[oldPeerID] = [makePrivateMessage(id: "m2", timestamp: Date(timeIntervalSince1970: 1))]
+
+        coordinator.migrateNoiseKeyUpdate(oldPeerID: oldPeerID, newPeerID: newPeerID)
+
+        let notice = (context.privateChats[newPeerID] ?? []).last
+        #expect(notice?.content.contains("carol") == true)
     }
 
     @Test @MainActor
