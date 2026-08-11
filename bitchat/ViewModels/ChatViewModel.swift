@@ -202,6 +202,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     private lazy var outgoingCoordinator = ChatOutgoingCoordinator(context: self)
     private lazy var lifecycleCoordinator = ChatLifecycleCoordinator(context: self)
     private lazy var transportEventCoordinator = ChatTransportEventCoordinator(context: self)
+    /// Rate limit for the media-decode-failure system lines. Decode failures are
+    /// attacker-triggerable, so the thread is protected from a flood (#1518).
+    private var privateMediaDecodeFailureThrottle = PrivateMediaDecodeFailureThrottle()
     private lazy var peerListCoordinator = ChatPeerListCoordinator(context: self)
     private lazy var messageFormatter = ChatMessageFormatter(viewModel: self)
     lazy var peerIdentityCoordinator = ChatPeerIdentityCoordinator(context: self)
@@ -2142,6 +2145,29 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             timestamp: timestamp,
             messageID: messageID
         )
+    }
+
+    func didFailPrivateMediaDecode(from peerID: PeerID, reason: PrivateMediaDecodeFailureReason) {
+        // Attacker-triggerable: an authenticated peer can send malformed media
+        // as fast as the link allows, so this is rate-limited per peer rather
+        // than posting a line per payload.
+        switch privateMediaDecodeFailureThrottle.record(from: peerID, reason: reason) {
+        case .suppress:
+            return
+        case .post(let reason):
+            addLocalPrivateSystemMessage(reason.localizedSystemMessage, to: peerID)
+        case .postWithSuppressed(let reason, let suppressed):
+            let summary = String(
+                format: String(
+                    localized: "media.decode.failure.suppressed",
+                    defaultValue: "additional media failed to decode: %lld",
+                    comment: "Appended when repeated media decode failures were rate-limited; %lld is how many were suppressed"
+                ),
+                locale: .current,
+                suppressed
+            )
+            addLocalPrivateSystemMessage("\(reason.localizedSystemMessage) \(summary)", to: peerID)
+        }
     }
 
     func didReceiveGroupMessage(payload: Data, timestamp: Date) {
