@@ -180,15 +180,7 @@ struct MeshPeerList: View {
                         }
 
                         if !isMe {
-                            Button(action: {
-                                // The first favorite ever asks once: the star
-                                // notifies the peer and shares the nostr key.
-                                if !peer.isFavorite, !FavoriteConsent.isAcknowledged {
-                                    pendingFavorite = peer
-                                } else {
-                                    onToggleFavorite(peer.peerID)
-                                }
-                            }) {
+                            Button(action: { requestFavoriteToggle(peer) }) {
                                 // Mutuality is the load-bearing state (one-sided
                                 // favorites don't enable offline delivery), so it
                                 // shows at the point of decision: half star until
@@ -205,7 +197,7 @@ struct MeshPeerList: View {
                                     .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            .help(peer.isMutualFavorite ? Strings.favoriteMutualTooltip : Strings.favoritePendingTooltip)
+                            .help(favoriteTooltip(for: peer))
                         }
                     }
                     .padding(.horizontal)
@@ -221,7 +213,7 @@ struct MeshPeerList: View {
                                 onTapPeer(peer.peerID)
                             }
                             Button(peer.isFavorite ? Strings.removeFavorite : Strings.addFavorite) {
-                                onToggleFavorite(peer.peerID)
+                                requestFavoriteToggle(peer)
                             }
                             Button(Strings.showFingerprint) {
                                 onShowFingerprint(peer.peerID)
@@ -246,7 +238,7 @@ struct MeshPeerList: View {
                     .accessibilityActions {
                         if !isMe {
                             Button(peer.isFavorite ? Strings.removeFavorite : Strings.addFavorite) {
-                                onToggleFavorite(peer.peerID)
+                                requestFavoriteToggle(peer)
                             }
                             Button(Strings.showFingerprint) {
                                 onShowFingerprint(peer.peerID)
@@ -289,6 +281,24 @@ struct MeshPeerList: View {
         } message: { peer in
             Text(verbatim: Strings.consentMessage(peer.displayName))
         }
+    }
+
+    /// Routes every add-favorite entry point (star, context menu, VoiceOver)
+    /// through the one-time consent dialog; removals stay immediate.
+    private func requestFavoriteToggle(_ peer: MeshPeerRow) {
+        if !peer.isFavorite, !FavoriteConsent.isAcknowledged {
+            pendingFavorite = peer
+        } else {
+            onToggleFavorite(peer.peerID)
+        }
+    }
+
+    /// Tooltip for the star: the mutual/pending copy applies only once the
+    /// peer is actually favorited — on an empty star it would claim a
+    /// favorite that doesn't exist.
+    private func favoriteTooltip(for peer: MeshPeerRow) -> String {
+        guard peer.isFavorite else { return Strings.addFavorite }
+        return peer.isMutualFavorite ? Strings.favoriteMutualTooltip : Strings.favoritePendingTooltip
     }
 
     /// One spoken sentence per row: name, how they're reachable, and any
