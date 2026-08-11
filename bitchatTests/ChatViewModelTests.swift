@@ -462,10 +462,13 @@ struct ChatViewModelServiceLifecycleTests {
         #expect(!sentReadReceipt)
 
         // ...while the chat is still marked read locally and the receipt is
-        // recorded as handled, so re-enabling the setting never fires a
-        // retroactive burst disclosing past reading activity.
+        // recorded as handled in BOTH tracking sets (the lifecycle pass
+        // dedups against the owner's persisted set, the manager against its
+        // own), so re-enabling the setting never fires a retroactive burst
+        // disclosing past reading activity from either path.
         #expect(!viewModel.unreadPrivateMessages.contains(peerID))
-        #expect(viewModel.sentReadReceipts.contains("read-2") || viewModel.privateChatManager.sentReadReceipts.contains("read-2"))
+        #expect(viewModel.sentReadReceipts.contains("read-2"))
+        #expect(viewModel.privateChatManager.sentReadReceipts.contains("read-2"))
     }
 
     @Test @MainActor
@@ -1588,6 +1591,9 @@ struct ChatViewModelPrivateMediaDeletionTests {
             kind: .canceled
         ))
         let coordinator = viewModel.liveVoiceCoordinator
+        // The live-voice preference defaults OFF now; this fixture exercises
+        // the opted-in live path.
+        coordinator.liveVoiceEnabled = { true }
         defer {
             coordinator.handleVoiceFramePayload(
                 from: peerID,

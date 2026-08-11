@@ -127,6 +127,7 @@ struct ChatLiveVoiceCoordinatorTests {
     @Test func burstCreatesBubbleAndPersistsFramesInOrder() throws {
         let context = MockChatLiveVoiceContext()
         let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
+        coordinator.liveVoiceEnabled = { true }
         let burstID = makeBurstID(0xA1)
         defer { fallbackFileURL(burstID: burstID, peerID: peer).map { try? FileManager.default.removeItem(at: $0) } }
 
@@ -168,6 +169,7 @@ struct ChatLiveVoiceCoordinatorTests {
         let context = MockChatLiveVoiceContext()
         context.selectedPrivateChatPeer = peer
         let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
+        coordinator.liveVoiceEnabled = { true }
         let burstID = makeBurstID(0xB2)
         let hex = burstID.hexEncodedString()
         let fileName = "voice_\(hex).m4a"
@@ -223,6 +225,7 @@ struct ChatLiveVoiceCoordinatorTests {
     @Test func absorbIgnoresUnrelatedVoiceNotes() throws {
         let context = MockChatLiveVoiceContext()
         let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
+        coordinator.liveVoiceEnabled = { true }
 
         // A classic voice note (date-stamped name) and a live-capture name
         // must both pass through untouched.
@@ -247,6 +250,7 @@ struct ChatLiveVoiceCoordinatorTests {
     @Test func canceledBurstRemovesBubbleAndFile() throws {
         let context = MockChatLiveVoiceContext()
         let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
+        coordinator.liveVoiceEnabled = { true }
         let burstID = makeBurstID(0xC3)
 
         send(try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([Data(repeating: 9, count: 40)]))), to: coordinator, from: peer)
@@ -262,6 +266,7 @@ struct ChatLiveVoiceCoordinatorTests {
     @Test func emptyBurstLeavesNoBubble() throws {
         let context = MockChatLiveVoiceContext()
         let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
+        coordinator.liveVoiceEnabled = { true }
         let burstID = makeBurstID(0xD4)
 
         send(try #require(VoiceBurstPacket(burstID: burstID, seq: 0, kind: .start(codec: .aacLC16kMono))), to: coordinator, from: peer)
@@ -275,6 +280,7 @@ struct ChatLiveVoiceCoordinatorTests {
     @Test func ignoresBlockedPeersAndUnknownControlPackets() throws {
         let context = MockChatLiveVoiceContext()
         let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
+        coordinator.liveVoiceEnabled = { true }
 
         context.blockedPeers = [peer]
         send(try #require(VoiceBurstPacket(burstID: makeBurstID(0xE5), seq: 0, kind: .start(codec: .aacLC16kMono))), to: coordinator, from: peer)
@@ -290,6 +296,7 @@ struct ChatLiveVoiceCoordinatorTests {
     @Test func concurrentAssemblyCapDropsExtraBursts() throws {
         let context = MockChatLiveVoiceContext()
         let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
+        coordinator.liveVoiceEnabled = { true }
 
         var cleanup: [Data] = []
         defer {
@@ -309,12 +316,10 @@ struct ChatLiveVoiceCoordinatorTests {
     }
 
     @Test func liveVoiceToggleOffDropsInboundFrames() throws {
-        let previous = PTTSettings.liveVoiceEnabled
-        PTTSettings.liveVoiceEnabled = false
-        defer { PTTSettings.liveVoiceEnabled = previous }
-
         let context = MockChatLiveVoiceContext()
         let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
+        coordinator.liveVoiceEnabled = { true }
+        coordinator.liveVoiceEnabled = { false }
         let burstID = makeBurstID(0xE8)
 
         // Off means classic-notes-only: no live bubble, no partial file.
@@ -328,6 +333,7 @@ struct ChatLiveVoiceCoordinatorTests {
     @Test func publicBurstCreatesMeshBubbleAndTracksTalker() throws {
         let context = MockChatLiveVoiceContext()
         let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
+        coordinator.liveVoiceEnabled = { true }
         let burstID = makeBurstID(0x71)
         defer {
             incomingFileURL(burstID: burstID, peerID: peer, scope: .publicMesh).map { try? FileManager.default.removeItem(at: $0) }
@@ -369,6 +375,7 @@ struct ChatLiveVoiceCoordinatorTests {
     @Test func absorbEnforcesScopeBinding() throws {
         let context = MockChatLiveVoiceContext()
         let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
+        coordinator.liveVoiceEnabled = { true }
         let burstID = makeBurstID(0x72)
         defer { fallbackFileURL(burstID: burstID, peerID: peer).map { try? FileManager.default.removeItem(at: $0) } }
 
@@ -400,6 +407,7 @@ struct ChatLiveVoiceCoordinatorTests {
     @Test func collidingBurstIDFromAnotherPeerCannotHijackAssembly() throws {
         let context = MockChatLiveVoiceContext()
         let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
+        coordinator.liveVoiceEnabled = { true }
         let burstID = makeBurstID(0x73)
         let attacker = PeerID(str: "ddddeeeeffff0002")
         defer {
@@ -435,6 +443,7 @@ struct ChatLiveVoiceCoordinatorTests {
     @Test func sameBurstIDCoexistsAcrossScopes() throws {
         let context = MockChatLiveVoiceContext()
         let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
+        coordinator.liveVoiceEnabled = { true }
         let burstID = makeBurstID(0x74)
         defer {
             fallbackFileURL(burstID: burstID, peerID: peer).map { try? FileManager.default.removeItem(at: $0) }
@@ -492,6 +501,7 @@ struct ChatLiveVoiceCoordinatorTests {
     @Test func finalizedNoteBindsToItsAuthenticatedSender() throws {
         let context = MockChatLiveVoiceContext()
         let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
+        coordinator.liveVoiceEnabled = { true }
         let burstID = makeBurstID(0x75)
         let hex = burstID.hexEncodedString()
         let attacker = PeerID(str: "ddddeeeeffff0002")
@@ -550,6 +560,7 @@ struct ChatLiveVoiceCoordinatorTests {
 
         let context = MockChatLiveVoiceContext()
         let coordinator = ChatLiveVoiceCoordinator(context: context, fileStore: store)
+        coordinator.liveVoiceEnabled = { true }
         let burstID = makeBurstID(0x76)
         send(try #require(VoiceBurstPacket(burstID: burstID, seq: 0, kind: .start(codec: .aacLC16kMono))), to: coordinator, from: peer)
 
@@ -571,6 +582,7 @@ struct ChatLiveVoiceCoordinatorTests {
 
         let context = MockChatLiveVoiceContext()
         let coordinator = ChatLiveVoiceCoordinator(context: context, fileStore: store)
+        coordinator.liveVoiceEnabled = { true }
         let burstID = makeBurstID(0x77)
         send(try #require(VoiceBurstPacket(burstID: burstID, seq: 0, kind: .start(codec: .aacLC16kMono))), to: coordinator, from: peer)
         send(try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([Data(repeating: 8, count: 60)]))), to: coordinator, from: peer)
@@ -618,6 +630,7 @@ struct ChatLiveVoiceCoordinatorTests {
         // sender out of range): the capture is the row's only audio.
         let context = MockChatLiveVoiceContext()
         let coordinator = ChatLiveVoiceCoordinator(context: context, fileStore: store)
+        coordinator.liveVoiceEnabled = { true }
         let burstID = makeBurstID(0x79)
         let frame = Data(repeating: 0x0B, count: 60)
         send(try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([frame]))), to: coordinator, from: peer)
@@ -642,6 +655,7 @@ struct ChatLiveVoiceCoordinatorTests {
 
         let context = MockChatLiveVoiceContext()
         let coordinator = ChatLiveVoiceCoordinator(context: context, fileStore: store)
+        coordinator.liveVoiceEnabled = { true }
         let burstID = makeBurstID(0x7A)
         send(try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([Data(repeating: 0x0C, count: 60)]))), to: coordinator, from: peer)
         send(try #require(VoiceBurstPacket(burstID: burstID, seq: 2, kind: .end(totalDataPackets: 1, durationMs: 64))), to: coordinator, from: peer)

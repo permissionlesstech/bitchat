@@ -252,15 +252,23 @@ final class PrivateChatManager: ObservableObject {
     /// suites through the shared UserDefaults-backed setting.
     var sendsReadReceipts: () -> Bool = { ReadReceiptSettings.sendReadReceipts }
 
+    /// Records a withheld receipt in the owner's persisted set too: the
+    /// lifecycle read pass dedups against ChatViewModel.sentReadReceipts,
+    /// not this manager's set, so claiming only locally would let a receipt
+    /// for a message read while the setting was OFF fire after re-enabling.
+    var markReceiptHandled: ((String) -> Void)?
+
     private func sendReadReceipt(for message: BitchatMessage) {
         guard !sentReadReceipts.contains(message.id),
               let senderPeerID = message.senderPeerID else {
             return
         }
-        // Withheld receipts are still claimed below as sent: re-enabling the
-        // setting must never fire a retroactive burst disclosing past reads.
+        // Withheld receipts are still claimed as sent — in BOTH tracking
+        // sets: re-enabling the setting must never fire a retroactive burst
+        // disclosing past reads, from this manager or the lifecycle pass.
         guard sendsReadReceipts() else {
             sentReadReceipts.insert(message.id)
+            markReceiptHandled?(message.id)
             return
         }
 

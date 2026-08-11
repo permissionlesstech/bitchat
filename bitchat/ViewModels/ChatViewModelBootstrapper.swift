@@ -90,6 +90,9 @@ private extension ChatViewModelBootstrapper {
         viewModel.privateChatManager.conversationStore = viewModel.conversations
         viewModel.privateChatManager.messageRouter = viewModel.messageRouter
         viewModel.privateChatManager.unifiedPeerService = viewModel.unifiedPeerService
+        viewModel.privateChatManager.markReceiptHandled = { [weak viewModel] messageID in
+            viewModel?.markReadReceiptSent(messageID)
+        }
         viewModel.unifiedPeerService.messageRouter = viewModel.messageRouter
         // Surface silent outbox drops (attempt cap, TTL expiry, overflow
         // eviction) as a visible failure. The store's no-downgrade rule does
