@@ -119,6 +119,7 @@ final class NotificationService {
     /// which behavior they are asserting instead of inheriting whatever the
     /// shared preference happens to hold when they run.
     private let hidePreviewsProvider: () -> Bool
+    private let conversationMutedProvider: (ConversationNotificationMuteStore.Scope) -> Bool
 
     private var hidePreviews: Bool {
         hidePreviewsProvider()
@@ -136,6 +137,7 @@ final class NotificationService {
 
     private init() {
         self.hidePreviewsProvider = { NotificationPrivacySettings.hideMessagePreviews }
+        self.conversationMutedProvider = { ConversationNotificationMuteStore.isMuted($0) }
         self.isRunningTestsProvider = {
             let env = ProcessInfo.processInfo.environment
             return NSClassFromString("XCTestCase") != nil ||
@@ -161,13 +163,17 @@ final class NotificationService {
         authorizer: NotificationAuthorizing,
         requestDeliverer: NotificationRequestDelivering,
         categoryRegistrar: NotificationCategoryRegistering = NoopNotificationCategoryRegistrar(),
-        hidePreviewsProvider: @escaping () -> Bool = { NotificationPrivacySettings.hideMessagePreviews }
+        hidePreviewsProvider: @escaping () -> Bool = { NotificationPrivacySettings.hideMessagePreviews },
+        conversationMutedProvider: @escaping (ConversationNotificationMuteStore.Scope) -> Bool = {
+            ConversationNotificationMuteStore.isMuted($0)
+        }
     ) {
         self.isRunningTestsProvider = isRunningTestsProvider
         self.authorizer = authorizer
         self.requestDeliverer = requestDeliverer
         self.categoryRegistrar = categoryRegistrar
         self.hidePreviewsProvider = hidePreviewsProvider
+        self.conversationMutedProvider = conversationMutedProvider
     }
 
     func requestAuthorization() {
@@ -236,7 +242,20 @@ final class NotificationService {
         sendLocalNotification(title: title, body: body, identifier: identifier)
     }
 
-    func sendPrivateMessageNotification(from sender: String, message: String, peerID: PeerID) {
+    func sendPrivateMessageNotification(
+        from sender: String,
+        message: String,
+        peerID: PeerID,
+        fingerprint: String? = nil
+    ) {
+        // No fingerprint means no mute could have been keyed for this
+        // conversation (the toggle is disabled until one exists), so the
+        // notification is delivered rather than suppressed by a guess.
+        if let scope = ConversationNotificationMuteStore.Scope.direct(fingerprint: fingerprint),
+           conversationMutedProvider(scope) {
+            return
+        }
+
         let title = hidePreviews ? Redacted.directMessageTitle : "🔒 DM from \(sender)"
         let body = hidePreviews ? Redacted.body : message
         let identifier = "private-\(UUID().uuidString)"
@@ -249,6 +268,8 @@ final class NotificationService {
 
     // Geohash public chat notification with deep link to a specific geohash
     func sendGeohashActivityNotification(geohash: String, titlePrefix: String = "#", bodyPreview: String) {
+        guard !conversationMutedProvider(.geohash(geohash)) else { return }
+
         // The geohash itself is location data, so hiding previews withholds it
         // from the alert while leaving the deep link intact for the tap.
         let title = hidePreviews ? Redacted.geohashActivityTitle : "\(titlePrefix)\(geohash)"

@@ -116,6 +116,57 @@ final class NotificationServiceTests: XCTestCase {
         XCTAssertEqual(deliverer.requests[1].content.interruptionLevel, .timeSensitive)
         XCTAssertEqual(deliverer.requests[1].content.body, "2 people around")
     }
+
+    func test_sendPrivateMessageNotification_skipsWhenConversationMuted() {
+        let deliverer = RecordingNotificationRequestDeliverer()
+        let peerID = PeerID(str: "deadbeefdeadbeef")
+        let scope = ConversationNotificationMuteStore.Scope.direct(fingerprint: "fp1")
+        let service = NotificationService(
+            isRunningTestsProvider: { false },
+            authorizer: RecordingNotificationAuthorizer(),
+            requestDeliverer: deliverer,
+            conversationMutedProvider: { $0 == scope }
+        )
+
+        service.sendPrivateMessageNotification(from: "Alice", message: "hi", peerID: peerID, fingerprint: "fp1")
+
+        XCTAssertTrue(deliverer.requests.isEmpty)
+    }
+
+    /// No fingerprint means no mute can have been keyed (the toggle is disabled
+    /// until one exists), so the notification must still be delivered rather
+    /// than suppressed by a peer-ID guess that rotation would invalidate.
+    func test_sendPrivateMessageNotification_deliversWhenNoFingerprintIsKnown() {
+        let deliverer = RecordingNotificationRequestDeliverer()
+        let peerID = PeerID(str: "deadbeefdeadbeef")
+        let service = NotificationService(
+            isRunningTestsProvider: { false },
+            authorizer: RecordingNotificationAuthorizer(),
+            requestDeliverer: deliverer,
+            conversationMutedProvider: { _ in true }
+        )
+
+        service.sendPrivateMessageNotification(from: "Alice", message: "hi", peerID: peerID, fingerprint: nil)
+
+        XCTAssertEqual(deliverer.requests.count, 1)
+    }
+
+    func test_sendGeohashActivityNotification_skipsWhenChannelMuted() {
+        let deliverer = RecordingNotificationRequestDeliverer()
+        let service = NotificationService(
+            isRunningTestsProvider: { false },
+            authorizer: RecordingNotificationAuthorizer(),
+            requestDeliverer: deliverer,
+            conversationMutedProvider: {
+                if case .geohash("u4pru") = $0 { return true }
+                return false
+            }
+        )
+
+        service.sendGeohashActivityNotification(geohash: "u4pru", bodyPreview: "hello")
+
+        XCTAssertTrue(deliverer.requests.isEmpty)
+    }
 }
 
 private final class RecordingNotificationAuthorizer: NotificationAuthorizing {
