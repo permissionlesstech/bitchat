@@ -29,6 +29,29 @@ final class SimulatedMesh {
     private var pendingDeliveries: [(from: Int, packet: BitchatPacket)] = []
     /// Total (packet, receiving-node) deliveries pumped — the storm bound.
     private(set) var deliveredFrameCount = 0
+    /// The same deliveries split by packet type. A whole-mesh frame budget
+    /// silently includes announce traffic, and announce *admission* is the one
+    /// decision the manual scheduler does not own: `sendAnnounceNow` asks
+    /// `announceThrottle.shouldSend(force:now: Date())` (BLEService), so
+    /// whether a scheduled re-announce reaches the wire depends on real
+    /// elapsed seconds, not on `advanceTime`. Burn 0.2s of wall clock in the
+    /// middle of a test — the forced-announce window is 0.15s — and announce
+    /// deliveries rise (measured: 22 → 36) while every other type is
+    /// unchanged. A test that drains the mesh to quiet before it measures
+    /// absorbs that into its baseline; one that cannot has a budget moving
+    /// with runner load. Counting per type lets a test bound the traffic it
+    /// is actually about either way.
+    private var deliveredFrameCountsByType: [UInt8: Int] = [:]
+
+    /// Deliveries of one packet type — the storm bound for a specific kind of
+    /// traffic, immune to unrelated announce frames.
+    /// Unlocked deliberately, matching `deliveredFrameCount` above: both
+    /// counters are written only by `pump` on the test thread (the outbound
+    /// tap touches `pendingDeliveries`/`emitted`, never these). Taking the
+    /// lock here would advertise a protection the writer does not hold.
+    func deliveredFrameCount(ofType type: MessageType) -> Int {
+        deliveredFrameCountsByType[type.rawValue] ?? 0
+    }
 
     private(set) var nodes: [Node] = []
     private var neighbors: [Set<Int>] = []
@@ -168,6 +191,7 @@ final class SimulatedMesh {
                 for receiver in neighbors[from] {
                     for link in links(from: from, at: receiver) {
                         deliveredFrameCount += 1
+                        deliveredFrameCountsByType[packet.type, default: 0] += 1
                         nodes[receiver].service._test_ingestFrame(packet, link: link)
                     }
                 }
