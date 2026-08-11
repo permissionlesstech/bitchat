@@ -10,6 +10,8 @@ struct MeshPeerList: View {
     /// Optional so existing call sites (and previews/tests) keep compiling;
     /// when absent the block/unblock context-menu entry is hidden.
     var onToggleBlock: ((MeshPeerRow) -> Void)? = nil
+    /// Clears the unread badge without opening the conversation.
+    var onClearUnread: ((PeerID) -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
 
     @State private var orderedIDs: [String] = []
@@ -34,6 +36,7 @@ struct MeshPeerList: View {
         static let directMessage = String(localized: "content.actions.direct_message", comment: "Action that opens a private chat with the person")
         static let block = String(localized: "geohash_people.action.block", comment: "Context menu action to block a person")
         static let unblock = String(localized: "geohash_people.action.unblock", comment: "Context menu action to unblock a person")
+        static let markRead = String(localized: "conversation.action.mark_read", comment: "Context menu action that clears the unread badge for one conversation")
     }
 
     var body: some View {
@@ -186,6 +189,11 @@ struct MeshPeerList: View {
                     .onTapGesture { if !isMe { onTapPeer(peer.peerID) } }
                     .contextMenu {
                         if !isMe {
+                            if peer.hasUnread, let onClearUnread {
+                                Button(Strings.markRead) {
+                                    onClearUnread(peer.peerID)
+                                }
+                            }
                             Button(Strings.directMessage) {
                                 onTapPeer(peer.peerID)
                             }
@@ -214,6 +222,11 @@ struct MeshPeerList: View {
                     .accessibilityHint(isMe ? "" : Strings.openDMHint)
                     .accessibilityActions {
                         if !isMe {
+                            if peer.hasUnread, let onClearUnread {
+                                Button(Strings.markRead) {
+                                    onClearUnread(peer.peerID)
+                                }
+                            }
                             Button(peer.isFavorite ? Strings.removeFavorite : Strings.addFavorite) {
                                 onToggleFavorite(peer.peerID)
                             }
