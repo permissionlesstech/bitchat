@@ -69,7 +69,7 @@ extension ChatViewModel {
 
     @MainActor
     private func liveVoiceTarget() -> LiveVoiceTarget? {
-        guard PTTSettings.liveVoiceEnabled else { return nil }
+        guard liveVoiceCoordinator.liveVoiceEnabled() else { return nil }
 
         if let selectedPeer = selectedPrivateChatPeer {
             guard !selectedPeer.isGeoDM, !selectedPeer.isGeoChat, !selectedPeer.isGroup else { return nil }
