@@ -45,6 +45,10 @@ struct BitchatApp: App {
                 .onAppear {
                     appDelegate.runtime = runtime
                     runtime.start()
+                    // No-op on macOS / devices without alternate-icon support;
+                    // kept outside `#if os(iOS)` so the macOS Periphery scan
+                    // sees the launch-time apply path.
+                    AlternateAppIconSettings.applyStoredPreference()
                 }
                 .onOpenURL { url in
                     runtime.handleOpenURL(url)
