@@ -312,7 +312,60 @@ struct BinaryProtocolTests {
         
         #expect(decodedPacket.payload == largePayload)
     }
-    
+
+    /// Verification re-encodes the packet, so a re-encode must reproduce the
+    /// originator's bytes. Android compresses with java.util.zip.Deflater, which
+    /// need not match Apple's compression_encode_buffer byte for byte.
+    ///
+    /// The payload is wrapped in a raw-DEFLATE "stored" block (BTYPE=00): valid, it
+    /// inflates correctly, and no compressor would emit it, so it stands in for a
+    /// foreign encoder without a second library.
+    @Test("Re-encoding preserves a foreign encoder's compressed payload")
+    func reEncodePreservesForeignCompressedPayload() throws {
+        let payload = Data(String(repeating: "the mesh is up near the north gate. relay running all evening. ",
+                                  count: 4).utf8)
+
+        // Raw DEFLATE stored block: BFINAL=1 BTYPE=00, then LEN and NLEN little-endian.
+        let len = UInt16(payload.count)
+        let nlen = ~len
+        var stored = Data([0x01])
+        stored.append(UInt8(len & 0xFF))
+        stored.append(UInt8(len >> 8))
+        stored.append(UInt8(nlen & 0xFF))
+        stored.append(UInt8(nlen >> 8))
+        stored.append(payload)
+
+        let senderID = Data([0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88])
+        let timestamp: UInt64 = 1_709_600_000_000
+        let payloadLength = UInt32(stored.count + 4) // payload + originalSize field
+
+        var raw = Data()
+        raw.append(2) // version = 2
+        raw.append(1) // type
+        raw.append(5) // ttl
+        for shift in stride(from: 56, through: 0, by: -8) {
+            raw.append(UInt8((timestamp >> UInt64(shift)) & 0xFF))
+        }
+        raw.append(BinaryProtocol.Flags.isCompressed) // flags
+        for shift in stride(from: 24, through: 0, by: -8) {
+            raw.append(UInt8((payloadLength >> UInt32(shift)) & 0xFF))
+        }
+        raw.append(senderID)
+        for shift in stride(from: 24, through: 0, by: -8) {
+            raw.append(UInt8((UInt32(payload.count) >> UInt32(shift)) & 0xFF))
+        }
+        raw.append(stored)
+
+        let decoded = try #require(BinaryProtocol.decode(raw), "Foreign-encoded frame must decode")
+        #expect(decoded.payload == payload, "Payload must inflate to the original")
+
+        // Compared unpadded so the result does not depend on how padding is generated.
+        let reEncoded = try #require(BinaryProtocol.encode(decoded, padding: false),
+                                     "Re-encode must succeed")
+        #expect(reEncoded == raw,
+                "Re-encode must reproduce the originator's bytes, or a valid signature stops verifying")
+    }
+
     @Test("Small payloads should not be compressed")
     func smallPayloadNoCompression() throws {
         let smallPayload = Data("Hi".utf8)

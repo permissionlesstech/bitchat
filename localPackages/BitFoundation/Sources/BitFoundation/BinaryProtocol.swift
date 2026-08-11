@@ -137,7 +137,16 @@ public struct BinaryProtocol {
         var payload = packet.payload
         var isCompressed = false
         var originalPayloadSize: Int?
-        if CompressionUtil.shouldCompress(payload) {
+        // Re-encode of a decoded packet: reuse the originator's bytes (see WirePayload).
+        if let wire = packet.wirePayload, wire.forPayload == packet.payload {
+            if wire.compressed {
+                payload = wire.bytes
+                originalPayloadSize = packet.payload.count
+                isCompressed = true
+            }
+            // Uncompressed on the wire: keep it that way. shouldCompress agrees across
+            // clients, but the "only if smaller" check need not.
+        } else if CompressionUtil.shouldCompress(payload) {
             // Only compress when we can represent the original length in the outbound frame
             let maxRepresentable = version == 2 ? Int(UInt32.max) : Int(UInt16.max)
             if payload.count <= maxRepresentable,
@@ -356,6 +365,8 @@ public struct BinaryProtocol {
 
             // Payload: payloadLength is exactly the payload size (+ compression preamble if compressed)
             let payload: Data
+            // Kept so the packet can be re-encoded byte-identically (see WirePayload).
+            var receivedCompressed: Data? = nil
             if isCompressed {
                 guard payloadLength >= lengthFieldBytes else { return nil }
                 let originalSize: Int
@@ -379,6 +390,7 @@ public struct BinaryProtocol {
                 guard let decompressed = CompressionUtil.decompress(compressed, originalSize: originalSize),
                       decompressed.count == originalSize else { return nil }
                 payload = decompressed
+                receivedCompressed = compressed
             } else {
                 guard let rawPayload = readData(payloadLength) else { return nil }
                 payload = rawPayload
@@ -402,7 +414,12 @@ public struct BinaryProtocol {
                 ttl: ttl,
                 version: version,
                 route: route,
-                isRSR: isRSR
+                isRSR: isRSR,
+                wirePayload: WirePayload(
+                    bytes: receivedCompressed ?? payload,
+                    compressed: receivedCompressed != nil,
+                    forPayload: payload
+                )
             )
         }
     }
