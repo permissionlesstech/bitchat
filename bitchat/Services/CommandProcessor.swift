@@ -368,7 +368,7 @@ final class CommandProcessor {
                 return .success(message: String(format: String(localized: "command.block.already", defaultValue: "%@ is already blocked", comment: "Reply when /block targets an already-blocked nickname"), locale: .current, nickname))
             }
             identityManager.setNostrBlocked(pub, isBlocked: true)
-            return .success(message: String(format: String(localized: "command.block.done_geo", defaultValue: "blocked %@ in geohash chats", comment: "Confirmation after blocking a geohash participant"), locale: .current, nickname))
+            return .success(message: String(format: String(localized: "command.block.done_geo", defaultValue: "blocked %@ in this geohash channel — in other geohash channels they appear as someone new, so block them there too if needed", comment: "Confirmation after blocking a geohash participant; says the block is per-channel because identities differ per geohash"), locale: .current, nickname))
         }
         
         return .error(message: String(format: String(localized: "command.block.failed", defaultValue: "cannot block %@: not found or unable to verify identity", comment: "Error when /block can't resolve or verify the target"), locale: .current, nickname))

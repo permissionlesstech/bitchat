@@ -469,6 +469,21 @@ struct ChatViewModelServiceLifecycleTests {
     }
 
     @Test @MainActor
+    func favoriteConsentDefaultsToUnacknowledgedAndResets() {
+        let suite = "FavoriteConsentTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        // The first star must ask: it notifies the peer and shares the
+        // nostr key, and a wiped device must ask again.
+        #expect(!FavoriteConsent.isAcknowledged(in: defaults))
+        FavoriteConsent.acknowledge(in: defaults)
+        #expect(FavoriteConsent.isAcknowledged(in: defaults))
+        FavoriteConsent.reset(in: defaults)
+        #expect(!FavoriteConsent.isAcknowledged(in: defaults))
+    }
+
+    @Test @MainActor
     func readReceiptSettingDefaultsToOnAndResets() {
         let suite = "ReadReceiptSettingsTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
