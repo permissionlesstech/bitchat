@@ -368,8 +368,44 @@ final class MessageFormattingEngine {
             allMatches.append(ContentMatch(range: match.range(at: 0), type: .lnurl))
         }
 
-        // Sort by position
-        return allMatches.sorted { $0.range.location < $1.range.location }
+        // The per-type checks above only guard specific known pairs (e.g.
+        // bolt11/lnurl against url/lightning) -- they don't cover every
+        // combination, so an ordinary message can still produce overlapping
+        // matches of two OTHER types the checks never compared (e.g. a URL
+        // whose path embeds a "cashuA..."-shaped token). Resolve any
+        // remaining overlap before handing matches to a rendering pass.
+        return resolveOverlappingMatches(allMatches) { $0.range }
+    }
+
+    /// Sorts matches by start position and greedily keeps only non-overlapping
+    /// ones, dropping any later match whose start falls inside an
+    /// already-kept match's range. Rendering passes that consume the result
+    /// (here and in `ChatMessageFormatter`, which has its own copy of the
+    /// match-collection logic above) assume non-overlapping,
+    /// strictly-increasing ranges; without this resolution a nested match
+    /// re-renders already-shown text and can walk the render cursor
+    /// backwards, duplicating a trailing slice of content a second time.
+    ///
+    /// Ties break by start position only, not length: whichever match starts
+    /// first wins outright, so an outer match (e.g. a URL) always keeps
+    /// priority over a shorter match nested inside it (e.g. an embedded cashu
+    /// token) rather than the other way around. That's intentional for
+    /// rendering — flip it to prefer the inner match only with a matching
+    /// change to how callers render the dropped outer span.
+    static func resolveOverlappingMatches<Match>(
+        _ matches: [Match],
+        range: (Match) -> NSRange
+    ) -> [Match] {
+        let sorted = matches.sorted { range($0).location < range($1).location }
+        var resolved: [Match] = []
+        var occupiedUntil = 0
+        for match in sorted {
+            let matchRange = range(match)
+            guard matchRange.location >= occupiedUntil else { continue }
+            resolved.append(match)
+            occupiedUntil = matchRange.location + matchRange.length
+        }
+        return resolved
     }
 
     private static func formatPlainContent(_ content: String, baseColor: Color, isSelf: Bool) -> AttributedString {
