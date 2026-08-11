@@ -46,6 +46,19 @@ private final class MockChatPeerIdentityContext: ChatPeerIdentityContext {
         unreadPrivateMessages.remove(peerID)
     }
 
+    func markPrivateChatUnread(_ peerID: PeerID) {
+        unreadPrivateMessages.insert(peerID)
+    }
+
+    @discardableResult
+    func appendPrivateMessage(_ message: BitchatMessage, to peerID: PeerID) -> Bool {
+        var chat = privateChats[peerID] ?? []
+        guard !chat.contains(where: { $0.id == message.id }) else { return false }
+        chat.append(message)
+        privateChats[peerID] = chat
+        return true
+    }
+
     func migratePrivateChat(from oldPeerID: PeerID, to newPeerID: PeerID) {
         migratedChats.append((oldPeerID, newPeerID))
         guard oldPeerID != newPeerID, let source = privateChats[oldPeerID] else { return }
@@ -358,6 +371,73 @@ struct ChatPeerIdentityCoordinatorContextTests {
         coordinator.updateEncryptionStatus(for: peerID)
         #expect(context.encryptionStatuses[peerID] == .noiseVerified)
         #expect(context.cachedEncryptionStatuses[peerID] == nil)
+    }
+
+    @Test @MainActor
+    func migrateNoiseKeyUpdate_warnsThatIdentityChanged() async {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        let oldPeerID = PeerID(str: "1111111111111111")
+        let newPeerID = PeerID(str: "2222222222222222")
+        context.nicknamesByPeerID[newPeerID] = "alice"
+        context.privateChats[oldPeerID] = [makePrivateMessage(id: "m1", timestamp: Date(timeIntervalSince1970: 1))]
+
+        coordinator.migrateNoiseKeyUpdate(oldPeerID: oldPeerID, newPeerID: newPeerID)
+
+        // The thread migrated AND says out loud that the identity changed:
+        // earlier verification is bound to the old fingerprint, and silence
+        // would let whoever holds the new key inherit the earned trust.
+        let migrated = context.privateChats[newPeerID] ?? []
+        #expect(migrated.contains { $0.id == "m1" })
+        let notice = migrated.last
+        #expect(notice?.sender == "system")
+        #expect(notice?.content.contains("identity key changed") == true)
+        #expect(notice?.content.contains("alice") == true)
+        #expect(context.privateChats[oldPeerID] == nil)
+        // A background security event must surface via the unread indicator.
+        #expect(context.unreadPrivateMessages.contains(newPeerID))
+    }
+
+    @Test @MainActor
+    func migrateNoiseKeyUpdate_namesOfflineFavoritesFromTheRelationship() async {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        let oldPeerID = PeerID(str: "5555555555555555")
+        let newKey = Data(repeating: 0xCD, count: 32)
+        let newPeerID = PeerID(hexData: newKey)
+        // Offline key rotation: no mesh nickname, no social identity for the
+        // unverified new fingerprint — only the favorite relationship knows
+        // who this is.
+        context.favoriteRelationshipsByNoiseKey[newKey] = FavoritesPersistenceService.FavoriteRelationship(
+            peerNoisePublicKey: newKey,
+            peerNostrPublicKey: nil,
+            peerNickname: "carol",
+            isFavorite: true,
+            theyFavoritedUs: true,
+            favoritedAt: Date(timeIntervalSince1970: 0),
+            lastUpdated: Date(timeIntervalSince1970: 0)
+        )
+        context.privateChats[oldPeerID] = [makePrivateMessage(id: "m2", timestamp: Date(timeIntervalSince1970: 1))]
+
+        coordinator.migrateNoiseKeyUpdate(oldPeerID: oldPeerID, newPeerID: newPeerID)
+
+        let notice = (context.privateChats[newPeerID] ?? []).last
+        #expect(notice?.content.contains("carol") == true)
+    }
+
+    @Test @MainActor
+    func migrateNoiseKeyUpdate_staysQuietWithNoConversationToProtect() async {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+
+        coordinator.migrateNoiseKeyUpdate(
+            oldPeerID: PeerID(str: "3333333333333333"),
+            newPeerID: PeerID(str: "4444444444444444")
+        )
+
+        // No selected chat and no messages: a warning would create a
+        // conversation out of nothing for a favorite never chatted with.
+        #expect(context.privateChats.isEmpty)
     }
 
     @Test @MainActor

@@ -15997,6 +15997,192 @@
         }
       }
     },
+    "system.identity.key_changed" : {
+      "comment" : "Private-chat system warning after a peer's Noise identity key changed; placeholder is the peer's name",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تغيّر مفتاح هوية %@ — قد يعني هذا جهازًا جديدًا أو إعادة ضبط. لم يعد التحقق السابق ساريًا؛ تحقّق من هويته مجددًا قبل الوثوق بهذه المحادثة."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@-এর পরিচয় চাবি বদলে গেছে — এর মানে নতুন ডিভাইস বা রিসেট হতে পারে। আগের যাচাই আর প্রযোজ্য নয়; এই চ্যাটে ভরসা করার আগে তাকে আবার যাচাই করে নাও।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "der identitätsschlüssel von %@ hat sich geändert — das kann ein neues gerät oder ein reset bedeuten. frühere verifizierung gilt nicht mehr; verifiziere die person erneut, bevor du diesem chat vertraust."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@'s identity key changed — this can mean a new device or a reset. earlier verification no longer applies; verify them again before trusting this chat."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "la clave de identidad de %@ cambió — puede significar un dispositivo nuevo o un restablecimiento. la verificación anterior ya no vale; verifica de nuevo su identidad antes de confiar en este chat."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "کلید هویت %@ تغییر کرده — این می‌تواند به معنی دستگاه جدید یا بازنشانی باشد. تأیید قبلی دیگر معتبر نیست؛ پیش از اعتماد به این گفتگو دوباره هویتش را تأیید کن."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nagbago ang identity key ni %@ — puwedeng ibig sabihin nito ay bagong device o reset. hindi na umiiral ang dating beripikasyon; i-verify siya ulit bago pagkatiwalaan ang chat na ito."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "la clé d'identité de %@ a changé — cela peut vouloir dire un nouvel appareil ou une réinitialisation. la vérification précédente ne vaut plus ; vérifie à nouveau son identité avant de faire confiance à cette conversation."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מפתח הזהות של %@ השתנה — זה יכול להעיד על מכשיר חדש או איפוס. האימות הקודם כבר לא תקף; כדאי לאמת שוב לפני שסומכים על הצ'אט הזה."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ की पहचान कुंजी बदल गई है — इसका मतलब नया डिवाइस या रीसेट हो सकता है। पहले किया गया सत्यापन अब मान्य नहीं; इस चैट पर भरोसा करने से पहले दोबारा सत्यापित कर लो।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kunci identitas %@ berubah — bisa berarti perangkat baru atau reset. verifikasi sebelumnya tidak berlaku lagi; verifikasi dia lagi sebelum memercayai chat ini."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "la chiave d'identità di %@ è cambiata — può voler dire un nuovo dispositivo o un ripristino. la verifica precedente non vale più; verifica di nuovo la sua identità prima di fidarti di questa chat."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@のアイデンティティキーが変わりました — 新しい端末かリセットの可能性があります。以前の確認はもう有効ではありません。このチャットを信頼する前に、もう一度相手を確認してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@의 신원 키가 변경되었어요 — 새 기기나 초기화일 수 있어요. 이전 확인은 더 이상 유효하지 않으니, 이 채팅을 신뢰하기 전에 상대를 다시 확인해 주세요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kunci identiti %@ berubah — ini mungkin bermaksud peranti baharu atau tetapan semula. pengesahan sebelum ini tidak lagi terpakai; sahkan dia semula sebelum mempercayai sembang ini."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ को पहिचान कुञ्जी परिवर्तन भयो — यसको अर्थ नयाँ डिभाइस वा रिसेट हुन सक्छ। पहिलेको प्रमाणीकरण अब लागू हुँदैन; यो च्याटमा भरोसा गर्नुअघि फेरि प्रमाणित गर।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "de identiteitssleutel van %@ is veranderd — dat kan een nieuw apparaat of een reset betekenen. eerdere verificatie geldt niet meer; verifieer deze persoon opnieuw voordat je deze chat vertrouwt."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "klucz tożsamości %@ się zmienił — to może oznaczać nowe urządzenie albo reset. wcześniejsza weryfikacja już nie obowiązuje; zweryfikuj tę osobę ponownie, zanim zaufasz temu czatowi."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "a chave de identidade de %@ mudou — pode significar um dispositivo novo ou uma reposição. a verificação anterior já não se aplica; verifica outra vez a identidade antes de confiares neste chat."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "a chave de identidade de %@ mudou — pode significar um aparelho novo ou uma redefinição. a verificação anterior não vale mais; verifique de novo antes de confiar neste chat."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ключ идентификации %@ изменился — это может означать новое устройство или сброс. прежняя проверка больше не действует; проверь собеседника заново, прежде чем доверять этому чату."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "identitetsnyckeln för %@ har ändrats — det kan betyda en ny enhet eller en återställning. tidigare verifiering gäller inte längre; verifiera personen igen innan du litar på den här chatten."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ இன் அடையாளச் சாவி மாறிவிட்டது — இது புதிய சாதனம் அல்லது மீட்டமைப்பைக் குறிக்கலாம். முந்தைய சரிபார்ப்பு இனி செல்லாது; இந்த அரட்டையை நம்புவதற்கு முன் அவரை மீண்டும் சரிபார்த்துக்கொள்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "กุญแจยืนยันตัวตนของ %@ เปลี่ยนไป — อาจหมายถึงอุปกรณ์ใหม่หรือการรีเซ็ต การยืนยันก่อนหน้านี้ใช้ไม่ได้อีกต่อไป ยืนยันตัวตนอีกครั้งก่อนไว้ใจแชทนี้"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ adlı kişinin kimlik anahtarı değişti — bu yeni bir cihaz ya da sıfırlama anlamına gelebilir. önceki doğrulama artık geçerli değil; bu sohbete güvenmeden önce onu yeniden doğrula."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ключ ідентичності %@ змінився — це може означати новий пристрій або скидання. попередня перевірка більше не діє; перевір співрозмовника ще раз, перш ніж довіряти цьому чату."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ کی شناختی کلید بدل گئی ہے — اس کا مطلب نیا آلہ یا ری سیٹ ہو سکتا ہے۔ پہلے کی تصدیق اب لاگو نہیں؛ اس چیٹ پر بھروسا کرنے سے پہلے دوبارہ تصدیق کرو۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "khóa định danh của %@ đã thay đổi — có thể là thiết bị mới hoặc do đặt lại. xác minh trước đây không còn hiệu lực; hãy xác minh lại trước khi tin tưởng cuộc trò chuyện này."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 的身份密钥已更改 — 可能是换了新设备或进行了重置。之前的验证不再有效；在信任此聊天之前请重新验证对方。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 的身分金鑰已變更 — 可能是換了新裝置或進行了重設。先前的驗證已不再有效；信任此聊天前請重新驗證對方。"
+          }
+        }
+      }
+    },
     "content.delivery.reason.legacy_media_consent_required" : {
       "comment" : "Failure reason when a legacy private-media send lacks per-send consent",
       "extractionState" : "manual",

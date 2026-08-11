@@ -24,9 +24,16 @@ protocol ChatPeerIdentityContext: AnyObject {
     var unreadPrivateMessages: Set<PeerID> { get }
     /// Clears the peer's unread flag (single-writer store intent).
     func markPrivateChatRead(_ peerID: PeerID)
+    /// Sets the peer's unread flag (shared requirement with the inbound DM
+    /// paths; witness on `ChatViewModel`).
+    func markPrivateChatUnread(_ peerID: PeerID)
     /// Moves all messages from `oldPeerID`'s chat into `newPeerID`'s chat
     /// (dedup by ID, order preserved, unread carried, old chat removed).
     func migratePrivateChat(from oldPeerID: PeerID, to newPeerID: PeerID)
+    /// Appends a private message via the single-writer store intent
+    /// (shared requirement with `ChatLifecycleContext`).
+    @discardableResult
+    func appendPrivateMessage(_ message: BitchatMessage, to peerID: PeerID) -> Bool
     var selectedPrivateChatPeer: PeerID? { get set }
     var selectedPrivateChatFingerprint: String? { get set }
     var myPeerID: PeerID { get }
@@ -578,7 +585,11 @@ private extension ChatPeerIdentityCoordinator {
         // order, carries the unread flag, and removes the old chat.
         context.migratePrivateChat(from: oldPeerID, to: newPeerID)
     }
+}
 
+extension ChatPeerIdentityCoordinator {
+    // Internal (not in the private extension): the identity-changed warning
+    // below is a security behavior the context tests pin directly.
     @MainActor
     func migrateNoiseKeyUpdate(oldPeerID: PeerID, newPeerID: PeerID) {
         // Capture before the migration: the store hands its selection off to
@@ -605,6 +616,44 @@ private extension ChatPeerIdentityCoordinator {
             if context.selectedPrivateChatPeer == newPeerID {
                 context.selectedPrivateChatFingerprint = fingerprint
             }
+        }
+
+        // An identity-key change is a security event, not bookkeeping: any
+        // earlier verification is bound to the OLD fingerprint and no longer
+        // applies, and saying nothing would let whoever holds the new key
+        // inherit the thread's earned trust under the same nickname. Only
+        // warn when there is a conversation to protect.
+        if wasSelected || !context.privateMessages(for: newPeerID).isEmpty {
+            // Offline key rotation is the common case here (a favorite came
+            // back with new keys), and resolveNickname has no mesh nickname
+            // and no social identity for a fingerprint nobody verified yet —
+            // the persisted favorite relationship still knows who this is.
+            let favoriteNickname = newPeerID.noiseKey
+                .flatMap { context.favoriteRelationship(forNoiseKey: $0)?.peerNickname }
+                .flatMap { $0.isEmpty ? nil : $0 }
+            let displayName = favoriteNickname ?? resolveNickname(for: newPeerID)
+            let notice = BitchatMessage(
+                sender: "system",
+                content: String(
+                    format: String(localized: "system.identity.key_changed", defaultValue: "%@'s identity key changed — this can mean a new device or a reset. earlier verification no longer applies; verify them again before trusting this chat.", comment: "Private-chat system warning after a peer's Noise identity key changed; placeholder is the peer's name"),
+                    locale: .current,
+                    displayName
+                ),
+                timestamp: Date(),
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: true,
+                recipientNickname: context.peerNickname(for: newPeerID),
+                senderPeerID: context.myPeerID
+            )
+            context.appendPrivateMessage(notice, to: newPeerID)
+            // A security event nobody is looking at must not stay silent:
+            // surface it through the unread indicator unless the chat is
+            // open right now.
+            if !wasSelected {
+                context.markPrivateChatUnread(newPeerID)
+            }
+            context.notifyUIChanged()
         }
     }
 
