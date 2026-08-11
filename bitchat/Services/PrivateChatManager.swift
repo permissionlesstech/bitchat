@@ -248,9 +248,19 @@ final class PrivateChatManager: ObservableObject {
 
     // MARK: - Private Methods
 
+    /// Injectable so tests assert the gated behavior without racing other
+    /// suites through the shared UserDefaults-backed setting.
+    var sendsReadReceipts: () -> Bool = { ReadReceiptSettings.sendReadReceipts }
+
     private func sendReadReceipt(for message: BitchatMessage) {
         guard !sentReadReceipts.contains(message.id),
               let senderPeerID = message.senderPeerID else {
+            return
+        }
+        // Withheld receipts are still claimed below as sent: re-enabling the
+        // setting must never fire a retroactive burst disclosing past reads.
+        guard sendsReadReceipts() else {
+            sentReadReceipts.insert(message.id)
             return
         }
 
