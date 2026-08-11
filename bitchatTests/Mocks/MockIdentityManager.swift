@@ -70,6 +70,24 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
             blockedFingerprints.remove(fingerprint)
         }
     }
+
+    private var nearbyNotificationMutedFingerprints: Set<String> = []
+
+    func isNearbyNotificationMuted(fingerprint: String) -> Bool {
+        nearbyNotificationMutedFingerprints.contains(fingerprint)
+    }
+
+    func suppressesNearbyNotification(fingerprint: String) -> Bool {
+        isBlocked(fingerprint: fingerprint) || isNearbyNotificationMuted(fingerprint: fingerprint)
+    }
+
+    func setNearbyNotificationMuted(_ fingerprint: String, muted: Bool) {
+        if muted {
+            nearbyNotificationMutedFingerprints.insert(fingerprint)
+        } else {
+            nearbyNotificationMutedFingerprints.remove(fingerprint)
+        }
+    }
     
     func isNostrBlocked(pubkeyHexLowercased: String) -> Bool {
         blockedNostrPubkeys.contains(pubkeyHexLowercased)

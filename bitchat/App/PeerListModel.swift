@@ -8,6 +8,7 @@ struct MeshPeerRow: Identifiable, Equatable {
     let isMe: Bool
     let hasUnread: Bool
     let isBlocked: Bool
+    let isNearbyNotificationMuted: Bool
     let isFavorite: Bool
     let isConnected: Bool
     let isReachable: Bool
@@ -108,6 +109,15 @@ final class PeerListModel: ObservableObject {
 
     func toggleFavorite(peerID: PeerID) {
         chatViewModel.toggleFavorite(peerID: peerID)
+    }
+
+    func toggleNearbyNotificationMute(peerID: PeerID) {
+        let muted = !chatViewModel.isNearbyNotificationMuted(for: peerID)
+        chatViewModel.setNearbyNotificationMuted(for: peerID, muted: muted)
+        // Mute lives on the identity manager — PeerListModel's publishers
+        // do not observe it, so refresh now or the row's bell / menu label
+        // stay stale until some unrelated peer update (#1541 Codex).
+        refresh()
     }
 
     func openGeohashDirectMessage(with pubkeyHex: String) {
@@ -243,6 +253,7 @@ final class PeerListModel: ObservableObject {
                 isMe: isMe,
                 hasUnread: chatViewModel.hasUnreadMessages(for: peer.peerID),
                 isBlocked: !isMe && chatViewModel.isPeerBlocked(peer.peerID),
+                isNearbyNotificationMuted: !isMe && chatViewModel.isNearbyNotificationMuted(for: peer.peerID),
                 isFavorite: peer.favoriteStatus?.isFavorite ?? false,
                 isConnected: peer.isConnected,
                 isReachable: peer.isReachable,
@@ -276,7 +287,7 @@ final class PeerListModel: ObservableObject {
         self.recentChatRows = recentChatRows
         renderID = (
             meshRows.map {
-                "\($0.id)-\($0.displayName)-\($0.isConnected)-\($0.isReachable)-\($0.hasUnread)-\($0.isFavorite)-\($0.isBlocked)"
+                "\($0.id)-\($0.displayName)-\($0.isConnected)-\($0.isReachable)-\($0.hasUnread)-\($0.isFavorite)-\($0.isBlocked)-\($0.isNearbyNotificationMuted)"
             } +
             geohashPeople.map {
                 "geo:\($0.id)-\($0.isTeleported)-\($0.isBlocked)-\($0.displayName)"
