@@ -98,6 +98,9 @@ enum TransportConfig {
     // Reject oversized/untrusted relay frames before JSON parse / store.
     static let nostrMaxInboundMessageBytes: Int = 256 * 1024
     static let nostrMaxEventTags: Int = 64
+    // Sonar sticker packs can carry up to 200 stickers (1 tag each) plus
+    // metadata, so kind 30031/10031 events get a higher inbound tag cap.
+    static let nostrMaxStickerPackEventTags: Int = 220
     static let nostrMaxEventTagValues: Int = 16
     static let nostrMaxEventTagValueBytes: Int = 1024
     // Bounded per-relay inbound frame buffer. Each relay connection owns its
