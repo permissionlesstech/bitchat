@@ -168,7 +168,11 @@ extension ChatViewModel: ChatPrivateConversationContext {
 
     @discardableResult
     func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool {
-        messageRouter.sendReadReceipt(receipt, to: peerID)
+        // Withheld receipts report success so callers record them as sent:
+        // re-enabling the setting must never fire a retroactive burst that
+        // discloses past reading activity.
+        guard sendsReadReceipts() else { return true }
+        return messageRouter.sendReadReceipt(receipt, to: peerID)
     }
 
     @discardableResult
@@ -181,6 +185,7 @@ extension ChatViewModel: ChatPrivateConversationContext {
     }
 
     func sendMeshReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
+        guard sendsReadReceipts() else { return }
         meshService.sendReadReceipt(receipt, to: peerID)
     }
 
@@ -198,6 +203,7 @@ extension ChatViewModel: ChatPrivateConversationContext {
     }
 
     func sendGeohashReadReceipt(_ messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity) {
+        guard sendsReadReceipts() else { return }
         makeGeohashNostrTransport().sendReadReceiptGeohash(messageID, toRecipientHex: recipientHex, from: identity)
     }
 

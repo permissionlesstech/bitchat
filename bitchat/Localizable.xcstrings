@@ -15253,6 +15253,378 @@
         }
       }
     },
+    "app_info.settings.read_receipts.subtitle" : {
+      "comment" : "Subtitle explaining what the read-receipt setting shares and what turning it off withholds",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يتيح للآخرين معرفة متى قرأت رسائلهم الخاصة. الإيصال يكشف أيضًا أنك كنت مستيقظًا وفتحت التطبيق في تلك اللحظة — أوقف هذا الخيار لتُبقي نشاط قراءتك لنفسك. ستظل ترى الإيصالات التي يرسلها الآخرون."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "অন্যরা দেখতে পাবে আপনি কখন তাদের ব্যক্তিগত মেসেজ পড়েছেন। রসিদটি এটাও জানিয়ে দেয় যে সেই মুহূর্তে আপনি জেগে ছিলেন এবং অ্যাপটি খুলেছিলেন — আপনার পড়ার তথ্য নিজের কাছে রাখতে এটি বন্ধ করুন। অন্যরা যে রসিদ পাঠায় তা আপনি তবুও দেখতে পাবেন।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lässt andere sehen, wann du ihre privaten nachrichten gelesen hast. eine bestätigung verrät auch, dass du in dem moment wach warst und die app geöffnet hast — schalte das aus, um deine leseaktivität für dich zu behalten. bestätigungen von anderen siehst du weiterhin."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lets people see when you've read their private messages. a receipt also says you were awake and opened the app at that moment — turn this off to keep your reading activity to yourself. you'll still see receipts others send."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "permite que los demás vean cuándo has leído sus mensajes privados. una confirmación también revela que no estabas durmiendo y abriste la app en ese momento — desactívalo para guardarte tu actividad de lectura. seguirás viendo las confirmaciones que envíen los demás."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "به دیگران اجازه می‌دهد ببینند کی پیام‌های خصوصی‌شان را خوانده‌ای. رسید همچنین لو می‌دهد که در آن لحظه بیدار بوده‌ای و برنامه را باز کرده‌ای — برای اینکه فعالیت خواندنت را برای خودت نگه داری، این را خاموش کن. رسیدهایی را که دیگران می‌فرستند همچنان می‌بینی."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hinahayaan ang ibang tao na makita kung kailan mo nabasa ang kanilang mga pribadong mensahe. sinasabi rin ng receipt na gising ka at binuksan mo ang app sa sandaling iyon — i-off ito para sa iyo lang ang iyong pagbabasa. makikita mo pa rin ang mga receipt na ipinapadala ng iba."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "permet aux autres de voir quand tu as lu leurs messages privés. une confirmation révèle aussi que tu ne dormais pas et que tu as ouvert l'app à ce moment-là — désactive cette option pour garder ton activité de lecture pour toi. tu verras toujours les confirmations envoyées par les autres."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מאפשר לאחרים לראות מתי קראת את ההודעות הפרטיות שלהם. האישור גם מגלה שלא ישנת ושפתחת את האפליקציה באותו רגע — אפשר לכבות את זה כדי לשמור את פעילות הקריאה לעצמך. אישורים שאחרים שולחים עדיין יופיעו אצלך."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "इससे लोग देख पाते हैं कि आपने उनके निजी मैसेज कब पढ़े। रसीद यह भी बता देती है कि उस पल आप जागे हुए थे और आपने ऐप खोला था — अपनी पढ़ने की गतिविधि अपने तक रखने के लिए इसे बंद करें। दूसरों की भेजी रसीदें आपको फिर भी दिखेंगी।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "memungkinkan orang lain melihat kapan kamu membaca pesan pribadi mereka. laporan ini juga menandakan bahwa kamu sedang terjaga dan membuka aplikasi saat itu — matikan untuk menyimpan aktivitas membacamu untuk dirimu sendiri. kamu tetap akan melihat laporan dibaca yang dikirim orang lain."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "permette agli altri di vedere quando hai letto i loro messaggi privati. una conferma rivela anche che in quel momento non stavi dormendo e hai aperto l'app — disattivala per tenere per te la tua attività di lettura. continuerai a vedere le conferme inviate dagli altri."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "相手のプライベートメッセージをいつ読んだかが相手にわかるようになります。既読通知は、その瞬間に起きていてアプリを開いていたことも伝えてしまいます。オフにすれば、読んだかどうかを自分だけの秘密にできます。オフにしても、ほかの人が送る既読通知は引き続き表示されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "내가 개인 메시지를 언제 읽었는지 상대가 알 수 있어요. 읽음 확인은 그 순간 깨어 있었고 앱을 열었다는 것까지 알려줘요 — 읽은 기록을 나만 알고 싶다면 꺼 두세요. 꺼도 다른 사람이 보내는 읽음 확인은 계속 보여요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "membenarkan orang lain melihat bila kamu membaca mesej peribadi mereka. resit itu juga menunjukkan yang kamu sedang berjaga dan membuka aplikasi pada saat itu — matikannya untuk menyimpan aktiviti pembacaan untuk diri sendiri. kamu tetap akan nampak resit yang dihantar orang lain."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "यसले अरूलाई तपाईंले उनीहरूका निजी सन्देश कहिले पढ्नुभयो भन्ने देखाउँछ। रसिदले त्यस क्षण तपाईं ब्युँझिरहनुभएको र एप खोल्नुभएको कुरा पनि बताउँछ — आफ्नो पढाइ आफैसँग राख्न यसलाई बन्द गर्नुहोस्। अरूले पठाएका रसिदहरू भने तपाईंले अझै देख्नुहुनेछ।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "laat anderen zien wanneer je hun privéberichten hebt gelezen. een bevestiging verraadt ook dat je op dat moment wakker was en de app had geopend — zet dit uit om je leesactiviteit voor jezelf te houden. bevestigingen van anderen blijf je gewoon zien."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pozwala innym widzieć, kiedy przeczytasz ich prywatne wiadomości. potwierdzenie zdradza też, że w danym momencie nie śpisz i masz otwartą aplikację — wyłącz to, aby zachować swoje czytanie dla siebie. potwierdzenia od innych nadal będziesz widzieć."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "permite que as outras pessoas vejam quando leste as mensagens privadas delas. uma confirmação também revela que não estavas a dormir e que abriste a app nesse momento — desativa isto para guardares a tua atividade de leitura para ti. continuas a ver as confirmações que os outros enviam."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "permite que as pessoas vejam quando você leu as mensagens privadas delas. uma confirmação também revela que você não estava dormindo e abriu o app naquele momento — desative para manter sua atividade de leitura só com você. você continua vendo as confirmações que os outros enviam."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "другие смогут видеть, когда ты читаешь их личные сообщения. отчёт заодно выдаёт, что в этот момент ты не спишь и у тебя открыто приложение — выключи, чтобы оставить свою активность чтения при себе. отчёты от других ты всё равно будешь видеть."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "låter andra se när du har läst deras privata meddelanden. ett läskvitto avslöjar också att du var vaken och öppnade appen just då — stäng av det här för att hålla din läsaktivitet för dig själv. du ser fortfarande kvitton som andra skickar."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "நீங்கள் அவர்களின் தனிப்பட்ட செய்திகளை எப்போது படித்தீர்கள் என்பதை மற்றவர்கள் பார்க்க முடியும். அந்த நேரத்தில் நீங்கள் விழித்திருந்து ஆப்பைத் திறந்தீர்கள் என்பதையும் ரசீது வெளிப்படுத்தும் — உங்கள் படிக்கும் செயல்பாட்டை உங்களிடமே வைத்திருக்க இதை அணைக்கவும். மற்றவர்கள் அனுப்பும் ரசீதுகளை நீங்கள் தொடர்ந்து பார்ப்பீர்கள்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ให้คนอื่นเห็นว่าคุณอ่านข้อความส่วนตัวของพวกเขาเมื่อไหร่ รายงานนี้ยังบอกด้วยว่าตอนนั้นคุณตื่นอยู่และเปิดแอปอยู่ — ปิดไว้ถ้าอยากเก็บเรื่องการอ่านไว้กับตัวเอง คุณจะยังเห็นรายงานการอ่านที่คนอื่นส่งมาเหมือนเดิม"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "insanların özel mesajlarını ne zaman okuduğunu görmesine izin verir. okundu bilgisi ayrıca o an uyanık olduğunu ve uygulamayı açtığını da ele verir — okuma etkinliğini kendine saklamak için bunu kapat. başkalarının gönderdiği okundu bilgilerini yine de görürsün."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "інші бачитимуть, коли ти читаєш їхні особисті повідомлення. звіт також видає, що тієї миті ти не спиш і в тебе відкритий застосунок — вимкни, щоб залишити свою активність читання при собі. звіти від інших ти все одно бачитимеш."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اس سے لوگ دیکھ سکتے ہیں کہ آپ نے ان کے نجی پیغامات کب پڑھے۔ رسید یہ بھی بتا دیتی ہے کہ اس لمحے آپ جاگ رہے تھے اور ایپ کھولی تھی — اپنی پڑھنے کی سرگرمی اپنے تک رکھنے کے لیے اسے بند کر دیں۔ دوسروں کی بھیجی ہوئی رسیدیں آپ کو پھر بھی نظر آئیں گی۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cho người khác thấy khi nào bạn đã đọc tin nhắn riêng của họ. xác nhận này cũng tiết lộ rằng lúc đó bạn đang thức và mở ứng dụng — tắt đi để giữ chuyện đọc tin cho riêng mình. bạn vẫn thấy xác nhận mà người khác gửi."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "让别人看到你何时读过他们的私信。回执还会透露你在那一刻醒着并打开了应用——关闭后可以把你的阅读动态留给自己。别人发来的已读回执你仍然可以看到。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "讓別人看到你何時讀過他們的私訊。回執也會透露你在那一刻醒著並開啟了應用程式——關閉後可將你的閱讀動態留給自己。別人傳來的已讀回執你仍然看得到。"
+          }
+        }
+      }
+    },
+    "app_info.settings.read_receipts.title" : {
+      "comment" : "Title of the setting that controls whether read receipts are sent for private messages",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إرسال إيصالات القراءة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "পঠিত রসিদ পাঠান"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lesebestätigungen senden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "send read receipts"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "enviar confirmaciones de lectura"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ارسال رسید خواندن"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "magpadala ng mga read receipt"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "envoyer des confirmations de lecture"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שליחת אישורי קריאה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पठन रसीदें भेजें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kirim laporan dibaca"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "invia conferme di lettura"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "既読通知を送信"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "읽음 확인 보내기"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hantar resit dibaca"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पढेको रसिद पठाउनुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "leesbevestigingen versturen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wysyłaj potwierdzenia odczytu"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "enviar confirmações de leitura"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "enviar confirmações de leitura"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "отправлять отчёты о прочтении"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "skicka läskvitton"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "படித்ததற்கான ரசீதுகளை அனுப்பு"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ส่งรายงานการอ่าน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "okundu bilgisi gönder"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "надсилати звіти про прочитання"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پڑھنے کی رسیدیں بھیجیں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gửi xác nhận đã đọc"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发送已读回执"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "傳送已讀回執"
+          }
+        }
+      }
+    },
     "content.delivery.reason.legacy_media_consent_required" : {
       "comment" : "Failure reason when a legacy private-media send lacks per-send consent",
       "extractionState" : "manual",

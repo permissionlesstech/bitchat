@@ -464,6 +464,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         return scratch
     }
 
+    /// Whether this device sends read receipts. Injectable so tests assert
+    /// the gated behavior without racing other suites through the shared
+    /// UserDefaults-backed setting.
+    var sendsReadReceipts: () -> Bool = { ReadReceiptSettings.sendReadReceipts }
+
     // Track sent read receipts to avoid duplicates (persisted across launches)
     // Note: Persistence happens automatically in didSet, no lifecycle observers needed
     var sentReadReceipts: Set<String> = [] {  // messageID set
@@ -1641,6 +1646,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         MeshSightingsTracker.shared.clear()
         MeshEchoSettings.reset()
         NotificationPrivacySettings.reset()
+        ReadReceiptSettings.reset()
         // A hand-added relay names an operator someone chose to route through,
         // which is the kind of trace a wipe should not leave behind.
         NostrRelaySettings.reset()

@@ -22,6 +22,7 @@ struct AppInfoView: View {
     @State private var liveVoiceEnabled = PTTSettings.liveVoiceEnabled
     @State private var locationNotesEnabled = LocationNotesSettings.enabled
     @State private var hideMessagePreviews = NotificationPrivacySettings.hideMessagePreviews
+    @State private var sendReadReceipts = ReadReceiptSettings.sendReadReceipts
     @State private var customRelays = NostrRelaySettings.customRelays()
     @State private var relayInput = ""
     @State private var relayError: String?
@@ -117,6 +118,8 @@ struct AppInfoView: View {
             static let privacyTitle = String(localized: "app_info.settings.privacy.title", defaultValue: "PRIVACY", comment: "Section header (uppercase) for privacy settings such as hiding notification previews")
             static let hidePreviewsTitle = String(localized: "app_info.settings.hide_previews.title", defaultValue: "hide message previews", comment: "Title of the setting that keeps message text, sender names, and geohashes out of lock-screen notifications")
             static let hidePreviewsSubtitle = String(localized: "app_info.settings.hide_previews.subtitle", defaultValue: "notifications say that something arrived without showing the message, who sent it, or which location channel it came from. anyone holding your locked phone learns nothing from the lock screen. on by default.", comment: "Subtitle explaining what hiding notification message previews does")
+            static let readReceiptsTitle = String(localized: "app_info.settings.read_receipts.title", defaultValue: "send read receipts", comment: "Title of the setting that controls whether read receipts are sent for private messages")
+            static let readReceiptsSubtitle = String(localized: "app_info.settings.read_receipts.subtitle", defaultValue: "lets people see when you've read their private messages. a receipt also says you were awake and opened the app at that moment — turn this off to keep your reading activity to yourself. you'll still see receipts others send.", comment: "Subtitle explaining what the read-receipt setting shares and what turning it off withholds")
 
             static let dangerTitle = String(localized: "app_info.settings.danger.title", defaultValue: "DANGER ZONE", comment: "Section header (uppercase) for destructive actions in settings")
             static let panicButton = String(localized: "app_info.settings.danger.panic_button", defaultValue: "panic wipe", comment: "Button in the settings danger zone that erases all local data after confirmation")
@@ -537,6 +540,20 @@ struct AppInfoView: View {
                             set: { newValue in
                                 hideMessagePreviews = newValue
                                 NotificationPrivacySettings.hideMessagePreviews = newValue
+                            }
+                        )
+                    )
+                }
+
+                settingsCard {
+                    settingToggle(
+                        title: Text(verbatim: Strings.Settings.readReceiptsTitle),
+                        subtitle: Text(verbatim: Strings.Settings.readReceiptsSubtitle),
+                        isOn: Binding(
+                            get: { sendReadReceipts },
+                            set: { newValue in
+                                sendReadReceipts = newValue
+                                ReadReceiptSettings.sendReadReceipts = newValue
                             }
                         )
                     )
