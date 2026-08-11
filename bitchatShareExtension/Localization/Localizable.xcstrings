@@ -93,7 +93,7 @@
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "공유 링크",
             "comment" : "Fallback title when saving a shared link"
           }
