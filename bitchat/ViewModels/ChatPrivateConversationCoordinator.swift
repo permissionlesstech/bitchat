@@ -548,8 +548,14 @@ final class ChatPrivateConversationCoordinator {
 
         let isViewing = context.selectedPrivateChatPeer == conversationPeerID
         let wasReadBefore = context.sentReadReceipts.contains(messageId)
+        // Recency gates only the notification. A DM sent while the app was
+        // closed reaches this path through the gift-wrap lookback long after
+        // it was sent, so gating the badge on recency left the conversation
+        // looking read and the message findable only by opening that chat.
+        // The mesh overload below marks unread whenever the chat is not on
+        // screen, with no recency test at all.
         let isRecentMessage = Date().timeIntervalSince(messageTimestamp) < 30
-        let shouldMarkUnread = !wasReadBefore && !isViewing && isRecentMessage
+        let shouldMarkUnread = !wasReadBefore && !isViewing
         if shouldMarkUnread {
             context.markPrivateChatUnread(conversationPeerID)
         }
@@ -558,7 +564,7 @@ final class ChatPrivateConversationCoordinator {
             sendReadReceiptIfNeeded(to: messageId, senderPubKey: senderPubkey, from: id)
         }
 
-        if !isViewing && shouldMarkUnread {
+        if shouldMarkUnread && isRecentMessage {
             context.notifyPrivateMessage(from: senderName, message: pm.content, peerID: conversationPeerID)
         }
 
