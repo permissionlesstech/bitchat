@@ -1591,6 +1591,9 @@ struct ChatViewModelPrivateMediaDeletionTests {
             kind: .canceled
         ))
         let coordinator = viewModel.liveVoiceCoordinator
+        // The live-voice preference defaults OFF now; this fixture exercises
+        // the opted-in live path.
+        coordinator.liveVoiceEnabled = { true }
         defer {
             coordinator.handleVoiceFramePayload(
                 from: peerID,

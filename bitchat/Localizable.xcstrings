@@ -15625,6 +15625,378 @@
         }
       }
     },
+    "voice.hud.release_to_cancel" : {
+      "comment" : "Recording HUD label while the finger has slid off the mic button; releasing now discards the recording",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ارفع إصبعك للإلغاء"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "বাতিল করতে ছেড়ে দাও"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "loslassen zum abbrechen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "release to cancel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "suelta para cancelar"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "برای لغو رها کن"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitawan para kanselahin"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "relâche pour annuler"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שחרור לביטול"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "रद्द करने के लिए छोड़ दो"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lepas untuk membatalkan"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "rilascia per annullare"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "離すとキャンセル"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "손을 떼면 취소"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lepaskan untuk batal"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "रद्द गर्न छोड"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "laat los om te annuleren"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "puść, aby anulować"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "solta para cancelar"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "solte para cancelar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "отпусти, чтобы отменить"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "släpp för att avbryta"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ரத்து செய்ய விடு"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ปล่อยเพื่อยกเลิก"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iptal için bırak"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "відпусти, щоб скасувати"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "منسوخ کرنے کے لیے چھوڑ دو"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "thả ra để hủy"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "松开取消"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放開取消"
+          }
+        }
+      }
+    },
+    "voice.hud.slide_to_cancel" : {
+      "comment" : "Recording HUD hint that sliding the finger off the mic button cancels instead of sending",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اسحب بعيدًا للإلغاء"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "বাতিল করতে আঙুল সরাও"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "zum abbrechen wegziehen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "slide away to cancel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "desliza para cancelar"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "برای لغو انگشتت را بکش"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "i-slide palayo para kanselahin"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "glisse pour annuler"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "החלקה הצידה לביטול"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "रद्द करने के लिए दूर खिसकाओ"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "geser menjauh untuk membatalkan"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "scorri via per annullare"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "スライドでキャンセル"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "밀어서 취소"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "leret menjauh untuk batal"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "रद्द गर्न टाढा सार"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "veeg weg om te annuleren"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "przesuń, aby anulować"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "desliza para cancelar"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "deslize para cancelar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "сдвинь, чтобы отменить"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dra bort för att avbryta"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ரத்து செய்ய விலக்கி நகர்த்து"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เลื่อนออกเพื่อยกเลิก"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iptal için kaydır"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "посунь, щоб скасувати"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "منسوخ کرنے کے لیے دور سرکاؤ"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "trượt ra để hủy"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "滑开取消"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "滑開取消"
+          }
+        }
+      }
+    },
     "content.delivery.reason.legacy_media_consent_required" : {
       "comment" : "Failure reason when a legacy private-media send lacks per-send consent",
       "extractionState" : "manual",
@@ -33116,181 +33488,181 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "يُبث أثناء التحدث؛ الصوت المباشر الوارد يُشغَّل تلقائيًا"
+            "value" : "متوقف افتراضيًا. عند تفعيله، يُبث صوتك إلى الآخرين أثناء كلامك — قبل أن ترفع إصبعك — ويُشغَّل الصوت المباشر الوارد بصوت مسموع تلقائيًا."
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "কথা বলার সাথে সাথে স্ট্রিম হয়; আগত লাইভ ভয়েস স্বয়ংক্রিয়ভাবে চলে"
+            "value" : "ডিফল্টভাবে বন্ধ। চালু থাকলে তোমার কণ্ঠ কথা বলার সঙ্গে সঙ্গেই অন্যদের কাছে স্ট্রিম হয় — বোতাম ছাড়ার আগেই — আর আসা লাইভ ভয়েস স্বয়ংক্রিয়ভাবে জোরে বাজে।"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "überträgt live beim sprechen; eingehende live-stimme wird automatisch abgespielt"
+            "value" : "standardmäßig aus. wenn aktiviert, wird deine stimme schon beim sprechen an andere gestreamt — noch bevor du loslässt — und eingehende live-stimmen werden automatisch laut abgespielt."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "streams as you speak; incoming live voice plays automatically"
+            "value" : "off by default. when on, your voice streams to people as you speak — before you release — and incoming live voice plays out loud automatically."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "transmite mientras hablas; la voz en vivo entrante se reproduce automáticamente"
+            "value" : "desactivado por defecto. si lo activas, tu voz se transmite a la gente mientras hablas — antes de soltar — y la voz en directo entrante se reproduce en voz alta automáticamente."
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "همان‌طور که حرف می‌زنی پخش می‌شود؛ صدای زندهٔ دریافتی خودکار پخش می‌شود"
+            "value" : "به‌طور پیش‌فرض خاموش است. وقتی روشن باشد، صدایت همان لحظه که حرف می‌زنی — پیش از رها کردن — برای دیگران پخش می‌شود و صدای زنده‌ی دریافتی هم به‌طور خودکار با صدای بلند پخش می‌شود."
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "nag-i-stream habang nagsasalita ka; awtomatikong tumutugtog ang papasok na live na boses"
+            "value" : "naka-off bilang default. kapag naka-on, naist-stream ang boses mo sa iba habang nagsasalita ka — bago mo pa bitawan — at awtomatikong tumutugtog nang malakas ang papasok na live na boses."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "diffuse pendant que vous parlez ; la voix en direct entrante est lue automatiquement"
+            "value" : "désactivé par défaut. une fois activé, ta voix est diffusée aux autres pendant que tu parles — avant même de relâcher — et la voix en direct reçue est lue à voix haute automatiquement."
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "משדר בזמן שאתה מדבר; קול חי נכנס מושמע אוטומטית"
+            "value" : "כבוי כברירת מחדל. כשהוא פועל, הקול שלך משודר לאחרים תוך כדי דיבור — עוד לפני שחרור הכפתור — וקול חי נכנס מושמע בקול רם אוטומטית."
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "बोलते समय स्ट्रीम होता है; आने वाली लाइव आवाज़ अपने आप चलती है"
+            "value" : "डिफ़ॉल्ट रूप से बंद। चालू होने पर तुम्हारी आवाज़ बोलते-बोलते ही लोगों तक स्ट्रीम होती है — बटन छोड़ने से पहले ही — और आने वाली लाइव आवाज़ अपने आप ज़ोर से बजती है।"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "streaming saat Anda berbicara; suara langsung yang masuk diputar otomatis"
+            "value" : "nonaktif secara default. saat aktif, suaramu langsung dialirkan ke orang lain saat kamu bicara — sebelum tombol dilepas — dan suara langsung yang masuk otomatis diputar dengan keras."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "trasmette mentre parli; la voce in diretta in arrivo viene riprodotta automaticamente"
+            "value" : "disattivato per impostazione predefinita. quando è attivo, la tua voce viene trasmessa agli altri mentre parli — prima ancora di rilasciare — e la voce dal vivo in arrivo viene riprodotta ad alta voce automaticamente."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "話しながらライブ配信。受信したライブ音声は自動再生されます"
+            "value" : "デフォルトはオフ。オンにすると、ボタンを離す前から話している声がそのまま相手に配信され、受信したライブ音声は自動的にスピーカーで再生されます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "말하는 동안 실시간 전송됩니다. 수신된 라이브 음성은 자동 재생됩니다"
+            "value" : "기본은 꺼짐. 켜면 버튼에서 손을 떼기 전부터 말하는 동안 목소리가 상대에게 실시간으로 전송되고, 수신된 라이브 음성은 자동으로 소리 내어 재생돼요."
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "strim semasa anda bercakap; suara langsung masuk dimainkan secara automatik"
+            "value" : "dimatikan secara lalai. apabila dihidupkan, suara kamu distrim kepada orang lain semasa kamu bercakap — sebelum kamu lepaskan — dan suara langsung yang masuk dimainkan dengan kuat secara automatik."
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "बोल्दै गर्दा स्ट्रिम हुन्छ; आगमन लाइभ आवाज स्वतः बज्छ"
+            "value" : "पूर्वनिर्धारित रूपमा बन्द। खुला हुँदा तिम्रो आवाज बोल्दै गर्दा नै — बटन छोड्नुअघि नै — अरूसम्म स्ट्रिम हुन्छ, र आएको लाइभ आवाज आफैँ ठूलो स्वरमा बज्छ।"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "streamt terwijl je praat; inkomende live spraak wordt automatisch afgespeeld"
+            "value" : "standaard uit. indien aan wordt je stem al tijdens het praten naar anderen gestreamd — nog vóór je loslaat — en binnenkomende live spraak wordt automatisch hardop afgespeeld."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "przesyła na żywo podczas mówienia; przychodzący głos na żywo odtwarza się automatycznie"
+            "value" : "domyślnie wyłączone. po włączeniu twój głos jest przesyłany innym już w trakcie mówienia — zanim puścisz przycisk — a przychodzący głos na żywo jest automatycznie odtwarzany na głos."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "transmite enquanto fala; a voz ao vivo recebida é reproduzida automaticamente"
+            "value" : "desligado por predefinição. quando ativado, a tua voz é transmitida às outras pessoas enquanto falas — antes de soltares — e a voz em direto recebida é reproduzida em voz alta automaticamente."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "transmite enquanto você fala; a voz ao vivo recebida toca automaticamente"
+            "value" : "desativado por padrão. quando ativado, sua voz é transmitida às pessoas enquanto você fala — antes de soltar — e a voz ao vivo recebida toca em voz alta automaticamente."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "передаёт, пока вы говорите; входящий живой голос воспроизводится автоматически"
+            "value" : "по умолчанию выключено. когда включено, твой голос передаётся другим прямо во время разговора — ещё до того, как ты отпустишь кнопку, — а входящий живой голос автоматически проигрывается вслух."
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "strömmar medan du pratar; inkommande live-röst spelas upp automatiskt"
+            "value" : "av som standard. när det är på strömmas din röst till andra medan du pratar — innan du släpper — och inkommande live-röst spelas automatiskt upp högt."
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "நீங்கள் பேசும்போதே நேரலையாக அனுப்பப்படும்; உள்வரும் நேரலை குரல் தானாக ஒலிக்கும்"
+            "value" : "இயல்பாக முடக்கப்பட்டுள்ளது. இயக்கினால், நீ பேசும்போதே — பொத்தானை விடுவதற்கு முன்பே — உன் குரல் மற்றவர்களுக்கு ஸ்ட்ரீம் ஆகும்; வரும் நேரடி குரல் தானாக சத்தமாக ஒலிக்கும்."
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "สตรีมขณะพูด เสียงสดขาเข้าจะเล่นอัตโนมัติ"
+            "value" : "ปิดไว้เป็นค่าเริ่มต้น เมื่อเปิด เสียงของคุณจะสตรีมถึงคนอื่นระหว่างที่พูด — ก่อนปล่อยปุ่ม — และเสียงสดที่เข้ามาจะเล่นออกลำโพงโดยอัตโนมัติ"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "siz konuşurken canlı iletilir; gelen canlı ses otomatik çalınır"
+            "value" : "varsayılan olarak kapalı. açıkken sesin, sen konuşurken — daha bırakmadan — başkalarına aktarılır ve gelen canlı ses otomatik olarak sesli çalınır."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "передає, поки ви говорите; вхідний живий голос відтворюється автоматично"
+            "value" : "типово вимкнено. коли ввімкнено, твій голос транслюється іншим просто під час розмови — ще до того, як ти відпустиш кнопку, — а вхідний живий голос автоматично відтворюється вголос."
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "بولتے وقت لائیو نشر ہوتا ہے؛ موصول ہونے والی لائیو آواز خود بخود چلتی ہے"
+            "value" : "طے شدہ طور پر بند۔ آن ہونے پر تمہاری آواز بولتے ہی — بٹن چھوڑنے سے پہلے — لوگوں تک اسٹریم ہوتی ہے، اور آنے والی لائیو آواز خودبخود بلند آواز میں چلتی ہے۔"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "phát trực tiếp khi bạn nói; giọng nói trực tiếp đến sẽ tự phát"
+            "value" : "mặc định tắt. khi bật, giọng của bạn được truyền trực tiếp tới mọi người ngay lúc bạn nói — trước cả khi thả tay — và giọng nói trực tiếp nhận được sẽ tự động phát ra loa."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "边说边实时传输；收到的实时语音会自动播放"
+            "value" : "默认关闭。开启后，你说话的同时——还没松开按钮——声音就会实时传给对方，收到的实时语音也会自动外放播放。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "邊說邊即時傳輸；收到的即時語音會自動播放"
+            "value" : "預設關閉。開啟後，你說話的同時——還沒放開按鈕——聲音就會即時傳給對方，收到的即時語音也會自動以擴音播放。"
           }
         }
       }

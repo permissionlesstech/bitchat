@@ -220,7 +220,11 @@ private extension ContentComposerView {
             TimelineView(.periodic(from: .now, by: 0.05)) { context in
                 // Live streaming means audio is heard as you speak — the HUD
                 // must make that unmistakable, not just show a timer.
-                if voiceRecordingVM.isLiveStreaming {
+                if voiceRecordingVM.isCancelArmed {
+                    Text(String(localized: "voice.hud.release_to_cancel", defaultValue: "release to cancel", comment: "Recording HUD label while the finger has slid off the mic button; releasing now discards the recording"))
+                        .bitchatFont(size: 13, weight: .bold)
+                        .foregroundColor(.secondary)
+                } else if voiceRecordingVM.isLiveStreaming {
                     Text(
                         "live \(voiceRecordingVM.formattedDuration(for: context.date))",
                         comment: "Recording HUD label while a voice message streams live to the recipient"
@@ -235,6 +239,12 @@ private extension ContentComposerView {
                     .bitchatFont(size: 13)
                     .foregroundColor(.red)
                 }
+            }
+            if !voiceRecordingVM.isCancelArmed {
+                Text(String(localized: "voice.hud.slide_to_cancel", defaultValue: "slide away to cancel", comment: "Recording HUD hint that sliding the finger off the mic button cancels instead of sending"))
+                    .bitchatFont(size: 11)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
             }
             Spacer()
             Button(action: voiceRecordingVM.cancel) {
@@ -346,11 +356,22 @@ private extension ContentComposerView {
                     .contentShape(Circle())
                     .gesture(
                         DragGesture(minimumDistance: 0)
-                            .onChanged { _ in
+                            .onChanged { value in
                                 voiceRecordingVM.start(shouldShow: conversationUIModel.canSendMediaInCurrentContext)
+                                // Slide-away-to-cancel: release always used to
+                                // send, and the HUD cancel button required
+                                // lifting the finger — which sent. Sliding off
+                                // the button arms cancel; sliding back re-arms
+                                // send.
+                                let distance = hypot(value.translation.width, value.translation.height)
+                                voiceRecordingVM.setCancelArmed(distance > 60)
                             }
                             .onEnded { _ in
-                                voiceRecordingVM.finish(completion: conversationUIModel.sendVoiceNote)
+                                if voiceRecordingVM.isCancelArmed {
+                                    voiceRecordingVM.cancel()
+                                } else {
+                                    voiceRecordingVM.finish(completion: conversationUIModel.sendVoiceNote)
+                                }
                             }
                     )
             )

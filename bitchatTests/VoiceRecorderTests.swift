@@ -453,3 +453,35 @@ struct VoiceRecorderTests {
         #expect(session.activationCalls == [true, false, true, false])
     }
 }
+
+// MARK: - Slide-to-cancel state
+
+/// Pins the slide-away-to-cancel arming semantics on the recording view
+/// model: release used to ALWAYS send (the HUD cancel button required
+/// lifting the finger — which sent), so the armed flag must reset on every
+/// exit path or a stale value could discard a wanted recording.
+struct VoiceRecordingCancelArmingTests {
+
+    @Test @MainActor
+    func cancelArmingTogglesAndResetsOnEveryExitPath() {
+        let vm = VoiceRecordingViewModel()
+        #expect(!vm.isCancelArmed)
+
+        vm.setCancelArmed(true)
+        #expect(vm.isCancelArmed)
+        vm.setCancelArmed(false)
+        #expect(!vm.isCancelArmed)
+
+        vm.setCancelArmed(true)
+        vm.cancel()
+        #expect(!vm.isCancelArmed)
+
+        vm.setCancelArmed(true)
+        vm.finish(completion: nil)
+        #expect(!vm.isCancelArmed)
+
+        vm.setCancelArmed(true)
+        vm.panicWipe()
+        #expect(!vm.isCancelArmed)
+    }
+}
