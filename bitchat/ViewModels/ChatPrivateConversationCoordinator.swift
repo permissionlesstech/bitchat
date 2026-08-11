@@ -823,11 +823,21 @@ final class ChatPrivateConversationCoordinator {
     }
 
     func processActionMessage(_ message: BitchatMessage) -> BitchatMessage {
-        let isActionMessage = message.content.hasPrefix("* ")
-            && message.content.hasSuffix(" *")
-            && (message.content.contains("🫂")
-                || message.content.contains("🐟")
-                || message.content.contains("took a screenshot"))
+        // This rewrite hands the message to the formatter as sender "system",
+        // which styles it as trusted, non-peer content. Substring sniffing
+        // ("contains 🫂") let ANY sender put arbitrary text in that styling:
+        // `* SECURITY: session expired — bob took a screenshot *` rendered as
+        // a system-authored line. Only the exact, locally-generatable action
+        // shapes qualify, and the actor slot must be the actual wire sender —
+        // a peer can only "hug"/"slap"/"screenshot" as themselves.
+        guard message.content.hasPrefix("* "), message.content.hasSuffix(" *") else { return message }
+        let inner = String(message.content.dropFirst(2).dropLast(2))
+        let sender = message.sender
+
+        let isActionMessage =
+            Self.matchesActionTemplate(inner, prefix: "🫂 \(sender) hugs ", suffix: "")
+            || Self.matchesActionTemplate(inner, prefix: "🐟 \(sender) slaps ", suffix: " around a bit with a large trout")
+            || inner == "\(sender) took a screenshot"
 
         guard isActionMessage else { return message }
 
@@ -844,6 +854,15 @@ final class ChatPrivateConversationCoordinator {
             mentions: message.mentions,
             deliveryStatus: message.deliveryStatus
         )
+    }
+
+    /// The target slot of an action template: bounded, single-line, and
+    /// non-empty — a nickname or the literal "you", never free text.
+    static func matchesActionTemplate(_ inner: String, prefix: String, suffix: String) -> Bool {
+        guard inner.hasPrefix(prefix), inner.hasSuffix(suffix),
+              inner.count >= prefix.count + suffix.count + 1 else { return false }
+        let target = inner.dropFirst(prefix.count).dropLast(suffix.count)
+        return !target.isEmpty && target.count <= 64 && !target.contains("\n")
     }
 
     func migratePrivateChatsIfNeeded(for peerID: PeerID, senderNickname: String) {
