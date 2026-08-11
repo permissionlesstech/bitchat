@@ -78,6 +78,14 @@ struct AppInfoView: View {
                 )
             }
             static let bridgeNoCell = String(localized: "app_info.settings.bridge.no_cell", defaultValue: "no rendezvous cell yet — needs location access or a nearby bridge peer", comment: "Caption under the mesh bridge toggle when the bridge is on but has no geohash cell to meet on")
+            static func bridgeStatusSummary(enabled: Bool, cell: String?, bridgedCount: Int, nearbyOnly: Bool) -> String {
+                BridgeStatusSummary.formatted(
+                    enabled: enabled,
+                    cell: cell,
+                    bridgedCount: bridgedCount,
+                    nearbyOnly: nearbyOnly
+                )
+            }
 
             // Moved from LocationChannelsSheet; keys unchanged. (The former
             // internet-gateway toggle is gone: the bridge switch drives all
@@ -440,6 +448,17 @@ struct AppInfoView: View {
                             .bitchatFont(size: 11)
                             .foregroundColor(secondaryTextColor)
                     }
+                    Text(
+                        verbatim: Strings.Settings.bridgeStatusSummary(
+                            enabled: bridgeService.isEnabled,
+                            cell: bridgeService.activeCell,
+                            bridgedCount: bridgeService.bridgedPeerCount,
+                            nearbyOnly: bridgeService.nearbyOnly
+                        )
+                    )
+                    .bitchatFont(size: 11)
+                    .foregroundColor(secondaryTextColor)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
 
                 settingsCard {
