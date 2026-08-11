@@ -143,6 +143,22 @@ final class AppChromeModel: ObservableObject {
         chatViewModel.panicClearAllData()
     }
 
+    /// Fingerprint of the live Noise static identity (for the backup sheet).
+    func identityFingerprint() -> String {
+        chatViewModel.meshService.noiseIdentityFingerprint()
+    }
+
+    func exportEncryptedIdentityBackup(passphrase: String, confirm: String) throws -> String {
+        try chatViewModel.exportEncryptedIdentityBackup(
+            passphrase: passphrase,
+            confirm: confirm
+        )
+    }
+
+    func restoreIdentityFromBackup(_ backup: String, passphrase: String) throws -> String {
+        try chatViewModel.restoreIdentityFromBackup(backup, passphrase: passphrase)
+    }
+
     private func bind(privateInboxModel: PrivateInboxModel) {
         privateInboxModel.$unreadPeerIDs
             .receive(on: DispatchQueue.main)

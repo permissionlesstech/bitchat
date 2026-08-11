@@ -1785,6 +1785,116 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         return true
     }
 
+    // MARK: - Identity Backup (export / restore)
+
+    /// Assemble the passphrase-encryptable identity material from the live
+    /// Noise service + Nostr bridge.
+    @MainActor
+    func exportIdentityKeyMaterial() throws -> IdentityKeyMaterial {
+        guard let bleService = meshService as? BLEService else {
+            throw IdentityBackupError.encodingFailed
+        }
+        let noiseKeys = bleService.exportNoisePrivateKeysForBackup()
+        guard let nostr = try idBridge.getCurrentNostrIdentity() else {
+            throw IdentityBackupError.invalidKeyMaterial
+        }
+        let seed = idBridge.exportDeviceSeed()
+        return try IdentityKeyMaterial(
+            noiseStaticPrivateKey: noiseKeys.noiseStatic,
+            ed25519SigningPrivateKey: noiseKeys.ed25519Signing,
+            nostrPrivateKey: nostr.privateKey,
+            nostrDeviceSeed: seed
+        ).validated()
+    }
+
+    /// Encrypt the live identity into a `bitchat://identity-backup/v1/…` URI.
+    @MainActor
+    func exportEncryptedIdentityBackup(passphrase: String, confirm: String) throws -> String {
+        try IdentityBackupService.validatePassphrase(passphrase, confirm: confirm)
+        let material = try exportIdentityKeyMaterial()
+        return try IdentityBackupService.encrypt(material, passphrase: passphrase)
+    }
+
+    /// Decrypt a backup and replace the on-device cryptographic identity.
+    /// Does not wipe messages or favorites — only keys and Noise sessions.
+    @MainActor
+    @discardableResult
+    func restoreIdentityFromBackup(
+        _ backup: String,
+        passphrase: String,
+        restartServices: Bool = true
+    ) throws -> String {
+        let material = try IdentityBackupService.decrypt(backup, passphrase: passphrase)
+        let fingerprint = try IdentityBackupService.fingerprint(of: material)
+
+        guard let bleService = meshService as? BLEService else {
+            throw IdentityBackupError.encodingFailed
+        }
+
+        // Pause internet work so in-flight Nostr decrypts cannot land under the
+        // old identity while we swap keys.
+        panicNetworkLifecycle.stop()
+        nostrCoordinator.inbound.invalidateInFlightDecrypts()
+
+        bleService.suspendForPanicReset()
+
+        // Always reopen admission + Nostr after a suspend, even when install
+        // throws — otherwise a failed restore leaves BLE/internet dead until
+        // relaunch.
+        do {
+            try idBridge.installRestoredIdentity(
+                privateKey: material.nostrPrivateKey,
+                deviceSeed: material.nostrDeviceSeed
+            )
+
+            try bleService.installRestoredNoiseIdentity(
+                noiseStaticPrivateKey: material.noiseStaticPrivateKey,
+                ed25519SigningPrivateKey: material.ed25519SigningPrivateKey,
+                currentNickname: nickname,
+                restartServices: false
+            )
+
+            // Nostr transport caches the previous sender peer ID; point it at the
+            // restored mesh identity.
+            messageRouter.updateNostrSenderPeerID(meshService.myPeerID)
+
+            resumeTransportsAfterIdentityRestore(
+                bleService: bleService,
+                restartServices: restartServices
+            )
+
+            SecureLogger.info(
+                "Identity restored from backup; fingerprint=\(fingerprint.prefix(16))…",
+                category: .security
+            )
+            return fingerprint
+        } catch {
+            resumeTransportsAfterIdentityRestore(
+                bleService: bleService,
+                restartServices: restartServices
+            )
+            SecureLogger.error(
+                "Identity restore failed after transport suspend; services reopened: \(error)",
+                category: .security
+            )
+            throw error
+        }
+    }
+
+    @MainActor
+    private func resumeTransportsAfterIdentityRestore(
+        bleService: BLEService,
+        restartServices: Bool
+    ) {
+        bleService.completePanicReset(restartServices: restartServices)
+        guard restartServices else { return }
+        if !TestEnvironment.isRunningTests {
+            nostrRelayManager = NostrRelayManager.shared
+            setupNostrMessageHandling()
+        }
+        panicNetworkLifecycle.restart()
+    }
+
     /// BCH-01-013: Clear iOS app switcher snapshots during panic mode
     /// iOS stores preview screenshots in Library/Caches/Snapshots/<bundle_id>/
     /// These could reveal sensitive information visible in the app at the time
