@@ -16,11 +16,16 @@ import AppKit
 /// User preference for live push-to-talk voice. One switch controls both
 /// directions: streaming your holds live, and auto-playing inbound bursts.
 /// Off means voice messages behave exactly like classic voice notes.
+///
+/// Off by default: live mode sends audio to other people BEFORE the hold is
+/// released and plays strangers' voices out of the speaker unprompted —
+/// both are consequences someone must opt into, not discover. A single
+/// buried toggle defaulting on was not consent.
 enum PTTSettings {
     private static let liveVoiceEnabledKey = "ptt.liveVoiceEnabled"
 
     static var liveVoiceEnabled: Bool {
-        get { UserDefaults.standard.object(forKey: liveVoiceEnabledKey) as? Bool ?? true }
+        get { UserDefaults.standard.object(forKey: liveVoiceEnabledKey) as? Bool ?? false }
         set { UserDefaults.standard.set(newValue, forKey: liveVoiceEnabledKey) }
     }
 

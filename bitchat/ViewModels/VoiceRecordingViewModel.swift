@@ -59,6 +59,12 @@ final class VoiceRecordingViewModel: ObservableObject {
     /// composer switches its recording HUD to the LIVE treatment.
     @Published private(set) var isLiveStreaming = false
 
+    /// Armed when the finger slides off the mic button mid-hold: releasing
+    /// then cancels instead of sending. Before this existed, release ALWAYS
+    /// sent — the HUD's cancel button required lifting the finger, which
+    /// sent. A recording (or live stream) could not be aborted one-handed.
+    @Published private(set) var isCancelArmed = false
+
     /// Supplies the capture backend per press. `ChatViewModel` swaps in a
     /// live push-to-talk session when the current DM peer can hear it now.
     var sessionProvider: () -> VoiceCaptureSession = { VoiceNoteCaptureSession() }
@@ -77,8 +83,14 @@ final class VoiceRecordingViewModel: ObservableObject {
         return String(format: "%02d:%02d.%02d", minutes, seconds, centiseconds)
     }
 
+    func setCancelArmed(_ armed: Bool) {
+        guard isCancelArmed != armed else { return }
+        isCancelArmed = armed
+    }
+
     func start(shouldShow: Bool) {
         guard shouldShow, state == .idle else { return }
+        isCancelArmed = false
         holdGeneration &+= 1
         let generation = holdGeneration
         let session = sessionProvider()
@@ -162,6 +174,7 @@ final class VoiceRecordingViewModel: ObservableObject {
     }
 
     func finish(completion: ((URL) -> Void)?) {
+        isCancelArmed = false
         let previousState = state
 
         switch previousState {
@@ -220,6 +233,7 @@ final class VoiceRecordingViewModel: ObservableObject {
     }
 
     func cancel() {
+        isCancelArmed = false
         finish(completion: nil)
     }
 
@@ -231,6 +245,7 @@ final class VoiceRecordingViewModel: ObservableObject {
         activeSession = nil
         state = .idle
         isLiveStreaming = false
+        isCancelArmed = false
         session?.panicCancelSynchronously()
     }
 
