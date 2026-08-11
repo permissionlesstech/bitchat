@@ -89,10 +89,25 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 #if os(macOS)
 import AppKit
 
+@MainActor
 final class MacAppDelegate: NSObject, NSApplicationDelegate {
-    weak var runtime: AppRuntime?
+    /// Holds off App Nap while a transport is actually relaying, so Tor and the
+    /// BLE mesh keep serving neighbors when the window is minimized or fully
+    /// occluded by another app (#1593).
+    ///
+    /// Scoped to the minimize/occlusion case only: closing the last window
+    /// still quits, so "I closed bitchat" continues to mean the radios stop.
+    private let relayActivity = MacRelayActivityController()
+
+    weak var runtime: AppRuntime? {
+        didSet {
+            guard let runtime else { return }
+            relayActivity.observe(chatViewModel: runtime.chatViewModel)
+        }
+    }
 
     func applicationWillTerminate(_ notification: Notification) {
+        relayActivity.stop()
         runtime?.applicationWillTerminate()
     }
 
