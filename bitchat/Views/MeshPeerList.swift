@@ -24,7 +24,6 @@ struct MeshPeerList: View {
         static let reachable = String(localized: "content.accessibility.reachable_mesh", comment: "Accessibility label for mesh-reachable peer indicator")
         static let nostr = String(localized: "content.accessibility.available_nostr", comment: "Accessibility label for Nostr-available peer indicator")
         static let offline = String(localized: "mesh_peers.state.offline", comment: "State label for a peer that is not currently reachable")
-        static let favorite = String(localized: "mesh_peers.state.favorite", comment: "State label for a favorited peer")
         static let unread = String(localized: "mesh_peers.state.unread", comment: "State label for a peer with unread private messages")
         static let blocked = String(localized: "mesh_peers.state.blocked", comment: "State label for a blocked peer")
         static let vouched = String(localized: "mesh_peers.state.vouched", comment: "State label for a peer vouched for by someone the user verified")
