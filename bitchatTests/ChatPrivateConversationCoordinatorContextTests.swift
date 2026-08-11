@@ -328,6 +328,52 @@ private func makeFavoriteRelationship(
 struct ChatPrivateConversationCoordinatorContextTests {
 
     @Test @MainActor
+    func processActionMessage_rendersOnlyExactSenderAnchoredTemplates() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+
+        func processed(_ content: String, sender: String = "bob") -> BitchatMessage {
+            coordinator.processActionMessage(
+                BitchatMessage(
+                    id: UUID().uuidString,
+                    sender: sender,
+                    content: content,
+                    timestamp: Date(),
+                    isRelay: false
+                )
+            )
+        }
+
+        // Exact locally-generatable shapes, actor == wire sender: system.
+        #expect(processed("* 🫂 bob hugs alice *").sender == "system")
+        #expect(processed("* 🫂 bob hugs you *").sender == "system")
+        #expect(processed("* 🐟 bob slaps alice around a bit with a large trout *").sender == "system")
+        #expect(processed("* bob took a screenshot *").sender == "system")
+
+        // Location-channel senders arrive suffixed while content stays
+        // unsuffixed — must still render as a system action.
+        #expect(processed("* 🫂 bob hugs alice *", sender: "bob#ab12").sender == "system")
+        #expect(processed("* 🫂 bob hugs alice#1a2b *").sender == "system")
+
+        // The spoof this parser used to allow: arbitrary text between the
+        // markers with a magic substring rendered as system-authored.
+        #expect(processed("* SECURITY: your session key expired, re-verify at evil.example — bob took a screenshot *").sender == "bob")
+        #expect(processed("* 🫂 admin hugs alice — send your keys to @admin *").sender == "bob")
+        // Self-attributed preamble smuggled into the target slot: the target
+        // must be a single name token, so free text with spaces is rejected.
+        #expect(processed("* 🫂 bob hugs SECURITY: reset your keys at evil.example *").sender == "bob")
+        // Actor slot must be the actual sender, not someone else's name.
+        #expect(processed("* alice took a screenshot *", sender: "bob").sender == "bob")
+        #expect(processed("* 🫂 alice hugs you *", sender: "bob").sender == "bob")
+        // Target slot: single whitespace-free token, bounded length only.
+        #expect(processed("* 🫂 bob hugs " + String(repeating: "x", count: 200) + " *").sender == "bob")
+        #expect(processed("* 🫂 bob hugs a\nb *").sender == "bob")
+        #expect(processed("* 🫂 bob hugs a b *").sender == "bob")
+        // Not an action shape at all.
+        #expect(processed("hello there").sender == "bob")
+    }
+
+    @Test @MainActor
     func addMessageToPrivateChats_upsertsByIdAndSanitizes() async {
         let context = MockChatPrivateConversationContext()
         let coordinator = ChatPrivateConversationCoordinator(context: context)
