@@ -45,6 +45,10 @@ final class AppLockModel: ObservableObject {
 
     private let isEnabledProvider: () -> Bool
     private let authenticate: (@escaping @MainActor (Bool) -> Void) -> Void
+    /// Bumped on every lock, so a success callback from a prior unlock
+    /// attempt (e.g. Face ID resolving just as the app backgrounded and
+    /// re-locked) cannot clear the new lock.
+    private var lockGeneration = 0
 
     /// Providers are injectable so tests drive the lock without LAContext
     /// or the shared UserDefaults.
@@ -67,14 +71,20 @@ final class AppLockModel: ObservableObject {
 
     func lockIfEnabled() {
         guard isEnabledProvider() else { return }
+        lockGeneration &+= 1
+        isAuthenticating = false
         isLocked = true
     }
 
     func requestUnlock() {
         guard isLocked, !isAuthenticating else { return }
         isAuthenticating = true
+        let generation = lockGeneration
         authenticate { [weak self] success in
             guard let self else { return }
+            // Ignore a callback for a lock cycle that has already been
+            // superseded (backgrounded and re-locked mid-authentication).
+            guard generation == self.lockGeneration else { return }
             self.isAuthenticating = false
             if success {
                 self.isLocked = false
@@ -89,7 +99,11 @@ final class AppLockModel: ObservableObject {
             // Fail OPEN, deliberately: removing the device passcode already
             // requires knowing it, so this state means the owner disabled
             // it — locking them out of their own chats would punish exactly
-            // the wrong person. The settings copy states this rule.
+            // the wrong person. Turn the setting itself off too, so the
+            // toggle stops claiming the lock is on and re-adding a passcode
+            // later doesn't silently reactivate it (the copy promises the
+            // lock "turns itself off").
+            AppLockSettings.setEnabled(false)
             Task { @MainActor in completion(true) }
             return
         }

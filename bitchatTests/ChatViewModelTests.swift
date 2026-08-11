@@ -2421,6 +2421,23 @@ struct AppLockModelTests {
     }
 
     @Test @MainActor
+    func staleAuthCallbackCannotUnlockAfterRelock() {
+        var pending: ((Bool) -> Void)?
+        let model = AppLockModel(
+            isEnabledProvider: { true },
+            authenticate: { completion in pending = completion }
+        )
+        #expect(model.isLocked)
+
+        // Auth begins, then the app backgrounds and re-locks before Face ID
+        // resolves; the late success must be ignored.
+        model.requestUnlock()
+        model.lockIfEnabled()
+        pending?(true)
+        #expect(model.isLocked)
+    }
+
+    @Test @MainActor
     func staysInertWhenDisabled() {
         let model = AppLockModel(
             isEnabledProvider: { false },
