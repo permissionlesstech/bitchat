@@ -38,7 +38,7 @@ struct PanicRecoveryOperations {
     }
 
     static func live(
-        fileStore: BLEIncomingFileStore = BLEIncomingFileStore(),
+        fileStore: BLEIncomingFileStore = .shared,
         defaults: UserDefaults = .standard
     ) -> PanicRecoveryOperations {
         let defaultsKey = "bitchat.panicResetPending"
@@ -107,10 +107,22 @@ struct BLEIncomingFileStore: @unchecked Sendable {
         fileprivate let id: UUID
     }
 
+    /// Held headroom for a multi-step write (image encode→disk, voice
+    /// capture, live PTT). Unlike the call-scoped `reservingBytes` argument
+    /// to `enforceQuota`, this stays charged against the quota until
+    /// `releaseQuotaReservation` — so cancel / encode failure / panic must
+    /// release it or later writers see a permanently tighter budget.
+    /// Scope and byte count live in `PayloadCoordination.byteReservations`
+    /// keyed by `id`; the token itself is only an opaque handle.
+    struct QuotaByteReservation: Sendable {
+        fileprivate let id: UUID
+    }
+
     private final class PayloadCoordination: @unchecked Sendable {
         let lock = NSLock()
         var pendingDeliveryPaths: Set<String> = []
         var deletionReservations: [UUID: Set<String>] = [:]
+        var byteReservations: [UUID: (scope: MediaQuotaScope, bytes: Int64)] = [:]
     }
 
     private static let defaultQuotaBytes: Int64 = 100 * 1024 * 1024
@@ -152,6 +164,44 @@ struct BLEIncomingFileStore: @unchecked Sendable {
         #else
         return nil
         #endif
+    }
+
+    /// Process-wide store for the default Application Support media tree.
+    /// `PayloadCoordination` is per-instance, so writers (image/voice capture)
+    /// and BLE deletion/delivery must share one store or eviction exclusions
+    /// become vacuous. Tests that inject a temp `baseDirectory` should still
+    /// construct their own instance.
+    static let shared = BLEIncomingFileStore()
+
+    /// Which managed media tree a size quota applies to. Incoming and outgoing
+    /// keep separate 100 MB budgets; age retention still covers both.
+    enum MediaQuotaScope {
+        case incoming
+        case outgoing
+
+        var subdirectories: [String] {
+            switch self {
+            case .incoming:
+                return [
+                    "voicenotes/incoming",
+                    "images/incoming",
+                    "files/incoming"
+                ]
+            case .outgoing:
+                return [
+                    "voicenotes/outgoing",
+                    "images/outgoing",
+                    "files/outgoing"
+                ]
+            }
+        }
+
+        var logLabel: String {
+            switch self {
+            case .incoming: return "incoming"
+            case .outgoing: return "outgoing"
+            }
+        }
     }
 
     /// Exposed so callers that write progressively into the store's
@@ -207,6 +257,9 @@ struct BLEIncomingFileStore: @unchecked Sendable {
                 keepingCapacity: false
             )
             payloadCoordination.deletionReservations.removeAll(
+                keepingCapacity: false
+            )
+            payloadCoordination.byteReservations.removeAll(
                 keepingCapacity: false
             )
             payloadCoordination.lock.unlock()
@@ -494,10 +547,26 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     /// conversation insertion. Before this callback, a deletion transaction
     /// may not infer ownership from a stale bubble that names the same path.
     func finishIncomingFileDelivery(at storedURL: URL) {
+        endEvictionProtection(for: storedURL)
+    }
+
+    /// Registers `url` in the same exclusion set as pending deliveries so
+    /// quota eviction / age expiry cannot unlink a file an outgoing capture
+    /// is still writing (`voice_<…>.m4a` is not covered by `voice_live_`).
+    /// Pair with `endEvictionProtection` on stop, cancel, or start failure.
+    func beginEvictionProtection(for url: URL) {
+        payloadCoordination.lock.lock()
+        defer { payloadCoordination.lock.unlock() }
+        payloadCoordination.pendingDeliveryPaths.insert(
+            url.standardizedFileURL.path
+        )
+    }
+
+    func endEvictionProtection(for url: URL) {
         payloadCoordination.lock.lock()
         defer { payloadCoordination.lock.unlock() }
         payloadCoordination.pendingDeliveryPaths.remove(
-            storedURL.standardizedFileURL.path
+            url.standardizedFileURL.path
         )
     }
 
@@ -519,25 +588,78 @@ struct BLEIncomingFileStore: @unchecked Sendable {
         }
     }
 
-    /// Frees least-recently-modified incoming files until `reservingBytes`
-    /// fits under the quota. Files named `voice_live_*` (in-flight live
-    /// captures) are never evicted regardless of who triggers enforcement —
-    /// a finalized transfer can arrive at quota while a burst is still
-    /// streaming — but they still count toward usage.
+    /// Frees least-recently-modified files in `scope` until `reservingBytes`
+    /// (plus any held `QuotaByteReservation`s for that scope) fits under the
+    /// quota. `reservingBytes` itself is call-scoped — it is not stored —
+    /// and is the right tool for a synchronous write that completes before
+    /// the next eviction. Multi-step writers should use
+    /// `reserveQuotaBytes` / `releaseQuotaReservation` instead.
+    ///
+    /// Files named `voice_live_*` (in-flight live captures) are never
+    /// evicted regardless of who triggers enforcement — a finalized
+    /// transfer can arrive at quota while a burst is still streaming — but
+    /// they still count toward usage. Paths reserved for an in-flight
+    /// delivery or private-media deletion are also skipped.
     func enforceQuota(reservingBytes: Int) {
+        enforceQuota(reservingBytes: reservingBytes, scope: .incoming)
+    }
+
+    /// Same oldest-first eviction as incoming, applied to the outgoing media
+    /// directories (user-created voice notes, images, and files).
+    func enforceOutgoingQuota(reservingBytes: Int) {
+        enforceQuota(reservingBytes: reservingBytes, scope: .outgoing)
+    }
+
+    func enforceQuota(reservingBytes: Int, scope: MediaQuotaScope) {
+        payloadCoordination.lock.lock()
+        defer { payloadCoordination.lock.unlock() }
+        enforceQuotaLocked(reservingBytes: reservingBytes, scope: scope)
+    }
+
+    /// Evicts enough room for `bytes`, then holds that headroom against the
+    /// scope's quota until `releaseQuotaReservation`. Callers must release
+    /// on success, cancel, encode/write failure, and panic (panic also
+    /// clears every outstanding reservation).
+    @discardableResult
+    func reserveQuotaBytes(_ bytes: Int, scope: MediaQuotaScope) -> QuotaByteReservation {
         payloadCoordination.lock.lock()
         defer { payloadCoordination.lock.unlock() }
 
+        let clamped = Int64(max(0, bytes))
+        enforceQuotaLocked(reservingBytes: Int(clamped), scope: scope)
+        let reservation = QuotaByteReservation(id: UUID())
+        payloadCoordination.byteReservations[reservation.id] = (
+            scope: scope,
+            bytes: clamped
+        )
+        return reservation
+    }
+
+    func releaseQuotaReservation(_ reservation: QuotaByteReservation) {
+        payloadCoordination.lock.lock()
+        defer { payloadCoordination.lock.unlock() }
+        payloadCoordination.byteReservations.removeValue(forKey: reservation.id)
+    }
+
+    /// Test seam: bytes currently held by `reserveQuotaBytes` for `scope`.
+    func reservedQuotaBytes(for scope: MediaQuotaScope) -> Int64 {
+        payloadCoordination.lock.lock()
+        defer { payloadCoordination.lock.unlock() }
+        return payloadCoordination.byteReservations.values.reduce(into: Int64(0)) {
+            guard $1.scope == scope else { return }
+            $0 += $1.bytes
+        }
+    }
+
+    private func enforceQuotaLocked(reservingBytes: Int, scope: MediaQuotaScope) {
         do {
             let base = try filesDirectory()
-            let incomingDirs = [
-                base.appendingPathComponent("voicenotes/incoming", isDirectory: true),
-                base.appendingPathComponent("images/incoming", isDirectory: true),
-                base.appendingPathComponent("files/incoming", isDirectory: true)
-            ]
+            let dirs = scope.subdirectories.map {
+                base.appendingPathComponent($0, isDirectory: true)
+            }
             var allFiles: [(url: URL, size: Int64, modified: Date)] = []
 
-            for dir in incomingDirs where fileManager.fileExists(atPath: dir.path) {
+            for dir in dirs where fileManager.fileExists(atPath: dir.path) {
                 guard let contents = try? fileManager.contentsOfDirectory(
                     at: dir,
                     includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey],
@@ -552,8 +674,12 @@ struct BLEIncomingFileStore: @unchecked Sendable {
                 }
             }
 
+            let heldBytes = payloadCoordination.byteReservations.values.reduce(into: Int64(0)) {
+                guard $1.scope == scope else { return }
+                $0 += $1.bytes
+            }
             let currentUsage = allFiles.reduce(0) { $0 + $1.size }
-            let targetUsage = quotaBytes - Int64(reservingBytes)
+            let targetUsage = quotaBytes - Int64(reservingBytes) - heldBytes
             guard currentUsage > targetUsage else { return }
 
             let needToFree = currentUsage - targetUsage
@@ -576,14 +702,20 @@ struct BLEIncomingFileStore: @unchecked Sendable {
                 do {
                     try fileManager.removeItem(at: file.url)
                     freedSpace += file.size
-                    SecureLogger.debug("🗑️ BCH-01-002: Deleted old incoming file to free space: \(file.url.lastPathComponent)", category: .security)
+                    SecureLogger.debug(
+                        "🗑️ BCH-01-002: Deleted old \(scope.logLabel) file to free space: \(file.url.lastPathComponent)",
+                        category: .security
+                    )
                 } catch {
                     SecureLogger.warning("⚠️ Failed to delete old file for quota: \(error)", category: .security)
                 }
             }
 
             if freedSpace > 0 {
-                SecureLogger.info("📊 BCH-01-002: Freed \(ByteCountFormatter.string(fromByteCount: freedSpace, countStyle: .file)) to stay within incoming files quota", category: .security)
+                SecureLogger.info(
+                    "📊 BCH-01-002: Freed \(ByteCountFormatter.string(fromByteCount: freedSpace, countStyle: .file)) to stay within \(scope.logLabel) files quota",
+                    category: .security
+                )
             }
         } catch {
             SecureLogger.warning("⚠️ Could not enforce storage quota: \(error)", category: .security)
@@ -593,11 +725,9 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     /// Deletes managed media older than `retention`, across both incoming and
     /// outgoing directories, and reports how many files went away.
     ///
-    /// The quota sweep above only bounds *size*, and only for incoming files,
-    /// so a received photo or a sent voice note could sit on disk unbounded in
-    /// time — long outliving the conversation it belonged to, which is what a
-    /// seized device gives up. This bounds media by age instead, on the same
-    /// principle as the courier envelope and gossip archive lifetimes.
+    /// Size quotas bound each tree separately; this bounds *all* managed media
+    /// by age as well — the same principle as courier envelope and gossip
+    /// archive lifetimes.
     ///
     /// Honors the same exclusions as quota eviction: in-flight live captures
     /// and files reserved by an in-progress delivery or deletion are left

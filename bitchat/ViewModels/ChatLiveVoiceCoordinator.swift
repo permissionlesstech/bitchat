@@ -113,10 +113,22 @@ final class ChatLiveVoiceCoordinator {
         var player: PTTBurstPlayer?
         var idleTimeout: Task<Void, Never>?
         var gapRedrain: Task<Void, Never>?
+        /// Incoming quota headroom held for this live capture; released on
+        /// finalize / cancel so a dropped burst cannot keep the budget tight.
+        var quotaReservation: BLEIncomingFileStore.QuotaByteReservation?
 
         var key: AssemblyKey { AssemblyKey(peerID: peerID, scope: scope, burstID: burstID) }
 
-        init(burstID: Data, peerID: PeerID, scope: VoiceBurstScope, nickname: String, message: BitchatMessage, fileURL: URL, fileHandle: FileHandle) {
+        init(
+            burstID: Data,
+            peerID: PeerID,
+            scope: VoiceBurstScope,
+            nickname: String,
+            message: BitchatMessage,
+            fileURL: URL,
+            fileHandle: FileHandle,
+            quotaReservation: BLEIncomingFileStore.QuotaByteReservation?
+        ) {
             self.burstID = burstID
             self.peerID = peerID
             self.scope = scope
@@ -124,6 +136,7 @@ final class ChatLiveVoiceCoordinator {
             self.message = message
             self.fileURL = fileURL
             self.fileHandle = fileHandle
+            self.quotaReservation = quotaReservation
             self.firstPacketAt = Date()
         }
     }
@@ -158,7 +171,7 @@ final class ChatLiveVoiceCoordinator {
     /// `sweepsOnInit` exists for tests whose coordinator shares the real
     /// application-support directory: they pass `false` so parallel test
     /// runs never sweep each other's in-flight capture files.
-    init(context: any ChatLiveVoiceContext, fileStore: BLEIncomingFileStore = BLEIncomingFileStore(), sweepsOnInit: Bool = true) {
+    init(context: any ChatLiveVoiceContext, fileStore: BLEIncomingFileStore = .shared, sweepsOnInit: Bool = true) {
         self.context = context
         self.fileStore = fileStore
         // Orphaned partial captures from a previous session (live-only bursts
@@ -349,10 +362,14 @@ final class ChatLiveVoiceCoordinator {
             return nil
         }
         // BCH-01-002: live captures share the incoming-media quota with
-        // finalized transfers; reserve the burst's worst case up front.
+        // finalized transfers; hold the burst's worst case until finalize
+        // or cancel so a dropped assembly cannot leak headroom.
         // Eviction skips voice_live_* names, so partials still streaming in
         // are safe no matter which caller triggers enforcement.
-        fileStore.enforceQuota(reservingBytes: TransportConfig.pttMaxBurstBytes)
+        let reservation = fileStore.reserveQuotaBytes(
+            TransportConfig.pttMaxBurstBytes,
+            scope: .incoming
+        )
         fileManager.createFile(
             atPath: fileURL.path,
             contents: nil,
@@ -360,6 +377,7 @@ final class ChatLiveVoiceCoordinator {
         )
         guard let handle = try? FileHandle(forWritingTo: fileURL) else {
             SecureLogger.error("PTT: cannot open capture file for burst \(burstID.hexEncodedString())", category: .session)
+            fileStore.releaseQuotaReservation(reservation)
             try? fileManager.removeItem(at: fileURL)
             return nil
         }
@@ -383,7 +401,8 @@ final class ChatLiveVoiceCoordinator {
             nickname: nickname,
             message: message,
             fileURL: fileURL,
-            fileHandle: handle
+            fileHandle: handle,
+            quotaReservation: reservation
         )
 
         // DM bubbles ride the full inbound pipeline (store append, unread,
@@ -520,6 +539,7 @@ final class ChatLiveVoiceCoordinator {
         assembly.fileHandle = nil
         assemblies.removeValue(forKey: assembly.key)
         updatePublicTalkerIndicator()
+        releaseQuotaReservation(of: assembly)
 
         guard assembly.deliveredFrames > 0 else {
             // Nothing audible ever arrived — drop the empty bubble.
@@ -628,10 +648,17 @@ final class ChatLiveVoiceCoordinator {
         assembly.fileHandle = nil
         assemblies.removeValue(forKey: assembly.key)
         updatePublicTalkerIndicator()
+        releaseQuotaReservation(of: assembly)
         removeBubble(of: assembly)
         WaveformCache.shared.purge(url: assembly.fileURL)
         try? fileManager.removeItem(at: assembly.fileURL)
         context.notifyUIChanged()
+    }
+
+    private func releaseQuotaReservation(of assembly: Assembly) {
+        guard let reservation = assembly.quotaReservation else { return }
+        fileStore.releaseQuotaReservation(reservation)
+        assembly.quotaReservation = nil
     }
 
     // MARK: - Timers

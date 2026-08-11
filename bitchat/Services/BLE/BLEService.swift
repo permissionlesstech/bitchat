@@ -505,7 +505,7 @@ final class BLEService: NSObject {
         idBridge: NostrIdentityBridge,
         identityManager: SecureIdentityStateManagerProtocol,
         initializeBluetoothManagers: Bool = true,
-        incomingFileStore: BLEIncomingFileStore = BLEIncomingFileStore(),
+        incomingFileStore: BLEIncomingFileStore = .shared,
         startSuspendedForPanicRecovery: Bool = false,
         noiseResponderHandshakeTimeout: TimeInterval =
             NoiseSecurityConstants.ordinaryResponderHandshakeTimeout,

@@ -74,6 +74,28 @@ enum ImageUtils {
             }
 
             let outputURL = try makeOutputURL(outputDirectory: outputDirectory)
+            let reservation: BLEIncomingFileStore.QuotaByteReservation?
+            if outputDirectory == nil {
+                // Hold headroom only for the default Application Support tree;
+                // test / custom directories skip quota entirely (see
+                // `makeOutputURL`). Release even if the write throws so a
+                // failed encode→disk handoff cannot leak.
+                reservation = BLEIncomingFileStore.shared.reserveQuotaBytes(
+                    jpegData.count,
+                    scope: .outgoing
+                )
+                BLEIncomingFileStore.shared.beginEvictionProtection(for: outputURL)
+            } else {
+                reservation = nil
+            }
+            defer {
+                if outputDirectory == nil {
+                    BLEIncomingFileStore.shared.endEvictionProtection(for: outputURL)
+                }
+                if let reservation {
+                    BLEIncomingFileStore.shared.releaseQuotaReservation(reservation)
+                }
+            }
             try jpegData.write(to: outputURL, options: .atomic)
             return outputURL
         }
@@ -152,6 +174,26 @@ enum ImageUtils {
                 }
             }
             let outputURL = try makeOutputURL(outputDirectory: outputDirectory)
+            let reservation: BLEIncomingFileStore.QuotaByteReservation?
+            if outputDirectory == nil {
+                // Custom `outputDirectory` (tests) skips quota — only the
+                // default Application Support tree is budgeted.
+                reservation = BLEIncomingFileStore.shared.reserveQuotaBytes(
+                    jpegData.count,
+                    scope: .outgoing
+                )
+                BLEIncomingFileStore.shared.beginEvictionProtection(for: outputURL)
+            } else {
+                reservation = nil
+            }
+            defer {
+                if outputDirectory == nil {
+                    BLEIncomingFileStore.shared.endEvictionProtection(for: outputURL)
+                }
+                if let reservation {
+                    BLEIncomingFileStore.shared.releaseQuotaReservation(reservation)
+                }
+            }
             try jpegData.write(to: outputURL, options: .atomic)
             return outputURL
         }
@@ -195,6 +237,13 @@ enum ImageUtils {
     }
     #endif
 
+    /// Resolves the JPEG destination path.
+    ///
+    /// When `outputDirectory` is nil, the file lands in the default
+    /// Application Support `images/outgoing` tree (callers must
+    /// reserve/release quota bytes and eviction protection around the
+    /// write). A non-nil `outputDirectory` is a test/custom escape hatch
+    /// that skips quota entirely.
     private static func makeOutputURL(outputDirectory: URL? = nil) throws -> URL {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd_HHmmss"
