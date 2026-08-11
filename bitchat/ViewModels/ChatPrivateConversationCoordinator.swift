@@ -832,12 +832,16 @@ final class ChatPrivateConversationCoordinator {
         // a peer can only "hug"/"slap"/"screenshot" as themselves.
         guard message.content.hasPrefix("* "), message.content.hasSuffix(" *") else { return message }
         let inner = String(message.content.dropFirst(2).dropLast(2))
-        let sender = message.sender
+        // Match the ACTOR by base name: location-channel senders arrive
+        // suffixed (`bob#ab12`) while handleEmote embeds the unsuffixed
+        // nickname, so a raw-string compare would regress every received
+        // geohash action to plain text.
+        let senderBase = message.sender.splitSuffix().0
 
         let isActionMessage =
-            Self.matchesActionTemplate(inner, prefix: "🫂 \(sender) hugs ", suffix: "")
-            || Self.matchesActionTemplate(inner, prefix: "🐟 \(sender) slaps ", suffix: " around a bit with a large trout")
-            || inner == "\(sender) took a screenshot"
+            Self.matchesActionTemplate(inner, prefix: "🫂 \(senderBase) hugs ", suffix: "")
+            || Self.matchesActionTemplate(inner, prefix: "🐟 \(senderBase) slaps ", suffix: " around a bit with a large trout")
+            || inner == "\(senderBase) took a screenshot"
 
         guard isActionMessage else { return message }
 
@@ -856,13 +860,30 @@ final class ChatPrivateConversationCoordinator {
         )
     }
 
-    /// The target slot of an action template: bounded, single-line, and
-    /// non-empty — a nickname or the literal "you", never free text.
+    /// The target slot of an action template must be a single name token —
+    /// "you", or a nickname optionally carrying a `#abcd` suffix — never
+    /// free text. handleEmote only ever emits a resolved nickname or "you"
+    /// there; accepting arbitrary bounded text let a self-attributed action
+    /// smuggle a preamble ("… hugs SECURITY: reset your keys at evil…") into
+    /// the trusted system styling.
     static func matchesActionTemplate(_ inner: String, prefix: String, suffix: String) -> Bool {
         guard inner.hasPrefix(prefix), inner.hasSuffix(suffix),
               inner.count >= prefix.count + suffix.count + 1 else { return false }
-        let target = inner.dropFirst(prefix.count).dropLast(suffix.count)
-        return !target.isEmpty && target.count <= 64 && !target.contains("\n")
+        let target = String(inner.dropFirst(prefix.count).dropLast(suffix.count))
+        return isNameToken(target)
+    }
+
+    /// A display name as it appears in action content: "you", or a single
+    /// whitespace-free token of bounded length (a nickname, optionally with
+    /// a `#abcd` disambiguator). A space-containing nickname degrades to a
+    /// plain message rather than trusted styling — the safe direction.
+    static func isNameToken(_ token: String) -> Bool {
+        guard token == "you" else {
+            guard !token.isEmpty, token.count <= 32,
+                  !token.contains(where: { $0.isWhitespace }) else { return false }
+            return true
+        }
+        return true
     }
 
     func migratePrivateChatsIfNeeded(for peerID: PeerID, senderNickname: String) {
