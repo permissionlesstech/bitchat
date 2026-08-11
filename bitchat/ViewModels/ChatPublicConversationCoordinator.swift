@@ -227,7 +227,8 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
             String(
                 format: String(
                     localized: "system.geohash.blocked",
-                    comment: "System message shown when a user is blocked in geohash chats"
+                    defaultValue: "blocked %@ in this geohash channel — in other geohash channels they appear as someone new, so block them there too if needed",
+                    comment: "System message after blocking a geohash participant; says the block is per-channel because identities differ per geohash"
                 ),
                 locale: .current,
                 displayName

@@ -5216,181 +5216,181 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "تم حظر %@ في محادثات geohash"
+            "value" : "تم حظر %@ في قناة geohash هذه — في قنوات geohash الأخرى يظهر كشخص جديد، فاحظره هناك أيضًا إذا لزم الأمر"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geohash চ্যাটে %@-কে ব্লক করা হলো"
+            "value" : "এই geohash চ্যানেলে %@ কে ব্লক করা হয়েছে — অন্য geohash চ্যানেলে সে নতুন কেউ হিসেবে দেখা দেবে, তাই প্রয়োজনে সেখানেও ব্লক করুন"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ in geohash-chats blockiert"
+            "value" : "%@ in diesem geohash-kanal blockiert — in anderen geohash-kanälen erscheint diese person als jemand neues, blockiere sie dort bei bedarf ebenfalls"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "blocked %@ in geohash chats"
+            "value" : "blocked %@ in this geohash channel — in other geohash channels they appear as someone new, so block them there too if needed"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ bloqueado en los chats de geohash"
+            "value" : "has bloqueado a %@ en este canal geohash — en otros canales geohash aparece como alguien nuevo, así que bloquéalo también allí si hace falta"
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ در چت‌های geohash مسدود شد"
+            "value" : "%@ در این کانال geohash مسدود شد — در کانال‌های geohash دیگر به‌عنوان فردی جدید ظاهر می‌شود، پس در صورت نیاز آنجا هم او را مسدود کنید"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "na-block si %@ sa mga geohash chat"
+            "value" : "na-block si %@ sa geohash channel na ito — sa ibang geohash channel, lilitaw siya bilang bagong tao, kaya i-block din siya roon kung kailangan"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ bloqué dans les chats geohash"
+            "value" : "%@ a été bloqué dans ce canal geohash — dans les autres canaux geohash, cette personne apparaît comme quelqu'un de nouveau, alors bloque-la aussi là-bas si besoin"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ נחסם בצ'אטים של geohash"
+            "value" : "%@ נחסם בערוץ ה‑geohash הזה — בערוצי geohash אחרים הוא יופיע כמישהו חדש, אז אם צריך, כדאי לחסום אותו גם שם"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geohash चैट में %@ को ब्लॉक किया गया"
+            "value" : "इस geohash चैनल में %@ को ब्लॉक किया गया — दूसरे geohash चैनलों में वे किसी नए व्यक्ति की तरह दिखेंगे, इसलिए ज़रूरत हो तो वहाँ भी ब्लॉक करें"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ diblokir di chat geohash"
+            "value" : "%@ diblokir di channel geohash ini — di channel geohash lain dia muncul sebagai orang baru, jadi blokir juga di sana kalau perlu"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ bloccato nelle chat geohash"
+            "value" : "%@ bloccato in questo canale geohash — negli altri canali geohash appare come una persona nuova, quindi bloccalo anche lì se serve"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geohash チャットで %@ をブロックした"
+            "value" : "このgeohashチャンネルで%@をブロックしました — 他のgeohashチャンネルでは別人として表示されるため、必要ならそちらでもブロックしてください"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geohash 채팅에서 %@을(를) 차단했어요"
+            "value" : "이 geohash 채널에서 %@을(를) 차단했어요 — 다른 geohash 채널에서는 새로운 사람으로 표시되니 필요하면 거기서도 차단하세요"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ disekat dalam sembang geohash"
+            "value" : "%@ disekat dalam saluran geohash ini — dalam saluran geohash lain dia muncul sebagai orang baharu, jadi sekat juga di sana jika perlu"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geohash च्याटहरूमा %@ ब्लक गरियो"
+            "value" : "यस geohash च्यानलमा %@ लाई ब्लक गरियो — अन्य geohash च्यानलहरूमा उनी नयाँ व्यक्तिजस्तै देखिन्छन्, त्यसैले आवश्यक परे त्यहाँ पनि ब्लक गर्नुहोस्"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ geblokkeerd in geohash-chats"
+            "value" : "%@ geblokkeerd in dit geohash-kanaal — in andere geohash-kanalen verschijnt diegene als iemand nieuws, dus blokkeer daar ook als dat nodig is"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "zablokowano %@ w czatach geohash"
+            "value" : "zablokowano %@ w tym kanale geohash — w innych kanałach geohash ta osoba pojawia się jako ktoś nowy, więc w razie potrzeby zablokuj ją też tam"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ bloqueado nas conversas geohash"
+            "value" : "%@ bloqueado neste canal geohash — noutros canais geohash aparece como alguém novo, por isso bloqueia-o também aí se for preciso"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ bloqueado nos chats geohash"
+            "value" : "%@ bloqueado neste canal geohash — em outros canais geohash essa pessoa aparece como alguém novo, então bloqueie lá também se precisar"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ заблокирован в geohash-чатах"
+            "value" : "%@ заблокирован в этом geohash-канале — в других geohash-каналах этот человек выглядит как кто-то новый, так что при необходимости заблокируй его и там"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "blockerade %@ i geohash-chattar"
+            "value" : "%@ blockerad i den här geohash-kanalen — i andra geohash-kanaler dyker personen upp som någon ny, så blockera hen där också om det behövs"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geohash அரட்டைகளில் %@ தடுக்கப்பட்டார்"
+            "value" : "இந்த geohash சேனலில் %@ தடுக்கப்பட்டார் — மற்ற geohash சேனல்களில் அவர் புதிய நபராகத் தோன்றுவார், தேவைப்பட்டால் அங்கும் தடுக்கவும்"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "บล็อก %@ ในแชท geohash แล้ว"
+            "value" : "บล็อก %@ ในช่อง geohash นี้แล้ว — ในช่อง geohash อื่นเขาจะปรากฏเป็นคนใหม่ ดังนั้นถ้าจำเป็นก็บล็อกที่นั่นด้วย"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ geohash sohbetlerinde engellendi"
+            "value" : "%@ bu geohash kanalında engellendi — diğer geohash kanallarında yeni biri olarak görünür, gerekirse orada da engelle"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ заблоковано в geohash-чатах"
+            "value" : "%@ заблоковано в цьому geohash-каналі — в інших geohash-каналах ця людина виглядає як хтось новий, тож за потреби заблокуй її й там"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geohash چیٹس میں %@ کو بلاک کر دیا گیا"
+            "value" : "اس geohash چینل میں %@ کو بلاک کر دیا گیا — دوسرے geohash چینلز میں وہ کسی نئے فرد کے طور پر نظر آئیں گے، اس لیے ضرورت ہو تو وہاں بھی بلاک کریں"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "đã chặn %@ trong các kênh trò chuyện geohash"
+            "value" : "đã chặn %@ trong kênh geohash này — ở các kênh geohash khác, người đó xuất hiện như một người mới, nên hãy chặn ở đó nữa nếu cần"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已在 geohash 聊天中屏蔽 %@"
+            "value" : "已在此 geohash 频道屏蔽 %@ — 在其他 geohash 频道中对方会显示为新面孔，如有需要请在那里也进行屏蔽"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已在 geohash 聊天中封鎖 %@"
+            "value" : "已在此 geohash 頻道封鎖 %@ — 在其他 geohash 頻道中對方會顯示為新的人，如有需要請在那裡也一併封鎖"
           }
         }
       }
@@ -16183,6 +16183,1308 @@
         }
       }
     },
+    "favorites.consent.confirm" : {
+      "comment" : "Confirm button of the one-time favorite consent dialog",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إضافة مفضل"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "প্রিয় যোগ করুন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorit hinzufügen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "add favorite"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "añadir favorito"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "افزودن موردعلاقه"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "idagdag"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ajouter en favori"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הוספה למועדפים"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पसंदीदा जोड़ें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tambahkan favorit"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aggiungi preferito"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "お気に入りに追加"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "즐겨찾기 추가"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tambah kegemaran"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "मनपर्ने थप्नुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favoriet toevoegen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dodaj do ulubionych"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "adicionar favorito"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "adicionar favorito"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "добавить в избранное"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lägg till favorit"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "பிடித்தவராகச் சேர்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เพิ่มรายการโปรด"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorilere ekle"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "додати в обране"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پسندیدہ شامل کریں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "thêm yêu thích"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加星标"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加入星標"
+          }
+        }
+      }
+    },
+    "favorites.consent.message" : {
+      "comment" : "Body of the one-time favorite consent dialog; placeholder is the person's name",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سيُعلم هذا %@ فورًا ويشارك مفتاح nostr الخاص بك معه. إذا أضافك إلى مفضلته أيضًا، يمكنكما مراسلة بعضكما عبر الإنترنت عندما تكونان خارج نطاق شبكة mesh."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "এতে %@ কে সাথে সাথে জানানো হবে এবং আপনার nostr কী তার সাথে শেয়ার করা হবে। সে-ও যদি আপনাকে প্রিয় করে, তাহলে mesh-এর সীমার বাইরে থাকলে আপনারা ইন্টারনেটের মাধ্যমে একে অপরকে বার্তা পাঠাতে পারবেন।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "das benachrichtigt %@ sofort und teilt deinen nostr-schlüssel mit dieser person. bei gegenseitigem favorisieren könnt ihr einander über das internet schreiben, wenn ihr außer mesh-reichweite seid."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "this tells %@ right away and shares your nostr key with them. if they favorite you back, you can message each other over the internet when out of mesh range."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "esto avisa a %@ de inmediato y comparte tu clave nostr con esa persona. si también te añade como favorito, podrán enviarse mensajes por internet cuando estén fuera del alcance de la red mesh."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "این کار بلافاصله به %@ اطلاع می‌دهد و کلید nostr شما را با او به اشتراک می‌گذارد. اگر او هم شما را موردعلاقه کند، وقتی خارج از برد شبکه mesh باشید می‌توانید از طریق اینترنت به هم پیام بدهید."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aabisuhan agad si %@ at ibabahagi ang iyong nostr key sa kanya. kapag ginawa ka rin niyang paborito, makakapagpadala kayo ng mensahe sa isa't isa sa internet kapag wala sa saklaw ng mesh."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cela prévient %@ immédiatement et partage ta clé nostr avec cette personne. si elle t'ajoute aussi en favori, vous pourrez vous écrire par internet quand vous serez hors de portée du mesh."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הפעולה תודיע ל‑%@ מיד ותשתף איתם את מפתח ה‑nostr שלך. אם יוסיפו אותך למועדפים בחזרה, תוכלו לשלוח הודעות דרך האינטרנט כשאתם מחוץ לטווח ה‑mesh."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "इससे %@ को तुरंत पता चल जाएगा और आपकी nostr कुंजी उनके साथ साझा होगी। अगर वे भी आपको पसंदीदा बनाते हैं, तो mesh की रेंज से बाहर होने पर आप इंटरनेट के ज़रिए एक-दूसरे को संदेश भेज सकते हैं।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ini langsung memberi tahu %@ dan membagikan kunci nostr-mu kepadanya. kalau dia juga menjadikanmu favorit, kalian bisa saling berkirim pesan lewat internet saat di luar jangkauan mesh."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "questo avvisa subito %@ e condivide la tua chiave nostr con questa persona. se ti aggiunge anche lei ai preferiti, potrete scrivervi via internet quando siete fuori dalla portata della mesh."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "追加すると%@にすぐ通知され、あなたのnostr鍵が相手に共有されます。相手もあなたをお気に入りにすると、meshの範囲外でもインターネット経由でメッセージをやり取りできます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "추가하면 %@에게 바로 알림이 가고 내 nostr 키가 상대와 공유돼요. 상대도 나를 즐겨찾기에 추가하면 mesh 범위 밖에서도 인터넷으로 서로 메시지를 주고받을 수 있어요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ini terus memberitahu %@ dan berkongsi kunci nostr anda dengannya. jika dia turut menjadikan anda kegemaran, anda berdua boleh berutus mesej melalui internet apabila di luar liputan mesh."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "यसले %@ लाई तुरुन्तै थाहा दिन्छ र तपाईंको nostr कुञ्जी उनीसँग साझा गर्छ। उनले पनि तपाईंलाई मनपर्ने बनाए भने, mesh को दायराबाहिर हुँदा तपाईंहरू इन्टरनेटमार्फत एकअर्कालाई सन्देश पठाउन सक्नुहुन्छ।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dit laat het %@ meteen weten en deelt je nostr-sleutel met diegene. als diegene jou ook als favoriet toevoegt, kunnen jullie elkaar via internet berichten sturen wanneer jullie buiten bereik van het mesh zijn."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "to od razu powiadomi %@ i udostępni tej osobie twój klucz nostr. jeśli ona też doda cię do ulubionych, będziecie mogli pisać do siebie przez internet poza zasięgiem sieci mesh."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "isto avisa %@ de imediato e partilha a tua chave nostr com essa pessoa. se ela também te marcar como favorito, podem trocar mensagens pela internet quando estiverem fora do alcance da mesh."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "isso avisa %@ na hora e compartilha sua chave nostr com essa pessoa. se ela também favoritar você, vocês podem trocar mensagens pela internet quando estiverem fora do alcance da mesh."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "это сразу уведомит %@ и передаст этому человеку твой ключ nostr. если он добавит тебя в избранное в ответ, вы сможете переписываться через интернет вне зоны действия mesh-сети."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "det här meddelar %@ direkt och delar din nostr-nyckel med personen. om personen också favoritmarkerar dig kan ni skicka meddelanden till varandra via internet när ni är utom räckhåll för mesh-nätet."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இது %@-க்கு உடனே தெரிவிக்கும், உங்கள் nostr சாவியையும் அவருடன் பகிரும். அவரும் உங்களைப் பிடித்தவராகச் சேர்த்தால், mesh எல்லைக்கு வெளியே இருக்கும்போது இணையம் வழியாக ஒருவருக்கொருவர் செய்தி அனுப்பலாம்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "การเพิ่มจะแจ้งให้ %@ ทราบทันทีและแชร์คีย์ nostr ของคุณให้เขา ถ้าเขาเพิ่มคุณเป็นรายการโปรดกลับ คุณทั้งคู่จะส่งข้อความหากันผ่านอินเทอร์เน็ตได้เมื่ออยู่นอกระยะ mesh"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bu, %@ kişisine hemen haber verir ve nostr anahtarını onunla paylaşır. o da seni favorilerine eklerse, mesh menzili dışındayken internet üzerinden birbirinize mesaj gönderebilirsiniz."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ одразу дізнається про це, і ця людина отримає твій ключ nostr. якщо вона додасть тебе в обране у відповідь, ви зможете листуватися через інтернет поза зоною дії mesh-мережі."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اس سے %@ کو فوراً اطلاع ملے گی اور آپ کی nostr کلید اس کے ساتھ شیئر ہوگی۔ اگر وہ بھی آپ کو پسندیدہ بنائیں تو mesh کی حد سے باہر ہونے پر آپ دونوں انٹرنیٹ کے ذریعے ایک دوسرے کو پیغام بھیج سکتے ہیں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "việc này sẽ báo cho %@ ngay lập tức và chia sẻ khóa nostr của bạn với người đó. nếu người đó cũng thêm bạn vào yêu thích, hai bạn có thể nhắn tin cho nhau qua internet khi ngoài tầm mesh."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这会立即通知 %@ 并与对方共享你的 nostr 密钥。如果对方也给你加星标，你们就能在超出 mesh 范围时通过互联网互发消息。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這會立即通知 %@ 並與對方分享你的 nostr 金鑰。如果對方也把你加為星標，你們就能在超出 mesh 範圍時透過網際網路互傳訊息。"
+          }
+        }
+      }
+    },
+    "favorites.consent.title" : {
+      "comment" : "Title of the one-time confirmation before the first favorite",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إضافة إلى المفضلة؟"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "প্রিয় হিসেবে যোগ করবেন?"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorit hinzufügen?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "add favorite?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿añadir favorito?"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "افزودن به موردعلاقه‌ها؟"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "idagdag bilang paborito?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ajouter en favori ?"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "להוסיף למועדפים?"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पसंदीदा में जोड़ें?"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tambahkan favorit?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aggiungere ai preferiti?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "お気に入りに追加しますか？"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "즐겨찾기에 추가할까요?"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tambah kegemaran?"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "मनपर्नेमा थप्ने?"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favoriet toevoegen?"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dodać do ulubionych?"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "adicionar favorito?"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "adicionar favorito?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "добавить в избранное?"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lägga till favorit?"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "பிடித்தவராகச் சேர்க்கவா?"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เพิ่มเป็นรายการโปรด?"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorilere eklensin mi?"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "додати в обране?"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پسندیدہ میں شامل کریں؟"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "thêm vào yêu thích?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加星标？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加入星標？"
+          }
+        }
+      }
+    },
+    "mesh_peers.state.favorite_mutual" : {
+      "comment" : "State label for a reciprocated favorite",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مفضلة متبادلة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "পারস্পরিক প্রিয়"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gegenseitiger favorit"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mutual favorite"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorito mutuo"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "موردعلاقه دوطرفه"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "paborito ng isa't isa"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favori mutuel"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מועדף הדדי"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "आपसी पसंदीदा"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "saling favorit"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "preferito reciproco"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "相互お気に入り"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "상호 즐겨찾기"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kegemaran dua hala"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "आपसी मनपर्ने"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wederzijdse favoriet"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wzajemnie w ulubionych"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorito mútuo"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorito mútuo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "взаимно в избранном"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ömsesidig favorit"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "பரஸ்பரம் பிடித்தவர்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "รายการโปรดร่วมกัน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "karşılıklı favori"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "взаємно в обраному"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "باہمی پسندیدہ"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yêu thích lẫn nhau"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "互相星标"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "互相星標"
+          }
+        }
+      }
+    },
+    "mesh_peers.state.favorite_pending" : {
+      "comment" : "State label for a favorite the peer has not reciprocated",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مفضل، ليس متبادلًا بعد"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "প্রিয়, এখনও পারস্পরিক নয়"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorisiert, noch nicht gegenseitig"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorited, not mutual yet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorito, aún no mutuo"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "موردعلاقه، هنوز دوطرفه نیست"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "naka-paborito, hindi pa mutual"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "en favori, pas encore mutuel"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מועדף, עדיין לא הדדי"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पसंदीदा, अभी आपसी नहीं"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "difavoritkan, belum saling"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nei preferiti, non ancora reciproco"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "お気に入り済み・まだ相互ではありません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "즐겨찾기함, 아직 상호 아님"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kegemaran, belum dua hala"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "मनपर्ने, अझै आपसी छैन"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favoriet, nog niet wederzijds"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "w ulubionych, jeszcze nie wzajemnie"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorito, ainda não mútuo"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favoritado, ainda não mútuo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "в избранном, пока не взаимно"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favoritmarkerad, inte ömsesidig än"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "பிடித்தவர், இன்னும் பரஸ்பரம் இல்லை"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "รายการโปรด ยังไม่ร่วมกัน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favori, henüz karşılıklı değil"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "в обраному, ще не взаємно"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پسندیدہ، ابھی باہمی نہیں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "đã yêu thích, chưa được đáp lại"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已加星标，尚未互相"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已加星標，尚未互相"
+          }
+        }
+      }
+    },
+    "mesh_peers.tooltip.favorite_mutual" : {
+      "comment" : "Tooltip for the filled star on a reciprocated favorite",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مفضلة متبادلة — الرسائل دون اتصال عبر nostr تعمل في الاتجاهين"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "পারস্পরিক প্রিয় — nostr-এর মাধ্যমে অফলাইন বার্তা দুই দিকেই কাজ করে"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gegenseitiger favorit — offline-nachrichten über nostr funktionieren in beide richtungen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mutual favorite — offline messages via nostr work both ways"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorito mutuo — los mensajes sin conexión por nostr funcionan en ambos sentidos"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "موردعلاقه دوطرفه — پیام‌های آفلاین از طریق nostr در هر دو جهت کار می‌کند"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "paborito ng isa't isa — gumagana ang offline na mensahe sa nostr sa magkabilang direksyon"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favori mutuel — les messages hors ligne via nostr fonctionnent dans les deux sens"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מועדף הדדי — הודעות לא מקוונות דרך nostr עובדות בשני הכיוונים"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "आपसी पसंदीदा — nostr के ज़रिए ऑफ़लाइन संदेश दोनों तरफ़ काम करते हैं"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "saling favorit — pesan offline lewat nostr berfungsi dua arah"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "preferito reciproco — i messaggi offline via nostr funzionano in entrambe le direzioni"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "相互お気に入り — nostr経由のオフラインメッセージが双方向で使えます"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "상호 즐겨찾기 — nostr를 통한 오프라인 메시지가 양방향으로 작동해요"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kegemaran dua hala — mesej luar talian melalui nostr berfungsi dua arah"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "आपसी मनपर्ने — nostr मार्फत अफलाइन सन्देश दुवैतर्फ काम गर्छ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wederzijdse favoriet — offline berichten via nostr werken in beide richtingen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wzajemnie w ulubionych — wiadomości offline przez nostr działają w obie strony"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorito mútuo — as mensagens offline via nostr funcionam nos dois sentidos"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorito mútuo — mensagens offline via nostr funcionam nos dois sentidos"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "взаимно в избранном — офлайн-сообщения через nostr работают в обе стороны"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ömsesidig favorit — offlinemeddelanden via nostr fungerar åt båda hållen"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "பரஸ்பரம் பிடித்தவர் — nostr வழியான ஆஃப்லைன் செய்திகள் இரு திசைகளிலும் வேலை செய்யும்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "รายการโปรดร่วมกัน — ข้อความออฟไลน์ผ่าน nostr ใช้ได้ทั้งสองทาง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "karşılıklı favori — nostr üzerinden çevrimdışı mesajlar iki yönde de çalışır"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "взаємно в обраному — офлайн-повідомлення через nostr працюють в обидва боки"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "باہمی پسندیدہ — nostr کے ذریعے آف لائن پیغامات دونوں طرف کام کرتے ہیں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yêu thích lẫn nhau — tin nhắn ngoại tuyến qua nostr hoạt động hai chiều"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "互相星标 — 通过 nostr 的离线消息双向可用"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "互相星標 — 透過 nostr 的離線訊息雙向可用"
+          }
+        }
+      }
+    },
+    "mesh_peers.tooltip.favorite_pending" : {
+      "comment" : "Tooltip for the half star on an unreciprocated favorite",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تمت الإضافة إلى المفضلة — تبدأ المراسلة دون اتصال عندما يضيفك إلى مفضلته أيضًا"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "প্রিয় করা হয়েছে — সে-ও আপনাকে প্রিয় করলে অফলাইন বার্তা চালু হবে"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorisiert — offline-nachrichten starten, sobald du zurück favorisiert wirst"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorited — offline messaging starts when they favorite you back"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "en favoritos — los mensajes sin conexión empiezan cuando te añada también"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "موردعلاقه شد — وقتی او هم شما را موردعلاقه کند، پیام‌رسانی آفلاین شروع می‌شود"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "naka-paborito — magsisimula ang offline na pagmemensahe kapag ginawa ka rin niyang paborito"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "en favori — la messagerie hors ligne démarre quand cette personne t'ajoute aussi"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "נוסף למועדפים — שליחת הודעות לא מקוונות תתחיל כשיוסיפו אותך בחזרה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पसंदीदा बनाया — जब वे आपको वापस पसंदीदा बनाएंगे, तब ऑफ़लाइन संदेश शुरू होंगे"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sudah difavoritkan — pesan offline mulai berfungsi saat dia memfavoritkanmu balik"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nei preferiti — la messaggistica offline inizia quando ti aggiunge a sua volta"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "お気に入り済み — 相手もあなたをお気に入りにするとオフラインメッセージが使えるようになります"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "즐겨찾기함 — 상대도 나를 즐겨찾기에 추가하면 오프라인 메시지가 시작돼요"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sudah dijadikan kegemaran — pemesejan luar talian bermula apabila dia turut menjadikan anda kegemaran"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "मनपर्ने बनाइयो — उनले पनि तपाईंलाई मनपर्ने बनाएपछि अफलाइन सन्देश सुरु हुन्छ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "als favoriet toegevoegd — offline berichten starten zodra diegene jou ook toevoegt"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dodano do ulubionych — wiadomości offline ruszą, gdy ta osoba też cię doda"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nos favoritos — as mensagens offline começam quando essa pessoa também te marcar"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favoritado — as mensagens offline começam quando essa pessoa favoritar você de volta"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "в избранном — офлайн-переписка начнётся, когда тебя добавят в ответ"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favoritmarkerad — offlinemeddelanden börjar fungera när personen favoritmarkerar dig tillbaka"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "பிடித்தவராகச் சேர்க்கப்பட்டார் — அவரும் உங்களைச் சேர்த்ததும் ஆஃப்லைன் செய்தி தொடங்கும்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เพิ่มเป็นรายการโปรดแล้ว — การส่งข้อความออฟไลน์จะเริ่มเมื่อเขาเพิ่มคุณกลับ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorilere eklendi — o da seni eklediğinde çevrimdışı mesajlaşma başlar"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "в обраному — офлайн-листування почнеться, коли тебе додадуть у відповідь"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پسندیدہ بنایا گیا — جب وہ بھی آپ کو پسندیدہ بنائیں گے تو آف لائن پیغام رسانی شروع ہو جائے گی"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "đã thêm yêu thích — nhắn tin ngoại tuyến sẽ bắt đầu khi người đó thêm lại bạn"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已加星标 — 对方也给你加星标后，离线消息即可使用"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已加星標 — 對方也把你加為星標後，離線訊息即可使用"
+          }
+        }
+      }
+    },
     "content.delivery.reason.legacy_media_consent_required" : {
       "comment" : "Failure reason when a legacy private-media send lacks per-send consent",
       "extractionState" : "manual",
@@ -22552,181 +23854,181 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "تلقَّ تنبيهات عندما ينضم أحباؤك"
+            "value" : "يمكن للمفضلات المتبادلة مراسلة بعضها عبر الإنترنت (nostr) خارج نطاق شبكة mesh — وسيصلك إشعار عندما يعودون إلى الاتصال"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "আপনার প্রিয় মানুষ যোগ দিলে বিজ্ঞপ্তি পান"
+            "value" : "পারস্পরিক প্রিয়রা mesh-এর সীমার বাইরে থাকলে ইন্টারনেটের (nostr) মাধ্যমে একে অপরকে বার্তা পাঠাতে পারে — আর তারা অনলাইনে এলে আপনি বিজ্ঞপ্তি পাবেন"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "erhalte hinweise, wenn deine lieblingsmenschen online kommen"
+            "value" : "gegenseitige favoriten können einander über das internet (nostr) schreiben, wenn sie außer mesh-reichweite sind — und du wirst benachrichtigt, sobald sie online kommen"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "get notified when your favorite people join"
+            "value" : "mutual favorites can message each other over the internet (nostr) when out of mesh range — and you're notified when they come online"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recibe avisos cuando tus personas favoritas se conecten"
+            "value" : "los favoritos mutuos pueden enviarse mensajes por internet (nostr) fuera del alcance de la red mesh — y recibes un aviso cuando se conectan"
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "وقتی افراد موردعلاقه‌ات می‌پیوندند باخبر شو"
+            "value" : "موردعلاقه‌های دوطرفه می‌توانند خارج از برد mesh از طریق اینترنت (nostr) به هم پیام بدهند — و وقتی آنلاین شوند به شما اطلاع داده می‌شود"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tumanggap ng abiso kapag sumali ang paborito mong mga tao"
+            "value" : "ang mga paborito ng isa't isa ay maaaring magpadalahan ng mensahe sa internet (nostr) kapag wala sa saklaw ng mesh — at aabisuhan ka kapag nag-online sila"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "reçois une alerte quand tes personnes favorites arrivent"
+            "value" : "les favoris mutuels peuvent s'écrire par internet (nostr) hors de portée du mesh — et tu reçois une notification quand ils reviennent en ligne"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "קבל התראות כשהאנשים המועדפים שלך מצטרפים"
+            "value" : "מועדפים הדדיים יכולים לשלוח הודעות דרך האינטרנט (nostr) מחוץ לטווח ה‑mesh — ומתקבלת התראה כשהם חוזרים להיות מקוונים"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "जब आपके पसंदीदा लोग जुड़ें तो सूचना पाएं"
+            "value" : "आपसी पसंदीदा mesh की रेंज से बाहर होने पर इंटरनेट (nostr) के ज़रिए एक-दूसरे को संदेश भेज सकते हैं — और जब वे ऑनलाइन आते हैं तो आपको सूचना मिलती है"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "dapatkan notifikasi saat orang favoritmu bergabung"
+            "value" : "yang saling favorit bisa berkirim pesan lewat internet (nostr) saat di luar jangkauan mesh — dan kamu diberi tahu saat mereka online"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ricevi avvisi quando entrano le tue persone preferite"
+            "value" : "i preferiti reciproci possono scriversi via internet (nostr) fuori dalla portata della mesh — e ricevi una notifica quando tornano online"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "お気に入りの人が参加したら通知を受け取れます"
+            "value" : "相互お気に入り同士は、meshの範囲外でもインターネット（nostr）経由でメッセージを送り合えます — 相手がオンラインになると通知されます"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "즐겨찾는 사용자가 참여하면 알림을 받습니다"
+            "value" : "상호 즐겨찾기끼리는 mesh 범위 밖에서도 인터넷(nostr)으로 메시지를 주고받을 수 있어요 — 상대가 온라인이 되면 알림을 받아요"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "dapatkan notifikasi saat orang favoritmu bergabung"
+            "value" : "kegemaran dua hala boleh berutus mesej melalui internet (nostr) apabila di luar liputan mesh — dan anda akan diberitahu apabila mereka kembali dalam talian"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "तिम्रा मनपर्ने मानिस जोडिएपछि सूचनाहरू पाऊ"
+            "value" : "आपसी मनपर्नेहरूले mesh को दायराबाहिर हुँदा इन्टरनेट (nostr) मार्फत एकअर्कालाई सन्देश पठाउन सक्छन् — र उनीहरू अनलाइन आउँदा तपाईंलाई सूचना आउँछ"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ontvang meldingen wanneer je favoriete mensen meedoen"
+            "value" : "wederzijdse favorieten kunnen elkaar via internet (nostr) berichten sturen buiten bereik van het mesh — en je krijgt een melding wanneer ze online komen"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "otrzymuj powiadomienia, gdy dołączają twoje ulubione osoby"
+            "value" : "osoby wzajemnie w ulubionych mogą pisać do siebie przez internet (nostr) poza zasięgiem sieci mesh — a gdy pojawią się online, dostaniesz powiadomienie"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "recebe notificações quando as tuas pessoas favoritas entram"
+            "value" : "os favoritos mútuos podem trocar mensagens pela internet (nostr) fora do alcance da mesh — e recebes uma notificação quando ficam online"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "receba avisos quando suas pessoas favoritas entrarem"
+            "value" : "favoritos mútuos podem trocar mensagens pela internet (nostr) fora do alcance da mesh — e você recebe uma notificação quando eles ficam online"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "получай уведомления, когда подключаются любимые люди"
+            "value" : "взаимно избранные могут переписываться через интернет (nostr) вне зоны действия mesh-сети — а когда они появляются в сети, приходит уведомление"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "få aviseringar när dina favoriter ansluter"
+            "value" : "ömsesidiga favoriter kan skicka meddelanden till varandra via internet (nostr) utom räckhåll för mesh-nätet — och du får en avisering när de kommer online"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "உங்களுக்குப் பிரியமானவர்கள் சேர்ந்தவுடன் அறிவிப்பு பெறுங்கள்"
+            "value" : "பரஸ்பரம் பிடித்தவர்கள் mesh எல்லைக்கு வெளியே இருக்கும்போது இணையம் (nostr) வழியாக ஒருவருக்கொருவர் செய்தி அனுப்பலாம் — அவர்கள் ஆன்லைனுக்கு வரும்போது உங்களுக்கு அறிவிப்பு வரும்"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "รับการแจ้งเตือนเมื่อคนโปรดของคุณเข้าร่วม"
+            "value" : "รายการโปรดร่วมกันส่งข้อความหากันผ่านอินเทอร์เน็ต (nostr) ได้เมื่ออยู่นอกระยะ mesh — และคุณจะได้รับแจ้งเตือนเมื่อพวกเขาออนไลน์"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "favori kişileriniz katıldığında bildirim alın"
+            "value" : "karşılıklı favoriler mesh menzili dışındayken internet (nostr) üzerinden birbirlerine mesaj gönderebilir — ve çevrimiçi olduklarında bildirim alırsın"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "отримуй сповіщення, коли підключаються улюблені люди"
+            "value" : "взаємно обрані можуть листуватися через інтернет (nostr) поза зоною дії mesh-мережі — а коли вони з'являються онлайн, надходить сповіщення"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "جب آپ کے پسندیدہ لوگ شامل ہوں تو اطلاع پائیں"
+            "value" : "باہمی پسندیدہ mesh کی حد سے باہر انٹرنیٹ (nostr) کے ذریعے ایک دوسرے کو پیغام بھیج سکتے ہیں — اور جب وہ آن لائن آئیں تو آپ کو اطلاع ملتی ہے"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "nhận thông báo khi những người yêu thích của bạn tham gia"
+            "value" : "những người yêu thích lẫn nhau có thể nhắn tin cho nhau qua internet (nostr) khi ngoài tầm mesh — và bạn sẽ được thông báo khi họ trực tuyến"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "你喜欢的人加入时立刻提醒"
+            "value" : "互相星标的双方在超出 mesh 范围时可通过互联网（nostr）互发消息 — 对方上线时你会收到通知"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "你喜歡的人加入時立刻提醒"
+            "value" : "互相星標的雙方在超出 mesh 範圍時可透過網際網路（nostr）互傳訊息 — 對方上線時你會收到通知"
           }
         }
       }
@@ -85958,181 +87260,181 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "تم حظر %@ في محادثات geohash"
+            "value" : "تم حظر %@ في قناة geohash هذه — في قنوات geohash الأخرى يظهر كشخص جديد، فاحظره هناك أيضًا إذا لزم الأمر"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "জিওহ্যাশ চ্যাটে %@ ব্লক করা হয়েছে"
+            "value" : "এই geohash চ্যানেলে %@ কে ব্লক করা হয়েছে — অন্য geohash চ্যানেলে সে নতুন কেউ হিসেবে দেখা দেবে, তাই প্রয়োজনে সেখানেও ব্লক করুন"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ wurde in geohash-chats blockiert"
+            "value" : "%@ in diesem geohash-kanal blockiert — in anderen geohash-kanälen erscheint diese person als jemand neues, blockiere sie dort bei bedarf ebenfalls"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "blocked %@ in geohash chats"
+            "value" : "blocked %@ in this geohash channel — in other geohash channels they appear as someone new, so block them there too if needed"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "se bloqueó a %@ en los chats geohash"
+            "value" : "has bloqueado a %@ en este canal geohash — en otros canales geohash aparece como alguien nuevo, así que bloquéalo también allí si hace falta"
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ در گفتگوهای ژئوهش مسدود شد"
+            "value" : "%@ در این کانال geohash مسدود شد — در کانال‌های geohash دیگر به‌عنوان فردی جدید ظاهر می‌شود، پس در صورت نیاز آنجا هم او را مسدود کنید"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "na-block si %@ sa geohash chats"
+            "value" : "na-block si %@ sa geohash channel na ito — sa ibang geohash channel, lilitaw siya bilang bagong tao, kaya i-block din siya roon kung kailangan"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ a été bloqué dans les chats geohash"
+            "value" : "%@ a été bloqué dans ce canal geohash — dans les autres canaux geohash, cette personne apparaît comme quelqu'un de nouveau, alors bloque-la aussi là-bas si besoin"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ נחסם בצ'אטי geohash"
+            "value" : "%@ נחסם בערוץ ה‑geohash הזה — בערוצי geohash אחרים הוא יופיע כמישהו חדש, אז אם צריך, כדאי לחסום אותו גם שם"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "जियोहैश चैट में %@ ब्लॉक किया गया"
+            "value" : "इस geohash चैनल में %@ को ब्लॉक किया गया — दूसरे geohash चैनलों में वे किसी नए व्यक्ति की तरह दिखेंगे, इसलिए ज़रूरत हो तो वहाँ भी ब्लॉक करें"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ diblokir di chat geohash"
+            "value" : "%@ diblokir di channel geohash ini — di channel geohash lain dia muncul sebagai orang baru, jadi blokir juga di sana kalau perlu"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ è stato bloccato nei chat geohash"
+            "value" : "%@ bloccato in questo canale geohash — negli altri canali geohash appare come una persona nuova, quindi bloccalo anche lì se serve"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@をgeohashチャットでブロックしました"
+            "value" : "このgeohashチャンネルで%@をブロックしました — 他のgeohashチャンネルでは別人として表示されるため、必要ならそちらでもブロックしてください"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geohash 채팅에서 %@을(를) 차단했습니다"
+            "value" : "이 geohash 채널에서 %@을(를) 차단했어요 — 다른 geohash 채널에서는 새로운 사람으로 표시되니 필요하면 거기서도 차단하세요"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ diblokir di chat geohash"
+            "value" : "%@ disekat dalam saluran geohash ini — dalam saluran geohash lain dia muncul sebagai orang baharu, jadi sekat juga di sana jika perlu"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ लाई geohash च्याटमा ब्लक गरियो"
+            "value" : "यस geohash च्यानलमा %@ लाई ब्लक गरियो — अन्य geohash च्यानलहरूमा उनी नयाँ व्यक्तिजस्तै देखिन्छन्, त्यसैले आवश्यक परे त्यहाँ पनि ब्लक गर्नुहोस्"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ geblokkeerd in geohash-chats"
+            "value" : "%@ geblokkeerd in dit geohash-kanaal — in andere geohash-kanalen verschijnt diegene als iemand nieuws, dus blokkeer daar ook als dat nodig is"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "zablokowano %@ w czatach geohash"
+            "value" : "zablokowano %@ w tym kanale geohash — w innych kanałach geohash ta osoba pojawia się jako ktoś nowy, więc w razie potrzeby zablokuj ją też tam"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ bloqueado nos chats geohash"
+            "value" : "%@ bloqueado neste canal geohash — noutros canais geohash aparece como alguém novo, por isso bloqueia-o também aí se for preciso"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ foi bloqueado nos chats geohash"
+            "value" : "%@ bloqueado neste canal geohash — em outros canais geohash essa pessoa aparece como alguém novo, então bloqueie lá também se precisar"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ заблокирован в geohash-чатах"
+            "value" : "%@ заблокирован в этом geohash-канале — в других geohash-каналах этот человек выглядит как кто-то новый, так что при необходимости заблокируй его и там"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "blockerade %@ i geohash-chattar"
+            "value" : "%@ blockerad i den här geohash-kanalen — i andra geohash-kanaler dyker personen upp som någon ny, så blockera hen där också om det behövs"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geohash உரையாடல்களில் %@ தடுக்கப்பட்டார்"
+            "value" : "இந்த geohash சேனலில் %@ தடுக்கப்பட்டார் — மற்ற geohash சேனல்களில் அவர் புதிய நபராகத் தோன்றுவார், தேவைப்பட்டால் அங்கும் தடுக்கவும்"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "บล็อก %@ ในแชท geohash"
+            "value" : "บล็อก %@ ในช่อง geohash นี้แล้ว — ในช่อง geohash อื่นเขาจะปรากฏเป็นคนใหม่ ดังนั้นถ้าจำเป็นก็บล็อกที่นั่นด้วย"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geohash sohbetlerinde %@ engellendi"
+            "value" : "%@ bu geohash kanalında engellendi — diğer geohash kanallarında yeni biri olarak görünür, gerekirse orada da engelle"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ заблоковано в geohash-чатах"
+            "value" : "%@ заблоковано в цьому geohash-каналі — в інших geohash-каналах ця людина виглядає як хтось новий, тож за потреби заблокуй її й там"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geohash چیٹس میں %@ کو بلاک کیا"
+            "value" : "اس geohash چینل میں %@ کو بلاک کر دیا گیا — دوسرے geohash چینلز میں وہ کسی نئے فرد کے طور پر نظر آئیں گے، اس لیے ضرورت ہو تو وہاں بھی بلاک کریں"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "đã chặn %@ trong chat geohash"
+            "value" : "đã chặn %@ trong kênh geohash này — ở các kênh geohash khác, người đó xuất hiện như một người mới, nên hãy chặn ở đó nữa nếu cần"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已在 geohash 聊天中屏蔽 %@"
+            "value" : "已在此 geohash 频道屏蔽 %@ — 在其他 geohash 频道中对方会显示为新面孔，如有需要请在那里也进行屏蔽"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已在 geohash 聊天中屏蔽 %@"
+            "value" : "已在此 geohash 頻道封鎖 %@ — 在其他 geohash 頻道中對方會顯示為新的人，如有需要請在那裡也一併封鎖"
           }
         }
       }
