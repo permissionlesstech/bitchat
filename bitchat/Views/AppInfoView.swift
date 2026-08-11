@@ -23,6 +23,7 @@ struct AppInfoView: View {
     @State private var locationNotesEnabled = LocationNotesSettings.enabled
     @State private var hideMessagePreviews = NotificationPrivacySettings.hideMessagePreviews
     @State private var sendReadReceipts = ReadReceiptSettings.sendReadReceipts
+    @State private var appLockEnabled = AppLockSettings.isEnabled
     @State private var customRelays = NostrRelaySettings.customRelays()
     @State private var relayInput = ""
     @State private var relayError: String?
@@ -119,6 +120,8 @@ struct AppInfoView: View {
             static let hidePreviewsTitle = String(localized: "app_info.settings.hide_previews.title", defaultValue: "hide message previews", comment: "Title of the setting that keeps message text, sender names, and geohashes out of lock-screen notifications")
             static let hidePreviewsSubtitle = String(localized: "app_info.settings.hide_previews.subtitle", defaultValue: "notifications say that something arrived without showing the message, who sent it, or which location channel it came from. anyone holding your locked phone learns nothing from the lock screen. on by default.", comment: "Subtitle explaining what hiding notification message previews does")
             static let readReceiptsTitle = String(localized: "app_info.settings.read_receipts.title", defaultValue: "send read receipts", comment: "Title of the setting that controls whether read receipts are sent for private messages")
+            static let appLockTitle = String(localized: "app_info.settings.app_lock.title", defaultValue: "lock the app", comment: "Title of the setting that gates the app behind Face ID/Touch ID/passcode")
+            static let appLockSubtitle = String(localized: "app_info.settings.app_lock.subtitle", defaultValue: "require face id, touch id, or the device passcode to open bitchat after it's been in the background. needs a device passcode — if the passcode is ever removed, the lock turns itself off instead of locking you out.", comment: "Subtitle explaining the app-lock setting, its passcode requirement, and the fail-open rule")
             static let readReceiptsSubtitle = String(localized: "app_info.settings.read_receipts.subtitle", defaultValue: "lets people see when you've read their private messages. a receipt also says you were awake and opened the app at that moment — turn this off to keep your reading activity to yourself. you'll still see receipts others send.", comment: "Subtitle explaining what the read-receipt setting shares and what turning it off withholds")
 
             static let dangerTitle = String(localized: "app_info.settings.danger.title", defaultValue: "DANGER ZONE", comment: "Section header (uppercase) for destructive actions in settings")
@@ -554,6 +557,25 @@ struct AppInfoView: View {
                             set: { newValue in
                                 sendReadReceipts = newValue
                                 ReadReceiptSettings.sendReadReceipts = newValue
+                            }
+                        )
+                    )
+                }
+
+                settingsCard {
+                    settingToggle(
+                        title: Text(verbatim: Strings.Settings.appLockTitle),
+                        subtitle: Text(verbatim: Strings.Settings.appLockSubtitle),
+                        isOn: Binding(
+                            get: { appLockEnabled },
+                            set: { newValue in
+                                // Refuse to arm without a device passcode:
+                                // there would be nothing to unlock WITH, and
+                                // the fail-open rule would make the lock a
+                                // no-op anyway.
+                                guard !newValue || AppLockModel.canAuthenticate() else { return }
+                                appLockEnabled = newValue
+                                AppLockSettings.setEnabled(newValue)
                             }
                         )
                     )

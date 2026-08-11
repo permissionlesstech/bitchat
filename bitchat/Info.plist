@@ -39,6 +39,8 @@
 	<string>bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>bitchat uses Bluetooth to discover and connect with other bitchat users nearby.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Face ID unlocks bitchat when the app lock is turned on.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>bitchat uses the camera to scan QR codes to verify peers.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

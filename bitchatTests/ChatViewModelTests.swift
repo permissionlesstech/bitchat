@@ -2383,3 +2383,61 @@ struct ChatViewModelLifecycleTests {
         #expect(transport.startServicesCallCount == 1)
     }
 }
+
+// MARK: - App Lock
+
+/// Drives AppLockModel through injected providers — no LAContext, no shared
+/// UserDefaults — pinning the gate's whole contract: locked from launch when
+/// enabled, re-locks on background, unlock only on auth success, and inert
+/// when disabled.
+struct AppLockModelTests {
+
+    @Test @MainActor
+    func locksAtLaunchAndUnlocksOnlyOnAuthSuccess() {
+        var authResult = false
+        let model = AppLockModel(
+            isEnabledProvider: { true },
+            authenticate: { completion in completion(authResult) }
+        )
+
+        #expect(model.isLocked)
+
+        model.requestUnlock()
+        #expect(model.isLocked)
+
+        authResult = true
+        model.requestUnlock()
+        #expect(!model.isLocked)
+
+        // Backgrounding re-engages the gate.
+        model.lockIfEnabled()
+        #expect(model.isLocked)
+    }
+
+    @Test @MainActor
+    func staysInertWhenDisabled() {
+        let model = AppLockModel(
+            isEnabledProvider: { false },
+            authenticate: { _ in Issue.record("must not authenticate while disabled") }
+        )
+
+        #expect(!model.isLocked)
+        model.lockIfEnabled()
+        #expect(!model.isLocked)
+        model.requestUnlock()
+        #expect(!model.isLocked)
+    }
+
+    @Test @MainActor
+    func appLockSettingDefaultsToOffAndResets() {
+        let suite = "AppLockSettingsTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        #expect(!AppLockSettings.isEnabled(in: defaults))
+        AppLockSettings.setEnabled(true, in: defaults)
+        #expect(AppLockSettings.isEnabled(in: defaults))
+        AppLockSettings.reset(in: defaults)
+        #expect(!AppLockSettings.isEnabled(in: defaults))
+    }
+}
