@@ -63,6 +63,14 @@ final class VerificationModel: ObservableObject {
         return VerificationService.shared.buildMyQRString(nickname: currentNickname, npub: npub) ?? ""
     }
 
+    func identityVerificationCard() -> IdentityVerificationCard {
+        IdentityVerificationCard.current(
+            nickname: currentNickname,
+            npub: try? chatViewModel.idBridge.getCurrentNostrIdentity()?.npub,
+            noiseFingerprint: chatViewModel.getMyFingerprint()
+        )
+    }
+
     func verifyScannedPayload(_ payload: String) -> VerificationScanOutcome {
         guard let qr = VerificationService.shared.verifyScannedQR(payload) else {
             return .invalid
