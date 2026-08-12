@@ -84281,6 +84281,750 @@
         }
       }
     },
+    "security.mesh_plaintext.body" : {
+      "comment" : "Body of the dismissible notice explaining mesh is unencrypted",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أي شيء تكتبه في ‎#mesh يمكن لكل جهاز ضمن نطاق الراديو قراءته. لرسالة مباشرة مشفّرة، افتح شخصًا من قائمة الأشخاص."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "#mesh-এ আপনি যা লেখেন তা রেডিও পরিসরের প্রতিটি ডিভাইস পড়তে পারে। এনক্রিপ্টেড সরাসরি বার্তার জন্য, লোক তালিকা থেকে কাউকে খুলুন।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alles, was du in #mesh schreibst, kann von jedem gerät in funkreichweite gelesen werden. für eine verschlüsselte direktnachricht öffne jemanden aus der personenliste."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "anything you type in #mesh can be read by every device within radio range. for an encrypted direct message, open someone from the people list."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cualquier cosa que escribas en #mesh puede leerla cualquier dispositivo dentro del alcance de radio. para un mensaje directo cifrado, abre a alguien desde la lista de personas."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "هر چیزی که در ‎#mesh بنویسید، هر دستگاهی در برد رادیویی می‌تواند بخواند. برای پیام مستقیم رمزگذاری‌شده، کسی را از فهرست افراد باز کنید."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "anumang i-type mo sa #mesh ay mababasa ng bawat device sa loob ng radio range. para sa naka-encrypt na direktang mensahe, buksan ang isang tao mula sa listahan ng mga tao."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tout ce que tu écris dans #mesh peut être lu par tous les appareils à portée radio. pour un message direct chiffré, ouvre quelqu'un depuis la liste des personnes."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כל מה שתכתוב ב-#mesh יכול להיקרא בידי כל מכשיר בטווח הקליטה. להודעה ישירה מוצפנת, פתח מישהו מרשימת האנשים."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "#mesh में आप जो कुछ भी लिखते हैं उसे रेडियो रेंज के हर डिवाइस द्वारा पढ़ा जा सकता है। एन्क्रिप्टेड सीधा संदेश भेजने के लिए, लोगों की सूची से किसी को खोलें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apa pun yang kamu ketik di #mesh dapat dibaca oleh setiap perangkat dalam jangkauan radio. untuk pesan langsung terenkripsi, buka seseorang dari daftar orang."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tutto ciò che scrivi in #mesh può essere letto da ogni dispositivo nel raggio radio. per un messaggio diretto cifrato, apri qualcuno dall'elenco delle persone."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "#mesh に入力した内容は、電波の届く範囲にあるすべての端末が読めます。暗号化されたダイレクトメッセージには、people リストから相手を開いてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "#mesh에 입력한 내용은 무선 범위 내의 모든 기기가 읽을 수 있습니다. 암호화된 다이렉트 메시지는 사람 목록에서 상대를 여세요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apa sahaja yang anda taip dalam #mesh boleh dibaca oleh setiap peranti dalam julat radio. untuk mesej terus tersulit, buka seseorang daripada senarai orang."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "#mesh मा तपाईंले लेख्ने जुनसुकै कुरा रेडियो दायराभित्रका हरेक यन्त्रले पढ्न सक्छ। इन्क्रिप्टेड सिधा सन्देशका लागि, मानिसहरूको सूचीबाट कसैलाई खोल्नुहोस्।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alles wat je in #mesh typt, kan door elk apparaat binnen radiobereik worden gelezen. voor een versleuteld direct bericht open je iemand uit de personenlijst."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wszystko, co wpiszesz w #mesh, może odczytać każde urządzenie w zasięgu radiowym. aby wysłać zaszyfrowaną wiadomość bezpośrednią, otwórz kogoś z listy osób."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tudo o que escreveres em #mesh pode ser lido por qualquer dispositivo ao alcance de rádio. para uma mensagem direta cifrada, abre alguém na lista de pessoas."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tudo o que você digitar em #mesh pode ser lido por qualquer dispositivo no alcance do rádio. para uma mensagem direta criptografada, abra alguém na lista de pessoas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "всё, что вы пишете в #mesh, может прочитать любое устройство в зоне радиосвязи. для зашифрованного личного сообщения откройте кого-нибудь из списка людей."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "allt du skriver i #mesh kan läsas av varje enhet inom radioräckvidd. för ett krypterat direktmeddelande öppnar du någon från personlistan."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "#mesh இல் நீங்கள் தட்டச்சு செய்யும் எதையும் ரேடியோ வரம்பிலுள்ள ஒவ்வொரு சாதனமும் படிக்க முடியும். மறையாக்கப்பட்ட நேரடிச் செய்திக்கு, நபர்கள் பட்டியலிலிருந்து ஒருவரைத் திறக்கவும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "สิ่งที่คุณพิมพ์ใน #mesh อุปกรณ์ทุกเครื่องในระยะสัญญาณวิทยุอ่านได้ หากต้องการข้อความส่วนตัวที่เข้ารหัส ให้เปิดใครสักคนจากรายชื่อผู้คน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "#mesh içinde yazdığın her şey telsiz menzilindeki her cihaz tarafından okunabilir. şifreli bir doğrudan mesaj için kişiler listesinden birini aç."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "усе, що ви пишете в #mesh, може прочитати будь-який пристрій у радіусі радіозв'язку. для зашифрованого прямого повідомлення відкрийте когось зі списку людей."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "#mesh میں آپ جو کچھ بھی لکھتے ہیں اسے ریڈیو رینج کے اندر ہر ڈیوائس پڑھ سکتی ہے۔ خفیہ کردہ براہ راست پیغام کے لیے، لوگوں کی فہرست سے کسی کو کھولیں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bất cứ điều gì bạn gõ trong #mesh đều có thể được mọi thiết bị trong tầm sóng đọc được. để gửi tin nhắn trực tiếp được mã hóa, hãy mở một người từ danh sách mọi người."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你在 #mesh 中输入的任何内容，无线电范围内的每台设备都能读到。如需加密的私信，请从人员列表中打开某人。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你在 #mesh 中輸入的任何內容，無線電範圍內的每台裝置都能讀到。如需加密的私訊，請從人員清單中開啟某人。"
+          }
+        }
+      }
+    },
+    "security.mesh_plaintext.body.bridged" : {
+      "comment" : "Body of the mesh plaintext notice when the mesh bridge is enabled",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أي شيء تكتبه في ‎#mesh يمكن للأجهزة القريبة قراءته، وعندما يكون الجسر مفعّلًا قد يصل أيضًا إلى أشخاص عبر مرحّلات Nostr في هذه المنطقة. لرسالة مباشرة مشفّرة، افتح شخصًا من قائمة الأشخاص."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "#mesh-এ আপনি যা লেখেন তা কাছাকাছি ডিভাইসগুলি পড়তে পারে, এবং ব্রিজ চালু থাকলে তা এই এলাকার Nostr রিলের মাধ্যমে অন্যদের কাছেও পৌঁছাতে পারে। এনক্রিপ্টেড সরাসরি বার্তার জন্য, লোক তালিকা থেকে কাউকে খুলুন।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alles, was du in #mesh schreibst, kann von geräten in der nähe gelesen werden und kann bei aktivierter brücke auch über Nostr-relays in dieser gegend andere erreichen. für eine verschlüsselte direktnachricht öffne jemanden aus der personenliste."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "anything you type in #mesh can be read by nearby devices and, when the bridge is on, may also reach people via Nostr relays in this area. for an encrypted direct message, open someone from the people list."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cualquier cosa que escribas en #mesh puede leerla los dispositivos cercanos y, con el puente activado, también puede llegar a personas mediante relés Nostr de esta zona. para un mensaje directo cifrado, abre a alguien desde la lista de personas."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "هر چیزی که در ‎#mesh بنویسید، دستگاه‌های نزدیک می‌توانند بخوانند و اگر پل روشن باشد ممکن است از طریق رله‌های Nostr در این منطقه به افراد دیگر هم برسد. برای پیام مستقیم رمزگذاری‌شده، کسی را از فهرست افراد باز کنید."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "anumang i-type mo sa #mesh ay mababasa ng mga kalapit na device at, kapag naka-on ang bridge, maaari ring makarating sa mga tao sa pamamagitan ng mga Nostr relay sa lugar na ito. para sa naka-encrypt na direktang mensahe, buksan ang isang tao mula sa listahan ng mga tao."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tout ce que tu écris dans #mesh peut être lu par les appareils à proximité et, quand le pont est actif, peut aussi atteindre des gens via les relais Nostr de cette zone. pour un message direct chiffré, ouvre quelqu'un depuis la liste des personnes."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כל מה שתכתוב ב-#mesh יכול להיקרא בידי מכשירים בסביבה, וכשהגשר פעיל הוא עשוי להגיע גם לאנשים דרך ממסרי Nostr באזור. להודעה ישירה מוצפנת, פתח מישהו מרשימת האנשים."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "#mesh में आप जो कुछ भी लिखते हैं उसे आस-पास के डिवाइस पढ़ सकते हैं, और ब्रिज चालू होने पर वह इस क्षेत्र के Nostr रिले के ज़रिए दूसरों तक भी पहुँच सकता है। एन्क्रिप्टेड सीधा संदेश भेजने के लिए, लोगों की सूची से किसी को खोलें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apa pun yang kamu ketik di #mesh dapat dibaca oleh perangkat di sekitar dan, saat bridge aktif, juga dapat menjangkau orang melalui relai Nostr di area ini. untuk pesan langsung terenkripsi, buka seseorang dari daftar orang."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tutto ciò che scrivi in #mesh può essere letto dai dispositivi vicini e, con il bridge attivo, può raggiungere altre persone tramite i relay Nostr di questa zona. per un messaggio diretto cifrato, apri qualcuno dall'elenco delle persone."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "#mesh に入力した内容は近くの端末が読めます。ブリッジが有効な場合は、この地域の Nostr リレー経由で他の人にも届くことがあります。暗号化されたダイレクトメッセージには、people リストから相手を開いてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "#mesh에 입력한 내용은 근처 기기가 읽을 수 있고, 브리지가 켜져 있으면 이 지역의 Nostr 릴레이를 통해 다른 사람에게도 전달될 수 있습니다. 암호화된 다이렉트 메시지는 사람 목록에서 상대를 여세요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apa sahaja yang anda taip dalam #mesh boleh dibaca oleh peranti berdekatan dan, apabila jambatan dihidupkan, mungkin juga sampai kepada orang melalui geganti Nostr di kawasan ini. untuk mesej terus tersulit, buka seseorang daripada senarai orang."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "#mesh मा तपाईंले लेख्ने जुनसुकै कुरा नजिकका यन्त्रहरूले पढ्न सक्छन्, र ब्रिज खुला हुँदा यो क्षेत्रका Nostr रिले मार्फत अरूसम्म पनि पुग्न सक्छ। इन्क्रिप्टेड सिधा सन्देशका लागि, मानिसहरूको सूचीबाट कसैलाई खोल्नुहोस्।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alles wat je in #mesh typt, kan door apparaten in de buurt worden gelezen en kan, als de brug aanstaat, ook mensen bereiken via Nostr-relays in dit gebied. voor een versleuteld direct bericht open je iemand uit de personenlijst."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wszystko, co wpiszesz w #mesh, mogą odczytać pobliskie urządzenia, a przy włączonym moście może też dotrzeć do ludzi przez przekaźniki Nostr w tej okolicy. aby wysłać zaszyfrowaną wiadomość bezpośrednią, otwórz kogoś z listy osób."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tudo o que escreveres em #mesh pode ser lido por dispositivos próximos e, com a ponte ligada, pode também chegar a pessoas através de relés Nostr nesta zona. para uma mensagem direta cifrada, abre alguém na lista de pessoas."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tudo o que você digitar em #mesh pode ser lido por dispositivos próximos e, com a ponte ligada, também pode chegar a pessoas por relés Nostr nesta área. para uma mensagem direta criptografada, abra alguém na lista de pessoas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "всё, что вы пишете в #mesh, могут прочитать устройства поблизости, а при включённом мосте это может дойти и до людей через реле Nostr в этом районе. для зашифрованного личного сообщения откройте кого-нибудь из списка людей."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "allt du skriver i #mesh kan läsas av enheter i närheten och kan, när bryggan är på, även nå folk via Nostr-reläer i det här området. för ett krypterat direktmeddelande öppnar du någon från personlistan."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "#mesh இல் நீங்கள் தட்டச்சு செய்யும் எதையும் அருகிலுள்ள சாதனங்கள் படிக்க முடியும், மேலும் பாலம் இயக்கத்தில் இருக்கும்போது இப்பகுதியின் Nostr ரிலேக்கள் வழியாக மற்றவர்களையும் சென்றடையலாம். மறையாக்கப்பட்ட நேரடிச் செய்திக்கு, நபர்கள் பட்டியலிலிருந்து ஒருவரைத் திறக்கவும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "สิ่งที่คุณพิมพ์ใน #mesh อุปกรณ์ใกล้เคียงอ่านได้ และเมื่อเปิดบริดจ์ไว้ ก็อาจไปถึงผู้คนผ่านรีเลย์ Nostr ในพื้นที่นี้ด้วย หากต้องการข้อความส่วนตัวที่เข้ารหัส ให้เปิดใครสักคนจากรายชื่อผู้คน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "#mesh içinde yazdığın her şey yakındaki cihazlar tarafından okunabilir ve köprü açıkken bu bölgedeki Nostr aktarıcıları üzerinden başkalarına da ulaşabilir. şifreli bir doğrudan mesaj için kişiler listesinden birini aç."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "усе, що ви пишете в #mesh, можуть прочитати пристрої поблизу, а коли міст увімкнено — це може дійти й до людей через реле Nostr у цьому районі. для зашифрованого прямого повідомлення відкрийте когось зі списку людей."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "#mesh میں آپ جو کچھ بھی لکھتے ہیں اسے قریبی ڈیوائسز پڑھ سکتی ہیں، اور برج آن ہونے پر یہ اس علاقے کے Nostr ریلے کے ذریعے دوسروں تک بھی پہنچ سکتا ہے۔ خفیہ کردہ براہ راست پیغام کے لیے، لوگوں کی فہرست سے کسی کو کھولیں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bất cứ điều gì bạn gõ trong #mesh đều có thể được các thiết bị gần đó đọc được, và khi bật cầu nối, nó cũng có thể đến với mọi người qua các relay Nostr trong khu vực này. để gửi tin nhắn trực tiếp được mã hóa, hãy mở một người từ danh sách mọi người."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你在 #mesh 中输入的任何内容，附近设备都能读到；开启桥接时，还可能通过本地区的 Nostr 中继到达其他人。如需加密的私信，请从人员列表中打开某人。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你在 #mesh 中輸入的任何內容，附近裝置都能讀到；開啟橋接時，還可能透過本地區的 Nostr 中繼到達其他人。如需加密的私訊，請從人員清單中開啟某人。"
+          }
+        }
+      }
+    },
+    "security.mesh_plaintext.dismiss" : {
+      "comment" : "Button that hides the mesh plaintext notice until reinstall",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إغلاق"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "বন্ধ করুন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "schließen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dismiss"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "descartar"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بستن"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "isara"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ignorer"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "סגור"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "बंद करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tutup"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chiudi"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "閉じる"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "닫기"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tutup"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "बन्द गर"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sluiten"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "zamknij"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "fechar"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dispensar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "закрыть"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "stäng"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "மூடு"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ปิด"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kapat"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "закрити"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بند کریں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "đóng"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "關閉"
+          }
+        }
+      }
+    },
+    "security.mesh_plaintext.title" : {
+      "comment" : "Title of the dismissible notice above the mesh composer",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الشبكة بث عام"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "মেশ একটি প্রকাশ্য সম্প্রচার"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh ist eine öffentliche übertragung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh is a public broadcast"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh es una transmisión pública"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مش یک پخش عمومی است"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pampubliko ang mesh"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "le mesh est une diffusion publique"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רשת המש היא שידור פומבי"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "मेश एक सार्वजनिक प्रसारण है"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh adalah siaran publik"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh è una trasmissione pubblica"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh は公開ブロードキャストです"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh는 공개 방송입니다"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh ialah siaran awam"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "मेश सार्वजनिक प्रसारण हो"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh is een openbare uitzending"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh to nadawanie publiczne"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh é uma transmissão pública"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "o mesh é uma transmissão pública"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh — это открытая трансляция"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh är en offentlig sändning"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh என்பது பொது ஒலிபரப்பு"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh คือการกระจายสัญญาณสาธารณะ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh herkese açık bir yayındır"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh — це відкрита трансляція"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "میش ایک عوامی نشریات ہے"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh là một kênh phát công khai"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh 是公开广播"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh 是公開廣播"
+          }
+        }
+      }
+    },
     "system.chat.blocked" : {
       "extractionState" : "manual",
       "localizations" : {

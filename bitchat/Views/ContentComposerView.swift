@@ -28,8 +28,17 @@ struct ContentComposerView: View {
     @Binding var showMacImagePicker: Bool
     #endif
 
+    @State private var meshPlaintextNoticeDismissed = MeshPlaintextNoticeSettings.isDismissed
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            if showsMeshPlaintextNotice {
+                MeshPlaintextNoticeView(bridgeEnabled: bridgeService.isEnabled) {
+                    meshPlaintextNoticeDismissed = true
+                    MeshPlaintextNoticeSettings.isDismissed = true
+                }
+            }
+
             if conversationUIModel.showAutocomplete && !conversationUIModel.autocompleteSuggestions.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(conversationUIModel.autocompleteSuggestions.prefix(4).enumerated()), id: \.element) { index, suggestion in
@@ -145,10 +154,22 @@ struct ContentComposerView: View {
         .onDisappear {
             autocompleteDebounceTimer?.invalidate()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .meshPlaintextNoticeSettingsChanged)) { _ in
+            meshPlaintextNoticeDismissed = MeshPlaintextNoticeSettings.isDismissed
+        }
     }
 }
 
 private extension ContentComposerView {
+    var showsMeshPlaintextNotice: Bool {
+        guard !meshPlaintextNoticeDismissed,
+              privateConversationModel.selectedHeaderState == nil,
+              case .mesh = locationChannelsModel.selectedChannel else {
+            return false
+        }
+        return true
+    }
+
     /// The nearby-only scope toggle appears only where it means something:
     /// the public mesh channel with the bridge on.
     var showsNearbyOnlyToggle: Bool {
