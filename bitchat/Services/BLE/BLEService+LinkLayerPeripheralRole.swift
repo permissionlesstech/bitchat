@@ -284,6 +284,11 @@ extension BLEService: CBPeripheralManagerDelegate {
                 logAccumulatedCentralWrite(metadata, centralUUID: centralUUID)
                 SecureLogger.warning("⚠️ Dropping oversized pending write buffer (\(metadata.accumulatedBytes) bytes) for central \(centralUUID.prefix(8))…", category: .session)
                 logFailedSingleWriteIfNeeded(hasMultiple: hasMultiple, sortedRequests: sorted)
+
+            case let .invalid(metadata):
+                logAccumulatedCentralWrite(metadata, centralUUID: centralUUID)
+                SecureLogger.warning("⚠️ Dropping malformed pending write (offsets=\(metadata.offsets)) for central \(centralUUID.prefix(8))…", category: .session)
+                logFailedSingleWriteIfNeeded(hasMultiple: hasMultiple, sortedRequests: sorted)
             }
         }
     }
