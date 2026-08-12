@@ -23,6 +23,8 @@ final class AppChromeModel: ObservableObject {
     @Published var showScreenshotPrivacyWarning = false
     /// Triple-tapping the logo asks first; the dialog lives on the header.
     @Published var showPanicConfirmation = false
+    /// Triple-tap while the gesture is off. See `requestPanicWipe`.
+    @Published var showPanicGestureDisabledAlert = false
     /// Mirrors `ChatViewModel.panicRecoveryBlocked` for the chrome: a wipe
     /// that did not commit must be visible, not just logged — the person who
     /// triggered it needs to know data may remain on the device.
@@ -120,11 +122,23 @@ final class AppChromeModel: ObservableObject {
         prepareForPanic = preparation
     }
 
-    /// Entry point for the header triple-tap: confirm before destroying.
-    /// The Settings-pane button has always confirmed; the gesture now goes
-    /// through the same dialog so a mis-tap can't wipe the device.
+    /// Entry point for the header triple-tap. The Settings-pane button has
+    /// always confirmed; the gesture goes through the same dialog by default
+    /// so a mis-tap can't wipe the device.
+    ///
+    /// The mode is resolved here rather than at the gesture site so that
+    /// instant / confirm / off is decided at one choke point.
     func requestPanicWipe() {
-        showPanicConfirmation = true
+        switch PanicWipeSettings.logoShortcutMode {
+        case .confirm:
+            showPanicConfirmation = true
+        case .instant:
+            panicClearAllData()
+        case .off:
+            // A silent no-op is the worst outcome here: someone triple-tapping
+            // under duress would believe the device was wiped. Say it wasn't.
+            showPanicGestureDisabledAlert = true
+        }
     }
 
     func panicClearAllData() {
