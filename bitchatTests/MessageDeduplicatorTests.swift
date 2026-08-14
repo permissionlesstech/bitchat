@@ -13,7 +13,12 @@ import Testing
 @Suite("Message Deduplicator")
 struct MessageDeduplicatorTests {
     @Test func markProcessed_enforcesMaximumCount() {
-        let deduplicator = MessageDeduplicator(maxAge: 300, maxCount: 4)
+        let now = Date(timeIntervalSince1970: 1_000)
+        let deduplicator = MessageDeduplicator(
+            maxAge: 300,
+            maxCount: 4,
+            dateProvider: { now }
+        )
 
         for id in ["a", "b", "c", "d", "e"] {
             deduplicator.markProcessed(id)
@@ -26,11 +31,16 @@ struct MessageDeduplicatorTests {
         #expect(deduplicator.contains("e"))
     }
 
-    @Test func markProcessed_cleansExpiredEntriesBeforeCountTrim() async {
-        let deduplicator = MessageDeduplicator(maxAge: 0.1, maxCount: 4)
+    @Test func markProcessed_cleansExpiredEntriesBeforeCountTrim() {
+        var now = Date(timeIntervalSince1970: 1_000)
+        let deduplicator = MessageDeduplicator(
+            maxAge: 300,
+            maxCount: 4,
+            dateProvider: { now }
+        )
 
         deduplicator.markProcessed("expired")
-        try? await Task.sleep(nanoseconds: 200_000_000)
+        now.addTimeInterval(301)
 
         for id in ["b", "c", "d", "e"] {
             deduplicator.markProcessed(id)

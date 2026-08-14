@@ -16,6 +16,7 @@ final class MessageDeduplicator {
     private let lock = NSLock()
     private let maxAge: TimeInterval
     private let maxCount: Int
+    private let dateProvider: () -> Date
 
     /// Initialize with default config from TransportConfig
     convenience init() {
@@ -26,9 +27,14 @@ final class MessageDeduplicator {
     }
 
     /// Initialize with custom config for content deduplication
-    init(maxAge: TimeInterval, maxCount: Int) {
+    init(
+        maxAge: TimeInterval,
+        maxCount: Int,
+        dateProvider: @escaping () -> Date = Date.init
+    ) {
         self.maxAge = maxAge
         self.maxCount = maxCount
+        self.dateProvider = dateProvider
     }
 
     /// Check if message is duplicate and add if not.
@@ -38,7 +44,7 @@ final class MessageDeduplicator {
         lock.lock()
         defer { lock.unlock() }
 
-        let now = Date()
+        let now = dateProvider()
         cleanupOldEntries(before: now.addingTimeInterval(-maxAge))
 
         if lookup[id] != nil {
@@ -57,7 +63,7 @@ final class MessageDeduplicator {
         lock.lock()
         defer { lock.unlock() }
 
-        let now = Date()
+        let now = dateProvider()
         cleanupOldEntries(before: now.addingTimeInterval(-maxAge))
 
         if lookup[id] == nil {
@@ -109,7 +115,7 @@ final class MessageDeduplicator {
         lock.lock()
         defer { lock.unlock() }
 
-        cleanupOldEntries(before: Date().addingTimeInterval(-maxAge))
+        cleanupOldEntries(before: dateProvider().addingTimeInterval(-maxAge))
 
         // Shrink capacity if significantly oversized
         if entries.capacity > maxCount * 2 && entries.count < maxCount {
