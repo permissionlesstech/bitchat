@@ -551,7 +551,7 @@ final class ChatMediaTransferCoordinator {
         guard context.canSendMediaInCurrentContext else {
             SecureLogger.info("Voice note blocked outside mesh/private context", category: .session)
             try? FileManager.default.removeItem(at: url)
-            context.addSystemMessage("Voice notes are only available in mesh chats.")
+            context.addSystemMessage(String(localized: "Voice notes are only available in mesh chats.", comment: "System message when a voice note is attempted outside mesh chats"))
             return
         }
 
@@ -694,7 +694,7 @@ final class ChatMediaTransferCoordinator {
         guard context.canSendMediaInCurrentContext else {
             SecureLogger.info("Image send blocked outside mesh/private context", category: .session)
             cleanup?()
-            context.addSystemMessage("Images are only available in mesh chats.")
+            context.addSystemMessage(String(localized: "Images are only available in mesh chats.", comment: "System message when an image send is attempted outside mesh chats"))
             return
         }
 
