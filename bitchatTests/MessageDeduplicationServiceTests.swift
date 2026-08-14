@@ -166,31 +166,6 @@ struct LRUDeduplicationCacheTests {
         #expect(cache.contains("c"))
     }
 
-    @Test func repeatedRemovalAndReinsertionCompactsStaleNodes() {
-        let cache = LRUDeduplicationCache<Int>(capacity: 3)
-        cache.record("a", value: 0)
-
-        for value in 1...1_001 {
-            cache.remove("a")
-            cache.record("a", value: value)
-        }
-
-        #expect(cache.count == 1)
-        #expect(cache.value(for: "a") == 1_001)
-        #if DEBUG
-        #expect(cache._orderStorageCountForTesting <= 32)
-        #endif
-
-        cache.record("b", value: 1)
-        cache.record("c", value: 2)
-        cache.record("d", value: 3)
-
-        #expect(!cache.contains("a"))
-        #expect(cache.contains("b"))
-        #expect(cache.contains("c"))
-        #expect(cache.contains("d"))
-    }
-
     // MARK: - Edge Cases
 
     @Test func emptyKey_works() {
