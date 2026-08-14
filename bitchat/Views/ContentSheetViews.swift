@@ -608,9 +608,14 @@ private struct ContentPrivateChatSheetView: View {
     private var swipeToLeaveGesture: some Gesture {
         DragGesture(minimumDistance: 25, coordinateSpace: .local)
             .onEnded { value in
-                let horizontal = value.translation.width
-                let vertical = abs(value.translation.height)
-                guard horizontal > 80, vertical < 60 else { return }
+                // Stands down while a voice note is audible: this gesture is
+                // attached with `highPriorityGesture` and would otherwise starve
+                // the waveform's seek drag, and a scrub that drifts right would
+                // end the conversation mid-playback.
+                guard PrivateChatSwipeToLeavePolicy.shouldLeave(
+                    translation: value.translation,
+                    isVoiceNotePlaying: VoiceNotePlaybackCoordinator.shared.hasActivePlayback
+                ) else { return }
                 withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                     showSidebar = true
                     privateConversationModel.endConversation()

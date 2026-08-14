@@ -342,6 +342,15 @@ final class VoiceNotePlaybackCoordinator {
         return true
     }
 
+    /// True while some controller holds the playback slot.
+    ///
+    /// Read by the private-chat swipe-to-leave gesture, which stands down while
+    /// a voice note is audible so a waveform seek is not starved by the
+    /// high-priority ancestor drag. See `PrivateChatSwipeToLeavePolicy`.
+    var hasActivePlayback: Bool {
+        activeController != nil
+    }
+
     func isCurrent(_ reservation: Reservation, for controller: any ExclusivePlayback) -> Bool {
         latestReservation == reservation && latestReservedController === controller
     }
