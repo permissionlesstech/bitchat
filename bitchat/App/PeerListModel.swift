@@ -49,8 +49,26 @@ struct RecentChatRow: Identifiable, Equatable {
     let displayName: String
     let hasUnread: Bool
     let lastActivity: Date
+    /// One-line snippet of the newest message, or nil when there is nothing
+    /// worth showing (see `RecentChatPreview`). Nil rather than "" so the
+    /// row can collapse to a single line instead of reserving blank space.
+    let preview: String?
 
     var id: String { peerID.id }
+
+    init(
+        peerID: PeerID,
+        displayName: String,
+        hasUnread: Bool,
+        lastActivity: Date,
+        preview: String? = nil
+    ) {
+        self.peerID = peerID
+        self.displayName = displayName
+        self.hasUnread = hasUnread
+        self.lastActivity = lastActivity
+        self.preview = preview
+    }
 }
 
 @MainActor
@@ -165,6 +183,17 @@ final class PeerListModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] change in
                 guard case .direct = Self.changedConversationID(change) else { return }
+                self?.refresh()
+            }
+            .store(in: &cancellables)
+
+        // Opening or closing a direct conversation adds and removes its chat
+        // row. Without this the suppression would only take effect on the
+        // next unrelated refresh, so the sheet would keep offering to open
+        // the thread already on screen until something else changed.
+        chatViewModel.privateChatManager.$selectedPeer
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
                 self?.refresh()
             }
             .store(in: &cancellables)
@@ -315,9 +344,22 @@ final class PeerListModel: ObservableObject {
             visibleIdentities.insert(PeerID(nostr_: person.id).id)
         }
 
+        // The thread already on screen does not need a row pointing at it.
+        // Compare through the same identity keys used above: a conversation
+        // opened under the stable Noise ID must still suppress the row keyed
+        // by its ephemeral alias, or closing the sheet reopens what is open.
+        var openIdentities = Set<String>()
+        if let openPeerID = chatViewModel.selectedPrivateChatPeer {
+            openIdentities.insert(openPeerID.id)
+            if let fingerprint = chatViewModel.getFingerprint(for: openPeerID) {
+                openIdentities.insert(fingerprint)
+            }
+        }
+
         struct Candidate {
             let peerID: PeerID
             let lastActivity: Date
+            let preview: String?
         }
         var bestByIdentity: [String: Candidate] = [:]
 
@@ -332,13 +374,19 @@ final class PeerListModel: ObservableObject {
             let fingerprint = chatViewModel.getFingerprint(for: peerID)
             if visibleIdentities.contains(peerID.id) { continue }
             if let fingerprint, visibleIdentities.contains(fingerprint) { continue }
+            if openIdentities.contains(peerID.id) { continue }
+            if let fingerprint, openIdentities.contains(fingerprint) { continue }
 
             let identityKey = fingerprint ?? peerID.id
             if let existing = bestByIdentity[identityKey],
                existing.lastActivity >= lastMessage.timestamp {
                 continue
             }
-            bestByIdentity[identityKey] = Candidate(peerID: peerID, lastActivity: lastMessage.timestamp)
+            bestByIdentity[identityKey] = Candidate(
+                peerID: peerID,
+                lastActivity: lastMessage.timestamp,
+                preview: RecentChatPreview.snippet(for: lastMessage.content)
+            )
         }
 
         return bestByIdentity.values
@@ -348,7 +396,8 @@ final class PeerListModel: ObservableObject {
                     peerID: candidate.peerID,
                     displayName: displayName(for: candidate.peerID),
                     hasUnread: chatViewModel.hasUnreadMessages(for: candidate.peerID),
-                    lastActivity: candidate.lastActivity
+                    lastActivity: candidate.lastActivity,
+                    preview: candidate.preview
                 )
             }
     }
