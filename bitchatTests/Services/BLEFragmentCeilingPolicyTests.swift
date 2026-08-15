@@ -124,7 +124,7 @@ struct BLEFragmentCeilingPolicyTests {
             fileTransfer,
             noiseEncrypted,
             MessageType.message.rawValue,
-            MessageType.announce.rawValue,
+            MessageType.announce.rawValue
         ]
 
         for ceiling in ceilings {

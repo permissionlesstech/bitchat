@@ -2009,13 +2009,19 @@ final class BLEService: NSObject {
         // unaffected. Run the same planner the scheduler will use, after route
         // application, and reject before reserving a transfer slot or writing
         // any fragment.
-        // TODO(#1434): negotiate an explicit per-peer fragment limit so a future
-        // Android client that adopts the encrypted 0x20 path but still caps its
-        // reassembler can advertise its own ceiling instead of relying on the
-        // capability/type proxy above.
+        // The proxy above is now only the fallback: a peer that advertised its
+        // own ceiling in authenticated `0x21` state has it honoured instead,
+        // which is what closes #1434. That also means the check can no longer
+        // be restricted to `fileTransfer` — an advertised ceiling constrains
+        // encrypted media too, and that is precisely the case (small
+        // reassembler behind the `0x20` path) the type proxy misses.
         if let transferId,
-           let recipientPeerID = PeerID(hexData: packetToSend.recipientID),
-           packetToSend.type == MessageType.fileTransfer.rawValue {
+           let recipientPeerID = PeerID(hexData: packetToSend.recipientID) {
+            let ceiling = BLEFragmentCeilingPolicy.decide(
+                packetType: packetToSend.type,
+                isDirectedToPeer: true,
+                negotiatedCeiling: privateMediaSessions.negotiatedFragmentCeiling(for: recipientPeerID.toShort())
+            )
             let compatibilityRequest = BLEOutboundFragmentTransferRequest(
                 packet: packetToSend,
                 pad: padForBLE,
@@ -2027,17 +2033,20 @@ final class BLEService: NSObject {
                 for: compatibilityRequest,
                 defaultChunkSize: defaultFragmentSize,
                 bleMaxMTU: bleMaxMTU
-            ), BLEOutboundFragmentPlanner.isPrivateMediaV1Compatible(plan) else {
+            ), ceiling.admits(fragmentCount: plan.totalFragments) else {
                 SecureLogger.warning(
-                    "Private media rejected: exceeds cross-platform 256-fragment limit",
+                    "Private media rejected: \(String(describing: ceiling.source)) limit of \(ceiling.maxFragments) fragments",
                     category: .security
                 )
                 TransferProgressManager.shared.rejectBeforeStart(
                     id: transferId,
                     reason: String(
-                        localized: "content.delivery.reason.private_media_too_many_fragments",
-                        defaultValue: "File is too large for this contact's client (more than 256 mesh fragments)",
-                        comment: "Failure reason when private media exceeds the Android-compatible fragment limit"
+                        format: String(
+                            localized: "content.delivery.reason.private_media_too_many_fragments",
+                            defaultValue: "File is too large for this contact's client (more than %lld mesh fragments)",
+                            comment: "Failure reason when private media exceeds the recipient's fragment limit; %lld is that limit"
+                        ),
+                        ceiling.maxFragments
                     )
                 )
                 if requiresPrivateMediaAdmission {
@@ -4234,7 +4243,12 @@ extension BLEService {
         let capabilities = localIdentityState.snapshot().advertisedCapabilities
         let state = AuthenticatedPeerStatePacket(
             capabilities: capabilities,
-            signingPublicKey: noiseService.getSigningPublicKeyData()
+            signingPublicKey: noiseService.getSigningPublicKeyData(),
+            // Our own reassembler's bound, so a peer sizing a transfer for us
+            // does not have to infer it from the packet type either.
+            maxReassemblyFragments: UInt16(
+                clamping: BLEFragmentAssemblyBuffer.maxReassemblyFragments
+            )
         )
         guard let payload = BLENoisePayloadFactory.authenticatedPeerState(state) else {
             SecureLogger.error("Failed to encode authenticated peer state", category: .security)
@@ -4308,7 +4322,8 @@ extension BLEService {
                     for: normalizedPeerID,
                     fingerprint: fingerprint,
                     generation: generation,
-                    capabilities: state.capabilities
+                    capabilities: state.capabilities,
+                    maxReassemblyFragments: state.maxReassemblyFragments
                 ) else {
                     return (false, [])
                 }
