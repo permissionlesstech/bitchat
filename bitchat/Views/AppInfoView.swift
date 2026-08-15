@@ -87,7 +87,12 @@ struct AppInfoView: View {
             // setting as location-channels-only. It covers private messages and
             // relay-directory refreshes too, and said nothing about the cost of
             // switching it off.
-            static let torSubtitle = String(localized: "app_info.settings.tor.subtitle", defaultValue: "sends internet traffic through tor, so relay operators see tor's address instead of yours. covers location channels and private messages delivered over the internet. recommended: on.", comment: "Subtitle for the tor routing toggle in settings, explaining what it covers")
+            //
+            // No longer says "recommended: on": torNoBridgesNote below states,
+            // while tor is on, that this build cannot back that advice up
+            // everywhere. An unconditional recommendation two lines above a
+            // caption qualifying it read as the screen contradicting itself.
+            static let torSubtitle = String(localized: "app_info.settings.tor.subtitle", defaultValue: "sends internet traffic through tor, so relay operators see tor's address instead of yours. covers location channels and private messages delivered over the internet.", comment: "Subtitle for the tor routing toggle in settings, explaining what it covers")
             static let torOffWarning = String(localized: "app_info.settings.tor.off_warning", defaultValue: "tor is off: every relay you connect to can see your IP address, including relays carrying your private messages.", comment: "Warning shown under the tor toggle while tor is switched off, stating that relay operators can see the device IP address")
             static let torNoBridgesNote = String(localized: "app_info.settings.tor.no_bridges_note", defaultValue: "no bridges or pluggable transports yet: a network operator can see that you use tor, though not what you send. take care where using tor is itself risky.", comment: "Caption shown under the tor toggle while tor is on, disclosing that the bundled tor client ships without bridges or pluggable transports, so a network operator can identify the connection as tor")
 
