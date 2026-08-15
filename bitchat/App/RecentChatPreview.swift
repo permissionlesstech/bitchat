@@ -6,7 +6,6 @@
 // For more information, see <https://unlicense.org>
 //
 
-import BitFoundation
 import Foundation
 
 /// Builds the one-line snippet shown under a name in the "chats" section.
