@@ -165,6 +165,7 @@ struct AnnouncementPacket {
 /// `[version=0x01][type][length][value]...`
 /// - TLV `0x01`: canonical minimal little-endian `PeerCapabilities`
 /// - TLV `0x02`: 32-byte Ed25519 signing public key
+/// - TLV `0x03`: optional 2-byte big-endian reassembly fragment ceiling
 ///
 /// Unknown TLVs are skipped for forward compatibility. Unknown versions,
 /// duplicates, non-canonical capability fields, and malformed lengths are
@@ -172,19 +173,49 @@ struct AnnouncementPacket {
 struct AuthenticatedPeerStatePacket: Equatable {
     static let currentVersion: UInt8 = 1
     static let signingPublicKeyLength = 32
+    static let maxReassemblyFragmentsLength = 2
 
     let capabilities: PeerCapabilities
     let signingPublicKey: Data
+    /// How many BLE fragments this peer will reassemble for one packet, as it
+    /// reported inside the established Noise session.
+    ///
+    /// The `.privateMedia` capability bit says a peer understands encrypted
+    /// media; it says nothing about how much of it that peer can hold. Before
+    /// this TLV existed, senders inferred the ceiling from the packet type —
+    /// 256 for the directed migration fallback, the full local ceiling for
+    /// anything encrypted — which is only correct while every client that
+    /// implements `0x20` also has a large reassembler.
+    ///
+    /// `nil` means the peer did not advertise one, which is the case for every
+    /// client released before this TLV. Senders fall back to the type proxy
+    /// there; see `BLEFragmentCeilingPolicy`.
+    let maxReassemblyFragments: UInt16?
+
+    init(
+        capabilities: PeerCapabilities,
+        signingPublicKey: Data,
+        maxReassemblyFragments: UInt16? = nil
+    ) {
+        self.capabilities = capabilities
+        self.signingPublicKey = signingPublicKey
+        self.maxReassemblyFragments = maxReassemblyFragments
+    }
 
     private enum TLVType: UInt8 {
         case capabilities = 0x01
         case signingPublicKey = 0x02
+        case maxReassemblyFragments = 0x03
     }
 
     func encode() -> Data? {
         guard signingPublicKey.count == Self.signingPublicKeyLength else { return nil }
         let capabilityBytes = capabilities.encoded()
         guard !capabilityBytes.isEmpty, capabilityBytes.count <= 8 else { return nil }
+        // Zero would advertise a peer that can reassemble nothing, which is
+        // indistinguishable in effect from refusing every fragmented packet.
+        // Omit the TLV instead of putting a meaningless number on the wire.
+        if let maxReassemblyFragments { guard maxReassemblyFragments > 0 else { return nil } }
 
         var data = Data([Self.currentVersion])
         data.append(TLVType.capabilities.rawValue)
@@ -193,6 +224,11 @@ struct AuthenticatedPeerStatePacket: Equatable {
         data.append(TLVType.signingPublicKey.rawValue)
         data.append(UInt8(signingPublicKey.count))
         data.append(signingPublicKey)
+        if let maxReassemblyFragments {
+            data.append(TLVType.maxReassemblyFragments.rawValue)
+            data.append(UInt8(Self.maxReassemblyFragmentsLength))
+            data.append(contentsOf: withUnsafeBytes(of: maxReassemblyFragments.bigEndian) { Data($0) })
+        }
         return data
     }
 
@@ -202,6 +238,7 @@ struct AuthenticatedPeerStatePacket: Equatable {
         var offset = 1
         var capabilities: PeerCapabilities?
         var signingPublicKey: Data?
+        var maxReassemblyFragments: UInt16?
 
         while offset < data.count {
             guard offset + 2 <= data.count else { return nil }
@@ -228,13 +265,26 @@ struct AuthenticatedPeerStatePacket: Equatable {
                 guard signingPublicKey == nil,
                       value.count == Self.signingPublicKeyLength else { return nil }
                 signingPublicKey = value
+
+            case .maxReassemblyFragments:
+                // Rejected rather than skipped: a peer that meant to constrain
+                // us but sent a field we cannot read must not be treated as
+                // having said nothing, because "said nothing" falls back to
+                // the permissive type proxy.
+                guard maxReassemblyFragments == nil,
+                      value.count == Self.maxReassemblyFragmentsLength else { return nil }
+                let decoded = (UInt16(value[value.startIndex]) << 8)
+                    | UInt16(value[value.startIndex + 1])
+                guard decoded > 0 else { return nil }
+                maxReassemblyFragments = decoded
             }
         }
 
         guard let capabilities, let signingPublicKey else { return nil }
         return AuthenticatedPeerStatePacket(
             capabilities: capabilities,
-            signingPublicKey: signingPublicKey
+            signingPublicKey: signingPublicKey,
+            maxReassemblyFragments: maxReassemblyFragments
         )
     }
 }
