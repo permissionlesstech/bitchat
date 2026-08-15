@@ -19,7 +19,7 @@ enum ChatPlaintextExporter {
             "exported \(exportTimestamp(context.exportedAt))",
             "",
             warningLine,
-            "",
+            ""
         ].joined(separator: "\n")
 
         guard !messages.isEmpty else {
