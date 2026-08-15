@@ -63,7 +63,8 @@ struct SimulatedMeshTests {
         // baseline snapshot depends on the draw — the budget assertion below
         // flaked on CI at 14 and 18 frames for exactly that reason. Advance
         // until the mesh goes a full window with no new frames, so the
-        // baseline only ever measures the message under test.
+        // baseline only ever measures the message under test. Quiescence is
+        // judged on every frame; the baseline itself is taken per type.
         var settled = mesh.deliveredFrameCount
         for _ in 0..<20 {
             mesh.advanceTime(by: 2)
@@ -71,7 +72,7 @@ struct SimulatedMeshTests {
             if now == settled { break }
             settled = now
         }
-        let baseline = mesh.deliveredFrameCount
+        let baseline = mesh.deliveredFrameCount(ofType: .message)
 
         let capture = TransportEventCapture()
         c.service.eventDelegate = capture
@@ -84,9 +85,57 @@ struct SimulatedMeshTests {
 
         let arrived = await capture.drainedPublicMessageCount(content: "hello line") == 1
         #expect(arrived)
-        // Storm bound: a single public message across one relay hop must
-        // not multiply into more than a handful of frames.
-        #expect(mesh.deliveredFrameCount - baseline <= 12)
+        // Storm bound: a single public message across one relay hop must not
+        // multiply into more than a handful of frames. Counted per type so
+        // the budget measures relay fan-out and nothing else. The whole-mesh
+        // total also carries announces, and announce admission is the one
+        // decision the manual scheduler does not own — `sendAnnounceNow` asks
+        // `announceThrottle.shouldSend(force:now: Date())` — so announce
+        // volume tracks real elapsed seconds. The settle loop above keeps
+        // that traffic in the baseline rather than in the delta: burning 0.2s
+        // of wall clock before it moves the baseline 66 → 80 frames and
+        // leaves this delta at 4. Per-type counting is what makes the
+        // assertion say which traffic it bounds.
+        #expect(mesh.deliveredFrameCount(ofType: .message) - baseline <= 8)
+    }
+
+    /// Guards the storm bound above. Announce admission used to consult the
+    /// wall clock while the harness advanced only simulated time, so on a
+    /// loaded runner the 0.15 s forced-minimum window elapsed *between*
+    /// announces that the simulation places at one instant. The extra
+    /// announces that let through fanned out to every neighbour and pushed
+    /// `deliveredFrameCount` past the bound — the test measured machine
+    /// speed, not relay behaviour. Admission must move with simulated time
+    /// and only with simulated time.
+    ///
+    /// A lone node keeps this exact: nothing answers it, so every emitted
+    /// announce is one its own throttle admitted.
+    @Test
+    func announceAdmissionFollowsSimulatedTimeNotWallClock() {
+        let mesh = SimulatedMesh()
+        _ = mesh.addNode(nickname: "alice")
+        mesh.announceAll()
+
+        func announceCount() -> Int {
+            mesh.emittedPackets(from: 0)
+                .filter { $0.type == MessageType.announce.rawValue }
+                .count
+        }
+
+        // Same simulated instant: refused, however many real milliseconds
+        // the runner burned between `announceAll` and here.
+        let admitted = announceCount()
+        mesh.forceAnnounce(from: 0)
+        #expect(announceCount() == admitted)
+
+        // Simulated time is the only thing that opens the window. The first
+        // advance drains any work already scheduled, so the second crosses
+        // the forced minimum interval with nothing else due.
+        mesh.advanceTime(by: 5)
+        mesh.advanceTime(by: TransportConfig.bleForceAnnounceMinIntervalSeconds + 0.01)
+        let beforeAdmitted = announceCount()
+        mesh.forceAnnounce(from: 0)
+        #expect(announceCount() == beforeAdmitted + 1)
     }
 
     @Test
@@ -144,7 +193,8 @@ struct SimulatedMeshTests {
 
         // A fresh announce over the (re-established) link binds and
         // reconnects — the same heal path a real reconnection drives.
-        // (The announce throttle runs on wall clock; model elapsed time.)
+        // (Clear the throttle rather than advance time: this announce must
+        // land without releasing any other scheduled work.)
         b.service._test_resetAnnounceThrottle()
         mesh.forceAnnounce(from: 1)
         mesh.settleUntil {
@@ -302,7 +352,7 @@ struct SimulatedMeshTests {
 
         // Containment: further announces (and the rebind cooldown) leave
         // the healed binding alone — no flip-flop back to the dead ID.
-        // (Reset the wall-clock announce throttles so these actually send.)
+        // (Reset the announce throttles so these actually send.)
         b.service._test_resetAnnounceThrottle()
         mesh.forceAnnounce(from: 1)
         a.service._test_resetAnnounceThrottle()
