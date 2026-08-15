@@ -252,12 +252,17 @@ final class BLERadioController {
                 return
             }
 
-            if self.delegate?.radioIsAppActive() == false {
-                // Backgrounded: leave the connect pending. iOS never expires
-                // it — the controller completes it whenever the peer comes
-                // back into range, waking the app (state restoration
-                // relaunches us if we were terminated). Foreground return
-                // cancels stale pendings via cancelStalePendingConnects().
+            if self.delegate?.radioIsAppActive() == false,
+               BLEProximityWakeSettings.enabled {
+                // Backgrounded with wake-on-proximity on: leave the connect
+                // pending. iOS never expires it — the controller completes it
+                // whenever the peer comes back into range, waking the app
+                // (state restoration relaunches us if we were terminated).
+                // Foreground return cancels stale pendings via
+                // cancelStalePendingConnects(). If the user opted out, fall
+                // through and cancel so an in-flight foreground connect that
+                // timed out after backgrounding cannot still trigger the
+                // iOS 26 accessory-open prompt (#1512 Codex).
                 SecureLogger.info("🌙 Connect timeout deferred while backgrounded, left pending for wake-on-proximity: \(candidate.name)", category: .session)
                 return
             }
@@ -314,6 +319,11 @@ final class BLERadioController {
     func armPendingBackgroundConnects(
         slotReserve: Int = TransportConfig.bleBackgroundPendingConnectSlotReserve
     ) {
+        // Opt-out for people who don't want iOS 26's "accessory would like
+        // to open bitchat" wake prompt (#1427 / #1396). Default stays on.
+        // Disabling also cancels in-flight / pending connects via
+        // `cancelPendingWakeConnects()` (settings notification).
+        guard BLEProximityWakeSettings.enabled else { return }
         queue.async { [weak self] in
             guard let self,
                   self.delegate?.radioIsPanicSuspended() == false,
@@ -361,20 +371,35 @@ final class BLERadioController {
     /// scheduler take over. Anything still nearby is rediscovered within
     /// seconds by the allow-duplicates foreground scan.
     func cancelStalePendingConnects() {
+        cancelPendingConnects(olderThan: TransportConfig.bleConnectTimeoutSeconds, reason: "stale pending connect(s) on foreground")
+    }
+
+    /// Drop every still-connecting peripheral immediately. Used when the
+    /// user turns off wake-on-proximity so an already-armed or in-flight
+    /// connect cannot still wake the app after opt-out (#1512).
+    func cancelPendingWakeConnects() {
+        cancelPendingConnects(olderThan: 0, reason: "pending connect(s) after wake-on-proximity opt-out")
+    }
+
+    private func cancelPendingConnects(olderThan minAge: TimeInterval, reason: String) {
         queue.async { [weak self] in
             guard let self, let central = self.central else { return }
             let now = Date()
             var cancelled = 0
             for state in self.linkStateStore.peripheralStates where state.isConnecting && !state.isConnected {
                 let age = state.lastConnectionAttempt.map { now.timeIntervalSince($0) } ?? .infinity
-                guard age > TransportConfig.bleConnectTimeoutSeconds else { continue }
+                // minAge == 0 means cancel every pending connect (opt-out);
+                // otherwise match the prior stale-foreground threshold (`>`).
+                if minAge > 0 {
+                    guard age > minAge else { continue }
+                }
                 let peripheralID = state.peripheral.identifier.uuidString
                 central.cancelPeripheralConnection(state.peripheral)
                 self.delegate?.radioTearDownPeripheralLink(peripheralID)
                 cancelled += 1
             }
             if cancelled > 0 {
-                SecureLogger.info("🌅 Cancelled \(cancelled) stale pending connect(s) on foreground", category: .session)
+                SecureLogger.info("🌅 Cancelled \(cancelled) \(reason)", category: .session)
                 self.tryConnectFromQueue()
             }
         }
