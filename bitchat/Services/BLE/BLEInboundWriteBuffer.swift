@@ -26,6 +26,16 @@ struct BLEInboundWriteBuffer {
         buffersByCentralID.removeAll()
     }
 
+    /// Discards one central's partial write buffer. Every other exit from
+    /// `.waiting` (decode success, the oversized cap, `removeAll()`) already
+    /// clears its entry; a central that unsubscribes or disconnects mid-write
+    /// leaves the transfer permanently incomplete, so its callers must reach
+    /// for this instead of leaving the entry to accumulate toward a frame
+    /// that can never finish decoding.
+    mutating func removeValue(forCentralID centralID: String) {
+        buffersByCentralID.removeValue(forKey: centralID)
+    }
+
     mutating func append(
         chunks: [BLEInboundWriteChunk],
         for centralID: String,

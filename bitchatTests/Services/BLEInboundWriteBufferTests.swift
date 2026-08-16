@@ -126,6 +126,54 @@ struct BLEInboundWriteBufferTests {
         }
     }
 
+    @Test
+    func removeValueClearsOnlyTheTargetedCentralsPartialWrite() throws {
+        var buffer = BLEInboundWriteBuffer()
+        let packet = makePacket()
+        let frame = try #require(packet.toBinaryData(padding: false))
+        let splitIndex = max(1, frame.count / 2)
+
+        // Two centrals each mid-write, as if both had connected and started
+        // sending a fragmented frame before central-1 disconnected.
+        _ = buffer.append(
+            chunks: [BLEInboundWriteChunk(offset: 0, data: frame.prefix(splitIndex))],
+            for: "central-1",
+            capBytes: 1024
+        )
+        _ = buffer.append(
+            chunks: [BLEInboundWriteChunk(offset: 0, data: frame.prefix(splitIndex))],
+            for: "central-2",
+            capBytes: 1024
+        )
+
+        buffer.removeValue(forCentralID: "central-1")
+
+        // central-1's abandoned first half must be gone: completing it with
+        // only the second half now must not decode (nothing to decode against).
+        let afterRemoval = buffer.append(
+            chunks: [BLEInboundWriteChunk(offset: splitIndex, data: frame.suffix(from: splitIndex))],
+            for: "central-1",
+            capBytes: 1024
+        )
+        if case .waiting = afterRemoval {
+            // Expected: central-1's earlier half was discarded on disconnect.
+        } else {
+            Issue.record("Expected central-1's partial write to be discarded by removeValue")
+        }
+
+        // central-2's own in-flight write must be untouched by central-1's cleanup.
+        let central2Result = buffer.append(
+            chunks: [BLEInboundWriteChunk(offset: splitIndex, data: frame.suffix(from: splitIndex))],
+            for: "central-2",
+            capBytes: 1024
+        )
+        if case let .decoded(decoded, _) = central2Result {
+            #expect(decoded.timestamp == packet.timestamp)
+        } else {
+            Issue.record("Expected central-2's unrelated partial write to still complete normally")
+        }
+    }
+
     private func makePacket(timestamp: UInt64 = 0x0102030405) -> BitchatPacket {
         BitchatPacket(
             type: MessageType.message.rawValue,

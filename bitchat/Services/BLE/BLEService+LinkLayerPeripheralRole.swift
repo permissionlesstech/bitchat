@@ -176,6 +176,11 @@ extension BLEService: CBPeripheralManagerDelegate {
         // bleQueue: physical retirement now.
         pendingNotifications.removeTarget { $0.identifier.uuidString == centralID }
         linkStateStore.removeSubscribedCentral(central)
+        // A central that disconnects mid-write (walked out of range, backgrounded)
+        // never reaches .decoded or .oversized in BLEInboundWriteBuffer.append, so
+        // its partial buffer would otherwise sit forever -- this is the only
+        // peripheral-role signal CoreBluetooth gives us that a central is gone.
+        pendingWriteBuffers.removeValue(forCentralID: centralID)
 
         // Ensure we're still advertising for other devices to find us
         if !isPanicSuspended, peripheral.isAdvertising == false {
