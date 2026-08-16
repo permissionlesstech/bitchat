@@ -67,6 +67,15 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.sendMessage("/clear")
     }
 
+    /// Resends a message's content as a fresh outgoing private message to
+    /// `peerID`, regardless of which conversation (if any) is currently open.
+    /// Goes straight through the same send path a normal DM uses -- this is
+    /// not a distinct wire concept, just a new outgoing message that happens
+    /// to start from someone else's words.
+    func forwardMessage(_ content: String, to peerID: PeerID) {
+        chatViewModel.sendPrivateMessage(content, to: peerID)
+    }
+
     func sendHug(to sender: String) {
         chatViewModel.sendMessage("/hug @\(sender)")
     }
