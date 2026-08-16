@@ -66,12 +66,24 @@ final class SecureNoiseSession: NoiseSession {
         if messageCount >= messageThreshold {
             return true
         }
-        
+
         // Check if last activity was more than 30 minutes ago
         if Date().timeIntervalSince(lastActivityTime) > NoiseSecurityConstants.sessionTimeout {
             return true
         }
-        
+
+        // A session that never goes idle (a long-lived conversation with
+        // steady traffic) keeps refreshing lastActivityTime forever, so the
+        // check above never fires -- only sessionStartTime tracks how close
+        // encrypt/decrypt are to the hard sessionExpired cutoff above. Firing
+        // at 90% of sessionTimeout leaves the rekey timer's polling interval
+        // (checked every 60s, see NoiseEncryptionService.rekeyCheckInterval)
+        // room to complete a full handshake well before the old session
+        // starts throwing sessionExpired on every call.
+        if Date().timeIntervalSince(sessionStartTime) > NoiseSecurityConstants.sessionTimeout * 0.9 {
+            return true
+        }
+
         return false
     }
     
