@@ -231,7 +231,14 @@ final class BLERadioController {
         guard delegate?.radioIsPanicSuspended() == false else { return }
         let peripheral = candidate.peripheral
         let peripheralID = candidate.peripheralID
-        linkStateStore.beginConnecting(to: peripheral, at: Date())
+        // Captured so the timeout closure below can tell this specific
+        // attempt apart from a later one: linkStateStore.beginConnecting
+        // overwrites lastConnectionAttempt on every call for this
+        // peripheralID (disconnect -> reconnect included), but nothing
+        // previously distinguished which attempt a given timeout closure was
+        // scheduled for.
+        let attemptStartedAt = Date()
+        linkStateStore.beginConnecting(to: peripheral, at: attemptStartedAt)
         peripheral.delegate = peripheralDelegate
         let options: [String: Any] = [
             CBConnectPeripheralOptionNotifyOnConnectionKey: true,
@@ -246,6 +253,20 @@ final class BLERadioController {
             guard let self,
                   let state = self.linkStateStore.state(forPeripheralID: peripheralID),
                   state.isConnecting && !state.isConnected else { return }
+
+            // A disconnect + immediate reconnect between this attempt and now
+            // starts a new attempt with a fresh lastConnectionAttempt (via
+            // beginConnecting or armPendingBackgroundConnects, which sets it
+            // nil). Without this check, this now-stale timeout would cancel
+            // that newer, still-live attempt out from under it and apply a
+            // connection-timeout penalty to a peer that never actually timed
+            // out — reproducible any time a peer drops and reconnects while
+            // this timer is still armed (a few seconds of marginal signal is
+            // enough).
+            guard state.lastConnectionAttempt == attemptStartedAt else {
+                SecureLogger.debug("⏱️ Timeout fired for a superseded connection attempt, ignoring: \(candidate.name)", category: .session)
+                return
+            }
 
             guard peripheral.state != .connected else {
                 SecureLogger.debug("⏱️ Timeout fired but peripheral already connected: \(candidate.name)", category: .session)
