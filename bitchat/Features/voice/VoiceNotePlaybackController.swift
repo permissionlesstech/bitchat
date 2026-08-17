@@ -113,6 +113,11 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
         updateProgress()
         isPlaying = false
         releaseSession()
+        // The slot means "audio is audible", not "a row is selected": a paused
+        // note has nothing to yield to the next playback, and readers of
+        // `hasActivePlayback` would otherwise see playback that stopped being
+        // heard when the user paused it.
+        exclusivity.deactivate(self)
     }
 
     func stop() {
@@ -296,7 +301,7 @@ extension VoiceNotePlaybackController: ExclusivePlayback {
 }
 
 /// Ensures only one voice playback (note or live burst) runs at a time.
-final class VoiceNotePlaybackCoordinator {
+final class VoiceNotePlaybackCoordinator: ObservableObject {
     static let shared = VoiceNotePlaybackCoordinator()
 
     struct Reservation: Equatable {
@@ -339,6 +344,7 @@ final class VoiceNotePlaybackCoordinator {
         }
         activeController?.pauseForExclusivity()
         activeController = controller
+        hasActivePlayback = true
         return true
     }
 
@@ -347,9 +353,11 @@ final class VoiceNotePlaybackCoordinator {
     /// Read by the private-chat swipe-to-leave gesture, which stands down while
     /// a voice note is audible so a waveform seek is not starved by the
     /// high-priority ancestor drag. See `PrivateChatSwipeToLeavePolicy`.
-    var hasActivePlayback: Bool {
-        activeController != nil
-    }
+    ///
+    /// Published rather than computed so a view can drop the gesture for the
+    /// duration: a gesture that is armed at all starves its descendants, so
+    /// reading this only once the drag ends comes too late for the seek.
+    @Published private(set) var hasActivePlayback: Bool = false
 
     func isCurrent(_ reservation: Reservation, for controller: any ExclusivePlayback) -> Bool {
         latestReservation == reservation && latestReservedController === controller
@@ -358,6 +366,7 @@ final class VoiceNotePlaybackCoordinator {
     func deactivate(_ controller: any ExclusivePlayback) {
         if activeController === controller {
             activeController = nil
+            hasActivePlayback = false
         }
         if latestReservedController === controller {
             latestReservedController = nil

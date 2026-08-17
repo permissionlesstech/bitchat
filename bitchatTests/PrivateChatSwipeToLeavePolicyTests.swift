@@ -8,6 +8,7 @@
 
 import Testing
 import CoreGraphics
+import Foundation
 @testable import bitchat
 
 /// A stand-in for the playback slot holder. The coordinator only needs identity
@@ -134,6 +135,42 @@ struct VoiceNotePlaybackCoordinatorActivityTests {
         coordinator.activate(holder)
         coordinator.deactivate(StubPlayback())
         #expect(coordinator.hasActivePlayback)
+    }
+
+    @Test("a controller that pauses releases the slot")
+    func pauseReleasesSlot() throws {
+        // The slot means audible playback. A paused note holds nothing, and
+        // leaving it in place kept the leave gesture suppressed for the rest
+        // of the row's life.
+        let coordinator = VoiceNotePlaybackCoordinator()
+        let url = try Self.makeSilentVoiceNote()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let controller = VoiceNotePlaybackController(url: url, exclusivity: coordinator)
+
+        controller.play()
+        #expect(coordinator.hasActivePlayback)
+
+        controller.pause()
+        #expect(!coordinator.hasActivePlayback)
+    }
+
+    /// A one-frame WAV: enough for AVAudioPlayer to prepare and start.
+    private static func makeSilentVoiceNote() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("swipe-policy-\(UUID().uuidString).wav")
+        var data = Data()
+        func append(_ string: String) { data.append(contentsOf: Array(string.utf8)) }
+        func append(_ value: UInt32) { withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) } }
+        func append(_ value: UInt16) { withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) } }
+        let frames: UInt32 = 8_000            // one second at 8 kHz, 16-bit mono
+        let dataBytes = frames * 2
+        append("RIFF"); append(36 + dataBytes); append("WAVE")
+        append("fmt "); append(UInt32(16)); append(UInt16(1)); append(UInt16(1))
+        append(UInt32(8_000)); append(UInt32(16_000)); append(UInt16(2)); append(UInt16(16))
+        append("data"); append(dataBytes)
+        data.append(Data(repeating: 0, count: Int(dataBytes)))
+        try data.write(to: url)
+        return url
     }
 
     @Test("taking over the slot pauses the previous holder and stays active")
