@@ -59,11 +59,15 @@ final class MessageDeduplicator {
 
         if lookup[id] == nil {
             let now = Date()
+            // Expire first, then cap, in that order and for the same reason as
+            // isDuplicate: trimming by count alone would drop still-valid IDs
+            // to make room while an already-expired prefix sat in front of them.
+            cleanupOldEntries(before: now.addingTimeInterval(-maxAge))
             entries.append(Entry(id: id, timestamp: now))
             lookup[id] = now
-            // Same cap as isDuplicate: a node that only sends (self-broadcasts,
-            // announce-backs) never reaches the eviction in isDuplicate, so
-            // without this its dedup set grows for the whole maxAge window.
+            // A node that only sends (self-broadcasts, announce-backs) never
+            // reaches the eviction in isDuplicate, so without this its dedup
+            // set grows for the whole maxAge window.
             trimIfNeeded()
         }
     }
