@@ -61,6 +61,10 @@ final class MessageDeduplicator {
             let now = Date()
             entries.append(Entry(id: id, timestamp: now))
             lookup[id] = now
+            // Same cap as isDuplicate: a node that only sends (self-broadcasts,
+            // announce-backs) never reaches the eviction in isDuplicate, so
+            // without this its dedup set grows for the whole maxAge window.
+            trimIfNeeded()
         }
     }
 
