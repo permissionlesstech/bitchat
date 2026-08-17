@@ -9,6 +9,10 @@ import Testing
 import SwiftUI
 @testable import bitchat
 
+/// Serialized: the compute-count assertions read a process-global counter,
+/// so a sibling test computing a colour between two reads would fail them for
+/// the wrong reason. The seeds are unique per test, but the counter is not.
+@Suite(.serialized)
 struct ColorPeerTests {
 
     @Test func repeatedSeedHitsCacheInsteadOfRecomputing() {
