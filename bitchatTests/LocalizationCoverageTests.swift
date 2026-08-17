@@ -89,12 +89,18 @@ struct LocalizationCoverageTests {
         let mainKeys = Set(main.coverage.keys)
         let shareKeys = Set(shareExt.coverage.keys)
 
+        // Files under `bitchat/` that the share extension also compiles have to
+        // resolve in both catalogs, since each target bundles only its own.
+        let sharedSources = try Self.shareExtensionMembershipExceptions()
+
         for (sourceRoot, ownKeys, otherKeys, ownCatalog, otherCatalog) in [
             ("bitchat", mainKeys, shareKeys, Self.mainCatalogPath, Self.shareExtensionCatalogPath),
             ("bitchatShareExtension", shareKeys, mainKeys,
              Self.shareExtensionCatalogPath, Self.mainCatalogPath)
         ] {
-            let missing = try Self.localizedKeyReferences(in: sourceRoot)
+            let references = try Self.localizedKeyReferences(in: sourceRoot)
+
+            let missing = references
                 .filter { !ownKeys.contains($0.key) }
                 .map { reference -> String in
                     let note = otherKeys.contains(reference.key)
@@ -111,7 +117,50 @@ struct LocalizationCoverageTests {
                 \(missing.sorted().joined(separator: "\n"))
                 """
             )
+
+            guard sourceRoot == "bitchat" else { continue }
+            let missingInBoth = references
+                .filter { sharedSources.contains($0.location.prefix(while: { $0 != ":" }).description) }
+                .filter { !shareKeys.contains($0.key) }
+                .map { "\($0.location) \($0.key)" }
+
+            #expect(
+                missingInBoth.isEmpty,
+                """
+                keys referenced from files the share extension also compiles, but absent \
+                from \(Self.shareExtensionCatalogPath) — these ship English inside the \
+                extension:
+                \(missingInBoth.sorted().joined(separator: "\n"))
+                """
+            )
         }
+    }
+
+    /// The files under `bitchat/` that the share-extension target compiles, read
+    /// from the project's membership exceptions so this cannot drift when the
+    /// set changes.
+    private static func shareExtensionMembershipExceptions() throws -> Set<String> {
+        let project = try String(
+            contentsOf: repoRoot.appendingPathComponent("bitchat.xcodeproj/project.pbxproj"),
+            encoding: .utf8
+        )
+        let marker = #"Exceptions for "bitchat" folder in "bitchatShareExtension" target"#
+        guard let markerRange = project.range(of: marker),
+              let listStart = project.range(
+                of: "membershipExceptions = (", range: markerRange.upperBound..<project.endIndex
+              ),
+              let listEnd = project.range(
+                of: ");", range: listStart.upperBound..<project.endIndex
+              )
+        else { return [] }
+
+        return Set(
+            project[listStart.upperBound..<listEnd.lowerBound]
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { $0.hasSuffix(".swift") }
+                .map { "bitchat/\($0)" }
+        )
     }
 
     private static let mainCatalogPath = "bitchat/Localizable.xcstrings"
