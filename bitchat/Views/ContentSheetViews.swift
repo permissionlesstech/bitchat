@@ -462,6 +462,9 @@ private extension ContentPeopleListView {
 
 private struct ContentPrivateChatSheetView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
+    /// Observed so the swipe gesture can be dropped for the duration of
+    /// playback rather than merely declining to act when it ends.
+    @ObservedObject private var playbackCoordinator = VoiceNotePlaybackCoordinator.shared
 
     @Binding var showSidebar: Bool
     @Binding var messageText: String
@@ -572,7 +575,14 @@ private struct ContentPrivateChatSheetView: View {
             // whole sheet it preempted the composer's press-and-hold mic
             // gesture (a high-priority ancestor drag cancels child gestures
             // within milliseconds — same starvation as the image-reveal bug).
-            .highPriorityGesture(swipeToLeaveGesture)
+            // `.subviews` while a note is audible: recognition then belongs to
+            // the waveform's seek drag. Guarding in `onEnded` is not enough --
+            // an armed high-priority ancestor drag starves its descendants
+            // before either gesture ends, so the scrub would still be lost.
+            .highPriorityGesture(
+                swipeToLeaveGesture,
+                including: playbackCoordinator.hasActivePlayback ? .subviews : .all
+            )
 
             if !theme.usesGlassChrome {
                 Divider()
