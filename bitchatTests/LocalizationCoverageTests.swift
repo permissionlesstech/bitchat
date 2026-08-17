@@ -79,26 +79,39 @@ struct LocalizationCoverageTests {
     /// coverage tests stayed green. Interpolated keys can't be checked
     /// statically and are skipped; every literal key must resolve.
     ///
-    @Test func everyCodeReferencedKeyExistsInACatalog() throws {
+    /// The catalogs are checked per target, not as a union: the share
+    /// extension bundles only its own catalog, so a key it references that
+    /// lives solely in the app catalog is just as untranslated there as one
+    /// that exists nowhere.
+    @Test func everyCodeReferencedKeyExistsInItsOwnCatalog() throws {
         let main = try Self.loadCatalog(Self.mainCatalogPath)
         let shareExt = try Self.loadCatalog(Self.shareExtensionCatalogPath)
-        let knownKeys = Set(main.coverage.keys).union(shareExt.coverage.keys)
+        let mainKeys = Set(main.coverage.keys)
+        let shareKeys = Set(shareExt.coverage.keys)
 
-        var missing: [String] = []
-        for sourceRoot in ["bitchat", "bitchatShareExtension"] {
-            missing += try Self.localizedKeyReferences(in: sourceRoot)
-                .filter { !knownKeys.contains($0.key) }
-                .map { "\($0.location) \($0.key)" }
+        for (sourceRoot, ownKeys, otherKeys, ownCatalog, otherCatalog) in [
+            ("bitchat", mainKeys, shareKeys, Self.mainCatalogPath, Self.shareExtensionCatalogPath),
+            ("bitchatShareExtension", shareKeys, mainKeys,
+             Self.shareExtensionCatalogPath, Self.mainCatalogPath)
+        ] {
+            let missing = try Self.localizedKeyReferences(in: sourceRoot)
+                .filter { !ownKeys.contains($0.key) }
+                .map { reference -> String in
+                    let note = otherKeys.contains(reference.key)
+                        ? " (present in \(otherCatalog), which this target does not bundle)"
+                        : " (present in no catalog)"
+                    return "\(reference.location) \(reference.key)\(note)"
+                }
+
+            #expect(
+                missing.isEmpty,
+                """
+                keys referenced under \(sourceRoot)/ but absent from \(ownCatalog) — \
+                these ship English to all non-source locales:
+                \(missing.sorted().joined(separator: "\n"))
+                """
+            )
         }
-
-        #expect(
-            missing.isEmpty,
-            """
-            keys referenced in code but absent from every catalog — these ship English \
-            to all non-source locales:
-            \(missing.sorted().joined(separator: "\n"))
-            """
-        )
     }
 
     private static let mainCatalogPath = "bitchat/Localizable.xcstrings"
