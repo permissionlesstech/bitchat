@@ -235,7 +235,7 @@ public struct BinaryProtocol {
                 }
             } else {
                 let value = UInt16(originalSize)
-                data.append(UInt8((value >> 8) & 0xFF))
+                data.append(UInt8((value >> 8) & 0xFF)
                 data.append(UInt8(value & 0xFF))
             }
         }
@@ -366,7 +366,14 @@ public struct BinaryProtocol {
                     guard let rawSize = read16() else { return nil }
                     originalSize = Int(rawSize)
                 }
-                guard originalSize >= 0 && originalSize <= FileTransferLimits.maxFramedFileBytes else { return nil }
+                guard originalSize >= 0 else { return nil }
+                guard originalSize <= FileTransferLimits.maxFramedFileBytes else {
+                    SecureLogger.warning(
+                        "🚫 Compressed payload expanded size exceeds limit: \(originalSize) bytes > \(FileTransferLimits.maxFramedFileBytes) bytes",
+                        category: .security
+                    )
+                    return nil
+                }
                 let compressedSize = payloadLength - lengthFieldBytes
                 guard compressedSize > 0, let compressed = readData(compressedSize) else { return nil }
 
