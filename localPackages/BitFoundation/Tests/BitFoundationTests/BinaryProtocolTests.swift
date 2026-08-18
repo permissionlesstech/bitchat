@@ -349,6 +349,37 @@ struct BinaryProtocolTests {
         let encoded = try #require(BinaryProtocol.encode(packet), "Failed to encode oversized packet")
         #expect(BinaryProtocol.decode(encoded) == nil)
     }
+
+    @Test("Log and reject compressed payloads above the expanded-size limit")
+    func compressedPayloadExpandedSizeAboveLimitIsRejected() {
+        var malformedData = Data()
+        malformedData.append(2) // v2
+        malformedData.append(MessageType.message.rawValue)
+        malformedData.append(1) // ttl
+        malformedData.append(contentsOf: Data(repeating: 0, count: 8)) // timestamp
+        malformedData.append(BinaryProtocol.Flags.isCompressed)
+
+        // The v2 payload length includes the four-byte original-size preamble.
+        let payloadLength: UInt32 = 6
+        malformedData.append(contentsOf: [
+            UInt8((payloadLength >> 24) & 0xFF),
+            UInt8((payloadLength >> 16) & 0xFF),
+            UInt8((payloadLength >> 8) & 0xFF),
+            UInt8(payloadLength & 0xFF)
+        ])
+        malformedData.append(contentsOf: Data(repeating: 0x01, count: BinaryProtocol.senderIDSize))
+
+        let expandedSize = UInt32(FileTransferLimits.maxFramedFileBytes + 1)
+        malformedData.append(contentsOf: [
+            UInt8((expandedSize >> 24) & 0xFF),
+            UInt8((expandedSize >> 16) & 0xFF),
+            UInt8((expandedSize >> 8) & 0xFF),
+            UInt8(expandedSize & 0xFF)
+        ])
+        malformedData.append(contentsOf: [0x78, 0x9C]) // compressed bytes are never reached
+
+        #expect(BinaryProtocol.decode(malformedData) == nil)
+    }
     
     // MARK: - Message Padding Tests
     
