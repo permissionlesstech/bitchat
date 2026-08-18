@@ -235,7 +235,7 @@ public struct BinaryProtocol {
                 }
             } else {
                 let value = UInt16(originalSize)
-                data.append(UInt8((value >> 8) & 0xFF)
+                data.append(UInt8((value >> 8) & 0xFF))
                 data.append(UInt8(value & 0xFF))
             }
         }
