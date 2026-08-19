@@ -43,6 +43,10 @@ final class LRUDeduplicationCache<Value> {
         map.count
     }
 
+    var orderStorageCountForTesting: Int {
+        order.count
+    }
+
     /// Checks if a key exists in the cache
     func contains(_ key: String) -> Bool {
         map[key] != nil
@@ -65,11 +69,13 @@ final class LRUDeduplicationCache<Value> {
         }
 
         trimIfNeeded()
+        compactIfNeeded()
     }
 
     /// Removes a specific key from the cache
     func remove(_ key: String) {
-        map.removeValue(forKey: key)
+        guard map.removeValue(forKey: key) != nil else { return }
+        compactIfNeeded()
     }
 
     /// Clears all entries from the cache
@@ -93,13 +99,6 @@ final class LRUDeduplicationCache<Value> {
             let candidate = order[head]
             head += 1
 
-            // Periodically compact the consumed prefix, matching the previous
-            // cache behavior without scanning unconsumed order nodes.
-            if head >= 32 && head * 2 >= order.count {
-                order.removeFirst(head)
-                head = 0
-            }
-
             guard let liveEntry = map[candidate.key],
                   liveEntry.generation == candidate.generation else {
                 continue
@@ -109,6 +108,24 @@ final class LRUDeduplicationCache<Value> {
             return true
         }
         return false
+    }
+
+    private func compactIfNeeded() {
+        let unconsumedCount = order.count - head
+        let staleNodeCount = unconsumedCount - map.count
+        let shouldDropConsumedPrefix = head >= 32 && head * 2 >= order.count
+        let shouldRemoveStaleNodes = staleNodeCount >= 32 && staleNodeCount * 2 >= unconsumedCount
+
+        guard shouldDropConsumedPrefix || shouldRemoveStaleNodes else { return }
+
+        if shouldRemoveStaleNodes {
+            order = order[head...].filter { candidate in
+                map[candidate.key]?.generation == candidate.generation
+            }
+        } else {
+            order.removeFirst(head)
+        }
+        head = 0
     }
 }
 
