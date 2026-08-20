@@ -18,7 +18,7 @@ An outer payload is the `payload` section of a plaintext `BitchatPacket` — its
 | 0x02 | `noisePublicKey` | 32 | The device's Noise `static key`. |
 | 0x03 | `signingPublicKey` | 32 | The device's Ed25519 `signing key`. |
 | 0x04 | `directNeighbors` | multiple of 8, optional | Up to 10 direct-neighbor `peer ID`s, concatenated. |
-| 0x05 | `capabilities` | 1–8, optional | `PeerCapabilities` bitfield ([§5.1](#51-peercapabilities-bitfield)). |
+| 0x05 | `capabilities` | 1–8, optional | `PeerCapabilities` bitfield ([§5.1](#51-peercapabilities-bitfield)). The length bound constrains encoders; a decoder MUST accept any length here, per [§5.1](#51-peercapabilities-bitfield). |
 | 0x06 | `bridgeGeohash` | ≤12, optional, UTF-8 | Coarse geohash cell this peer bridges to Nostr, present only when advertising the `bridge` capability. Full encoding is defined in the Nostr Bridge chapter. |
 
 `nickname`, `noisePublicKey`, and `signingPublicKey` are REQUIRED; a decoder MUST reject an `announce` payload missing any of them. `directNeighbors`, `capabilities`, and `bridgeGeohash` are each OPTIONAL and MAY be absent, including from clients that predate them.
@@ -64,9 +64,18 @@ An outer payload is the `payload` section of a plaintext `BitchatPacket` — its
 
 `version` MUST be `0x01`; a decoder MUST reject any other value. A decoder MUST reject a payload with a duplicate TLV entry, and MUST reject a `capabilities` TLV that is not the minimal (trailing-zero-byte-stripped) encoding described in [§5.1](#51-peercapabilities-bitfield).
 
+A decoder MUST skip a TLV whose type it does not recognize, provided that entry's `length` lies wholly within the payload; it MUST reject the payload on any TLV whose `length` overruns the payload, recognized or not. A decoder MUST reject the whole payload — not skip the entry — on a malformed TLV of a type it does recognize. Skipping unrecognized types is what lets a later revision add a field to this payload without breaking peers that predate it; rejecting a malformed known type keeps a field a peer did send from being read as a field it did not.
+
 ### 5.1 `PeerCapabilities` Bitfield
 
-`PeerCapabilities` is a little-endian bitfield, encoded as the fewest whole bytes needed to represent its highest set bit (at least 1 byte when non-empty; an encoder omits trailing all-zero bytes). A decoder accepts any length and keeps only the low 64 bits, so an unrecognized high bit set by a newer client round-trips without corrupting bits the decoder does understand. This encoding is used both standalone (`announce`'s `capabilities` TLV, [§2](#2-presence-announce)) and inside `authenticatedPeerState` ([§5](#5-peer-state-and-capabilities)).
+`PeerCapabilities` is a little-endian bitfield, encoded as the fewest whole bytes needed to represent its highest set bit (at least 1 byte when non-empty; an encoder omits trailing all-zero bytes). An encoder MUST NOT emit more than 8 bytes.
+
+This encoding is used both standalone (`announce`'s `capabilities` TLV, [§2](#2-presence-announce)) and inside `authenticatedPeerState` ([§5](#5-peer-state-and-capabilities)). Decoding differs between the two, and the rules are not interchangeable:
+
+- **Standalone**, in `announce`: a decoder MUST accept any length, keeping the low 64 bits and ignoring any bytes beyond them. Neither a field wider than 8 bytes nor a non-minimal encoding invalidates the `announce`.
+- **Inside `authenticatedPeerState`**: a decoder MUST reject the whole payload on a `capabilities` TLV that is empty, longer than 8 bytes, or not minimally encoded, per that section's table and rules.
+
+Within the 8-byte field the two forms behave identically: an unrecognized set bit in 11–63 decodes, is preserved, and re-encodes minimally, so a bit assigned by a later revision round-trips without corrupting bits the decoder does understand. The strict form's rejection reaches only a field wider than the 64-bit bitfield.
 
 | Bit | Name | Meaning |
 |---|---|---|
