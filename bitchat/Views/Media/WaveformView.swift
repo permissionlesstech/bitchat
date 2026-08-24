@@ -8,7 +8,7 @@ struct WaveformView: View {
     let isInteractive: Bool
     @ThemedPalette private var palette
 
-    /// Converts a tap location into a bounded playback fraction.
+    /// Converts a gesture location into a bounded playback fraction.
     ///
     /// Keep this separate from the gesture so the coordinate contract can be
     /// tested without mounting SwiftUI. A zero-sized geometry can occur while
@@ -62,15 +62,14 @@ struct WaveformView: View {
                 if isInteractive, let onSeek = onSeek {
                     Color.clear
                         .contentShape(Rectangle())
-                        // The private conversation owns a high-priority
-                        // swipe-to-leave drag on the message list. A drag here
-                        // is therefore interpreted as navigation instead of
-                        // seeking and can close the conversation. Seeking is
-                        // intentionally a tap: it preserves the swipe gesture
-                        // while keeping the waveform's direct-manipulation
-                        // affordance deterministic.
+                        // The private conversation drops its high-priority
+                        // swipe-to-leave gesture while a note is playing, so
+                        // drag-seeking remains available without allowing a
+                        // scrub to close the conversation. Keep the original
+                        // zero-distance drag: users can press, slide to a
+                        // target, and release to seek.
                         .gesture(
-                            SpatialTapGesture(count: 1, coordinateSpace: .local)
+                            DragGesture(minimumDistance: 0, coordinateSpace: .local)
                                 .onEnded { value in
                                     guard let fraction = Self.seekFraction(
                                         forX: value.location.x,
