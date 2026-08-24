@@ -410,4 +410,13 @@ enum TransportConfig {
     // announces, keep it alive in peers' gossip stores; changed bundles are
     // sent immediately.
     static let prekeyBundleRebroadcastSeconds: TimeInterval = 60 * 60
+    // A bundle that arrives before its owner's announce is stashed until that
+    // announce binds a signing key. Nothing about a stashed bundle is verified
+    // yet and anyone can mint one for an owner that never announces, so the
+    // stash is bounded both ways: oldest-by-insertion eviction at the cap, plus
+    // an age sweep. The TTL is many announce intervals
+    // (bleAnnounceIntervalSeconds), so a genuine bundle is always drained well
+    // inside it.
+    static let prekeyBundlePendingCap: Int = 64
+    static let prekeyBundlePendingTTLSeconds: TimeInterval = 120.0
 }
