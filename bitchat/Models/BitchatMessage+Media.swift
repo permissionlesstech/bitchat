@@ -13,6 +13,7 @@ extension BitchatMessage {
     enum Media {
         case voice(URL)
         case image(URL)
+        case file(URL)
     }
 
     // Cache the directory lookup to avoid repeated FileManager calls during view rendering
@@ -56,6 +57,9 @@ extension BitchatMessage {
         }
         if let url = url(for: .image) {
             return .image(url)
+        }
+        if let url = url(for: .file) {
+            return .file(url)
         }
         return nil
     }
