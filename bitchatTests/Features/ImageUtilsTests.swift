@@ -26,7 +26,7 @@ private func makePlatformImage(size: CGSize) -> UIImage {
 }
 
 private func makeNoisyPlatformImage(size: CGSize) -> UIImage {
-    UIGraphicsImageRenderer(size: size).image { context in
+    UIGraphicsImageRenderer(size: size).image { _ in
         for i in 0..<600 {
             UIColor(
                 hue: CGFloat(i % 47) / 47,
