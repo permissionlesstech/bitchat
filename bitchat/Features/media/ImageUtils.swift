@@ -1,3 +1,4 @@
+import BitFoundation
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
@@ -14,10 +15,14 @@ enum ImageUtilsError: Error {
 
 enum ImageUtils {
     private static let compressionQuality: CGFloat = 0.82
-    private static let targetImageBytes: Int = 45_000
+    /// Encode against the protocol image budget, not a second magic squeeze.
+    /// Voice notes already travel at 512 KiB; photos should too. Android
+    /// encodes at 512px / q=85 with no 45 KB crush, so matching that budget
+    /// is what keeps a photo readable on the same radio.
+    private static let targetImageBytes: Int = FileTransferLimits.maxImageBytes
     private static let maxSourceImageBytes: Int = 10 * 1024 * 1024
 
-    static func processImage(at url: URL, maxDimension: CGFloat = 448, outputDirectory: URL? = nil) throws -> URL {
+    static func processImage(at url: URL, maxDimension: CGFloat = 512, outputDirectory: URL? = nil) throws -> URL {
         try validateImageSource(at: url)
 
         let data = try Data(contentsOf: url)
@@ -47,7 +52,7 @@ enum ImageUtils {
     }
 
     #if os(iOS)
-    static func processImage(_ image: UIImage, maxDimension: CGFloat = 448, outputDirectory: URL? = nil) throws -> URL {
+    static func processImage(_ image: UIImage, maxDimension: CGFloat = 512, outputDirectory: URL? = nil) throws -> URL {
         return try autoreleasepool {
             // Scale the image first
             let scaled = scaledImage(image, maxDimension: maxDimension)
@@ -82,11 +87,12 @@ enum ImageUtils {
     private static func scaledImage(_ image: UIImage, maxDimension: CGFloat) -> UIImage {
         let size = image.size
         let maxSide = max(size.width, size.height)
-        guard maxSide > maxDimension else { return image }
-        let scale = maxDimension / maxSide
+        let scale = maxSide > maxDimension ? maxDimension / maxSide : 1
         let newSize = CGSize(width: size.width * scale, height: size.height * scale)
 
-        // Draw into a new context to get a clean CGImage without metadata
+        // Always redraw so EXIF orientation is baked in even when the
+        // pixel size already fits. Returning the original left
+        // `image.cgImage` rotated for camera stills under 512px.
         UIGraphicsBeginImageContextWithOptions(newSize, true, 1.0)
         image.draw(in: CGRect(origin: .zero, size: newSize))
         let rendered = UIGraphicsGetImageFromCurrentImageContext()
@@ -115,7 +121,7 @@ enum ImageUtils {
         return data as Data
     }
     #else
-    static func processImage(_ image: NSImage, maxDimension: CGFloat = 448, outputDirectory: URL? = nil) throws -> URL {
+    static func processImage(_ image: NSImage, maxDimension: CGFloat = 512, outputDirectory: URL? = nil) throws -> URL {
         return try autoreleasepool {
             let scaled = scaledImage(image, maxDimension: maxDimension)
             guard let inputCG = scaled.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
@@ -160,8 +166,7 @@ enum ImageUtils {
     private static func scaledImage(_ image: NSImage, maxDimension: CGFloat) -> NSImage {
         let size = image.size
         let maxSide = max(size.width, size.height)
-        guard maxSide > maxDimension else { return image }
-        let scale = maxDimension / maxSide
+        let scale = maxSide > maxDimension ? maxDimension / maxSide : 1
         let newSize = NSSize(width: size.width * scale, height: size.height * scale)
         let scaledImage = NSImage(size: newSize)
         scaledImage.lockFocus()
