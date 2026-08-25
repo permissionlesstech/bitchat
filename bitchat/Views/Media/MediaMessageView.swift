@@ -123,6 +123,14 @@ struct MediaMessageView: View {
                             onDelete: !isFromMe ? { conversationUIModel.deleteMediaMessage(messageID: message.id) } : nil
                         )
                         .frame(maxWidth: 280)
+                    case .file(let url):
+                        FileAttachmentView(
+                            url: url,
+                            isSending: state.isSending,
+                            sendProgress: state.progress,
+                            onCancel: cancelAction,
+                            onDelete: !isFromMe ? { conversationUIModel.deleteMediaMessage(messageID: message.id) } : nil
+                        )
                     }
                 }
             }
