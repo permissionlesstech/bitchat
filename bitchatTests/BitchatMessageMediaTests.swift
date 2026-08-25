@@ -46,4 +46,26 @@ struct BitchatMessageMediaTests {
             Issue.record("file transfers must not render as images")
         }
     }
+
+    @Test func mediaAttachment_rejectsPathTraversalInFileName() {
+        let traversal = BitchatMessage(
+            sender: "alice",
+            content: "[file] ../../../prekeys/bundles.json",
+            timestamp: Date(),
+            isRelay: false
+        )
+        if traversal.mediaAttachment(for: "bob") != nil {
+            Issue.record("traversal names must not become file attachments")
+        }
+
+        let parent = BitchatMessage(
+            sender: "alice",
+            content: "[file] ..",
+            timestamp: Date(),
+            isRelay: false
+        )
+        if parent.mediaAttachment(for: "bob") != nil {
+            Issue.record("parent directory names must not become file attachments")
+        }
+    }
 }
