@@ -21,6 +21,15 @@ final class AppChromeModel: ObservableObject {
     /// connectivity banner. Mirrored from `ChatViewModel.torBlocked`.
     @Published private(set) var torBlocked = false
     @Published var showScreenshotPrivacyWarning = false
+    /// Latch for the people / conversation-list sheet. Owned here (rather than as
+    /// `ContentView` local `@State`) so non-view launch code can raise it: on launch
+    /// `AppRuntime` sets this to `true` when the last-active conversation resolves to
+    /// "present the conversation list" (first-ever launch or a stale/unrestorable DM
+    /// peer). `ContentView` binds the people sheet directly to this, and every
+    /// competing sheet/cover already gates on `!showSidebar`, so a single latch keeps
+    /// the launch presentation from colliding with the fingerprint / image-picker
+    /// sheets (#1064).
+    @Published var showSidebar = false
     /// Triple-tapping the logo asks first; the dialog lives on the header.
     @Published var showPanicConfirmation = false
     /// Mirrors `ChatViewModel.panicRecoveryBlocked` for the chrome: a wipe
@@ -137,6 +146,11 @@ final class AppChromeModel: ObservableObject {
         isLocationChannelsSheetPresented = false
         isNoticesSheetPresented = false
         showingFingerprintFor = nil
+        // The people/conversation-list sheet is presented on this latch too
+        // (`ContentView.isPeopleSheetPresented`), and launch restore can raise
+        // it without anyone touching the screen — so it hides the outcome
+        // exactly like the sheets above unless it is cleared here.
+        showSidebar = false
 
         prepareForPanic?()
         onPanicWipe()

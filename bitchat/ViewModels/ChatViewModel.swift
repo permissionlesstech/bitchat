@@ -1592,6 +1592,20 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         // single-writer ConversationStore; the derived `messages` view and
         // the legacy mirror empty with it)
         conversations.clearAll()
+        // Begin suppressing last-active persistence (#1064). The selection and
+        // channel resets below route through the store's setters, which would
+        // otherwise re-persist a `.mesh` pointer.
+        //
+        // Finished via `defer` rather than a call at the end: this method now
+        // has an early `return false` when the keychain wipe is incomplete, and
+        // suppression that outlives the wipe would silently stop persisting the
+        // last-active conversation for the rest of the process. `defer` also
+        // keeps the ordering the store requires — it runs after every selection
+        // and channel reset below, so no setter can re-persist the pointer
+        // afterwards, and the pointer is removed exactly once, leaving the key
+        // absent so the next launch hits the conversation-list fallback.
+        conversations.beginPanicWipe()
+        defer { conversations.finishPanicWipe() }
         pendingGeohashSystemMessages.removeAll()
 
         // Delete all keychain data (including Noise and Nostr keys)
