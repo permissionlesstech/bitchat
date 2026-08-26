@@ -57,6 +57,9 @@ struct SyncTypeFlags: OptionSet {
         // Live voice is only useful now; replaying stale audio frames via
         // sync would waste airtime (receivers drop them as stale anyway).
         case .voiceFrame: return nil
+        // Courier spray receipts are ephemeral directed acks/declines between
+        // trusted peers; replaying them via gossip sync would be meaningless.
+        case .courierSprayAck, .courierSprayDecline: return nil
         // Rotating-ID presence is valid only inside its epoch, and gossiping it
         // would defeat the point: a synced announce would let a device that was
         // never in radio range collect tag blocks, turning a local presence

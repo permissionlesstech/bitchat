@@ -663,6 +663,122 @@ struct CourierEndToEndTests {
             ttl: TransportConfig.messageTTLDefault
         )
     }
+
+    // MARK: - Spray-receipt recipient binding
+
+    /// Builds a signed spray receipt (`courierSprayAck`/`courierSprayDecline`)
+    /// as it appears on the wire from `taker`, addressed to `recipientID` and
+    /// carrying `ciphertextHash` as its payload. The signature is genuine; only
+    /// the recipient field varies, isolating the recipient-binding guard.
+    private func signedSprayReceipt(
+        _ type: MessageType,
+        from taker: NoiseEncryptionService,
+        to recipientID: Data,
+        ciphertextHash: Data
+    ) throws -> BitchatPacket {
+        let takerPeerID = PeerID(publicKey: taker.getStaticPublicKeyData())
+        let unsigned = BitchatPacket(
+            type: type.rawValue,
+            senderID: Data(hexString: takerPeerID.id) ?? Data(),
+            recipientID: recipientID,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: ciphertextHash,
+            signature: nil,
+            ttl: 1
+        )
+        return try #require(taker.signPacket(unsigned))
+    }
+
+    /// Seeds `giver` with a 4-copy envelope and commits one spray offer to
+    /// `courierNoiseKey`, leaving budget 2 with a single outstanding pending
+    /// offer. Returns the envelope's ciphertext hash (the receipt payload).
+    private func seedSprayOffer(in giver: BLEService, to courierNoiseKey: Data) -> Data {
+        let recipientKey = Data(repeating: 0xB0, count: 32)
+        let now = Date()
+        let envelope = CourierEnvelope(
+            recipientTag: CourierEnvelope.recipientTag(
+                noiseStaticKey: recipientKey,
+                epochDay: CourierEnvelope.epochDay(for: now)
+            ),
+            expiry: UInt64((now.timeIntervalSince1970 + 3600) * 1000),
+            ciphertext: Data((0..<96).map { _ in UInt8.random(in: 0...255) })
+        ).withCopies(4)
+        let depositor = Data(repeating: 0xA1, count: 32)
+        _ = giver.courierStore.deposit(envelope, from: depositor)
+        let committed = giver.courierStore.offerSprayCopies(to: courierNoiseKey) { _ in true }
+        #expect(committed == 1)
+        return CourierStore.ciphertextHash(envelope.ciphertext)
+    }
+
+    /// A validly signed decline addressed to a *different* giver, merely relayed
+    /// onto our link, must not restore budget we already spent. The signature is
+    /// genuine, so only the recipient-binding guard prevents cross-recipient
+    /// copy inflation.
+    @Test func sprayDeclineAddressedToAnotherGiverDoesNotRestoreBudget() async throws {
+        let alice = makeService()
+        let carol = NoiseEncryptionService(keychain: MockKeychain())
+        let carolPeerID = PeerID(publicKey: carol.getStaticPublicKeyData())
+        let carolSenderData = Data(hexString: carolPeerID.id) ?? Data()
+
+        let ciphertextHash = seedSprayOffer(in: alice, to: carolSenderData)
+
+        let strangerID = Data(hexString: PeerID(publicKey: Data(repeating: 0xE0, count: 32)).id) ?? Data()
+        let decline = try signedSprayReceipt(.courierSprayDecline, from: carol, to: strangerID, ciphertextHash: ciphertextHash)
+        alice._test_handlePacket(decline, fromPeerID: carolPeerID, signingPublicKey: carol.getSigningPublicKeyData())
+        await alice._test_drainFragmentPipeline()
+
+        // Budget still 2 (not restored to 4): a fresh courier gets 2/2 = 1.
+        let probe = Data(repeating: 0xD1, count: 32)
+        #expect(alice.courierStore.takeSprayCopies(for: probe).map(\.copies) == [1])
+    }
+
+    /// The same signed decline addressed to us *does* restore the deferred
+    /// budget — proving the recipient check is the only thing gating the
+    /// mis-addressed case (the negative test above is not passing vacuously).
+    @Test func sprayDeclineAddressedToUsRestoresBudget() async throws {
+        let alice = makeService()
+        let carol = NoiseEncryptionService(keychain: MockKeychain())
+        let carolPeerID = PeerID(publicKey: carol.getStaticPublicKeyData())
+        let carolSenderData = Data(hexString: carolPeerID.id) ?? Data()
+
+        let ciphertextHash = seedSprayOffer(in: alice, to: carolSenderData)
+
+        let aliceID = Data(hexString: alice.myPeerID.id) ?? Data()
+        let decline = try signedSprayReceipt(.courierSprayDecline, from: carol, to: aliceID, ciphertextHash: ciphertextHash)
+        alice._test_handlePacket(decline, fromPeerID: carolPeerID, signingPublicKey: carol.getSigningPublicKeyData())
+        await alice._test_drainFragmentPipeline()
+
+        // Budget restored to 4: a fresh courier gets 4/2 = 2.
+        let probe = Data(repeating: 0xD1, count: 32)
+        #expect(alice.courierStore.takeSprayCopies(for: probe).map(\.copies) == [2])
+    }
+
+    /// A validly signed ack addressed to a *different* giver must not consume our
+    /// pending offer. If it did, a later legitimate decline could no longer
+    /// restore the budget — cross-recipient copy loss. Here the stray ack is
+    /// ignored, so Carol's own signed decline still restores.
+    @Test func sprayAckAddressedToAnotherGiverDoesNotClearRestoreWindow() async throws {
+        let alice = makeService()
+        let carol = NoiseEncryptionService(keychain: MockKeychain())
+        let carolPeerID = PeerID(publicKey: carol.getStaticPublicKeyData())
+        let carolSenderData = Data(hexString: carolPeerID.id) ?? Data()
+
+        let ciphertextHash = seedSprayOffer(in: alice, to: carolSenderData)
+
+        let strangerID = Data(hexString: PeerID(publicKey: Data(repeating: 0xE0, count: 32)).id) ?? Data()
+        let strayAck = try signedSprayReceipt(.courierSprayAck, from: carol, to: strangerID, ciphertextHash: ciphertextHash)
+        alice._test_handlePacket(strayAck, fromPeerID: carolPeerID, signingPublicKey: carol.getSigningPublicKeyData())
+        await alice._test_drainFragmentPipeline()
+
+        let aliceID = Data(hexString: alice.myPeerID.id) ?? Data()
+        let decline = try signedSprayReceipt(.courierSprayDecline, from: carol, to: aliceID, ciphertextHash: ciphertextHash)
+        alice._test_handlePacket(decline, fromPeerID: carolPeerID, signingPublicKey: carol.getSigningPublicKeyData())
+        await alice._test_drainFragmentPipeline()
+
+        // Pending offer survived the stray ack, so the decline restores to 4.
+        let probe = Data(repeating: 0xD1, count: 32)
+        #expect(alice.courierStore.takeSprayCopies(for: probe).map(\.copies) == [2])
+    }
 }
 
 // MARK: - Router courier selection

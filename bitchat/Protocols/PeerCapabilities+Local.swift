@@ -8,6 +8,7 @@ extension PeerCapabilities {
         .prekeys,
         .groups,
         .privateMedia,
-        .privateMediaReceipts
+        .privateMediaReceipts,
+        .courierAck
     ]
 }
