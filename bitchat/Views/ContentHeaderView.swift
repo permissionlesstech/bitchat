@@ -129,7 +129,7 @@ struct ContentHeaderView: View {
                 if locationChannelsModel.gatewayEnabled {
                     // The gateway toggle lives in the App Info settings pane
                     // now, so the indicator deep-links there.
-                    Button(action: { appChromeModel.presentAppInfo() }) {
+                    Button(action: { appChromeModel.presentAppInfo(pane: .settings) }) {
                         Image(systemName: "globe")
                             .font(.bitchatSystem(size: 12))
                             .foregroundColor(palette.secondary.opacity(0.8))

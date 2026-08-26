@@ -32210,7 +32210,7 @@
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "settings"
+            "value" : "mga setting"
           }
         },
         "fr" : {
@@ -55949,7 +55949,7 @@
         "en" : { "stringUnit" : { "state" : "translated", "value" : "settings" } },
         "es" : { "stringUnit" : { "state" : "translated", "value" : "ajustes" } },
         "fa" : { "stringUnit" : { "state" : "translated", "value" : "تنظیمات" } },
-        "fil" : { "stringUnit" : { "state" : "translated", "value" : "settings" } },
+        "fil" : { "stringUnit" : { "state" : "translated", "value" : "mga setting" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "réglages" } },
         "he" : { "stringUnit" : { "state" : "translated", "value" : "הגדרות" } },
         "hi" : { "stringUnit" : { "state" : "translated", "value" : "सेटिंग्स" } },
