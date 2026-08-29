@@ -137,6 +137,12 @@ public struct BinaryProtocol {
         var payload = packet.payload
         var isCompressed = false
         var originalPayloadSize: Int?
+        // Refuse to emit a frame whose expanded (or plain) payload we would reject on decode.
+        // Decode enforces FileTransferLimits.maxFramedFileBytes; encode previously only checked
+        // the on-wire length field width, so v2 could compress up to UInt32.max and produce
+        // frames peers (including ourselves) silently drop.
+        guard payload.count <= FileTransferLimits.maxFramedFileBytes else { return nil }
+
         if CompressionUtil.shouldCompress(payload) {
             // Only compress when we can represent the original length in the outbound frame
             let maxRepresentable = version == 2 ? Int(UInt32.max) : Int(UInt16.max)
