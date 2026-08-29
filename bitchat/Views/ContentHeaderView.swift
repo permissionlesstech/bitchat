@@ -33,6 +33,7 @@ struct ContentHeaderView: View {
     @State private var pendingShareGeohash: String?
     @State private var showSharePrecisionWarning = false
     @State private var activeSharePayload: ChannelSharePayload?
+    @State private var geohashNotificationsMuted = false
 
     /// The bridged-people count belongs to the mesh channel only.
     private var showBridgedPeerCount: Bool {
@@ -213,6 +214,19 @@ struct ContentHeaderView: View {
                 )
 
                 if case .location(let channel) = locationChannelsModel.selectedChannel {
+                    Button(action: { toggleGeohashNotificationMute(for: channel.geohash) }) {
+                        Image(systemName: geohashNotificationsMuted ? "bell.slash.fill" : "bell")
+                            .font(.bitchatSystem(size: 12))
+                            .foregroundColor(geohashNotificationsMuted ? palette.secondary : palette.primary)
+                            .headerTapTarget()
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(
+                        geohashNotificationsMuted
+                            ? String(localized: "notification.mute.geohash.unmute", defaultValue: "unmute channel notifications", comment: "Accessibility label to resume notifications for this location channel")
+                            : String(localized: "notification.mute.geohash.mute", defaultValue: "mute channel notifications", comment: "Accessibility label to silence notifications for this location channel")
+                    )
+
                     Button(action: { locationChannelsModel.toggleBookmark(channel.geohash) }) {
                         Image(systemName: locationChannelsModel.isBookmarked(channel.geohash) ? "bookmark.fill" : "bookmark")
                             .font(.bitchatSystem(size: 12))
@@ -347,9 +361,11 @@ struct ContentHeaderView: View {
         }
         .onAppear {
             locationChannelsModel.refreshMeshChannelsIfNeeded()
+            refreshGeohashNotificationMuteState()
         }
         .onChange(of: locationChannelsModel.selectedChannel) { _ in
             locationChannelsModel.refreshMeshChannelsIfNeeded()
+            refreshGeohashNotificationMuteState()
         }
         .onChange(of: locationChannelsModel.permissionState) { _ in
             locationChannelsModel.refreshMeshChannelsIfNeeded()
@@ -464,5 +480,20 @@ private extension ContentHeaderView {
             let color: Color = peerListModel.connectedMeshPeerCount > 0 ? meshBlue : palette.secondary
             return (peerListModel.reachableMeshPeerCount, color)
         }
+    }
+
+    func refreshGeohashNotificationMuteState() {
+        if case .location(let channel) = locationChannelsModel.selectedChannel {
+            geohashNotificationsMuted = ConversationNotificationMuteStore.isMuted(.geohash(channel.geohash))
+        } else {
+            geohashNotificationsMuted = false
+        }
+    }
+
+    func toggleGeohashNotificationMute(for geohash: String) {
+        let scope = ConversationNotificationMuteStore.Scope.geohash(geohash)
+        let next = !ConversationNotificationMuteStore.isMuted(scope)
+        ConversationNotificationMuteStore.setMuted(next, for: scope)
+        geohashNotificationsMuted = next
     }
 }

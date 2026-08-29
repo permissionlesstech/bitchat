@@ -17,6 +17,9 @@ struct MeshPeerRow: Identifiable, Equatable {
     /// Vouched-for by someone I verified, without an explicit verification of
     /// mine — rendered as the unfilled seal (verified gets the filled one).
     let showsVouchedBadge: Bool
+    /// This peer's direct conversation has notifications muted. Surfaced in the
+    /// row so muting is discoverable outside the open thread's bell (#1606).
+    let notificationsMuted: Bool
 
     var id: String { peerID.id }
 }
@@ -231,6 +234,16 @@ final class PeerListModel: ObservableObject {
         let meshRows = allPeers.map { peer in
             let isMe = peer.peerID == myPeerID
             let fingerprint = isMe ? nil : chatViewModel.getFingerprint(for: peer.peerID)
+            // Same resolver the mute toggle and the notification path use, so
+            // the row can never disagree with either (#1606).
+            let muteScope: ConversationNotificationMuteStore.Scope? = isMe
+                ? nil
+                : .direct(fingerprint: chatViewModel.stableConversationIdentity(for: peer.peerID))
+            // Hoisted out of the MeshPeerRow literal: `isMuted` carries a
+            // defaulted UserDefaults parameter, so it cannot be passed as a
+            // bare function value, and inlining it makes the initializer
+            // expression too complex for the type checker.
+            let notificationsMuted = muteScope.map { ConversationNotificationMuteStore.isMuted($0) } ?? false
             let isVerifiedFingerprint = fingerprint.map { peerIdentityStore.isVerified($0) } ?? false
             let verifiedBadge = !peer.isConnected && isVerifiedFingerprint
             // Vouched is subordinate to verified: never show both seals.
@@ -249,7 +262,8 @@ final class PeerListModel: ObservableObject {
                 isMutualFavorite: peer.isMutualFavorite,
                 encryptionStatus: chatViewModel.getEncryptionStatus(for: peer.peerID),
                 showsVerifiedBadgeWhenOffline: verifiedBadge,
-                showsVouchedBadge: vouchedBadge
+                showsVouchedBadge: vouchedBadge,
+                notificationsMuted: notificationsMuted
             )
         }
 
