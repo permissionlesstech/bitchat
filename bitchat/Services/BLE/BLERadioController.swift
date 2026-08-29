@@ -231,7 +231,9 @@ final class BLERadioController {
         guard delegate?.radioIsPanicSuspended() == false else { return }
         let peripheral = candidate.peripheral
         let peripheralID = candidate.peripheralID
-        linkStateStore.beginConnecting(to: peripheral, at: Date())
+        // Captured monotonically increasing attempt token so the timeout closure
+        // below can tell this specific attempt apart from a later one.
+        let attemptToken = linkStateStore.beginConnecting(to: peripheral, at: Date())
         peripheral.delegate = peripheralDelegate
         let options: [String: Any] = [
             CBConnectPeripheralOptionNotifyOnConnectionKey: true,
@@ -243,12 +245,25 @@ final class BLERadioController {
         SecureLogger.debug("\(logPrefix): \(candidate.name) [RSSI:\(candidate.rssi)]", category: .session)
 
         queue.asyncAfter(deadline: .now() + TransportConfig.bleConnectTimeoutSeconds) { [weak self] in
-            guard let self,
-                  let state = self.linkStateStore.state(forPeripheralID: peripheralID),
-                  state.isConnecting && !state.isConnected else { return }
+            guard let self else { return }
+            let state = self.linkStateStore.state(forPeripheralID: peripheralID)
 
-            guard peripheral.state != .connected else {
-                SecureLogger.debug("⏱️ Timeout fired but peripheral already connected: \(candidate.name)", category: .session)
+            // A disconnect + immediate reconnect between this attempt and now
+            // starts a new attempt with an incremented attemptToken. Without
+            // this check, this now-stale timeout would cancel that newer,
+            // still-live attempt out from under it and apply a
+            // connection-timeout penalty to a peer that never actually timed out.
+            guard let state,
+                  BLEConnectTimeoutPolicy.shouldExecuteConnectTimeout(
+                      capturedAttemptToken: attemptToken,
+                      isConnecting: state.isConnecting,
+                      isConnected: state.isConnected,
+                      currentAttemptToken: state.attemptToken,
+                      isPeripheralConnected: peripheral.state == .connected
+                  ) else {
+                if let state, state.attemptToken != attemptToken {
+                    SecureLogger.debug("⏱️ Timeout fired for a superseded connection attempt, ignoring: \(candidate.name)", category: .session)
+                }
                 return
             }
 

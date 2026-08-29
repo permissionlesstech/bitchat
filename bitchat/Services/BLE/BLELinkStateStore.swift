@@ -8,6 +8,7 @@ struct BLEPeripheralLinkState {
     var isConnecting: Bool
     var isConnected: Bool
     var lastConnectionAttempt: Date?
+    var attemptToken: UInt64 = 0
     /// When didConnect last fired for this link. Nil for links restored
     /// already-connected (their connect predates this process), which is
     /// exactly the signal redundant-link consolidation needs: a restored
@@ -15,6 +16,23 @@ struct BLEPeripheralLinkState {
     /// so it must never be kept over a freshly connected duplicate.
     var lastConnectedAt: Date? = nil
     var assembler: NotificationStreamAssembler
+}
+
+struct BLEConnectTimeoutPolicy {
+    /// Pure decision: given a captured attempt token and current link state attributes,
+    /// returns true if the timeout closure should act on this peripheral attempt.
+    static func shouldExecuteConnectTimeout(
+        capturedAttemptToken: UInt64,
+        isConnecting: Bool,
+        isConnected: Bool,
+        currentAttemptToken: UInt64,
+        isPeripheralConnected: Bool
+    ) -> Bool {
+        guard isConnecting && !isConnected else { return false }
+        guard !isPeripheralConnected else { return false }
+        guard currentAttemptToken == capturedAttemptToken else { return false }
+        return true
+    }
 }
 
 struct BLEDirectLinkState: Equatable {
@@ -104,7 +122,10 @@ final class BLELinkStateStore {
         return state
     }
 
-    func beginConnecting(to peripheral: CBPeripheral, at date: Date) {
+    @discardableResult
+    func beginConnecting(to peripheral: CBPeripheral, at date: Date = Date()) -> UInt64 {
+        let peripheralID = peripheral.identifier.uuidString
+        let nextAttemptToken = (peripherals[peripheralID]?.attemptToken ?? 0) + 1
         setPeripheralState(
             BLEPeripheralLinkState(
                 peripheral: peripheral,
@@ -112,10 +133,12 @@ final class BLELinkStateStore {
                 isConnecting: true,
                 isConnected: false,
                 lastConnectionAttempt: date,
+                attemptToken: nextAttemptToken,
                 assembler: NotificationStreamAssembler()
             ),
-            for: peripheral.identifier.uuidString
+            for: peripheralID
         )
+        return nextAttemptToken
     }
 
     func markConnected(_ peripheral: CBPeripheral, at now: Date = Date()) {
