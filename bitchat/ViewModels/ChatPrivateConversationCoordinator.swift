@@ -146,6 +146,14 @@ extension ChatViewModel: ChatPrivateConversationContext {
         peerIDToPublicKeyFingerprint[peerID]
     }
 
+    /// Stable identity for keying per-conversation preferences, or nil before a
+    /// handshake has produced a fingerprint. Single source of truth so the mute
+    /// toggle, the notification lookup and the people-sheet badge cannot
+    /// resolve differently (#1606).
+    func stableConversationIdentity(for peerID: PeerID) -> String? {
+        (getFingerprint(for: peerID) ?? storedFingerprint(for: peerID))?.trimmedOrNilIfEmpty
+    }
+
     func clearStoredFingerprint(for peerID: PeerID) {
         peerIdentityStore.setFingerprint(nil, for: peerID)
     }
@@ -223,7 +231,13 @@ extension ChatViewModel: ChatPrivateConversationContext {
     }
 
     func notifyPrivateMessage(from senderName: String, message: String, peerID: PeerID) {
-        NotificationService.shared.sendPrivateMessageNotification(from: senderName, message: message, peerID: peerID)
+        let fingerprint = stableConversationIdentity(for: peerID)
+        NotificationService.shared.sendPrivateMessageNotification(
+            from: senderName,
+            message: message,
+            peerID: peerID,
+            fingerprint: fingerprint
+        )
     }
 
     private func makeGeohashNostrTransport() -> NostrTransport {

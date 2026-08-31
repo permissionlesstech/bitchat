@@ -533,6 +533,31 @@ private struct ContentPrivateChatSheetView: View {
                                 : String(localized: "content.accessibility.add_favorite", comment: "Accessibility label to add a favorite")
                             )
                         }
+
+                        Button(action: {
+                            privateConversationModel.toggleSelectedConversationNotificationMute()
+                        }) {
+                            Image(systemName: privateConversationModel.selectedConversationNotificationsMuted ? "bell.slash.fill" : "bell")
+                                .font(.bitchatSystem(size: 14))
+                                .foregroundColor(
+                                    privateConversationModel.selectedConversationNotificationsMuted
+                                        ? palette.secondary
+                                        : palette.primary
+                                )
+                                .frame(width: 32, height: 32)
+                                .contentShape(Rectangle().inset(by: -6))
+                        }
+                        .buttonStyle(.plain)
+                        // Disabled until a handshake produces the fingerprint the
+                        // mute is keyed on, so the control can never appear to
+                        // work while writing a key nothing reads.
+                        .disabled(!privateConversationModel.canToggleSelectedConversationNotificationMute)
+                        .opacity(privateConversationModel.canToggleSelectedConversationNotificationMute ? 1 : 0.4)
+                        .accessibilityLabel(
+                            privateConversationModel.selectedConversationNotificationsMuted
+                                ? String(localized: "notification.mute.direct.unmute", defaultValue: "unmute notifications", comment: "Accessibility label to resume notifications for this direct conversation")
+                                : String(localized: "notification.mute.direct.mute", defaultValue: "mute notifications", comment: "Accessibility label to silence notifications for this direct conversation")
+                        )
                     }
                     .frame(maxWidth: .infinity)
 

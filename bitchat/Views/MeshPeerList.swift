@@ -34,6 +34,7 @@ struct MeshPeerList: View {
         static let directMessage = String(localized: "content.actions.direct_message", comment: "Action that opens a private chat with the person")
         static let block = String(localized: "geohash_people.action.block", comment: "Context menu action to block a person")
         static let unblock = String(localized: "geohash_people.action.unblock", comment: "Context menu action to unblock a person")
+        static let notificationsMutedLabel = String(localized: "notification.mute.state.muted", comment: "Badge on a peer row indicating that conversation's notifications are muted")
     }
 
     var body: some View {
@@ -161,6 +162,14 @@ struct MeshPeerList: View {
                                 .font(.bitchatSystem(size: 10))
                                 .foregroundColor(.orange)
                                 .help(Strings.newMessagesTooltip)
+                        }
+
+                        if peer.notificationsMuted {
+                            Image(systemName: "bell.slash.fill")
+                                .font(.bitchatSystem(size: 10))
+                                .foregroundColor(palette.secondary)
+                                .accessibilityLabel(Strings.notificationsMutedLabel)
+                                .help(Strings.notificationsMutedLabel)
                         }
 
                         if !isMe {
