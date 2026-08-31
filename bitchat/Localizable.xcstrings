@@ -19200,20 +19200,20 @@
       "localizations" : {
         "ar" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "كتم الإشعارات"
           }
         },
         "bn" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "বিজ্ঞপ্তি নিঃশব্দ করো"
           }
         },
         "de" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "benachrichtigungen stummschalten"
           }
         },
         "en" : {
@@ -19224,158 +19224,158 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "silenciar notificaciones"
           }
         },
         "fa" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "بی‌صدا کردن اعلان‌ها"
           }
         },
         "fil" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "i-mute ang mga notification"
           }
         },
         "fr" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "couper les notifications"
           }
         },
         "he" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "השתק התראות"
           }
         },
         "hi" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "सूचनाएँ म्यूट करो"
           }
         },
         "id" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "bisukan notifikasi"
           }
         },
         "it" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "silenzia le notifiche"
           }
         },
         "ja" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "通知をミュート"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "알림 뮤트"
           }
         },
         "ms" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "senyapkan pemberitahuan"
           }
         },
         "ne" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "सूचना म्युट गर"
           }
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "meldingen dempen"
           }
         },
         "pl" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "wycisz powiadomienia"
           }
         },
         "pt" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "silenciar notificações"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "silenciar notificações"
           }
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "выключить уведомления"
           }
         },
         "sv" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "tysta aviseringar"
           }
         },
         "ta" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "அறிவிப்புகளை முடக்கு"
           }
         },
         "th" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "ปิดการแจ้งเตือน"
           }
         },
         "tr" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "bildirimleri sessize al"
           }
         },
         "uk" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "вимкнути сповіщення"
           }
         },
         "ur" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "اطلاعات خاموش کریں"
           }
         },
         "vi" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "tắt thông báo"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "静音通知"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute notifications"
+            "state" : "translated",
+            "value" : "靜音通知"
           }
         }
       }
@@ -19385,20 +19385,20 @@
       "localizations" : {
         "ar" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "إلغاء كتم الإشعارات"
           }
         },
         "bn" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "বিজ্ঞপ্তি আনমিউট করো"
           }
         },
         "de" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "benachrichtigungen wieder an"
           }
         },
         "en" : {
@@ -19409,158 +19409,158 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "activar notificaciones"
           }
         },
         "fa" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "وصل کردن اعلان‌ها"
           }
         },
         "fil" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "i-unmute ang mga notification"
           }
         },
         "fr" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "réactiver les notifications"
           }
         },
         "he" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "בטל השתקת התראות"
           }
         },
         "hi" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "सूचनाएँ अनम्यूट करो"
           }
         },
         "id" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "nyalakan notifikasi"
           }
         },
         "it" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "riattiva le notifiche"
           }
         },
         "ja" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "通知のミュートを解除"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "알림 뮤트 해제"
           }
         },
         "ms" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "nyahsenyap pemberitahuan"
           }
         },
         "ne" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "सूचना अनम्युट गर"
           }
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "meldingen aanzetten"
           }
         },
         "pl" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "włącz powiadomienia"
           }
         },
         "pt" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "reativar notificações"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "reativar notificações"
           }
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "включить уведомления"
           }
         },
         "sv" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "slå på aviseringar"
           }
         },
         "ta" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "அறிவிப்பு முடக்கம் நீக்கு"
           }
         },
         "th" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "เปิดการแจ้งเตือน"
           }
         },
         "tr" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "bildirimleri aç"
           }
         },
         "uk" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "увімкнути сповіщення"
           }
         },
         "ur" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "اطلاعات آن کریں"
           }
         },
         "vi" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "bật thông báo"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "取消静音通知"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute notifications"
+            "state" : "translated",
+            "value" : "取消靜音通知"
           }
         }
       }
@@ -19570,20 +19570,20 @@
       "localizations" : {
         "ar" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "كتم إشعارات القناة"
           }
         },
         "bn" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "চ্যানেল বিজ্ঞপ্তি নিঃশব্দ করো"
           }
         },
         "de" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "kanal-benachrichtigungen stummschalten"
           }
         },
         "en" : {
@@ -19594,158 +19594,158 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "silenciar notificaciones del canal"
           }
         },
         "fa" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "بی‌صدا کردن اعلان‌های کانال"
           }
         },
         "fil" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "i-mute ang notification ng channel"
           }
         },
         "fr" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "couper les notifications du canal"
           }
         },
         "he" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "השתק התראות ערוץ"
           }
         },
         "hi" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "चैनल सूचनाएँ म्यूट करो"
           }
         },
         "id" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "bisukan notifikasi kanal"
           }
         },
         "it" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "silenzia le notifiche del canale"
           }
         },
         "ja" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "チャンネル通知をミュート"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "채널 알림 뮤트"
           }
         },
         "ms" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "senyapkan pemberitahuan saluran"
           }
         },
         "ne" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "च्यानल सूचना म्युट गर"
           }
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "kanaalmeldingen dempen"
           }
         },
         "pl" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "wycisz powiadomienia kanału"
           }
         },
         "pt" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "silenciar notificações do canal"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "silenciar notificações do canal"
           }
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "выключить уведомления канала"
           }
         },
         "sv" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "tysta kanalaviseringar"
           }
         },
         "ta" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "சேனல் அறிவிப்புகளை முடக்கு"
           }
         },
         "th" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "ปิดการแจ้งเตือนช่อง"
           }
         },
         "tr" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "kanal bildirimlerini sessize al"
           }
         },
         "uk" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "вимкнути сповіщення каналу"
           }
         },
         "ur" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "چینل اطلاعات خاموش کریں"
           }
         },
         "vi" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "tắt thông báo kênh"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "静音频道通知"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "mute channel notifications"
+            "state" : "translated",
+            "value" : "靜音頻道通知"
           }
         }
       }
@@ -19755,20 +19755,20 @@
       "localizations" : {
         "ar" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "إلغاء كتم إشعارات القناة"
           }
         },
         "bn" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "চ্যানেল বিজ্ঞপ্তি আনমিউট করো"
           }
         },
         "de" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "kanal-benachrichtigungen wieder an"
           }
         },
         "en" : {
@@ -19779,158 +19779,158 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "activar notificaciones del canal"
           }
         },
         "fa" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "وصل کردن اعلان‌های کانال"
           }
         },
         "fil" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "i-unmute ang notification ng channel"
           }
         },
         "fr" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "réactiver les notifications du canal"
           }
         },
         "he" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "בטל השתקת התראות ערוץ"
           }
         },
         "hi" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "चैनل सूचनाएँ अनम्यूट करो"
           }
         },
         "id" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "nyalakan notifikasi kanal"
           }
         },
         "it" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "riattiva le notifiche del canale"
           }
         },
         "ja" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "チャンネル通知のミュートを解除"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "채널 알림 뮤트 해제"
           }
         },
         "ms" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "nyahsenyap pemberitahuan saluran"
           }
         },
         "ne" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "च्यानल सूचना अनम्युट गर"
           }
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "kanaalmeldingen aanzetten"
           }
         },
         "pl" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "włącz powiadomienia kanału"
           }
         },
         "pt" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "reativar notificações do canal"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "reativar notificações do canal"
           }
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "включить уведомления канала"
           }
         },
         "sv" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "slå på kanalaviseringar"
           }
         },
         "ta" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "சேனல் அறிவிப்பு முடக்கம் நீக்கு"
           }
         },
         "th" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "เปิดการแจ้งเตือนช่อง"
           }
         },
         "tr" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "kanal bildirimlerini aç"
           }
         },
         "uk" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "увімкнути сповіщення каналу"
           }
         },
         "ur" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "چینل اطلاعات آن کریں"
           }
         },
         "vi" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "bật thông báo kênh"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "取消静音频道通知"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "unmute channel notifications"
+            "state" : "translated",
+            "value" : "取消靜音頻道通知"
           }
         }
       }
@@ -19940,20 +19940,20 @@
       "localizations" : {
         "ar" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "مكتوم"
           }
         },
         "bn" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "নিঃশব্দ"
           }
         },
         "de" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "stumm"
           }
         },
         "en" : {
@@ -19964,158 +19964,158 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "silenciado"
           }
         },
         "fa" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "بی‌صدا"
           }
         },
         "fil" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "naka-mute"
           }
         },
         "fr" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "en sourdine"
           }
         },
         "he" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "מושתק"
           }
         },
         "hi" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "म्यूट"
           }
         },
         "id" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "dibisukan"
           }
         },
         "it" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "silenziato"
           }
         },
         "ja" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "ミュート中"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "뮤트됨"
           }
         },
         "ms" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "disenyapkan"
           }
         },
         "ne" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "म्युट"
           }
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "gedempt"
           }
         },
         "pl" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "wyciszone"
           }
         },
         "pt" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "silenciado"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "silenciado"
           }
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "без звука"
           }
         },
         "sv" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "tystad"
           }
         },
         "ta" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "முடக்கப்பட்டது"
           }
         },
         "th" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "ปิดเสียงแล้ว"
           }
         },
         "tr" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "sessiz"
           }
         },
         "uk" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "без звуку"
           }
         },
         "ur" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "خاموش"
           }
         },
         "vi" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "đã tắt"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "已静音"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "notifications muted"
+            "state" : "translated",
+            "value" : "已靜音"
           }
         }
       }
