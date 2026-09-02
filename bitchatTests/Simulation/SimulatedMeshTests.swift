@@ -122,6 +122,157 @@ struct SimulatedMeshTests {
     }
 
     @Test
+    func fragmentedSyncReplyFromAnAuthorTwoHopsAwayIsDeliveredOnTheServingPeersLink() async throws {
+        // Alice is two hops from Carol: Carol learns her key from a relayed
+        // announce but never sends her a sync request, because requests go
+        // only to direct neighbours. Alice's long message reaches Carol as
+        // sync history served by Bob, too large for one frame, arriving as
+        // fragments on Bob's bound link while Carol holds a request to Bob.
+        // This runs the production ingress path end to end: attribution on
+        // the bound link, the fragment dispatch, reassembly, and the
+        // reassembled packet's acceptance check.
+        let mesh = SimulatedMesh()
+        let alice = mesh.addNode(nickname: "alice")
+        let bob = mesh.addNode(nickname: "bob")
+        let carol = mesh.addNode(nickname: "carol")
+        mesh.connect(0, 1)
+        mesh.connect(1, 2)
+        try Self.settleTwoHopDiscovery(mesh, author: alice, requester: carol)
+        let bobLink = mesh.linkUUID(from: 1, at: 2)
+        #expect(carol.service._test_centralBinding(bobLink) == bob.service.myPeerID)
+
+        let capture = TransportEventCapture()
+        carol.service.eventDelegate = capture
+        let content = Self.longIncompressibleText(count: 1_200, seed: 0x9E37_79B9)
+        let plan = try Self.syncReplyPlan(from: alice, content: content, servedTo: carol)
+
+        // What Carol's own REQUEST_SYNC to Bob records.
+        carol.service._test_registerSyncRequest(to: bob.service.myPeerID)
+        for fragment in plan.fragmentPackets {
+            carol.service._test_ingestFrame(fragment, link: .central(bobLink))
+        }
+        mesh.pump()
+        await carol.service._test_drainFragmentPipeline()
+
+        let delivered = await capture.drainedPublicMessageCount(content: content) == 1
+        #expect(delivered)
+    }
+
+    @Test
+    func fragmentedTrainOnAnUnboundLinkIsJudgedByItsOwnSenderEvenWhenItNamesAnAskedPeer() async throws {
+        // Same mesh, but the train arrives on a link that never announced,
+        // and its fragments name Bob, a peer Carol asked, while the packet
+        // inside is Alice's. The reassembled packet must be judged by its own
+        // sender, as a single frame on that link would be, and Alice was never
+        // asked. Nothing in this test can register a request to Alice: a
+        // relayed announce does not schedule one.
+        let mesh = SimulatedMesh()
+        let alice = mesh.addNode(nickname: "alice")
+        let bob = mesh.addNode(nickname: "bob")
+        let carol = mesh.addNode(nickname: "carol")
+        mesh.connect(0, 1)
+        mesh.connect(1, 2)
+        try Self.settleTwoHopDiscovery(mesh, author: alice, requester: carol)
+
+        let capture = TransportEventCapture()
+        carol.service.eventDelegate = capture
+        let content = Self.longIncompressibleText(count: 1_200, seed: 0x2545_F491)
+        let plan = try Self.syncReplyPlan(from: alice, content: content, servedTo: carol)
+        let bobID = Data(hexString: bob.service.myPeerID.id) ?? Data()
+        let crafted = plan.fragmentPackets.map { fragment in
+            BitchatPacket(
+                type: fragment.type,
+                senderID: bobID,
+                recipientID: fragment.recipientID,
+                timestamp: fragment.timestamp,
+                payload: fragment.payload,
+                signature: nil,
+                ttl: fragment.ttl,
+                version: fragment.version,
+                route: fragment.route,
+                isRSR: fragment.isRSR
+            )
+        }
+
+        carol.service._test_registerSyncRequest(to: bob.service.myPeerID)
+        let silentLink = "SIM-NEVER-ANNOUNCED-LINK"
+        #expect(carol.service._test_centralBinding(silentLink) == nil)
+        for fragment in crafted {
+            carol.service._test_ingestFrame(fragment, link: .central(silentLink))
+        }
+        mesh.pump()
+        await carol.service._test_drainFragmentPipeline()
+
+        let delivered = await capture.drainedPublicMessageCount(content: content)
+        #expect(delivered == 0)
+    }
+
+    /// Discovery for a line Alice - Bob - Carol: Alice's announce reaches
+    /// Carol only through Bob's relay, so Carol knows Alice's key without a
+    /// direct link. Relay jitter rides engine timers; advance until a full
+    /// window passes with no new frames, the same settling the relay test
+    /// uses, then check what the scenario needs.
+    private static func settleTwoHopDiscovery(_ mesh: SimulatedMesh, author: SimulatedMesh.Node, requester: SimulatedMesh.Node) throws {
+        mesh.announceAll()
+        var settled = mesh.deliveredFrameCount
+        for _ in 0..<20 {
+            mesh.advanceTime(by: 2)
+            let now = mesh.deliveredFrameCount
+            if now == settled { break }
+            settled = now
+        }
+        try #require(requester.service._test_knownPeerIDs().contains(author.service.myPeerID))
+        #expect(!requester.service.getConnectedPeers().contains(author.service.myPeerID))
+    }
+
+    /// Bob's reply to Carol's REQUEST_SYNC for one of Alice's broadcasts:
+    /// Alice's signed packet, half an hour old, marked as GossipSyncManager
+    /// marks a reply (the responder side of that marking is pinned in
+    /// GossipSyncBoardTests) and split as BLEService splits a directed send.
+    /// The signature covers neither ttl nor the flag.
+    private static func syncReplyPlan(from author: SimulatedMesh.Node, content: String, servedTo requester: SimulatedMesh.Node) throws -> BLEOutboundFragmentPlan {
+        let original = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: Data(hexString: author.service.myPeerID.id) ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000) - 30 * 60 * 1000,
+            payload: Data(content.utf8),
+            signature: nil,
+            ttl: TransportConfig.messageTTLDefault
+        )
+        var reply = author.service.signPacketForBroadcast(original)
+        reply.ttl = 0
+        reply.isRSR = true
+        let plan = try #require(BLEOutboundFragmentPlanner.makePlan(
+            for: BLEOutboundFragmentTransferRequest(
+                packet: reply,
+                pad: false,
+                maxChunk: nil,
+                directedPeer: requester.service.myPeerID,
+                transferId: nil
+            ),
+            defaultChunkSize: TransportConfig.bleDefaultFragmentSize,
+            bleMaxMTU: 512
+        ))
+        #expect(plan.totalFragments > 1)
+        return plan
+    }
+
+    /// Fixed-seed xorshift text: deterministic, and it does not compress. A
+    /// message of this length is still several fragments after the transport's
+    /// compression step.
+    private static func longIncompressibleText(count: Int, seed: UInt32) -> String {
+        let alphabet = Array("abcdefghijklmnopqrstuvwxyz0123456789 ")
+        var state: UInt32 = seed
+        return String((0..<count).map { _ -> Character in
+            state ^= state << 13
+            state ^= state >> 17
+            state ^= state << 5
+            return alphabet[Int(state % UInt32(alphabet.count))]
+        })
+    }
+
+    @Test
     func linkDropEventRetiresBindingAndReconnectHeals() {
         let mesh = SimulatedMesh()
         let a = mesh.addNode(nickname: "alice")
