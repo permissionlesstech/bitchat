@@ -15,6 +15,7 @@ struct NostrInboundPipelineTimestampTests {
     private let nowSeconds = 1_700_000_000
     private let skew = Int(TransportConfig.nostrDMMaxClockSkewSeconds)
     private let lookback = Int(TransportConfig.nostrDMSubscribeLookbackSeconds)
+    private let giftWrapMaxAge = Int(TransportConfig.nostrGiftWrapMaxAgeSeconds)
 
     @Test("Rumor timestamps inside the lookback-plus-skew window are accepted")
     func acceptsPlausibleTimestamps() {
@@ -28,5 +29,22 @@ struct NostrInboundPipelineTimestampTests {
     func rejectsImplausibleTimestamps() {
         #expect(!NostrInboundPipeline.isPlausibleRumorTimestamp(nowSeconds + skew + 60, now: now))
         #expect(!NostrInboundPipeline.isPlausibleRumorTimestamp(nowSeconds - lookback - skew - 60, now: now))
+    }
+
+    @Test("Outer gift wraps inside the 48h-plus-skew window are accepted")
+    func acceptsPlausibleGiftWrapTimestamps() {
+        #expect(NostrInboundPipeline.isAcceptableGiftWrapTimestamp(nowSeconds, now: now))
+        // Android randomizes wraps up to 48h into the past.
+        #expect(NostrInboundPipeline.isAcceptableGiftWrapTimestamp(nowSeconds - 172_800 + 60, now: now))
+        #expect(NostrInboundPipeline.isAcceptableGiftWrapTimestamp(nowSeconds + skew - 60, now: now))
+    }
+
+    @Test("Far-future and over-age outer gift wraps are rejected")
+    func rejectsImplausibleGiftWrapTimestamps() {
+        #expect(!NostrInboundPipeline.isAcceptableGiftWrapTimestamp(nowSeconds + skew + 60, now: now))
+        #expect(!NostrInboundPipeline.isAcceptableGiftWrapTimestamp(nowSeconds - giftWrapMaxAge - 60, now: now))
+        // A wrap older than 24h but inside 48h+skew must still pass — that is
+        // the Android→iOS delivery gap this gate exists to keep open.
+        #expect(NostrInboundPipeline.isAcceptableGiftWrapTimestamp(nowSeconds - lookback - 3_600, now: now))
     }
 }
