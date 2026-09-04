@@ -48,3 +48,20 @@ struct NostrInboundPipelineTimestampTests {
         #expect(NostrInboundPipeline.isAcceptableGiftWrapTimestamp(nowSeconds - lookback - 3_600, now: now))
     }
 }
+
+struct NostrEnvelopeTimestampRandomizationTests {
+    @Test("Envelope timestamps stay in [now-maxPast, now] and never go future")
+    func samplesPastOnlyWindow() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let maxPast: TimeInterval = 172_800
+        for _ in 0..<200 {
+            let ts = NostrProtocol.randomizedEnvelopeTimestamp(now: now, maxPast: maxPast)
+            #expect(ts <= now)
+            #expect(ts >= now.addingTimeInterval(-maxPast))
+        }
+        // Zero past collapses to exactly now.
+        #expect(NostrProtocol.randomizedEnvelopeTimestamp(now: now, maxPast: 0) == now)
+        // Negative past is treated as zero.
+        #expect(NostrProtocol.randomizedEnvelopeTimestamp(now: now, maxPast: -10) == now)
+    }
+}
