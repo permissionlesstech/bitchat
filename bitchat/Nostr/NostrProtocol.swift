@@ -745,25 +745,23 @@ struct NostrProtocol {
         return sharedSecretData
     }
     
+    /// Randomized `created_at` for seals and gift wraps. Samples uniformly
+    /// from `[now − maxPast, now]` (never future) so relays cannot correlate
+    /// envelope timing with the true send time carried on the inner rumor.
+    /// Matches Android `NostrCrypto.randomizeTimestampUpToPast`. Internal so
+    /// tests can pin `now` / `maxPast`.
+    static func randomizedEnvelopeTimestamp(
+        now: Date = Date(),
+        maxPast: TimeInterval = TransportConfig.nostrGiftWrapTimestampRandomizationSeconds
+    ) -> Date {
+        let clampedPast = max(0, maxPast)
+        // Inclusive of both endpoints, matching Android's nextInt(maxPast+1).
+        let offsetSeconds = Int.random(in: 0...Int(clampedPast))
+        return now.addingTimeInterval(-TimeInterval(offsetSeconds))
+    }
+
     private static func randomizedTimestamp() -> Date {
-        // Add random offset to current time for privacy
-        // This prevents timing correlation attacks while the actual message timestamp
-        // is preserved in the encrypted rumor
-        let offset = TimeInterval.random(in: -900...900) // +/- 15 minutes
-        let now = Date()
-        let randomized = now.addingTimeInterval(offset)
-        
-        // Log with explicit UTC and local time for debugging
-        let formatter = DateFormatter()
-        //
-        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        formatter.timeZone = TimeZone(abbreviation: "UTC")
-        
-        formatter.timeZone = TimeZone.current
-        
-        // Timestamp randomized for privacy
-        
-        return randomized
+        randomizedEnvelopeTimestamp()
     }
 }
 
