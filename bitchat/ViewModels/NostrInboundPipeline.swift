@@ -427,6 +427,16 @@ final class NostrInboundPipeline {
         }
         if alreadyProcessed { return }
 
+        // Cheap outer-wrap gate before the NIP-17 unwrap (two ECDH+ChaCha
+        // rounds). Android may stamp wraps up to 48h into the past; a
+        // future-dated wrap beyond skew is never legitimate for our clients.
+        guard Self.isAcceptableGiftWrapTimestamp(giftWrap.created_at) else {
+            if verbose {
+                SecureLogger.warning("GeoDM: dropping gift-wrap with implausible outer timestamp id=\(giftWrap.id.prefix(8))…", category: .session)
+            }
+            return
+        }
+
         guard let (content, senderPubkey, rumorTs) = try? NostrProtocol.decryptPrivateMessage(
             giftWrap: giftWrap,
             recipientIdentity: id,
@@ -527,6 +537,11 @@ final class NostrInboundPipeline {
         }
         guard let (currentIdentity, wipeGeneration) = preDecrypt else { return }
 
+        guard Self.isAcceptableGiftWrapTimestamp(giftWrap.created_at) else {
+            SecureLogger.warning("Dropping Nostr DM with implausible outer gift-wrap timestamp id=\(giftWrap.id.prefix(8))…", category: .session)
+            return
+        }
+
         do {
             let (content, senderPubkey, rumorTimestamp) = try NostrProtocol.decryptPrivateMessage(
                 giftWrap: giftWrap,
@@ -622,6 +637,16 @@ extension NostrInboundPipeline {
         return age >= -TransportConfig.nostrDMMaxClockSkewSeconds
             && age <= TransportConfig.nostrDMSubscribeLookbackSeconds
                 + TransportConfig.nostrDMMaxClockSkewSeconds
+    }
+
+    /// Accept an outer gift-wrap `created_at` that is not in the far future
+    /// and not older than the 48h randomization ceiling plus skew. Checked
+    /// before decrypt so a hostile relay cannot force ECDH work with
+    /// ancient or far-future wraps.
+    static func isAcceptableGiftWrapTimestamp(_ createdAt: Int, now: Date = Date()) -> Bool {
+        let age = now.timeIntervalSince1970 - TimeInterval(createdAt)
+        return age >= -TransportConfig.nostrDMMaxClockSkewSeconds
+            && age <= TransportConfig.nostrGiftWrapMaxAgeSeconds
     }
 }
 
