@@ -80,9 +80,12 @@ final class AppChromeModel: ObservableObject {
         isNoticesSheetPresented = true
     }
 
-    /// Builds the mesh topology map model from the transport's gossiped
-    /// graph plus the live nickname table. Unknown nodes (heard about via a
-    /// neighbor claim but never announced to us) fall back to a short ID.
+    /// Builds the mesh topology map model from the transport's graph plus the
+    /// live nickname table. Unknown nodes (heard about via a neighbor claim but
+    /// never announced to us) fall back to a short ID.
+    ///
+    /// That graph is mostly this device's own direct links now that neighbour
+    /// lists are no longer announced; see `BLEService.currentMeshTopology()`.
     func meshTopologyDisplayModel() -> MeshTopologyDisplayModel {
         let mesh = chatViewModel.meshService
         guard let diagnostics = mesh as? MeshDiagnosing,

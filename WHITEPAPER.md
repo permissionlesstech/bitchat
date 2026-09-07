@@ -52,7 +52,7 @@ Only `noiseEncrypted` and `noiseHandshake` packets are padded, toward 256/512/10
 
 Relaying is a deterministic controlled flood tuned by local connection degree:
 
-* **TTL:** packets originate with TTL 7. Relays clamp: dense graphs (≥ 6 links) cap broadcast TTL at 5; thin chains (≤ 2 links) relay at full incoming depth.
+* **TTL:** packets originate with TTL 7, except public broadcasts carrying authored content — public and group messages, broadcast files, board posts, live voice, and leave — which draw uniformly from 5–7 so that a maximum TTL is not a reliable authorship marker (§8). Live voice draws once per talk burst rather than per frame. Relays clamp: dense graphs (≥ 6 links) cap broadcast TTL at 5; thin chains (≤ 2 links) relay at full incoming depth.
 * **Deduplication:** an LRU seen-set (1000 entries, 5-minute expiry) keyed by sender, timestamp, type, and a payload digest drops duplicates. A scheduled relay is cancelled when a duplicate arrives first from another relay.
 * **Jitter:** relays wait a random 10–220 ms (wider when dense) so duplicate suppression wins often.
 * **Fanout subsetting:** broadcast messages are re-sent to a deterministic, message-ID-seeded subset of links (~log₂ of degree) rather than all of them; announces, fragments, and sync packets use full fanout. The ingress link is always excluded (split horizon).
@@ -60,7 +60,9 @@ Relaying is a deterministic controlled flood tuned by local connection degree:
 
 ### 4.3 Routing
 
-Announcements carry up to 10 direct-neighbor IDs, giving each node a shallow topology map (60 s freshness). When a bidirectionally-confirmed path exists, packets are source-routed along it; otherwise — and whenever a route fails — delivery falls back to flooding.
+Announcements no longer carry direct-neighbor IDs. The list gave each node a shallow topology map, but it also handed any single passive receiver the local adjacency graph (§8), so it is suppressed by default. Lists from peers still sending them are parsed, so a mixed network behaves sensibly and a node keeps a shallow topology map (60 s freshness) of whatever it hears.
+
+When a bidirectionally-confirmed path exists, packets are source-routed along it; otherwise — and whenever a route fails — delivery falls back to flooding. Confirmation requires both endpoints to claim the edge, so once neighbor lists are suppressed network-wide no path is confirmable and directed traffic floods. That is the documented fallback rather than a new failure mode: it costs airtime in dense meshes and changes no delivery semantics.
 
 ### 4.4 Fragmentation
 
@@ -132,7 +134,11 @@ Bare local counters (deposits, handovers, sprays, opens, outbox flushes and drop
 * **Couriers** are quota-bounded mailbags. A malicious courier can drop mail (redundant copies and deposit retry mitigate this) but cannot read it, link it across days, or amplify it — copy budgets are capped and every envelope is validated against size and lifetime policy on deposit.
 * **Flooding abuse** is bounded by TTL clamps, deduplication, per-depositor quotas, connect-rate limits, and announce-rate limiting.
 * **Replay** of public broadcasts is bounded by the 6-hour acceptance window plus deduplication; private payloads are protected by Noise nonces.
-* **Metadata is the weakest part of this design, and the peer ID does not help.** The 8-byte sender ID in every packet header is derived from a never-rotating key (§3), and announcements publish the static keys and nickname in cleartext, so a passive listener can enumerate participants and follow a device between places. Announcements also carry up to ten direct-neighbor IDs (§4.3), which hands a single sniffer the local adjacency graph. Origin packets leave at the default TTL, so hop distance identifies the originator. Daily-rotating courier tags do limit correlation of carried mail, and Nostr traffic can ride Tor. Addressing the radio-layer exposure is future work (§9).
+* **Metadata is the weakest part of this design, and the peer ID does not help.** The 8-byte sender ID in every packet header is derived from a never-rotating key (§3), and announcements publish the static keys and nickname in cleartext, so a passive listener can enumerate participants and follow a device between places. Two narrower leaks are now closed. Announcements no longer carry neighbor IDs (§4.3), so a single sniffer no longer reconstructs the local adjacency graph. And authored public broadcasts draw their origin TTL from a range (§4.2) instead of always leaving at the maximum.
+
+  The TTL change **reduces an authorship marker rather than removing it**, and the distinction matters. Relays strictly decrement, so the top of the range can still only have come from an origin: with three values that is one message in three, and `1 − (2/3)ᵏ` — roughly 87% of senders self-identified within five messages. It protects an occasional sender considerably and a chatty one little. Eliminating the marker requires relays to sometimes *not* decrement, which trades directly against TTL's role as the loop bound, so it is named as future work (§9) rather than implied to be solved.
+
+  Daily-rotating courier tags do limit correlation of carried mail, and Nostr traffic can ride Tor. Addressing the remaining radio-layer exposure — the non-rotating identity above all — is future work (§9).
 * **No forward secrecy for sealed mail or Nostr private envelopes** (§5.2–5.3) means compromise of a recipient's static key can expose retained ciphertext addressed to that key.
 
 ## 9. Future Work
@@ -143,7 +149,8 @@ Bare local counters (deposits, handovers, sprays, opens, outbox flushes and drop
 * Multi-hop courier routing informed by encounter history.
 * **Rotating on-air identity.** Epoch-rotating peer IDs, with static-key disclosure moved inside the encrypted handshake and mutual favorites recognising each other through a tag derived from their shared secret, so presence stops being linkable across sessions (§3, §8).
 * **Padding for non-Noise packet types**, and closing the gap where a frame needing more than 255 bytes of padding is emitted unpadded (§4.1).
-* Making the neighbor list in announcements optional, or restricted to authenticated links (§4.3).
+* **Removing the origin-TTL authorship marker outright** (§4.2, §8). Drawing from a range leaves the top of that range origin-only; suppressing it entirely needs relays to sometimes forward without decrementing, which trades against TTL's role as the loop bound and so needs the relay behaviour in scope.
+* **Restoring source routing without publishing adjacency** (§4.3) — for example deriving confirmable paths from authenticated links only, so suppressing the neighbor list does not permanently cost directed-traffic efficiency.
 
 ---
 

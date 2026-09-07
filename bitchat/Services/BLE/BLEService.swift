@@ -3921,8 +3921,17 @@ extension BLEService {
         return isPeerConnected(peerID) ? [] : nil
     }
 
-    /// Mesh graph for the topology map. Edges are advisory: announces cap
-    /// neighbor lists at 10, so an edge claimed by either endpoint counts.
+    /// Mesh graph for the topology map. Edges are advisory: an edge claimed by
+    /// either endpoint counts.
+    ///
+    /// Since announces stopped carrying neighbour lists
+    /// (`TransportConfig.announceIncludesDirectNeighbors`) the only claims a
+    /// device reliably holds are its own, refreshed from live connections just
+    /// below. So this degrades to a star centred on self rather than going
+    /// empty, and peer-to-peer edges appear only for peers still advertising a
+    /// list. The caption in the topology sheet says so, because a star that
+    /// silently stands in for the whole graph reads as "the mesh is a star"
+    /// rather than "this is all we can see".
     func currentMeshTopology() -> MeshTopologySnapshot? {
         refreshLocalTopology()
         let claims = meshTopology.adjacencySnapshot()

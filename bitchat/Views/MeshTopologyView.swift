@@ -8,9 +8,10 @@
 
 import SwiftUI
 
-/// Display model for the mesh topology map: nodes are known mesh peers,
-/// edges are gossiped `directNeighbors` claims. Built on the main actor from
-/// a `MeshTopologySnapshot` plus the current nickname table.
+/// Display model for the mesh topology map: nodes are known mesh peers, edges
+/// are neighbour claims — in practice this device's own, since announces no
+/// longer carry a neighbour list. Built on the main actor from a
+/// `MeshTopologySnapshot` plus the current nickname table.
 struct MeshTopologyDisplayModel {
     struct Node: Identifiable, Equatable {
         let id: String

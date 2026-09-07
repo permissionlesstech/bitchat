@@ -72718,181 +72718,181 @@
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "مُقدَّرة من قوائم الجيران المتناقلة (حتى 10 لكل قرين) — جهازك مميَّز"
+            "value" : "في الغالب روابطك المباشرة — لم تعد قوائم الجيران تُبَث، لذلك لا تظهر الروابط بين الأقران الآخرين إلا لمن لا يزال يرسلها"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "গসিপ করা প্রতিবেশী তালিকা থেকে অনুমান করা (প্রতি পিয়ারে সর্বোচ্চ ১০) — আপনার ডিভাইস হাইলাইট করা"
+            "value" : "বেশিরভাগই আপনার নিজের সরাসরি সংযোগ — প্রতিবেশী তালিকা আর সম্প্রচার করা হয় না, তাই অন্য পিয়ারদের মধ্যেকার সংযোগ কেবল সেই পিয়ারদের জন্যই দেখা যায় যারা এখনও তা পাঠাচ্ছে"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "geschätzt aus verbreiteten nachbarlisten (bis zu 10 pro peer) — dein gerät ist hervorgehoben"
+            "value" : "meist deine eigenen direkten verbindungen — nachbarlisten werden nicht mehr gesendet, verbindungen zwischen anderen peers erscheinen nur bei peers, die sie noch senden"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "estimated from gossiped neighbor lists (up to 10 per peer) — your device is highlighted"
+            "value" : "mostly your own direct links — neighbor lists are no longer broadcast, so links between other peers only appear for peers still sending them"
           }
         },
         "es" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "estimado a partir de listas de vecinos difundidas (hasta 10 por peer) — tu dispositivo está resaltado"
+            "state" : "needs_review",
+            "value" : "en su mayoría tus enlaces directos — las listas de vecinos ya no se difunden, así que los enlaces entre otros peers solo aparecen para los peers que todavía las envían"
           }
         },
         "fa" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "برآورد از فهرست همسایه‌های منتشرشده (تا ۱۰ مورد برای هر همتا) — دستگاه شما پررنگ شده است"
+            "state" : "needs_review",
+            "value" : "بیشتر پیوندهای مستقیم خودتان — فهرست همسایه‌ها دیگر منتشر نمی‌شود، پس پیوند میان همتاهای دیگر فقط برای همتاهایی نمایش داده می‌شود که هنوز آن را می‌فرستند"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "tinantiya mula sa mga ibinahaging listahan ng kapitbahay (hanggang 10 bawat peer) — naka-highlight ang iyong device"
+            "value" : "kadalasan ang sarili mong direktang koneksyon — hindi na ibinabrodkast ang listahan ng kapitbahay, kaya ang koneksyon sa pagitan ng ibang peer ay lumalabas lang para sa mga peer na nagpapadala pa nito"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "estimé à partir des listes de voisins diffusées (jusqu'à 10 par pair) — ton appareil est mis en évidence"
+            "value" : "surtout tes liens directs — les listes de voisins ne sont plus diffusées, donc les liens entre les autres pairs n'apparaissent que pour les pairs qui les envoient encore"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "מוערך מרשימות שכנים שהופצו (עד 10 לכל עמית) — המכשיר שלך מודגש"
+            "value" : "בעיקר הקישורים הישירים שלך — רשימות שכנים כבר לא משודרות, ולכן קישורים בין עמיתים אחרים מופיעים רק אצל עמיתים שעדיין שולחים אותן"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "गॉसिप की गई पड़ोसी सूचियों से अनुमानित (प्रति पीयर 10 तक) — आपका डिवाइस हाइलाइट किया गया है"
+            "value" : "ज़्यादातर आपके अपने सीधे लिंक — पड़ोसी सूचियाँ अब प्रसारित नहीं होतीं, इसलिए अन्य पीयर के बीच के लिंक केवल उन पीयर के लिए दिखते हैं जो अब भी उन्हें भेज रहे हैं"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "diperkirakan dari daftar tetangga yang di-gossip (hingga 10 per peer) — perangkatmu disorot"
+            "value" : "sebagian besar tautan langsungmu sendiri — daftar tetangga tidak lagi disiarkan, jadi tautan antar peer lain hanya muncul untuk peer yang masih mengirimkannya"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "stimato dalle liste di vicini diffuse (fino a 10 per peer) — il tuo dispositivo è evidenziato"
+            "value" : "per lo più i tuoi collegamenti diretti — le liste di vicini non vengono più diffuse, quindi i collegamenti tra altri peer compaiono solo per i peer che le inviano ancora"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "ゴシップされた近隣リスト（ピアあたり最大10件）から推定 — お使いのデバイスをハイライト"
+            "value" : "ほとんどは自分の直接リンク — 近隣リストはもう配信されないため、他のピア同士のリンクはまだ送っているピアの分だけ表示されます"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "가십으로 전파된 이웃 목록(피어당 최대 10개)에서 추정 — 사용 중인 기기가 강조 표시됨"
+            "value" : "대부분 내 직접 연결 — 이웃 목록은 더 이상 브로드캐스트되지 않아 다른 피어 간 연결은 아직 목록을 보내는 피어에 대해서만 표시됨"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "dianggarkan dari senarai jiran yang di-gossip (sehingga 10 setiap peer) — perantimu diserlahkan"
+            "value" : "kebanyakannya pautan langsungmu sendiri — senarai jiran tidak lagi disiarkan, jadi pautan antara peer lain hanya muncul bagi peer yang masih menghantarnya"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "गसिप गरिएका छिमेकी सूचीबाट अनुमानित (प्रति सहकर्मी बढीमा १०) — तिम्रो यन्त्र हाइलाइट गरिएको छ"
+            "value" : "प्रायः तपाईंका आफ्नै प्रत्यक्ष लिंक — छिमेकी सूची अब प्रसारण गरिँदैन, त्यसैले अन्य सहकर्मीहरूबीचका लिंक अझै सूची पठाइरहेका सहकर्मीहरूका लागि मात्र देखिन्छ"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "geschat op basis van verspreide buurlijsten (tot 10 per peer) — je apparaat is gemarkeerd"
+            "value" : "meestal je eigen directe verbindingen — buurlijsten worden niet meer uitgezonden, dus verbindingen tussen andere peers verschijnen alleen bij peers die ze nog versturen"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "oszacowane na podstawie rozgłaszanych list sąsiadów (do 10 na peera) — twoje urządzenie jest wyróżnione"
+            "value" : "przeważnie twoje własne bezpośrednie połączenia — listy sąsiadów nie są już rozgłaszane, więc połączenia między innymi peerami pojawiają się tylko przy peerach, które wciąż je wysyłają"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "estimado a partir de listas de vizinhos difundidas (até 10 por par) — o teu dispositivo está destacado"
+            "value" : "sobretudo as tuas ligações diretas — as listas de vizinhos já não são difundidas, por isso as ligações entre outros pares só aparecem para os pares que ainda as enviam"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "estimado a partir das listas de vizinhos divulgadas (até 10 por par) — seu dispositivo está destacado"
+            "value" : "na maior parte, seus links diretos — as listas de vizinhos não são mais divulgadas, então os links entre outros pares só aparecem para os pares que ainda as enviam"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "оценено по gossip-спискам соседей (до 10 на пира) — твоё устройство выделено"
+            "value" : "в основном твои прямые связи — списки соседей больше не рассылаются, поэтому связи между другими пирами видны только для пиров, которые их всё ещё отправляют"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "uppskattat från skvallrade grannlistor (upp till 10 per peer) — din enhet är markerad"
+            "value" : "mest dina egna direkta länkar — grannlistor sänds inte längre ut, så länkar mellan andra peers visas bara för peers som fortfarande skickar dem"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "வதந்தியாகப் பகிரப்பட்ட அண்டை பட்டியல்களிலிருந்து மதிப்பிடப்பட்டது (ஒரு peer க்கு 10 வரை) — உங்கள் சாதனம் தனிப்படுத்தப்பட்டுள்ளது"
+            "value" : "பெரும்பாலும் உங்கள் நேரடி இணைப்புகள் — அண்டை பட்டியல்கள் இனி ஒளிபரப்பப்படுவதில்லை, எனவே பிற peer-களுக்கு இடையேயான இணைப்புகள் இன்னும் அவற்றை அனுப்பும் peer-களுக்கு மட்டுமே தெரியும்"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "ประมาณจากรายชื่อเพื่อนบ้านที่ส่งต่อแบบ gossip (สูงสุด 10 รายต่อเพียร์) — อุปกรณ์ของคุณถูกไฮไลต์"
+            "value" : "ส่วนใหญ่เป็นลิงก์โดยตรงของคุณ — ไม่มีการกระจายรายชื่อเพื่อนบ้านอีกต่อไป ลิงก์ระหว่างเพียร์อื่นจึงปรากฏเฉพาะเพียร์ที่ยังส่งรายชื่ออยู่"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "yayılan komşu listelerinden tahmin edildi (eş başına en fazla 10) — cihazın vurgulanmış"
+            "value" : "çoğunlukla kendi doğrudan bağlantıların — komşu listeleri artık yayınlanmıyor, bu yüzden diğer eşler arasındaki bağlantılar yalnızca hâlâ liste gönderen eşler için görünüyor"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "оцінено на основі поширюваних списків сусідів (до 10 на піра) — твій пристрій виділено"
+            "value" : "переважно твої прямі з'єднання — списки сусідів більше не розсилаються, тому з'єднання між іншими пірами видно лише для пірів, які їх ще надсилають"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "گپ شپ کی گئی پڑوسیوں کی فہرستوں سے اندازہ (فی ہم منصب 10 تک) — آپ کی ڈیوائس نمایاں ہے"
+            "value" : "زیادہ تر آپ کے اپنے براہِ راست روابط — پڑوسیوں کی فہرستیں اب نشر نہیں ہوتیں، اس لیے دیگر ہم منصبوں کے درمیان روابط صرف اُن ہم منصبوں کے لیے دکھائے جاتے ہیں جو اب بھی یہ فہرستیں بھیج رہے ہیں"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "ước tính từ danh sách hàng xóm được gossip (tối đa 10 mỗi nút) — thiết bị của bạn được làm nổi bật"
+            "value" : "chủ yếu là các liên kết trực tiếp của bạn — danh sách hàng xóm không còn được phát nữa, nên liên kết giữa các nút khác chỉ hiện với những nút vẫn còn gửi danh sách"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "根据传播的邻居列表估算（每个同伴最多 10 个）— 你的设备已高亮显示"
+            "value" : "多为你自己的直接连接 — 邻居列表不再广播，因此其他同伴之间的连接只对仍在发送列表的同伴显示"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "根據同伴間流傳的鄰居列表估算（每位同伴最多 10 個）— 你的裝置已高亮顯示"
+            "value" : "多為你自己的直接連線 — 鄰居列表不再廣播，因此其他同伴之間的連線只會對仍在傳送列表的同伴顯示"
           }
         }
       }
