@@ -534,7 +534,15 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     @MainActor
     @discardableResult
     func markReadReceiptSent(_ messageID: String) -> Bool {
-        sentReadReceipts.insert(messageID).inserted
+        // Mirror into the manager's set too. PrivateChatManager.markAsRead
+        // re-scans on every chat open and dedups against ITS own set, so a
+        // receipt withheld (or sent) on the coordinator path — which records
+        // only here — would otherwise be invisible to that re-scan and could
+        // fire after the read-receipt setting is toggled back on. Keep both
+        // sets in lockstep; the existing markReceiptHandled bridge covers the
+        // reverse (manager -> here) direction.
+        privateChatManager.recordReadReceiptSent(messageID)
+        return sentReadReceipts.insert(messageID).inserted
     }
 
     /// Records that a GeoDM delivery ACK is being sent for `messageID`.
@@ -550,6 +558,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     @MainActor
     func unmarkReadReceiptsSent(_ ids: [String]) {
         sentReadReceipts.subtract(ids)
+        // Must reach the manager set too: markAsRead guards on that set while
+        // the lifecycle pass guards on this one, so leaving ids stuck there
+        // would let the two sets disagree about the same receipt — one path
+        // re-sending it, the other still treating it as handled.
+        privateChatManager.forgetReadReceiptsSent(ids)
     }
 
     /// Marks read receipts as sent for own messages already delivered/read in
@@ -1693,6 +1706,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
         // Clear read receipt tracking
         sentReadReceipts.removeAll()
+        privateChatManager.clearReadReceiptsSent()
         deduplicationService.clearAll()
 
         // IMPORTANT: Clear Nostr-related state

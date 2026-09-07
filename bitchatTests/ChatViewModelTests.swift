@@ -471,6 +471,136 @@ struct ChatViewModelServiceLifecycleTests {
         #expect(viewModel.privateChatManager.sentReadReceipts.contains("read-2"))
     }
 
+    /// Regression for the two-set asymmetry: a message read while viewing a
+    /// chat with receipts OFF is withheld on the *coordinator* path (which
+    /// records only the view-model set). `PrivateChatManager.markAsRead`
+    /// re-scans on every chat open and dedups against its OWN set, so before
+    /// the fix, re-enabling the setting and reopening the chat fired a receipt
+    /// for that already-read message — a delayed disclosure of reading done
+    /// while the setting was off. Drives the real inbound delegate path, not
+    /// the manager-withhold path the test above covers.
+    @Test @MainActor
+    func readReceiptNotResentWhenReenablingAfterMessageReadWhileViewing() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        viewModel.sendsReadReceipts = { false }
+        viewModel.privateChatManager.sendsReadReceipts = { false }
+        let peerID = PeerID(str: "0000000000000042")
+        transport.simulateConnect(peerID, nickname: "Alice")
+        viewModel.selectedPrivateChatPeer = peerID   // viewing
+
+        let message = BitchatMessage(
+            id: "read-viewing",
+            sender: "Alice",
+            content: "read while receipts were off",
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: true,
+            recipientNickname: viewModel.nickname,
+            senderPeerID: peerID,
+            mentions: nil
+        )
+        // Real inbound path -> didReceiveMessage -> handlePrivateMessage
+        // (isViewing branch): withholds the mesh receipt and records the id.
+        transport.simulateIncomingMessage(message)
+
+        // Confirm the coordinator path actually ran (id recorded) and nothing
+        // left the device while the setting was OFF.
+        #expect(await TestHelpers.waitUntil({
+            viewModel.sentReadReceipts.contains("read-viewing")
+        }, timeout: TestConstants.settleTimeout))
+        #expect(!transport.sentReadReceipts.contains { $0.receipt.originalMessageID == "read-viewing" })
+
+        // Re-enable, leave, and reopen the chat: startChat -> markAsRead
+        // re-scans. The message must NOT be resent.
+        viewModel.selectedPrivateChatPeer = nil
+        viewModel.sendsReadReceipts = { true }
+        viewModel.privateChatManager.sendsReadReceipts = { true }
+        viewModel.selectedPrivateChatPeer = peerID   // reopen
+
+        let leaked = await TestHelpers.waitUntil({
+            transport.sentReadReceipts.contains { $0.receipt.originalMessageID == "read-viewing" }
+        }, timeout: TestConstants.negativeWaitWindow)
+        #expect(!leaked)
+    }
+
+    /// Guards the second half of the fix: `unmarkReadReceiptsSent` must clear
+    /// BOTH sets, or they drift apart — markAsRead guards on the manager set,
+    /// the lifecycle pass on the view model's.
+    @Test @MainActor
+    func unmarkReadReceiptsSentClearsBothSets() {
+        let (viewModel, _) = makeTestableViewModel()
+        viewModel.markReadReceiptSent("m-1")
+        #expect(viewModel.sentReadReceipts.contains("m-1"))
+        #expect(viewModel.privateChatManager.sentReadReceipts.contains("m-1"))
+
+        viewModel.unmarkReadReceiptsSent(["m-1"])
+        #expect(!viewModel.sentReadReceipts.contains("m-1"))
+        #expect(!viewModel.privateChatManager.sentReadReceipts.contains("m-1"))
+    }
+
+    /// Regression for the duplicate a reopen used to emit: opening a chat
+    /// runs the manager's read scan (claims in the manager set, routes
+    /// asynchronously) and then the lifecycle pass, which dedups against the
+    /// view model's set. Until the manager bridged its successful claims back,
+    /// that second scan saw an unclaimed id and routed the receipt again —
+    /// twice per open, and twice more after a reconnect cleared both sets.
+    @Test @MainActor
+    func readReceiptSentOnceOnOpenAndOnceMoreAfterReconnect() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: "0000000000000043")
+        transport.simulateConnect(peerID, nickname: "Alice")
+
+        let message = BitchatMessage(
+            id: "read-reopen",
+            sender: "Alice",
+            content: "Hello from Alice",
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: true,
+            recipientNickname: viewModel.nickname,
+            senderPeerID: peerID,
+            mentions: nil
+        )
+
+        viewModel.seedPrivateChat([message], for: peerID)
+        viewModel.markPrivateChatUnread(peerID)
+
+        func receiptCount() -> Int {
+            transport.sentReadReceipts.filter { $0.receipt.originalMessageID == "read-reopen" }.count
+        }
+
+        // Open through startPrivateChat, not the selection setter: only this
+        // path runs the lifecycle read pass after the manager's own scan, so
+        // only this path can produce the duplicate.
+        viewModel.startPrivateChat(with: peerID)
+
+        #expect(await TestHelpers.waitUntil({ receiptCount() >= 1 }, timeout: TestConstants.settleTimeout))
+        // Negative wait: a duplicate lands in the same runloop turn as the
+        // first, so nothing more may arrive in this window.
+        _ = await TestHelpers.waitUntil({ receiptCount() > 1 }, timeout: TestConstants.negativeWaitWindow)
+        #expect(receiptCount() == 1)
+
+        // A disconnect clears both claims so the receipt can be re-sent — but
+        // it runs inside a Task, so drain before reopening or the reopen would
+        // still see both sets claiming the id.
+        viewModel.endPrivateChat()
+        transport.simulateDisconnect(peerID)
+        #expect(await TestHelpers.waitUntil({
+            !viewModel.sentReadReceipts.contains("read-reopen")
+                && !viewModel.privateChatManager.sentReadReceipts.contains("read-reopen")
+        }, timeout: TestConstants.settleTimeout))
+
+        transport.simulateConnect(peerID, nickname: "Alice")
+        viewModel.startPrivateChat(with: peerID)
+
+        #expect(await TestHelpers.waitUntil({ receiptCount() >= 2 }, timeout: TestConstants.settleTimeout))
+        _ = await TestHelpers.waitUntil({ receiptCount() > 2 }, timeout: TestConstants.negativeWaitWindow)
+        // The one original plus a single retry — not a pair per open.
+        #expect(receiptCount() == 2)
+    }
+
     @Test @MainActor
     func readReceiptSettingDefaultsToOnAndResets() {
         let suite = "ReadReceiptSettingsTests.\(UUID().uuidString)"
