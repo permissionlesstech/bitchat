@@ -538,7 +538,40 @@ final class CommandProcessor {
     }
 
     private func handleFavorite(_ args: String, add: Bool) -> CommandResult {
-        let targetName = args.trimmed
+        // The first favorite is consent-gated on the ADD path: adding notifies
+        // the peer immediately and shares your durable Nostr key. The star UI
+        // shows a one-time dialog for this; a slash command has no view to
+        // present it, so require an explicit trailing `!confirm` the first time.
+        // Parse it as a trailing flag rather than tokenizing the name
+        // (@Chessing234 on #1702): the rest of the line is the nickname, so a
+        // name with spaces survives intact. Add-only; removals stay immediate.
+        var targetName = args.trimmed
+        var confirmed = false
+        if add {
+            let flag = "!confirm"
+            // An exact name beats the flag: if the whole line already names a
+            // peer — someone nicknamed "alice !confirm" — keep it whole and
+            // show them the disclosure. Reading their name as consent would
+            // skip the disclosure and hand the durable key to whatever
+            // "alice" resolves to, a different person; refusing to read it
+            // costs at most one more confirmation step, so that is the safe
+            // way to be wrong. They confirm with "/fav alice !confirm !confirm".
+            let givenName = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
+            let namesAPeer = contextProvider?.getPeerIDForNickname(givenName) != nil
+            if !namesAPeer {
+                // The flag is matched case-insensitively; the nickname is not.
+                if targetName.lowercased() == flag {
+                    confirmed = true
+                    targetName = ""
+                } else if targetName.count > flag.count,
+                          targetName.suffix(flag.count).lowercased() == flag,
+                          targetName.dropLast(flag.count).hasSuffix(" ") {
+                    confirmed = true
+                    targetName = String(targetName.dropLast(flag.count + 1)).trimmed
+                }
+            }
+        }
+
         guard !targetName.isEmpty else {
             return .error(message: String(format: String(localized: "command.action.usage", defaultValue: "usage: /%@ <nickname>", comment: "Usage hint for a command that takes a nickname; placeholder is the command name"), locale: .current, (add ? "fav" : "unfav")))
         }
@@ -563,6 +596,21 @@ final class CommandProcessor {
             return .success(message: add
                 ? String(format: String(localized: "command.fav.already", defaultValue: "%@ is already a favorite", comment: "Reply when /fav targets an existing favorite"), locale: .current, nickname)
                 : String(format: String(localized: "command.fav.not_favorite", defaultValue: "%@ is not a favorite", comment: "Reply when /unfav targets someone who isn't a favorite"), locale: .current, nickname))
+        }
+
+        // Consent gate: no durable linkage or peer notification happens until
+        // the user has seen the disclosure and re-issued with !confirm — or has
+        // already acknowledged it through the star UI (the flag is shared).
+        if add, !FavoriteConsent.isAcknowledged {
+            guard confirmed else {
+                let disclosure = String(
+                    format: String(localized: "favorites.consent.message", defaultValue: "this tells %@ right away and shares your nostr key with them. if they favorite you back, you can message each other over the internet when out of mesh range.", comment: "Body of the one-time favorite consent dialog; placeholder is the person's name"),
+                    locale: .current,
+                    nickname
+                )
+                return .error(message: disclosure + "\n\n/fav \(nickname) !confirm")
+            }
+            FavoriteConsent.acknowledge()
         }
 
         // toggleFavorite persists by the real noise key and notifies the peer.
