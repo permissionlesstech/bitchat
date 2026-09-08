@@ -837,6 +837,21 @@ final class ChatPrivateConversationCoordinator {
         // nickname, so a raw-string compare would regress every received
         // geohash action to plain text.
         let senderBase = message.sender.splitSuffix().0
+        // The actor slot needs the same constraint as the target slot, and for
+        // the same reason. Anchoring to the wire sender stops a peer acting as
+        // someone else, but the sender is a *self-chosen nickname* that nothing
+        // upstream bounds: `InputValidator.validateNickname` is only ever
+        // reached from ReadReceipt decoding, inbound announce nicknames are
+        // merely NFC-normalized, and inbound content is merely trimmed. So the
+        // token check has to carry the whole constraint itself — otherwise the
+        // preamble the target slot rejects simply moves into the name:
+        // nickname `SECURITY: session expired, re-verify at evil` sending
+        // `* SECURITY: session expired, re-verify at evil took a screenshot *`
+        // is a peer speaking as itself, and lands in the trusted styling.
+        // A space-containing nickname degrades to a plain message instead.
+        guard Self.isNameToken(senderBase, maxLength: InputValidator.Limits.maxNicknameLength) else {
+            return message
+        }
 
         let isActionMessage =
             Self.matchesActionTemplate(inner, prefix: "🫂 \(senderBase) hugs ", suffix: "")
@@ -874,16 +889,124 @@ final class ChatPrivateConversationCoordinator {
     }
 
     /// A display name as it appears in action content: "you", or a single
-    /// whitespace-free token of bounded length (a nickname, optionally with
-    /// a `#abcd` disambiguator). A space-containing nickname degrades to a
-    /// plain message rather than trusted styling — the safe direction.
-    static func isNameToken(_ token: String) -> Bool {
-        guard token == "you" else {
-            guard !token.isEmpty, token.count <= 32,
-                  !token.contains(where: { $0.isWhitespace }) else { return false }
-            return true
+    /// bounded token in the conservative shape handleEmote actually emits (a
+    /// resolved nickname, optionally with a `#abcd` disambiguator). Anything
+    /// else degrades to a plain message rather than trusted styling — the safe
+    /// direction.
+    ///
+    /// `maxLength` defaults to the target-slot bound. The actor slot passes the
+    /// full nickname limit, because there the token is the sender's own name
+    /// and truncating legitimate long names would silently stop their actions
+    /// rendering.
+    ///
+    /// "No Swift whitespace" is not enough (thanks @Chessing234): the token is
+    /// still rendered inside the trusted `system` line, where anything without
+    /// a visible glyph reads as a word gap and lets free text pose as one name.
+    /// So reject two classes:
+    ///
+    /// 1. Scalars that render as nothing — see `rendersAsBlank`. The one
+    ///    exception is U+200C, allowed in its orthographic position only; see
+    ///    `hasOrthographicJoinerUseOnly` for why it is not in the same class.
+    /// 2. Anything the formatter would linkify. Its gate is exactly
+    ///    `contains("://") || contains("www.") || contains("http")`
+    ///    (ChatMessageFormatter). That loop is *inside* the formatter's
+    ///    `sender != "system"` branch and the else branch that draws system
+    ///    lines attaches no link attributes, so no link is tappable here
+    ///    today; matching the gate is defense in depth against a formatter
+    ///    change that starts linkifying system content, not a live fix.
+    ///
+    /// A real action still renders — handleEmote only ever emits a resolved
+    /// nickname (optionally `#abcd`-suffixed, left intact) or "you", none of
+    /// which trip either class. An attacker's blank-scalar/URL payload falls
+    /// through to a plain message under the sender's own name.
+    static func isNameToken(_ token: String, maxLength: Int = 32) -> Bool {
+        if token == "you" { return true }
+        guard !token.isEmpty, token.count <= maxLength else { return false }
+        guard hasOrthographicJoinerUseOnly(token) else { return false }
+        guard token.unicodeScalars.allSatisfy({ $0 == Self.zeroWidthNonJoiner || !rendersAsBlank($0) })
+        else { return false }
+        let lower = token.lowercased()
+        return !lower.contains("://") && !lower.contains("www.") && !lower.contains("http")
+    }
+
+    /// U+200C ZERO WIDTH NON-JOINER — Persian's نیم‌فاصله (half-space).
+    private static let zeroWidthNonJoiner: Unicode.Scalar = "\u{200C}"
+
+    /// Persian compounds need one, occasionally two (`علی‌رضا‌پور`). Three or
+    /// more is not a name, it is a sentence wearing one.
+    private static let maxJoinersInName = 2
+
+    /// U+200C is category Cf, so `rendersAsBlank` rejects it with the rest of
+    /// the format characters — which silently stopped Persian names written
+    /// with the half-space (`علی‌رضا`, `می‌رود`) from rendering as actions.
+    /// That is a real cost borne only by Persian and Arabic speakers, and it
+    /// buys less than it looks: unlike the invisible scalars this check exists
+    /// to stop, the joiner *renders* — as a visible half-space gap in Arabic
+    /// script, and as nothing at all in Latin, where it cannot fake a word
+    /// boundary. As an attack tool it is therefore no stronger than the hyphen,
+    /// dot and colon this check has always allowed.
+    ///
+    /// So allow it, but only where the orthography actually puts it: between
+    /// two letters, at most `maxJoinersInName` times. That admits the names
+    /// while denying the shapes an attacker wants — a leading or trailing gap,
+    /// a gap after punctuation (`امنیت:‌جلسه…`), and any run long enough to
+    /// stack several words into one token.
+    private static func hasOrthographicJoinerUseOnly(_ token: String) -> Bool {
+        let scalars = Array(token.unicodeScalars)
+        var joiners = 0
+        for (index, scalar) in scalars.enumerated() where scalar == zeroWidthNonJoiner {
+            joiners += 1
+            guard joiners <= maxJoinersInName,
+                  index > 0, index + 1 < scalars.count,
+                  isLetterLike(scalars[index - 1]), isLetterLike(scalars[index + 1])
+            else { return false }
         }
         return true
+    }
+
+    /// Letters, plus the combining marks that ride on them — a joiner sitting
+    /// after a harakat is still between two letters as far as the reader is
+    /// concerned.
+    private static func isLetterLike(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.properties.generalCategory {
+        case .lowercaseLetter, .uppercaseLetter, .titlecaseLetter,
+             .modifierLetter, .otherLetter, .nonspacingMark, .spacingMark:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Blank-rendering scalars that fall in none of the rejected categories and
+    /// are not default-ignorable, so only naming them catches them.
+    private static let blankRenderingScalars: Set<Unicode.Scalar> = [
+        "\u{2800}",   // braille pattern blank
+        "\u{FFFC}",   // object replacement character
+        "\u{FFFD}",   // replacement character
+        "\u{1D159}"   // musical symbol null notehead
+    ]
+
+    /// Why a per-scalar category grammar and not the old
+    /// `whitespacesAndNewlines ∪ controlCharacters` set test: set membership
+    /// only ever covered separators and control/format characters, and
+    /// blank-rendering scalars outside those categories (U+2800, U+3164) went
+    /// on smuggling readable free text into a line drawn with trusted system
+    /// styling.
+    ///
+    /// Nonspacing and enclosing combining marks are deliberately absent:
+    /// Persian and Arabic names carry harakat and must keep rendering.
+    private static func rendersAsBlank(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.properties.generalCategory {
+        case .spaceSeparator, .lineSeparator, .paragraphSeparator,
+             .control, .format, .surrogate, .privateUse, .unassigned:
+            return true
+        default:
+            break
+        }
+        // Catches the hangul fillers (U+3164, U+115F, U+1160, U+FFA0) and the
+        // variation selectors, which are letters and marks by category.
+        if scalar.properties.isDefaultIgnorableCodePoint { return true }
+        return blankRenderingScalars.contains(scalar)
     }
 
     func migratePrivateChatsIfNeeded(for peerID: PeerID, senderNickname: String) {
