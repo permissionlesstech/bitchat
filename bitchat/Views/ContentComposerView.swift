@@ -10,6 +10,7 @@ struct ContentComposerView: View {
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
+    @EnvironmentObject private var publicChatModel: PublicChatModel
     @ObservedObject private var bridgeService = BridgeService.shared
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
@@ -162,12 +163,18 @@ struct ContentComposerView: View {
 
 private extension ContentComposerView {
     var showsMeshPlaintextNotice: Bool {
-        guard !meshPlaintextNoticeDismissed,
-              privateConversationModel.selectedHeaderState == nil,
-              case .mesh = locationChannelsModel.selectedChannel else {
-            return false
+        let onPublicMesh: Bool
+        if privateConversationModel.selectedHeaderState == nil,
+           case .mesh = locationChannelsModel.selectedChannel {
+            onPublicMesh = true
+        } else {
+            onPublicMesh = false
         }
-        return true
+        return MeshPlaintextNoticeSettings.shouldShow(
+            dismissed: meshPlaintextNoticeDismissed,
+            isPublicMesh: onPublicMesh,
+            timelineEmpty: publicChatModel.messages.isEmpty
+        )
     }
 
     /// The nearby-only scope toggle appears only where it means something:
