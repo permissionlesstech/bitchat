@@ -190,7 +190,12 @@ struct RelayActivityAssertionTests {
         let spy = SpyAsserter()
         let assertion = RelayActivityAssertion(asserter: spy)
 
-        assertion.update { $0.bleRelayActive = true }
+        // update() starts from TransportState defaults (nap=false). Set nap so
+        // the policy can hold — production always feeds window visibility too.
+        assertion.update {
+            $0.appNapWouldApply = true
+            $0.bleRelayActive = true
+        }
         #expect(assertion.isHolding)
         #expect(spy.beginCount == 1)
 
@@ -206,8 +211,14 @@ struct RelayActivityAssertionTests {
         let spy = SpyAsserter()
         let assertion = RelayActivityAssertion(asserter: spy)
 
-        assertion.update { $0.bleRelayActive = true }
-        assertion.update { $0.bleRelayActive = true }
+        assertion.update {
+            $0.appNapWouldApply = true
+            $0.bleRelayActive = true
+        }
+        assertion.update {
+            $0.appNapWouldApply = true
+            $0.bleRelayActive = true
+        }
 
         #expect(spy.beginCount == 1)
     }
