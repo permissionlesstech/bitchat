@@ -95,8 +95,9 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
     /// BLE mesh keep serving neighbors when the window is minimized or fully
     /// occluded by another app (#1593).
     ///
-    /// Scoped to the minimize/occlusion case only: closing the last window
-    /// still quits, so "I closed bitchat" continues to mean the radios stop.
+    /// App Nap keep-alive is scoped to minimize/occlusion only. Closing the
+    /// last window quits by default; users can opt in via settings to stay in
+    /// the dock with Tor/BLE still running.
     private let relayActivity = MacRelayActivityController()
 
     weak var runtime: AppRuntime? {
@@ -112,7 +113,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        MacKeepRunningSettings.shouldTerminateAfterLastWindowClosed()
     }
 }
 #endif
