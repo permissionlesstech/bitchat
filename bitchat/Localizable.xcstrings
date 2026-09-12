@@ -31812,6 +31812,379 @@
         }
       }
     },
+    "app_info.settings.keep_running.subtitle" : {
+      "comment" : "Subtitle explaining the macOS keep-running-when-window-closed setting and its default-off privacy posture",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إغلاق النافذة عادةً يُنهي bitchat ويوقف tor وشبكة البلوتوث. فعّل هذا الخيار للاستمرار في الترحيل من الـ dock — مغلق افتراضيًا، فالإغلاق يعني الخروج."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "সাধারণত উইন্ডো বন্ধ করলে bitchat বন্ধ হয় এবং tor ও ব্লুটুথ mesh থেমে যায়। ডক থেকে relay চালিয়ে রাখতে এটি চালু করুন — ডিফল্টে বন্ধ, তাই বন্ধ মানে quit।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wenn du das fenster schließt, beendet sich bitchat normalerweise und tor sowie das bluetooth-mesh stoppen. schalte dies ein, um aus dem dock weiter zu relayen — standardmäßig aus, schließen heißt beenden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "closing the window normally quits bitchat and stops tor and the bluetooth mesh. turn this on to keep relaying from the dock — off by default so closing means quit."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cerrar la ventana normalmente cierra bitchat y detiene tor y la malla bluetooth. actívalo para seguir retransmitiendo desde el dock — desactivado por defecto, cerrar significa salir."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بستن پنجره معمولاً bitchat را می‌بندد و tor و mesh بلوتوث را متوقف می‌کند. برای relay از dock روشن کن — پیش‌فرض خاموش است تا بستن یعنی خروج."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "karaniwang pag-sara ng bintana ay nag-quit sa bitchat at humihinto ang tor at bluetooth mesh. i-on ito para mag-relay mula sa dock — off bilang default para ang pagsara ay quit."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "fermer la fenêtre quitte bitchat et arrête tor et le maillage bluetooth. active ceci pour continuer à relayer depuis le dock — désactivé par défaut, fermer signifie quitter."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "סגירת החלון בדרך‑כלל מסיימת את bitchat ועוצרת את tor ואת רשת ה‑bluetooth. הפעל כדי להמשיך relay מה‑dock — כבוי כברירת מחדל, סגירה פירושה יציאה."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "आमतौर पर विंडो बंद करने पर bitchat बंद हो जाता है और tor व ब्लूटूथ mesh रुक जाता है। dock से relay जारी रखने के लिए चालू करें — डिफ़ॉल्ट बंद, बंद करना मतलब quit।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "menutup jendela biasanya keluar dari bitchat dan menghentikan tor serta mesh bluetooth. nyalakan untuk tetap relay dari dock — mati secara bawaan, menutup berarti keluar."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chiudere la finestra di solito termina bitchat e ferma tor e la mesh bluetooth. attivalo per continuare a inoltrare dal dock — disattivato per impostazione predefinita, chiudere significa uscire."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通常、ウィンドウを閉じると bitchat は終了し、tor と Bluetooth メッシュも停止します。dock から中継を続ける場合はオンにしてください — 既定はオフで、閉じる＝終了です。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "보통 창을 닫으면 bitchat이 종료되고 tor와 블루투스 mesh가 멈춥니다. dock에서 계속 relay하려면 켜세요 — 기본값은 꺼짐, 닫기는 종료를 의미합니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "menutup tetingkap biasanya menamatkan bitchat dan menghentikan tor serta mesh bluetooth. hidupkan untuk terus relay dari dock — dimatikan secara lalai, tutup bermaksud keluar."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सामान्यतया सञ्झ्याल बन्द गर्दा bitchat बन्द हुन्छ र tor तथा bluetooth mesh रोकिन्छ। dock बाट relay जारी राख्न सक्रिय गर्नुहोस् — पूर्वनिर्धारित अफ, बन्द गर्नु भनेको quit।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sluiten van het venster beëindigt bitchat normaal en stopt tor en het bluetooth-mesh. zet dit aan om vanuit het dock door te relayen — standaard uit, sluiten betekent afsluiten."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "zamknięcie okna zwykle kończy bitchat i zatrzymuje tor oraz mesh bluetooth. włącz, by nadal relayować z docka — domyślnie wyłączone, zamknięcie oznacza zakończenie."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "fechar a janela normalmente encerra o bitchat e para o tor e a mesh bluetooth. ative para continuar a retransmitir a partir do dock — desligado por predefinição, fechar significa sair."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "fechar a janela normalmente encerra o bitchat e para o tor e a mesh bluetooth. ative para continuar retransmitindo pelo dock — desligado por padrão, fechar significa sair."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "обычно закрытие окна завершает bitchat и останавливает tor и bluetooth‑mesh. включите, чтобы продолжать relay из dock — по умолчанию выкл., закрытие значит выход."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "att stänga fönstret avslutar normalt bitchat och stoppar tor och bluetooth‑mesh. slå på för att fortsätta relaya från dockan — av som standard, stängning betyder avsluta."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "சாளரத்தை மூடுவது பொதுவாக bitchat-ஐ நிறுத்தி tor மற்றும் bluetooth mesh-ஐ நிறுத்தும். dock-லிருந்து relay தொடர இதை இயக்கவும் — இயல்பாக அணை, மூடுதல் என்பது quit."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "การปิดหน้าต่างตามปกติจะออกจาก bitchat และหยุด tor กับ bluetooth mesh เปิดเพื่อ relay ต่อจาก dock — ปิดเป็นค่าเริ่มต้น การปิดหมายถึง quit"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pencereyi kapatmak normalde bitchat'i sonlandırır ve tor ile bluetooth mesh'i durdurur. dock'tan relay etmeye devam etmek için aç — varsayılan kapalı, kapatmak çıkmak demektir."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "зазвичай закриття вікна завершує bitchat і зупиняє tor та bluetooth‑mesh. увімкніть, щоб продовжувати relay із dock — за замовчуванням вимк., закриття означає вихід."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ونڈو بند کرنے سے عام طور پر bitchat بند ہو جاتا ہے اور tor و bluetooth mesh رک جاتا ہے۔ dock سے relay جاری رکھنے کے لیے آن کریں — ڈیفالٹ آف، بند کرنا quit ہے۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "đóng cửa sổ thường thoát bitchat và dừng tor cùng mesh bluetooth. bật để tiếp tục relay từ dock — mặc định tắt, đóng nghĩa là thoát."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通常关闭窗口会退出 bitchat 并停止 tor 与蓝牙 mesh。开启后可在 dock 中继续中继 — 默认关闭，关闭即退出。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通常關閉視窗會結束 bitchat 並停止 tor 與藍牙 mesh。開啟後可在 dock 中繼續中繼 — 預設關閉，關閉即結束。"
+          }
+        }
+      }
+    },
+    "app_info.settings.keep_running.title" : {
+      "comment" : "Title of the macOS setting that keeps Tor and the BLE mesh relaying after the last window is closed",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الاستمرار في التشغيل عند إغلاق النافذة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "উইন্ডো বন্ধ করলেও চালু রাখুন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "weiterlaufen lassen, wenn das fenster geschlossen ist"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "keep running when window is closed"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "seguir en ejecución al cerrar la ventana"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ادامهٔ اجرا پس از بستن پنجره"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "patuloy na tumakbo kapag sarado ang bintana"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "continuer à tourner quand la fenêtre est fermée"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "המשך לפעול כשהחלון סגור"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "विंडो बंद होने पर भी चालू रखें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tetap berjalan saat jendela ditutup"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "continua a girare con la finestra chiusa"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ウィンドウを閉じても実行を続ける"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "창을 닫아도 계속 실행"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "terus berjalan apabila tetingkap ditutup"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सञ्झ्याल बन्द भए पनि चलिरहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "blijven draaien wanneer het venster is gesloten"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "działaj dalej po zamknięciu okna"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "continuar a correr com a janela fechada"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "continuar rodando com a janela fechada"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "продолжать работу после закрытия окна"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "fortsätt köra när fönstret stängs"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "சாளரம் மூடப்பட்டாலும் தொடர்ந்து இயங்க"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ทำงานต่อเมื่อปิดหน้าต่าง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pencere kapanınca çalışmaya devam et"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "продовжувати роботу після закриття вікна"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ونڈو بند ہونے پر بھی چلتا رہے"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tiếp tục chạy khi đóng cửa sổ"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭窗口后仍保持运行"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "關閉視窗後仍保持執行"
+          }
+        }
+      }
+    },
+
     "app_info.settings.privacy.title" : {
       "comment" : "Section header (uppercase) for privacy settings such as hiding notification previews",
       "extractionState" : "manual",

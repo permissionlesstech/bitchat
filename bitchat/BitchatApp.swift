@@ -89,15 +89,31 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 #if os(macOS)
 import AppKit
 
+@MainActor
 final class MacAppDelegate: NSObject, NSApplicationDelegate {
-    weak var runtime: AppRuntime?
+    /// Holds off App Nap while a transport is actually relaying, so Tor and the
+    /// BLE mesh keep serving neighbors when the window is minimized or fully
+    /// occluded by another app (#1593).
+    ///
+    /// App Nap keep-alive is scoped to minimize/occlusion only. Closing the
+    /// last window quits by default; users can opt in via settings to stay in
+    /// the dock with Tor/BLE still running.
+    private let relayActivity = MacRelayActivityController()
+
+    weak var runtime: AppRuntime? {
+        didSet {
+            guard let runtime else { return }
+            relayActivity.observe(chatViewModel: runtime.chatViewModel)
+        }
+    }
 
     func applicationWillTerminate(_ notification: Notification) {
+        relayActivity.stop()
         runtime?.applicationWillTerminate()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        MacKeepRunningSettings.shouldTerminateAfterLastWindowClosed()
     }
 }
 #endif
