@@ -533,6 +533,20 @@ struct ContentView: View {
             }
             Button("common.cancel", role: .cancel) {}
         }
+        // Same reasoning as the dialog above: hosted here, not on the logo,
+        // so the header chrome can't take it down with it.
+        .alert(
+            Text(
+                String(localized: "app_info.settings.danger.logo_disabled_title", defaultValue: "logo wipe is off", comment: "Title of the alert shown when the logo triple-tap runs while the gesture is turned off")
+            ),
+            isPresented: $appChromeModel.showPanicGestureDisabledAlert
+        ) {
+            Button("common.ok", role: .cancel) {}
+        } message: {
+            Text(
+                String(localized: "app_info.settings.danger.logo_disabled_message", defaultValue: "nothing was wiped. turn the logo gesture back on in settings, or use the panic wipe button there.", comment: "Message explaining that the logo triple-tap did nothing because the gesture is off")
+            )
+        }
     }
 
     private var publicMessageList: some View {
