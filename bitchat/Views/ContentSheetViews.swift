@@ -413,6 +413,9 @@ private struct ContentPeopleListView: View {
                                 } else {
                                     conversationUIModel.block(peerID: peer.peerID, displayName: peer.displayName)
                                 }
+                            },
+                            onToggleNearbyNotificationMute: { peer in
+                                peerListModel.toggleNearbyNotificationMute(peerID: peer.peerID)
                             }
                         )
                         // People in this area but beyond radio range, and

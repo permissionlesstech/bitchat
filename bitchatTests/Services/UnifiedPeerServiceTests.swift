@@ -241,6 +241,24 @@ private final class TestIdentityManager: SecureIdentityStateManagerProtocol {
         socialIdentities[fingerprint] = identity
     }
 
+    private var nearbyMuted: Set<String> = []
+
+    func isNearbyNotificationMuted(fingerprint: String) -> Bool {
+        nearbyMuted.contains(fingerprint)
+    }
+
+    func suppressesNearbyNotification(fingerprint: String) -> Bool {
+        isBlocked(fingerprint: fingerprint) || nearbyMuted.contains(fingerprint)
+    }
+
+    func setNearbyNotificationMuted(_ fingerprint: String, muted: Bool) {
+        if muted {
+            nearbyMuted.insert(fingerprint)
+        } else {
+            nearbyMuted.remove(fingerprint)
+        }
+    }
+
     func isNostrBlocked(pubkeyHexLowercased: String) -> Bool {
         blockedNostr.contains(pubkeyHexLowercased)
     }
