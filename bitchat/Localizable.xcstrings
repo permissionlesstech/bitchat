@@ -32747,6 +32747,192 @@
         }
       }
     },
+    "app_info.settings.danger.panic_note_instant" : {
+      "comment" : "Caption under the panic wipe button when the logo triple-tap wipes immediately",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يمسح كل الرسائل والمفاتيح والهوية. النقر ثلاث مرات على شعار bitchat/ يمسح فوراً (بدون تأكيد)."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "সব বার্তা, কী এবং পরিচয় মুছে ফেলে। bitchat/ লোগোতে তিনবার ট্যাপ করলে তৎক্ষণাৎ মুছে যায় (নিশ্চিতকরণ ছাড়া)।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "löscht alle nachrichten, schlüssel und die identität. dreifaches tippen aufs bitchat/-logo wischt sofort (ohne bestätigung)."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "erases all messages, keys, and identity. triple-tapping the bitchat/ logo wipes immediately (no confirmation)."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "borra todos los mensajes, claves e identidad. tocar tres veces el logo bitchat/ borra al instante (sin confirmación)."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "همه پیام‌ها، کلیدها و هویت را پاک می‌کند. سه‌بار ضربه روی لوگوی bitchat/ فوراً پاک می‌کند (بدون تأیید)."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "binubura ang lahat ng mensahe, key, at identity. triple-tap sa bitchat/ logo agad magbubura (walang kumpirmasyon)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "efface tous les messages, clés et l’identité. un triple tap sur le logo bitchat/ efface immédiatement (sans confirmation)."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מוחק את כל ההודעות, המפתחות והזהות. שלוש הקשות על לוגו bitchat/ מוחקות מיד (ללא אישור)."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सभी संदेश, कुंजियाँ और पहचान मिटाता है। bitchat/ लोगो पर तीन बार टैप तुरंत मिटा देता है (बिना पुष्टि)।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "menghapus semua pesan, kunci, dan identitas. ketuk tiga kali logo bitchat/ langsung menghapus (tanpa konfirmasi)."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cancella tutti i messaggi, le chiavi e l’identità. triplo tap sul logo bitchat/ cancella immediatamente (senza conferma)."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべてのメッセージ、鍵、身元を消去します。bitchat/ ロゴを3回タップすると即座に消去されます（確認なし）。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "모든 메시지, 키, 신원을 지웁니다. bitchat/ 로고를 세 번 탭하면 즉시 삭제됩니다(확인 없음)."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "memadam semua mesej, kunci dan identiti. ketik tiga kali logo bitchat/ terus memadam (tanpa pengesahan)."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सबै सन्देश, कुञ्जी र पहिचान मेटाउँछ। bitchat/ लोगो ट्रिपल-ट्याप तुरुन्तै मेटाउँछ (पुष्टि बिना)।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wist alle berichten, sleutels en identiteit. drie keer tikken op het bitchat/-logo wist direct (zonder bevestiging)."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "usuwa wszystkie wiadomości, klucze i tożsamość. potrójne stuknięcie logo bitchat/ kasuje natychmiast (bez potwierdzenia)."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apaga todas as mensagens, chaves e identidade. tocar três vezes no logo bitchat/ apaga imediatamente (sem confirmação)."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apaga todas as mensagens, chaves e identidade. tocar três vezes no logo bitchat/ apaga imediatamente (sem confirmação)."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "стирает все сообщения, ключи и личность. тройной тап по логотипу bitchat/ стирает немедленно (без подтверждения)."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "raderar alla meddelanden, nycklar och identitet. trippeltryck på bitchat/-logotypen raderar omedelbart (ingen bekräftelse)."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "எல்லா செய்திகள், விசைகள், அடையாளத்தையும் அழிக்கும். bitchat/ லோகோ மூன்று தட்டு உடனே அழிக்கும் (உறுதிப்படுத்தல் இல்லாமல்)."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ลบข้อความ กุญแจ และตัวตนทั้งหมด แตะโลโก้ bitchat/ สามครั้งจะลบทันที (ไม่ต้องยืนยัน)"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tüm mesajları, anahtarları ve kimliği siler. bitchat/ logosuna üç kez dokunmak anında siler (onay yok)."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "стирає всі повідомлення, ключі та особу. потрійне натискання на логотип bitchat/ стирає негайно (без підтвердження)."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تمام پیغامات، کلیدیں اور شناخت مٹا دیتا ہے۔ bitchat/ لوگو پر تین بار تھپتھپانے سے فوری مٹ جاتا ہے (تصدیق کے بغیر)۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "xóa mọi tin nhắn, khóa và danh tính. chạm ba lần logo bitchat/ xóa ngay (không xác nhận)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除所有消息、密钥和身份。三击 bitchat/ 图标会立即擦除（无需确认）。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除所有訊息、金鑰與身分。三點 bitchat/ 圖示會立即清除（無需確認）。"
+          }
+        }
+      }
+    },
     "app_info.settings.danger.panic_button" : {
       "extractionState" : "manual",
       "localizations" : {

@@ -124,6 +124,7 @@ struct AppInfoView: View {
             static let panicButton = String(localized: "app_info.settings.danger.panic_button", defaultValue: "panic wipe", comment: "Button in the settings danger zone that erases all local data after confirmation")
             static let panicNote = String(localized: "app_info.settings.danger.panic_note", defaultValue: "erases all messages, keys, and identity. triple-tapping the bitchat/ logo does the same, instantly.", comment: "Caption under the panic wipe button explaining what it does and the triple-tap shortcut")
             static let panicNoteDisabled = String(localized: "app_info.settings.danger.panic_note_disabled", defaultValue: "erases all messages, keys, and identity. the bitchat/ logo triple-tap is off — only this button wipes.", comment: "Caption under the panic wipe button when the logo triple-tap is turned off")
+            static let panicNoteInstant = String(localized: "app_info.settings.danger.panic_note_instant", defaultValue: "erases all messages, keys, and identity. triple-tapping the bitchat/ logo wipes immediately (no confirmation).", comment: "Caption under the panic wipe button when the logo triple-tap wipes without confirmation")
             static let logoModeTitle = String(localized: "app_info.settings.danger.logo_mode.title", defaultValue: "logo triple-tap wipe", comment: "Title of the setting that chooses instant / confirm / off for the logo panic gesture")
             static let logoModeSubtitle = String(localized: "app_info.settings.danger.logo_mode.subtitle", defaultValue: "confirm first by default, so a mis-tap on the logo cannot wipe the device. instant skips the dialog for the seizure path. off removes the gesture — turning it off asks for confirmation, because a disabled triple-tap is a silent failure in a panic.", comment: "Subtitle explaining the three logo panic gesture modes")
             static let logoModeInstant = String(localized: "app_info.settings.danger.logo_mode.instant", defaultValue: "instant", comment: "Logo panic mode: wipe immediately on triple-tap")
@@ -633,7 +634,14 @@ struct AppInfoView: View {
     /// The caption under the panic button stops being true once the gesture is
     /// off — main's copy says the logo "does the same".
     private var logoShortcutPanicNote: String {
-        logoShortcutMode == .off ? Strings.Settings.panicNoteDisabled : Strings.Settings.panicNote
+        switch logoShortcutMode {
+        case .confirm:
+            return Strings.Settings.panicNote
+        case .instant:
+            return Strings.Settings.panicNoteInstant
+        case .off:
+            return Strings.Settings.panicNoteDisabled
+        }
     }
 
     /// Same problem in the privacy section: main's line says the triple-tap
