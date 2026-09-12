@@ -44,7 +44,7 @@ Private messages target the built-in relay set plus any relays added by hand (`N
 
 On iOS, `AppRuntime` puts Tor dormant when the scene enters the background — the OS will suspend the process anyway. macOS has no equivalent scene-phase dormancy path: Tor is meant to keep running so a docked install can still bridge Nostr for nearby mesh peers.
 
-macOS App Nap can still freeze that work when the window is minimized or fully occluded by another app. `MacRelayActivityController` therefore holds a `ProcessInfo` activity (`.userInitiatedAllowingIdleSystemSleep`) while a transport is actually relaying — Tor switched on (including bootstrap) or Bluetooth powered on. With Tor off and Bluetooth unavailable there is nothing to relay, so the assertion is released rather than costing battery for an idle process.
+macOS App Nap can still freeze that work when the window is minimized or fully occluded by another app. `MacRelayActivityController` therefore holds a `ProcessInfo` activity (`.userInitiatedAllowingIdleSystemSleep`) only while App Nap would apply *and* a transport is actually relaying — Tor switched on (including bootstrap), or BLE mesh work allowed by activation policy with the radio powered on. A visible window or an idle configuration does not hold the assertion.
 
 Closing the last window still quits the app, so stopping bitchat still stops the radios. See #1593.
 

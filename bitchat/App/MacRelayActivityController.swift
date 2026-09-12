@@ -18,6 +18,7 @@ import Tor
 @MainActor
 final class MacRelayActivityController {
     private let assertion: RelayActivityAssertion
+    private let appNapMonitor = MacAppNapRiskMonitor()
     private var cancellables = Set<AnyCancellable>()
 
     // Default arguments are evaluated in a nonisolated context, so neither the
@@ -32,6 +33,15 @@ final class MacRelayActivityController {
         let activation = NetworkActivationService.shared
         let tor = TorManager.shared
         cancellables.removeAll()
+        appNapMonitor.start()
+
+        appNapMonitor.$appNapWouldApply
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] wouldApply in
+                self?.assertion.update { $0.appNapWouldApply = wouldApply }
+            }
+            .store(in: &cancellables)
 
         // Tor "on" per user preference *and* activation policy — this covers
         // the bootstrap window, before `isReady` flips.
@@ -52,12 +62,17 @@ final class MacRelayActivityController {
             }
             .store(in: &cancellables)
 
-        chatViewModel.$bluetoothState
-            .map { $0 == .poweredOn }
+        Publishers.CombineLatest(activation.$activationAllowed, chatViewModel.$bluetoothState)
+            .map { allowed, state in
+                RelayActivityAssertion.isBLERelayActive(
+                    bluetoothPoweredOn: state == .poweredOn,
+                    activationAllowed: allowed
+                )
+            }
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] poweredOn in
-                self?.assertion.update { $0.bluetoothPoweredOn = poweredOn }
+            .sink { [weak self] bleRelayActive in
+                self?.assertion.update { $0.bleRelayActive = bleRelayActive }
             }
             .store(in: &cancellables)
     }
@@ -65,6 +80,7 @@ final class MacRelayActivityController {
     /// Drops the transport subscriptions and releases the assertion.
     func stop() {
         cancellables.removeAll()
+        appNapMonitor.stop()
         assertion.release()
     }
 }

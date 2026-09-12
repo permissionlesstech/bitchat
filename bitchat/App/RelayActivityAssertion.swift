@@ -50,22 +50,32 @@ final class RelayActivityAssertion {
 
     /// Inputs that decide whether the process is doing relay work.
     struct TransportState: Equatable {
+        /// App Nap would throttle us — all windows minimized or occluded.
+        var appNapWouldApply: Bool = false
         /// Tor is switched on by the user and network activation policy allows
         /// it. Covers bootstrap, which needs CPU before `torReady` flips.
         var torDesired: Bool = false
         /// Tor has finished bootstrapping and is carrying traffic.
         var torReady: Bool = false
-        /// The BLE mesh radio is powered on, so we can scan/advertise/relay.
-        var bluetoothPoweredOn: Bool = false
+        /// BLE mesh relay is allowed and the radio is up.
+        var bleRelayActive: Bool = false
     }
 
     /// Pure policy.
     ///
-    /// `torDesired` is included alongside `torReady` on purpose: dropping the
-    /// assertion mid-bootstrap is what would leave a minimized window stuck
-    /// part-way through connecting.
+    /// The assertion is held only while App Nap would actually bite — a visible
+    /// window does not need it. `torDesired` is included alongside `torReady`
+    /// on purpose: dropping the assertion mid-bootstrap is what would leave a
+    /// minimized window stuck part-way through connecting.
     static func shouldHold(_ state: TransportState) -> Bool {
-        state.torDesired || state.torReady || state.bluetoothPoweredOn
+        guard state.appNapWouldApply else { return false }
+        return state.torDesired || state.torReady || state.bleRelayActive
+    }
+
+    /// BLE is relaying when activation policy allows mesh work and the radio
+    /// is powered on — tighter than "Bluetooth on" alone for an idle config.
+    static func isBLERelayActive(bluetoothPoweredOn: Bool, activationAllowed: Bool) -> Bool {
+        bluetoothPoweredOn && activationAllowed
     }
 
     private let asserter: ProcessActivityAsserting

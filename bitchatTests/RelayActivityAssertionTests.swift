@@ -40,8 +40,8 @@ struct RelayActivityAssertionTests {
 
     private typealias State = RelayActivityAssertion.TransportState
 
-    private func state(tor: Bool = false, ready: Bool = false, ble: Bool = false) -> State {
-        State(torDesired: tor, torReady: ready, bluetoothPoweredOn: ble)
+    private func state(nap: Bool = true, tor: Bool = false, ready: Bool = false, ble: Bool = false) -> State {
+        State(appNapWouldApply: nap, torDesired: tor, torReady: ready, bleRelayActive: ble)
     }
 
     // MARK: - Policy
@@ -52,11 +52,24 @@ struct RelayActivityAssertionTests {
         #expect(!RelayActivityAssertion.shouldHold(state()))
     }
 
-    @Test("BLE alone justifies the assertion")
+    @Test("A visible window holds no assertion even while relaying")
+    func visibleWindowHoldsNothing() {
+        #expect(!RelayActivityAssertion.shouldHold(state(nap: false, ble: true)))
+        #expect(!RelayActivityAssertion.shouldHold(state(nap: false, tor: true)))
+    }
+
+    @Test("BLE relay alone justifies the assertion once App Nap would apply")
     func bluetoothAloneJustifiesTheAssertion() {
         // Mesh-only, Tor deliberately off — the BLE relay is exactly what App
         // Nap would freeze on a minimized window.
         #expect(RelayActivityAssertion.shouldHold(state(ble: true)))
+    }
+
+    @Test("BLE relay requires activation policy, not just a powered radio")
+    func bleRelayRequiresActivationPolicy() {
+        #expect(RelayActivityAssertion.isBLERelayActive(bluetoothPoweredOn: true, activationAllowed: true))
+        #expect(!RelayActivityAssertion.isBLERelayActive(bluetoothPoweredOn: true, activationAllowed: false))
+        #expect(!RelayActivityAssertion.isBLERelayActive(bluetoothPoweredOn: false, activationAllowed: true))
     }
 
     @Test("Tor bootstrap justifies the assertion before it reports ready")
@@ -73,14 +86,16 @@ struct RelayActivityAssertionTests {
 
     @Test("Every transport combination matches the documented policy")
     func everyTransportCombinationMatchesPolicy() {
-        for tor in [false, true] {
-            for ready in [false, true] {
-                for ble in [false, true] {
-                    #expect(
-                        RelayActivityAssertion.shouldHold(state(tor: tor, ready: ready, ble: ble))
-                            == (tor || ready || ble),
-                        "tor=\(tor) ready=\(ready) ble=\(ble)"
-                    )
+        for nap in [false, true] {
+            for tor in [false, true] {
+                for ready in [false, true] {
+                    for ble in [false, true] {
+                        #expect(
+                            RelayActivityAssertion.shouldHold(state(nap: nap, tor: tor, ready: ready, ble: ble))
+                                == (nap && (tor || ready || ble)),
+                            "nap=\(nap) tor=\(tor) ready=\(ready) ble=\(ble)"
+                        )
+                    }
                 }
             }
         }
@@ -175,11 +190,11 @@ struct RelayActivityAssertionTests {
         let spy = SpyAsserter()
         let assertion = RelayActivityAssertion(asserter: spy)
 
-        assertion.update { $0.bluetoothPoweredOn = true }
+        assertion.update { $0.bleRelayActive = true }
         #expect(assertion.isHolding)
         #expect(spy.beginCount == 1)
 
-        assertion.update { $0.bluetoothPoweredOn = false }
+        assertion.update { $0.bleRelayActive = false }
         #expect(!assertion.isHolding)
         #expect(spy.outstanding == 0)
     }
@@ -191,8 +206,8 @@ struct RelayActivityAssertionTests {
         let spy = SpyAsserter()
         let assertion = RelayActivityAssertion(asserter: spy)
 
-        assertion.update { $0.bluetoothPoweredOn = true }
-        assertion.update { $0.bluetoothPoweredOn = true }
+        assertion.update { $0.bleRelayActive = true }
+        assertion.update { $0.bleRelayActive = true }
 
         #expect(spy.beginCount == 1)
     }
