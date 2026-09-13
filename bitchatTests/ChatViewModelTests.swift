@@ -2075,6 +2075,11 @@ struct ChatViewModelPrivateMediaDeletionTests {
 
 // MARK: - Panic Clear Tests
 
+/// Two tests here write `panic.gestureMode` in UserDefaults.standard (the
+/// view model's store is fixed). They cannot interleave today because both
+/// are synchronous @MainActor bodies, but that is incidental — serialize so
+/// an `await` added later cannot reintroduce the race.
+@Suite(.serialized)
 struct ChatViewModelPanicTests {
 
     @Test @MainActor

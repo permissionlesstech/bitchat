@@ -509,6 +509,10 @@ struct ViewSmokeTests {
             .environmentObject(LocationChannelsModel(manager: makeSmokeLocationManager()))
         let appInfo = AppInfoView()
             .environmentObject(LocationChannelsModel(manager: makeSmokeLocationManager()))
+        // The danger zone is its own view with no environment needs, so it
+        // can also be rendered directly — the chips, both dialogs, and the
+        // captions — independent of which pane the sheet opens on.
+        let dangerZone = PanicDangerZoneSection(onPanicWipe: {})
         let header = SectionHeader("app_info.features.title")
         let featureRow = FeatureRow(info: feature)
         let paymentCashu = PaymentChipView(paymentType: .cashu("cashuA_test-token"))
@@ -540,6 +544,7 @@ struct ViewSmokeTests {
         }
         UserDefaults.standard.set("settings", forKey: paneKey)
         _ = mount(appInfoWithDangerZone)
+        _ = mount(dangerZone)
         _ = mount(header)
         _ = mount(featureRow)
         _ = mount(paymentCashu)
