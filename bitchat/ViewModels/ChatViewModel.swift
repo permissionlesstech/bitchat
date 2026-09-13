@@ -1752,6 +1752,16 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
         guard panicCompleted else { return false }
 
+        // Only now, on the committed path — unlike the preference resets
+        // above, this one moves the device to a LESS safe state (the logo
+        // wipes on the next triple-tap, no dialog). A wipe that did not
+        // commit leaves the data on disk, and must not also leave it one
+        // accidental tap from destruction on a gesture the user may have
+        // deliberately switched off. Not a restore-to-default: a device wiped
+        // under duress comes back armed for the next one, and keeps no record
+        // of what it was set to before.
+        PanicGestureSettings.resetForPanicWipe()
+
         if let panicTransport = meshService as? PanicResettingTransport {
             // Startup recovery reopens admission but leaves actual service
             // start to the bootstrapper immediately after this method.

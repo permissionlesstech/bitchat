@@ -30,6 +30,9 @@ struct AppInfoView: View {
     /// introduction), and afterwards the sheet reopens wherever it was left.
     @AppStorage("appInfo.selectedPane") private var selectedPane: Pane = .info
     @State private var showPanicConfirmation = false
+    @AppStorage(PanicGestureSettings.storageKey) private var panicGestureRawValue = PanicGestureSettings.installDefault.rawValue
+    /// Turning the gesture off is itself a safety decision — confirm it.
+    @State private var showDisableGestureConfirm = false
     @AppStorage(AppLanguageSettings.overrideKey) private var languageOverride = ""
     /// The override changed this session; localization resolves at process
     /// start, so surface the restart hint.
@@ -42,6 +45,19 @@ struct AppInfoView: View {
 
     private var selectedTheme: AppTheme {
         AppTheme(rawValue: appThemeRawValue) ?? .matrix
+    }
+
+    private var panicGestureMode: PanicGestureMode {
+        PanicGestureMode(rawValue: panicGestureRawValue) ?? PanicGestureSettings.installDefault
+    }
+
+    /// Selecting `.off` asks first; every other mode applies immediately.
+    private func selectPanicGestureMode(_ mode: PanicGestureMode) {
+        guard mode == .off, panicGestureMode != .off else {
+            panicGestureRawValue = mode.rawValue
+            return
+        }
+        showDisableGestureConfirm = true
     }
 
     private var textColor: Color { palette.primary }
@@ -120,7 +136,37 @@ struct AppInfoView: View {
 
             static let dangerTitle = String(localized: "app_info.settings.danger.title", defaultValue: "DANGER ZONE", comment: "Section header (uppercase) for destructive actions in settings")
             static let panicButton = String(localized: "app_info.settings.danger.panic_button", defaultValue: "panic wipe", comment: "Button in the settings danger zone that erases all local data after confirmation")
-            static let panicNote = String(localized: "app_info.settings.danger.panic_note", defaultValue: "erases all messages, keys, and identity. triple-tapping the bitchat/ logo does the same, instantly.", comment: "Caption under the panic wipe button explaining what it does and the triple-tap shortcut")
+            static let panicNote = String(localized: "app_info.settings.danger.panic_note", defaultValue: "erases all messages, keys, and identity. there is no undo.", comment: "Caption under the panic wipe button explaining what it does")
+
+            static let gestureTitle = String(localized: "app_info.settings.danger.gesture_title", defaultValue: "triple-tap the logo", comment: "Title of the setting controlling what a triple-tap on the bitchat/ logo does")
+            static let gestureSubtitle = String(localized: "app_info.settings.danger.gesture_subtitle", defaultValue: "the bitchat/ logo runs the same wipe when tapped three times. fast when seconds matter, and easy to set off by accident \u{2014} choose which it is. the button above always asks first.", comment: "Subtitle explaining the triple-tap wipe shortcut and why its behavior can be configured")
+            static let gestureResetNote = String(localized: "app_info.settings.danger.gesture_reset_note", defaultValue: "a wipe resets this to instant, so a device you just wiped is ready to wipe again.", comment: "Caption explaining that performing a panic wipe sets the triple-tap gesture back to instant")
+            static func gestureMode(_ mode: PanicGestureMode) -> String {
+                switch mode {
+                case .instant:
+                    return String(localized: "app_info.settings.danger.gesture_instant", defaultValue: "instantly", comment: "Option: a triple-tap on the bitchat/ logo wipes all data immediately, with no confirmation")
+                case .confirm:
+                    return String(localized: "app_info.settings.danger.gesture_confirm", defaultValue: "ask first", comment: "Option: a triple-tap on the bitchat/ logo asks for confirmation before wiping all data")
+                case .off:
+                    return String(localized: "app_info.settings.danger.gesture_off", defaultValue: "off", comment: "Option: a triple-tap on the bitchat/ logo does nothing; only the settings button can wipe")
+                }
+            }
+            static let gestureDisableTitle = String(localized: "app_info.settings.danger.gesture_disable_title", defaultValue: "turn off the logo wipe?", comment: "Title of the dialog confirming that the triple-tap panic gesture should be disabled")
+            static let gestureDisableAction = String(localized: "app_info.settings.danger.gesture_disable_action", defaultValue: "turn it off", comment: "Confirmation button that disables the triple-tap panic gesture")
+            static let gestureDisableMessage = String(localized: "app_info.settings.danger.gesture_disable_message", defaultValue: "the logo will stop wiping entirely. the panic wipe button above still works.", comment: "Message of the dialog confirming that the triple-tap panic gesture should be disabled")
+
+            /// The privacy-pane one-liner has to track the mode too, or it
+            /// promises behavior the gesture no longer has.
+            static func privacyPanicDescription(_ mode: PanicGestureMode) -> String {
+                switch mode {
+                case .instant:
+                    return String(localized: "app_info.privacy.panic.description_instant", defaultValue: "triple-tap logo to wipe all data instantly", comment: "Privacy-pane description of the panic gesture when a triple-tap wipes immediately")
+                case .confirm:
+                    return String(localized: "app_info.privacy.panic.description", defaultValue: "triple-tap logo to wipe all data (asks to confirm)", comment: "Privacy-pane description of the panic gesture when a triple-tap asks for confirmation")
+                case .off:
+                    return String(localized: "app_info.privacy.panic.description_off", defaultValue: "panic wipe available in settings; the logo shortcut is off", comment: "Privacy-pane description of the panic gesture when the triple-tap shortcut is disabled")
+                }
+            }
             static let panicConfirmTitle = String(localized: "app_info.settings.danger.panic_confirm_title", defaultValue: "wipe all data?", comment: "Title of the confirmation dialog before a panic wipe")
             static let panicConfirmAction = String(localized: "app_info.settings.danger.panic_confirm_action", defaultValue: "wipe everything", comment: "Destructive confirmation button that performs the panic wipe")
         }
@@ -220,11 +266,6 @@ struct AppInfoView: View {
                 icon: "shuffle",
                 title: "app_info.privacy.ephemeral.title",
                 description: "app_info.privacy.ephemeral.description"
-            )
-            static let panic = AppInfoFeatureInfo(
-                icon: "hand.raised.fill",
-                title: "app_info.privacy.panic.title",
-                description: "app_info.privacy.panic.description"
             )
         }
 
@@ -338,22 +379,9 @@ struct AppInfoView: View {
                 SectionHeader(Strings.appearanceTitle)
                 Spacer()
                 ForEach(AppTheme.allCases) { theme in
-                    Button {
+                    optionChip(Text(theme.displayNameKey), isSelected: selectedTheme == theme) {
                         appThemeRawValue = theme.rawValue
-                    } label: {
-                        Text(theme.displayNameKey)
-                            .bitchatFont(size: 13, weight: selectedTheme == theme ? .semibold : .regular)
-                            .foregroundColor(selectedTheme == theme ? palette.accent : secondaryTextColor)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(selectedTheme == theme ? palette.accent.opacity(0.15) : Color.clear)
-                            )
-                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(selectedTheme == theme ? .isSelected : [])
                 }
             }
 
@@ -573,6 +601,50 @@ struct AppInfoView: View {
                         .bitchatFont(size: 11)
                         .foregroundColor(secondaryTextColor)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    // The gesture is the accident-prone entry point, so its
+                    // behavior is the user's call — three choices rather than
+                    // a toggle, because "never wipe from the logo" and "ask me
+                    // first" are different answers and both were asked for.
+                    settingsCard {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(verbatim: Strings.Settings.gestureTitle)
+                                .bitchatFont(size: 12, weight: .semibold)
+                                .foregroundColor(textColor)
+                            Text(verbatim: Strings.Settings.gestureSubtitle)
+                                .bitchatFont(size: 11)
+                                .foregroundColor(secondaryTextColor)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        HStack(spacing: 8) {
+                            ForEach(PanicGestureMode.allCases) { mode in
+                                optionChip(
+                                    Text(verbatim: Strings.Settings.gestureMode(mode)),
+                                    isSelected: panicGestureMode == mode
+                                ) {
+                                    selectPanicGestureMode(mode)
+                                }
+                            }
+                        }
+
+                        Text(verbatim: Strings.Settings.gestureResetNote)
+                            .bitchatFont(size: 11)
+                            .foregroundColor(secondaryTextColor)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .confirmationDialog(
+                        Text(verbatim: Strings.Settings.gestureDisableTitle),
+                        isPresented: $showDisableGestureConfirm,
+                        titleVisibility: .visible
+                    ) {
+                        Button(Strings.Settings.gestureDisableAction, role: .destructive) {
+                            panicGestureRawValue = PanicGestureMode.off.rawValue
+                        }
+                        Button("common.cancel", role: .cancel) {}
+                    } message: {
+                        Text(verbatim: Strings.Settings.gestureDisableMessage)
+                    }
                 }
             }
         }
@@ -738,6 +810,35 @@ struct AppInfoView: View {
         .toggleStyle(IRCToggleStyle(accent: palette.accent, onLabel: Strings.Settings.toggleOn, offLabel: Strings.Settings.toggleOff))
     }
 
+    /// One option in a multi-choice row — the appearance picker's chip, shared
+    /// so a second such row is the same control rather than a lookalike.
+    private func optionChip(_ title: Text, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            title
+                .bitchatFont(size: 13, weight: isSelected ? .semibold : .regular)
+                .foregroundColor(isSelected ? palette.accent : secondaryTextColor)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(isSelected ? palette.accent.opacity(0.15) : Color.clear)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    /// Privacy-pane panic row, rebuilt per mode so its one-liner cannot
+    /// promise a gesture the user has changed or switched off.
+    private var panicPrivacyRow: AppInfoFeatureInfo {
+        AppInfoFeatureInfo(
+            icon: "hand.raised.fill",
+            resolvedTitle: String(localized: "app_info.privacy.panic.title", comment: "Title of the privacy-pane row describing the panic wipe"),
+            resolvedDescription: Strings.Settings.privacyPanicDescription(panicGestureMode)
+        )
+    }
+
     // MARK: - Info pane
 
     @ViewBuilder
@@ -814,7 +915,7 @@ struct AppInfoView: View {
 
                 FeatureRow(info: Strings.Privacy.ephemeral)
 
-                FeatureRow(info: Strings.Privacy.panic)
+                FeatureRow(info: panicPrivacyRow)
             }
 
             // Symbols legend

@@ -2078,6 +2078,43 @@ struct ChatViewModelPrivateMediaDeletionTests {
 struct ChatViewModelPanicTests {
 
     @Test @MainActor
+    func panicClearAllData_armsTheLogoGestureForTheNextWipe() {
+        // ChatViewModel's store is hardcoded to .standard, so this test must
+        // write the shared preference — restore it, or it leaks into every
+        // later test (and into the developer's test host).
+        let previous = PanicGestureSettings.mode
+        defer { PanicGestureSettings.mode = previous }
+        PanicGestureSettings.mode = .off
+        let (viewModel, _) = makeTestableViewModel()
+
+        _ = viewModel.panicClearAllData(restartServices: false)
+
+        // Guards the wiring, not the setting: deleting the reset call from
+        // panicClearAllData must fail here, not pass quietly.
+        #expect(PanicGestureSettings.mode == .instant)
+    }
+
+    @Test @MainActor
+    func panicClearAllData_leavesTheGestureAloneWhenTheWipeDoesNotCommit() {
+        // Writes the shared preference (ChatViewModel's store is fixed), so
+        // restore it — otherwise it leaks into later tests and the test host.
+        let previous = PanicGestureSettings.mode
+        defer { PanicGestureSettings.mode = previous }
+        PanicGestureSettings.mode = .off
+        let keychain = MockKeychain()
+        keychain.simulatedDeleteAllResult = false
+        let (viewModel, _) = makeTestableViewModel(keychain: keychain)
+
+        let completed = viewModel.panicClearAllData(restartServices: false)
+
+        // Arming the instant gesture is the one reset that moves the device
+        // to a LESS safe state. With the data still on disk, a gesture the
+        // user deliberately switched off must stay off.
+        #expect(!completed)
+        #expect(PanicGestureSettings.mode == .off)
+    }
+
+    @Test @MainActor
     func panicClearAllData_finishesMediaWipeBeforeReturning() {
         var wipeFinished = false
         let (viewModel, _) = makeTestableViewModel(panicMediaWipe: {

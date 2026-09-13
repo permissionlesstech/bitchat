@@ -25,6 +25,12 @@ struct ContentRootModalPresentationState {
     var isVoiceAlertPresented = false
     var isScreenshotPrivacyAlertPresented = false
     var isMediaPickerPresented = false
+    /// The panic confirmation and the gesture-disabled notice are hosted on
+    /// ContentView, so they must count as presentations like every other
+    /// modal here — otherwise a Bluetooth alert can stack on top of a pending
+    /// "wipe all data?" dialog.
+    var isPanicConfirmationPresented = false
+    var isPanicGestureDisabledAlertPresented = false
 
     var hasPresentation: Bool {
         isPeopleSheetPresented
@@ -37,6 +43,8 @@ struct ContentRootModalPresentationState {
             || isVoiceAlertPresented
             || isScreenshotPrivacyAlertPresented
             || isMediaPickerPresented
+            || isPanicConfirmationPresented
+            || isPanicGestureDisabledAlertPresented
     }
 }
 
@@ -64,7 +72,11 @@ extension ContentRootModalPresentationState {
             isVoiceAlertPresented: isVoiceAlertPresented,
             isScreenshotPrivacyAlertPresented:
                 appChromeModel.showScreenshotPrivacyWarning,
-            isMediaPickerPresented: isMediaPickerPresented
+            isMediaPickerPresented: isMediaPickerPresented,
+            isPanicConfirmationPresented:
+                appChromeModel.showPanicConfirmation,
+            isPanicGestureDisabledAlertPresented:
+                appChromeModel.showPanicGestureDisabledAlert
         )
     }
 }
@@ -532,6 +544,21 @@ struct ContentView: View {
                 )
             }
             Button("common.cancel", role: .cancel) {}
+        }
+        // Switching the gesture off must not make it silently inert: someone
+        // triple-tapping in a hurry would otherwise walk away believing the
+        // device was wiped.
+        .alert(
+            Text(
+                String(localized: "content.alert.panic_gesture_off.title", defaultValue: "logo wipe is off", comment: "Title of the alert shown when the logo is triple-tapped while the panic gesture is disabled")
+            ),
+            isPresented: $appChromeModel.showPanicGestureDisabledAlert
+        ) {
+            Button("common.ok", role: .cancel) {}
+        } message: {
+            Text(
+                String(localized: "content.alert.panic_gesture_off.message", defaultValue: "nothing was wiped. turn the logo gesture back on in settings, or use the panic wipe button there.", comment: "Message of the alert shown when the logo is triple-tapped while the panic gesture is disabled")
+            )
         }
     }
 

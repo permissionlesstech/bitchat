@@ -503,6 +503,10 @@ struct ViewSmokeTests {
 
         // AppInfoView's settings pane reads LocationChannelsModel from the
         // environment, so it can only render mounted with one installed.
+        // The danger zone (panic button, gesture chips) is gated on a non-nil
+        // wipe hook, so a plain AppInfoView never evaluates that branch.
+        let appInfoWithDangerZone = AppInfoView(onPanicWipe: {})
+            .environmentObject(LocationChannelsModel(manager: makeSmokeLocationManager()))
         let appInfo = AppInfoView()
             .environmentObject(LocationChannelsModel(manager: makeSmokeLocationManager()))
         let header = SectionHeader("app_info.features.title")
@@ -521,6 +525,21 @@ struct ViewSmokeTests {
         _ = DeliveryStatusView(status: .failed(reason: "offline")).body
         _ = DeliveryStatusView(status: .partiallyDelivered(reached: 2, total: 3)).body
         _ = mount(appInfo)
+
+        // The pane picker is @AppStorage-backed and defaults to Info, so a
+        // mount lands on the Info pane; the danger zone lives in Settings.
+        // Force that pane for the second mount so the zone actually renders.
+        let paneKey = "appInfo.selectedPane"
+        let previousPane = UserDefaults.standard.object(forKey: paneKey)
+        defer {
+            if let previousPane {
+                UserDefaults.standard.set(previousPane, forKey: paneKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: paneKey)
+            }
+        }
+        UserDefaults.standard.set("settings", forKey: paneKey)
+        _ = mount(appInfoWithDangerZone)
         _ = mount(header)
         _ = mount(featureRow)
         _ = mount(paymentCashu)
@@ -568,6 +587,18 @@ struct ViewSmokeTests {
         #expect(
             ContentRootModalPresentationState(
                 isNoticesSheetPresented: true
+            ).hasPresentation
+        )
+        // Both panic modals are hosted on ContentView; if hasPresentation
+        // ignored them a Bluetooth alert could stack on a pending wipe dialog.
+        #expect(
+            ContentRootModalPresentationState(
+                isPanicConfirmationPresented: true
+            ).hasPresentation
+        )
+        #expect(
+            ContentRootModalPresentationState(
+                isPanicGestureDisabledAlertPresented: true
             ).hasPresentation
         )
     }
