@@ -2120,6 +2120,36 @@ struct ChatViewModelPanicTests {
     }
 
     @Test @MainActor
+    func panicClearAllData_armsTheGestureBeforeClearingRecoveryMarkers() {
+        // Writes the shared preference (ChatViewModel's store is fixed), so
+        // restore it — otherwise it leaks into later tests and the test host.
+        let previous = PanicGestureSettings.mode
+        defer { PanicGestureSettings.mode = previous }
+        PanicGestureSettings.mode = .off
+        var modeWhenMarkersCleared: PanicGestureMode?
+        let operations = PanicRecoveryOperations(
+            isPending: { false },
+            begin: {
+                PanicRecoveryIntent(
+                    fileMarkerEstablished: true,
+                    externalMarkerEstablished: false
+                )
+            },
+            wipeMedia: { _ in },
+            complete: { modeWhenMarkersCleared = PanicGestureSettings.mode }
+        )
+        let (viewModel, _) = makeTestableViewModel(panicRecoveryOperations: operations)
+
+        let completed = viewModel.panicClearAllData(restartServices: false)
+
+        // Clearing the markers is the point of no return for startup replay.
+        // If the arm landed after it, a process lost in between would come
+        // back with the old mode and nothing to retry it.
+        #expect(completed)
+        #expect(modeWhenMarkersCleared == .instant)
+    }
+
+    @Test @MainActor
     func panicClearAllData_finishesMediaWipeBeforeReturning() {
         var wipeFinished = false
         let (viewModel, _) = makeTestableViewModel(panicMediaWipe: {

@@ -1722,6 +1722,18 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         do {
             try panicRecoveryOperations.wipeMedia(recoveryIntent)
             if keychainWipeCompleted {
+                // Arm the logo gesture here, inside the transaction, not after
+                // it. Unlike the preference resets above this one moves the
+                // device to a LESS safe state (the next triple-tap wipes with
+                // no dialog), so it must not run when the keychain or media
+                // wipe failed and data is still on disk — hence this branch.
+                // But it must land BEFORE the recovery markers are cleared:
+                // once they are gone nothing replays, and a device wiped under
+                // duress that lost the process right here would come back
+                // asking instead of armed. Not a restore-to-default — the
+                // value written is a constant, so no trace of the pre-wipe
+                // choice survives.
+                PanicGestureSettings.resetForPanicWipe()
                 try panicRecoveryOperations.complete()
                 panicCompleted = true
                 SecureLogger.info(
@@ -1751,16 +1763,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         #endif
 
         guard panicCompleted else { return false }
-
-        // Only now, on the committed path — unlike the preference resets
-        // above, this one moves the device to a LESS safe state (the logo
-        // wipes on the next triple-tap, no dialog). A wipe that did not
-        // commit leaves the data on disk, and must not also leave it one
-        // accidental tap from destruction on a gesture the user may have
-        // deliberately switched off. Not a restore-to-default: a device wiped
-        // under duress comes back armed for the next one, and keeps no record
-        // of what it was set to before.
-        PanicGestureSettings.resetForPanicWipe()
 
         if let panicTransport = meshService as? PanicResettingTransport {
             // Startup recovery reopens admission but leaves actual service
