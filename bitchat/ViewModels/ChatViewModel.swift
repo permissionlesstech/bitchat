@@ -1722,6 +1722,18 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         do {
             try panicRecoveryOperations.wipeMedia(recoveryIntent)
             if keychainWipeCompleted {
+                // Arm the logo gesture here, inside the transaction, not after
+                // it. Unlike the preference resets above this one moves the
+                // device to a LESS safe state (the next triple-tap wipes with
+                // no dialog), so it must not run when the keychain or media
+                // wipe failed and data is still on disk — hence this branch.
+                // But it must land BEFORE the recovery markers are cleared:
+                // once they are gone nothing replays, and a device wiped under
+                // duress that lost the process right here would come back
+                // asking instead of armed. Not a restore-to-default — the
+                // value written is a constant, so no trace of the pre-wipe
+                // choice survives.
+                PanicGestureSettings.resetForPanicWipe()
                 try panicRecoveryOperations.complete()
                 panicCompleted = true
                 SecureLogger.info(
@@ -1776,10 +1788,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         }
 
         // In a duress scenario "did it work?" must not be a guess — the
-        // natural response to uncertainty is to trigger the wipe again.
+        // natural response to uncertainty is to trigger the wipe again. The
+        // same line says the gesture is now instant: that is when it matters,
+        // not the next time someone opens settings.
         // The failure case surfaces separately via `panicRecoveryBlocked`.
         addMeshOnlySystemMessage(
-            String(localized: "system.panic.completed", defaultValue: "all data wiped — new identity created", comment: "System message confirming a successful panic wipe")
+            String(localized: "system.panic.completed", defaultValue: "all data wiped — new identity created. triple-tapping the logo now wipes instantly.", comment: "System message confirming a successful panic wipe and that the logo gesture is now armed for an instant wipe")
         )
 
         return true

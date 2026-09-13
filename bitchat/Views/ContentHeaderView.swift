@@ -55,7 +55,9 @@ struct ContentHeaderView: View {
                     // App Info entry point and sits beside the nickname field, so
                     // a fumbled tap must never be able to wipe the device. The
                     // dialog matches the Settings-pane panic button; under duress
-                    // it costs one extra tap.
+                    // it costs one extra tap. Whether it confirms, wipes at once,
+                    // or does nothing is a DANGER ZONE setting — decided inside
+                    // requestPanicWipe(), never here.
                     appChromeModel.requestPanicWipe()
                 }
                 .onTapGesture(count: 1) {
