@@ -137,9 +137,6 @@ protocol SecureIdentityStateManagerProtocol {
     /// Whether this peer now announces a different nickname than the one its
     /// trust was earned under.
     func trustedNicknameMismatch(fingerprint: String) -> Bool
-    /// Verified AND still presenting the name it was verified under — what a
-    /// seal beside a LIVE name is actually asserting. One lock, not two.
-    func isVerifiedAndNameBound(fingerprint: String) -> Bool
     /// Verified AND `renderedSender` is the name it was verified under — what
     /// a seal beside a name frozen on a message row is asserting.
     func sealAppliesToRow(fingerprint: String, renderedSender: String) -> Bool
@@ -164,15 +161,11 @@ protocol SecureIdentityStateManagerProtocol {
 }
 
 extension SecureIdentityStateManagerProtocol {
-    // Default implementations so a conformance only has to provide the two
-    // primitives. `SecureIdentityStateManager` overrides both to answer in a
-    // single lock acquisition — these seal checks run per row, per render, and
-    // the format cache does not shield the one in ChatMessageFormatter because
-    // the answer is part of its cache key.
-    func isVerifiedAndNameBound(fingerprint: String) -> Bool {
-        isVerified(fingerprint: fingerprint) && !trustedNicknameMismatch(fingerprint: fingerprint)
-    }
-
+    // A default implementation so a conformance only has to provide the two
+    // primitives. `SecureIdentityStateManager` overrides it to answer in a
+    // single lock acquisition — this runs per row, per render, and the format
+    // cache does not shield the call in ChatMessageFormatter because the
+    // answer is part of its cache key.
     func sealAppliesToRow(fingerprint: String, renderedSender: String) -> Bool {
         guard isVerified(fingerprint: fingerprint) else { return false }
         guard let pinned = trustedNickname(fingerprint: fingerprint), !pinned.isEmpty
@@ -800,13 +793,6 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
 
     func trustedNickname(fingerprint: String) -> String? {
         queue.sync { cache.trustedNicknames?[fingerprint] }
-    }
-
-    func isVerifiedAndNameBound(fingerprint: String) -> Bool {
-        queue.sync {
-            guard cache.verifiedFingerprints.contains(fingerprint) else { return false }
-            return !liveNameMismatchLocked(fingerprint)
-        }
     }
 
     /// A message row shows the sender name frozen at receipt, so asking about

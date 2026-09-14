@@ -265,17 +265,17 @@ struct SecureIdentityStateManagerNicknameBindingTests {
     }
 
     @Test
-    func theCombinedLiveQueryAgreesWithItsParts() {
+    func theBaselineIsKeptSoASheetCanNameIt() {
+        // Suppressing the seal is the security fix; saying WHICH name was
+        // verified is what lets a reader recognise the peer instead of
+        // guessing. The baseline therefore survives the rename it detects.
         let manager = makeManager()
         announce(manager, vouchee, as: "ravi")
-        #expect(!manager.isVerifiedAndNameBound(fingerprint: vouchee), "not verified yet")
-
         manager.setVerified(fingerprint: vouchee, verified: true)
-        #expect(manager.isVerifiedAndNameBound(fingerprint: vouchee))
         #expect(manager.trustedNickname(fingerprint: vouchee) == "ravi")
 
         announce(manager, vouchee, as: "medic")
-        #expect(!manager.isVerifiedAndNameBound(fingerprint: vouchee))
+        #expect(manager.trustedNicknameMismatch(fingerprint: vouchee))
         #expect(manager.trustedNickname(fingerprint: vouchee) == "ravi",
                 "the baseline is what the sheet needs to name")
     }
@@ -292,7 +292,6 @@ struct SecureIdentityStateManagerNicknameBindingTests {
 
         announce(manager, vouchee, as: "ravi")
         #expect(!manager.trustedNicknameMismatch(fingerprint: vouchee))
-        #expect(manager.isVerifiedAndNameBound(fingerprint: vouchee))
         #expect(manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "RAVI"))
     }
 

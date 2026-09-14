@@ -477,9 +477,16 @@ final class ChatPeerIdentityCoordinator {
     /// invalidated by verification and session changes, never by a rename, so a
     /// demotion written into the cache would be both stale and sticky. The
     /// session really is Noise-secured; only the claim about *who* is weakened,
-    /// which is exactly the difference between the two cases. Nothing branches
-    /// on `.noiseVerified` beyond the glyph — every behavioural site treats it
-    /// and `.noiseSecured` alike.
+    /// which is exactly the difference between the two cases.
+    ///
+    /// No BEHAVIOUR branches on the distinction — `VerificationModel:33`,
+    /// `ContentSheetViews:659` and `:760` all treat `.noiseVerified` and
+    /// `.noiseSecured` alike. Four things the user perceives do, and all four
+    /// are meant to move: the icon (`checkmark.seal.fill` → `lock.fill`), the
+    /// `description` caption, the `accessibilityDescription` — so VoiceOver
+    /// stops saying "verified" on a demoted DM header — and the green tint on
+    /// the nickname at `FingerprintView:87`, which is the one site that does
+    /// NOT treat the two statuses identically.
     @MainActor
     private func demotedIfRenamed(_ status: EncryptionStatus, for peerID: PeerID) -> EncryptionStatus {
         guard status == .noiseVerified,
