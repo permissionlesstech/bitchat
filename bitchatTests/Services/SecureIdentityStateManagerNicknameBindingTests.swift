@@ -213,9 +213,9 @@ struct SecureIdentityStateManagerNicknameBindingTests {
         #expect(!manager.trustedNicknameMismatch(fingerprint: vouchee),
                 "the live name is bound again, which is why the live check alone is not enough")
 
-        #expect(!manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "medic"),
+        #expect(!manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "medic", senderPeerID: nil),
                 "the row posted as medic must not be sealed")
-        #expect(manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "ravi"),
+        #expect(manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "ravi", senderPeerID: nil),
                 "a row posted as ravi still is — that row really was ravi")
     }
 
@@ -230,9 +230,9 @@ struct SecureIdentityStateManagerNicknameBindingTests {
         announce(manager, vouchee, as: "medic")
 
         #expect(manager.trustedNicknameMismatch(fingerprint: vouchee), "live name is unbound")
-        #expect(manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "ravi"),
+        #expect(manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "ravi", senderPeerID: nil),
                 "but the archived ravi row is still accurate")
-        #expect(!manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "medic"))
+        #expect(!manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "medic", senderPeerID: nil))
     }
 
     @Test
@@ -244,24 +244,24 @@ struct SecureIdentityStateManagerNicknameBindingTests {
         announce(manager, vouchee, as: "ravi@hq")
         manager.setVerified(fingerprint: vouchee, verified: true)
 
-        #expect(manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "ravi@hq"))
-        #expect(manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "ravi@hq#a1b2"))
-        #expect(!manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "ravi"))
-        #expect(!manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "medic#a1b2"))
+        #expect(manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "ravi@hq", senderPeerID: nil))
+        #expect(manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "ravi@hq#a1b2", senderPeerID: decorator))
+        #expect(!manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "ravi", senderPeerID: nil))
+        #expect(!manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "medic#a1b2", senderPeerID: decorator))
     }
 
     @Test
     func aRowIsNotSealedForAnUnverifiedKeyAndFailsOpenWithNoBaseline() {
         let manager = makeManager()
         announce(manager, vouchee, as: "ravi")
-        #expect(!manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "ravi"),
+        #expect(!manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "ravi", senderPeerID: nil),
                 "no verification, no seal")
 
         // Verified before any announce: nothing bound, so rows stay sealed as
         // they did before this existed.
         let unbound = makeManager()
         unbound.setVerified(fingerprint: vouchee, verified: true)
-        #expect(unbound.sealAppliesToRow(fingerprint: vouchee, renderedSender: "anything"))
+        #expect(unbound.sealAppliesToRow(fingerprint: vouchee, renderedSender: "anything", senderPeerID: nil))
     }
 
     @Test
@@ -280,6 +280,55 @@ struct SecureIdentityStateManagerNicknameBindingTests {
                 "the baseline is what the sheet needs to name")
     }
 
+    @Test
+    func anAnnouncedSuffixIsNotADecoration() {
+        // Found by generalising a review finding on the Android mirror of this
+        // patch. `sealAppliesToRow` stripped a trailing "#abcd" from the
+        // rendered sender unconditionally — but a peer announces whatever
+        // string it likes, and "#" plus four hex is a legal thing to announce,
+        // which is why `splitSuffix` exists at all. So the one rule was wrong
+        // in both directions.
+        //
+        // The half that matters: a key pinned as "ravi" renames to "ravi#cafe"
+        // and its rows keep the seal. "#cafe" is indistinguishable from the
+        // decoration this app generates itself, so the row reads as "ravi,
+        // disambiguated" — a better disguise than an unrelated name, not worse.
+        let manager = makeManager()
+        announce(manager, vouchee, as: "ravi")
+        manager.setVerified(fingerprint: vouchee, verified: true)
+        #expect(!manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "ravi#cafe", senderPeerID: nil),
+                "a rename onto a hex-looking suffix must not keep the seal")
+
+        // ...and the other half: a key honestly verified under a name that
+        // simply ends that way must not lose its seal for standing still.
+        let ends = makeManager()
+        announce(ends, vouchee, as: "ravi#cafe")
+        ends.setVerified(fingerprint: vouchee, verified: true)
+        #expect(ends.sealAppliesToRow(fingerprint: vouchee, renderedSender: "ravi#cafe", senderPeerID: nil),
+                "an announced name that ends in a suffix still matches itself")
+        #expect(ends.sealAppliesToRow(fingerprint: vouchee, renderedSender: "ravi#cafe#a1b2", senderPeerID: decorator),
+                "and still matches once the list decorates it")
+        #expect(!ends.sealAppliesToRow(fingerprint: vouchee, renderedSender: "ravi", senderPeerID: nil),
+                "while the undecorated base is a different name")
+    }
+
+    @Test
+    func theLiveCheckNeverUndecorates() {
+        // The live question has no decoration to remove: `peer.nickname` is
+        // what the peer claims. Stripping there would let exactly the rename
+        // above through on the peer list as well as on a row.
+        let manager = makeManager()
+        announce(manager, vouchee, as: "ravi")
+        manager.setVerified(fingerprint: vouchee, verified: true)
+        announce(manager, vouchee, as: "ravi#cafe")
+        #expect(manager.trustedNicknameMismatch(fingerprint: vouchee),
+                "announcing ravi#cafe after being verified as ravi is a rename")
+    }
+
+    /// A peerID whose first four hex are "a1b2", so `#a1b2` is the decoration
+    /// `PeerDisplayNameResolver` would give this peer and nothing else is.
+    private var decorator: PeerID { PeerID(str: "a1b2c3d4") }
+
     // MARK: - What counts as the same name
 
     @Test
@@ -292,7 +341,7 @@ struct SecureIdentityStateManagerNicknameBindingTests {
 
         announce(manager, vouchee, as: "ravi")
         #expect(!manager.trustedNicknameMismatch(fingerprint: vouchee))
-        #expect(manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "RAVI"))
+        #expect(manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "RAVI", senderPeerID: nil))
     }
 
     @Test
@@ -307,7 +356,7 @@ struct SecureIdentityStateManagerNicknameBindingTests {
 
         announce(manager, vouchee, as: "\u{FF2D}edic")
         #expect(manager.trustedNicknameMismatch(fingerprint: vouchee))
-        #expect(!manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "\u{FF2D}edic"))
+        #expect(!manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "\u{FF2D}edic", senderPeerID: nil))
     }
 
     @Test
@@ -319,11 +368,12 @@ struct SecureIdentityStateManagerNicknameBindingTests {
         announce(manager, vouchee, as: "medic")
         manager.setVerified(fingerprint: vouchee, verified: true)
 
-        #expect(manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "medic#a1b2"))
+        #expect(manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "medic#a1b2", senderPeerID: decorator))
         #expect(!manager.sealAppliesToRow(fingerprint: vouchee,
-                                          renderedSender: "medic#\u{FF21}\u{FF22}\u{FF23}\u{FF24}"),
+                                          renderedSender: "medic#\u{FF21}\u{FF22}\u{FF23}\u{FF24}",
+                                          senderPeerID: decorator),
                 "a fullwidth tail is part of the name, not a suffix this device generates")
-        #expect(!manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "medic#zzzz"),
+        #expect(!manager.sealAppliesToRow(fingerprint: vouchee, renderedSender: "medic#zzzz", senderPeerID: nil),
                 "non-hex is part of the name too")
     }
 

@@ -1992,8 +1992,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     /// A seal beside a name frozen on a message row: is THAT name the one this
     /// key was verified under? See `sealAppliesToRow`.
     @MainActor
-    func sealAppliesToRow(_ fingerprint: String, renderedSender: String) -> Bool {
-        identityManager.sealAppliesToRow(fingerprint: fingerprint, renderedSender: renderedSender)
+    func sealAppliesToRow(_ fingerprint: String, renderedSender: String,
+                          senderPeerID: PeerID?) -> Bool {
+        identityManager.sealAppliesToRow(fingerprint: fingerprint, renderedSender: renderedSender,
+                                         senderPeerID: senderPeerID)
     }
 
     // MARK: - BitchatDelegate Methods

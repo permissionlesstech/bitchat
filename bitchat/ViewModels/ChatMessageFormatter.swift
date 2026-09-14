@@ -451,7 +451,8 @@ private extension ChatMessageFormatter {
         // Bound to the name ON THIS ROW, which is frozen at receipt — see
         // `sealAppliesToRow`. This check feeds the format cache key, so the
         // cache does not shield it; a single call keeps it to one lock.
-        return viewModel.sealAppliesToRow(fingerprint, renderedSender: message.sender)
+        return viewModel.sealAppliesToRow(fingerprint, renderedSender: message.sender,
+                                          senderPeerID: peerID)
     }
 
     func appendVerifiedSeal(

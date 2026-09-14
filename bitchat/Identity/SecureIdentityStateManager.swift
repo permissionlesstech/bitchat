@@ -139,7 +139,7 @@ protocol SecureIdentityStateManagerProtocol {
     func trustedNicknameMismatch(fingerprint: String) -> Bool
     /// Verified AND `renderedSender` is the name it was verified under — what
     /// a seal beside a name frozen on a message row is asserting.
-    func sealAppliesToRow(fingerprint: String, renderedSender: String) -> Bool
+    func sealAppliesToRow(fingerprint: String, renderedSender: String, senderPeerID: PeerID?) -> Bool
 
     // MARK: Vouching (transitive verification)
     @discardableResult
@@ -166,13 +166,11 @@ extension SecureIdentityStateManagerProtocol {
     // single lock acquisition — this runs per row, per render, and the format
     // cache does not shield the call in ChatMessageFormatter because the
     // answer is part of its cache key.
-    func sealAppliesToRow(fingerprint: String, renderedSender: String) -> Bool {
+    func sealAppliesToRow(fingerprint: String, renderedSender: String, senderPeerID: PeerID?) -> Bool {
         guard isVerified(fingerprint: fingerprint) else { return false }
         guard let pinned = trustedNickname(fingerprint: fingerprint), !pinned.isEmpty
         else { return true }
-        let shown = renderedSender.withoutCollisionSuffix
-        guard !shown.isEmpty else { return true }
-        return pinned.nicknameBindingKey == shown.nicknameBindingKey
+        return pinned.matchesRenderedName(renderedSender, decoratedFor: senderPeerID)
     }
 }
 
@@ -802,7 +800,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     /// against its own name, which also makes every row self-consistent — a
     /// historical "ravi ✓" stays sealed even while that key is currently
     /// renamed, because that row really was ravi.
-    func sealAppliesToRow(fingerprint: String, renderedSender: String) -> Bool {
+    func sealAppliesToRow(fingerprint: String, renderedSender: String, senderPeerID: PeerID?) -> Bool {
         queue.sync {
             guard cache.verifiedFingerprints.contains(fingerprint) else { return false }
             guard let pinned = cache.trustedNicknames?[fingerprint], !pinned.isEmpty
@@ -810,9 +808,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
             // No petname escape here, unlike the live check: the formatter
             // renders `message.sender`, never a petname, so a petname does not
             // stand between the reader and a spoofed name on this row.
-            let shown = renderedSender.withoutCollisionSuffix
-            guard !shown.isEmpty else { return true }
-            return pinned.nicknameBindingKey == shown.nicknameBindingKey
+            return pinned.matchesRenderedName(renderedSender, decoratedFor: senderPeerID)
         }
     }
 

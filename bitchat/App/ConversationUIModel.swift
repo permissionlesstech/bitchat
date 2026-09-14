@@ -169,7 +169,8 @@ final class ConversationUIModel: ObservableObject {
         // whether its current name is. Checking the current name would let a
         // rename away, a post, and a rename back put a seal beside a name the
         // key was never trusted under. One call, one lock.
-        return chatViewModel.sealAppliesToRow(fingerprint, renderedSender: message.sender)
+        return chatViewModel.sealAppliesToRow(fingerprint, renderedSender: message.sender,
+                                              senderPeerID: peerID)
     }
 
     func senderDisplayName(for peerID: PeerID, fallbackMessages: [BitchatMessage]) -> String? {
