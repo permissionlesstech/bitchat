@@ -448,7 +448,11 @@ private extension ChatMessageFormatter {
               let fingerprint = viewModel.getFingerprint(for: peerID) else {
             return false
         }
-        return viewModel.peerIdentityStore.isVerified(fingerprint)
+        // Bound to the name ON THIS ROW, which is frozen at receipt — see
+        // `sealAppliesToRow`. This check feeds the format cache key, so the
+        // cache does not shield it; a single call keeps it to one lock.
+        return viewModel.sealAppliesToRow(fingerprint, renderedSender: message.sender,
+                                          senderPeerID: peerID)
     }
 
     func appendVerifiedSeal(

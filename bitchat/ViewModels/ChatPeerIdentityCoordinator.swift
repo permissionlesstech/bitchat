@@ -76,6 +76,8 @@ protocol ChatPeerIdentityContext: AnyObject {
     /// falling back to `fallback` when none was stored. Returns the migrated fingerprint.
     func migrateFingerprintMapping(from oldPeerID: PeerID, to newPeerID: PeerID, fallback: String?) -> String?
     func isVerifiedFingerprint(_ fingerprint: String) -> Bool
+    /// Whether the peer renamed itself since its trust was established.
+    func trustedNicknameMismatch(_ fingerprint: String) -> Bool
     func setEncryptionStatus(_ status: EncryptionStatus?, for peerID: PeerID)
     func cachedEncryptionStatus(for peerID: PeerID) -> EncryptionStatus?
     func setCachedEncryptionStatus(_ status: EncryptionStatus, for peerID: PeerID)
@@ -437,7 +439,9 @@ final class ChatPeerIdentityCoordinator {
     @MainActor
     func getEncryptionStatus(for peerID: PeerID) -> EncryptionStatus {
         if let cachedStatus = context.cachedEncryptionStatus(for: peerID) {
-            return cachedStatus
+            // Demote on the cache-hit path too — this is the common one, and
+            // nothing invalidates the cache on a rename.
+            return demotedIfRenamed(cachedStatus, for: peerID)
         }
 
         // The status must reflect the LIVE session, never history. The old
@@ -462,7 +466,33 @@ final class ChatPeerIdentityCoordinator {
         }
 
         context.setCachedEncryptionStatus(status, for: peerID)
-        return status
+        return demotedIfRenamed(status, for: peerID)
+    }
+
+    /// `.noiseVerified` renders the same filled seal as the verified badge, and
+    /// for a CONNECTED peer it is the only thing that draws one — so the name
+    /// binding has to apply here too, or the live impersonation keeps its seal.
+    ///
+    /// Applied on the way out rather than stored: the cached status is only
+    /// invalidated by verification and session changes, never by a rename, so a
+    /// demotion written into the cache would be both stale and sticky. The
+    /// session really is Noise-secured; only the claim about *who* is weakened,
+    /// which is exactly the difference between the two cases.
+    ///
+    /// No BEHAVIOUR branches on the distinction — `VerificationModel:33`,
+    /// `ContentSheetViews:659` and `:760` all treat `.noiseVerified` and
+    /// `.noiseSecured` alike. Four things the user perceives do, and all four
+    /// are meant to move: the icon (`checkmark.seal.fill` → `lock.fill`), the
+    /// `description` caption, the `accessibilityDescription` — so VoiceOver
+    /// stops saying "verified" on a demoted DM header — and the green tint on
+    /// the nickname at `FingerprintView:87`, which is the one site that does
+    /// NOT treat the two statuses identically.
+    @MainActor
+    private func demotedIfRenamed(_ status: EncryptionStatus, for peerID: PeerID) -> EncryptionStatus {
+        guard status == .noiseVerified,
+              let fingerprint = getFingerprint(for: peerID),
+              context.trustedNicknameMismatch(fingerprint) else { return status }
+        return .noiseSecured
     }
 
     @MainActor

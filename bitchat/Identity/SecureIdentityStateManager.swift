@@ -130,6 +130,16 @@ protocol SecureIdentityStateManagerProtocol {
     func setVerified(fingerprint: String, verified: Bool)
     func isVerified(fingerprint: String) -> Bool
     func getVerifiedFingerprints() -> Set<String>
+    /// The nickname `fingerprint` was announcing when trust in it was
+    /// established, or nil if nothing was bound. Shown to the user, so a sheet
+    /// can say *which* name was verified rather than only that one changed.
+    func trustedNickname(fingerprint: String) -> String?
+    /// Whether this peer now announces a different nickname than the one its
+    /// trust was earned under.
+    func trustedNicknameMismatch(fingerprint: String) -> Bool
+    /// Verified AND `renderedSender` is the name it was verified under — what
+    /// a seal beside a name frozen on a message row is asserting.
+    func sealAppliesToRow(fingerprint: String, renderedSender: String, senderPeerID: PeerID?) -> Bool
 
     // MARK: Vouching (transitive verification)
     @discardableResult
@@ -148,6 +158,20 @@ protocol SecureIdentityStateManagerProtocol {
     // MARK: Private-media downgrade protection
     func markPrivateMediaCapable(fingerprint: String)
     func hasObservedPrivateMediaCapability(fingerprint: String) -> Bool
+}
+
+extension SecureIdentityStateManagerProtocol {
+    // A default implementation so a conformance only has to provide the two
+    // primitives. `SecureIdentityStateManager` overrides it to answer in a
+    // single lock acquisition — this runs per row, per render, and the format
+    // cache does not shield the call in ChatMessageFormatter because the
+    // answer is part of its cache key.
+    func sealAppliesToRow(fingerprint: String, renderedSender: String, senderPeerID: PeerID?) -> Bool {
+        guard isVerified(fingerprint: fingerprint) else { return false }
+        guard let pinned = trustedNickname(fingerprint: fingerprint), !pinned.isEmpty
+        else { return true }
+        return pinned.matchesRenderedName(renderedSender, decoratedFor: senderPeerID)
+    }
 }
 
 /// Singleton manager for secure identity state persistence and retrieval.
@@ -428,6 +452,15 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
                 } else if self.cache.socialIdentities[fingerprint] == nil {
                     self.cache.socialIdentities[fingerprint] = identity
                 }
+                // A vouch usually arrives for a peer we have not seen announce
+                // — it comes over Noise from someone else, and the vouchee may
+                // be several hops away. There was no name to bind to then, so
+                // bind on the first announce we see while the trust stands.
+                self.pinTrustedNicknameLocked(
+                    fingerprint: fingerprint,
+                    overwrite: false,
+                    requireExistingTrust: true
+                )
             }
 
             self.saveIdentityCache()
@@ -678,9 +711,15 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
                 var verifiedAt = self.cache.verifiedAt ?? [:]
                 verifiedAt[fingerprint] = Date()
                 self.cache.verifiedAt = verifiedAt
+                // Re-verifying overwrites the baseline: the user just checked
+                // this key again, under whatever name it presents now.
+                self.pinTrustedNicknameLocked(fingerprint: fingerprint, overwrite: true)
             } else {
                 self.cache.verifiedFingerprints.remove(fingerprint)
                 self.cache.verifiedAt?.removeValue(forKey: fingerprint)
+                if self.cache.vouchesByVouchee?[fingerprint]?.isEmpty ?? true {
+                    self.cache.trustedNicknames?.removeValue(forKey: fingerprint)
+                }
             }
 
             // Update trust level if social identity exists
@@ -697,6 +736,94 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         queue.sync {
             return cache.verifiedFingerprints.contains(fingerprint)
         }
+    }
+
+    // MARK: - Nickname binding
+    //
+    // A vouch signs `voucheeFingerprint | voucheeSigningKey | timestampMs` and
+    // deliberately says nothing about a name — the attestation is right to stay
+    // name-free. But the badge is *rendered* next to a self-claimed nickname,
+    // so the binding has to exist somewhere, and the receiver is the only party
+    // that can hold it: it is the one that decided to trust this key while it
+    // was presenting a particular name.
+
+    /// Requires `queue`. Records the peer's currently claimed nickname as the
+    /// name its trust is bound to. Empty nicknames are not pinned — a key
+    /// verified before its first announce has no name to bind to, and pinning
+    /// "" would then read as a mismatch against every later announce.
+    ///
+    /// `requireExistingTrust` is for the announce path, which runs for every
+    /// peer: pinning a name before there is any trust would bind the badge to
+    /// whatever name we happened to see first, so a peer who renamed *before*
+    /// being vouched would have its legitimate badge suppressed.
+    private func pinTrustedNicknameLocked(fingerprint: String,
+                                          overwrite: Bool,
+                                          requireExistingTrust: Bool = false) {
+        if requireExistingTrust {
+            let trusted = cache.verifiedFingerprints.contains(fingerprint)
+                || !(cache.vouchesByVouchee?[fingerprint] ?? []).isEmpty
+            guard trusted else { return }
+        }
+        guard let claimed = cache.socialIdentities[fingerprint]?.claimedNickname,
+              !claimed.isEmpty else { return }
+        var pinned = cache.trustedNicknames ?? [:]
+        if !overwrite, pinned[fingerprint] != nil { return }
+        pinned[fingerprint] = claimed
+        cache.trustedNicknames = pinned
+    }
+
+    /// True only when a baseline exists AND the peer now announces something
+    /// else.
+    ///
+    /// Deliberately compares announced name to announced name rather than to
+    /// anything on screen. Display strings are decorated: `PeerDisplayNameResolver`
+    /// appends `#abcd` to CONNECTED peers whose nicknames collide — which is
+    /// precisely what happens during this attack — so comparing a rendered name
+    /// would suppress the seal of the peer being impersonated, exactly when it
+    /// matters most.
+    ///
+    /// Fails OPEN on a missing baseline on purpose: peers trusted by builds
+    /// before this existed have none, and dropping their seals on upgrade would
+    /// train users to ignore the signal.
+    func trustedNicknameMismatch(fingerprint: String) -> Bool {
+        queue.sync { liveNameMismatchLocked(fingerprint) }
+    }
+
+    func trustedNickname(fingerprint: String) -> String? {
+        queue.sync { cache.trustedNicknames?[fingerprint] }
+    }
+
+    /// A message row shows the sender name frozen at receipt, so asking about
+    /// the peer's CURRENT name is the wrong question: rename away, post, rename
+    /// back, and the live name matches the baseline again while the archived row
+    /// still reads the name it was posted under. Each row is therefore checked
+    /// against its own name, which also makes every row self-consistent — a
+    /// historical "ravi ✓" stays sealed even while that key is currently
+    /// renamed, because that row really was ravi.
+    func sealAppliesToRow(fingerprint: String, renderedSender: String, senderPeerID: PeerID?) -> Bool {
+        queue.sync {
+            guard cache.verifiedFingerprints.contains(fingerprint) else { return false }
+            guard let pinned = cache.trustedNicknames?[fingerprint], !pinned.isEmpty
+            else { return true }                                  // nothing bound: fail open
+            // No petname escape here, unlike the live check: the formatter
+            // renders `message.sender`, never a petname, so a petname does not
+            // stand between the reader and a spoofed name on this row.
+            return pinned.matchesRenderedName(renderedSender, decoratedFor: senderPeerID)
+        }
+    }
+
+    /// Requires `queue`.
+    private func liveNameMismatchLocked(_ fingerprint: String) -> Bool {
+        guard let pinned = cache.trustedNicknames?[fingerprint], !pinned.isEmpty
+        else { return false }
+        let social = cache.socialIdentities[fingerprint]
+        // A local petname outranks the claimed nickname everywhere a LIVE name
+        // is displayed, so there is nothing to spoof and the seal stands.
+        if let petname = social?.localPetname, !petname.isEmpty { return false }
+        guard let claimed = social?.claimedNickname, !claimed.isEmpty else { return false }
+        // See `nicknameBindingKey`: NFC plus case, so a decomposed and a
+        // precomposed "café" are one name and recasing is not a rename.
+        return pinned.nicknameBindingKey != claimed.nicknameBindingKey
     }
     
     func getVerifiedFingerprints() -> Set<String> {
@@ -760,6 +887,10 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
             var vouches = self.cache.vouchesByVouchee ?? [:]
             vouches[voucheeFingerprint] = capped
             self.cache.vouchesByVouchee = vouches
+            // Pin on the FIRST vouch only. A later vouch for the same key must
+            // not move the baseline, or an attacker could rename and then have
+            // a second voucher silently re-anchor the badge to the new name.
+            self.pinTrustedNicknameLocked(fingerprint: voucheeFingerprint, overwrite: false)
             self.saveIdentityCache()
             return true
         }

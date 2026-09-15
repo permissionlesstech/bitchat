@@ -232,9 +232,20 @@ final class PeerListModel: ObservableObject {
             let isMe = peer.peerID == myPeerID
             let fingerprint = isMe ? nil : chatViewModel.getFingerprint(for: peer.peerID)
             let isVerifiedFingerprint = fingerprint.map { peerIdentityStore.isVerified($0) } ?? false
-            let verifiedBadge = !peer.isConnected && isVerifiedFingerprint
+            // A seal is bound to the name it was earned under. Without that,
+            // a key that earned one vouch as "ravi" can rename itself to
+            // "medic" and keep rendering the seal beside the new name. The
+            // check compares announced names, NOT `peer.nickname`, which is
+            // already collision-resolved: two connected peers both claiming
+            // "medic" are rendered "medic#a1b2" and "medic#c3d4", so comparing
+            // the displayed string would drop the real medic's seal during the
+            // very attack this defends against. Petnames are handled there too.
+            let renamedSinceTrust = fingerprint.map {
+                chatViewModel.trustedNicknameMismatch($0)
+            } ?? false
+            let verifiedBadge = !peer.isConnected && isVerifiedFingerprint && !renamedSinceTrust
             // Vouched is subordinate to verified: never show both seals.
-            let vouchedBadge = !isVerifiedFingerprint
+            let vouchedBadge = !isVerifiedFingerprint && !renamedSinceTrust
                 && (fingerprint.map { chatViewModel.isVouchedFingerprint($0) } ?? false)
 
             return MeshPeerRow(
