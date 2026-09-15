@@ -350,6 +350,25 @@ struct SecureIdentityStateManagerNicknameBindingTests {
                 "while the stored verification is untouched — re-verifying is the recovery")
     }
 
+    @Test
+    func aVoucherIsNamedByTheNameItWasVerifiedUnder() {
+        // The voucher list in the fingerprint sheet is a trust attribution, so
+        // it has the seal's problem one level out: name a voucher by what it
+        // announces NOW and a renamed voucher is credited under the new name.
+        // Eve verified as "ravi", vouches for Mallory, renames to "medic", and
+        // Mallory's sheet reads "vouched by medic".
+        //
+        // The baseline outlives the rename precisely so the sheet can say
+        // "ravi" — the person you actually checked. Pinned at the manager,
+        // which is where the view reads it from.
+        let manager = makeManager()
+        announce(manager, vouchee, as: "ravi")
+        manager.setVerified(fingerprint: vouchee, verified: true)
+        announce(manager, vouchee, as: "medic")
+        #expect(manager.trustedNickname(fingerprint: vouchee) == "ravi",
+                "a voucher that renamed is still named by what it was verified as")
+    }
+
     // MARK: - What counts as the same name
 
     @Test

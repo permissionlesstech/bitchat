@@ -162,11 +162,30 @@ final class VerificationModel: ObservableObject {
         } else {
             vouchers = []
         }
+        // Each voucher is named by the name YOU VERIFIED IT UNDER, not by
+        // whatever it announces now.
+        //
+        // This list is a trust attribution — "people you verified vouch for
+        // this peer" — so it has the same problem as a seal, one level out. Use
+        // the live name and a voucher that renamed is attributed under its new
+        // one: Eve gets verified as "ravi", vouches for Mallory, renames to
+        // "medic", and Mallory's sheet reads "vouched by medic". The vouch is
+        // real and the key is trusted; the NAME beside it was never verified,
+        // which is the whole subject of this change.
+        //
+        // Order: a petname first, because it is your own label and nothing on
+        // the network can influence it; then the pinned baseline; then the
+        // claimed nickname, for vouchers recorded before baselines existed —
+        // the same fail-open as everywhere else here.
         let voucherNames = vouchers.compactMap { record -> String? in
             guard let social = chatViewModel.identityManager.getSocialIdentity(for: record.voucherFingerprint) else {
                 return nil
             }
             if let petname = social.localPetname, !petname.isEmpty { return petname }
+            if let pinned = chatViewModel.identityManager.trustedNickname(
+                    fingerprint: record.voucherFingerprint), !pinned.isEmpty {
+                return pinned
+            }
             return social.claimedNickname.isEmpty ? nil : social.claimedNickname
         }
 
