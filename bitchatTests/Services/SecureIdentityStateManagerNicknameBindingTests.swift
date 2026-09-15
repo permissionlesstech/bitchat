@@ -329,6 +329,27 @@ struct SecureIdentityStateManagerNicknameBindingTests {
     /// `PeerDisplayNameResolver` would give this peer and nothing else is.
     private var decorator: PeerID { PeerID(str: "a1b2c3d4") }
 
+    @Test
+    func theSheetStopsEndorsingAfterARename() {
+        // The fingerprint sheet drives its badge, its message and its verify
+        // button off `nameChangedSinceVerification`, so the word demotes with
+        // the glyph. Pinned here at the state level, which is what the view
+        // reads: the view itself needs an app bundle these tests cannot build.
+        let manager = makeManager()
+        announce(manager, vouchee, as: "ravi")
+        manager.setVerified(fingerprint: vouchee, verified: true)
+        #expect(!manager.trustedNicknameMismatch(fingerprint: vouchee),
+                "nothing to explain while the name holds")
+
+        announce(manager, vouchee, as: "medic")
+        #expect(manager.trustedNicknameMismatch(fingerprint: vouchee),
+                "the sheet is told the name changed, so its copy can demote")
+        #expect(manager.trustedNickname(fingerprint: vouchee) == "ravi",
+                "and the old name survives, so a future revision can name it")
+        #expect(manager.isVerified(fingerprint: vouchee),
+                "while the stored verification is untouched — re-verifying is the recovery")
+    }
+
     // MARK: - What counts as the same name
 
     @Test
