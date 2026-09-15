@@ -13,7 +13,7 @@ on:
       - "scripts/tests/**"
       - ".github/workflows/validate_georelays.yml"
 
-# This job runs PR-authored code. Read-only, no secrets, and never
+# Both jobs run against pull-request content. Read-only, no secrets, and never
 # pull_request_target.
 permissions:
   contents: read
@@ -25,47 +25,49 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate-relay-directory:
+  # The trust boundary. Nothing authored by the pull request executes in this
+  # job, and the bytes it validates come from a git object rather than a
+  # worktree that PR-authored code could have rewritten.
+  gate:
     name: Validate relay directory
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
-      - name: Checkout pull request
-        # @v5 matches the sibling read-only PR workflows. fetch_georelays.yml
-        # pins a SHA for a reason that does not apply here — it protects the
-        # code that receives that job's write-capable token; this job has none.
+      - name: Check out the reviewed base
+        # base.sha, not the merge ref: the pull request's validator and its
+        # tests are never present in this workspace, so the gate cannot be
+        # influenced by code under review.
         uses: actions/checkout@v5
         with:
+          ref: ${{ github.event.pull_request.base.sha }}
           persist-credentials: false
 
-      - name: Test GeoRelay validator
-        # Exercises the pull request's own validator and workflow tests. The
-        # gate below deliberately does not use that copy.
-        run: python3 -m unittest discover -s scripts/tests -p "test_*.py" -v
-
-      - name: Validate relay directory against the reviewed baseline
+      - name: Validate the proposed relay directory
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
 
-          # actions/checkout gives a pull_request run the merge ref, not the
-          # base branch, so the reviewed copy has to be fetched explicitly.
-          git fetch --no-tags --depth=1 origin "+refs/heads/${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}"
-          git show "origin/${GITHUB_BASE_REF}:relays/online_relays_gps.csv" > "$RUNNER_TEMP/baseline.csv"
+          # Read the candidate as a git object pinned to the event's head commit.
+          # Reading it from a checked-out worktree would let PR-authored code
+          # swap the file first, so the hash below would describe a snapshot
+          # that never merges.
+          git fetch --no-tags --depth=1 origin "refs/pull/${PR_NUMBER}/head"
+          fetched_sha="$(git rev-parse FETCH_HEAD)"
+          if [[ "$fetched_sha" != "$HEAD_SHA" ]]; then
+            echo "::error::pull request head moved to $fetched_sha since this event ($HEAD_SHA); a newer run validates it"
+            exit 1
+          fi
+          git show "${HEAD_SHA}:relays/online_relays_gps.csv" > "$RUNNER_TEMP/candidate.csv"
 
-          # Gate with the reviewed validator rather than the pull request's copy,
-          # or a change that edits data and validator together certifies itself:
-          # dropping 86% of the directory passes if the same commit relaxes
-          # MIN_BASELINE_FRACTION. The scheduled job validates from a main
-          # checkout for the same reason. Stdlib-only, so a copy runs standalone.
-          git show "origin/${GITHUB_BASE_REF}:scripts/validate_georelays.py" > "$RUNNER_TEMP/reviewed-validator.py"
-
-          # --output is required and receives a verbatim copy of --input. It
-          # stays in RUNNER_TEMP so validation can never write to the tracked
-          # file it is checking.
-          python3 "$RUNNER_TEMP/reviewed-validator.py" \
-            --input relays/online_relays_gps.csv \
-            --baseline "$RUNNER_TEMP/baseline.csv" \
+          # Validator and baseline are the checked-out base commit's, so a change
+          # cannot relax the rule that judges it. --output is required and gets a
+          # verbatim copy of --input; it stays in RUNNER_TEMP.
+          python3 scripts/validate_georelays.py \
+            --input "$RUNNER_TEMP/candidate.csv" \
+            --baseline relays/online_relays_gps.csv \
             --output "$RUNNER_TEMP/validated-copy.csv" \
             --github-output "$RUNNER_TEMP/summary.txt"
 
@@ -76,3 +78,37 @@ jobs:
             echo
             sed 's/^/- /' "$RUNNER_TEMP/summary.txt"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # Runs code authored by the pull request, so it is an honest-mistake check and
+  # not a trust boundary: it catches a validator change that would invalidate the
+  # committed directory and break the weekly automation after merge.
+  proposed-validator:
+    name: Test the proposed validator
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the pull request
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Test GeoRelay validator
+        run: python3 -m unittest discover -s scripts/tests -p "test_*.py" -v
+
+      - name: Run the proposed validator against the real directory
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          # Without this the proposed validator only ever sees unit-test
+          # fixtures, and a new constraint can make the committed directory
+          # invalid while this workflow stays green.
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          git show "${BASE_SHA}:relays/online_relays_gps.csv" > "$RUNNER_TEMP/baseline.csv"
+
+          python3 scripts/validate_georelays.py \
+            --input relays/online_relays_gps.csv \
+            --baseline "$RUNNER_TEMP/baseline.csv" \
+            --output "$RUNNER_TEMP/proposed-copy.csv"
