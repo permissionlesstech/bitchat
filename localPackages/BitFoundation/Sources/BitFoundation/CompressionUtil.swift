@@ -38,6 +38,8 @@ struct CompressionUtil {
     
     // Decompress zlib compressed data
     static func decompress(_ compressedData: Data, originalSize: Int) -> Data? {
+        guard originalSize > 0, originalSize <= FileTransferLimits.maxExpandedPayloadBytes else { return nil }
+
         let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: originalSize)
         defer { destinationBuffer.deallocate() }
         

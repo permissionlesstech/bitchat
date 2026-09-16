@@ -147,6 +147,70 @@ struct BLEFragmentAssemblyBufferTests {
     }
 
     @Test
+    func noiseEncryptedAssemblyAboveFramedCapCompletes() throws {
+        var buffer = BLEFragmentAssemblyBuffer()
+        let fragmentID = Data(repeating: 0x16, count: 8)
+        let first = try #require(BLEFragmentHeader(packet: makeFragmentPacket(
+            fragmentID: fragmentID,
+            index: 0,
+            total: 2,
+            originalType: MessageType.noiseEncrypted.rawValue,
+            fragmentData: Data(repeating: 0x01, count: FileTransferLimits.maxFramedFileBytes)
+        )))
+        let second = try #require(BLEFragmentHeader(packet: makeFragmentPacket(
+            fragmentID: fragmentID,
+            index: 1,
+            total: 2,
+            originalType: MessageType.noiseEncrypted.rawValue,
+            fragmentData: Data([0x02])
+        )))
+
+        _ = buffer.append(first, maxInFlightAssemblies: 8)
+        let result = buffer.append(second, maxInFlightAssemblies: 8)
+
+        if case let .complete(_, data, _) = result {
+            #expect(data.count == FileTransferLimits.maxFramedFileBytes + 1)
+        } else {
+            Issue.record("Expected file/noise assembly to use the 10 MiB expanded ceiling")
+        }
+    }
+
+    @Test
+    func appendOverExpandedCeilingDropsPartialState() throws {
+        var buffer = BLEFragmentAssemblyBuffer()
+        let fragmentID = Data(repeating: 0x17, count: 8)
+        let oversized = try #require(BLEFragmentHeader(packet: makeFragmentPacket(
+            fragmentID: fragmentID,
+            index: 0,
+            total: 2,
+            originalType: MessageType.noiseEncrypted.rawValue,
+            fragmentData: Data(repeating: 0x01, count: FileTransferLimits.maxExpandedPayloadBytes + 1)
+        )))
+
+        let result = buffer.append(oversized, maxInFlightAssemblies: 8)
+        if case let .oversized(_, projectedSize, limit, started) = result {
+            #expect(projectedSize == FileTransferLimits.maxExpandedPayloadBytes + 1)
+            #expect(limit == FileTransferLimits.maxExpandedPayloadBytes)
+            #expect(started)
+        } else {
+            Issue.record("Expected assembly over the expanded ceiling to be evicted")
+        }
+
+        let followUp = try #require(BLEFragmentHeader(packet: makeFragmentPacket(
+            fragmentID: fragmentID,
+            index: 1,
+            total: 2,
+            originalType: MessageType.noiseEncrypted.rawValue,
+            fragmentData: Data([0x02])
+        )))
+        if case let .stored(_, started) = buffer.append(followUp, maxInFlightAssemblies: 8) {
+            #expect(started)
+        } else {
+            Issue.record("Expected later fragment to start a clean assembly after eviction")
+        }
+    }
+
+    @Test
     func removeExpiredDropsOldAssemblies() throws {
         var buffer = BLEFragmentAssemblyBuffer()
         let packet = makePacket(payload: makePayload(count: 256))

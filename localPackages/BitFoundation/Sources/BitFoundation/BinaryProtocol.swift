@@ -330,9 +330,17 @@ public struct BinaryProtocol {
             }
 
             guard payloadLength >= 0 else { return nil }
-            guard payloadLength <= FileTransferLimits.maxFramedFileBytes else { return nil }
 
             guard let senderID = readData(senderIDSize) else { return nil }
+
+            let expandedCeiling = FileTransferLimits.maxExpandedPayloadBytes
+            if payloadLength > expandedCeiling {
+                SecureLogger.warning(
+                    "Rejected payloadLength \(payloadLength) (ceiling \(expandedCeiling)) from peer \(peerIDHex(senderID))",
+                    category: .security
+                )
+                return nil
+            }
 
             var recipientID: Data? = nil
             if hasRecipient {
@@ -366,7 +374,13 @@ public struct BinaryProtocol {
                     guard let rawSize = read16() else { return nil }
                     originalSize = Int(rawSize)
                 }
-                guard originalSize >= 0 && originalSize <= FileTransferLimits.maxFramedFileBytes else { return nil }
+                if originalSize <= 0 || originalSize > expandedCeiling {
+                    SecureLogger.warning(
+                        "Rejected expanded payload size \(originalSize) (ceiling \(expandedCeiling)) from peer \(peerIDHex(senderID))",
+                        category: .security
+                    )
+                    return nil
+                }
                 let compressedSize = payloadLength - lengthFieldBytes
                 guard compressedSize > 0, let compressed = readData(compressedSize) else { return nil }
 
@@ -405,5 +419,9 @@ public struct BinaryProtocol {
                 isRSR: isRSR
             )
         }
+    }
+
+    private static func peerIDHex(_ senderID: Data) -> String {
+        senderID.prefix(senderIDSize).map { String(format: "%02x", $0) }.joined()
     }
 }

@@ -6,6 +6,9 @@ public enum FileTransferLimits {
     public static let maxVoiceNoteBytes: Int = 512 * 1024 // 512 KiB
     /// Compressed images after downscaling should comfortably fit under this budget.
     public static let maxImageBytes: Int = 512 * 1024 // 512 KiB
+    /// Matches Android `AppConstants.Protocol.MAX_PAYLOAD_LENGTH`.
+    /// Ceiling for on-wire `payloadLength` and decompressed `originalSize`.
+    public static let maxExpandedPayloadBytes: Int = 10_485_760
     /// Worst-case size once TLV metadata and binary packet framing are included for the largest payloads.
     public static let maxFramedFileBytes: Int = {
         let maxMetadataBytes = Int(UInt16.max) * 2 // fileName + mimeType TLVs

@@ -322,32 +322,61 @@ struct BinaryProtocolTests {
         #expect(decodedPacket.payload == smallPayload)
     }
 
-    @Test("Reject payloads larger than the framed file cap")
-    func oversizedPayloadIsRejected() throws {
-        let targetSize = FileTransferLimits.maxFramedFileBytes + 1
-        var oversized = Data()
-        oversized.reserveCapacity(targetSize)
-        let byteRun = Data((0...255).map { UInt8($0) })
-        while oversized.count < targetSize {
-            let remaining = targetSize - oversized.count
-            if remaining >= byteRun.count {
-                oversized.append(byteRun)
-            } else {
-                oversized.append(byteRun.prefix(remaining))
-            }
-        }
+    @Test("Reject payloads larger than the expanded payload ceiling")
+    func oversizedPayloadIsRejected() {
+        let targetSize = FileTransferLimits.maxExpandedPayloadBytes + 1
+        var malformedData = Data()
+        malformedData.append(2) // v2
+        malformedData.append(1) // type
+        malformedData.append(10) // ttl
+        malformedData.append(contentsOf: [UInt8](repeating: 0, count: 8)) // timestamp
+        malformedData.append(0) // flags
+        appendUInt32(&malformedData, UInt32(targetSize))
+        malformedData.append(contentsOf: [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77])
+        malformedData.append(contentsOf: [0x01, 0x02, 0x03])
+        #expect(BinaryProtocol.decode(malformedData) == nil)
+    }
+
+    @Test("Accept a compressed payload whose originalSize exceeds the framed-file cap")
+    func compressedPayloadAboveFramedCapIsAccepted() throws {
+        let originalSize = FileTransferLimits.maxFramedFileBytes + 1
+        let largePayload = Data(repeating: 0x41, count: originalSize)
         let packet = BitchatPacket(
             type: MessageType.message.rawValue,
             senderID: Data(hexString: "0011223344556677") ?? Data(),
             recipientID: nil,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-            payload: oversized,
+            payload: largePayload,
             signature: nil,
             ttl: 1,
             version: 2
         )
-        let encoded = try #require(BinaryProtocol.encode(packet), "Failed to encode oversized packet")
-        #expect(BinaryProtocol.decode(encoded) == nil)
+        let encoded = try #require(
+            BinaryProtocol.encode(packet, padding: false),
+            "Failed to encode compressed packet above framed cap"
+        )
+        let decoded = try #require(
+            BinaryProtocol.decode(encoded),
+            "Decode should accept originalSize between the framed cap and the 10 MiB ceiling"
+        )
+        #expect(decoded.payload == largePayload)
+    }
+
+    @Test("Reject a compressed payload whose originalSize exceeds the Android 10 MiB ceiling")
+    func expandedPayloadAboveAndroidCeilingIsRejected() {
+        let originalSize = FileTransferLimits.maxExpandedPayloadBytes + 1
+        let compressedSize = 300 // ratio ~35k:1, below the 50_000:1 bomb guard
+        var malformedData = Data()
+        malformedData.append(2) // v2
+        malformedData.append(1)
+        malformedData.append(10)
+        malformedData.append(contentsOf: [UInt8](repeating: 0, count: 8))
+        malformedData.append(0x04) // isCompressed
+        appendUInt32(&malformedData, UInt32(4 + compressedSize))
+        malformedData.append(contentsOf: [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77])
+        appendUInt32(&malformedData, UInt32(originalSize))
+        malformedData.append(contentsOf: [UInt8](repeating: 0x99, count: compressedSize))
+        #expect(BinaryProtocol.decode(malformedData) == nil)
     }
     
     // MARK: - Message Padding Tests
@@ -805,6 +834,13 @@ struct BinaryProtocolTests {
         // The important thing is no crash occurs - result might be nil or valid
         // We don't assert the result, just that no crash happens
     }
+}
+
+private func appendUInt32(_ data: inout Data, _ value: UInt32) {
+    data.append(UInt8((value >> 24) & 0xFF))
+    data.append(UInt8((value >> 16) & 0xFF))
+    data.append(UInt8((value >> 8) & 0xFF))
+    data.append(UInt8(value & 0xFF))
 }
 
 private extension Data {

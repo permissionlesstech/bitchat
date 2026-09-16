@@ -94,7 +94,7 @@ final class BLEFragmentHandler {
         case let .oversized(header, projectedSize, limit, started):
             logStartedIfNeeded(header: header, started: started)
             SecureLogger.warning(
-                "🚫 Fragment assembly exceeds size limit (\(projectedSize) bytes > \(limit)), evicting. Type=\(header.originalType) Index=\(header.index)/\(header.total)",
+                "🚫 Fragment assembly exceeds size limit (\(projectedSize) bytes > \(limit)), evicting. Type=\(header.originalType) Index=\(header.index)/\(header.total) sender=\(String(format: "%016llx", header.key.sender))",
                 category: .security
             )
         }
