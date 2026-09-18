@@ -8,6 +8,7 @@
 
 import Testing
 import Foundation
+import BitLogger
 @testable import BitFoundation
 
 struct BinaryProtocolTests {
@@ -339,6 +340,10 @@ struct BinaryProtocolTests {
 
     @Test("Accept a compressed payload whose originalSize exceeds the framed-file cap")
     func compressedPayloadAboveFramedCapIsAccepted() throws {
+        #if DEBUG
+        SecureLogger.testWarningSink = { _, _ in Issue.record("Unexpected warning emitted") }
+        defer { SecureLogger.testWarningSink = nil }
+        #endif
         let originalSize = FileTransferLimits.maxFramedFileBytes + 1
         let largePayload = Data(repeating: 0x41, count: originalSize)
         let packet = BitchatPacket(
@@ -364,6 +369,11 @@ struct BinaryProtocolTests {
 
     @Test("Reject a compressed payload whose originalSize exceeds the Android 10 MiB ceiling")
     func expandedPayloadAboveAndroidCeilingIsRejected() {
+        #if DEBUG
+        var warnings: [String] = []
+        SecureLogger.testWarningSink = { message, _ in warnings.append(message) }
+        defer { SecureLogger.testWarningSink = nil }
+        #endif
         let originalSize = FileTransferLimits.maxExpandedPayloadBytes + 1
         let compressedSize = 300 // ratio ~35k:1, below the 50_000:1 bomb guard
         var malformedData = Data()
@@ -377,6 +387,39 @@ struct BinaryProtocolTests {
         appendUInt32(&malformedData, UInt32(originalSize))
         malformedData.append(contentsOf: [UInt8](repeating: 0x99, count: compressedSize))
         #expect(BinaryProtocol.decode(malformedData) == nil)
+        #if DEBUG
+        #expect(warnings.count == 1)
+        let warning = warnings[0]
+        #expect(warning.contains("10485761"))
+        #expect(warning.contains("10485760"))
+        #expect(warning.contains("codec=zlib"))
+        #endif
+    }
+
+    @Test("Log and reject compressed payloads with corrupt deflate bytes")
+    func compressedPayloadWithCorruptDeflateIsRejected() {
+        #if DEBUG
+        var warnings: [String] = []
+        SecureLogger.testWarningSink = { message, _ in warnings.append(message) }
+        defer { SecureLogger.testWarningSink = nil }
+        #endif
+        let originalSize = 2048
+        let compressedSize = 50
+        var malformedData = Data()
+        malformedData.append(2) // v2
+        malformedData.append(1)
+        malformedData.append(10)
+        malformedData.append(contentsOf: [UInt8](repeating: 0, count: 8))
+        malformedData.append(0x04) // isCompressed
+        appendUInt32(&malformedData, UInt32(4 + compressedSize))
+        malformedData.append(contentsOf: [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77])
+        appendUInt32(&malformedData, UInt32(originalSize))
+        malformedData.append(contentsOf: [UInt8](repeating: 0x99, count: compressedSize))
+        #expect(BinaryProtocol.decode(malformedData) == nil)
+        #if DEBUG
+        #expect(warnings.count == 1)
+        #expect(warnings[0].contains("decompression failed or size mismatch"))
+        #endif
     }
     
     // MARK: - Message Padding Tests

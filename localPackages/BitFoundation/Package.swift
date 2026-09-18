@@ -27,7 +27,10 @@ let package = Package(
         ),
         .testTarget(
             name: "BitFoundationTests",
-            dependencies: ["BitFoundation"],
+            dependencies: [
+                "BitFoundation",
+                .product(name: "BitLogger", package: "BitLogger")
+            ],
         )
     ]
 )

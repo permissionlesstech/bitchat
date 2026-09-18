@@ -374,15 +374,22 @@ public struct BinaryProtocol {
                     guard let rawSize = read16() else { return nil }
                     originalSize = Int(rawSize)
                 }
+                let compressedSize = payloadLength - lengthFieldBytes
+                let peerHex = peerIDHex(senderID)
                 if originalSize <= 0 || originalSize > expandedCeiling {
                     SecureLogger.warning(
-                        "Rejected expanded payload size \(originalSize) (ceiling \(expandedCeiling)) from peer \(peerIDHex(senderID))",
+                        "Rejected compressed payload originalSize=\(originalSize) ceiling=\(expandedCeiling) compressedSize=\(compressedSize) codec=zlib peer=\(peerHex)",
                         category: .security
                     )
                     return nil
                 }
-                let compressedSize = payloadLength - lengthFieldBytes
-                guard compressedSize > 0, let compressed = readData(compressedSize) else { return nil }
+                guard compressedSize > 0, let compressed = readData(compressedSize) else {
+                    SecureLogger.warning(
+                        "Rejected compressed payload originalSize=\(originalSize) ceiling=\(expandedCeiling) compressedSize=\(max(compressedSize, 0)) codec=zlib peer=\(peerHex) (truncated compressed body)",
+                        category: .security
+                    )
+                    return nil
+                }
 
                 let compressionRatio = Double(originalSize) / Double(compressedSize)
                 guard compressionRatio <= 50_000.0 else {
@@ -390,9 +397,16 @@ public struct BinaryProtocol {
                     return nil
                 }
 
-                guard let decompressed = CompressionUtil.decompress(compressed, originalSize: originalSize),
-                      decompressed.count == originalSize else { return nil }
-                payload = decompressed
+                let decompressed = CompressionUtil.decompress(compressed, originalSize: originalSize)
+                if let decompressed, decompressed.count == originalSize {
+                    payload = decompressed
+                } else {
+                    SecureLogger.warning(
+                        "Rejected compressed payload originalSize=\(originalSize) ceiling=\(expandedCeiling) decompressedSize=\(decompressed?.count ?? 0) codec=zlib peer=\(peerHex) (decompression failed or size mismatch)",
+                        category: .security
+                    )
+                    return nil
+                }
             } else {
                 guard let rawPayload = readData(payloadLength) else { return nil }
                 payload = rawPayload

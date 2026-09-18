@@ -8,6 +8,7 @@
 
 import struct Foundation.Data
 private import Compression
+private import BitLogger
 
 struct CompressionUtil {
     // Compression threshold - don't compress if data is smaller than this
@@ -38,7 +39,13 @@ struct CompressionUtil {
     
     // Decompress zlib compressed data
     static func decompress(_ compressedData: Data, originalSize: Int) -> Data? {
-        guard originalSize > 0, originalSize <= FileTransferLimits.maxExpandedPayloadBytes else { return nil }
+        guard originalSize > 0, originalSize <= FileTransferLimits.maxExpandedPayloadBytes else {
+            SecureLogger.warning(
+                "CompressionUtil.decompress refused input exceeding allocation bound",
+                category: .security
+            )
+            return nil
+        }
 
         let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: originalSize)
         defer { destinationBuffer.deallocate() }

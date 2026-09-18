@@ -116,6 +116,11 @@ public final class SecureLogger {
     private static func shouldLog(_ level: LogLevel) -> Bool {
         return level.order >= minimumLevel.order
     }
+
+    #if DEBUG
+    /// Captures warning-level messages in tests. App code must not set this.
+    public static var testWarningSink: ((String, OSLog) -> Void)?
+    #endif
 }
 
 // MARK: - Public Logging Methods
@@ -253,6 +258,9 @@ private extension SecureLogger {
         guard shouldLog(level) else { return }
         let location = formatLocation(file: file, line: line, function: function)
         let sanitized = "\(location) \(message())".sanitized()
+        if level == .warning {
+            testWarningSink?(sanitized, category)
+        }
         os_log("%{public}@", log: category, type: level.osLogType, sanitized)
         #endif
     }
