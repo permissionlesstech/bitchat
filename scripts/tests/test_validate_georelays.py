@@ -217,6 +217,15 @@ class ValidateGeoRelaysTests(unittest.TestCase):
                         minimum_unique_relays=1,
                     )
 
+    def test_rejects_trailing_dot_hostname(self) -> None:
+        for addr in ["relay.example.com.", "wss://relay.example.com./"]:
+            with self.subTest(addr=addr):
+                with self.assertRaises(validator.ValidationError):
+                    validator.validate_bytes(
+                        csv_bytes([f"{addr},10,20"]),
+                        minimum_unique_relays=1,
+                    )
+
 
 if __name__ == "__main__":
     unittest.main()
