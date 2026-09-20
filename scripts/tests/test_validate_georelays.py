@@ -190,6 +190,24 @@ class ValidateGeoRelaysTests(unittest.TestCase):
         with self.assertRaises(validator.ValidationError):
             validator.validate_bytes(data, minimum_unique_relays=1)
 
+    def test_port_boundary_values(self) -> None:
+        bad_ports = ["0", "65536", "99999"]
+        for port in bad_ports:
+            with self.subTest(port=port):
+                with self.assertRaises(validator.ValidationError):
+                    validator.validate_bytes(
+                        csv_bytes([f"relay.example.com:{port},10,20"]),
+                        minimum_unique_relays=1,
+                    )
+        data = csv_bytes(
+            [
+                "one.example.com:1,10,20",
+                "two.example.com:65535,11,21",
+            ]
+        )
+        summary = validator.validate_bytes(data, minimum_unique_relays=2)
+        self.assertEqual(summary.unique_relays, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
