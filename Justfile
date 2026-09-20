@@ -76,3 +76,7 @@ relay-stats:
 # Check internal markdown links resolve (no http fetches, local files only).
 check-links:
     @python3 scripts/check_links.py
+
+# Validate the shipped georelay CSV against the project validator.
+check-csv-health:
+    @python3 scripts/check_csv_health.py
