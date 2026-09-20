@@ -236,6 +236,11 @@ class ValidateGeoRelaysTests(unittest.TestCase):
         with self.assertRaises(validator.ValidationError):
             validator.validate_bytes(csv_bytes(rows), maximum_unique_relays=3, minimum_unique_relays=1)
 
+    def test_rejects_non_utf8_bytes(self) -> None:
+        data = b"Relay URL,Latitude,Longitude\nrelay.example.com,10,20\n\xff\xfe\n"
+        with self.assertRaises(validator.ValidationError):
+            validator.validate_bytes(data, minimum_unique_relays=1)
+
 
 if __name__ == "__main__":
     unittest.main()
