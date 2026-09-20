@@ -329,6 +329,22 @@ class NormalizeRelayAddressTests(unittest.TestCase):
                 with self.assertRaises(validator.ValidationError):
                     validator.normalize_relay_address(f"{scheme}relay.example.com")
 
+    def test_normalize_relay_address_is_idempotent(self) -> None:
+        # The output of normalize_relay_address must itself be a valid input
+        # that normalizes to the same value. This is what makes deduplication
+        # and baseline comparison deterministic.
+        cases = [
+            "relay.example.com",
+            "wss://relay.example.com:443/",
+            "https://second.example.org",
+            "relay.example.com:8443",
+        ]
+        for raw in cases:
+            with self.subTest(raw=raw):
+                first = validator.normalize_relay_address(raw)
+                second = validator.normalize_relay_address(first)
+                self.assertEqual(first, second)
+
 
 if __name__ == "__main__":
     unittest.main()
