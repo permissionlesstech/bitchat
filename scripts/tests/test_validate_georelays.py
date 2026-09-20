@@ -277,6 +277,20 @@ class ValidateGeoRelaysTests(unittest.TestCase):
                         minimum_unique_relays=1,
                     )
 
+    def test_minimum_unique_relays_boundary(self) -> None:
+        data = csv_bytes(
+            [
+                "one.example.com,1,2",
+                "two.example.com,3,4",
+            ]
+        )
+        # Exactly at the minimum: should pass.
+        summary = validator.validate_bytes(data, minimum_unique_relays=2)
+        self.assertEqual(summary.unique_relays, 2)
+        # One below the minimum: should fail.
+        with self.assertRaises(validator.ValidationError):
+            validator.validate_bytes(data, minimum_unique_relays=3)
+
 
 if __name__ == "__main__":
     unittest.main()
