@@ -72,3 +72,7 @@ test-georelays:
 # Print summary statistics for the reviewed georelay CSV.
 relay-stats:
     @python3 scripts/relay_stats.py
+
+# Check internal markdown links resolve (no http fetches, local files only).
+check-links:
+    @python3 scripts/check_links.py
