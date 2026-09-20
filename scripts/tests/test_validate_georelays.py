@@ -241,6 +241,15 @@ class ValidateGeoRelaysTests(unittest.TestCase):
         with self.assertRaises(validator.ValidationError):
             validator.validate_bytes(data, minimum_unique_relays=1)
 
+    def test_rejects_coordinate_overflow_to_infinity(self) -> None:
+        # "1e999" matches the ASCII-decimal pattern but float() produces
+        # infinity, which the isfinite() guard must reject.
+        with self.assertRaises(validator.ValidationError):
+            validator.validate_bytes(
+                csv_bytes(["relay.example.com,1e999,20"]),
+                minimum_unique_relays=1,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
