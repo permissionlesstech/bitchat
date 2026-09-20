@@ -226,6 +226,16 @@ class ValidateGeoRelaysTests(unittest.TestCase):
                         minimum_unique_relays=1,
                     )
 
+    def test_enforces_maximum_rows(self) -> None:
+        rows = [f"r-{i}.example.com,{i % 80},{i % 170}" for i in range(5)]
+        with self.assertRaises(validator.ValidationError):
+            validator.validate_bytes(csv_bytes(rows), maximum_rows=3, minimum_unique_relays=1)
+
+    def test_enforces_maximum_unique_relays(self) -> None:
+        rows = [f"r-{i}.example.com,{i % 80},{i % 170}" for i in range(5)]
+        with self.assertRaises(validator.ValidationError):
+            validator.validate_bytes(csv_bytes(rows), maximum_unique_relays=3, minimum_unique_relays=1)
+
 
 if __name__ == "__main__":
     unittest.main()
