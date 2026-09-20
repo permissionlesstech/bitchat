@@ -331,6 +331,27 @@ class NormalizeRelayAddressTests(unittest.TestCase):
                 with self.assertRaises(validator.ValidationError):
                     validator.normalize_relay_address(f"{scheme}relay.example.com")
 
+    def test_rejects_credentials_in_url(self) -> None:
+        for addr in [
+            "wss://user@relay.example.com",
+            "wss://user:pass@relay.example.com",
+            "https://token:secret@relay.example.com",
+        ]:
+            with self.subTest(addr=addr):
+                with self.assertRaises(validator.ValidationError):
+                    validator.normalize_relay_address(addr)
+
+    def test_rejects_query_and_fragment(self) -> None:
+        for addr in [
+            "wss://relay.example.com?foo=1",
+            "wss://relay.example.com#section",
+            "relay.example.com?",
+            "relay.example.com#",
+        ]:
+            with self.subTest(addr=addr):
+                with self.assertRaises(validator.ValidationError):
+                    validator.normalize_relay_address(addr)
+
     def test_normalize_relay_address_is_idempotent(self) -> None:
         # The output of normalize_relay_address must itself be a valid input
         # that normalizes to the same value. This is what makes deduplication
