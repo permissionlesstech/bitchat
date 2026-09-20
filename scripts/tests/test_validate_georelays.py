@@ -208,6 +208,15 @@ class ValidateGeoRelaysTests(unittest.TestCase):
         summary = validator.validate_bytes(data, minimum_unique_relays=2)
         self.assertEqual(summary.unique_relays, 2)
 
+    def test_rejects_ipv4_literal_hostnames(self) -> None:
+        for addr in ["8.8.8.8", "1.1.1.1", "wss://203.0.113.1", "https://198.51.100.1:443"]:
+            with self.subTest(addr=addr):
+                with self.assertRaises(validator.ValidationError):
+                    validator.validate_bytes(
+                        csv_bytes([f"{addr},10,20"]),
+                        minimum_unique_relays=1,
+                    )
+
 
 if __name__ == "__main__":
     unittest.main()
