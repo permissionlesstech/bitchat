@@ -292,5 +292,43 @@ class ValidateGeoRelaysTests(unittest.TestCase):
             validator.validate_bytes(data, minimum_unique_relays=3)
 
 
+class NormalizeRelayAddressTests(unittest.TestCase):
+    """Direct unit tests for normalize_relay_address.
+
+    These exercise the normalizer in isolation so a failure points at the
+    exact rule, not at the full validate_bytes pipeline that wraps it.
+    """
+
+    def test_normalizes_bare_host_without_scheme(self) -> None:
+        self.assertEqual(
+            validator.normalize_relay_address("relay.example.com"),
+            "relay.example.com",
+        )
+
+    def test_strips_wss_scheme_and_default_port(self) -> None:
+        self.assertEqual(
+            validator.normalize_relay_address("wss://relay.example.com:443/"),
+            "relay.example.com",
+        )
+
+    def test_strips_https_scheme(self) -> None:
+        self.assertEqual(
+            validator.normalize_relay_address("https://relay.example.com"),
+            "relay.example.com",
+        )
+
+    def test_preserves_non_default_port(self) -> None:
+        self.assertEqual(
+            validator.normalize_relay_address("wss://relay.example.com:8443"),
+            "relay.example.com:8443",
+        )
+
+    def test_rejects_insecure_schemes(self) -> None:
+        for scheme in ["http://", "ws://", "ftp://"]:
+            with self.subTest(scheme=scheme):
+                with self.assertRaises(validator.ValidationError):
+                    validator.normalize_relay_address(f"{scheme}relay.example.com")
+
+
 if __name__ == "__main__":
     unittest.main()
