@@ -352,6 +352,18 @@ class NormalizeRelayAddressTests(unittest.TestCase):
                 with self.assertRaises(validator.ValidationError):
                     validator.normalize_relay_address(addr)
 
+    def test_rejects_invalid_dns_labels(self) -> None:
+        bad = [
+            "-relay.example.com",       # label starts with hyphen
+            "relay-.example.com",       # label ends with hyphen
+            "relay..example.com",       # empty label (double dot)
+            "a" * 64 + ".example.com",  # label too long (>63)
+        ]
+        for addr in bad:
+            with self.subTest(addr=addr):
+                with self.assertRaises(validator.ValidationError):
+                    validator.normalize_relay_address(addr)
+
     def test_normalize_relay_address_is_idempotent(self) -> None:
         # The output of normalize_relay_address must itself be a valid input
         # that normalizes to the same value. This is what makes deduplication
