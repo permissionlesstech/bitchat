@@ -268,6 +268,15 @@ class ValidateGeoRelaysTests(unittest.TestCase):
         with self.assertRaises(validator.ValidationError):
             validator.validate_bytes(data, minimum_unique_relays=1)
 
+    def test_rejects_localhost_and_local_domains(self) -> None:
+        for addr in ["localhost", "myhost.localhost", "relay.local", "relay.internal"]:
+            with self.subTest(addr=addr):
+                with self.assertRaises(validator.ValidationError):
+                    validator.validate_bytes(
+                        csv_bytes([f"{addr},10,20"]),
+                        minimum_unique_relays=1,
+                    )
+
 
 if __name__ == "__main__":
     unittest.main()
