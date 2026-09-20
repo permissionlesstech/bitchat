@@ -250,6 +250,19 @@ class ValidateGeoRelaysTests(unittest.TestCase):
                 minimum_unique_relays=1,
             )
 
+    def test_conflicting_coordinate_error_names_the_relay(self) -> None:
+        data = csv_bytes(
+            [
+                "relay.example.com,10,20",
+                "wss://relay.example.com:443/,11,21",
+            ]
+        )
+        with self.assertRaisesRegex(
+            validator.ValidationError,
+            r"relay\.example\.com",
+        ):
+            validator.validate_bytes(data, minimum_unique_relays=1)
+
 
 if __name__ == "__main__":
     unittest.main()
