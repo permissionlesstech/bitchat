@@ -43,3 +43,10 @@ If you're unsure whether something is in scope, report it privately anyway — a
 ## Verifying what you're running
 
 If your concern is that the app or source you have has been tampered with, that has its own document: `docs/VERIFYING-A-BUILD.md`.
+
+## Code of conduct reports
+
+This contact is for security vulnerabilities. For code of conduct violations,
+see [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). The reporting channel is the
+same (private vulnerability reporting), used for both kinds of sensitive
+report to keep reporting channels consistent.
