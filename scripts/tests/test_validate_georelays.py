@@ -181,6 +181,10 @@ class ValidateGeoRelaysTests(unittest.TestCase):
             self.assertIn("unique_relays=60", metadata)
             self.assertIn("sha256=", metadata)
 
+    def test_rejects_empty_file(self) -> None:
+        with self.assertRaises(validator.ValidationError):
+            validator.validate_bytes(b"", minimum_unique_relays=1)
+
 
 if __name__ == "__main__":
     unittest.main()
