@@ -43,6 +43,13 @@ class ValidationSummary:
 class _ValidatedDataset:
     summary: ValidationSummary
     entries: frozenset[tuple[str, float, float]]
+    # Original header line, preserved verbatim so deduplicated output can reuse
+    # the reviewed casing instead of inventing its own.
+    header_line: str
+    # First-seen (address, latitude_text, longitude_text) per unique relay, in
+    # insertion order. Coordinate text is preserved verbatim so deduplication
+    # does not silently rewrite reviewed ASCII-decimal formatting.
+    ordered_rows: tuple[tuple[str, str, str], ...]
 
 
 def _has_disallowed_control(value: str) -> bool:
@@ -137,6 +144,7 @@ def _validated_dataset(
 
     data_rows = 0
     relays: dict[str, tuple[float, float]] = {}
+    row_text: dict[str, tuple[str, str]] = {}
     try:
         for row in reader:
             if not row or all(not field.strip() for field in row):
@@ -166,6 +174,11 @@ def _validated_dataset(
             if previous is not None and previous != coordinates:
                 raise ValidationError(f"relay {address} has conflicting coordinates")
             relays[address] = coordinates
+            # Keep the first-seen coordinate text for each relay so a later
+            # duplicate (same address, same coordinates) cannot rewrite the
+            # reviewed formatting of the row that was already accepted.
+            if address not in row_text:
+                row_text[address] = (latitude_text, longitude_text)
             if len(relays) > maximum_unique_relays:
                 raise ValidationError(f"CSV exceeds {maximum_unique_relays} unique relays")
     except csv.Error as error:
@@ -185,6 +198,10 @@ def _validated_dataset(
         entries=frozenset(
             (address, coordinates[0], coordinates[1])
             for address, coordinates in relays.items()
+        ),
+        header_line=",".join(header),
+        ordered_rows=tuple(
+            (address, texts[0], texts[1]) for address, texts in row_text.items()
         ),
     )
 
@@ -238,19 +255,87 @@ def validate_update(candidate: bytes, baseline: bytes) -> ValidationSummary:
     return candidate_summary
 
 
+@dataclass(frozen=True)
+class DeduplicateResult:
+    summary: ValidationSummary
+    output: bytes
+
+
+def deduplicate_bytes(
+    data: bytes,
+    *,
+    minimum_unique_relays: int = MIN_UNIQUE_RELAYS,
+    maximum_bytes: int = MAX_BYTES,
+    maximum_rows: int = MAX_ROWS,
+    maximum_unique_relays: int = MAX_UNIQUE_RELAYS,
+) -> DeduplicateResult:
+    """Validate ``data`` and return a normalized, duplicate-free CSV.
+
+    The returned ``output`` uses the fixed three-field schema with the original
+    header line, one row per unique normalized relay address, sorted ascending
+    by address. Original coordinate text is preserved verbatim so reviewed
+    ASCII-decimal formatting (e.g. ``01``, ``2E+1``, ``20.``) is not rewritten.
+
+    The same validation rules as :func:`validate_bytes` apply, including the
+    rejection of conflicting coordinates for the same relay. The returned
+    ``summary`` describes the *output*: ``data_rows`` equals
+    ``unique_relays`` (one row per relay) and ``sha256`` is the SHA-256 of the
+    deduplicated bytes, so callers that persist ``output`` can trace it back to
+    the summary they emit.
+    """
+    dataset = _validated_dataset(
+        data,
+        minimum_unique_relays=minimum_unique_relays,
+        maximum_bytes=maximum_bytes,
+        maximum_rows=maximum_rows,
+        maximum_unique_relays=maximum_unique_relays,
+    )
+    sorted_rows = sorted(dataset.ordered_rows, key=lambda row: row[0])
+    lines = [dataset.header_line]
+    lines.extend(f"{address},{lat},{lon}" for address, lat, lon in sorted_rows)
+    # A trailing newline matches the reviewed file shape and keeps the file
+    # diff-stable when re-run. ``\n`` only: the validator rejects ``\r``.
+    output = ("\n".join(lines) + "\n").encode("utf-8")
+    return DeduplicateResult(
+        summary=ValidationSummary(
+            data_rows=len(sorted_rows),
+            unique_relays=len(sorted_rows),
+            sha256=hashlib.sha256(output).hexdigest(),
+        ),
+        output=output,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True, type=Path)
     parser.add_argument("--baseline", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--github-output", type=Path)
+    parser.add_argument(
+        "--deduplicate",
+        action="store_true",
+        help=(
+            "write one row per unique normalized relay address, sorted by "
+            "address, instead of the raw candidate bytes"
+        ),
+    )
     args = parser.parse_args(argv)
 
     try:
         candidate = args.input.read_bytes()
         baseline = args.baseline.read_bytes()
-        summary = validate_update(candidate, baseline)
-        args.output.write_bytes(candidate)
+        # The baseline overlap gate runs on the raw candidate so deduplication
+        # cannot widen or narrow the set of relays it is compared against.
+        validate_update(candidate, baseline)
+        if args.deduplicate:
+            result = deduplicate_bytes(candidate)
+            output_bytes = result.output
+            summary = result.summary
+        else:
+            output_bytes = candidate
+            summary = validate_bytes(candidate)
+        args.output.write_bytes(output_bytes)
         if args.github_output is not None:
             with args.github_output.open("a", encoding="utf-8") as output:
                 output.write(f"data_rows={summary.data_rows}\n")
