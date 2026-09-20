@@ -1,4 +1,6 @@
+import io
 import tempfile
+from contextlib import redirect_stdout
 from pathlib import Path
 import sys
 import unittest
@@ -344,6 +346,18 @@ class NormalizeRelayAddressTests(unittest.TestCase):
                 first = validator.normalize_relay_address(raw)
                 second = validator.normalize_relay_address(first)
                 self.assertEqual(first, second)
+
+
+class ValidatorCLITests(unittest.TestCase):
+    """Tests for the argparse surface of main()."""
+
+    def test_version_flag_prints_and_exits_zero(self) -> None:
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            with self.assertRaises(SystemExit) as ctx:
+                validator.main(["--version"])
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertIn("validate-georelays", buf.getvalue())
 
 
 if __name__ == "__main__":

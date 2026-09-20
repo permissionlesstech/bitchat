@@ -239,11 +239,18 @@ def validate_update(candidate: bytes, baseline: bytes) -> ValidationSummary:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Validate a candidate georelay CSV against the reviewed baseline.",
+    )
     parser.add_argument("--input", required=True, type=Path)
     parser.add_argument("--baseline", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--github-output", type=Path)
+    parser.add_argument(
+        "--version",
+        action="version",
+        version="validate-georelays 1.0",
+    )
     args = parser.parse_args(argv)
 
     try:
