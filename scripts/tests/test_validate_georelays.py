@@ -185,6 +185,11 @@ class ValidateGeoRelaysTests(unittest.TestCase):
         with self.assertRaises(validator.ValidationError):
             validator.validate_bytes(b"", minimum_unique_relays=1)
 
+    def test_rejects_header_only_csv(self) -> None:
+        data = b"Relay URL,Latitude,Longitude\n"
+        with self.assertRaises(validator.ValidationError):
+            validator.validate_bytes(data, minimum_unique_relays=1)
+
 
 if __name__ == "__main__":
     unittest.main()
