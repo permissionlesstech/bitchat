@@ -89,6 +89,9 @@ final class GossipSyncManager {
         var prekeyBundleCapacity: Int = 200
         var prekeyBundleSyncIntervalSeconds: TimeInterval = 60.0
         var prekeyBundleMaxAgeSeconds: TimeInterval = 24 * 60 * 60
+        // Future bound for every store: matches the ingress skew so nothing
+        // the radio accepts is refused here.
+        var maxFutureSkewMs: UInt64 = TransportConfig.bleMaxTimestampSkewMs
     }
 
     private let myPeerID: PeerID
@@ -224,6 +227,13 @@ final class GossipSyncManager {
             maxAgeSeconds = config.maxMessageAgeSeconds
         }
         let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+        // Age windows only bound the past. A future-dated packet would never
+        // expire, sort ahead of everything in each GCS filter, and push the
+        // requester's since-cursor past all real history, so anything dated
+        // beyond the ingress skew is never stored, served or restored.
+        if packet.timestamp > nowMs, packet.timestamp - nowMs > config.maxFutureSkewMs {
+            return false
+        }
         let ageThresholdMs = UInt64(maxAgeSeconds * 1000)
 
         // If current time is less than threshold, accept all (handle clock issues gracefully)
@@ -619,20 +629,28 @@ final class GossipSyncManager {
     // MARK: - Archive (public message persistence)
 
     /// Rebuild the public message store from disk on launch, dropping
-    /// anything that aged out while the app was dead.
+    /// anything that aged out while the app was dead — or that is dated in
+    /// the future, which an older build could have archived from a sync
+    /// reply. Any drop rewrites the file so it is purged from disk too.
     private func restoreArchivedMessages() {
         guard let archive else { return }
         var restored = 0
+        var droppedAny = false
         for data in archive.load() {
             guard let packet = BitchatPacket.from(data),
                   packet.type == MessageType.message.rawValue,
-                  isPacketFresh(packet) else { continue }
+                  isPacketFresh(packet) else {
+                droppedAny = true
+                continue
+            }
             let idHex = PacketIdUtil.computeId(packet).hexEncodedString()
             messages.insert(idHex: idHex, packet: packet, capacity: max(1, config.seenCapacity))
             restored += 1
         }
         if restored > 0 {
             SecureLogger.debug("Restored \(restored) archived public message(s) for gossip sync", category: .sync)
+        }
+        if restored > 0 || droppedAny {
             archiveDirty = true
         }
     }

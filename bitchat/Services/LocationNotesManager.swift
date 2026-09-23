@@ -267,7 +267,9 @@ final class LocationNotesManager: ObservableObject {
             if let expiresAt, expiresAt <= self.dependencies.now() { return }
             self.noteIDs.insert(event.id)
             let nick = event.tags.first(where: { $0.first?.lowercased() == "n" && $0.count >= 2 })?.dropFirst().first
-            let ts = Date(timeIntervalSince1970: TimeInterval(event.created_at))
+            // created_at is author-chosen; clamp so a future-dated note can't
+            // hold the top of the newest-first list past the memory cap.
+            let ts = min(Date(timeIntervalSince1970: TimeInterval(event.created_at)), self.dependencies.now())
             let urgent = event.tags.contains { $0.count >= 2 && $0[0].lowercased() == "t" && $0[1].lowercased() == "urgent" }
             let note = Note(id: event.id, pubkey: event.pubkey, content: event.content, createdAt: ts, nickname: nick, geohash: matchedGeohash, expiresAt: expiresAt, isUrgent: urgent)
             self.notes.append(note)

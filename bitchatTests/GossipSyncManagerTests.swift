@@ -738,6 +738,121 @@ struct GossipSyncManagerTests {
         #expect(manager._hasPrekeyBundle(for: ownerPeer))
     }
 
+    // MARK: - Future-dated packets
+
+    /// Age windows used to bound only the past, so a sync reply dated 2099
+    /// never expired and was re-served to every requester.
+    @Test func futureDatedPacketsAreNeitherStoredNorServed() async throws {
+        var config = GossipSyncManager.Config()
+        config.messageSyncIntervalSeconds = 0
+        config.fragmentSyncIntervalSeconds = 0
+        config.fileTransferSyncIntervalSeconds = 0
+        config.prekeyBundleSyncIntervalSeconds = 0
+
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: RequestSyncManager())
+        let delegate = RecordingDelegate()
+        manager.delegate = delegate
+
+        let futureSender = try #require(Data(hexString: "f0f1f2f3f4f5f6f7"))
+        let honestSender = try #require(Data(hexString: "a0a1a2a3a4a5a6a7"))
+        let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+        let beyondSkewMs = nowMs + config.maxFutureSkewMs + 60_000
+        let futureTypes: [MessageType] = [.announce, .message, .fragment, .fileTransfer, .groupMessage]
+        for (index, type) in futureTypes.enumerated() {
+            for timestamp in [beyondSkewMs, UInt64.max] {
+                manager.onPublicPacketSeen(BitchatPacket(
+                    type: type.rawValue,
+                    senderID: futureSender,
+                    recipientID: nil,
+                    timestamp: timestamp,
+                    payload: Data([UInt8(index), 0xEE]),
+                    signature: nil,
+                    ttl: 1
+                ))
+            }
+        }
+        let honest = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: honestSender,
+            recipientID: nil,
+            timestamp: nowMs,
+            payload: Data([0x01]),
+            signature: nil,
+            ttl: 1
+        )
+        manager.onPublicPacketSeen(honest)
+
+        #expect(manager._hasAnnouncement(for: PeerID(hexData: futureSender)) == false)
+        #expect(manager._messageCount(for: PeerID(hexData: futureSender)) == 0)
+
+        // An empty filter asks for everything the stores hold.
+        let request = RequestSyncPacket(
+            p: 7,
+            m: 1,
+            data: Data(),
+            types: SyncTypeFlags.publicMessages.union([.fragment, .fileTransfer, .groupMessage])
+        )
+        manager.handleRequestSync(from: PeerID(str: "FFFFFFFFFFFFFFFF"), request: request)
+        try await TestHelpers.waitFor({ !delegate.packets.isEmpty }, timeout: TestConstants.settleTimeout)
+        // Barrier: flush the sync queue so any late future-dated reply is visible.
+        manager._performMaintenanceSynchronously(now: Date())
+
+        #expect(delegate.packets.map(\.senderID) == [honestSender])
+    }
+
+    /// The sync cursor is the oldest timestamp the filter covers. Enough
+    /// future-dated junk used to fill the filter's newest slots and push the
+    /// cursor past every real message, so responders skipped all backfill.
+    @Test func futureDatedJunkCannotDragTheSinceCursor() throws {
+        var config = GossipSyncManager.Config()
+        config.seenCapacity = 100
+        config.gcsMaxBytes = 32 // caps the filter at 28 IDs (256 bits / 9 bits per element)
+        config.messageSyncIntervalSeconds = 1
+        config.fragmentSyncIntervalSeconds = 0
+        config.fileTransferSyncIntervalSeconds = 0
+        config.prekeyBundleSyncIntervalSeconds = 0
+        config.maintenanceIntervalSeconds = 0
+
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: RequestSyncManager())
+        let delegate = RecordingDelegate()
+        manager.delegate = delegate
+
+        let junkSender = try #require(Data(hexString: "f0f1f2f3f4f5f6f7"))
+        let honestSender = try #require(Data(hexString: "a0a1a2a3a4a5a6a7"))
+        let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+        // Unsigned group ciphertext needs no key to mint.
+        for i in 0..<40 {
+            manager.onPublicPacketSeen(BitchatPacket(
+                type: MessageType.groupMessage.rawValue,
+                senderID: junkSender,
+                recipientID: nil,
+                timestamp: nowMs + 3_600_000 + UInt64(i),
+                payload: Data([UInt8(i)]),
+                signature: nil,
+                ttl: 1
+            ))
+        }
+        for i in 0..<5 {
+            manager.onPublicPacketSeen(BitchatPacket(
+                type: MessageType.message.rawValue,
+                senderID: honestSender,
+                recipientID: nil,
+                timestamp: nowMs - 60_000 + UInt64(i),
+                payload: Data([UInt8(i)]),
+                signature: nil,
+                ttl: 1
+            ))
+        }
+
+        manager._performMaintenanceSynchronously(now: Date())
+
+        let requests = delegate.packets.compactMap { RequestSyncPacket.decode(from: $0.payload) }
+        let messageRequest = try #require(requests.first { $0.types?.contains(.message) == true })
+        // Only the five honest messages are candidates, so the filter covers
+        // them all and no cursor is needed.
+        #expect(messageRequest.sinceTimestamp == nil)
+    }
+
     // MARK: - Archive persistence
 
     @Test func publicMessagesRestoreFromArchiveAcrossRestart() async throws {
@@ -808,6 +923,60 @@ struct GossipSyncManagerTests {
         )
         manager._performMaintenanceSynchronously(now: Date())
         #expect(manager._messageCount(for: PeerID(hexData: senderID)) == 0)
+    }
+
+    /// An older build could archive a future-dated sync reply; restoring it
+    /// seeded a launch-time echo that crashed the app on every launch. The
+    /// restore must drop it and rewrite the file without it.
+    @Test func archiveRestoreDropsAndPurgesFutureDatedMessages() async throws {
+        let mixedURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gossip-archive-\(UUID().uuidString).json")
+        let poisonOnlyURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gossip-archive-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: mixedURL)
+            try? FileManager.default.removeItem(at: poisonOnlyURL)
+        }
+
+        let poisonSender = try #require(Data(hexString: "f0f1f2f3f4f5f6f7"))
+        let honestSender = try #require(Data(hexString: "a0a1a2a3a4a5a6a7"))
+        let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+        func archived(from sender: Data, at timestamp: UInt64) throws -> Data {
+            try #require(BitchatPacket(
+                type: MessageType.message.rawValue,
+                senderID: sender,
+                recipientID: nil,
+                timestamp: timestamp,
+                payload: Data([0x01]),
+                signature: nil,
+                ttl: 1
+            ).toBinaryData(padding: false))
+        }
+        let poison = [try archived(from: poisonSender, at: .max), try archived(from: poisonSender, at: nowMs + 3_600_000)]
+
+        // Mixed archive: only the honest entry is restored, offered as an
+        // echo, and written back.
+        let mixedArchive = GossipMessageArchive(fileURL: mixedURL)
+        mixedArchive.save(poison + [try archived(from: honestSender, at: nowMs)])
+        let manager = GossipSyncManager(myPeerID: myPeerID, requestSyncManager: RequestSyncManager(), archive: mixedArchive)
+        // The restore is queued at init; this synchronous pass runs after it
+        // and persists the dirty store.
+        manager._performMaintenanceSynchronously(now: Date())
+        #expect(manager._messageCount(for: PeerID(hexData: honestSender)) == 1)
+        #expect(manager._messageCount(for: PeerID(hexData: poisonSender)) == 0)
+        let echoes = await withCheckedContinuation { continuation in
+            manager.collectPublicMessagePackets { continuation.resume(returning: $0) }
+        }
+        #expect(echoes.map(\.senderID) == [honestSender])
+        #expect(mixedArchive.load().compactMap { BitchatPacket.from($0)?.senderID } == [honestSender])
+
+        // Poison-only archive: nothing restores, and the file is purged.
+        let poisonOnlyArchive = GossipMessageArchive(fileURL: poisonOnlyURL)
+        poisonOnlyArchive.save(poison)
+        let purging = GossipSyncManager(myPeerID: myPeerID, requestSyncManager: RequestSyncManager(), archive: poisonOnlyArchive)
+        purging._performMaintenanceSynchronously(now: Date())
+        #expect(purging._messageCount(for: PeerID(hexData: poisonSender)) == 0)
+        #expect(!FileManager.default.fileExists(atPath: poisonOnlyURL.path))
     }
 
     /// Clearing the mesh timeline must leave nothing behind on disk: a
