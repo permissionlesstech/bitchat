@@ -119,6 +119,38 @@ struct BLEFragmentAssemblyBufferTests {
     }
 
     @Test
+    func redeliveredIndexNearTheLimitDoesNotEvictTheAssembly() throws {
+        // Fragments bypass dedup and sync re-serves held indexes, so a
+        // duplicate must replace its index's bytes, not count them twice.
+        var buffer = BLEFragmentAssemblyBuffer()
+        let fragmentID = Data(repeating: 0x06, count: 8)
+        let limit = PacketPayloadLimits.maxFrameBytes(forType: MessageType.message.rawValue)
+        func fragment(_ index: Int, bytes: Int) throws -> BLEFragmentHeader {
+            try #require(BLEFragmentHeader(packet: makeFragmentPacket(
+                fragmentID: fragmentID,
+                index: index,
+                total: 3,
+                originalType: MessageType.message.rawValue,
+                fragmentData: Data(repeating: UInt8(index + 1), count: bytes)
+            )))
+        }
+        let large = try fragment(0, bytes: limit - 2)
+
+        _ = buffer.append(large, maxInFlightAssemblies: 8)
+        _ = buffer.append(try fragment(1, bytes: 1), maxInFlightAssemblies: 8)
+        guard case .stored = buffer.append(large, maxInFlightAssemblies: 8) else {
+            Issue.record("Expected a re-delivered index to keep the assembly")
+            return
+        }
+
+        if case let .complete(_, data, _) = buffer.append(try fragment(2, bytes: 1), maxInFlightAssemblies: 8) {
+            #expect(data.count == limit)
+        } else {
+            Issue.record("Expected the assembly to complete at its limit")
+        }
+    }
+
+    @Test
     func assemblyIsHeldToTheFrameItsClaimedTypeCanFill() throws {
         // Not a flat 1 MiB for every type: an assembly claiming a
         // link-scale or message-scale type is cut off just past the largest
