@@ -343,8 +343,7 @@ struct ChatNostrCoordinatorContextTests {
         let sender = try NostrIdentity.generate()
         let embedded = try #require(NostrEmbeddedBitChat.encodePMForNostrNoRecipient(
             content: "psst",
-            messageID: "gm-1",
-            senderPeerID: PeerID(str: "aabbccddeeff0011")
+            messageID: "gm-1"
         ))
         let giftWrap = try NostrProtocol.createPrivateMessage(
             content: embedded,
@@ -386,8 +385,7 @@ struct ChatNostrCoordinatorContextTests {
         let sender = try NostrIdentity.generate()
         let embedded = try #require(NostrEmbeddedBitChat.encodePMForNostrNoRecipient(
             content: "pre-wipe secret",
-            messageID: "gm-wipe-1",
-            senderPeerID: PeerID(str: "aabbccddeeff0011")
+            messageID: "gm-wipe-1"
         ))
         let giftWrap = try NostrProtocol.createPrivateMessage(
             content: embedded,
