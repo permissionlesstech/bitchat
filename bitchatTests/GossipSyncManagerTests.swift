@@ -810,6 +810,89 @@ struct GossipSyncManagerTests {
         #expect(manager._messageCount(for: PeerID(hexData: senderID)) == 0)
     }
 
+    // MARK: - Byte budgets
+
+    /// Three 100-byte packets from distinct senders, oldest first.
+    private func makeBudgetPackets(type: MessageType) throws -> [BitchatPacket] {
+        let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+        return try ["00000000000000a1", "00000000000000a2", "00000000000000a3"].enumerated().map { index, hex in
+            BitchatPacket(
+                type: type.rawValue,
+                senderID: try #require(Data(hexString: hex)),
+                recipientID: nil,
+                timestamp: nowMs + UInt64(index),
+                payload: Data(repeating: UInt8(index), count: 100),
+                signature: nil,
+                ttl: 1
+            )
+        }
+    }
+
+    @Test func messageStoreEvictsOldestPastItsByteBudget() throws {
+        var config = GossipSyncManager.Config()
+        config.messageByteBudget = 250
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: RequestSyncManager())
+
+        let packets = try makeBudgetPackets(type: .message)
+        packets.forEach(manager.onPublicPacketSeen)
+
+        // 300 bytes against a 250-byte budget: only the oldest goes, even
+        // though the 1000-packet count cap is nowhere near.
+        #expect(manager._messageCount(for: PeerID(hexData: packets[0].senderID)) == 0)
+        #expect(manager._messageCount(for: PeerID(hexData: packets[1].senderID)) == 1)
+        #expect(manager._messageCount(for: PeerID(hexData: packets[2].senderID)) == 1)
+    }
+
+    @Test func fragmentFileAndGroupStoresEvictOldestPastTheirByteBudgets() async throws {
+        var config = GossipSyncManager.Config()
+        config.fragmentByteBudget = 250
+        config.fileTransferByteBudget = 250
+        config.groupMessageByteBudget = 250
+        config.messageSyncIntervalSeconds = 0
+        config.fragmentSyncIntervalSeconds = 0
+        config.fileTransferSyncIntervalSeconds = 0
+        config.prekeyBundleSyncIntervalSeconds = 0
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: RequestSyncManager())
+        let delegate = RecordingDelegate()
+        manager.delegate = delegate
+
+        var expectedIDs: Set<Data> = []
+        for type in [MessageType.fragment, .fileTransfer, .groupMessage] {
+            let packets = try makeBudgetPackets(type: type)
+            packets.forEach(manager.onPublicPacketSeen)
+            expectedIDs.formUnion(packets.dropFirst().map { PacketIdUtil.computeId($0) })
+        }
+
+        let request = RequestSyncPacket(p: 4, m: 1, data: Data(), types: [.fragment, .fileTransfer, .groupMessage])
+        manager.handleRequestSync(from: PeerID(str: "FFFFFFFFFFFFFFFF"), request: request)
+
+        try await TestHelpers.waitFor({ delegate.packets.count >= expectedIDs.count }, timeout: TestConstants.settleTimeout)
+        // Barrier: flush the sync queue so an evicted packet served late would be visible.
+        manager._performMaintenanceSynchronously(now: Date())
+        #expect(Set(delegate.packets.map { PacketIdUtil.computeId($0) }) == expectedIDs)
+        #expect(delegate.packets.count == expectedIDs.count)
+    }
+
+    @Test func archiveRestoreStopsAtTheByteBudgetKeepingTheNewest() throws {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gossip-archive-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        let packets = try makeBudgetPackets(type: .message)
+        let archive = GossipMessageArchive(fileURL: fileURL)
+        archive.save(try packets.map { try #require($0.toBinaryData(padding: false)) })
+
+        var config = GossipSyncManager.Config()
+        config.messageByteBudget = 250
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: RequestSyncManager(), archive: archive)
+        // Barrier: the restore is queued on the sync queue at init.
+        manager._performMaintenanceSynchronously(now: Date())
+
+        #expect(manager._messageCount(for: PeerID(hexData: packets[0].senderID)) == 0)
+        #expect(manager._messageCount(for: PeerID(hexData: packets[1].senderID)) == 1)
+        #expect(manager._messageCount(for: PeerID(hexData: packets[2].senderID)) == 1)
+    }
+
     /// Clearing the mesh timeline must leave nothing behind on disk: a
     /// relaunch that restored the archive would undo the clear.
     @Test func removeAllPublicMessagesErasesTheArchiveOnDisk() async throws {
