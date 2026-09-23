@@ -15,6 +15,9 @@ struct BLEDirectedRelaySpoolEntry {
 struct BLEDirectedRelaySpool {
     private struct Key: Hashable {
         let recipient: PeerID
+        // periphery:ignore - read only via the synthesized Hashable
+        // conformance (dictionary-key identity), which the indexer
+        // cannot attribute.
         let messageID: String
     }
 

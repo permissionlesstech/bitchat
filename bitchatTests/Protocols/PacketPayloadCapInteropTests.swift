@@ -93,8 +93,10 @@ struct PacketPayloadCapInteropTests {
             (.courierEnvelope, try maxCourierEnvelope(), false),
             (.groupMessage, try maxGroupMessage(), false),
             (.prekeyBundle, try maxPrekeyBundle(), false),
-            (.voiceFrame, try maxVoiceFrame(), false),
-            (.announceV2, try maxAnnounceV2(), false)
+            (.voiceFrame, try maxVoiceFrame(), false)
+            // announceV2's largest payload is checked in BitFoundation's
+            // PacketPayloadLimitsTests: nothing in the app emits it yet, and a
+            // reference here would make it look used to the dead-code scan.
         ]
         for testCase in cases {
             let packet = makePacket(type: testCase.type, payload: testCase.payload)
@@ -214,15 +216,6 @@ struct PacketPayloadCapInteropTests {
         let frame = randomBytes(TransportConfig.pttMaxBurstContentBytes - 13)
         let burst = try #require(VoiceBurstPacket(burstID: Data(repeating: 0x71, count: 8), seq: 1, kind: .frames([frame])))
         return burst.encode()
-    }
-
-    private func maxAnnounceV2() throws -> Data {
-        try #require(AnnounceV2Packet(
-            epoch: 1,
-            tagBlock: randomBytes(AnnounceV2Packet.tagBlockLength),
-            capabilities: PeerCapabilities(rawValue: .max),
-            bridgeGeohash: "9q8yyk8yuv12"
-        ).encode())
     }
 
     // MARK: - Helpers

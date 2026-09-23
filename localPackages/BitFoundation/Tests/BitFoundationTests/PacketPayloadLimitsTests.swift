@@ -93,6 +93,31 @@ struct PacketPayloadLimitsTests {
         }
     }
 
+    /// AnnounceV2 isn't emitted by the app yet, so its largest payload is
+    /// checked here rather than in the app's interop tests.
+    @Test func largestAnnounceV2PayloadDecodesWithHeadroom() throws {
+        let payload = try #require(AnnounceV2Packet(
+            epoch: 1,
+            tagBlock: Data(repeating: 0x5A, count: AnnounceV2Packet.tagBlockLength),
+            capabilities: PeerCapabilities(rawValue: .max),
+            bridgeGeohash: "9q8yyk8yuv12"
+        ).encode())
+        #expect(payload.count * 2 <= PacketPayloadLimits.maxPayloadBytes(forType: MessageType.announceV2.rawValue))
+
+        let packet = BitchatPacket(
+            type: MessageType.announceV2.rawValue,
+            senderID: Data(repeating: 0x11, count: BinaryProtocol.senderIDSize),
+            recipientID: nil,
+            timestamp: 1_740_000_000_000,
+            payload: payload,
+            signature: Data(repeating: 0x33, count: BinaryProtocol.signatureSize),
+            ttl: 7,
+            version: 1
+        )
+        let frame = try #require(BinaryProtocol.encode(packet, padding: true))
+        #expect(BinaryProtocol.decode(frame)?.payload == payload)
+    }
+
     /// Every byte value once, then zeros: 100% byte diversity, so the encoder
     /// leaves it uncompressed, while the zero run would still compress well
     /// inside fragments (the reassembly bypass shape).
