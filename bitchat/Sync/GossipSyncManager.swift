@@ -107,6 +107,9 @@ final class GossipSyncManager {
         var prekeyBundleCapacity: Int = 200
         var prekeyBundleSyncIntervalSeconds: TimeInterval = 60.0
         var prekeyBundleMaxAgeSeconds: TimeInterval = 24 * 60 * 60
+        // Future bound for every store: matches the ingress skew so nothing
+        // the radio accepts is refused here.
+        var maxFutureSkewMs: UInt64 = TransportConfig.bleMaxTimestampSkewMs
     }
 
     private let myPeerID: PeerID
@@ -242,6 +245,13 @@ final class GossipSyncManager {
             maxAgeSeconds = config.maxMessageAgeSeconds
         }
         let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+        // Age windows only bound the past. A future-dated packet would never
+        // expire, sort ahead of everything in each GCS filter, and push the
+        // requester's since-cursor past all real history, so anything dated
+        // beyond the ingress skew is never stored, served or restored.
+        if packet.timestamp > nowMs, packet.timestamp - nowMs > config.maxFutureSkewMs {
+            return false
+        }
         let ageThresholdMs = UInt64(maxAgeSeconds * 1000)
 
         // If current time is less than threshold, accept all (handle clock issues gracefully)
@@ -637,7 +647,9 @@ final class GossipSyncManager {
     // MARK: - Archive (public message persistence)
 
     /// Rebuild the public message store from disk on launch, dropping
-    /// anything that aged out while the app was dead.
+    /// anything that aged out while the app was dead — or that is dated in
+    /// the future, which an older build could have archived from a sync
+    /// reply. Any drop rewrites the file so it is purged from disk too.
     ///
     /// Bounded like live intake: entries are stored oldest-first, so walk
     /// them newest-first and stop once the count or byte budget is spent. An
@@ -648,11 +660,15 @@ final class GossipSyncManager {
         let capacity = max(1, config.seenCapacity)
         var kept: [(idHex: String, packet: BitchatPacket)] = []
         var keptBytes = 0
+        var droppedAny = false
         for data in archive.load().reversed() {
             guard kept.count < capacity else { break }
             guard let packet = BitchatPacket.from(data),
                   packet.type == MessageType.message.rawValue,
-                  isPacketFresh(packet) else { continue }
+                  isPacketFresh(packet) else {
+                droppedAny = true
+                continue
+            }
             guard keptBytes + packet.payload.count <= config.messageByteBudget else { break }
             keptBytes += packet.payload.count
             kept.append((PacketIdUtil.computeId(packet).hexEncodedString(), packet))
@@ -662,6 +678,8 @@ final class GossipSyncManager {
         }
         if !kept.isEmpty {
             SecureLogger.debug("Restored \(kept.count) archived public message(s) for gossip sync", category: .sync)
+        }
+        if !kept.isEmpty || droppedAny {
             archiveDirty = true
         }
     }
