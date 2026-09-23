@@ -942,11 +942,15 @@ private final class RecordingDelegate: GossipSyncManager.Delegate {
     private let lock = NSLock()
 
     func sendPacket(_ packet: BitchatPacket) {
+        // Run the hook before recording: a waiter that sees `lastPacket`
+        // then knows the hook already ran. Recording first let
+        // concurrentPacketIntakeAndSyncRequest's waitFor win the race and
+        // close its confirmation before the hook confirmed it.
+        onSend?()
         lock.lock()
         lastPacket = packet
         packets.append(packet)
         lock.unlock()
-        onSend?()
     }
 
     func sendPacket(to peerID: PeerID, packet: BitchatPacket) {
