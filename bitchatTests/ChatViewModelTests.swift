@@ -429,6 +429,62 @@ struct ChatViewModelServiceLifecycleTests {
     }
 
     @Test @MainActor
+    func readReceiptsWithheldWhenSettingIsOff() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        viewModel.sendsReadReceipts = { false }
+        viewModel.privateChatManager.sendsReadReceipts = { false }
+        let peerID = PeerID(str: "0000000000000001")
+        transport.simulateConnect(peerID, nickname: "Alice")
+
+        let message = BitchatMessage(
+            id: "read-2",
+            sender: "Alice",
+            content: "Hello again",
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: true,
+            recipientNickname: viewModel.nickname,
+            senderPeerID: peerID,
+            mentions: nil
+        )
+
+        viewModel.seedPrivateChat([message], for: peerID)
+        viewModel.markPrivateChatUnread(peerID)
+        viewModel.selectedPrivateChatPeer = peerID
+
+        viewModel.handleDidBecomeActive()
+
+        // Negative wait: nothing must leave the device...
+        let sentReadReceipt = await TestHelpers.waitUntil({
+            transport.sentReadReceipts.contains { $0.receipt.originalMessageID == "read-2" }
+        }, timeout: TestConstants.negativeWaitWindow)
+        #expect(!sentReadReceipt)
+
+        // ...while the chat is still marked read locally and the receipt is
+        // recorded as handled in BOTH tracking sets (the lifecycle pass
+        // dedups against the owner's persisted set, the manager against its
+        // own), so re-enabling the setting never fires a retroactive burst
+        // disclosing past reading activity from either path.
+        #expect(!viewModel.unreadPrivateMessages.contains(peerID))
+        #expect(viewModel.sentReadReceipts.contains("read-2"))
+        #expect(viewModel.privateChatManager.sentReadReceipts.contains("read-2"))
+    }
+
+    @Test @MainActor
+    func readReceiptSettingDefaultsToOnAndResets() {
+        let suite = "ReadReceiptSettingsTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        #expect(ReadReceiptSettings.sendReadReceipts(in: defaults))
+        ReadReceiptSettings.setSendReadReceipts(false, in: defaults)
+        #expect(!ReadReceiptSettings.sendReadReceipts(in: defaults))
+        ReadReceiptSettings.reset(in: defaults)
+        #expect(ReadReceiptSettings.sendReadReceipts(in: defaults))
+    }
+
+    @Test @MainActor
     func handleScreenshotCaptured_privateChatStaysSilentWithoutSession() async {
         let (viewModel, transport) = makeTestableViewModel()
         let peerID = PeerID(str: "0000000000000002")
