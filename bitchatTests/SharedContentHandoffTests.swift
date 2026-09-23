@@ -12,6 +12,37 @@ struct SharedContentHandoffTests {
         return (suite, defaults, SharedContentStore(defaults: defaults))
     }
 
+    @Test("A link within shared text keeps its surrounding words")
+    func sharedTextWithEmbeddedURL() throws {
+        let content = "Meet here: https://example.com at 5"
+        let payload = try #require(SharedContentPayload.fromSharedText(content))
+        #expect(payload.kind == .text)
+        #expect(payload.composerText == content)
+
+        let context = makeStore()
+        defer { context.defaults.removePersistentDomain(forName: context.suite) }
+        try context.store.stage(payload)
+        #expect(context.store.pending()?.composerText == content)
+    }
+
+    @Test("A URL followed by words remains text")
+    func urlPrefixWithTrailingWords() throws {
+        let content = "https://example.com at 5"
+        let payload = try #require(SharedContentPayload.fromSharedText(content))
+        #expect(payload.kind == .text)
+        #expect(payload.composerText == content)
+    }
+
+    @Test("A URL-only shared string remains a URL share")
+    func sharedTextWithOnlyURL() throws {
+        let payload = try #require(SharedContentPayload.fromSharedText(
+            " https://example.com/path ", title: "Meeting place"
+        ))
+        #expect(payload.kind == .url)
+        #expect(payload.content == "https://example.com/path")
+        #expect(payload.title == "Meeting place")
+    }
+
     @Test("A staged share survives an inactive app and a late open")
     func stagedShareSurvivesLateOpen() throws {
         let context = makeStore()

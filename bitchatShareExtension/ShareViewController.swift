@@ -54,9 +54,12 @@ final class ShareViewController: UIViewController {
             return
         }
 
-        // Try content from attributed text first (Safari often passes URL here)
-        if let url = detectURL(in: item.attributedContentText?.string ?? "") {
-            saveAndFinish(url: url, title: item.attributedTitle?.string)
+        // Preserve the whole attributed text when it contains more than a URL.
+        if let payload = SharedContentPayload.fromSharedText(
+            item.attributedContentText?.string,
+            title: item.attributedTitle?.string
+        ) {
+            stageAndFinish(payload)
             return
         }
 
@@ -79,27 +82,17 @@ final class ShareViewController: UIViewController {
                 self.saveAndFinish(url: url, title: item.attributedTitle?.string)
             } else {
                 self.loadFirstPlainText(from: providers) { text in
-                    if let t = text, !t.isEmpty {
-                        // Treat as URL if parseable http(s), else plain text
-                        if let u = URL(string: t), ["http", "https"].contains(u.scheme?.lowercased() ?? "") {
-                            self.saveAndFinish(url: u, title: item.attributedTitle?.string)
-                        } else {
-                            self.saveAndFinish(text: t)
-                        }
+                    if let payload = SharedContentPayload.fromSharedText(
+                        text,
+                        title: item.attributedTitle?.string
+                    ) {
+                        self.stageAndFinish(payload)
                     } else {
                         self.finishWithMessage(Strings.noShareableContent)
                     }
                 }
             }
         }
-    }
-
-    private func detectURL(in text: String) -> URL? {
-        guard !text.isEmpty else { return nil }
-        let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
-        let range = NSRange(location: 0, length: (text as NSString).length)
-        let match = detector?.matches(in: text, options: [], range: range).first
-        return match?.url
     }
 
     private func loadFirstURL(from providers: [NSItemProvider], completion: @escaping (URL?) -> Void) {

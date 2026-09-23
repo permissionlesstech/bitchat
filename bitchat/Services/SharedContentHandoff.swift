@@ -45,6 +45,27 @@ struct SharedContentPayload: Codable, Sendable, Equatable, Identifiable {
         SharedContentPayload(kind: .text, content: content, createdAt: createdAt)
     }
 
+    /// Keep surrounding words when a shared string contains a link.
+    static func fromSharedText(_ content: String?, title: String? = nil) -> SharedContentPayload? {
+        guard let content else { return nil }
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+        let range = NSRange(location: 0, length: (trimmed as NSString).length)
+        if let match = detector?.firstMatch(in: trimmed, options: [], range: range),
+           match.range == range,
+           let url = match.url,
+           let components = URLComponents(string: url.absoluteString),
+           let scheme = components.scheme?.lowercased(),
+           scheme == "http" || scheme == "https",
+           let host = components.host, !host.isEmpty {
+            return SharedContentPayload(kind: .url, content: url.absoluteString, title: title ?? host)
+        }
+
+        return .text(content)
+    }
+
     var composerText: String { content }
 
     var preview: String {
