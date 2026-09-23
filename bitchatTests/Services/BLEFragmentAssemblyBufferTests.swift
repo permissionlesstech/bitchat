@@ -53,6 +53,174 @@ struct BLEFragmentAssemblyBufferTests {
     }
 
     @Test
+    func conflictingTotalIsRejectedWithoutDiscardingAssembly() throws {
+        var buffer = BLEFragmentAssemblyBuffer()
+        let fragmentID = Data(repeating: 0x21, count: 8)
+        let first = try makeHeader(
+            fragmentID: fragmentID,
+            index: 0,
+            total: 3,
+            fragmentData: Data([0x01])
+        )
+        let conflicting = try makeHeader(
+            fragmentID: fragmentID,
+            index: 1,
+            total: 2,
+            fragmentData: Data([0xEE])
+        )
+        let second = try makeHeader(
+            fragmentID: fragmentID,
+            index: 1,
+            total: 3,
+            fragmentData: Data([0x02])
+        )
+        let third = try makeHeader(
+            fragmentID: fragmentID,
+            index: 2,
+            total: 3,
+            fragmentData: Data([0x03])
+        )
+
+        _ = buffer.append(first, maxInFlightAssemblies: 8)
+        let conflict = buffer.append(conflicting, maxInFlightAssemblies: 8)
+
+        #expect(
+            conflict == .conflicting(
+                header: conflicting,
+                reason: .total(expected: 3, actual: 2)
+            )
+        )
+        _ = buffer.append(second, maxInFlightAssemblies: 8)
+
+        if case let .complete(_, data, _) = buffer.append(third, maxInFlightAssemblies: 8) {
+            #expect(data == Data([0x01, 0x02, 0x03]))
+        } else {
+            Issue.record("Expected the original assembly to survive a conflicting total")
+        }
+    }
+
+    @Test
+    func conflictingOriginalTypeIsRejected() throws {
+        var buffer = BLEFragmentAssemblyBuffer()
+        let fragmentID = Data(repeating: 0x22, count: 8)
+        let first = try makeHeader(
+            fragmentID: fragmentID,
+            index: 0,
+            total: 2,
+            fragmentData: Data([0x01])
+        )
+        let conflicting = try makeHeader(
+            fragmentID: fragmentID,
+            index: 1,
+            total: 2,
+            originalType: MessageType.noiseEncrypted.rawValue,
+            fragmentData: Data([0xEE])
+        )
+
+        _ = buffer.append(first, maxInFlightAssemblies: 8)
+
+        #expect(
+            buffer.append(conflicting, maxInFlightAssemblies: 8) == .conflicting(
+                header: conflicting,
+                reason: .originalType(
+                    expected: MessageType.message.rawValue,
+                    actual: MessageType.noiseEncrypted.rawValue
+                )
+            )
+        )
+    }
+
+    @Test
+    func conflictingRecipientScopeIsRejected() throws {
+        var buffer = BLEFragmentAssemblyBuffer()
+        let fragmentID = Data(repeating: 0x23, count: 8)
+        let broadcast = try makeHeader(
+            fragmentID: fragmentID,
+            index: 0,
+            total: 2,
+            fragmentData: Data([0x01])
+        )
+        let directed = try makeHeader(
+            fragmentID: fragmentID,
+            index: 1,
+            total: 2,
+            fragmentData: Data([0x02]),
+            recipientID: Data(hexString: "0102030405060708")
+        )
+
+        _ = buffer.append(broadcast, maxInFlightAssemblies: 8)
+
+        #expect(
+            buffer.append(directed, maxInFlightAssemblies: 8) == .conflicting(
+                header: directed,
+                reason: .broadcastScope(expected: true, actual: false)
+            )
+        )
+    }
+
+    @Test
+    func conflictingDuplicateDataCannotOverwriteFirstFragment() throws {
+        var buffer = BLEFragmentAssemblyBuffer()
+        let fragmentID = Data(repeating: 0x24, count: 8)
+        let first = try makeHeader(
+            fragmentID: fragmentID,
+            index: 0,
+            total: 2,
+            fragmentData: Data([0x01])
+        )
+        let conflicting = try makeHeader(
+            fragmentID: fragmentID,
+            index: 0,
+            total: 2,
+            fragmentData: Data([0xEE])
+        )
+        let second = try makeHeader(
+            fragmentID: fragmentID,
+            index: 1,
+            total: 2,
+            fragmentData: Data([0x02])
+        )
+
+        _ = buffer.append(first, maxInFlightAssemblies: 8)
+
+        #expect(
+            buffer.append(conflicting, maxInFlightAssemblies: 8) == .conflicting(
+                header: conflicting,
+                reason: .fragmentData(index: 0)
+            )
+        )
+
+        if case let .complete(_, data, _) = buffer.append(second, maxInFlightAssemblies: 8) {
+            #expect(data == Data([0x01, 0x02]))
+        } else {
+            Issue.record("Expected first-wins fragment data to complete normally")
+        }
+    }
+
+    @Test
+    func exactDuplicateDoesNotCountTwiceTowardSizeLimit() throws {
+        var buffer = BLEFragmentAssemblyBuffer()
+        let fragmentID = Data(repeating: 0x25, count: 8)
+        let fragment = try makeHeader(
+            fragmentID: fragmentID,
+            index: 0,
+            total: 2,
+            fragmentData: Data(
+                repeating: 0x01,
+                count: FileTransferLimits.maxPayloadBytes / 2 + 1
+            )
+        )
+
+        _ = buffer.append(fragment, maxInFlightAssemblies: 8)
+
+        if case let .stored(_, started) = buffer.append(fragment, maxInFlightAssemblies: 8) {
+            #expect(!started)
+        } else {
+            Issue.record("Expected an exact duplicate to keep the assembly unchanged")
+        }
+    }
+
+    @Test
     func appendEvictsOldestAssemblyWhenCapIsReached() throws {
         var buffer = BLEFragmentAssemblyBuffer()
         let oldPacket = makePacket(payload: makePayload(count: 256, seed: 1), timestamp: 1)
@@ -81,23 +249,32 @@ struct BLEFragmentAssemblyBufferTests {
     }
 
     @Test
-    func appendOversizedAssemblyDropsPartialState() throws {
+    func oversizedFragmentIsRejectedWithoutDiscardingAssembly() throws {
         var buffer = BLEFragmentAssemblyBuffer()
         let fragmentID = Data(repeating: 0x05, count: 8)
-        let first = try #require(BLEFragmentHeader(packet: makeFragmentPacket(
+        let headroom = 10
+        let first = try makeHeader(
             fragmentID: fragmentID,
             index: 0,
             total: 2,
-            originalType: MessageType.message.rawValue,
-            fragmentData: Data(repeating: 0x01, count: FileTransferLimits.maxPayloadBytes)
-        )))
-        let oversized = try #require(BLEFragmentHeader(packet: makeFragmentPacket(
+            fragmentData: Data(
+                repeating: 0x01,
+                count: FileTransferLimits.maxPayloadBytes - headroom
+            )
+        )
+        // An injected fragment at an unused index, sized to blow the budget.
+        let oversized = try makeHeader(
             fragmentID: fragmentID,
             index: 1,
             total: 2,
-            originalType: MessageType.message.rawValue,
-            fragmentData: Data([0x02])
-        )))
+            fragmentData: Data(repeating: 0xEE, count: headroom + 1)
+        )
+        let legitimate = try makeHeader(
+            fragmentID: fragmentID,
+            index: 1,
+            total: 2,
+            fragmentData: Data(repeating: 0x02, count: headroom)
+        )
 
         _ = buffer.append(first, maxInFlightAssemblies: 8)
         let result = buffer.append(oversized, maxInFlightAssemblies: 8)
@@ -107,13 +284,189 @@ struct BLEFragmentAssemblyBufferTests {
             #expect(limit == FileTransferLimits.maxPayloadBytes)
             #expect(!started)
         } else {
-            Issue.record("Expected oversized fragment assembly to be evicted")
+            Issue.record("Expected the oversized fragment to be rejected")
         }
 
-        if case let .stored(_, started) = buffer.append(oversized, maxInFlightAssemblies: 8) {
-            #expect(started)
+        // The stream a spoofed fragment tried to blow up still completes.
+        if case let .complete(_, data, _) = buffer.append(legitimate, maxInFlightAssemblies: 8) {
+            #expect(data.count == FileTransferLimits.maxPayloadBytes)
+            #expect(data.suffix(headroom) == Data(repeating: 0x02, count: headroom))
         } else {
-            Issue.record("Expected later fragment to start a clean assembly")
+            Issue.record("Expected the original assembly to survive an oversized fragment")
+        }
+    }
+
+    @Test
+    func oversizedFirstFragmentIsRejectedWithoutClaimingASlot() throws {
+        var buffer = BLEFragmentAssemblyBuffer()
+        // A single fragment over the budget can never be stored, so it must be
+        // turned away before an assembly is started for it — starting one
+        // evicts the oldest in-flight stream to make room. A compressed
+        // fragment can reach this size in one packet.
+        let victimID = Data(repeating: 0x07, count: 8)
+        let victimFirst = try makeHeader(
+            fragmentID: victimID,
+            index: 0,
+            total: 2,
+            fragmentData: Data([0x01])
+        )
+        let victimSecond = try makeHeader(
+            fragmentID: victimID,
+            index: 1,
+            total: 2,
+            fragmentData: Data([0x02])
+        )
+        let oversized = try makeHeader(
+            fragmentID: Data(repeating: 0x06, count: 8),
+            index: 0,
+            total: 2,
+            fragmentData: Data(
+                repeating: 0xEE,
+                count: FileTransferLimits.maxPayloadBytes + 1
+            )
+        )
+
+        _ = buffer.append(victimFirst, maxInFlightAssemblies: 1)
+
+        if case let .oversized(_, projectedSize, limit, started) = buffer.append(oversized, maxInFlightAssemblies: 1) {
+            #expect(projectedSize == FileTransferLimits.maxPayloadBytes + 1)
+            #expect(limit == FileTransferLimits.maxPayloadBytes)
+            #expect(!started)
+        } else {
+            Issue.record("Expected a single over-budget fragment to be rejected")
+        }
+
+        // The assembly holding the only in-flight slot was never evicted.
+        if case let .complete(_, data, _) = buffer.append(victimSecond, maxInFlightAssemblies: 1) {
+            #expect(data == Data([0x01, 0x02]))
+        } else {
+            Issue.record("Expected a rejected fragment to leave the in-flight slot alone")
+        }
+    }
+
+    @Test
+    func overBudgetStreamStopsDrawingResyncRequests() throws {
+        var buffer = BLEFragmentAssemblyBuffer()
+        let t0 = Date(timeIntervalSince1970: 100)
+        let headroom = 10
+        let starvedID = Data(repeating: 0x08, count: 8)
+        let healthyID = Data(repeating: 0x09, count: 8)
+
+        let starvedFirst = try makeHeader(
+            fragmentID: starvedID,
+            index: 0,
+            total: 3,
+            fragmentData: Data(
+                repeating: 0x01,
+                count: FileTransferLimits.maxPayloadBytes - headroom
+            )
+        )
+        let starvedOversized = try makeHeader(
+            fragmentID: starvedID,
+            index: 1,
+            total: 3,
+            fragmentData: Data(repeating: 0xEE, count: headroom + 1)
+        )
+        let healthyFirst = try makeHeader(
+            fragmentID: healthyID,
+            index: 0,
+            total: 2,
+            fragmentData: Data([0x01])
+        )
+
+        _ = buffer.append(starvedFirst, maxInFlightAssemblies: 8, now: t0)
+        _ = buffer.append(healthyFirst, maxInFlightAssemblies: 8, now: t0)
+        _ = buffer.append(starvedOversized, maxInFlightAssemblies: 8, now: t0)
+
+        // The starved stream is retained so a spoofed fragment cannot destroy
+        // it, but it cannot complete on what it holds — only the healthy
+        // stream is worth a REQUEST_SYNC slot.
+        let stalled = buffer.stalledBroadcastFragmentIDs(
+            stalledAfter: 5,
+            retryAfter: 10,
+            now: t0.addingTimeInterval(6)
+        )
+        #expect(stalled == [healthyID])
+
+        // The fragment that tripped the ceiling may have been the injected
+        // one. A fragment that does store proves the stream is still moving,
+        // so recovery must come back rather than stay suppressed for the
+        // assembly's whole lifetime.
+        let starvedProgress = try makeHeader(
+            fragmentID: starvedID,
+            index: 1,
+            total: 3,
+            fragmentData: Data(repeating: 0x02, count: headroom)
+        )
+        _ = buffer.append(starvedProgress, maxInFlightAssemblies: 8, now: t0.addingTimeInterval(7))
+
+        let recovered = buffer.stalledBroadcastFragmentIDs(
+            stalledAfter: 5,
+            retryAfter: 10,
+            now: t0.addingTimeInterval(20)
+        )
+        #expect(recovered.contains(starvedID))
+    }
+
+    @Test
+    func streamsFromDifferentSendersSharingAFragmentIDStayIsolated() throws {
+        var buffer = BLEFragmentAssemblyBuffer()
+        // Fragment IDs are only unique per sender, and a colliding ID must not
+        // make two honest senders reject each other — `BLEFragmentKey` carries
+        // the sender for exactly this reason. Dropping it would turn the
+        // first-wins checks below into a mutual-rejection DoS.
+        let sharedID = Data(repeating: 0x0A, count: 8)
+        let alice = Data([0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7])
+        let bob = Data([0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7])
+
+        // Same ID, different senders, and every header field disagrees.
+        let aliceFirst = try makeHeader(
+            fragmentID: sharedID,
+            index: 0,
+            total: 2,
+            fragmentData: Data([0x01]),
+            senderID: alice
+        )
+        let bobFirst = try makeHeader(
+            fragmentID: sharedID,
+            index: 0,
+            total: 3,
+            originalType: MessageType.noiseEncrypted.rawValue,
+            fragmentData: Data([0xB1]),
+            senderID: bob
+        )
+        let aliceSecond = try makeHeader(
+            fragmentID: sharedID,
+            index: 1,
+            total: 2,
+            fragmentData: Data([0x02]),
+            senderID: alice
+        )
+        let bobRest = try (1...2).map { index in
+            try makeHeader(
+                fragmentID: sharedID,
+                index: index,
+                total: 3,
+                originalType: MessageType.noiseEncrypted.rawValue,
+                fragmentData: Data([UInt8(0xB1 + index)]),
+                senderID: bob
+            )
+        }
+
+        _ = buffer.append(aliceFirst, maxInFlightAssemblies: 8)
+        #expect(!isConflicting(buffer.append(bobFirst, maxInFlightAssemblies: 8)))
+        #expect(!isConflicting(buffer.append(bobRest[0], maxInFlightAssemblies: 8)))
+
+        if case let .complete(_, data, _) = buffer.append(aliceSecond, maxInFlightAssemblies: 8) {
+            #expect(data == Data([0x01, 0x02]))
+        } else {
+            Issue.record("Expected Alice's stream to complete independently")
+        }
+
+        if case let .complete(_, data, _) = buffer.append(bobRest[1], maxInFlightAssemblies: 8) {
+            #expect(data == Data([0xB1, 0xB2, 0xB3]))
+        } else {
+            Issue.record("Expected Bob's stream to complete independently")
         }
     }
 
@@ -242,6 +595,45 @@ struct BLEFragmentAssemblyBufferTests {
     }
 
     @Test
+    func conflictingFragmentsDoNotResetStallClock() throws {
+        var buffer = BLEFragmentAssemblyBuffer()
+        let fragmentID = Data(repeating: 0x26, count: 8)
+        let first = try makeHeader(
+            fragmentID: fragmentID,
+            index: 0,
+            total: 2,
+            fragmentData: Data([0x01])
+        )
+        let conflicting = try makeHeader(
+            fragmentID: fragmentID,
+            index: 0,
+            total: 2,
+            fragmentData: Data([0xEE])
+        )
+
+        let t0 = Date(timeIntervalSince1970: 100)
+        _ = buffer.append(first, maxInFlightAssemblies: 8, now: t0)
+
+        // A rejected fragment brings no progress, so a flood of them must not
+        // keep a stalled stream looking "fresh" and suppress its REQUEST_SYNC.
+        for offset in [3.0, 5.0] {
+            let result = buffer.append(
+                conflicting,
+                maxInFlightAssemblies: 8,
+                now: t0.addingTimeInterval(offset)
+            )
+            #expect(result == .conflicting(header: conflicting, reason: .fragmentData(index: 0)))
+        }
+
+        let stalled = buffer.stalledBroadcastFragmentIDs(
+            stalledAfter: 5,
+            retryAfter: 10,
+            now: t0.addingTimeInterval(6)
+        )
+        #expect(stalled == [fragmentID])
+    }
+
+    @Test
     func overflowStalledStreamsRotateAcrossPasses() throws {
         var buffer = BLEFragmentAssemblyBuffer()
         let cap = RequestSyncPacket.maxFragmentIdFilterCount
@@ -336,6 +728,31 @@ struct BLEFragmentAssemblyBufferTests {
                 timestamp: packet.timestamp
             )
         }
+    }
+
+    private func isConflicting(_ result: BLEFragmentAssemblyBuffer.AppendResult) -> Bool {
+        if case .conflicting = result { return true }
+        return false
+    }
+
+    private func makeHeader(
+        fragmentID: Data,
+        index: Int,
+        total: Int,
+        originalType: UInt8 = MessageType.message.rawValue,
+        fragmentData: Data,
+        senderID: Data = Data([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77]),
+        recipientID: Data? = nil
+    ) throws -> BLEFragmentHeader {
+        try #require(BLEFragmentHeader(packet: makeFragmentPacket(
+            fragmentID: fragmentID,
+            index: index,
+            total: total,
+            originalType: originalType,
+            fragmentData: fragmentData,
+            senderID: senderID,
+            recipientID: recipientID
+        )))
     }
 
     private func makeFragmentPacket(
