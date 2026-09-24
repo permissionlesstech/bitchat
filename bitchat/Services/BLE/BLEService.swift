@@ -3095,7 +3095,7 @@ extension BLEService {
     /// REQUEST_SYNC to that peer records (GossipSyncManager.sendRequestSync),
     /// so a test can present a solicited reply without the timer-driven send.
     func _test_registerSyncRequest(to peerID: PeerID) {
-        requestSyncManager.registerRequest(to: peerID)
+        requestSyncManager._test_registerRequestNow(to: peerID)
     }
 
     /// Sends an unthrottled announce, exactly like the maintenance forced

@@ -317,7 +317,7 @@ struct BLEFragmentHandlerTests {
         let author = PeerID(str: "99AABBCCDDEEFF00")
         let servingPeer = remotePeerID
         let rig = SyncReplyRig()
-        rig.requestSyncManager.registerRequest(to: servingPeer)
+        rig.requestSyncManager._test_registerRequestNow(to: servingPeer)
         let handler = makeHandler(rig: rig)
         // An hour old: only a solicited sync response gets past the skew window.
         let reply = makeSyncReply(author: author, isRSR: true, timestamp: SyncReplyRig.nowMs - 3_600_000)
@@ -367,7 +367,7 @@ struct BLEFragmentHandlerTests {
         let author = PeerID(str: "99AABBCCDDEEFF00")
         let servingPeer = remotePeerID
         let rig = SyncReplyRig()
-        rig.requestSyncManager.registerRequest(to: servingPeer)
+        rig.requestSyncManager._test_registerRequestNow(to: servingPeer)
         let handler = makeHandler(rig: rig)
         let reply = makeSyncReply(author: author, isRSR: false, timestamp: SyncReplyRig.nowMs - 3_600_000)
         let fragments = try fragments(of: reply, servedTo: localPeerID)
@@ -408,7 +408,7 @@ struct BLEFragmentHandlerTests {
                                 for claimedSender in [author, servingPeer] {
                                     let rig = SyncReplyRig()
                                     for peer in requested {
-                                        rig.requestSyncManager.registerRequest(to: peer)
+                                        rig.requestSyncManager._test_registerRequestNow(to: peer)
                                     }
                                     let handler = makeHandler(rig: rig)
                                     let reply = makeSyncReply(author: author, isRSR: innerFlagged, timestamp: timestamp)
