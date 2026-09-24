@@ -133,17 +133,16 @@ class CheckPerfFloorsTests(unittest.TestCase):
         self.assertEqual(self.remeasure_count(), 0)
         self.assertIn("MISSING  b.two: floored benchmark reported no PERF line", result.stdout)
 
-    def test_unfloored_benchmark_is_reported_but_does_not_fail(self) -> None:
-        # Pinned as found, not endorsed: the gate fails when a floored
-        # benchmark stops reporting, but a benchmark that reports with no floor
-        # only prints advice. That asymmetry is the subject of the follow-up.
+    def test_unfloored_benchmark_fails_without_a_retry(self) -> None:
+        # The mirror of the missing case: a benchmark that measures but has no
+        # floor guards nothing, and no re-measurement can supply the floor.
         result = self.run_gate(
             self.log("PERF[a.one]: 1000 ops/sec", "PERF[c.new]: 1000 ops/sec"),
             self.floors(**{"a.one": 100}),
         )
 
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("NO-FLOOR c.new: 1000 ops/sec (consider adding a floor)", result.stdout)
+        self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
+        self.assertIn("NO-FLOOR c.new: 1000 ops/sec reports a PERF line but has no floor", result.stdout)
         self.assertEqual(self.remeasure_count(), 0)
 
     def test_output_without_perf_lines_skips(self) -> None:
