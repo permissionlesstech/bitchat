@@ -51,11 +51,20 @@ struct ContentHeaderView: View {
                 // cluster at priority 3 never gives up width.
                 .layoutPriority(2)
                 .onTapGesture(count: 3) {
-                    appChromeModel.panicClearAllData()
+                    // Confirm before destroying: the same logo is the single-tap
+                    // App Info entry point and sits beside the nickname field, so
+                    // a fumbled tap must never be able to wipe the device. The
+                    // dialog matches the Settings-pane panic button; under duress
+                    // it costs one extra tap.
+                    appChromeModel.requestPanicWipe()
                 }
                 .onTapGesture(count: 1) {
                     appChromeModel.presentAppInfo()
                 }
+                // The confirmation dialog itself is hosted on ContentView
+                // (next to the failed-wipe banner), not on this Text: a host
+                // that can be covered or removed could take the pending
+                // dialog down with it.
                 // This is the only entry point to App Info, but it reads as
                 // static text; surface the tap. (The triple-tap panic wipe
                 // stays undiscoverable on purpose — it's destructive.)

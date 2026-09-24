@@ -45,7 +45,12 @@ public extension Data {
 
         for _ in 0..<len {
             let nextIndex = hex.index(index, offsetBy: 2)
-            guard let byte = UInt8(String(hex[index..<nextIndex]), radix: 16) else {
+            let pair = hex[index..<nextIndex]
+            // UInt8(_:radix:) accepts a leading sign, so "+f" parses as 0x0f.
+            // That gives an identity-bearing hex string a second spelling which
+            // decodes to the same bytes, so require two hex digits first.
+            guard pair.allSatisfy(\.isHexDigit),
+                  let byte = UInt8(pair, radix: 16) else {
                 return nil
             }
             data.append(byte)

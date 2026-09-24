@@ -76,10 +76,9 @@ final class NostrIdentityBridge {
             deviceSeedCache = existing
             return existing
         }
-        var seed = Data(count: 32)
-        _ = seed.withUnsafeMutableBytes { ptr in
-            SecRandomCopyBytes(kSecRandomDefault, 32, ptr.baseAddress!)
-        }
+        // CryptoKit key generation cannot fail, unlike SecRandomCopyBytes —
+        // a discarded failure here would persist an all-zero identity seed.
+        let seed = SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) }
         // Ensure availability after first unlock to prevent unintended rotation when locked
         keychain.save(key: deviceSeedKey, data: seed, service: keychainService, accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
         deviceSeedCache = seed
