@@ -462,6 +462,49 @@ struct AppArchitectureTests {
         #expect(chromeModel.showingFingerprintFor == nil)
     }
 
+    @Test("App Info pane routing: a promised pane overrides the sticky memory, a plain present never touches it")
+    @MainActor
+    func presentAppInfoPaneRouting() {
+        let viewModel = makeArchitectureViewModel()
+        let privateInboxModel = PrivateInboxModel(conversations: ConversationStore())
+        let chromeModel = AppChromeModel(chatViewModel: viewModel, privateInboxModel: privateInboxModel)
+
+        // The sticky pane lives in standard defaults (@AppStorage's store);
+        // restore whatever was there so this test can't leak state.
+        let key = "appInfo.selectedPane"
+        let defaults = UserDefaults.standard
+        let original = defaults.string(forKey: key)
+        defer {
+            if let original {
+                defaults.set(original, forKey: key)
+            } else {
+                defaults.removeObject(forKey: key)
+            }
+        }
+
+        // First-ever open: the logo tap passes no pane, and the absent key is
+        // what lands new users on the gentler Info default — a plain present
+        // must not create it.
+        defaults.removeObject(forKey: key)
+        chromeModel.presentAppInfo()
+        #expect(defaults.string(forKey: key) == nil)
+        #expect(chromeModel.isAppInfoPresented)
+
+        // Later opens: the logo tap keeps whatever pane the sheet was left on.
+        chromeModel.isAppInfoPresented = false
+        defaults.set(AppInfoView.Pane.info.rawValue, forKey: key)
+        chromeModel.presentAppInfo()
+        #expect(defaults.string(forKey: key) == AppInfoView.Pane.info.rawValue)
+        #expect(chromeModel.isAppInfoPresented)
+
+        // Controls that promise a pane (the header gear and the gateway globe
+        // both say "settings") must land there even against sticky memory.
+        chromeModel.isAppInfoPresented = false
+        chromeModel.presentAppInfo(pane: .settings)
+        #expect(defaults.string(forKey: key) == AppInfoView.Pane.settings.rawValue)
+        #expect(chromeModel.isAppInfoPresented)
+    }
+
     @Test("Triple-tap panic entry point only raises the confirmation dialog")
     @MainActor
     func requestPanicWipeAsksBeforeDestroying() {

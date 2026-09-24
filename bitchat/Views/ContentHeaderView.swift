@@ -65,9 +65,10 @@ struct ContentHeaderView: View {
                 // (next to the failed-wipe banner), not on this Text: a host
                 // that can be covered or removed could take the pending
                 // dialog down with it.
-                // This is the only entry point to App Info, but it reads as
-                // static text; surface the tap. (The triple-tap panic wipe
-                // stays undiscoverable on purpose — it's destructive.)
+                // The gear in the icon cluster is the discoverable entry
+                // point to App Info; the logo tap stays as a shortcut but
+                // reads as static text, so surface it. (The triple-tap panic
+                // wipe stays undiscoverable on purpose — it's destructive.)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityHint(
                     String(localized: "content.accessibility.app_info_hint", comment: "Accessibility hint on the bitchat/ logo explaining a tap opens app info")
@@ -128,7 +129,7 @@ struct ContentHeaderView: View {
                 if locationChannelsModel.gatewayEnabled {
                     // The gateway toggle lives in the App Info settings pane
                     // now, so the indicator deep-links there.
-                    Button(action: { appChromeModel.presentAppInfo() }) {
+                    Button(action: { appChromeModel.presentAppInfo(pane: .settings) }) {
                         Image(systemName: "globe")
                             .font(.bitchatSystem(size: 12))
                             .foregroundColor(palette.secondary.opacity(0.8))
@@ -308,6 +309,26 @@ struct ContentHeaderView: View {
                     : (headerPeersReachable
                         ? String(localized: "content.accessibility.peers_connected", comment: "Accessibility value when peers are reachable")
                         : String(localized: "content.accessibility.peers_none", comment: "Accessibility value when no peers are reachable"))
+                )
+
+                // Settings entry point new users can actually find; the
+                // logo tap remains as a shortcut for those who know it.
+                // Opens on the settings pane explicitly: the sheet's pane
+                // memory defaults to info, and a button labeled "settings"
+                // must not land there.
+                Button(action: { appChromeModel.presentAppInfo(pane: .settings) }) {
+                    Image(systemName: "gearshape")
+                        .font(.bitchatSystem(size: 12))
+                        .foregroundColor(palette.secondary.opacity(0.9))
+                        .headerTapTarget()
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 4)
+                .accessibilityLabel(
+                    String(localized: "content.header.settings", defaultValue: "settings", comment: "Accessibility label and tooltip for the header gear button that opens the settings/app info sheet")
+                )
+                .help(
+                    String(localized: "content.header.settings", defaultValue: "settings", comment: "Accessibility label and tooltip for the header gear button that opens the settings/app info sheet")
                 )
             }
             .layoutPriority(3)
