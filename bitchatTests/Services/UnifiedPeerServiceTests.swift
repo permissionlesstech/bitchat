@@ -28,6 +28,38 @@ struct UnifiedPeerServiceTests {
     }
 
     @Test @MainActor
+    func getPeerID_acceptsAUniqueNickname() async {
+        let transport = MockTransport()
+        let identity = TestIdentityManager()
+        let idBridge = NostrIdentityBridge(keychain: MockKeychainHelper())
+        let service = UnifiedPeerService(meshService: transport, idBridge: idBridge, identityManager: identity)
+
+        let alice = PeerID(str: "1111111111111111")
+        transport.simulateConnect(alice, nickname: "alice")
+        service.didUpdatePeerSnapshots(transport.currentPeerSnapshots())
+
+        #expect(service.getPeerID(for: "alice") == alice)
+    }
+
+    @Test @MainActor
+    func getPeerID_refusesAmbiguousNicknameUnlessSuffixed() async {
+        let transport = MockTransport()
+        let identity = TestIdentityManager()
+        let idBridge = NostrIdentityBridge(keychain: MockKeychainHelper())
+        let service = UnifiedPeerService(meshService: transport, idBridge: idBridge, identityManager: identity)
+
+        let aliceA = PeerID(str: "1111111111111111")
+        let aliceB = PeerID(str: "2222222222222222")
+        transport.simulateConnect(aliceA, nickname: "alice")
+        transport.simulateConnect(aliceB, nickname: "alice")
+        service.didUpdatePeerSnapshots(transport.currentPeerSnapshots())
+
+        #expect(service.getPeerID(for: "alice") == nil)
+        #expect(service.getPeerID(for: "alice#1111") == aliceA)
+        #expect(service.getPeerID(for: "alice#2222") == aliceB)
+    }
+
+    @Test @MainActor
     func isBlocked_usesSocialIdentity() async {
         let transport = MockTransport()
         let identity = TestIdentityManager()

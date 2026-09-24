@@ -150,14 +150,12 @@ struct BLENoisePacketHandlerTests {
                     recorder.clearedSessions.append(peerID)
                     service.clearSession(for: peerID)
                 },
-                handleAuthenticatedPeerState: {
-                    peerID, payload, generation in
+                handleAuthenticatedPeerState: { peerID, payload, generation in
                     recorder.authenticatedPeerStates.append(
                         (peerID, payload, generation)
                     )
                 },
-                deliverNoisePayload: {
-                    peerID, type, payload, timestamp in
+                deliverNoisePayload: { peerID, type, payload, timestamp in
                     recorder.deliveries.append(
                         (peerID, type, payload, timestamp)
                     )

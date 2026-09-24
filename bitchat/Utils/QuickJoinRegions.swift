@@ -108,6 +108,6 @@ struct QuickJoinSuggestion {
         "UY": "6c", "UZ": "tx", "VA": "sr", "VC": "dd",
         "VE": "d9", "VI": "de", "VN": "w7", "VU": "rs",
         "WS": "2j", "XK": "sr", "YE": "sf", "YT": "mj",
-        "ZA": "ke", "ZM": "kt", "ZW": "ks",
+        "ZA": "ke", "ZM": "kt", "ZW": "ks"
     ]
 }
