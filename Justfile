@@ -64,3 +64,19 @@ info:
     @echo "BitChat - decentralized mesh messaging"
     @echo "macOS 13+ and iOS 16+"
     @echo "Bluetooth mesh behavior requires physical Bluetooth-capable devices"
+
+# Run the GeoRelay validator Python test suite (no Xcode required).
+test-georelays:
+    @python3 -m unittest discover -s scripts/tests -p "test_*.py" -v
+
+# Print summary statistics for the reviewed georelay CSV.
+relay-stats:
+    @python3 scripts/relay_stats.py
+
+# Check internal markdown links resolve (no http fetches, local files only).
+check-links:
+    @python3 scripts/check_links.py
+
+# Validate the shipped georelay CSV against the project validator.
+check-csv-health:
+    @python3 scripts/check_csv_health.py

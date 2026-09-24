@@ -62,6 +62,9 @@ xcuserdata/
 __pycache__/
 *.py[cod]
 *$py.class
+.venv/
+venv/
+.python-version
 
 ## Temporary files
 *.tmp

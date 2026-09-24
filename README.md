@@ -166,3 +166,11 @@ SwiftPM suite and `just test-ios` runs the iPhone 17 simulator suite.
 - Share extension strings are separate in `bitchatShareExtension/Localization/Localizable.xcstrings`.
 - Prefer keys that describe intent (`app_info.features.offline.title`) and reuse existing ones where possible.
 - Run `xcodebuild -project bitchat.xcodeproj -scheme "bitchat (macOS)" -configuration Debug CODE_SIGNING_ALLOWED=NO build` to compile-check any localization updates.
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the build
+and test workflow, the GeoRelay data pipeline, code style expectations, and the
+pull request process. For security vulnerabilities, follow the responsible
+disclosure process in [SECURITY.md](SECURITY.md) instead of opening a public
+issue.
