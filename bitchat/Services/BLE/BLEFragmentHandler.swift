@@ -68,19 +68,27 @@ final class BLEFragmentHandler {
         // Decode the original packet bytes we reassembled, so flags/compression are preserved
         if var originalPacket = BinaryProtocol.decode(reassembled) {
 
-            // Reassembled packet validation. A solicited sync response is
-            // judged against the peer bound to the link that served it, the
-            // rule the ingress registry applies to a flagged single frame: the
-            // inner sender is the message's original author, who may hold no
-            // sync request with us. With no bound link the packet is judged
-            // against its own sender, as a single frame would be; the
-            // fragments' claimed sender is never the anchor, because anyone
-            // can name a peer we asked. validatePayload is the seam a
-            // reassembled packet has always passed through; the guard's other
-            // checks describe a frame on a link, not a packet rebuilt from one.
+            // Reassembled packet validation. Both platforms' fragmenters copy
+            // the inner type into every fragment, and the assembly was sized
+            // for that claim, so a packet of any other type is forged.
+            // A solicited sync response is judged against the peer bound to
+            // the link that served it, the rule the ingress registry applies
+            // to a flagged single frame: the inner sender is the message's
+            // original author, who may hold no sync request with us. With no
+            // bound link the packet is judged against its own sender, as a
+            // single frame would be; the fragments' claimed sender is never
+            // the anchor, because anyone can name a peer we asked.
+            // validatePayload is the seam a reassembled packet has always
+            // passed through; the guard's other checks describe a frame on a
+            // link, not a packet rebuilt from one.
             let innerSender = PeerID(hexData: originalPacket.senderID)
             let validationPeerID = originalPacket.isRSR ? (boundPeerID ?? innerSender) : innerSender
-            if !env.isAcceptedIngressPayload(originalPacket, validationPeerID) {
+            if originalPacket.type != completedHeader.originalType {
+                SecureLogger.warning(
+                    "🚫 Reassembled packet id=\(completedHeader.idLogString) is type \(originalPacket.type), fragments claimed \(completedHeader.originalType)",
+                    category: .security
+                )
+            } else if !env.isAcceptedIngressPayload(originalPacket, validationPeerID) {
                 // Cleanup below
             } else {
                 SecureLogger.debug("✅ Reassembled packet id=\(completedHeader.idLogString) type=\(originalPacket.type) bytes=\(reassembled.count)", category: .session)
