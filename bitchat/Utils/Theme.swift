@@ -12,6 +12,11 @@ import SwiftUI
 enum AppTheme: String, CaseIterable, Identifiable {
     case matrix
     case liquidGlass
+    case nord
+    case dracula
+    case solarizedDark
+    case tokyoNight
+    case monochrome
 
     var id: String { rawValue }
 
@@ -22,6 +27,11 @@ enum AppTheme: String, CaseIterable, Identifiable {
         switch self {
         case .matrix: return "app_info.appearance.matrix"
         case .liquidGlass: return "app_info.appearance.liquid_glass"
+        case .nord: return "app_info.appearance.nord"
+        case .dracula: return "app_info.appearance.dracula"
+        case .solarizedDark: return "app_info.appearance.solarized_dark"
+        case .tokyoNight: return "app_info.appearance.tokyo_night"
+        case .monochrome: return "app_info.appearance.monochrome"
         }
     }
 
@@ -31,13 +41,21 @@ enum AppTheme: String, CaseIterable, Identifiable {
         switch self {
         case .matrix: return .monospaced
         case .liquidGlass: return .default
+        case .nord: return .default
+        case .dracula: return .monospaced
+        case .solarizedDark: return .monospaced
+        case .tokyoNight: return .default
+        case .monochrome: return .default
         }
     }
 
     /// Whether chrome surfaces (header/composer bars, input field) render as
     /// translucent glass/material instead of the flat matrix background.
     var usesGlassChrome: Bool {
-        self == .liquidGlass
+        switch self {
+        case .liquidGlass: return true
+        case .matrix, .nord, .dracula, .solarizedDark, .tokyoNight, .monochrome: return false
+        }
     }
 
     /// Discriminator mixed into per-message formatting caches so cached
@@ -47,16 +65,24 @@ enum AppTheme: String, CaseIterable, Identifiable {
         switch self {
         case .matrix: return ""
         case .liquidGlass: return "lg:"
+        case .nord: return "nd:"
+        case .dracula: return "dc:"
+        case .solarizedDark: return "sd:"
+        case .tokyoNight: return "tn:"
+        case .monochrome: return "mc:"
         }
     }
 
     /// Resolves the semantic color palette for this theme under the given color scheme.
     func palette(for colorScheme: ColorScheme) -> ThemePalette {
         switch self {
-        case .matrix:
-            return .matrix(colorScheme)
-        case .liquidGlass:
-            return .liquidGlass(colorScheme)
+        case .matrix: return .matrix(colorScheme)
+        case .liquidGlass: return .liquidGlass(colorScheme)
+        case .nord: return .nord(colorScheme)
+        case .dracula: return .dracula(colorScheme)
+        case .solarizedDark: return .solarizedDark(colorScheme)
+        case .tokyoNight: return .tokyoNight(colorScheme)
+        case .monochrome: return .monochrome(colorScheme)
         }
     }
 }
@@ -106,6 +132,76 @@ struct ThemePalette {
             accentBlue: .blue,
             alertRed: .red,
             divider: separator
+        )
+    }
+
+    static func nord(_ colorScheme: ColorScheme) -> ThemePalette {
+        let isDark = colorScheme == .dark
+        return ThemePalette(
+            background: isDark ? Color(red: 0.18, green: 0.20, blue: 0.25) : Color(red: 0.93, green: 0.94, blue: 0.96),
+            primary: isDark ? Color(red: 0.93, green: 0.94, blue: 0.96) : Color(red: 0.18, green: 0.20, blue: 0.25),
+            secondary: isDark ? Color(red: 0.61, green: 0.66, blue: 0.74) : Color(red: 0.30, green: 0.34, blue: 0.40),
+            accent: isDark ? Color(red: 0.53, green: 0.75, blue: 0.82) : Color(red: 0.37, green: 0.51, blue: 0.67),
+            locationAccent: isDark ? Color(red: 0.64, green: 0.75, blue: 0.55) : Color(red: 0.40, green: 0.55, blue: 0.31),
+            accentBlue: isDark ? Color(red: 0.51, green: 0.63, blue: 0.76) : Color(red: 0.51, green: 0.63, blue: 0.76),
+            alertRed: isDark ? Color(red: 0.75, green: 0.38, blue: 0.42) : Color(red: 0.75, green: 0.38, blue: 0.42),
+            divider: isDark ? Color(red: 0.30, green: 0.34, blue: 0.40) : Color(red: 0.85, green: 0.87, blue: 0.91)
+        )
+    }
+
+    static func dracula(_ colorScheme: ColorScheme) -> ThemePalette {
+        let isDark = colorScheme == .dark
+        return ThemePalette(
+            background: isDark ? Color(red: 0.16, green: 0.16, blue: 0.21) : Color(red: 0.97, green: 0.97, blue: 0.95),
+            primary: isDark ? Color(red: 0.97, green: 0.97, blue: 0.95) : Color(red: 0.16, green: 0.16, blue: 0.21),
+            secondary: isDark ? Color(red: 0.38, green: 0.45, blue: 0.64) : Color(red: 0.38, green: 0.45, blue: 0.64),
+            accent: isDark ? Color(red: 1.0, green: 0.47, blue: 0.78) : Color(red: 0.80, green: 0.28, blue: 0.56),
+            locationAccent: isDark ? Color(red: 0.31, green: 0.98, blue: 0.48) : Color(red: 0.22, green: 0.60, blue: 0.33),
+            accentBlue: isDark ? Color(red: 0.55, green: 0.91, blue: 0.99) : Color(red: 0.27, green: 0.73, blue: 0.83),
+            alertRed: isDark ? Color(red: 1.0, green: 0.33, blue: 0.33) : Color(red: 0.82, green: 0.18, blue: 0.18),
+            divider: isDark ? Color(red: 0.27, green: 0.28, blue: 0.35) : Color(red: 0.88, green: 0.88, blue: 0.88)
+        )
+    }
+
+    static func solarizedDark(_ colorScheme: ColorScheme) -> ThemePalette {
+        let isDark = colorScheme == .dark
+        return ThemePalette(
+            background: isDark ? Color(red: 0.0, green: 0.17, blue: 0.21) : Color(red: 0.99, green: 0.96, blue: 0.89),
+            primary: isDark ? Color(red: 0.51, green: 0.58, blue: 0.59) : Color(red: 0.40, green: 0.48, blue: 0.51),
+            secondary: isDark ? Color(red: 0.40, green: 0.48, blue: 0.51) : Color(red: 0.51, green: 0.58, blue: 0.59),
+            accent: isDark ? Color(red: 0.16, green: 0.63, blue: 0.60) : Color(red: 0.16, green: 0.63, blue: 0.60),
+            locationAccent: isDark ? Color(red: 0.52, green: 0.60, blue: 0.0) : Color(red: 0.52, green: 0.60, blue: 0.0),
+            accentBlue: isDark ? Color(red: 0.15, green: 0.55, blue: 0.82) : Color(red: 0.15, green: 0.55, blue: 0.82),
+            alertRed: isDark ? Color(red: 0.86, green: 0.20, blue: 0.18) : Color(red: 0.86, green: 0.20, blue: 0.18),
+            divider: isDark ? Color(red: 0.03, green: 0.24, blue: 0.26) : Color(red: 0.93, green: 0.91, blue: 0.84)
+        )
+    }
+
+    static func tokyoNight(_ colorScheme: ColorScheme) -> ThemePalette {
+        let isDark = colorScheme == .dark
+        return ThemePalette(
+            background: isDark ? Color(red: 0.10, green: 0.11, blue: 0.15) : Color(red: 0.84, green: 0.84, blue: 0.86),
+            primary: isDark ? Color(red: 0.66, green: 0.69, blue: 0.84) : Color(red: 0.22, green: 0.38, blue: 0.75),
+            secondary: isDark ? Color(red: 0.47, green: 0.51, blue: 0.67) : Color(red: 0.36, green: 0.38, blue: 0.56),
+            accent: isDark ? Color(red: 0.49, green: 0.81, blue: 1.0) : Color(red: 0.18, green: 0.49, blue: 0.91),
+            locationAccent: isDark ? Color(red: 0.62, green: 0.81, blue: 0.42) : Color(red: 0.35, green: 0.46, blue: 0.22),
+            accentBlue: isDark ? Color(red: 0.48, green: 0.64, blue: 0.97) : Color(red: 0.18, green: 0.49, blue: 0.91),
+            alertRed: isDark ? Color(red: 0.97, green: 0.46, blue: 0.56) : Color(red: 0.78, green: 0.26, blue: 0.26),
+            divider: isDark ? Color(red: 0.18, green: 0.24, blue: 0.39) : Color(red: 0.71, green: 0.71, blue: 0.77)
+        )
+    }
+
+    static func monochrome(_ colorScheme: ColorScheme) -> ThemePalette {
+        let isDark = colorScheme == .dark
+        return ThemePalette(
+            background: isDark ? .black : .white,
+            primary: isDark ? .white : .black,
+            secondary: isDark ? Color(white: 0.65) : Color(white: 0.40),
+            accent: isDark ? .white : .black,
+            locationAccent: isDark ? Color(white: 0.75) : Color(white: 0.25),
+            accentBlue: isDark ? Color(white: 0.75) : Color(white: 0.25),
+            alertRed: isDark ? Color(red: 0.82, green: 0.32, blue: 0.32) : Color(red: 0.72, green: 0.18, blue: 0.18),
+            divider: isDark ? Color(white: 0.25) : Color(white: 0.80)
         )
     }
 
