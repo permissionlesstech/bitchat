@@ -328,6 +328,264 @@ private func makeFavoriteRelationship(
 struct ChatPrivateConversationCoordinatorContextTests {
 
     @Test @MainActor
+    func processActionMessage_rendersOnlyExactSenderAnchoredTemplates() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+
+        func processed(_ content: String, sender: String = "bob") -> BitchatMessage {
+            coordinator.processActionMessage(
+                BitchatMessage(
+                    id: UUID().uuidString,
+                    sender: sender,
+                    content: content,
+                    timestamp: Date(),
+                    isRelay: false
+                )
+            )
+        }
+
+        // Exact locally-generatable shapes, actor == wire sender: system.
+        #expect(processed("* 🫂 bob hugs alice *").sender == "system")
+        #expect(processed("* 🫂 bob hugs you *").sender == "system")
+        #expect(processed("* 🐟 bob slaps alice around a bit with a large trout *").sender == "system")
+        #expect(processed("* bob took a screenshot *").sender == "system")
+
+        // Location-channel senders arrive suffixed while content stays
+        // unsuffixed — must still render as a system action.
+        #expect(processed("* 🫂 bob hugs alice *", sender: "bob#ab12").sender == "system")
+        #expect(processed("* 🫂 bob hugs alice#1a2b *").sender == "system")
+
+        // The spoof this parser used to allow: arbitrary text between the
+        // markers with a magic substring rendered as system-authored.
+        #expect(processed("* SECURITY: your session key expired, re-verify at evil.example — bob took a screenshot *").sender == "bob")
+        #expect(processed("* 🫂 admin hugs alice — send your keys to @admin *").sender == "bob")
+        // Self-attributed preamble smuggled into the target slot: the target
+        // must be a single name token, so free text with spaces is rejected.
+        #expect(processed("* 🫂 bob hugs SECURITY: reset your keys at evil.example *").sender == "bob")
+        // Actor slot must be the actual sender, not someone else's name.
+        #expect(processed("* alice took a screenshot *", sender: "bob").sender == "bob")
+        #expect(processed("* 🫂 alice hugs you *", sender: "bob").sender == "bob")
+        // Target slot: single whitespace-free token, bounded length only.
+        #expect(processed("* 🫂 bob hugs " + String(repeating: "x", count: 200) + " *").sender == "bob")
+        #expect(processed("* 🫂 bob hugs a\nb *").sender == "bob")
+        #expect(processed("* 🫂 bob hugs a b *").sender == "bob")
+        // Not an action shape at all.
+        #expect(processed("hello there").sender == "bob")
+    }
+
+    /// A name token is whitespace-free and bounded, but it still renders inside
+    /// the trusted `system` line, so a unicode separator or bidi mark reorders
+    /// the visible text there (@Chessing234 on #1662/#1699). The URL half of
+    /// the check is defense in depth, not a live tappable link: the formatter's
+    /// link-detection loop sits inside its `sender != "system"` branch and the
+    /// else branch that draws system lines attaches no link attributes — the
+    /// check exists so a later formatter change can't quietly make one
+    /// tappable. Both classes degrade to a plain message under the sender's own
+    /// name.
+    @Test @MainActor
+    func processActionMessage_rejectsLinkAndSeparatorPayloadsInSlots() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+
+        func processed(_ content: String, sender: String = "bob") -> BitchatMessage {
+            coordinator.processActionMessage(
+                BitchatMessage(id: UUID().uuidString, sender: sender, content: content,
+                               timestamp: Date(), isRelay: false)
+            )
+        }
+
+        // URL in the target slot — the whole point of the actor-anchoring
+        // example, but as a tappable link rather than a preamble.
+        #expect(processed("* 🫂 bob hugs https://evil.tld *").sender == "bob")
+        // The www. variant has no ":" or "/", so a naive charset check misses
+        // it; the formatter linkifies it via the "www." hint just the same.
+        #expect(processed("* 🫂 bob hugs www.evil.tld *").sender == "bob")
+        #expect(processed("* bob took a screenshot http://evil.tld *", sender: "bob").sender == "bob")
+        // URL smuggled through the ACTOR nickname too.
+        #expect(processed("* https://evil.tld took a screenshot *", sender: "https://evil.tld").sender == "https://evil.tld")
+        // Unicode bidi mark (U+202E right-to-left override) in the slot — this
+        // is the case a plain `Character.isWhitespace` scan actually missed.
+        #expect(processed("* 🫂 bob hugs a\u{202E}b *").sender == "bob")
+        // Non-breaking space (U+00A0). Swift's `isWhitespace` already matched
+        // this one on the base; it's kept as a regression guard.
+        #expect(processed("* 🫂 bob hugs a\u{00A0}b *").sender == "bob")
+
+        // Legitimate shapes still render as system actions.
+        #expect(processed("* 🫂 bob hugs alice *").sender == "system")
+        #expect(processed("* 🫂 bob hugs alice#1a2b *").sender == "system")
+        #expect(processed("* bob took a screenshot *").sender == "system")
+    }
+
+    /// The target slot rejects free text, but the ACTOR slot is the peer's own
+    /// self-chosen nickname, and nothing upstream bounds what arrives on the
+    /// wire: `InputValidator.validateNickname` is only reached from ReadReceipt
+    /// decoding, announce nicknames are merely NFC-normalized, and content is
+    /// merely trimmed. So the preamble the target slot now refuses can simply
+    /// be moved into the nickname, and the line still lands in the formatter's
+    /// trusted "system" styling — unless the token check catches it here.
+    @Test @MainActor
+    func processActionMessage_rejectsPreambleSmuggledIntoTheActorNickname() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+
+        func processed(_ content: String, sender: String) -> BitchatMessage {
+            coordinator.processActionMessage(
+                BitchatMessage(
+                    id: UUID().uuidString,
+                    sender: sender,
+                    content: content,
+                    timestamp: Date(),
+                    isRelay: false
+                )
+            )
+        }
+
+        // 44 characters — comfortably inside the 50-char nickname limit.
+        let hostileNick = "SECURITY: session expired, re-verify at evil"
+        #expect(hostileNick.count <= 50)
+
+        // Every one of these is a peer speaking as itself, so the actor check
+        // passes; the payload rides in the name.
+        #expect(processed("* \(hostileNick) took a screenshot *", sender: hostileNick).sender == hostileNick)
+        #expect(processed("* 🫂 \(hostileNick) hugs you *", sender: hostileNick).sender == hostileNick)
+        #expect(
+            processed(
+                "* 🐟 \(hostileNick) slaps you around a bit with a large trout *",
+                sender: hostileNick
+            ).sender == hostileNick
+        )
+
+        // Ordinary nicknames keep rendering as system actions.
+        #expect(processed("* bob took a screenshot *", sender: "bob").sender == "system")
+        #expect(processed("* 🫂 bob hugs you *", sender: "bob").sender == "system")
+
+        // The reason the actor bound is the nickname limit and not the target
+        // slot's 32: a legitimate, space-free nickname longer than 32 must
+        // STILL render as a system action. If this bound is ever "simplified"
+        // back to 32, these regress to plain text under the peer's own name and
+        // their hugs/slaps/screenshots silently stop rendering as actions.
+        let longLegitNick = String(repeating: "a", count: 40)  // > 32, ≤ 50, no spaces
+        #expect(longLegitNick.count > 32 && longLegitNick.count <= InputValidator.Limits.maxNicknameLength)
+        #expect(processed("* \(longLegitNick) took a screenshot *", sender: longLegitNick).sender == "system")
+        #expect(processed("* 🫂 \(longLegitNick) hugs you *", sender: longLegitNick).sender == "system")
+        #expect(processed("* 🐟 \(longLegitNick) slaps you around a bit with a large trout *", sender: longLegitNick).sender == "system")
+    }
+
+    /// A blank-rendering scalar is neither whitespace nor a control character,
+    /// so the old set-membership check waved it through (Codex on #1699): every
+    /// gap in `SECURITY:⠀session⠀expired,⠀re-verify⠀at⠀evil` is U+2800 braille
+    /// pattern blank, which reads as a sentence but passes as a single token
+    /// and lands in the trusted "system" styling. The scalar rule is by category now, so
+    /// hangul fillers and private-use scalars fall the same way — while names
+    /// carrying combining marks keep rendering.
+    @Test @MainActor
+    func processActionMessage_rejectsBlankRenderingScalarsInSlots() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+
+        func processed(_ content: String, sender: String = "bob") -> BitchatMessage {
+            coordinator.processActionMessage(
+                BitchatMessage(id: UUID().uuidString, sender: sender, content: content,
+                               timestamp: Date(), isRelay: false)
+            )
+        }
+
+        // The reported payload, verbatim: U+2800 in every gap.
+        let brailleBlank = "\u{2800}"
+        let hostileNick = [
+            "SECURITY:", "session", "expired,", "re-verify", "at", "evil"
+        ].joined(separator: brailleBlank)
+        // Inside the 50-char actor bound, so the rejection has to come from the
+        // scalar rule rather than the length check.
+        #expect(hostileNick.count <= InputValidator.Limits.maxNicknameLength)
+
+        // All three action templates, each a peer speaking as itself.
+        #expect(processed("* \(hostileNick) took a screenshot *", sender: hostileNick).sender == hostileNick)
+        #expect(processed("* 🫂 \(hostileNick) hugs you *", sender: hostileNick).sender == hostileNick)
+        #expect(
+            processed(
+                "* 🐟 \(hostileNick) slaps you around a bit with a large trout *",
+                sender: hostileNick
+            ).sender == hostileNick
+        )
+        // Same scalar in the target slot.
+        #expect(processed("* 🫂 bob hugs SECURITY:\(brailleBlank)verify\(brailleBlank)at\(brailleBlank)evil *").sender == "bob")
+
+        // U+3164 hangul filler is category Lo, not a separator — only its
+        // default-ignorable property gives it away. Well inside the 32-char
+        // target bound, so again the scalar rule is what rejects it.
+        let hangulFiller = "\u{3164}"
+        let fillerTarget = "SECURITY:\(hangulFiller)reset\(hangulFiller)keys"
+        #expect(fillerTarget.count <= 32)
+        #expect(processed("* 🫂 bob hugs \(fillerTarget) *").sender == "bob")
+
+        // Private-use scalars render as whatever the font decides, including
+        // nothing at all.
+        #expect(processed("* 🫂 bob hugs a\u{E000}b *").sender == "bob")
+
+        // Nonspacing combining marks are NOT blanks: Persian and Arabic names
+        // carry harakat and must keep rendering as system actions.
+        let harakatName = "\u{0645}\u{062D}\u{0645}\u{0651}\u{062F}"  // محمّد, with a U+0651 shadda
+        #expect(processed("* \(harakatName) took a screenshot *", sender: harakatName).sender == "system")
+        #expect(processed("* 🫂 bob hugs \(harakatName) *").sender == "system")
+
+        // A plain emoji nickname (no variation selector) is a symbol, not a
+        // blank.
+        let emojiNick = "\u{1F389}"  // 🎉
+        #expect(processed("* \(emojiNick) took a screenshot *", sender: emojiNick).sender == "system")
+        #expect(processed("* 🫂 bob hugs \(emojiNick) *").sender == "system")
+    }
+
+    /// Persian writes compounds with the half-space, U+200C ZERO WIDTH
+    /// NON-JOINER: `علی\u{200C}رضا`, `می\u{200C}رود`. It is category Cf, so the
+    /// blank-scalar rule rejected it and those names stopped rendering as
+    /// actions — a cost carried only by Persian and Arabic speakers. Unlike the
+    /// invisible scalars that rule exists to stop, the joiner renders: a
+    /// visible half-space in Arabic script, nothing at all in Latin, where it
+    /// cannot fake a word boundary. That makes it no stronger than the hyphen
+    /// and colon this check has always allowed, so it is admitted in its
+    /// orthographic position — between two letters, at most twice — and
+    /// nowhere else.
+    @Test @MainActor
+    func processActionMessage_allowsPersianHalfSpaceButNotSentencesBuiltFromIt() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+
+        func processed(_ content: String, sender: String = "bob") -> BitchatMessage {
+            coordinator.processActionMessage(
+                BitchatMessage(id: UUID().uuidString, sender: sender, content: content,
+                               timestamp: Date(), isRelay: false)
+            )
+        }
+
+        let zwnj = "\u{200C}"
+
+        // Real names must render as system actions, in both slots.
+        for name in ["علی\(zwnj)رضا", "می\(zwnj)رود", "امیر\(zwnj)حسین", "علی\(zwnj)رضا\(zwnj)پور"] {
+            #expect(processed("* \(name) took a screenshot *", sender: name).sender == "system")
+            #expect(processed("* 🫂 bob hugs \(name) *").sender == "system")
+        }
+        // A joiner after a harakat is still between two letters to a reader.
+        let harakat = "\u{0645}\u{062D}\u{0645}\u{0651}\u{062F}\(zwnj)\u{0631}\u{0636}\u{0627}"
+        #expect(processed("* \(harakat) took a screenshot *", sender: harakat).sender == "system")
+
+        // A sentence built out of joiners is not a name: three or more gaps.
+        let sentence = "امنیت\(zwnj)جلسه\(zwnj)منقضی\(zwnj)شد"
+        #expect(processed("* \(sentence) took a screenshot *", sender: sentence).sender == sentence)
+        #expect(processed("* 🫂 bob hugs \(sentence) *").sender == "bob")
+
+        // Nor is a gap opened next to anything that is not a letter.
+        for shape in ["امنیت:\(zwnj)جلسه", "\(zwnj)امنیت", "امنیت\(zwnj)", "ab1\(zwnj)2cd"] {
+            #expect(processed("* 🫂 bob hugs \(shape) *").sender == "bob")
+        }
+
+        // The exception is U+200C alone — every other invisible scalar stays out.
+        #expect(processed("* 🫂 bob hugs a\u{200B}b *").sender == "bob")
+        #expect(processed("* 🫂 bob hugs a\u{200D}b *").sender == "bob")
+        #expect(processed("* 🫂 bob hugs a\u{2800}b *").sender == "bob")
+    }
+
+    @Test @MainActor
     func addMessageToPrivateChats_upsertsByIdAndSanitizes() async {
         let context = MockChatPrivateConversationContext()
         let coordinator = ChatPrivateConversationCoordinator(context: context)
