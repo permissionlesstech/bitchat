@@ -277,11 +277,11 @@ struct ChatViewModelNostrExtensionTests {
         LocationChannelManager.shared.select(channel)
         defer { LocationChannelManager.shared.select(.mesh) }
 
-        _ = await TestHelpers.waitUntil({ LocationChannelManager.shared.selectedChannel == channel })
+        _ = await TestHelpers.waitUntil({ LocationChannelManager.shared.selectedChannel == channel }, timeout: TestConstants.settleTimeout)
 
         let (viewModel, _) = makeTestableViewModel()
         
-        _ = await TestHelpers.waitUntil({ viewModel.activeChannel == channel })
+        _ = await TestHelpers.waitUntil({ viewModel.activeChannel == channel }, timeout: TestConstants.settleTimeout)
         
         let signer = try NostrIdentity.generate()
         let event = NostrEvent(
@@ -312,7 +312,7 @@ struct ChatViewModelNostrExtensionTests {
                 viewModel.handleNostrEvent(signed)
             }
             return false
-        }, timeout: TestConstants.longTimeout)
+        }, timeout: TestConstants.settleTimeout)
         #expect(didAppend)
     }
 
@@ -452,7 +452,7 @@ struct ChatViewModelNostrExtensionTests {
             )
         ], for: convKey)
 
-        let content = try ackContent(type: .delivered, messageID: messageID, senderPeerID: PeerID(str: "0123456789abcdef"))
+        let content = try ackContent(type: .delivered, messageID: messageID)
         let giftWrap = try NostrProtocol.createPrivateMessage(
             content: content,
             recipientPubkey: recipient.publicKeyHex,
@@ -463,7 +463,7 @@ struct ChatViewModelNostrExtensionTests {
 
         let didUpdate = await TestHelpers.waitUntil(
             { isDelivered(status: deliveryStatus(in: viewModel, peerID: convKey, messageID: messageID)) },
-            timeout: 5.0
+            timeout: TestConstants.settleTimeout
         )
         #expect(didUpdate)
     }
@@ -490,7 +490,7 @@ struct ChatViewModelNostrExtensionTests {
             )
         ], for: convKey)
 
-        let content = try ackContent(type: .readReceipt, messageID: messageID, senderPeerID: PeerID(str: "0123456789abcdef"))
+        let content = try ackContent(type: .readReceipt, messageID: messageID)
         let giftWrap = try NostrProtocol.createPrivateMessage(
             content: content,
             recipientPubkey: recipient.publicKeyHex,
@@ -501,7 +501,7 @@ struct ChatViewModelNostrExtensionTests {
 
         let didUpdate = await TestHelpers.waitUntil(
             { isRead(status: deliveryStatus(in: viewModel, peerID: convKey, messageID: messageID)) },
-            timeout: 5.0
+            timeout: TestConstants.settleTimeout
         )
         #expect(didUpdate)
     }
@@ -516,8 +516,7 @@ struct ChatViewModelNostrExtensionTests {
 
         let content = try privateMessageContent(
             text: "Hello from gift wrap",
-            messageID: messageID,
-            senderPeerID: PeerID(str: "0123456789abcdef")
+            messageID: messageID
         )
         let giftWrap = try NostrProtocol.createPrivateMessage(
             content: content,
@@ -529,7 +528,7 @@ struct ChatViewModelNostrExtensionTests {
 
         let didStore = await TestHelpers.waitUntil(
             { viewModel.privateChats[convKey]?.first?.content == "Hello from gift wrap" },
-            timeout: 5.0
+            timeout: TestConstants.settleTimeout
         )
         #expect(didStore)
         #expect(viewModel.nostrKeyMapping[convKey] == sender.publicKeyHex)
@@ -548,8 +547,7 @@ struct ChatViewModelNostrExtensionTests {
 
         let content = try privateMessageContent(
             text: "Blocked",
-            messageID: messageID,
-            senderPeerID: PeerID(str: "0123456789abcdef")
+            messageID: messageID
         )
         let giftWrap = try NostrProtocol.createPrivateMessage(
             content: content,
@@ -559,14 +557,17 @@ struct ChatViewModelNostrExtensionTests {
 
         viewModel.handleGiftWrap(giftWrap, id: recipient)
 
-        // Gift-wrap decryption runs off the main actor; wait for the ack
-        // (sent even for blocked senders) to know processing finished.
-        let didAck = await TestHelpers.waitUntil(
-            { viewModel.sentGeoDeliveryAcks.contains(messageID) },
-            timeout: 5.0
+        // Gift-wrap decryption runs off the main actor. The key mapping is
+        // registered in the same main-actor hop that runs the PM handler, so
+        // once it shows up the handler has already returned.
+        let didProcess = await TestHelpers.waitUntil(
+            { viewModel.nostrKeyMapping[convKey] == sender.publicKeyHex },
+            timeout: TestConstants.settleTimeout
         )
-        #expect(didAck)
+        #expect(didProcess)
         #expect(viewModel.privateChats[convKey] == nil)
+        // A blocked sender gets nothing back, not even a DELIVERED ack.
+        #expect(!viewModel.sentGeoDeliveryAcks.contains(messageID))
     }
 
     @Test @MainActor
@@ -591,7 +592,7 @@ struct ChatViewModelNostrExtensionTests {
             )
         ], for: convKey)
 
-        let content = try ackContent(type: .delivered, messageID: messageID, senderPeerID: PeerID(str: "0123456789abcdef"))
+        let content = try ackContent(type: .delivered, messageID: messageID)
         let giftWrap = try NostrProtocol.createPrivateMessage(
             content: content,
             recipientPubkey: recipient.publicKeyHex,
@@ -602,7 +603,7 @@ struct ChatViewModelNostrExtensionTests {
 
         let didUpdate = await TestHelpers.waitUntil(
             { isDelivered(status: deliveryStatus(in: viewModel, peerID: convKey, messageID: messageID)) },
-            timeout: 5.0
+            timeout: TestConstants.settleTimeout
         )
         #expect(didUpdate)
     }
@@ -1022,10 +1023,10 @@ struct ChatViewModelMediaTransferTests {
         viewModel.sendVoiceNote(at: url)
 
         // Media sends hop through Task.detached; the global executor is
-        // shared with every parallel test worker, so a loaded runner can
-        // exceed the 5s default. waitUntil returns as soon as the condition
-        // holds, so passing runs never pay the longer timeout.
-        let didSend = await TestHelpers.waitUntil({ transport.sentPrivateFiles.count == 1 }, timeout: TestConstants.longTimeout)
+        // shared with every parallel test worker, so a loaded runner can be
+        // starved for seconds. waitUntil returns as soon as the condition
+        // holds, so passing runs never pay the settle deadline.
+        let didSend = await TestHelpers.waitUntil({ transport.sentPrivateFiles.count == 1 }, timeout: TestConstants.settleTimeout)
         #expect(didSend)
         #expect(transport.sentPrivateFiles.first?.peerID == peerID)
         #expect(viewModel.privateChats[peerID]?.last?.content.contains("[voice]") == true)
@@ -1056,7 +1057,7 @@ struct ChatViewModelMediaTransferTests {
         viewModel.resolveLegacyPrivateMediaConsent(requestID: firstRequestID, approved: true)
         let showedSecond = await TestHelpers.waitUntil(
             { viewModel.legacyPrivateMediaConsentRequest?.peerID == secondPeer },
-            timeout: TestConstants.longTimeout
+            timeout: TestConstants.settleTimeout
         )
         #expect(showedSecond)
         let secondRequestID = try #require(viewModel.legacyPrivateMediaConsentRequest?.id)
@@ -1098,7 +1099,7 @@ struct ChatViewModelMediaTransferTests {
         )
         let advanced = await TestHelpers.waitUntil(
             { viewModel.legacyPrivateMediaConsentRequest?.peerID == secondPeer },
-            timeout: TestConstants.longTimeout
+            timeout: TestConstants.settleTimeout
         )
         #expect(advanced)
         #expect(decisions.isEmpty, "Invalidation drops the request rather than resolving its send")
@@ -1128,7 +1129,7 @@ struct ChatViewModelMediaTransferTests {
 
         let didFail = await TestHelpers.waitUntil({
             isFailed(status: viewModel.privateChats[peerID]?.last?.deliveryStatus)
-        }, timeout: TestConstants.longTimeout)
+        }, timeout: TestConstants.settleTimeout)
         #expect(didFail)
         #expect(!FileManager.default.fileExists(atPath: url.path))
         #expect(transport.sentPrivateFiles.isEmpty)
@@ -1144,7 +1145,7 @@ struct ChatViewModelMediaTransferTests {
         viewModel.selectedPrivateChatPeer = peerID
         viewModel.sendImage(from: sourceURL)
 
-        let didSend = await TestHelpers.waitUntil({ transport.sentPrivateFiles.count == 1 }, timeout: TestConstants.longTimeout)
+        let didSend = await TestHelpers.waitUntil({ transport.sentPrivateFiles.count == 1 }, timeout: TestConstants.settleTimeout)
         #expect(didSend)
         #expect(transport.sentPrivateFiles.first?.peerID == peerID)
         #expect(transport.sentPrivateFiles.first?.packet.mimeType == "image/jpeg")
@@ -1165,7 +1166,7 @@ struct ChatViewModelMediaTransferTests {
 
         let didNotify = await TestHelpers.waitUntil({
             viewModel.messages.contains(where: { $0.sender == "system" && $0.content.contains("Failed to prepare image") })
-        }, timeout: TestConstants.longTimeout)
+        }, timeout: TestConstants.settleTimeout)
         #expect(didNotify)
         #expect(transport.sentPrivateFiles.isEmpty)
         #expect(viewModel.privateChats[peerID]?.isEmpty != false)
@@ -1262,22 +1263,20 @@ private func base64URLEncode(_ data: Data) -> String {
         .replacingOccurrences(of: "=", with: "")
 }
 
-private func ackContent(type: NoisePayloadType, messageID: String, senderPeerID: PeerID) throws -> String {
+private func ackContent(type: NoisePayloadType, messageID: String) throws -> String {
     if let content = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(
         type: type,
-        messageID: messageID,
-        senderPeerID: senderPeerID
+        messageID: messageID
     ) {
         return content
     }
     throw ChatViewModelExtensionsTestError.invalidAckContent
 }
 
-private func privateMessageContent(text: String, messageID: String, senderPeerID: PeerID) throws -> String {
+private func privateMessageContent(text: String, messageID: String) throws -> String {
     if let content = NostrEmbeddedBitChat.encodePMForNostrNoRecipient(
         content: text,
-        messageID: messageID,
-        senderPeerID: senderPeerID
+        messageID: messageID
     ) {
         return content
     }
