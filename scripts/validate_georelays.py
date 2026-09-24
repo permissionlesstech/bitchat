@@ -1,5 +1,24 @@
 #!/usr/bin/env python3
-"""Strict validator for the reviewed georelay CSV update workflow."""
+"""Strict validator for the reviewed georelay CSV update workflow.
+
+Usage::
+
+    python3 scripts/validate_georelays.py \\
+        --input candidate.csv \\
+        --baseline relays/online_relays_gps.csv \\
+        --output relays/online_relays_gps.csv \\
+        [--github-output \$GITHUB_OUTPUT]
+
+The candidate CSV must have the header ``Relay URL,Latitude,Longitude``
+and one relay per row. Relay addresses are normalized (scheme and default
+port stripped) before deduplication and baseline comparison, so
+``wss://relay.example.com:443/`` and ``relay.example.com`` are treated as
+the same relay.
+
+Exit codes:
+    0 - validation succeeded; the output file was written.
+    1 - validation or I/O error; the output file was not written.
+"""
 
 from __future__ import annotations
 
@@ -239,11 +258,18 @@ def validate_update(candidate: bytes, baseline: bytes) -> ValidationSummary:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Validate a candidate georelay CSV against the reviewed baseline.",
+    )
     parser.add_argument("--input", required=True, type=Path)
     parser.add_argument("--baseline", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--github-output", type=Path)
+    parser.add_argument(
+        "--version",
+        action="version",
+        version="validate-georelays 1.0",
+    )
     args = parser.parse_args(argv)
 
     try:

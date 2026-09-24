@@ -1,4 +1,6 @@
+import io
 import tempfile
+from contextlib import redirect_stdout
 from pathlib import Path
 import sys
 import unittest
@@ -180,6 +182,215 @@ class ValidateGeoRelaysTests(unittest.TestCase):
             metadata = github_output.read_text()
             self.assertIn("unique_relays=60", metadata)
             self.assertIn("sha256=", metadata)
+
+    def test_rejects_empty_file(self) -> None:
+        with self.assertRaises(validator.ValidationError):
+            validator.validate_bytes(b"", minimum_unique_relays=1)
+
+    def test_rejects_header_only_csv(self) -> None:
+        data = b"Relay URL,Latitude,Longitude\n"
+        with self.assertRaises(validator.ValidationError):
+            validator.validate_bytes(data, minimum_unique_relays=1)
+
+    def test_port_boundary_values(self) -> None:
+        bad_ports = ["0", "65536", "99999"]
+        for port in bad_ports:
+            with self.subTest(port=port):
+                with self.assertRaises(validator.ValidationError):
+                    validator.validate_bytes(
+                        csv_bytes([f"relay.example.com:{port},10,20"]),
+                        minimum_unique_relays=1,
+                    )
+        data = csv_bytes(
+            [
+                "one.example.com:1,10,20",
+                "two.example.com:65535,11,21",
+            ]
+        )
+        summary = validator.validate_bytes(data, minimum_unique_relays=2)
+        self.assertEqual(summary.unique_relays, 2)
+
+    def test_rejects_ipv4_literal_hostnames(self) -> None:
+        for addr in ["8.8.8.8", "1.1.1.1", "wss://203.0.113.1", "https://198.51.100.1:443"]:
+            with self.subTest(addr=addr):
+                with self.assertRaises(validator.ValidationError):
+                    validator.validate_bytes(
+                        csv_bytes([f"{addr},10,20"]),
+                        minimum_unique_relays=1,
+                    )
+
+    def test_rejects_trailing_dot_hostname(self) -> None:
+        for addr in ["relay.example.com.", "wss://relay.example.com./"]:
+            with self.subTest(addr=addr):
+                with self.assertRaises(validator.ValidationError):
+                    validator.validate_bytes(
+                        csv_bytes([f"{addr},10,20"]),
+                        minimum_unique_relays=1,
+                    )
+
+    def test_enforces_maximum_rows(self) -> None:
+        rows = [f"r-{i}.example.com,{i % 80},{i % 170}" for i in range(5)]
+        with self.assertRaises(validator.ValidationError):
+            validator.validate_bytes(csv_bytes(rows), maximum_rows=3, minimum_unique_relays=1)
+
+    def test_enforces_maximum_unique_relays(self) -> None:
+        rows = [f"r-{i}.example.com,{i % 80},{i % 170}" for i in range(5)]
+        with self.assertRaises(validator.ValidationError):
+            validator.validate_bytes(csv_bytes(rows), maximum_unique_relays=3, minimum_unique_relays=1)
+
+    def test_rejects_non_utf8_bytes(self) -> None:
+        data = b"Relay URL,Latitude,Longitude\nrelay.example.com,10,20\n\xff\xfe\n"
+        with self.assertRaises(validator.ValidationError):
+            validator.validate_bytes(data, minimum_unique_relays=1)
+
+    def test_rejects_coordinate_overflow_to_infinity(self) -> None:
+        # "1e999" matches the ASCII-decimal pattern but float() produces
+        # infinity, which the isfinite() guard must reject.
+        with self.assertRaises(validator.ValidationError):
+            validator.validate_bytes(
+                csv_bytes(["relay.example.com,1e999,20"]),
+                minimum_unique_relays=1,
+            )
+
+    def test_conflicting_coordinate_error_names_the_relay(self) -> None:
+        data = csv_bytes(
+            [
+                "relay.example.com,10,20",
+                "wss://relay.example.com:443/,11,21",
+            ]
+        )
+        with self.assertRaisesRegex(
+            validator.ValidationError,
+            r"relay\.example\.com",
+        ):
+            validator.validate_bytes(data, minimum_unique_relays=1)
+
+    def test_rejects_utf8_bom(self) -> None:
+        data = b"\xef\xbb\xbfRelay URL,Latitude,Longitude\nrelay.example.com,10,20\n"
+        with self.assertRaises(validator.ValidationError):
+            validator.validate_bytes(data, minimum_unique_relays=1)
+
+    def test_rejects_localhost_and_local_domains(self) -> None:
+        for addr in ["localhost", "myhost.localhost", "relay.local", "relay.internal"]:
+            with self.subTest(addr=addr):
+                with self.assertRaises(validator.ValidationError):
+                    validator.validate_bytes(
+                        csv_bytes([f"{addr},10,20"]),
+                        minimum_unique_relays=1,
+                    )
+
+    def test_minimum_unique_relays_boundary(self) -> None:
+        data = csv_bytes(
+            [
+                "one.example.com,1,2",
+                "two.example.com,3,4",
+            ]
+        )
+        # Exactly at the minimum: should pass.
+        summary = validator.validate_bytes(data, minimum_unique_relays=2)
+        self.assertEqual(summary.unique_relays, 2)
+        # One below the minimum: should fail.
+        with self.assertRaises(validator.ValidationError):
+            validator.validate_bytes(data, minimum_unique_relays=3)
+
+
+class NormalizeRelayAddressTests(unittest.TestCase):
+    """Direct unit tests for normalize_relay_address.
+
+    These exercise the normalizer in isolation so a failure points at the
+    exact rule, not at the full validate_bytes pipeline that wraps it.
+    """
+
+    def test_normalizes_bare_host_without_scheme(self) -> None:
+        self.assertEqual(
+            validator.normalize_relay_address("relay.example.com"),
+            "relay.example.com",
+        )
+
+    def test_strips_wss_scheme_and_default_port(self) -> None:
+        self.assertEqual(
+            validator.normalize_relay_address("wss://relay.example.com:443/"),
+            "relay.example.com",
+        )
+
+    def test_strips_https_scheme(self) -> None:
+        self.assertEqual(
+            validator.normalize_relay_address("https://relay.example.com"),
+            "relay.example.com",
+        )
+
+    def test_preserves_non_default_port(self) -> None:
+        self.assertEqual(
+            validator.normalize_relay_address("wss://relay.example.com:8443"),
+            "relay.example.com:8443",
+        )
+
+    def test_rejects_insecure_schemes(self) -> None:
+        for scheme in ["http://", "ws://", "ftp://"]:
+            with self.subTest(scheme=scheme):
+                with self.assertRaises(validator.ValidationError):
+                    validator.normalize_relay_address(f"{scheme}relay.example.com")
+
+    def test_rejects_credentials_in_url(self) -> None:
+        for addr in [
+            "wss://user@relay.example.com",
+            "wss://user:pass@relay.example.com",
+            "https://token:secret@relay.example.com",
+        ]:
+            with self.subTest(addr=addr):
+                with self.assertRaises(validator.ValidationError):
+                    validator.normalize_relay_address(addr)
+
+    def test_rejects_query_and_fragment(self) -> None:
+        for addr in [
+            "wss://relay.example.com?foo=1",
+            "wss://relay.example.com#section",
+            "relay.example.com?",
+            "relay.example.com#",
+        ]:
+            with self.subTest(addr=addr):
+                with self.assertRaises(validator.ValidationError):
+                    validator.normalize_relay_address(addr)
+
+    def test_rejects_invalid_dns_labels(self) -> None:
+        bad = [
+            "-relay.example.com",       # label starts with hyphen
+            "relay-.example.com",       # label ends with hyphen
+            "relay..example.com",       # empty label (double dot)
+            "a" * 64 + ".example.com",  # label too long (>63)
+        ]
+        for addr in bad:
+            with self.subTest(addr=addr):
+                with self.assertRaises(validator.ValidationError):
+                    validator.normalize_relay_address(addr)
+
+    def test_normalize_relay_address_is_idempotent(self) -> None:
+        # The output of normalize_relay_address must itself be a valid input
+        # that normalizes to the same value. This is what makes deduplication
+        # and baseline comparison deterministic.
+        cases = [
+            "relay.example.com",
+            "wss://relay.example.com:443/",
+            "https://second.example.org",
+            "relay.example.com:8443",
+        ]
+        for raw in cases:
+            with self.subTest(raw=raw):
+                first = validator.normalize_relay_address(raw)
+                second = validator.normalize_relay_address(first)
+                self.assertEqual(first, second)
+
+
+class ValidatorCLITests(unittest.TestCase):
+    """Tests for the argparse surface of main()."""
+
+    def test_version_flag_prints_and_exits_zero(self) -> None:
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            with self.assertRaises(SystemExit) as ctx:
+                validator.main(["--version"])
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertIn("validate-georelays", buf.getvalue())
 
 
 if __name__ == "__main__":
