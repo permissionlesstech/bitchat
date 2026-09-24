@@ -11,9 +11,11 @@ jobs:
     name: Periphery scan
     runs-on: macos-latest
     timeout-minutes: 30
-    # Advisory, like SwiftLint (#1361): findings annotate the PR but don't
-    # block merges. Drop continue-on-error once the baseline proves stable.
-    continue-on-error: true
+    # Blocking, like SwiftLint since #1646. The baseline (committed July 8)
+    # has been stable across a month of merges — the "drop continue-on-error
+    # once the baseline proves stable" condition this job shipped with is met.
+    # Known macOS-scan false positives stay suppressed by the baseline; only
+    # NEW dead code fails the job (--strict below).
 
     steps:
       - name: Checkout code

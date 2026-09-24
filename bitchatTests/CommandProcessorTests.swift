@@ -255,7 +255,9 @@ struct CommandProcessorTests {
         }
         switch blockResult {
         case .success(let message):
-            #expect(message == "blocked bob. you will no longer receive messages from them")
+            // "no longer see" — blocking filters at display time; packets still
+            // arrive and relay, so "receive" overpromised (UX audit fix).
+            #expect(message == "blocked bob. you will no longer see their messages")
         default:
             Issue.record("Expected success result")
         }
