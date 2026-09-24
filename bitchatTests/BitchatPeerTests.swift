@@ -36,6 +36,30 @@ struct BitchatPeerTests {
         #expect(peer.statusIcon == "🌙")
     }
 
+    @Test("Mutual favorite without a stored Nostr key is offline, not nostr-available")
+    func mutualFavoriteWithoutNostrKeyIsOffline() {
+        let peerID = PeerID(str: "0123456789abcdef")
+        let noiseKey = Data((0..<32).map(UInt8.init))
+        var peer = BitchatPeer(peerID: peerID, noisePublicKey: noiseKey, nickname: "A", isConnected: false, isReachable: false)
+        peer.favoriteStatus = FavoriteRelationship(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: nil,
+            peerNickname: "A",
+            isFavorite: true,
+            theyFavoritedUs: true,
+            favoritedAt: Date(timeIntervalSince1970: 1),
+            lastUpdated: Date(timeIntervalSince1970: 2)
+        )
+
+        // Nothing to seal a Nostr envelope to: claiming availability here
+        // would relight the DM header's "end-to-end encrypted" caption with
+        // neither a Noise session nor a usable recipient key.
+        #expect(peer.connectionState == .offline)
+
+        peer.nostrPublicKey = "abcdef"
+        #expect(peer.connectionState == .nostrAvailable)
+    }
+
     @Test("Mutual offline peers show Nostr icon")
     func mutualFavoriteOfflinePeerShowsNostrIcon() {
         let peerID = PeerID(str: "0011223344556677")

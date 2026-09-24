@@ -440,7 +440,13 @@ final class ChatPeerIdentityCoordinator {
             return cachedStatus
         }
 
-        let hasEverEstablishedSession = getFingerprint(for: peerID) != nil
+        // The status must reflect the LIVE session, never history. The old
+        // mapping returned secured/verified for any peer whose fingerprint was
+        // ever persisted — so after a cold launch or a handshake FAILURE the
+        // DM header still showed a solid lock and the composer still claimed
+        // "end-to-end encrypted" with no secure session in existence. A
+        // remembered fingerprint changes what an established session upgrades
+        // to (verified vs secured); it must not conjure a lock on its own.
         let sessionState = context.noiseSessionState(for: peerID)
 
         let status: EncryptionStatus
@@ -448,11 +454,11 @@ final class ChatPeerIdentityCoordinator {
         case .established:
             status = verifiedEncryptionStatus(for: peerID)
         case .handshaking, .handshakeQueued:
-            status = hasEverEstablishedSession ? verifiedEncryptionStatus(for: peerID) : .noiseHandshaking
+            status = .noiseHandshaking
         case .none:
-            status = hasEverEstablishedSession ? verifiedEncryptionStatus(for: peerID) : .noHandshake
+            status = .noHandshake
         case .failed:
-            status = hasEverEstablishedSession ? verifiedEncryptionStatus(for: peerID) : .none
+            status = .none
         }
 
         context.setCachedEncryptionStatus(status, for: peerID)
@@ -477,15 +483,21 @@ final class ChatPeerIdentityCoordinator {
             return peerID.id
         }
 
+        // Local aliases outrank announced nicknames so a saved petname is
+        // actually visible after the fingerprint sheet dismisses.
+        if let fingerprint = getFingerprint(for: peerID),
+           let identity = context.socialIdentity(forFingerprint: fingerprint),
+           let petname = identity.localPetname,
+           !petname.isEmpty {
+            return petname
+        }
+
         if let nickname = context.meshPeerNicknames()[peerID] {
             return nickname
         }
 
         if let fingerprint = getFingerprint(for: peerID),
            let identity = context.socialIdentity(forFingerprint: fingerprint) {
-            if let petname = identity.localPetname {
-                return petname
-            }
             return identity.claimedNickname
         }
 
@@ -506,12 +518,15 @@ final class ChatPeerIdentityCoordinator {
         let nickname = nickname.normalizedNickname
         switch context.activeChannel {
         case .location:
-            if nickname.contains("#"),
-               let person = context.visibleGeohashPeople()
-                .first(where: { $0.displayName == nickname }) {
-                let conversationKey = PeerID(nostr_: person.id)
-                context.registerNostrKeyMapping(person.id, for: conversationKey)
-                return conversationKey
+            if nickname.contains("#") {
+                let people = context.visibleGeohashPeople().filter {
+                    $0.displayName.normalizedNickname == nickname
+                }
+                if people.count == 1, let person = people.first {
+                    let conversationKey = PeerID(nostr_: person.id)
+                    context.registerNostrKeyMapping(person.id, for: conversationKey)
+                    return conversationKey
+                }
             }
 
             let base = nickname
@@ -519,10 +534,14 @@ final class ChatPeerIdentityCoordinator {
                 .first
                 .map(String.init)?
                 .lowercased() ?? nickname.lowercased()
-            if let pubkey = context.geoNicknames.first(where: { $0.value.lowercased() == base })?.key {
+            let geoMatches = context.geoNicknames.filter { $0.value.lowercased() == base }
+            if geoMatches.count == 1, let pubkey = geoMatches.keys.first {
                 let conversationKey = PeerID(nostr_: pubkey)
                 context.registerNostrKeyMapping(pubkey, for: conversationKey)
                 return conversationKey
+            }
+            if geoMatches.count > 1 {
+                return nil
             }
 
         case .mesh:

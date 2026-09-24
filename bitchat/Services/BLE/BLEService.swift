@@ -1943,7 +1943,7 @@ final class BLEService: NSObject {
 
     private func logValidRSR(from peerID: PeerID) {
         guard logRateLimiter.shouldLog(key: "valid-rsr:\(peerID.id)") else { return }
-        SecureLogger.debug("Valid RSR packet from \(peerID.id.prefix(8))… - skipping timestamp check", category: .security)
+        SecureLogger.debug("Valid RSR packet from \(peerID.id.prefix(8))… - skipping past-timestamp check", category: .security)
     }
 
     private func logSelfLoopback(packetType: UInt8, linkDescription: String) {
@@ -4027,10 +4027,8 @@ extension BLEService {
                 )
             }
         }
-        service.onRekeyHandshakeReady = {
-            [weak self, weak service] peerID, initiation in
-            self?.messageQueue.async {
-                [weak self, weak service] in
+        service.onRekeyHandshakeReady = { [weak self, weak service] peerID, initiation in
+            self?.messageQueue.async { [weak self, weak service] in
                 guard let self,
                       let service,
                       self.noiseService === service else {
@@ -4046,14 +4044,12 @@ extension BLEService {
                 self.broadcastNoiseHandshake(message, to: peerID)
             }
         }
-        service.onHandshakeRecoveryRequired = {
-            [weak self, weak service] request in
+        service.onHandshakeRecoveryRequired = { [weak self, weak service] request in
             guard let self, let service else { return }
             #if DEBUG
             self._test_beforeHandshakeRecoveryEnqueued?(request.peerID)
             #endif
-            self.messageQueue.async {
-                [weak self, weak service] in
+            self.messageQueue.async { [weak self, weak service] in
                 guard let self,
                       let service,
                       self.noiseService === service else {
@@ -5294,8 +5290,7 @@ extension BLEService {
             ) else {
                 return
             }
-            messageQueue.async {
-                [weak self, weak service] in
+            messageQueue.async { [weak self, weak service] in
                 guard let self,
                       let service,
                       self.noiseService === service,
@@ -5983,7 +5978,16 @@ extension BLEService {
         switch context.messageType {
         case .announce:
             handleAnnounce(packet, from: senderID)
-            
+
+        case .announceV2:
+            // Parsed and ignored on purpose. The wire format and derivations are
+            // implemented and tested (see PeerIDRotation, AnnounceV2Packet), but
+            // consuming presence from it needs the replacement identity binding
+            // and the peer-list policy for unverified presence, both of which are
+            // still open questions in docs/PEER-ID-ROTATION.md. Accepting it now
+            // would add unauthenticated entries to the peer list.
+            break
+
         case .message:
             handleMessage(packet, from: senderID)
             

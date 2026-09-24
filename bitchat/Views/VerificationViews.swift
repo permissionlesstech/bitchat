@@ -1,6 +1,7 @@
 import SwiftUI
 import CoreImage
 import CoreImage.CIFilterBuiltins
+import AVFoundation
 #if os(iOS)
 import UIKit
 #else
@@ -109,19 +110,27 @@ struct ImageWrapper: View {
     }
 }
 
-/// Placeholder scanner UI; real camera scanning will be added later.
+/// Peer verification QR scanner. Uses the camera on iOS and macOS; macOS also
+/// keeps a paste/validate fallback for machines without a usable camera.
 struct QRScanView: View {
     @EnvironmentObject private var verificationModel: VerificationModel
     @ThemedPalette private var palette
     var isActive: Bool = true
     var onSuccess: (() -> Void)? = nil  // Called when verification succeeds
     @State private var input = ""
-    @State private var result: String = "" // not shown for iOS scanner
+    @State private var result: String = ""
     @State private var lastValid: String = ""
+
+    @State private var cameraUnavailable = false
 
     private enum Strings {
         static let pastePrompt: LocalizedStringKey = "verification.scan.paste_prompt"
         static let validate: LocalizedStringKey = "verification.scan.validate"
+        static let cameraUnavailable = String(
+            localized: "verification.scan.camera_unavailable",
+            defaultValue: "Camera unavailable — paste a QR below.",
+            comment: "Shown over the scanner preview when no camera is available or permission was denied"
+        )
         static func requested(_ nickname: String) -> String {
             String(
                 format: String(localized: "verification.scan.status.requested", comment: "Status text when verification is requested for a nickname"),
@@ -135,69 +144,83 @@ struct QRScanView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            #if os(iOS)
-            CameraScannerView(isActive: isActive) { code in
-                // Deduplicate: ignore if we just processed this exact QR code
-                guard code != lastValid else { return }
-
-                switch verificationModel.verifyScannedPayload(code) {
-                case .requested:
-                    // Successfully initiated verification; remember this QR to prevent re-scanning
-                    lastValid = code
-                    // Close scanner and return to "My QR" view
-                    onSuccess?()
-                case .notFound, .invalid:
-                    // Ignore invalid/no-match reads and keep scanning
-                    break
+            ZStack {
+                CameraScannerView(isActive: isActive, onUnavailable: { cameraUnavailable = true }) { code in
+                    handleScannedCode(code, announceResult: false)
+                }
+                if cameraUnavailable {
+                    Text(Strings.cameraUnavailable)
+                        .bitchatFont(size: 13, weight: .medium)
+                        .foregroundColor(palette.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(16)
                 }
             }
             .frame(height: 260)
             .clipShape(RoundedRectangle(cornerRadius: 8))
-            #else
+
+            #if os(macOS)
             Text(Strings.pastePrompt)
                 .bitchatFont(size: 14, weight: .medium)
             TextEditor(text: $input)
                 .frame(height: 100)
                 .border(palette.secondary.opacity(0.4))
             Button(Strings.validate) {
-                // Deduplicate: ignore if we just processed this exact QR
-                guard input != lastValid else {
-                    result = Strings.requested("")  // Already processed
-                    return
-                }
-
-                switch verificationModel.verifyScannedPayload(input) {
-                case .requested(let nickname):
-                    result = Strings.requested(nickname)
-                    lastValid = input
-                    // Close scanner and return to "My QR" view
-                    onSuccess?()
-                case .notFound:
-                    result = Strings.notFound
-                case .invalid:
-                    result = Strings.invalid
-                }
+                handleScannedCode(input, announceResult: true)
             }
             .buttonStyle(.bordered)
+            if !result.isEmpty {
+                Text(result)
+                    .bitchatFont(size: 12)
+                    .foregroundColor(palette.secondary)
+            }
             #endif
-            // No status text under camera per design
             Spacer()
         }
         .padding()
     }
+
+    private func handleScannedCode(_ code: String, announceResult: Bool) {
+        guard code != lastValid else {
+            if announceResult {
+                result = Strings.requested("")
+            }
+            return
+        }
+
+        switch verificationModel.verifyScannedPayload(code) {
+        case .requested(let nickname):
+            lastValid = code
+            if announceResult {
+                result = Strings.requested(nickname)
+            }
+            onSuccess?()
+        case .notFound:
+            if announceResult {
+                result = Strings.notFound
+            }
+        case .invalid:
+            if announceResult {
+                result = Strings.invalid
+            }
+        }
+    }
 }
 
 #if os(iOS)
-import AVFoundation
-
 struct CameraScannerView: UIViewRepresentable {
     typealias UIViewType = PreviewView
     var isActive: Bool
+    var onUnavailable: (() -> Void)? = nil
     var onCode: (String) -> Void
 
     func makeUIView(context: Context) -> PreviewView {
         let view = PreviewView()
-        context.coordinator.setup(sessionOwner: view, onCode: onCode)
+        context.coordinator.setup(
+            previewLayer: view.videoPreviewLayer,
+            onCode: onCode,
+            onUnavailable: onUnavailable
+        )
         context.coordinator.setActive(isActive)
         return view
     }
@@ -206,68 +229,7 @@ struct CameraScannerView: UIViewRepresentable {
         context.coordinator.setActive(isActive)
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    final class Coordinator: NSObject, AVCaptureMetadataOutputObjectsDelegate {
-        private var onCode: ((String) -> Void)?
-        private weak var owner: PreviewView?
-        private let session = AVCaptureSession()
-        private var isRunning = false
-        private var permissionGranted = false
-        private var desiredActive = false
-
-        func setup(sessionOwner: PreviewView, onCode: @escaping (String) -> Void) {
-            self.owner = sessionOwner
-            self.onCode = onCode
-            session.beginConfiguration()
-            session.sessionPreset = .high
-            guard let device = AVCaptureDevice.default(for: .video),
-                  let input = try? AVCaptureDeviceInput(device: device),
-                  session.canAddInput(input) else { return }
-            session.addInput(input)
-            let output = AVCaptureMetadataOutput()
-            guard session.canAddOutput(output) else { return }
-            session.addOutput(output)
-            output.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
-            if output.availableMetadataObjectTypes.contains(.qr) {
-                output.metadataObjectTypes = [.qr]
-            }
-            session.commitConfiguration()
-            sessionOwner.videoPreviewLayer.session = session
-            // Request permission and start
-            AVCaptureDevice.requestAccess(for: .video) { granted in
-                self.permissionGranted = granted
-                if granted && self.desiredActive && !self.isRunning {
-                    self.setActive(true)
-                }
-            }
-        }
-
-        func setActive(_ active: Bool) {
-            desiredActive = active
-            guard permissionGranted else { return }
-            if active && !isRunning {
-                isRunning = true
-                DispatchQueue.global(qos: .userInitiated).async {
-                    if !self.session.isRunning { self.session.startRunning() }
-                }
-            } else if !active && isRunning {
-                isRunning = false
-                DispatchQueue.global(qos: .userInitiated).async {
-                    if self.session.isRunning { self.session.stopRunning() }
-                }
-            }
-        }
-
-        func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
-            for obj in metadataObjects {
-                guard let m = obj as? AVMetadataMachineReadableCodeObject,
-                      m.type == .qr,
-                      let str = m.stringValue else { continue }
-                onCode?(str)
-            }
-        }
-    }
+    func makeCoordinator() -> CameraScannerCoordinator { CameraScannerCoordinator() }
 
     final class PreviewView: UIView {
         override static var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
@@ -279,7 +241,165 @@ struct CameraScannerView: UIViewRepresentable {
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     }
 }
+#elseif os(macOS)
+struct CameraScannerView: NSViewRepresentable {
+    typealias NSViewType = PreviewView
+    var isActive: Bool
+    var onUnavailable: (() -> Void)? = nil
+    var onCode: (String) -> Void
+
+    func makeNSView(context: Context) -> PreviewView {
+        let view = PreviewView()
+        context.coordinator.setup(
+            previewLayer: view.videoPreviewLayer,
+            onCode: onCode,
+            onUnavailable: onUnavailable
+        )
+        context.coordinator.setActive(isActive)
+        return view
+    }
+
+    func updateNSView(_ nsView: PreviewView, context: Context) {
+        context.coordinator.setActive(isActive)
+    }
+
+    func makeCoordinator() -> CameraScannerCoordinator { CameraScannerCoordinator() }
+
+    final class PreviewView: NSView {
+        let videoPreviewLayer = AVCaptureVideoPreviewLayer()
+
+        override init(frame frameRect: NSRect) {
+            super.init(frame: frameRect)
+            wantsLayer = true
+            videoPreviewLayer.videoGravity = .resizeAspectFill
+            layer = CALayer()
+            layer?.addSublayer(videoPreviewLayer)
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+        override func layout() {
+            super.layout()
+            videoPreviewLayer.frame = bounds
+        }
+    }
+}
 #endif
+
+final class CameraScannerCoordinator: NSObject, AVCaptureMetadataOutputObjectsDelegate {
+    private var onCode: ((String) -> Void)?
+    private var onUnavailable: (() -> Void)?
+    private let session = AVCaptureSession()
+    private var isRunning = false
+    private var permissionGranted = false
+    private var desiredActive = false
+    private var didConfigureSession = false
+    private weak var previewLayer: AVCaptureVideoPreviewLayer?
+
+    func setup(
+        previewLayer: AVCaptureVideoPreviewLayer,
+        onCode: @escaping (String) -> Void,
+        onUnavailable: (() -> Void)? = nil
+    ) {
+        self.onCode = onCode
+        self.onUnavailable = onUnavailable
+        self.previewLayer = previewLayer
+        previewLayer.session = session
+
+        // Check authorization before creating AVCaptureDeviceInput so tests and
+        // cold launches do not trigger a TCC prompt just by constructing input.
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            permissionGranted = true
+            if !configureSessionIfNeeded() {
+                reportUnavailable()
+            }
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    self.permissionGranted = granted
+                    if granted {
+                        if !self.configureSessionIfNeeded() {
+                            self.reportUnavailable()
+                            return
+                        }
+                        if self.desiredActive && !self.isRunning {
+                            self.setActive(true)
+                        }
+                    } else {
+                        self.reportUnavailable()
+                    }
+                }
+            }
+        default:
+            permissionGranted = false
+            reportUnavailable()
+        }
+    }
+
+    @discardableResult
+    private func configureSessionIfNeeded() -> Bool {
+        guard !didConfigureSession else { return true }
+        session.beginConfiguration()
+        session.sessionPreset = .high
+        guard let device = AVCaptureDevice.default(for: .video),
+              let input = try? AVCaptureDeviceInput(device: device),
+              session.canAddInput(input) else {
+            session.commitConfiguration()
+            return false
+        }
+        session.addInput(input)
+        let output = AVCaptureMetadataOutput()
+        guard session.canAddOutput(output) else {
+            session.commitConfiguration()
+            return false
+        }
+        session.addOutput(output)
+        output.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
+        if output.availableMetadataObjectTypes.contains(.qr) {
+            output.metadataObjectTypes = [.qr]
+        }
+        session.commitConfiguration()
+        previewLayer?.session = session
+        didConfigureSession = true
+        return true
+    }
+
+    private func reportUnavailable() {
+        DispatchQueue.main.async {
+            self.onUnavailable?()
+        }
+    }
+
+    func setActive(_ active: Bool) {
+        desiredActive = active
+        guard permissionGranted, didConfigureSession else { return }
+        if active && !isRunning {
+            isRunning = true
+            DispatchQueue.global(qos: .userInitiated).async {
+                if !self.session.isRunning { self.session.startRunning() }
+            }
+        } else if !active && isRunning {
+            isRunning = false
+            DispatchQueue.global(qos: .userInitiated).async {
+                if self.session.isRunning { self.session.stopRunning() }
+            }
+        }
+    }
+
+    func metadataOutput(
+        _ output: AVCaptureMetadataOutput,
+        didOutput metadataObjects: [AVMetadataObject],
+        from connection: AVCaptureConnection
+    ) {
+        for obj in metadataObjects {
+            guard let m = obj as? AVMetadataMachineReadableCodeObject,
+                  m.type == .qr,
+                  let str = m.stringValue else { continue }
+            onCode?(str)
+        }
+    }
+}
 
 // Combined sheet: shows my QR by default with a button to scan instead
 struct VerificationSheetView: View {
@@ -320,19 +440,12 @@ struct VerificationSheetView: View {
                             .frame(maxWidth: .infinity)
                             .multilineTextAlignment(.center)
                             .foregroundColor(accentColor)
-                        #if os(iOS)
                         QRScanView(isActive: showingScanner, onSuccess: {
                             showingScanner = false
                         })
                             .environmentObject(verificationModel)
-                            .frame(height: 280)
+                            .frame(minHeight: 280)
                             .clipShape(RoundedRectangle(cornerRadius: 10))
-                        #else
-                        QRScanView(onSuccess: {
-                            showingScanner = false
-                        })
-                            .environmentObject(verificationModel)
-                        #endif
                     }
                     .padding()
                     .frame(maxWidth: .infinity)

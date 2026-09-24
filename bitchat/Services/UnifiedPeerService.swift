@@ -195,7 +195,8 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             nickname: peerInfo.nickname,
             lastSeen: peerInfo.lastSeen,
             isConnected: peerInfo.isConnected,
-            isReachable: isReachable
+            isReachable: isReachable,
+            localPetname: localPetname(forFingerprint: fingerprint)
         )
         
         // Check for favorite status
@@ -218,7 +219,8 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             nickname: favorite.peerNickname,
             lastSeen: favorite.lastUpdated,
             isConnected: false,
-            isReachable: false
+            isReachable: false,
+            localPetname: localPetname(forFingerprint: favorite.peerNoisePublicKey.sha256Fingerprint())
         )
         
         peer.favoriteStatus = favorite
@@ -227,6 +229,21 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         return peer
     }
     
+    /// Rebuild peer rows after a social-identity write (local alias, etc.) so
+    /// display names update without waiting for a mesh event.
+    func refreshPeers() {
+        updatePeers()
+    }
+
+    private func localPetname(forFingerprint fingerprint: String?) -> String? {
+        guard let fingerprint,
+              let petname = identityManager.getSocialIdentity(for: fingerprint)?.localPetname,
+              !petname.isEmpty else {
+            return nil
+        }
+        return petname
+    }
+
     // MARK: - Public Methods
     
     /// Get peer by ID
@@ -234,17 +251,21 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         return peerIndex[peerID]
     }
     
-    /// Get peer ID for nickname
+    /// Get peer ID for nickname.
+    ///
+    /// An unsuffixed name is accepted only when it identifies exactly one peer.
+    /// Colliding nicknames must be disambiguated with the people-list `#xxxx`
+    /// suffix (first four hex characters of the peer ID).
     func getPeerID(for nickname: String) -> PeerID? {
-        // Normalize both sides: the query may come from typed content and
-        // stored names may predate NFC-at-ingest (e.g. persisted favorites).
-        let target = nickname.normalizedNickname
-        for peer in peers {
-            if peer.displayName.normalizedNickname == target || peer.nickname.normalizedNickname == target {
-                return peer.peerID
+        guard let id = NicknameLookup.uniquePeerIDString(
+            for: nickname,
+            peers: peers.map { peer in
+                (id: peer.peerID.id, nickname: peer.nickname, displayName: peer.displayName)
             }
+        ) else {
+            return nil
         }
-        return nil
+        return peers.first(where: { $0.peerID.id == id })?.peerID
     }
     
     /// Check if peer is blocked

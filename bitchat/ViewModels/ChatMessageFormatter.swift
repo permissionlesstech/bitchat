@@ -68,7 +68,10 @@ final class ChatMessageFormatter {
                 suffixStyle.foregroundColor = baseColor.opacity(0.6)
                 result.append(AttributedString(suffix).mergingAttributes(suffixStyle))
             }
-            if isVerifiedSender {
+            // Private rows render a filled SF Symbol seal beside the lock
+            // (TextMessageView / MediaMessageView); skip the in-string ✓ there
+            // so verified DMs don't show two markers.
+            if isVerifiedSender, !message.isPrivate {
                 appendVerifiedSeal(to: &result, baseColor: baseColor, design: design)
             }
             result.append(AttributedString("> ").mergingAttributes(senderStyle))
@@ -388,7 +391,7 @@ final class ChatMessageFormatter {
             suffixStyle.foregroundColor = baseColor.opacity(0.6)
             result.append(AttributedString(suffix).mergingAttributes(suffixStyle))
         }
-        if isVerifiedSender {
+        if isVerifiedSender, !message.isPrivate {
             appendVerifiedSeal(to: &result, baseColor: baseColor, design: design)
         }
         result.append(AttributedString("> ").mergingAttributes(senderStyle))
