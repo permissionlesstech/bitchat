@@ -244,14 +244,16 @@ extension BLEService: CBPeripheralManagerDelegate {
         if requests.count > 1 {
             SecureLogger.debug("📥 Received \(requests.count) write requests from central", category: .session)
         }
-        
-        // IMPORTANT: Respond immediately to prevent timeouts!
-        // We must respond within a few milliseconds or the central will timeout
-        for request in requests {
-            peripheral.respond(to: request, withResult: .success)
+
+        // While panic-suspended we drop everything; still ACK so centrals
+        // do not stall waiting on a response.
+        guard !isPanicSuspended else {
+            for request in requests {
+                peripheral.respond(to: request, withResult: .success)
+            }
+            return
         }
-        guard !isPanicSuspended else { return }
-        
+
         // Process writes. For long writes, CoreBluetooth may deliver multiple CBATTRequest values with offsets.
         // Combine per-central request values by offset before decoding.
         // Process directly on our message queue to match transport context
@@ -271,6 +273,20 @@ extension BLEService: CBPeripheralManagerDelegate {
                 capBytes: TransportConfig.blePendingWriteBufferCapBytes
             )
 
+            // IMPORTANT: respond within a few milliseconds or the central will
+            // time out. Reject malformed writes with an ATT error instead of a
+            // silent success, so a central sending poisoned offsets learns the
+            // write failed instead of retrying into a cleared buffer.
+            if case .invalid = result {
+                for request in group {
+                    peripheral.respond(to: request, withResult: .invalidOffset)
+                }
+            } else {
+                for request in group {
+                    peripheral.respond(to: request, withResult: .success)
+                }
+            }
+
             switch result {
             case let .decoded(packet, metadata):
                 logAccumulatedCentralWrite(metadata, centralUUID: centralUUID)
@@ -283,6 +299,11 @@ extension BLEService: CBPeripheralManagerDelegate {
             case let .oversized(metadata):
                 logAccumulatedCentralWrite(metadata, centralUUID: centralUUID)
                 SecureLogger.warning("⚠️ Dropping oversized pending write buffer (\(metadata.accumulatedBytes) bytes) for central \(centralUUID.prefix(8))…", category: .session)
+                logFailedSingleWriteIfNeeded(hasMultiple: hasMultiple, sortedRequests: sorted)
+
+            case let .invalid(metadata):
+                logAccumulatedCentralWrite(metadata, centralUUID: centralUUID)
+                SecureLogger.warning("⚠️ Dropping malformed pending write (offsets=\(metadata.offsets)) for central \(centralUUID.prefix(8))…", category: .session)
                 logFailedSingleWriteIfNeeded(hasMultiple: hasMultiple, sortedRequests: sorted)
             }
         }
