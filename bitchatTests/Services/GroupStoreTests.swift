@@ -81,6 +81,58 @@ struct GroupStoreTests {
         #expect(store.group(withID: group.groupID)?.members == [creator])
     }
 
+    // MARK: - Creator pinning
+
+    @Test func upsertRefusesToChangeTheCreatorOfAnExistingGroup() throws {
+        let store = GroupStore(keychain: MockKeychain(), persistsToDisk: false)
+        let creator = makeMember(seed: 0xC1, nickname: "creator")
+        let me = makeMember(seed: 0x0E, nickname: "me")
+        let attacker = makeMember(seed: 0xEE, nickname: "creator")
+        let group = try #require(store.createGroup(named: "trip", creator: creator))
+        #expect(store.updateRoster(groupID: group.groupID, members: [creator, me]) != nil)
+        let stored = try #require(store.group(withID: group.groupID))
+        let realKey = try #require(store.key(forGroupID: group.groupID))
+
+        // Same groupID at a higher epoch with the attacker as creator…
+        let hijack = BitchatGroup(
+            groupID: group.groupID,
+            name: group.name,
+            epoch: .max,
+            members: [attacker, me],
+            creatorFingerprint: attacker.fingerprint
+        )
+        #expect(!store.upsert(hijack, key: Data(repeating: 0xAB, count: 32)))
+
+        // …or the creator's fingerprint re-pinned to the attacker's signing key.
+        let repinned = GroupMember(fingerprint: creator.fingerprint, signingKey: attacker.signingKey, nickname: creator.nickname)
+        var repin = stored
+        repin.epoch = .max
+        repin.members = [repinned, me]
+        #expect(!store.upsert(repin, key: Data(repeating: 0xAB, count: 32)))
+
+        #expect(store.group(withID: group.groupID) == stored)
+        #expect(store.key(forGroupID: group.groupID) == realKey)
+
+        // The boundary: the same creator still moves the group forward.
+        var rotated = stored
+        rotated.epoch = stored.epoch + 1
+        let newKey = Data(repeating: 0x5A, count: 32)
+        #expect(store.upsert(rotated, key: newKey))
+        #expect(store.group(withID: group.groupID)?.epoch == stored.epoch + 1)
+        #expect(store.key(forGroupID: group.groupID) == newKey)
+    }
+
+    @Test func updateRosterRefusesToRepinTheCreatorSigningKey() throws {
+        let store = GroupStore(keychain: MockKeychain(), persistsToDisk: false)
+        let creator = makeMember(seed: 0xC1, nickname: "creator")
+        let me = makeMember(seed: 0x0E, nickname: "me")
+        let group = try #require(store.createGroup(named: "trip", creator: creator))
+
+        let repinned = GroupMember(fingerprint: creator.fingerprint, signingKey: Data(repeating: 0xEF, count: 32), nickname: creator.nickname)
+        #expect(store.updateRoster(groupID: group.groupID, members: [repinned, me]) == nil)
+        #expect(store.group(withID: group.groupID) == group)
+    }
+
     // MARK: - Rotation
 
     @Test func rotateKeyBumpsEpochAndReplacesKey() throws {
@@ -134,6 +186,42 @@ struct GroupStoreTests {
         let reloaded = GroupStore(keychain: keychain, fileURL: fileURL)
         #expect(reloaded.groups.isEmpty)
         #expect(reloaded.group(withID: group.groupID) == nil)
+    }
+
+    @Test func loadEnforcesTheUpsertInvariants() throws {
+        let keychain = MockKeychain()
+        let fileURL = tempFileURL()
+        defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
+
+        let creator = makeMember(seed: 0xC1, nickname: "creator")
+        let other = makeMember(seed: 0xEE, nickname: "other")
+        let kept: BitchatGroup
+        let orphaned: BitchatGroup
+        do {
+            let store = GroupStore(keychain: keychain, fileURL: fileURL)
+            kept = try #require(store.createGroup(named: "kept", creator: creator))
+            orphaned = try #require(store.createGroup(named: "orphaned", creator: creator))
+        }
+        // Loading bypasses `upsert`: a second entry handing `kept` to another
+        // creator, and an entry whose creator is missing from its roster.
+        let rehomed = BitchatGroup(
+            groupID: kept.groupID,
+            name: kept.name,
+            epoch: kept.epoch + 1,
+            members: [other],
+            creatorFingerprint: other.fingerprint
+        )
+        let creatorless = BitchatGroup(
+            groupID: orphaned.groupID,
+            name: orphaned.name,
+            epoch: orphaned.epoch,
+            members: orphaned.members,
+            creatorFingerprint: other.fingerprint
+        )
+        try JSONEncoder().encode([kept, rehomed, creatorless]).write(to: fileURL)
+
+        let reloaded = GroupStore(keychain: keychain, fileURL: fileURL)
+        #expect(reloaded.groups == [kept])
     }
 
     // MARK: - Panic wipe
