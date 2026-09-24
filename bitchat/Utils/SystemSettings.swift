@@ -14,17 +14,22 @@ import AppKit
 
 enum SystemSettings {
     case bluetooth
+    /// The radio power toggle, distinct from the `.bluetooth` privacy
+    /// permission anchor: an already-authorized person whose radio is
+    /// switched off can't fix anything from the privacy pane.
+    case bluetoothPower
     case location
     case microphone
 
     #if os(macOS)
     private static let baseURL = "x-apple.systempreferences:com.apple.preference.security"
 
-    private var macPrivacyAnchor: String {
+    private var macURLString: String {
         switch self {
-        case .bluetooth: "Privacy_Bluetooth"
-        case .location: "Privacy_LocationServices"
-        case .microphone: "Privacy_Microphone"
+        case .bluetooth: "\(Self.baseURL)?Privacy_Bluetooth"
+        case .bluetoothPower: "x-apple.systempreferences:com.apple.BluetoothSettings"
+        case .location: "\(Self.baseURL)?Privacy_LocationServices"
+        case .microphone: "\(Self.baseURL)?Privacy_Microphone"
         }
     }
     #endif
@@ -35,8 +40,7 @@ enum SystemSettings {
             UIApplication.shared.open(url)
         }
         #elseif os(macOS)
-        let urlString = "\(Self.baseURL)?\(macPrivacyAnchor)"
-        if let url = URL(string: urlString) {
+        if let url = URL(string: macURLString) {
             NSWorkspace.shared.open(url)
         }
         #endif
