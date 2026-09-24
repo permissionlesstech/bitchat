@@ -17,6 +17,9 @@ struct AppInfoView: View {
     /// Wipes all local data. Nil (previews, missing wiring) hides the danger
     /// zone entirely.
     var onPanicWipe: (@MainActor () -> Void)?
+    /// Passphrase-encrypted identity export/restore. Nil hides the IDENTITY
+    /// section (previews, missing wiring).
+    var identityBackupActions: IdentityBackupActions?
 
     @State private var showTopology = false
     @State private var liveVoiceEnabled = PTTSettings.liveVoiceEnabled
@@ -30,6 +33,7 @@ struct AppInfoView: View {
     /// introduction), and afterwards the sheet reopens wherever it was left.
     @AppStorage("appInfo.selectedPane") private var selectedPane: Pane = .info
     @State private var showPanicConfirmation = false
+    @State private var identityBackupMode: IdentityBackupMode?
     @AppStorage(AppLanguageSettings.overrideKey) private var languageOverride = ""
     /// The override changed this session; localization resolves at process
     /// start, so surface the restart hint.
@@ -117,6 +121,11 @@ struct AppInfoView: View {
             static let privacyTitle = String(localized: "app_info.settings.privacy.title", defaultValue: "PRIVACY", comment: "Section header (uppercase) for privacy settings such as hiding notification previews")
             static let hidePreviewsTitle = String(localized: "app_info.settings.hide_previews.title", defaultValue: "hide message previews", comment: "Title of the setting that keeps message text, sender names, and geohashes out of lock-screen notifications")
             static let hidePreviewsSubtitle = String(localized: "app_info.settings.hide_previews.subtitle", defaultValue: "notifications say that something arrived without showing the message, who sent it, or which location channel it came from. anyone holding your locked phone learns nothing from the lock screen. on by default.", comment: "Subtitle explaining what hiding notification message previews does")
+
+            static let identityTitle = String(localized: "app_info.settings.identity.title", defaultValue: "IDENTITY", comment: "Section header (uppercase) for identity export/restore in settings")
+            static let identitySubtitle = String(localized: "app_info.settings.identity.subtitle", defaultValue: "keys stay on this device by design. export an encrypted backup when you switch phones — never run the same backup on two devices at once.", comment: "Subtitle under the identity section explaining export/restore")
+            static let identityExport = String(localized: "app_info.settings.identity.export", defaultValue: "export encrypted backup", comment: "Button that opens the identity export sheet")
+            static let identityRestore = String(localized: "app_info.settings.identity.restore", defaultValue: "restore from backup", comment: "Button that opens the identity restore sheet")
 
             static let dangerTitle = String(localized: "app_info.settings.danger.title", defaultValue: "DANGER ZONE", comment: "Section header (uppercase) for destructive actions in settings")
             static let panicButton = String(localized: "app_info.settings.danger.panic_button", defaultValue: "panic wipe", comment: "Button in the settings danger zone that erases all local data after confirmation")
@@ -279,6 +288,18 @@ struct AppInfoView: View {
                 MeshTopologyView(provider: topologyProvider)
             }
         }
+        .sheet(item: $identityBackupMode) { mode in
+            if let identityBackupActions {
+                IdentityBackupSheet(
+                    mode: mode,
+                    actions: identityBackupActions,
+                    isPresented: Binding(
+                        get: { identityBackupMode != nil },
+                        set: { if !$0 { identityBackupMode = nil } }
+                    )
+                )
+            }
+        }
         #else
         NavigationView {
             VStack(spacing: 0) {
@@ -300,6 +321,18 @@ struct AppInfoView: View {
         .sheet(isPresented: $showTopology) {
             if let topologyProvider {
                 MeshTopologyView(provider: topologyProvider)
+            }
+        }
+        .sheet(item: $identityBackupMode) { mode in
+            if let identityBackupActions {
+                IdentityBackupSheet(
+                    mode: mode,
+                    actions: identityBackupActions,
+                    isPresented: Binding(
+                        get: { identityBackupMode != nil },
+                        set: { if !$0 { identityBackupMode = nil } }
+                    )
+                )
             }
         }
         #endif
@@ -540,6 +573,44 @@ struct AppInfoView: View {
                             }
                         )
                     )
+                }
+            }
+
+            // Identity migration: passphrase-encrypted export/restore. Keys are
+            // ThisDeviceOnly in the keychain, so this is the only supported
+            // way to move an identity onto a new phone (#183).
+            if identityBackupActions != nil {
+                VStack(alignment: .leading, spacing: 12) {
+                    SectionHeader(verbatim: Strings.Settings.identityTitle)
+
+                    settingsCard {
+                        Text(verbatim: Strings.Settings.identitySubtitle)
+                            .bitchatFont(size: 11)
+                            .foregroundColor(secondaryTextColor)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Button(action: { identityBackupMode = .export }) {
+                            Text(verbatim: Strings.Settings.identityExport)
+                                .bitchatFont(size: 12)
+                                .foregroundColor(palette.accent)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                                .background(palette.accent.opacity(0.12))
+                                .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button(action: { identityBackupMode = .restore }) {
+                            Text(verbatim: Strings.Settings.identityRestore)
+                                .bitchatFont(size: 12)
+                                .foregroundColor(textColor)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                                .background(palette.secondary.opacity(0.12))
+                                .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
 

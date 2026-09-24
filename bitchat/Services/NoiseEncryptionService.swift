@@ -425,6 +425,16 @@ final class NoiseEncryptionService {
     func getIdentityFingerprint() -> String {
         staticIdentityPublicKey.rawRepresentation.sha256Fingerprint()
     }
+
+    /// Export the long-lived Noise static + Ed25519 signing private keys for a
+    /// passphrase-encrypted identity backup (issue #183). Callers must treat
+    /// the returned bytes as secret and clear them when finished.
+    func exportPersistentPrivateKeys() -> (noiseStatic: Data, ed25519Signing: Data) {
+        (
+            staticIdentityKey.rawRepresentation,
+            signingKey.rawRepresentation
+        )
+    }
     
     /// Get peer's public key data
     func getPeerPublicKeyData(_ peerID: PeerID) -> Data? {

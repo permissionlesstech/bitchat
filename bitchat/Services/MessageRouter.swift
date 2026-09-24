@@ -557,6 +557,15 @@ final class MessageRouter {
         outboxStore?.wipe()
     }
 
+    /// Point the Nostr transport at a new mesh peer ID after identity restore.
+    func updateNostrSenderPeerID(_ peerID: PeerID) {
+        for transport in transports {
+            if let nostr = transport as? NostrTransport {
+                nostr.senderPeerID = peerID
+            }
+        }
+    }
+
     /// Returns true only when the receipt was handed to a reachable transport.
     /// A false result means it was dropped (no route) and must NOT be recorded
     /// as sent, or the sender's message would stay unread forever — the receipt
