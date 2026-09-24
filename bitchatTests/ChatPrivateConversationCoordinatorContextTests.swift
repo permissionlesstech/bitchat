@@ -492,6 +492,49 @@ struct ChatPrivateConversationCoordinatorContextTests {
     }
 
     @Test @MainActor
+    func geoPrivateMessage_blockedSenderGetsNoAckOrReadReceipt() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let convKey = PeerID(str: "nostr_abcdef12")
+        let senderPubkey = "feedface00112233"
+        context.blockedNostrPubkeys = [senderPubkey]
+        // Viewing the chat: an admitted message would also get a READ ack.
+        context.selectedPrivateChatPeer = convKey
+        let payloadData = PrivateMessagePacket(messageID: "geo-blocked", content: "you there?").encode()!
+        let payload = NoisePayload(type: .privateMessage, data: payloadData)
+
+        coordinator.handlePrivateMessage(
+            payload,
+            senderPubkey: senderPubkey,
+            convKey: convKey,
+            id: MockChatPrivateConversationContext.dummyIdentity,
+            messageTimestamp: Date()
+        )
+
+        // Nothing goes back to a blocked sender, not even a DELIVERED ack
+        // that would confirm this identity is online.
+        #expect(context.geoDeliveryAcks.isEmpty)
+        #expect(context.geoReadReceipts.isEmpty)
+        #expect(context.sentGeoDeliveryAcks.isEmpty)
+        #expect(context.privateChats[convKey] == nil)
+        #expect(context.privateMessageNotifications.isEmpty)
+
+        // The dropped copy didn't consume the dedup slot: after unblocking, a
+        // retry of the same message is admitted and acked exactly once.
+        context.blockedNostrPubkeys = []
+        coordinator.handlePrivateMessage(
+            payload,
+            senderPubkey: senderPubkey,
+            convKey: convKey,
+            id: MockChatPrivateConversationContext.dummyIdentity,
+            messageTimestamp: Date()
+        )
+        #expect(context.geoDeliveryAcks.map(\.messageID) == ["geo-blocked"])
+        #expect(context.geoReadReceipts.map(\.messageID) == ["geo-blocked"])
+        #expect(context.privateChats[convKey]?.map(\.id) == ["geo-blocked"])
+    }
+
+    @Test @MainActor
     func accountDM_handsOpenShortIDConversationToStableWhenOffline() async {
         let context = MockChatPrivateConversationContext()
         let coordinator = ChatPrivateConversationCoordinator(context: context)
