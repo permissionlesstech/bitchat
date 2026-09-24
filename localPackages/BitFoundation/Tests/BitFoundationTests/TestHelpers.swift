@@ -56,7 +56,8 @@ final class TestHelpers {
         recipientID: PeerID? = nil,
         payload: Data = Data("test payload".utf8),
         signature: Data? = nil,
-        ttl: UInt8 = 3
+        ttl: UInt8 = 3,
+        version: UInt8 = 1
     ) -> BitchatPacket {
         return BitchatPacket(
             type: type,
@@ -65,7 +66,8 @@ final class TestHelpers {
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: payload,
             signature: signature,
-            ttl: ttl
+            ttl: ttl,
+            version: version
         )
     }
     
