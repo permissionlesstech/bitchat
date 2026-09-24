@@ -238,7 +238,7 @@ private extension ContentComposerView {
             }
             Spacer()
             Button(action: voiceRecordingVM.cancel) {
-                Label("Cancel", systemImage: "xmark.circle")
+                Label(String(localized: "common.cancel", comment: "Cancel action in the voice recording HUD"), systemImage: "xmark.circle")
                     .labelStyle(.iconOnly)
                     .font(.bitchatSystem(size: 18))
                     .foregroundColor(.red)

@@ -282,7 +282,7 @@ struct ContentPeopleSheetView: View {
             }
         }
         #endif
-        .alert("Recording Error", isPresented: voiceAlertBinding, actions: {
+        .alert(Text(String(localized: "voice.error.title", defaultValue: "recording error", comment: "Title of the voice recording error alert")), isPresented: voiceAlertBinding, actions: {
             Button("common.ok", role: .cancel) {}
             if voiceRecordingVM.state == .permissionDenied {
                 Button("location_channels.action.open_settings") {
