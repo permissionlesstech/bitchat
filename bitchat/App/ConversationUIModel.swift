@@ -164,7 +164,13 @@ final class ConversationUIModel: ObservableObject {
               !isSentByCurrentUser(message),
               let peerID = message.senderPeerID else { return false }
         guard let fingerprint = chatViewModel.getFingerprint(for: peerID) else { return false }
-        return chatViewModel.peerIdentityStore.isVerified(fingerprint)
+        // The row renders `message.sender`, frozen at receipt, so the question
+        // is whether THAT name is the one this key was verified under — not
+        // whether its current name is. Checking the current name would let a
+        // rename away, a post, and a rename back put a seal beside a name the
+        // key was never trusted under. One call, one lock.
+        return chatViewModel.sealAppliesToRow(fingerprint, renderedSender: message.sender,
+                                              senderPeerID: peerID)
     }
 
     func senderDisplayName(for peerID: PeerID, fallbackMessages: [BitchatMessage]) -> String? {
