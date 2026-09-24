@@ -75,6 +75,70 @@ final class BitchatFilePacketTests: XCTestCase {
         XCTAssertEqual(decoded.content, content)
     }
 
+    /// The TLV tag list is a floor, not a ceiling: a decoder that bails on the
+    /// first tag it does not know makes the format unextendable, because a field
+    /// the sender considered optional costs the receiver the whole file. This
+    /// decoder skips them (`case nil: continue`) and that has to stay true — it
+    /// is load-bearing for any peer, version or third-party client that adds a
+    /// field we have not seen. `PrivateMediaMessageIdentity` exists precisely
+    /// because the Android decoder does *not* do this, so the asymmetry is real
+    /// and worth pinning on the side that gets it right.
+    func testDecodeSkipsUnknownTLVTypesInsteadOfDroppingTheFile() throws {
+        let content = Data((0..<64).map { UInt8($0) })
+        let unknownValue = Data("some-message-id".utf8)
+        var data = Data()
+
+        // fileName
+        data.append(0x01)
+        data.append(contentsOf: [0x00, 0x09])
+        data.append(Data("photo.jpg".utf8))
+        // fileSize
+        data.append(0x02)
+        data.append(contentsOf: [0x00, 0x04])
+        data.append(contentsOf: [0x00, 0x00, 0x00, UInt8(content.count)])
+        // mimeType
+        data.append(0x03)
+        data.append(contentsOf: [0x00, 0x0A])
+        data.append(Data("image/jpeg".utf8))
+        // An unknown tag, where an encoder appending content last would put it
+        data.append(0x05)
+        data.append(contentsOf: [0x00, UInt8(unknownValue.count)])
+        data.append(unknownValue)
+        // content
+        data.append(0x04)
+        data.append(contentsOf: [0x00, 0x00, 0x00, UInt8(content.count)])
+        data.append(content)
+
+        let decoded = try XCTUnwrap(BitchatFilePacket.decode(data))
+        XCTAssertEqual(decoded.fileName, "photo.jpg")
+        XCTAssertEqual(decoded.mimeType, "image/jpeg")
+        XCTAssertEqual(decoded.fileSize, UInt64(content.count))
+        XCTAssertEqual(decoded.content, content)
+    }
+
+    /// Same contract for an extension that trails the content, which a decoder
+    /// stopping at the first unknown tag would also lose.
+    func testDecodeSkipsAnUnknownTLVTrailingTheContent() throws {
+        let content = Data(repeating: 0x7F, count: 16)
+        var data = Data()
+
+        data.append(0x01)
+        data.append(contentsOf: [0x00, 0x08])
+        data.append(Data("note.m4a".utf8))
+        data.append(0x04)
+        data.append(contentsOf: [0x00, 0x00, 0x00, UInt8(content.count)])
+        data.append(content)
+        data.append(0x7F)
+        data.append(contentsOf: [0x00, 0x04])
+        data.append(Data([0x11, 0x11, 0x11, 0x11]))
+
+        let decoded = try XCTUnwrap(BitchatFilePacket.decode(data))
+        XCTAssertEqual(decoded.fileName, "note.m4a")
+        XCTAssertNil(decoded.mimeType)
+        XCTAssertEqual(decoded.fileSize, UInt64(content.count))
+        XCTAssertEqual(decoded.content, content)
+    }
+
     func testPrivateMediaMessageIdentityConvergesAcrossPeerIDAliases() throws {
         let senderKey = Data(repeating: 0x11, count: 32)
         let recipientKey = Data(repeating: 0x22, count: 32)

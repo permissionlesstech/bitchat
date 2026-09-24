@@ -203,14 +203,12 @@ final class PrivateChatManager: ObservableObject {
     func syncReadReceiptsForSentMessages(peerID: PeerID, nickname: String, externalReceipts: inout Set<String>) {
         for message in messages(for: peerID) {
             if message.sender == nickname {
-                if let status = message.deliveryStatus {
-                    switch status {
-                    case .read, .delivered:
-                        externalReceipts.insert(message.id)
-                        sentReadReceipts.insert(message.id)
-                    case .failed, .partiallyDelivered, .sending, .sent, .carried:
-                        break
-                    }
+                switch message.deliveryStatus {
+                case .read, .delivered:
+                    externalReceipts.insert(message.id)
+                    sentReadReceipts.insert(message.id)
+                case .notSentYet, .failed, .partiallyDelivered, .sending, .sent, .carried:
+                    break
                 }
             }
         }

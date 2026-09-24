@@ -435,8 +435,14 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
     }
 
     static func archivedEchoKey(senderPeerID: PeerID?, timestamp: Date, content: String) -> String {
-        let ms = UInt64((timestamp.timeIntervalSince1970 * 1000).rounded())
-        return "\(senderPeerID?.id ?? "")|\(ms)|\(content)"
+        // The timestamp is peer-chosen: a wire value near UInt64.max comes
+        // back from Date as 2^64, so a trapping UInt64(_:) here would be a
+        // remote crash. Anything that isn't an exact UInt64 keys on its
+        // Double form instead — still deterministic, which is all the dedup
+        // needs.
+        let ms = (timestamp.timeIntervalSince1970 * 1000).rounded()
+        let msKey = UInt64(exactly: ms).map { String($0) } ?? "\(ms)"
+        return "\(senderPeerID?.id ?? "")|\(msKey)|\(content)"
     }
 
     func handlePublicMessage(_ message: BitchatMessage, powBits: Int = 0) {
@@ -506,14 +512,15 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
     }
 
     func checkForMentions(_ message: BitchatMessage) {
-        var myTokens: Set<String> = [context.nickname]
+        let myNickname = context.nickname.normalizedNickname
+        var myTokens: Set<String> = [myNickname]
         let meshPeers = context.meshPeerNicknames()
-        let collisions = meshPeers.values.filter { $0.hasPrefix(context.nickname + "#") }
+        let collisions = meshPeers.values.filter { $0.normalizedNickname.hasPrefix(myNickname + "#") }
         if !collisions.isEmpty {
             let suffix = "#" + String(context.myPeerID.id.prefix(4))
-            myTokens = [context.nickname + suffix]
+            myTokens = [myNickname + suffix]
         }
-        let isMentioned = message.mentions?.contains(where: myTokens.contains) ?? false
+        let isMentioned = message.mentions?.contains { myTokens.contains($0.normalizedNickname) } ?? false
 
         if isMentioned && message.sender != context.nickname {
             SecureLogger.info("🔔 Mention from \(message.sender)", category: .session)

@@ -29,7 +29,7 @@ public final class BitchatMessage: Codable {
     public let recipientNickname: String?
     public let senderPeerID: PeerID?
     public let mentions: [String]?  // Array of mentioned nicknames
-    public var deliveryStatus: DeliveryStatus? // Delivery tracking
+    public var deliveryStatus: DeliveryStatus // Delivery tracking
     /// True when this message reached us across a mesh bridge (signed by its
     /// author for an internet rendezvous) rather than over local radio.
     public let isBridged: Bool
@@ -64,7 +64,9 @@ public final class BitchatMessage: Codable {
         recipientNickname = try container.decodeIfPresent(String.self, forKey: .recipientNickname)
         senderPeerID = try container.decodeIfPresent(PeerID.self, forKey: .senderPeerID)
         mentions = try container.decodeIfPresent([String].self, forKey: .mentions)
-        deliveryStatus = try container.decodeIfPresent(DeliveryStatus.self, forKey: .deliveryStatus)
+        // Archives written while the field was optional omit it for public
+        // messages; absent means the message never entered a send pipeline.
+        deliveryStatus = try container.decodeIfPresent(DeliveryStatus.self, forKey: .deliveryStatus) ?? .notSentYet
         // Absent in archives written before bridging existed.
         isBridged = try container.decodeIfPresent(Bool.self, forKey: .isBridged) ?? false
     }
@@ -93,7 +95,7 @@ public final class BitchatMessage: Codable {
         self.recipientNickname = recipientNickname
         self.senderPeerID = senderPeerID
         self.mentions = mentions
-        self.deliveryStatus = deliveryStatus ?? (isPrivate ? .sending : nil)
+        self.deliveryStatus = deliveryStatus ?? (isPrivate ? .sending : .notSentYet)
         self.isBridged = isBridged
     }
 }

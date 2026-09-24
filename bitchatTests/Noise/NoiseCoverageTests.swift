@@ -578,6 +578,26 @@ struct NoiseCoverageTests {
         #expect(failingManager.getSession(for: charliePeerID) == nil)
     }
 
+    @Test("Handshake completion fails closed on non-wire peer IDs")
+    func handshakeCompletionRejectsNonWirePeerIDs() throws {
+        let aliceManager = NoiseSessionManager(localStaticKey: aliceStaticKey, keychain: keychain)
+        let bobManager = NoiseSessionManager(localStaticKey: bobStaticKey, keychain: keychain)
+
+        // Alice addresses Bob by an identifier no static key can vouch for:
+        // neither a 16-hex wire ID nor a full Noise-key ID. Completion must
+        // reject it rather than accept any remote static key.
+        let nonWireID = PeerID(str: "not-a-wire-identifier")
+        let msg1 = try aliceManager.initiateHandshake(with: nonWireID)
+        let msg2 = try #require(
+            try bobManager.handleIncomingHandshake(from: bobPeerID, message: msg1)
+        )
+
+        #expect(throws: (any Error).self) {
+            try aliceManager.handleIncomingHandshake(from: nonWireID, message: msg2)
+        }
+        #expect(aliceManager.getSession(for: nonWireID)?.isEstablished() != true)
+    }
+
     @Test("Session manager cleans up initiator sessions after start-handshake failures")
     func sessionManagerCleansUpInitiatorSessionsAfterStartHandshakeFailures() {
         let manager = NoiseSessionManager(
@@ -723,9 +743,9 @@ struct NoiseCoverageTests {
             // A failed startup requirement must not strand a late thread in
             // the blocking test double after the test has returned.
             oldSession.resumeDecrypt()
-            _ = decryptResult.wait(timeout: 5)
+            _ = decryptResult.wait(timeout: TestConstants.settleTimeout)
             if let promotionResultForCleanup {
-                _ = promotionResultForCleanup.wait(timeout: 5)
+                _ = promotionResultForCleanup.wait(timeout: TestConstants.settleTimeout)
             }
         }
 
@@ -751,15 +771,19 @@ struct NoiseCoverageTests {
         promotionThread.name = "NoiseCoverageTests.staleDecrypt.promote"
         promotionThread.qualityOfService = .userInitiated
         promotionThread.start()
-        try #require(promotionStarted.wait(timeout: .now() + 5) == .success)
+        try #require(promotionStarted.wait(timeout: .now() + TestConstants.settleTimeout) == .success)
         #expect(
+            // test-timing-ok: a NEGATIVE wait — it asserts the promotion has
+            // NOT completed yet, so a long deadline would only make the suite
+            // slow while still passing. A starved runner can only make this
+            // more likely to hold, never less.
             promotionResult.wait(timeout: 0.05) == nil,
             "Promotion must wait for the exact decrypting-session lease"
         )
 
         oldSession.resumeDecrypt()
-        let decrypted = try #require(decryptResult.wait(timeout: 5)).get()
-        _ = try #require(promotionResult.wait(timeout: 5)).get()
+        let decrypted = try #require(decryptResult.wait(timeout: TestConstants.settleTimeout)).get()
+        _ = try #require(promotionResult.wait(timeout: TestConstants.settleTimeout)).get()
 
         #expect(decrypted.plaintext == Data("old session".utf8))
         #expect(decrypted.sessionGeneration == oldGeneration)
@@ -867,6 +891,44 @@ struct NoiseCoverageTests {
         #expect(throws: (any Error).self) {
             try responder.decrypt(Data())
         }
+    }
+
+    @Test("A continuously active session still schedules a rekey before it hard-expires")
+    func continuouslyActiveSessionStillNeedsRenegotiationBeforeExpiry() throws {
+        // A session with steady traffic never goes idle, so lastActivityTime
+        // stays fresh right up to the moment sessionStartTime crosses the
+        // hard sessionTimeout cutoff above and encrypt/decrypt start throwing
+        // sessionExpired on every call. needsRenegotiation() has to notice
+        // the session is old on its own -- it can't rely on the idle check,
+        // because there is no idle time to find.
+        let session = SecureNoiseSession(
+            peerID: alicePeerID,
+            role: .initiator,
+            keychain: keychain,
+            localStaticKey: aliceStaticKey
+        )
+        let responder = SecureNoiseSession(
+            peerID: bobPeerID,
+            role: .responder,
+            keychain: keychain,
+            localStaticKey: bobStaticKey
+        )
+        try establishSessions(initiator: session, responder: responder)
+
+        // Just under the hard cutoff, but past the 90% rekey threshold.
+        session.setSessionStartTimeForTesting(
+            Date().addingTimeInterval(-(NoiseSecurityConstants.sessionTimeout * 0.95))
+        )
+        session.setLastActivityTimeForTesting(Date())
+        session.setMessageCountForTesting(0)
+
+        #expect(session.needsRenegotiation())
+
+        // The session is still within its hard cutoff, so it must keep
+        // working right up until a rekey actually replaces it -- the fix is
+        // to schedule the rekey earlier, not to expire the session sooner.
+        let ciphertext = try session.encrypt(Data("still working".utf8))
+        #expect(try responder.decrypt(ciphertext) == Data("still working".utf8))
     }
 
     @Test("Rate limiter handles global message caps and per-peer resets")

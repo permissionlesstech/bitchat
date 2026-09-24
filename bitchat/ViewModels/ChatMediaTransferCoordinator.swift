@@ -151,14 +151,19 @@ extension ChatViewModel: ChatMediaTransferContext {
     // other contexts or satisfied by existing `ChatViewModel` members. The
     // members below flatten mesh service accesses.
 
+    /// File transfer rides the mesh only. Without that capability the
+    /// policy degrades to the safe floor (blocked), matching the old
+    /// inert protocol defaults.
+    private var fileTransport: MeshFileTransferring? { meshService as? MeshFileTransferring }
+
     func privateMediaSendPolicy(to peerID: PeerID) -> PrivateMediaSendPolicy {
-        meshService.privateMediaSendPolicy(to: peerID)
+        fileTransport?.privateMediaSendPolicy(to: peerID) ?? .blockedDowngrade
     }
 
     func authenticatedPrivateMediaReceiptSessionGeneration(
         to peerID: PeerID
     ) -> UUID? {
-        meshService.authenticatedPrivateMediaReceiptSessionGeneration(
+        fileTransport?.authenticatedPrivateMediaReceiptSessionGeneration(
             to: peerID
         )
     }
@@ -167,7 +172,11 @@ extension ChatViewModel: ChatMediaTransferContext {
         to peerID: PeerID,
         completion: @escaping @MainActor (PrivateMediaSendPolicy) -> Void
     ) {
-        meshService.resolvePrivateMediaSendPolicy(to: peerID, completion: completion)
+        guard let fileTransport else {
+            Task { @MainActor in completion(.blockedDowngrade) }
+            return
+        }
+        fileTransport.resolvePrivateMediaSendPolicy(to: peerID, completion: completion)
     }
 
     func requestLegacyPrivateMediaConsent(
@@ -197,7 +206,7 @@ extension ChatViewModel: ChatMediaTransferContext {
         transferId: String,
         allowLegacyFallback: Bool
     ) {
-        meshService.sendFilePrivate(
+        fileTransport?.sendFilePrivate(
             packet,
             to: peerID,
             transferId: transferId,
@@ -210,7 +219,7 @@ extension ChatViewModel: ChatMediaTransferContext {
         to peerID: PeerID,
         transferId: String
     ) {
-        meshService.sendFilePrivateReceiptRetry(
+        fileTransport?.sendFilePrivateReceiptRetry(
             packet,
             to: peerID,
             transferId: transferId
@@ -218,11 +227,11 @@ extension ChatViewModel: ChatMediaTransferContext {
     }
 
     func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String) {
-        meshService.sendFileBroadcast(packet, transferId: transferId)
+        fileTransport?.sendFileBroadcast(packet, transferId: transferId)
     }
 
     func cancelTransfer(_ transferId: String) {
-        meshService.cancelTransfer(transferId)
+        fileTransport?.cancelTransfer(transferId)
     }
 
     func removeUntombstonedMediaMessage(withID messageID: String) {
@@ -542,7 +551,7 @@ final class ChatMediaTransferCoordinator {
         guard context.canSendMediaInCurrentContext else {
             SecureLogger.info("Voice note blocked outside mesh/private context", category: .session)
             try? FileManager.default.removeItem(at: url)
-            context.addSystemMessage("Voice notes are only available in mesh chats.")
+            context.addSystemMessage(String(localized: "Voice notes are only available in mesh chats.", comment: "System message when a voice note is attempted outside mesh chats"))
             return
         }
 
@@ -685,7 +694,7 @@ final class ChatMediaTransferCoordinator {
         guard context.canSendMediaInCurrentContext else {
             SecureLogger.info("Image send blocked outside mesh/private context", category: .session)
             cleanup?()
-            context.addSystemMessage("Images are only available in mesh chats.")
+            context.addSystemMessage(String(localized: "Images are only available in mesh chats.", comment: "System message when an image send is attempted outside mesh chats"))
             return
         }
 
@@ -1850,8 +1859,7 @@ private extension ChatMediaTransferCoordinator {
                 TimeInterval(UInt64.max) / 1_000_000_000
             ) * 1_000_000_000
         )
-        reconnectRetryExpiryTasks[messageID] = Task {
-            @MainActor [weak self] in
+        reconnectRetryExpiryTasks[messageID] = Task { @MainActor [weak self] in
             if nanoseconds > 0 {
                 try? await Task.sleep(nanoseconds: nanoseconds)
             }
@@ -1890,7 +1898,7 @@ private extension ChatMediaTransferCoordinator {
         try FileManager.default.createDirectory(
             at: filesDirectory,
             withIntermediateDirectories: true,
-            attributes: nil
+            attributes: BLEIncomingFileStore.mediaProtectionAttributes
         )
         return filesDirectory
     }

@@ -206,7 +206,7 @@ enum ImageUtils {
         } else {
             directory = try applicationFilesDirectory().appendingPathComponent("images/outgoing", isDirectory: true)
         }
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: BLEIncomingFileStore.mediaProtectionAttributes)
         return directory.appendingPathComponent(fileName)
     }
 

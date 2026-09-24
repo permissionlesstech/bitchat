@@ -1001,8 +1001,7 @@ final class NoiseSessionManager {
             0,
             recentInitiatorCompletionGracePeriod - elapsed
         )
-        let timeout = DispatchWorkItem(flags: .barrier) {
-            [weak self, weak establishedSession] in
+        let timeout = DispatchWorkItem(flags: .barrier) { [weak self, weak establishedSession] in
             guard let self,
                   let establishedSession,
                   let current = self.sessions[peerID],
@@ -1027,6 +1026,27 @@ final class NoiseSessionManager {
         suppressedInitiationRecoveryTimeouts.removeValue(forKey: peerID)?
             .cancel()
     }
+
+    #if DEBUG
+    /// Fires a pending suppressed-initiation recovery immediately instead of
+    /// waiting out the completion-grace timer, so tests can inject a grace
+    /// period too large to lose against a starved runner and still exercise
+    /// the recovery path deterministically.
+    func _test_fireSuppressedInitiationRecovery(for peerID: PeerID) {
+        managerQueue.sync(flags: .barrier) {
+            guard let pending = suppressedInitiationRecoveryTimeouts
+                .removeValue(forKey: peerID) else {
+                return
+            }
+            pending.cancel()
+            guard let current = sessions[peerID],
+                  current.isEstablished() else {
+                return
+            }
+            requestHandshakeRecovery(for: peerID)
+        }
+    }
+    #endif
 
     private func requestHandshakeRecovery(
         for peerID: PeerID,
@@ -1105,8 +1125,8 @@ final class NoiseSessionManager {
 
     /// Mesh handshakes normally use a 16-hex wire ID. Full Noise-key IDs are
     /// also accepted by internal callers when they exactly match the static
-    /// key. Non-wire identifiers remain available to protocol test harnesses;
-    /// BLE packet ingress always supplies a short hexadecimal ID.
+    /// key. Anything else fails closed: an identifier that can't be checked
+    /// against the remote static key must never complete a handshake.
     private func authenticatedRemoteKey(
         _ remoteKey: Curve25519.KeyAgreement.PublicKey,
         matches claimedPeerID: PeerID
@@ -1118,7 +1138,7 @@ final class NoiseSessionManager {
         if let claimedNoiseKey = claimedPeerID.noiseKey {
             return claimedNoiseKey == rawKey
         }
-        return true
+        return false
     }
     
     // MARK: - Encryption/Decryption

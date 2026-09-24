@@ -8,6 +8,8 @@ A decentralized peer-to-peer messaging app with dual transport architecture: loc
 
 📲 [App Store](https://apps.apple.com/us/app/bitchat-mesh/id6748219622)
 
+📲 [Play Store](https://play.google.com/store/apps/details?id=com.bitchat.droid)
+
 ### Getting a copy you can trust
 
 Install from the App Store, or build from source you have verified. A compiled build from anywhere else cannot be verified — see [Verifying bitchat](docs/VERIFYING-A-BUILD.md) for how to check source against the per-release hash manifest, and for what to do if that is the only build you can get.
@@ -49,7 +51,7 @@ BitChat uses a **hybrid messaging architecture** with two complementary transpor
 
 - **Global Reach**: Connect with users worldwide via internet relays
 - **Location Channels**: Geographic chat rooms using geohash coordinates
-- **290+ Relay Network**: Distributed across the globe for reliability
+- **440+ Relay Network**: Distributed across the globe for reliability
 - **BitChat Private Envelopes**: App-specific encrypted private messages over Nostr relays
 - **Ephemeral Keys**: Fresh cryptographic identity per geohash area
 

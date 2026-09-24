@@ -294,6 +294,21 @@ final class PrivateConversationModel: ObservableObject {
         if conversationPeerID.isGeoDM, case .location(let channel) = locationChannelsModel.selectedChannel {
             return "#\(channel.geohash)/@\(chatViewModel.geohashDisplayName(for: conversationPeerID))"
         }
+        // Local alias wins over a live peer row's announced nickname.
+        if headerPeerID.id.count == 16 {
+            let candidates = chatViewModel.identityManager.getCryptoIdentitiesByPeerIDPrefix(headerPeerID)
+            if let identity = candidates.first,
+               let social = chatViewModel.identityManager.getSocialIdentity(for: identity.fingerprint),
+               let pet = social.localPetname, !pet.isEmpty {
+                return pet
+            }
+        } else if let noiseKey = headerPeerID.noiseKey {
+            let fingerprint = noiseKey.sha256Fingerprint()
+            if let social = chatViewModel.identityManager.getSocialIdentity(for: fingerprint),
+               let pet = social.localPetname, !pet.isEmpty {
+                return pet
+            }
+        }
         if let displayName = peer?.displayName {
             return displayName
         }
@@ -308,23 +323,15 @@ final class PrivateConversationModel: ObservableObject {
         if headerPeerID.id.count == 16 {
             let candidates = chatViewModel.identityManager.getCryptoIdentitiesByPeerIDPrefix(headerPeerID)
             if let identity = candidates.first,
-               let social = chatViewModel.identityManager.getSocialIdentity(for: identity.fingerprint) {
-                if let pet = social.localPetname, !pet.isEmpty {
-                    return pet
-                }
-                if !social.claimedNickname.isEmpty {
-                    return social.claimedNickname
-                }
+               let social = chatViewModel.identityManager.getSocialIdentity(for: identity.fingerprint),
+               !social.claimedNickname.isEmpty {
+                return social.claimedNickname
             }
         } else if let noiseKey = headerPeerID.noiseKey {
             let fingerprint = noiseKey.sha256Fingerprint()
-            if let social = chatViewModel.identityManager.getSocialIdentity(for: fingerprint) {
-                if let pet = social.localPetname, !pet.isEmpty {
-                    return pet
-                }
-                if !social.claimedNickname.isEmpty {
-                    return social.claimedNickname
-                }
+            if let social = chatViewModel.identityManager.getSocialIdentity(for: fingerprint),
+               !social.claimedNickname.isEmpty {
+                return social.claimedNickname
             }
         }
 
@@ -350,7 +357,10 @@ final class PrivateConversationModel: ObservableObject {
         }
         if let noiseKey = Data(hexString: headerPeerID.id),
            let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
-           favoriteStatus.isMutual {
+           favoriteStatus.isMutual,
+           // No stored recipient key means no Nostr delivery — and the
+           // "end-to-end encrypted" caption keys off .nostrAvailable.
+           favoriteStatus.peerNostrPublicKey != nil {
             return .nostrAvailable
         }
         if chatViewModel.meshService.isPeerConnected(headerPeerID) || chatViewModel.connectedPeers.contains(headerPeerID) {

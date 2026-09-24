@@ -105,11 +105,11 @@ struct NoiseEncryptionServiceTests {
 
         try establishSessions(alice: alice, bob: bob)
 
-        let authenticated = await TestHelpers.waitUntil({ recorder.count >= 2 }, timeout: 5.0)
+        let authenticated = await TestHelpers.waitUntil({ recorder.count >= 2 }, timeout: TestConstants.settleTimeout)
         #expect(authenticated)
         let generationAuthenticated = await TestHelpers.waitUntil(
             { recorder.generationCount >= 1 },
-            timeout: 5.0
+            timeout: TestConstants.settleTimeout
         )
         #expect(generationAuthenticated)
         #expect(alice.hasEstablishedSession(with: bobPeerID))
@@ -166,7 +166,7 @@ struct NoiseEncryptionServiceTests {
         #expect(!receiver.hasSession(with: claimedAlicePeerID))
         let emittedAuthentication = await TestHelpers.waitUntil(
             { recorder.count > 0 },
-            timeout: TestConstants.shortTimeout
+            timeout: TestConstants.negativeWaitWindow
         )
         #expect(!emittedAuthentication)
     }
@@ -216,7 +216,7 @@ struct NoiseEncryptionServiceTests {
         #expect(try receiver.decrypt(after, from: alicePeerID) == Data("after".utf8))
         let emittedReplacementAuthentication = await TestHelpers.waitUntil(
             { recorder.count > 1 },
-            timeout: TestConstants.shortTimeout
+            timeout: TestConstants.negativeWaitWindow
         )
         #expect(!emittedReplacementAuthentication)
     }
@@ -652,12 +652,12 @@ struct NoiseEncryptionServiceTests {
         )
         let retried = await TestHelpers.waitUntil(
             { recorder.messages.count == 1 },
-            timeout: 1
+            timeout: TestConstants.longTimeout
         )
         #expect(retried)
         let retryExpired = await TestHelpers.waitUntil(
             { !service.hasSession(with: peerID) },
-            timeout: 1
+            timeout: TestConstants.longTimeout
         )
         #expect(retryExpired)
         #expect(recorder.timeoutCount == 1)
@@ -710,7 +710,12 @@ struct NoiseEncryptionServiceTests {
         let alice = NoiseEncryptionService(keychain: MockKeychain())
         let bob = NoiseEncryptionService(
             keychain: MockKeychain(),
-            ordinaryResponderHandshakeTimeout: 0.06,
+            // Generous for the same reason as the quarantine-restore test
+            // (#1483): this timeout also arms during the `establishSessions`
+            // setup handshake below, where bob is the responder. At 0.06 a
+            // preempted runner could fire it mid-setup, tear down the half-open
+            // responder, and make message 3 be answered as a fresh initiation.
+            ordinaryResponderHandshakeTimeout: 1.0,
             ordinaryReconnectRollbackCooldown: 0.3
         )
         let mallory = NoiseEncryptionService(keychain: MockKeychain())
@@ -741,12 +746,12 @@ struct NoiseEncryptionServiceTests {
 
         let restored = await TestHelpers.waitUntil(
             { bob.hasEstablishedSession(with: alicePeerID) },
-            timeout: 1
+            timeout: TestConstants.longTimeout
         )
         #expect(restored)
         let callbackArrived = await TestHelpers.waitUntil(
             { recovery.timeoutCount == 1 },
-            timeout: 1
+            timeout: TestConstants.longTimeout
         )
         #expect(callbackArrived)
 
@@ -780,7 +785,13 @@ struct NoiseEncryptionServiceTests {
         let bob = NoiseEncryptionService(
             keychain: MockKeychain(),
             ordinaryHandshakeTimeout: 0.04,
-            ordinaryResponderHandshakeTimeout: 0.04
+            // Also arms during the `establishSessions` setup handshake below,
+            // where bob is the responder. Observed failing on a loaded CI
+            // runner with exactly the signature #1483 documented: the setup's
+            // `#expect(finalMessage == nil)` saw a 96-byte message 2, because
+            // the half-open responder had already been torn down and message 3
+            // was answered as a fresh initiation.
+            ordinaryResponderHandshakeTimeout: 1.0
         )
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
         let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
@@ -814,12 +825,12 @@ struct NoiseEncryptionServiceTests {
         // initiates one bounded convergence retry; drop that message 1 too.
         let retryPrepared = await TestHelpers.waitUntil(
             { recovery.messages.count == 1 },
-            timeout: 1
+            timeout: TestConstants.longTimeout
         )
         #expect(retryPrepared)
         let retryExpired = await TestHelpers.waitUntil(
             { !bob.hasSession(with: alicePeerID) },
-            timeout: 1
+            timeout: TestConstants.longTimeout
         )
         #expect(retryExpired)
         #expect(recovery.timeoutCount == 1)
@@ -951,15 +962,20 @@ struct NoiseEncryptionServiceTests {
 
     @Test("Immediate legacy restart during completion grace converges once")
     func immediateLegacyRestartDuringCompletionGrace() async throws {
+        // The grace period must still be open when the restart initiation
+        // arrives below. A small value races the wall clock on a starved
+        // runner, so inject one no test run can outlive; the recovery half
+        // is then fired explicitly instead of waiting out the timer.
+        let unlosableGracePeriod: TimeInterval = 600
         let firstKeychain = MockKeychain()
         let secondKeychain = MockKeychain()
         let first = NoiseEncryptionService(
             keychain: firstKeychain,
-            recentInitiatorCompletionGracePeriod: 0.03
+            recentInitiatorCompletionGracePeriod: unlosableGracePeriod
         )
         let second = NoiseEncryptionService(
             keychain: secondKeychain,
-            recentInitiatorCompletionGracePeriod: 0.03
+            recentInitiatorCompletionGracePeriod: unlosableGracePeriod
         )
         let firstPeerID = PeerID(publicKey: first.getStaticPublicKeyData())
         let secondPeerID = PeerID(publicKey: second.getStaticPublicKeyData())
@@ -1024,9 +1040,10 @@ struct NoiseEncryptionServiceTests {
         )
         #expect(lower.hasEstablishedSession(with: higherPeerID))
 
+        lower._test_fireSuppressedInitiationRecovery(for: higherPeerID)
         let requested = await TestHelpers.waitUntil(
             { recovery.messages.count == 1 },
-            timeout: 1
+            timeout: TestConstants.longTimeout
         )
         #expect(requested)
         let retryMessage1 = try #require(recovery.messages.first)

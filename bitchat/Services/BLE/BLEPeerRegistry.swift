@@ -223,7 +223,7 @@ struct BLEPeerRegistry {
 
         peers[peerID] = BLEPeerInfo(
             peerID: existing?.peerID ?? peerID,
-            nickname: nickname,
+            nickname: nickname.normalizedNickname,
             isConnected: isConnected,
             noisePublicKey: noisePublicKey,
             // Never drop an already-pinned signing key.

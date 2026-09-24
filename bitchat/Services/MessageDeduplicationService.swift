@@ -104,12 +104,10 @@ final class LRUDeduplicationCache<Value> {
 enum ContentNormalizer {
 
     /// Regex to simplify HTTP URLs by stripping query strings and fragments
-    private static let simplifyHTTPURL: NSRegularExpression = {
-        try! NSRegularExpression(
-            pattern: "https?://[^\\s?#]+(?:[?#][^\\s]*)?",
-            options: [.caseInsensitive]
-        )
-    }()
+    private static let simplifyHTTPURL = SafeRegex.compile(
+        "https?://[^\\s?#]+(?:[?#][^\\s]*)?",
+        options: [.caseInsensitive]
+    )
 
     /// Normalizes content for deduplication comparison.
     /// - Parameters:

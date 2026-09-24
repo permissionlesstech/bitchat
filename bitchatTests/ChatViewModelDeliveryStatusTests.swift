@@ -147,6 +147,10 @@ struct ChatViewModelDeliveryStatusTests {
         #expect(Conversation.shouldSkipStatusUpdate(current: .sent, new: .sending))
         // ...but a retry after a real failure stays visible.
         #expect(!Conversation.shouldSkipStatusUpdate(current: .failed(reason: "no route"), new: .sending))
+        // .notSentYet is the pre-transport initial state: leaving it is always
+        // allowed, returning to it never is.
+        #expect(!Conversation.shouldSkipStatusUpdate(current: .notSentYet, new: .sending))
+        #expect(Conversation.shouldSkipStatusUpdate(current: .sent, new: .notSentYet))
     }
 
     @Test @MainActor
@@ -729,9 +733,10 @@ struct ChatViewModelDeliveryStatusTests {
     @Test @MainActor
     func statusRank_orderingIsCorrect() async {
         // This tests the implicit ordering used in refreshVisibleMessages
-        // failed < sending < sent < carried < partiallyDelivered < delivered < read
+        // notSentYet < failed < sending < sent < carried < partiallyDelivered < delivered < read
 
         let statuses: [DeliveryStatus] = [
+            .notSentYet,
             .failed(reason: "test"),
             .sending,
             .sent,
@@ -745,13 +750,14 @@ struct ChatViewModelDeliveryStatusTests {
         // This is more of a documentation test to ensure the ranking logic is understood
         for (index, status) in statuses.enumerated() {
             switch status {
-            case .failed: #expect(index == 0)
-            case .sending: #expect(index == 1)
-            case .sent: #expect(index == 2)
-            case .carried: #expect(index == 3)
-            case .partiallyDelivered: #expect(index == 4)
-            case .delivered: #expect(index == 5)
-            case .read: #expect(index == 6)
+            case .notSentYet: #expect(index == 0)
+            case .failed: #expect(index == 1)
+            case .sending: #expect(index == 2)
+            case .sent: #expect(index == 3)
+            case .carried: #expect(index == 4)
+            case .partiallyDelivered: #expect(index == 5)
+            case .delivered: #expect(index == 6)
+            case .read: #expect(index == 7)
             }
         }
     }

@@ -3,6 +3,7 @@
 excluded:
   - .build
   - .claude
+  - .device-lab
   - .swiftpm
   - .DerivedData
   - DerivedData
@@ -21,6 +22,7 @@ disabled_rules:
   - control_statement
   - void_function_in_ternary
   - redundant_discardable_let  # SwiftUI breaks without it
+  - todo  # TODOs that cite a tracked issue are deliberate markers, not lint debt
   # To be enabled as we fix the issues
   - trailing_whitespace
   - cyclomatic_complexity

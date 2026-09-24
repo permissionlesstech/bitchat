@@ -37,4 +37,13 @@ final class BLEAnnounceThrottle: @unchecked Sendable {
             return true
         }
     }
+
+    /// Forgets the last-sent timestamp. A panic rotation calls this so the
+    /// new identity's first announce cannot be swallowed by the old
+    /// identity's throttle debt — otherwise a panic within the forced
+    /// minimum interval of the last announce leaves the rotated identity
+    /// invisible until the next maintenance cycle.
+    func reset() {
+        lock.withLock { lastSent = .distantPast }
+    }
 }

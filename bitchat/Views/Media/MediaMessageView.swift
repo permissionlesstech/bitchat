@@ -20,7 +20,7 @@ struct MediaMessageView: View {
     /// is a reference type mutated in place, and SwiftUI compares reference
     /// fields by identity, so without the snapshot a status-only change
     /// (send progress, delivered → read) would not re-render this row.
-    private let deliveryStatus: DeliveryStatus?
+    private let deliveryStatus: DeliveryStatus
     @State private var showDeliveryDetail = false
 
     @Binding var imagePreviewURL: URL?
@@ -48,6 +48,15 @@ struct MediaMessageView: View {
                     .padding(.trailing, 4)
                     .accessibilityHidden(true)
             }
+            if conversationUIModel.showsVerifiedSeal(for: message) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.bitchatSystem(size: 8))
+                    .foregroundColor(Color.green.opacity(0.85))
+                    .padding(.trailing, 4)
+                    .accessibilityLabel(
+                        String(localized: "content.accessibility.verified_sender", defaultValue: "Verified sender", comment: "Accessibility label for the seal next to a verified peer's name on a private message")
+                    )
+            }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .center, spacing: 4) {
                     Text(conversationUIModel.formatMessageHeader(message, colorScheme: colorScheme, theme: theme))
@@ -57,11 +66,11 @@ struct MediaMessageView: View {
                     // .help() tooltips only exist on macOS, so iOS users get the
                     // explanation as a caption under the row instead.
                     if message.isPrivate && conversationUIModel.isSentByCurrentUser(message),
-                       let status = deliveryStatus {
+                       deliveryStatus != .notSentYet {
                         Button {
                             showDeliveryDetail.toggle()
                         } label: {
-                            DeliveryStatusView(status: status)
+                            DeliveryStatusView(status: deliveryStatus)
                                 .padding(.leading, 4)
                                 .contentShape(Rectangle())
                         }
@@ -75,14 +84,14 @@ struct MediaMessageView: View {
                 // Failure reasons stay visible without a tap; other statuses
                 // reveal on demand.
                 if message.isPrivate && conversationUIModel.isSentByCurrentUser(message),
-                   let status = deliveryStatus {
-                    if case .failed = status {
-                        Text(verbatim: status.bitchatDescription)
+                   deliveryStatus != .notSentYet {
+                    if case .failed = deliveryStatus {
+                        Text(verbatim: deliveryStatus.bitchatDescription)
                             .bitchatFont(size: 11)
                             .foregroundColor(Color.red.opacity(0.9))
                             .fixedSize(horizontal: false, vertical: true)
                     } else if showDeliveryDetail {
-                        Text(verbatim: status.bitchatDescription)
+                        Text(verbatim: deliveryStatus.bitchatDescription)
                             .bitchatFont(size: 11)
                             .foregroundColor(palette.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -132,26 +141,24 @@ struct MediaMessageView: View {
         }
     }
 
-    private func mediaSendState(for deliveryStatus: DeliveryStatus?, isFromMe: Bool) -> (isSending: Bool, progress: Double?, canCancel: Bool) {
+    private func mediaSendState(for deliveryStatus: DeliveryStatus, isFromMe: Bool) -> (isSending: Bool, progress: Double?, canCancel: Bool) {
         // A received message is never in a send state: BitchatMessage defaults
         // private messages to .sending, so an incoming message's status must
         // not drive the reveal mask or disable the reveal tap.
         guard isFromMe else { return (false, nil, false) }
         var isSending = false
         var progress: Double?
-        if let status = deliveryStatus {
-            switch status {
-            case .sending:
+        switch deliveryStatus {
+        case .sending:
+            isSending = true
+            progress = 0
+        case .partiallyDelivered(let reached, let total):
+            if total > 0 {
                 isSending = true
-                progress = 0
-            case .partiallyDelivered(let reached, let total):
-                if total > 0 {
-                    isSending = true
-                    progress = Double(reached) / Double(total)
-                }
-            case .sent, .carried, .read, .delivered, .failed:
-                break
+                progress = Double(reached) / Double(total)
             }
+        case .notSentYet, .sent, .carried, .read, .delivered, .failed:
+            break
         }
         let canCancel = isSending && conversationUIModel.isSentByCurrentUser(message)
         let clamped = progress.map { max(0, min(1, $0)) }

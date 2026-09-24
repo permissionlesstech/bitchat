@@ -14,7 +14,10 @@ import BitFoundation
 
 /// Mock Transport implementation for testing ChatViewModel in isolation.
 /// Records all method calls and allows test code to verify interactions.
-final class MockTransport: Transport, PrivateMediaDeletionPersisting {
+final class MockTransport: Transport, PrivateMediaDeletionPersisting,
+    MeshFileTransferring, MeshVerifying, MeshCourierTransporting,
+    MeshDiagnosing, MeshPublicArchiving, MeshVoiceStreaming,
+    MeshGroupMessaging, MeshBoardBroadcasting {
 
     // MARK: - Protocol Properties
 
@@ -205,11 +208,6 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting {
         sentBroadcastFiles.append((packet, transferId))
     }
 
-    func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String) {
-        sentPrivateFiles.append((packet, peerID, transferId))
-        sentPrivateFileLegacyAllowances.append(false)
-    }
-
     func sendFilePrivate(
         _ packet: BitchatFilePacket,
         to peerID: PeerID,
@@ -240,6 +238,15 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting {
 
     func cancelTransfer(_ transferId: String) {
         cancelledTransfers.append(transferId)
+    }
+
+    private(set) var sentFileReceiptRetries: [(BitchatFilePacket, PeerID, String)] = []
+    func sendFilePrivateReceiptRetry(
+        _ packet: BitchatFilePacket,
+        to peerID: PeerID,
+        transferId: String
+    ) {
+        sentFileReceiptRetries.append((packet, peerID, transferId))
     }
 
     @MainActor
@@ -315,6 +322,50 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting {
 
     func currentMeshTopology() -> MeshTopologySnapshot? {
         meshTopologySnapshot
+    }
+
+    // MARK: - Remaining mesh capabilities (recording stubs)
+
+    private(set) var sentVouchAttestations: [(Data, PeerID)] = []
+    func sendVouchAttestations(_ payload: Data, to peerID: PeerID) {
+        sentVouchAttestations.append((payload, peerID))
+    }
+
+    var archivedPublicMessages: [ArchivedPublicMessage] = []
+    private(set) var purgedAllArchived = false
+    func collectArchivedPublicMessages(completion: @escaping @MainActor ([ArchivedPublicMessage]) -> Void) {
+        let archived = archivedPublicMessages
+        Task { @MainActor in completion(archived) }
+    }
+    func purgeAllArchivedPublicMessages() {
+        purgedAllArchived = true
+    }
+
+    private(set) var sentVoiceFrames: [(Data, PeerID)] = []
+    private(set) var sentVoiceBroadcasts: [Data] = []
+    func sendVoiceFrame(_ burstContent: Data, to peerID: PeerID) {
+        sentVoiceFrames.append((burstContent, peerID))
+    }
+    func sendVoiceFrameBroadcast(_ burstContent: Data) {
+        sentVoiceBroadcasts.append(burstContent)
+    }
+
+    private(set) var sentGroupInvites: [(Data, PeerID)] = []
+    private(set) var sentGroupKeyUpdates: [(Data, PeerID)] = []
+    private(set) var broadcastGroupMessages: [Data] = []
+    func sendGroupInvite(_ statePayload: Data, to peerID: PeerID) {
+        sentGroupInvites.append((statePayload, peerID))
+    }
+    func sendGroupKeyUpdate(_ statePayload: Data, to peerID: PeerID) {
+        sentGroupKeyUpdates.append((statePayload, peerID))
+    }
+    func broadcastGroupMessage(_ envelope: Data) {
+        broadcastGroupMessages.append(envelope)
+    }
+
+    private(set) var sentBoardPayloads: [Data] = []
+    func sendBoardPayload(_ payload: Data) {
+        sentBoardPayloads.append(payload)
     }
 
     // MARK: - Test Helpers

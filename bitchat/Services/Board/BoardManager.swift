@@ -19,6 +19,8 @@ final class BoardManager: ObservableObject {
     @Published private(set) var posts: [BoardPostPacket] = []
 
     private let transport: Transport
+    /// Board broadcast rides the mesh only; absent on other transports.
+    private var boardTransport: MeshBoardBroadcasting? { transport as? MeshBoardBroadcasting }
     /// Publishes a bridged kind-1 note (expiring with the board post via
     /// NIP-40) and returns its Nostr event id, or nil when bridging failed or
     /// was skipped.
@@ -122,7 +124,7 @@ final class BoardManager: ObservableObject {
             flags: flags,
             signature: signature
         )
-        transport.sendBoardPayload(BoardWire.post(post).encode())
+        boardTransport?.sendBoardPayload(BoardWire.post(post).encode())
 
         // Nostr bridge: geohash posts also go out as kind-1 location notes so
         // online users see them. Remember the event id for merged deletes.
@@ -148,7 +150,7 @@ final class BoardManager: ObservableObject {
             deletedAt: deletedAt,
             signature: signature
         )
-        transport.sendBoardPayload(BoardWire.tombstone(tombstone).encode())
+        boardTransport?.sendBoardPayload(BoardWire.tombstone(tombstone).encode())
 
         // Merged delete: also retract the bridged Nostr copy when we still
         // know its event id.

@@ -63,7 +63,7 @@ final class NetworkActivationServiceTests: XCTestCase {
         context.service.start()
         context.service.setUserTorEnabled(false)
 
-        wait(for: [notified], timeout: 1.0)
+        wait(for: [notified], timeout: TestConstants.negativeWaitWindow)
         context.notificationCenter.removeObserver(token)
 
         XCTAssertFalse(context.service.userTorEnabled)
@@ -243,7 +243,7 @@ final class NetworkActivationServiceTests: XCTestCase {
     }
 
     private func waitUntil(
-        timeout: TimeInterval = 1.0,
+        timeout: TimeInterval = TestConstants.settleTimeout,
         condition: @escaping @MainActor () -> Bool
     ) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)

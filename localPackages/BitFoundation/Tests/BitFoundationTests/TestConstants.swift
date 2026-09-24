@@ -11,7 +11,6 @@ import Foundation
 // Kept local until the test-helper module is split out.
 struct TestConstants {
     static let defaultTimeout: TimeInterval = 5.0
-    static let shortTimeout: TimeInterval = 1.0
     static let longTimeout: TimeInterval = 10.0
     
     static let testNickname1 = "Alice"

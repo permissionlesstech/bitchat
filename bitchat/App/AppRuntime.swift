@@ -152,18 +152,23 @@ final class AppRuntime: ObservableObject {
         NetworkActivationService.shared.start()
         GeohashPresenceService.shared.start()
         checkForSharedContent()
-        expireAgedMedia()
+        performMediaMaintenance()
 
         record(.launched)
         record(.startupCompleted)
     }
 
-    /// Drops media that has outlived the retention window. Off the main thread
-    /// and best-effort: the sweep walks the media tree, and nothing at launch
-    /// depends on its result.
-    private func expireAgedMedia() {
-        Task(priority: .utility) {
-            BLEIncomingFileStore().expireAgedMedia()
+    /// Drops media that has outlived the retention window, then applies the
+    /// explicit protection class to files that older builds wrote without
+    /// one. Expiry runs first so the migration never touches files the
+    /// sweep is about to delete. Detached because `AppRuntime` is
+    /// main-actor and both passes go file by file through the media tree;
+    /// best-effort, nothing at launch depends on their results.
+    private func performMediaMaintenance() {
+        Task.detached(priority: .utility) {
+            let store = BLEIncomingFileStore()
+            store.expireAgedMedia()
+            store.migrateFileProtectionIfNeeded()
         }
     }
 
@@ -419,16 +424,24 @@ private extension AppRuntime {
     }
 
     func handleScreenshotCaptured() {
-        if appChromeModel.isLocationChannelsSheetPresented {
+        let isLocationChannelActive: Bool = {
+            if case .location = chatViewModel.activeChannel { return true }
+            return false
+        }()
+
+        switch Self.resolveScreenshotResponse(
+            isLocationChannelsSheetPresented: appChromeModel.isLocationChannelsSheetPresented,
+            isAppInfoPresented: appChromeModel.isAppInfoPresented,
+            hasPrivateChatOpen: chatViewModel.selectedPrivateChatPeer != nil,
+            isLocationChannelActive: isLocationChannelActive
+        ) {
+        case .warnLocally:
             appChromeModel.triggerScreenshotPrivacyWarning()
-            return
+        case .ignore:
+            break
+        case .forwardToChat:
+            chatViewModel.handleScreenshotCaptured()
         }
-
-        if appChromeModel.isAppInfoPresented {
-            return
-        }
-
-        chatViewModel.handleScreenshotCaptured()
     }
 
     func openExternalURL(_ url: URL) {
@@ -443,5 +456,42 @@ private extension AppRuntime {
         Task {
             await events.emit(event)
         }
+    }
+}
+
+// MARK: - Screenshot routing
+
+extension AppRuntime {
+    /// What a screenshot triggers. Nothing on this table sends anything to
+    /// a public channel (see `ChatLifecycleCoordinator.handleScreenshotCaptured`).
+    enum ScreenshotCaptureResponse: Equatable {
+        /// Show the local location-privacy alert; nothing is sent anywhere.
+        case warnLocally
+        /// Do nothing. App Info holds no conversation or location content.
+        case ignore
+        /// Hand to the chat layer: a DM notice goes to the peer when a
+        /// secure session exists; public timelines stay silent. Mesh
+        /// deliberately gets no local alert either — a mesh screenshot
+        /// reveals no place and triggers no send, so there is nothing to
+        /// warn about, and alerting on every screenshot would train people
+        /// to dismiss the one alert that matters (the location one).
+        case forwardToChat
+    }
+
+    /// Pure decision table so the screenshot routing is testable without a
+    /// runtime.
+    nonisolated static func resolveScreenshotResponse(
+        isLocationChannelsSheetPresented: Bool,
+        isAppInfoPresented: Bool,
+        hasPrivateChatOpen: Bool,
+        isLocationChannelActive: Bool
+    ) -> ScreenshotCaptureResponse {
+        if isLocationChannelsSheetPresented { return .warnLocally }
+        if isAppInfoPresented { return .ignore }
+        // A geohash timeline screenshot still reveals a place — warn the
+        // person taking it, locally, with the same alert the channel sheet
+        // uses.
+        if !hasPrivateChatOpen, isLocationChannelActive { return .warnLocally }
+        return .forwardToChat
     }
 }

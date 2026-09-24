@@ -653,8 +653,7 @@ struct ChatMediaTransferCoordinatorContextTests {
 
     @Test @MainActor
     func deleteStableMediaReleasesRetainedRetryBeforeTombstoneCommit()
-        async throws
-    {
+        async throws {
         let context = MockChatMediaTransferContext()
         let peerID = PeerID(str: "1122334455667788")
         context.selectedPrivateChatPeer = peerID

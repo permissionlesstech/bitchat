@@ -204,7 +204,8 @@ struct PrivateMediaEndToEndTests {
         alice.sendFilePrivate(
             file,
             to: bob.myPeerID,
-            transferId: deniedID
+            transferId: deniedID,
+            allowLegacyFallback: false
         )
         let denied = await TestHelpers.waitUntil(
             { cancellations.contains(deniedID) },
@@ -254,7 +255,7 @@ struct PrivateMediaEndToEndTests {
 
         // Consent is invocation-scoped, not a sticky peer preference.
         let retryID = "legacy-retry-without-consent-\(UUID().uuidString)"
-        alice.sendFilePrivate(file, to: bob.myPeerID, transferId: retryID)
+        alice.sendFilePrivate(file, to: bob.myPeerID, transferId: retryID, allowLegacyFallback: false)
         let retryDenied = await TestHelpers.waitUntil(
             { cancellations.contains(retryID) },
             timeout: TestConstants.longTimeout
@@ -998,7 +999,7 @@ struct PrivateMediaEndToEndTests {
         let encryptedID = "encrypted-over-256-\(UUID().uuidString)"
         let legacyID = "legacy-over-256-\(UUID().uuidString)"
 
-        alice.sendFilePrivate(file, to: bob.myPeerID, transferId: encryptedID)
+        alice.sendFilePrivate(file, to: bob.myPeerID, transferId: encryptedID, allowLegacyFallback: false)
         alice.sendFilePrivate(
             file,
             to: oldCarol.myPeerID,
@@ -1318,7 +1319,7 @@ struct PrivateMediaEndToEndTests {
             mimeType: mimeType,
             content: content
         )
-        alice.sendFilePrivate(file, to: bob.myPeerID, transferId: "wire-\(UUID().uuidString)")
+        alice.sendFilePrivate(file, to: bob.myPeerID, transferId: "wire-\(UUID().uuidString)", allowLegacyFallback: false)
 
         let fragmented = await TestHelpers.waitUntil(
             { tap.hasCompleteFragmentTrain },

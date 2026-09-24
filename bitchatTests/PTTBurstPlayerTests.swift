@@ -188,7 +188,7 @@ struct PTTBurstPlayerTests {
         _ condition: () -> Bool,
         sourceLocation: SourceLocation = #_sourceLocation
     ) async {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        let deadline = ContinuousClock.now.advanced(by: .seconds(TestConstants.settleTimeout))
         while !condition(), ContinuousClock.now < deadline {
             await Task.yield()
             try? await Task.sleep(nanoseconds: 1_000_000)
