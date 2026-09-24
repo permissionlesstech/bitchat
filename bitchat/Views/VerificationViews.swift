@@ -460,6 +460,17 @@ struct VerificationSheetView: View {
 
             // Centered controls moved up
             VStack(spacing: 10) {
+                if !showingScanner {
+                    Button(action: copyIdentityVerificationCard) {
+                        Label(
+                            String(localized: "identity.card.copy", defaultValue: "copy identity card", comment: "Button that copies the public identity verification card as plain text"),
+                            systemImage: "doc.on.doc"
+                        )
+                        .bitchatFont(size: 13)
+                    }
+                    .buttonStyle(.bordered)
+                }
+
                 if showingScanner {
                     Button(action: { showingScanner = false }) {
                         Label("show my qr", systemImage: "qrcode")
@@ -491,5 +502,16 @@ struct VerificationSheetView: View {
         }
         .themedSheetBackground()
         .onDisappear { showingScanner = false }
+    }
+
+    private func copyIdentityVerificationCard() {
+        let text = verificationModel.identityVerificationCard().plainText
+        #if os(iOS)
+        UIPasteboard.general.string = text
+        #else
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(text, forType: .string)
+        #endif
     }
 }
