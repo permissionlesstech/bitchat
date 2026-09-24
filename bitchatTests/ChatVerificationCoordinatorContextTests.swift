@@ -316,7 +316,11 @@ struct ChatVerificationCoordinatorContextTests {
 
         // Already-verified peer challenging us: mutual-verification toast.
         #expect(context.postedLocalNotifications.count == 1)
-        #expect(context.postedLocalNotifications.first?.title == "Mutual verification")
+        #expect(context.postedLocalNotifications.first?.title == String(
+            localized: "verification.notification.mutual.title",
+            defaultValue: "Mutual verification",
+            comment: "Notification title when both peers have verified each other"
+        ))
         #expect(context.postedLocalNotifications.first?.body.hasSuffix("verified each other") == true)
         #expect(context.postedLocalNotifications.first?.identifier.hasPrefix("verify-mutual-") == true)
 
