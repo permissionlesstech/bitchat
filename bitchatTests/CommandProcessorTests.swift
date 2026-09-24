@@ -287,7 +287,7 @@ struct CommandProcessorTests {
         }
         switch blockResult {
         case .success(let message):
-            #expect(message == "blocked carol in geohash chats")
+            #expect(message == "blocked carol in this geohash channel — in other geohash channels they appear as someone new, so block them there too if needed")
         default:
             Issue.record("Expected success result")
         }

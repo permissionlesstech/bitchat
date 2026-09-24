@@ -105,6 +105,9 @@ struct PrivateConversationHeaderState: Equatable {
     let displayName: String
     let availability: PrivateConversationAvailability
     let isFavorite: Bool
+    /// Whether the favorite is reciprocated — the load-bearing state:
+    /// one-sided favorites do NOT enable offline delivery.
+    let isMutualFavorite: Bool
     let encryptionStatus: EncryptionStatus?
 
     var supportsFavoriteToggle: Bool {
@@ -258,6 +261,7 @@ final class PrivateConversationModel: ObservableObject {
                 displayName: displayName,
                 availability: .meshReachable,
                 isFavorite: false,
+                isMutualFavorite: false,
                 encryptionStatus: nil
             )
         }
@@ -282,6 +286,7 @@ final class PrivateConversationModel: ObservableObject {
             displayName: displayName,
             availability: availability,
             isFavorite: chatViewModel.isFavorite(peerID: headerPeerID),
+            isMutualFavorite: peer?.isMutualFavorite ?? false,
             encryptionStatus: encryptionStatus
         )
     }

@@ -463,6 +463,9 @@ private extension ContentPeopleListView {
 private struct ContentPrivateChatSheetView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
 
+    /// First-ever favorite waiting on the one-time consent dialog.
+    @State private var showFavoriteConsent = false
+
     @Binding var showSidebar: Bool
     @Binding var messageText: String
     @Binding var selectedMessageSender: String?
@@ -517,9 +520,19 @@ private struct ContentPrivateChatSheetView: View {
 
                         if headerState.supportsFavoriteToggle {
                             Button(action: {
-                                privateConversationModel.toggleFavoriteForSelectedConversation()
+                                // The first favorite ever asks once: the star
+                                // notifies the peer and shares the nostr key.
+                                if !headerState.isFavorite, !FavoriteConsent.isAcknowledged {
+                                    showFavoriteConsent = true
+                                } else {
+                                    privateConversationModel.toggleFavoriteForSelectedConversation()
+                                }
                             }) {
-                                Image(systemName: headerState.isFavorite ? "star.fill" : "star")
+                                // Half star until reciprocated: one-sided
+                                // favorites don't enable offline delivery.
+                                Image(systemName: headerState.isFavorite
+                                    ? (headerState.isMutualFavorite ? "star.fill" : "star.leadinghalf.filled")
+                                    : "star")
                                     .font(.bitchatSystem(size: 14))
                                     .foregroundColor(headerState.isFavorite ? Color.yellow : palette.primary)
                                     // Same visual box + 44pt hit target as SheetCloseButton.
@@ -532,6 +545,25 @@ private struct ContentPrivateChatSheetView: View {
                                 ? String(localized: "content.accessibility.remove_favorite", comment: "Accessibility label to remove a favorite")
                                 : String(localized: "content.accessibility.add_favorite", comment: "Accessibility label to add a favorite")
                             )
+                            .confirmationDialog(
+                                Text(String(localized: "favorites.consent.title", defaultValue: "add favorite?", comment: "Title of the one-time confirmation before the first favorite")),
+                                isPresented: $showFavoriteConsent,
+                                titleVisibility: .visible
+                            ) {
+                                Button(String(localized: "favorites.consent.confirm", defaultValue: "add favorite", comment: "Confirm button of the one-time favorite consent dialog")) {
+                                    FavoriteConsent.acknowledge()
+                                    privateConversationModel.toggleFavoriteForSelectedConversation()
+                                }
+                                Button("common.cancel", role: .cancel) {}
+                            } message: {
+                                Text(
+                                    String(
+                                        format: String(localized: "favorites.consent.message", defaultValue: "this tells %@ right away and shares your nostr key with them. if they favorite you back, you can message each other over the internet when out of mesh range.", comment: "Body of the one-time favorite consent dialog; placeholder is the person's name"),
+                                        locale: .current,
+                                        headerState.displayName
+                                    )
+                                )
+                            }
                         }
                     }
                     .frame(maxWidth: .infinity)
