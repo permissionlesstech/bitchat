@@ -4,6 +4,13 @@ import Foundation
 import Testing
 @testable import bitchat
 
+/// A throwaway suite for the panic-gesture preference, so the tests below
+/// drive `requestPanicWipe()` through its real read path without ever
+/// touching the shared defaults another suite may be using.
+private func makeIsolatedPanicGestureDefaults() -> UserDefaults {
+    UserDefaults(suiteName: "bitchat.tests.architecture.panic.\(UUID().uuidString)")!
+}
+
 @MainActor
 private func makeArchitectureViewModel(
     locationManager: LocationChannelManager? = nil
@@ -462,12 +469,19 @@ struct AppArchitectureTests {
         #expect(chromeModel.showingFingerprintFor == nil)
     }
 
-    @Test("Triple-tap panic entry point only raises the confirmation dialog")
+    @Test("The shipped default makes the triple-tap raise the confirmation dialog")
     @MainActor
     func requestPanicWipeAsksBeforeDestroying() {
         let viewModel = makeArchitectureViewModel()
         let privateInboxModel = PrivateInboxModel(conversations: ConversationStore())
-        let chromeModel = AppChromeModel(chatViewModel: viewModel, privateInboxModel: privateInboxModel)
+        // An empty store: this asserts what a fresh install does, through the
+        // real read path, without depending on whatever the shared defaults
+        // happen to hold on this machine.
+        let chromeModel = AppChromeModel(
+            chatViewModel: viewModel,
+            privateInboxModel: privateInboxModel,
+            panicGestureDefaults: makeIsolatedPanicGestureDefaults()
+        )
         viewModel.seedPublicMessages([
             BitchatMessage(
                 id: "keep-1",
@@ -484,6 +498,71 @@ struct AppArchitectureTests {
         // (single-tap opens App Info) cannot be allowed to destroy identity.
         #expect(chromeModel.showPanicConfirmation)
         #expect(viewModel.messages.map(\.id) == ["keep-1"])
+    }
+
+    @Test("A disabled logo gesture wipes nothing and says so")
+    @MainActor
+    func panicGestureOffReportsThatNothingHappened() {
+        let viewModel = makeArchitectureViewModel()
+        let defaults = makeIsolatedPanicGestureDefaults()
+        PanicGestureSettings.setMode(.off, in: defaults)
+        let chromeModel = AppChromeModel(
+            chatViewModel: viewModel,
+            privateInboxModel: PrivateInboxModel(conversations: ConversationStore()),
+            panicGestureDefaults: defaults
+        )
+        viewModel.seedPublicMessages([
+            BitchatMessage(id: "keep-1", sender: "Tester", content: "still here", timestamp: Date(), isRelay: false)
+        ])
+
+        chromeModel.requestPanicWipe()
+
+        // Silence is the dangerous outcome here: someone who triple-tapped in
+        // a hurry would otherwise believe the device had been wiped.
+        #expect(chromeModel.showPanicGestureDisabledAlert)
+        #expect(!chromeModel.showPanicConfirmation)
+        #expect(viewModel.messages.map(\.id) == ["keep-1"])
+    }
+
+    @Test("Instant mode wipes without asking")
+    @MainActor
+    func panicGestureInstantWipesImmediately() {
+        let viewModel = makeArchitectureViewModel()
+        let defaults = makeIsolatedPanicGestureDefaults()
+        PanicGestureSettings.setMode(.instant, in: defaults)
+        var wipes = 0
+        let chromeModel = AppChromeModel(
+            chatViewModel: viewModel,
+            privateInboxModel: PrivateInboxModel(conversations: ConversationStore()),
+            onPanicWipe: { wipes += 1 },
+            panicGestureDefaults: defaults
+        )
+
+        chromeModel.requestPanicWipe()
+
+        #expect(wipes == 1)
+        #expect(!chromeModel.showPanicConfirmation)
+        #expect(!chromeModel.showPanicGestureDisabledAlert)
+    }
+
+    @Test("Confirm mode destroys nothing until the dialog is answered")
+    @MainActor
+    func panicGestureConfirmDestroysNothingUpFront() {
+        let viewModel = makeArchitectureViewModel()
+        let defaults = makeIsolatedPanicGestureDefaults()
+        PanicGestureSettings.setMode(.confirm, in: defaults)
+        var wipes = 0
+        let chromeModel = AppChromeModel(
+            chatViewModel: viewModel,
+            privateInboxModel: PrivateInboxModel(conversations: ConversationStore()),
+            onPanicWipe: { wipes += 1 },
+            panicGestureDefaults: defaults
+        )
+
+        chromeModel.requestPanicWipe()
+
+        #expect(chromeModel.showPanicConfirmation)
+        #expect(wipes == 0)
     }
 
     @Test("Panic wipe dismisses chrome sheets so its outcome is visible")
