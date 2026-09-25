@@ -21,6 +21,7 @@ struct AppInfoView: View {
     @State private var showTopology = false
     @State private var liveVoiceEnabled = PTTSettings.liveVoiceEnabled
     @State private var locationNotesEnabled = LocationNotesSettings.enabled
+    @State private var proximityWakeEnabled = BLEProximityWakeSettings.enabled
     @State private var hideMessagePreviews = NotificationPrivacySettings.hideMessagePreviews
     @State private var customRelays = NostrRelaySettings.customRelays()
     @State private var relayInput = ""
@@ -117,6 +118,9 @@ struct AppInfoView: View {
             static let privacyTitle = String(localized: "app_info.settings.privacy.title", defaultValue: "PRIVACY", comment: "Section header (uppercase) for privacy settings such as hiding notification previews")
             static let hidePreviewsTitle = String(localized: "app_info.settings.hide_previews.title", defaultValue: "hide message previews", comment: "Title of the setting that keeps message text, sender names, and geohashes out of lock-screen notifications")
             static let hidePreviewsSubtitle = String(localized: "app_info.settings.hide_previews.subtitle", defaultValue: "notifications say that something arrived without showing the message, who sent it, or which location channel it came from. anyone holding your locked phone learns nothing from the lock screen. on by default.", comment: "Subtitle explaining what hiding notification message previews does")
+
+            static let proximityWakeTitle = String(localized: "app_info.settings.proximity_wake.title", defaultValue: "wake when nearby peers return", comment: "Title of the setting that lets Bluetooth relaunch bitchat when a recent peer comes back into range")
+            static let proximityWakeSubtitle = String(localized: "app_info.settings.proximity_wake.subtitle", defaultValue: "while bitchat is backgrounded, ask the system to reconnect to recent mesh peers so a nearby phone can wake the app. on ios 26 that wake can show an \"accessory would like to open bitchat\" prompt — safe to allow, or turn this off if you'd rather not see it. on by default so the mesh stays reachable.", comment: "Subtitle explaining wake-on-proximity and the ios 26 accessory open prompt")
 
             static let dangerTitle = String(localized: "app_info.settings.danger.title", defaultValue: "DANGER ZONE", comment: "Section header (uppercase) for destructive actions in settings")
             static let panicButton = String(localized: "app_info.settings.danger.panic_button", defaultValue: "panic wipe", comment: "Button in the settings danger zone that erases all local data after confirmation")
@@ -524,7 +528,8 @@ struct AppInfoView: View {
             }
 
             // Privacy: what a locked, seized, or borrowed phone gives away
-            // without being unlocked.
+            // without being unlocked — and whether background Bluetooth may
+            // relaunch the app when a peer returns (#1427).
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(verbatim: Strings.Settings.privacyTitle)
 
@@ -537,6 +542,20 @@ struct AppInfoView: View {
                             set: { newValue in
                                 hideMessagePreviews = newValue
                                 NotificationPrivacySettings.hideMessagePreviews = newValue
+                            }
+                        )
+                    )
+                }
+
+                settingsCard {
+                    settingToggle(
+                        title: Text(verbatim: Strings.Settings.proximityWakeTitle),
+                        subtitle: Text(verbatim: Strings.Settings.proximityWakeSubtitle),
+                        isOn: Binding(
+                            get: { proximityWakeEnabled },
+                            set: { newValue in
+                                proximityWakeEnabled = newValue
+                                BLEProximityWakeSettings.enabled = newValue
                             }
                         )
                     )
