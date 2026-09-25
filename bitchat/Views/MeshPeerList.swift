@@ -10,6 +10,8 @@ struct MeshPeerList: View {
     /// Optional so existing call sites (and previews/tests) keep compiling;
     /// when absent the block/unblock context-menu entry is hidden.
     var onToggleBlock: ((MeshPeerRow) -> Void)? = nil
+    /// Mute/unmute this peer for the "bitchatters nearby" notification.
+    var onToggleNearbyNotificationMute: ((MeshPeerRow) -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
 
     @State private var orderedIDs: [String] = []
@@ -34,6 +36,9 @@ struct MeshPeerList: View {
         static let directMessage = String(localized: "content.actions.direct_message", comment: "Action that opens a private chat with the person")
         static let block = String(localized: "geohash_people.action.block", comment: "Context menu action to block a person")
         static let unblock = String(localized: "geohash_people.action.unblock", comment: "Context menu action to unblock a person")
+        static let muteNearby = String(localized: "mesh_peers.action.mute_nearby", defaultValue: "Mute nearby alerts", comment: "Context menu action to stop nearby notifications for this peer")
+        static let unmuteNearby = String(localized: "mesh_peers.action.unmute_nearby", defaultValue: "Unmute nearby alerts", comment: "Context menu action to resume nearby notifications for this peer")
+        static let nearbyMuted = String(localized: "mesh_peers.state.nearby_muted", defaultValue: "nearby alerts muted", comment: "State label for a peer muted for proximity notifications")
     }
 
     var body: some View {
@@ -114,6 +119,11 @@ struct MeshPeerList: View {
                                 .font(.bitchatSystem(size: 10))
                                 .foregroundColor(.red)
                                 .help(Strings.blockedTooltip)
+                        } else if peer.isNearbyNotificationMuted {
+                            Image(systemName: "bell.slash")
+                                .font(.bitchatSystem(size: 10))
+                                .foregroundColor(palette.secondary)
+                                .help(Strings.nearbyMuted)
                         }
 
                         if !isMe {
@@ -195,6 +205,11 @@ struct MeshPeerList: View {
                             Button(Strings.showFingerprint) {
                                 onShowFingerprint(peer.peerID)
                             }
+                            if let onToggleNearbyNotificationMute {
+                                Button(peer.isNearbyNotificationMuted ? Strings.unmuteNearby : Strings.muteNearby) {
+                                    onToggleNearbyNotificationMute(peer)
+                                }
+                            }
                             if let onToggleBlock {
                                 if peer.isBlocked {
                                     Button(Strings.unblock) {
@@ -219,6 +234,11 @@ struct MeshPeerList: View {
                             }
                             Button(Strings.showFingerprint) {
                                 onShowFingerprint(peer.peerID)
+                            }
+                            if let onToggleNearbyNotificationMute {
+                                Button(peer.isNearbyNotificationMuted ? Strings.unmuteNearby : Strings.muteNearby) {
+                                    onToggleNearbyNotificationMute(peer)
+                                }
                             }
                             if let onToggleBlock {
                                 Button(peer.isBlocked ? Strings.unblock : Strings.block) {
@@ -261,6 +281,7 @@ struct MeshPeerList: View {
         if peer.isFavorite { parts.append(Strings.favorite) }
         if peer.hasUnread { parts.append(Strings.unread) }
         if peer.isBlocked { parts.append(Strings.blocked) }
+        if peer.isNearbyNotificationMuted { parts.append(Strings.nearbyMuted) }
         return parts.joined(separator: ", ")
     }
 }

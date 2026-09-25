@@ -187,6 +187,11 @@ struct IdentityCache: Codable {
     // Blocked Nostr pubkeys (lowercased hex) for geohash chats
     var blockedNostrPubkeys: Set<String> = []
 
+    // Noise fingerprints muted for the "bitchatters nearby" local
+    // notification. Optional so caches written before this feature decode
+    // cleanly. Local-only; never transmitted.
+    var nearbyNotificationMutedFingerprints: Set<String>? = nil
+
     // Vouching (transitive verification). All three fields are Optional so
     // caches persisted before this feature decode cleanly — decodeIfPresent
     // is used below, and a missing key must not trip the "unreadable cache"
@@ -237,6 +242,7 @@ struct IdentityCache: Codable {
         verifiedFingerprints = try container.decodeIfPresent(Set<String>.self, forKey: .verifiedFingerprints) ?? []
         lastInteractions = try container.decodeIfPresent([String: Date].self, forKey: .lastInteractions) ?? [:]
         blockedNostrPubkeys = try container.decodeIfPresent(Set<String>.self, forKey: .blockedNostrPubkeys) ?? []
+        nearbyNotificationMutedFingerprints = try container.decodeIfPresent(Set<String>.self, forKey: .nearbyNotificationMutedFingerprints)
         vouchesByVouchee = try container.decodeIfPresent([String: [VouchRecord]].self, forKey: .vouchesByVouchee)
         vouchBatchSentAt = try container.decodeIfPresent([String: Date].self, forKey: .vouchBatchSentAt)
         verifiedAt = try container.decodeIfPresent([String: Date].self, forKey: .verifiedAt)
