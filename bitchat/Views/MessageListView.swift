@@ -19,6 +19,7 @@ struct MessageListView: View {
     @EnvironmentObject private var privateInboxModel: PrivateInboxModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
+    @EnvironmentObject private var peerListModel: PeerListModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var appChromeModel: AppChromeModel
     @ObservedObject private var nearbyNotes = NearbyNotesCounter.shared
@@ -40,6 +41,7 @@ struct MessageListView: View {
 
     @State private var showMessageActions = false
     @State private var showClearConfirmation = false
+    @State private var messageToForward: BitchatMessage?
     @State private var lastScrollTime: Date = .distantPast
     @State private var scrollThrottleTimer: Timer?
     @State private var unseenCount = 0
@@ -157,6 +159,17 @@ struct MessageListView: View {
                                         conversationUIModel.resendFailedPrivateMessage(message)
                                     }
                                 }
+                                if message.senderPeerID != .system && conversationUIModel.mediaAttachment(for: message) == nil {
+                                    Button(
+                                        String(
+                                            localized: "content.actions.forward",
+                                            defaultValue: "Forward",
+                                            comment: "Context menu action that opens a picker to forward this message to another conversation"
+                                        )
+                                    ) {
+                                        messageToForward = message
+                                    }
+                                }
                                 if showsUserActions {
                                     Button("content.actions.block", role: .destructive) {
                                         conversationUIModel.block(peerID: message.senderPeerID, displayName: message.sender)
@@ -272,6 +285,17 @@ struct MessageListView: View {
             }
             .onDisappear {
                 scrollThrottleTimer?.invalidate()
+            }
+            .sheet(isPresented: Binding(
+                get: { messageToForward != nil },
+                set: { isPresented in if !isPresented { messageToForward = nil } }
+            )) {
+                if let messageToForward {
+                    ForwardMessageSheet { peerID in
+                        conversationUIModel.forwardMessage(messageToForward.content, to: peerID)
+                    }
+                    .environmentObject(peerListModel)
+                }
             }
         }
         }
