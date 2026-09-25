@@ -4,9 +4,11 @@
 
 ## Status of This Document
 
-This specification is the normative definition of the bitchat protocol. Reference client implementations (Swift, Kotlin, or otherwise) are expected to conform to it. Where an implementation's behavior diverges from this document, the implementation — not the spec — is considered in error, until this document is formally revised.
+This specification is the normative definition of the bitchat protocol. It describes the protocol, not any one program that speaks it: no platform-specific behavior is normative, and behavior a client exhibits that the protocol does not define is either recorded under [Known Gaps](07-conformance.md#8-known-gaps-non-normative) or left out. Reference client implementations (Swift, Kotlin, or otherwise) are expected to conform to it.
 
-This is a `0.1.0` release: a first, from-scratch, unreviewed draft. It has not yet been checked against every reference implementation in full, and its numbering reflects that — it does not claim the stability of a `1.0.0` release.
+Precedence is a rule rather than a claim of infallibility. A divergence between this document and any implementation is a defect in one of them and is filed as an issue; until the maintainers resolve it, by a code change or by revising this document, the text here stands. The document's standing as the project's definition of the protocol rests on adoption by the project maintainers; it does not confer that on itself.
+
+**Provenance.** This `0.1.0` release was written from the Swift client at commit `1f59e81` and reviewed against its source. The Wire Format chapter is additionally backed by [test vectors](07-conformance.md#7-test-vectors) produced by an independent encoder that shares no code with any client, and asserted by that client's test suite; the remaining chapters are backed by the conformance checklist only. This release has not been checked against the Kotlin client in full. Its numbering reflects that: it does not claim the stability of a `1.0.0` release.
 
 ## Chapters
 
@@ -69,3 +71,10 @@ Terms below are defined once here and used consistently across every chapter; a 
 - **gateway** — a peer that bridges a geohash channel between the BLE mesh and Nostr relays for mesh-only peers who cannot reach relays directly.
 - **bridge** — a peer that stitches disjoint BLE mesh islands together by routing public mesh traffic through Nostr as a rendezvous.
 - **rendezvous cell** — the geohash-precision-6 cell a `bridge` peer signs and subscribes to when relaying mesh traffic across islands.
+
+## Maintenance
+
+- A change that alters wire behavior (a byte layout, a TLV type, a reject or skip rule, a capability bit, or any constant a chapter marks normative) MUST update the affected chapter in the same change set, or add a [Known Gaps](07-conformance.md#8-known-gaps-non-normative) entry stating what is now unspecified. A change that leaves the protocol text and the code disagreeing is incomplete.
+- Every change to a chapter bumps [`VERSION`](VERSION) under semantic versioning: patch for clarifications that alter no conforming behavior, minor for additive changes an existing conforming implementation still satisfies, major for anything else.
+- A change to the Wire Format chapter's encoding MUST regenerate [`vectors/wire-format.json`](vectors/wire-format.json) with its generator and keep the client vector tests passing.
+- Ownership of `spec/` is assigned by the project maintainers. Until it is, changes here are reviewed like code.
