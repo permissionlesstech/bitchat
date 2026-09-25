@@ -273,8 +273,14 @@ final class BLEAnnounceHandler {
             responsePlan.shouldNotifyPeerConnected && responsePlan.shouldScheduleInitialSync
         )
 
-        // Track for sync (include our own and others' announces)
-        env.trackPacketSeen(packet)
+        // Track for sync — verified announces only (our own are tracked at
+        // send time). An unverified announce costs nothing to mint (any 32
+        // random bytes satisfy the sender binding), so tracking it would let
+        // a nearby device fill the announce store and the sync filter with
+        // junk identities that every peer then re-serves.
+        if verifiedAnnounce {
+            env.trackPacketSeen(packet)
+        }
 
         if responsePlan.shouldSendAnnounceBack {
             // Reciprocate announce for bidirectional discovery
