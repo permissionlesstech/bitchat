@@ -356,7 +356,7 @@ struct BinaryProtocolTests {
     @Test("Round-trip a payload exactly at the framed file cap")
     func framedFileCapRoundTrip() throws {
         let targetSize = FileTransferLimits.maxFramedFileBytes
-        var payload = Data(repeating: 0x41, count: targetSize)
+        let payload = Data(repeating: 0x41, count: targetSize)
         // Highly compressible so the frame stays wire-friendly after compression.
         let packet = BitchatPacket(
             type: MessageType.message.rawValue,
