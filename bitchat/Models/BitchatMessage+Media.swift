@@ -13,6 +13,7 @@ extension BitchatMessage {
     enum Media {
         case voice(URL)
         case image(URL)
+        case file(URL)
     }
 
     // Cache the directory lookup to avoid repeated FileManager calls during view rendering
@@ -36,19 +37,28 @@ extension BitchatMessage {
         guard let baseDirectory = Cache.shared.filesDir else { return nil }
 
         func url(for category: MimeType.Category) -> URL? {
+            // Real transfers write `messagePrefix + lastPathComponent`. A
+            // spoofed text bubble can still carry `[file] ../prekeys/…`;
+            // ShareLink would then export whatever that path resolves to.
             guard content.hasPrefix(category.messagePrefix),
-                  let filename = String(content.dropFirst(category.messagePrefix.count)).trimmedOrNilIfEmpty
+                  let rawFilename = String(content.dropFirst(category.messagePrefix.count)).trimmedOrNilIfEmpty,
+                  let filename = (rawFilename as NSString).lastPathComponent.nilIfEmpty,
+                  filename == rawFilename,
+                  filename != ".",
+                  filename != ".."
             else {
                 return nil
             }
 
-            // Check outgoing first for sent messages, incoming for received
             let subdir = sender == nickname ? "\(category.mediaDir)/outgoing" : "\(category.mediaDir)/incoming"
-
-            // Construct URL directly without fileExists check (avoids blocking disk I/O in view body)
-            // Files are checked during playback/display, so missing files fail gracefully
-            let directory = baseDirectory.appendingPathComponent(subdir, isDirectory: true)
-            return directory.appendingPathComponent(filename)
+            let directory = baseDirectory
+                .appendingPathComponent(subdir, isDirectory: true)
+                .standardizedFileURL
+            let candidate = directory.appendingPathComponent(filename).standardizedFileURL
+            guard candidate.deletingLastPathComponent().path == directory.path else {
+                return nil
+            }
+            return candidate
         }
 
         if let url = url(for: .audio) {
@@ -56,6 +66,9 @@ extension BitchatMessage {
         }
         if let url = url(for: .image) {
             return .image(url)
+        }
+        if let url = url(for: .file) {
+            return .file(url)
         }
         return nil
     }
