@@ -142,4 +142,27 @@ final class NoiseRateLimiterTests: XCTestCase {
         )
         XCTAssertEqual(limiter.trackedPeerCount, 1)
     }
+
+    func test_pruneRecoversAfterBackwardClockStep() {
+        let clock = TestClock(Date(timeIntervalSince1970: 40_000))
+        let limiter = NoiseRateLimiter(currentDate: { clock.now })
+
+        let peerCount = min(20, NoiseSecurityConstants.maxGlobalHandshakesPerMinute - 1)
+        for index in 0..<peerCount {
+            XCTAssertTrue(limiter.allowHandshake(from: makePeerID(index + 1)))
+        }
+        XCTAssertEqual(limiter.trackedPeerCount, peerCount)
+
+        // Age the entries out, then step the clock backwards so lastPrune sits
+        // in the future. Pruning must still run and reclaim the departed peers.
+        clock.advance(61)
+        clock.advance(-30)
+        _ = limiter.allowHandshake(from: makePeerID(200))
+
+        XCTAssertEqual(
+            limiter.trackedPeerCount,
+            1,
+            "a backwards clock step must not latch pruning off"
+        )
+    }
 }

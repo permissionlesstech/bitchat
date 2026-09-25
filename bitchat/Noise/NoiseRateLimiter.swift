@@ -114,7 +114,11 @@ final class NoiseRateLimiter {
     /// the per-peer counterpart and is never called from production code, so
     /// nothing else reclaimed them. Must be called with the barrier held.
     private func pruneStalePeersLocked(now: Date) {
-        guard now.timeIntervalSince(lastPrune) >= Self.pruneInterval else { return }
+        let elapsed = now.timeIntervalSince(lastPrune)
+        // A backwards clock step (NTP, user change) parks lastPrune in the
+        // future; without the `elapsed < 0` arm pruning would stop until wall
+        // time catches up and the maps would grow again.
+        guard elapsed >= Self.pruneInterval || elapsed < 0 else { return }
         lastPrune = now
 
         let handshakeCutoff = now.addingTimeInterval(-60)
