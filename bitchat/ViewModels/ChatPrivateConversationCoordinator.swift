@@ -55,6 +55,10 @@ protocol ChatPrivateConversationContext: AnyObject {
     /// Returns `false` when one was already recorded — the caller must skip sending.
     @discardableResult
     func markGeoDeliveryAckSent(_ messageID: String) -> Bool
+    /// Whether a DM was already read, in this launch or an earlier one.
+    func hasReadDM(_ messageID: String) -> Bool
+    /// Records a DM as read across launches.
+    func recordDMRead(_ messageID: String)
     /// Moves the open private chat to `newPeerID` when the current selection is
     /// one of the peer IDs being migrated away.
     func handOffSelectedPrivateChat(from oldPeerIDs: [PeerID], to newPeerID: PeerID)
@@ -551,13 +555,11 @@ final class ChatPrivateConversationCoordinator {
         context.appendPrivateMessage(message, to: conversationPeerID)
 
         let isViewing = context.selectedPrivateChatPeer == conversationPeerID
-        let wasReadBefore = context.sentReadReceipts.contains(messageId)
-        // Recency gates only the notification. A DM sent while the app was
-        // closed reaches this path through the gift-wrap lookback long after
-        // it was sent, so gating the badge on recency left the conversation
-        // looking read and the message findable only by opening that chat.
-        // The mesh overload below marks unread whenever the chat is not on
-        // screen, with no recency test at all.
+        let wasReadBefore = context.sentReadReceipts.contains(messageId) || context.hasReadDM(messageId)
+        // Recency gates only the notification: a DM sent while the app was
+        // closed arrives through the gift-wrap lookback long after it was
+        // sent. The read record covers the other side of that lookback, a DM
+        // read before a relaunch arriving again.
         let isRecentMessage = Date().timeIntervalSince(messageTimestamp) < 30
         let shouldMarkUnread = !wasReadBefore && !isViewing
         if shouldMarkUnread {
@@ -649,6 +651,7 @@ final class ChatPrivateConversationCoordinator {
     }
 
     func sendReadReceiptIfNeeded(to messageId: String, senderPubKey: String, from id: NostrIdentity) {
+        context.recordDMRead(messageId)
         guard context.markReadReceiptSent(messageId) else { return }
         context.sendGeohashReadReceipt(messageId, toRecipientHex: senderPubKey, from: id)
     }
@@ -702,6 +705,7 @@ final class ChatPrivateConversationCoordinator {
             )
             context.sendMeshReadReceipt(receipt, to: peerID)
             context.markReadReceiptSent(message.id)
+            context.recordDMRead(message.id)
         } else {
             context.markPrivateChatUnread(peerID)
             context.notifyPrivateMessage(from: message.sender, message: message.content, peerID: peerID)

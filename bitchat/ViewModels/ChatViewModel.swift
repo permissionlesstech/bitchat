@@ -518,6 +518,22 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         }
     }
 
+    // DMs already read, kept across launches (ReadDMRecord).
+    private lazy var readDMs = ReadDMRecord(defaults: readReceiptsDefaults)
+
+    /// Whether `messageID` is a DM this device read, in any launch.
+    @MainActor
+    func hasReadDM(_ messageID: String) -> Bool {
+        readDMs.contains(messageID)
+    }
+
+    /// Records a DM as read, so a replay after a relaunch is not marked
+    /// unread.
+    @MainActor
+    func recordDMRead(_ messageID: String) {
+        readDMs.record(messageID)
+    }
+
     /// Whether a read receipt has already been recorded for `messageID`.
     @MainActor
     func hasSentReadReceipt(_ messageID: String) -> Bool {
@@ -1688,6 +1704,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
         // Clear read receipt tracking
         sentReadReceipts.removeAll()
+        readDMs.removeAll()
         deduplicationService.clearAll()
 
         // IMPORTANT: Clear Nostr-related state
