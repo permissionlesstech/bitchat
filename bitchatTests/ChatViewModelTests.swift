@@ -676,6 +676,44 @@ struct ChatViewModelFormattingTests {
     }
 
     @Test @MainActor
+    func formatMessageAsText_urlContainingCashuTokenIsNotDuplicatedInUI() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let cashuToken = "cashuA" + String(repeating: "a", count: 44)
+        let url = "https://mint.example.com/redeem/\(cashuToken)/confirm"
+        let content = "redeem link \(url) now"
+        let message = BitchatMessage(
+            id: "fmt-url-cashu",
+            sender: "Alice#a1b2",
+            content: content,
+            timestamp: Date(timeIntervalSince1970: 1_700_010_124),
+            isRelay: false,
+            senderPeerID: PeerID(str: "00000000000000b4")
+        )
+
+        let formatted = viewModel.formatMessageAsText(message, colorScheme: .light)
+
+        #expect(String(formatted.characters) == "<@Alice#a1b2> \(content) [\(message.formattedTimestamp)]")
+    }
+
+    @Test @MainActor
+    func formatMessageAsText_hashtagOverlappingURLResolvesWithoutDuplication() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let content = "see #www.example.com"
+        let message = BitchatMessage(
+            id: "fmt-hashtag-url",
+            sender: "Alice#a1b2",
+            content: content,
+            timestamp: Date(timeIntervalSince1970: 1_700_010_125),
+            isRelay: false,
+            senderPeerID: PeerID(str: "00000000000000b5")
+        )
+
+        let formatted = viewModel.formatMessageAsText(message, colorScheme: .light)
+
+        #expect(String(formatted.characters) == "<@Alice#a1b2> \(content) [\(message.formattedTimestamp)]")
+    }
+
+    @Test @MainActor
     func formatMessageHeader_formatsSenderHeader() async {
         let (viewModel, _) = makeTestableViewModel()
         let message = BitchatMessage(
