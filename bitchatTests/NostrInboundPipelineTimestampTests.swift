@@ -64,4 +64,19 @@ struct NostrEnvelopeTimestampRandomizationTests {
         // Negative past is treated as zero.
         #expect(NostrProtocol.randomizedEnvelopeTimestamp(now: now, maxPast: -10) == now)
     }
+
+    @Test("Default send randomization stays inside the 24h subscribe lookback")
+    func defaultDrawStaysInsideLookback() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let lookback = TransportConfig.nostrDMSubscribeLookbackSeconds
+        let maxPast = TransportConfig.nostrGiftWrapTimestampRandomizationSeconds
+        #expect(maxPast == lookback - TransportConfig.nostrDMMaxClockSkewSeconds)
+        for _ in 0..<200 {
+            let ts = NostrProtocol.randomizedEnvelopeTimestamp(now: now)
+            #expect(ts <= now)
+            #expect(ts >= now.addingTimeInterval(-maxPast))
+            // Relays that honor `since: now − lookback` must still return it.
+            #expect(ts >= now.addingTimeInterval(-lookback))
+        }
+    }
 }
