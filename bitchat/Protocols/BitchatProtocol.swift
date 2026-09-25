@@ -165,6 +165,8 @@ protocol BitchatDelegate: AnyObject {
     // Bluetooth state updates for user notifications
     func didUpdateBluetoothState(_ state: CBManagerState)
     func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?)
+    /// Authenticated private media failed local validation on this device (#1518).
+    func didFailPrivateMediaDecode(from peerID: PeerID, reason: PrivateMediaDecodeFailureReason)
 }
 
 // Provide default implementation to make it effectively optional
@@ -190,6 +192,10 @@ extension BitchatDelegate {
     }
 
     func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?) {
+        // Default empty implementation
+    }
+
+    func didFailPrivateMediaDecode(from peerID: PeerID, reason: PrivateMediaDecodeFailureReason) {
         // Default empty implementation
     }
 }
