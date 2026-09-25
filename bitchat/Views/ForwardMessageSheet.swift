@@ -33,14 +33,25 @@ struct ForwardMessageSheet: View {
         static let title = String(localized: "forward.title", defaultValue: "Forward to…", comment: "Title of the sheet for picking who to forward a message to")
         static let noRecipients = String(localized: "forward.no_recipients", defaultValue: "No one to forward to yet — no known peers or recent conversations.", comment: "Empty state shown in the forward-message sheet when there is nobody to pick")
         static let peersHeader = String(localized: "forward.peers_header", defaultValue: "people", comment: "Section header above known peers in the forward-message sheet")
+        static let accessibilityHint = String(localized: "forward.accessibility.forward_hint", defaultValue: "forwards message to this conversation", comment: "Accessibility hint for selecting a target to forward a message to")
     }
 
     private var meshTargets: [MeshPeerRow] {
         peerListModel.meshRows.filter { !$0.isMe && !$0.isBlocked }
     }
 
+    private var filteredRecentChatRows: [RecentChatRow] {
+        peerListModel.recentChatRows.filter { row in
+            if case .location = peerListModel.activeChannel {
+                return true
+            } else {
+                return !row.peerID.isGeoDM
+            }
+        }
+    }
+
     private var hasAnyTarget: Bool {
-        !meshTargets.isEmpty || !peerListModel.recentChatRows.isEmpty
+        !meshTargets.isEmpty || !filteredRecentChatRows.isEmpty
     }
 
     var body: some View {
@@ -103,7 +114,10 @@ struct ForwardMessageSheet: View {
                         }
                     }
 
-                    RecentChatList(chats: peerListModel.recentChatRows) { peerID in
+                    RecentChatList(
+                        chats: filteredRecentChatRows,
+                        accessibilityHint: Strings.accessibilityHint
+                    ) { peerID in
                         forward(to: peerID)
                     }
                 }
@@ -113,20 +127,33 @@ struct ForwardMessageSheet: View {
     }
 
     private func forwardRow(displayName: String, peerID: PeerID) -> some View {
-        Button {
+        let parts = displayName.split(separator: "#", maxSplits: 1)
+        let baseName = parts.first.map(String.init) ?? displayName
+        let suffix = parts.count > 1 ? "#" + parts[1] : ""
+
+        return Button {
             forward(to: peerID)
         } label: {
-            Text(verbatim: displayName)
-                .bitchatFont(size: 14)
-                .foregroundColor(palette.primary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-                .contentShape(Rectangle())
+            HStack(spacing: 0) {
+                Text(verbatim: baseName)
+                    .bitchatFont(size: 14)
+                    .foregroundColor(palette.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                if !suffix.isEmpty {
+                    Text(verbatim: suffix)
+                        .bitchatFont(size: 12)
+                        .foregroundColor(palette.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityHint(Strings.accessibilityHint)
     }
 
     private func forward(to peerID: PeerID) {
