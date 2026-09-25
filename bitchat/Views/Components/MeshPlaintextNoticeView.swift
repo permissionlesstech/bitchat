@@ -10,7 +10,10 @@ import SwiftUI
 
 /// Dismissible banner reminding people that #mesh is a plaintext broadcast (#1064).
 struct MeshPlaintextNoticeView: View {
+    /// Bridge feature is on in settings.
     var bridgeEnabled: Bool
+    /// Outgoing mesh stays radio-local even when the bridge feature is on.
+    var nearbyOnly: Bool
     var onDismiss: () -> Void
     @ThemedPalette private var palette
 
@@ -37,8 +40,10 @@ struct MeshPlaintextNoticeView: View {
         )
     }
 
+    /// Bridged exposure only applies when the bridge is on *and* nearby-only
+    /// is off — otherwise outgoing #mesh stays radio-local.
     private var bodyText: String {
-        bridgeEnabled ? Strings.bodyBridged : Strings.bodyNearbyOnly
+        (bridgeEnabled && !nearbyOnly) ? Strings.bodyBridged : Strings.bodyNearbyOnly
     }
 
     var body: some View {

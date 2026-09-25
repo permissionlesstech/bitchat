@@ -34,7 +34,10 @@ struct ContentComposerView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if showsMeshPlaintextNotice {
-                MeshPlaintextNoticeView(bridgeEnabled: bridgeService.isEnabled) {
+                MeshPlaintextNoticeView(
+                    bridgeEnabled: bridgeService.isEnabled,
+                    nearbyOnly: bridgeService.nearbyOnly
+                ) {
                     meshPlaintextNoticeDismissed = true
                     MeshPlaintextNoticeSettings.isDismissed = true
                 }
