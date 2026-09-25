@@ -29220,6 +29220,379 @@
         }
       }
     },
+    "app_info.privacy.wake_proximity.title" : {
+      "comment" : "App Info privacy feature title explaining BLE wake-on-proximity",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إيقاظ الشبكة في الخلفية"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ব্যাকগ্রাউন্ড মেশ জাগানো"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh-aufwachen im hintergrund"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "background mesh wake"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "reactivación de malla en segundo plano"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بیدارسازی مش در پس‌زمینه"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "paggising ng mesh sa background"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "réveil mesh en arrière-plan"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הערכת רשת ברקע"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "बैकग्राउंड मेश वेक"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bangunkan mesh di latar"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "risveglio mesh in background"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バックグラウンドのメッシュ起動"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "백그라운드 메시 깨우기"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bangun mesh latar belakang"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पृष्ठभूमिको मेश वेक"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh-wake op de achtergrond"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wybudzanie mesh w tle"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "despertar da mesh em segundo plano"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "despertar da mesh em segundo plano"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "фоновое пробуждение mesh"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh-väckning i bakgrunden"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "பின்னணி மெஷ் எழுச்சி"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ปลุกเมชเบื้องหลัง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "arka planda mesh uyandırma"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "фонове пробудження mesh"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بیک گراؤنڈ میش ویک"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "đánh thức mesh nền"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "后台网格唤醒"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "背景網格喚醒"
+          }
+        }
+      }
+    },
+    "app_info.privacy.wake_proximity.description" : {
+      "comment" : "App Info privacy feature description for the iOS accessory wake modal",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أثناء الإغلاق، يجهّز bitchat إعادة اتصال البلوتوث حتى يعيد ios فتح التطبيق عندما يعود نظير للنطاق — موجه «يريد الملحق فتح bitchat» هو ذلك الإيقاظ، ومن الآمن السماح به"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "বন্ধ থাকা অবস্থায় bitchat ব্লুটুথ পুনঃসংযোগ প্রস্তুত রাখে যাতে কোনো পিয়ার আবার রেঞ্জে এলে ios অ্যাপটি খুলতে পারে — “অ্যাকসেসরি bitchat খুলতে চায়” প্রম্পটটি সেই ওয়েক, এবং অনুমতি দেওয়া নিরাপদ"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "im geschlossenen zustand bereitet bitchat bluetooth-reconnects vor, damit ios die app erneut öffnen kann, wenn ein peer in reichweite kommt — der „zubehör möchte bitchat öffnen“-hinweis ist genau dieses aufwachen und darf erlaubt werden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "while closed, bitchat arms bluetooth reconnects so ios can reopen the app when a peer returns into range — the “accessory would like to open bitchat” prompt is that wake, and is safe to allow"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mientras está cerrado, bitchat prepara reconexiones bluetooth para que ios pueda reabrir la app cuando un par vuelva al alcance — el aviso «el accesorio quiere abrir bitchat» es ese despertar, y es seguro permitirlo"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "وقتی بسته است، bitchat اتصال دوباره بلوتوث را آماده می‌کند تا ios با بازگشت یک همتا به برد، برنامه را دوباره باز کند — پیام «لوازم جانبی می‌خواهد bitchat را باز کند» همان بیدارسازی است و اجازه دادن به آن بی‌خطر است"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "habang sarado, naghahanda ang bitchat ng bluetooth reconnects para mabuksan ulit ng ios ang app kapag bumalik ang peer sa range — ang “gustong buksan ng accessory ang bitchat” prompt ang wake na iyon, at ligtas itong payagan"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "une fois fermée, bitchat prépare les reconnexions bluetooth pour qu’ios rouvre l’app quand un pair revient à portée — l’invite « l’accessoire souhaite ouvrir bitchat » est ce réveil, et il est sûr de l’autoriser"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כשהאפליקציה סגורה, bitchat מכינה חיבורי בלוטות׳ מחדש כדי ש־ios יוכל לפתוח אותה כשעמית חוזר לטווח — ההודעה „האביזר רוצה לפתוח את bitchat“ היא אותה הערכה, ובטוח לאשר אותה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "बंद होने पर bitchat ब्लूटूथ पुनःकनेक्ट तैयार रखती है ताकि पीयर फिर रेंज में आने पर ios ऐप खोल सके — “एक्सेसरी bitchat खोलना चाहती है” प्रॉम्प्ट वही वेक है, और इसे अनुमति देना सुरक्षित है"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "saat ditutup, bitchat menyiapkan reconnect bluetooth agar ios dapat membuka ulang aplikasi ketika peer kembali dalam jangkauan — prompt “aksesori ingin membuka bitchat” adalah wake tersebut, dan aman untuk diizinkan"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "da chiusa, bitchat prepara le riconnessioni bluetooth così ios può riaprire l’app quando un peer torna nel raggio — il prompt «l’accessorio vuole aprire bitchat» è quel risveglio ed è sicuro consentirlo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "閉じている間、bitchat は bluetooth の再接続を準備し、ピアが再び範囲に入ったときに ios がアプリを開き直せるようにします。「アクセサリが bitchat を開こうとしています」という表示がその起動であり、許可して問題ありません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "닫혀 있는 동안 bitchat은 블루투스 재연결을 준비해 피어가 다시 범위에 들어오면 ios가 앱을 다시 열 수 있게 합니다. “액세서리가 bitchat을 열려고 합니다” 알림이 그 깨우기이며, 허용해도 안전합니다"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "semasa ditutup, bitchat menyediakan reconnect bluetooth supaya ios boleh membuka semula aplikasi apabila rakan kembali ke julat — gesaan “aksesori mahu membuka bitchat” ialah wake itu, dan selamat untuk dibenarkan"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "बन्द हुँदा bitchat ब्लुटुথ पुनःजडान तयार राख्छ ताकि पीयर फेरि दायरामा आउँदा ios ले एप खोल्न सकोस् — “एक्सेसरीले bitchat खोल्न चाहन्छ” प्रम्प्ट त्यही वेक हो, र अनुमति दिन सुरक्षित छ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "terwijl bitchat gesloten is, bereidt het bluetooth-herverbindingen voor zodat ios de app opnieuw kan openen wanneer een peer weer in bereik komt — de melding “accessoire wil bitchat openen” is precies die wake, en die mag je toestaan"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gdy jest zamknięta, bitchat przygotowuje ponowne połączenia bluetooth, by ios mógł otworzyć aplikację, gdy peer wróci w zasięg — komunikat „akcesorium chce otworzyć bitchat” to właśnie to wybudzenie i można je bezpiecznie zezwolić"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "enquanto fechada, a bitchat prepara reconexões bluetooth para o ios reabrir a app quando um peer voltar ao alcance — o aviso «o acessório quer abrir a bitchat» é esse despertar, e é seguro permitir"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "enquanto fechada, a bitchat prepara reconexões bluetooth para o ios reabrir o app quando um peer voltar ao alcance — o aviso “o acessório quer abrir o bitchat” é esse despertar, e é seguro permitir"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "в закрытом состоянии bitchat готовит повторные bluetooth-подключения, чтобы ios могла снова открыть приложение, когда пир вернётся в зону — запрос «аксессуар хочет открыть bitchat» и есть это пробуждение, его можно разрешить"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "när den är stängd förbereder bitchat bluetooth-återanslutningar så ios kan öppna appen igen när en peer kommer inom räckvidd — prompten “tillbehöret vill öppna bitchat” är den väckningen, och det är säkert att tillåta den"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "மூடியிருக்கும்போது, ஒரு peer மீண்டும் வரம்பிற்குள் வந்தால் ios பயன்பாட்டை திறக்கும்படி bitchat புளூடூத் மீண்டும் இணைப்புகளை தயார் செய்கிறது — “ஆக்சஸரி bitchat-ஐ திறக்க விரும்புகிறது” என்ற அறிவிப்பு அந்த எழுச்சிதான், அனுமதிப்பது பாதுகாப்பானது"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ตอนที่ปิดอยู่ bitchat จะเตรียมการเชื่อมต่อบลูทูธใหม่เพื่อให้ ios เปิดแอปอีกครั้งเมื่อเพียร์กลับเข้าช่วงสัญญาณ — ข้อความ “อุปกรณ์เสริมต้องการเปิด bitchat” คือการปลุกนั้น และอนุญาตได้อย่างปลอดภัย"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kapalıyken bitchat, bir eş yeniden menzile girdiğinde ios’un uygulamayı yeniden açabilmesi için bluetooth yeniden bağlantılarını hazırlar — “aksesuar bitchat’i açmak istiyor” istemi bu uyandırmadır ve izin vermek güvenlidir"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "коли застосунок закритий, bitchat готує повторні bluetooth-з’єднання, щоб ios міг знову відкрити його, коли пір повернеться в зону — запит «аксесуар хоче відкрити bitchat» і є цим пробудженням, його можна дозволити"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بند ہونے پر bitchat بلوٹوتھ دوبارہ کنکشن تیار رکھتی ہے تاکہ جب پیئر دوبارہ رینج میں آئے تو ios ایپ کھول سکے — “ایکسسری bitchat کھولنا چاہتی ہے” پرامپٹ وہی ویک ہے، اور اجازت دینا محفوظ ہے"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "khi đóng, bitchat chuẩn bị kết nối lại bluetooth để ios có thể mở lại ứng dụng khi một peer trở lại phạm vi — lời nhắc “phụ kiện muốn mở bitchat” chính là lần đánh thức đó, và cho phép là an toàn"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭时，bitchat 会预备蓝牙重连，以便附近节点再次进入范围时 ios 能重新打开应用——“配件想要打开 bitchat”的提示就是该唤醒，允许它是安全的"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "關閉時，bitchat 會預備藍牙重連，以便附近節點再次進入範圍時 ios 能重新開啟 App——「配件想要打開 bitchat」的提示就是該喚醒，允許它是安全的"
+          }
+        }
+      }
+    },
+
     "app_info.privacy.panic.title" : {
       "extractionState" : "manual",
       "localizations" : {
