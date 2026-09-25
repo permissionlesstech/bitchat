@@ -332,7 +332,7 @@ public struct BinaryProtocol {
 
             guard payloadLength >= 0 else { return nil }
             guard payloadLength <= FileTransferLimits.maxFramedFileBytes else {
-                SecureLogger.debug(
+                SecureLogger.warning(
                     "🚫 Framed payload length \(payloadLength) exceeds cap \(FileTransferLimits.maxFramedFileBytes)",
                     category: .security
                 )
