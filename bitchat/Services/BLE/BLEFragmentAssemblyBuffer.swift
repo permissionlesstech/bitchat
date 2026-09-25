@@ -35,7 +35,8 @@ struct BLEFragmentHeader: Equatable {
         let index = Int((UInt16(packet.payload[8]) << 8) | UInt16(packet.payload[9]))
         let total = Int((UInt16(packet.payload[10]) << 8) | UInt16(packet.payload[11]))
 
-        guard total > 0 && total <= 10_000 && index >= 0 && index < total else {
+        guard total > 0 && total <= BLEFragmentAssemblyBuffer.maxReassemblyFragments
+                && index >= 0 && index < total else {
             return nil
         }
 
@@ -54,6 +55,19 @@ struct BLEFragmentHeader: Equatable {
 }
 
 struct BLEFragmentAssemblyBuffer {
+    /// The largest fragment count this client will ever begin reassembling.
+    ///
+    /// A sender cannot know this by inspection, so it is also the value we
+    /// advertise to authenticated peers (`AuthenticatedPeerStatePacket`'s
+    /// `maxReassemblyFragments` TLV). Naming it keeps the guard below and the
+    /// advertised number from drifting apart: a client that raises one and
+    /// forgets the other either rejects media it promised to accept, or
+    /// promises more than it can hold.
+    ///
+    /// Bounded by `UInt16.max` because the wire header carries `total` as a
+    /// big-endian `UInt16`.
+    static let maxReassemblyFragments = 10_000
+
     enum AppendResult: Equatable {
         case stored(header: BLEFragmentHeader, started: Bool)
         case complete(header: BLEFragmentHeader, reassembledData: Data, started: Bool)
