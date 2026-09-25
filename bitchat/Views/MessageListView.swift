@@ -51,8 +51,14 @@ struct MessageListView: View {
     /// Whether this instance holds the nearby-notes counter active (mesh
     /// public timeline only); balanced against activate/deactivate.
     @State private var holdsNotesCounter = false
+    @State private var threadSearchQuery = ""
+    @State private var isThreadSearchFieldVisible = false
 
     @ThemedPalette private var palette
+
+    private var isThreadSearching: Bool {
+        !threadSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     var body: some View {
         let currentWindowCount: Int = {
@@ -62,8 +68,20 @@ struct MessageListView: View {
             return windowCountPublic
         }()
 
-        let messages = conversationMessages(for: privatePeer)
-        let windowedMessages = Array(messages.suffix(currentWindowCount))
+        let allMessages = conversationMessages(for: privatePeer)
+        // Uncapped so the count is known, then capped for rendering — a common
+        // term in a long thread would otherwise render every historical match
+        // in one pass.
+        let searchMatches: [BitchatMessage] = isThreadSearching
+            ? ThreadMessageSearch.matchingMessages(in: allMessages, query: threadSearchQuery, limit: 0)
+            : []
+        let searchTruncated = ThreadMessageSearch.didTruncate(matchCount: searchMatches.count)
+        let displayedMessages: [BitchatMessage] = {
+            if isThreadSearching {
+                return Array(searchMatches.suffix(ThreadMessageSearch.resultLimit))
+            }
+            return Array(allMessages.suffix(currentWindowCount))
+        }()
 
         let contextKey: String = {
             if let peer = privatePeer {
@@ -73,12 +91,16 @@ struct MessageListView: View {
             }
         }()
 
-        let messageItems: [MessageDisplayItem] = windowedMessages.compactMap { message in
+        let messageItems: [MessageDisplayItem] = displayedMessages.compactMap { message in
             guard !message.content.trimmed.isEmpty else { return nil }
             return MessageDisplayItem(id: "\(contextKey)|\(message.id)", message: message)
         }
 
         VStack(spacing: 0) {
+        threadSearchBar
+        if searchTruncated {
+            threadSearchTruncationNotice(matchCount: searchMatches.count)
+        }
         // Notes pinned to this place stay visible while chatting — a
         // conversation starting must not hide what's left here.
         if privatePeer == nil,
@@ -89,30 +111,33 @@ struct MessageListView: View {
         GeometryReader { geometry in
         ScrollViewReader { proxy in
             ScrollView {
-                if messageItems.isEmpty && privatePeer == nil {
+                if messageItems.isEmpty && privatePeer == nil && !isThreadSearching {
                     publicEmptyState(fillHeight: geometry.size.height)
+                } else if messageItems.isEmpty && isThreadSearching {
+                    threadSearchEmptyState(fillHeight: geometry.size.height)
                 }
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(messageItems) { item in
                         let message = item.message
                         messageRow(for: message)
                             .onAppear {
-                                if message.id == windowedMessages.last?.id {
+                                if message.id == displayedMessages.last?.id {
                                     isAtBottom = true
                                     unseenCount = 0
                                 }
-                                if message.id == windowedMessages.first?.id,
-                                   messages.count > windowedMessages.count {
+                                if !isThreadSearching,
+                                   message.id == displayedMessages.first?.id,
+                                   allMessages.count > displayedMessages.count {
                                     expandWindow(
                                         ifNeededFor: message,
-                                        allMessages: messages,
+                                        allMessages: allMessages,
                                         privatePeer: privatePeer,
                                         proxy: proxy
                                     )
                                 }
                             }
                             .onDisappear {
-                                if message.id == windowedMessages.last?.id {
+                                if message.id == displayedMessages.last?.id {
                                     isAtBottom = false
                                 }
                             }
@@ -278,8 +303,14 @@ struct MessageListView: View {
         }
         .onAppear { updateNotesCounterHold() }
         .onDisappear { releaseNotesCounterHold() }
-        .onChange(of: locationChannelsModel.selectedChannel) { _ in updateNotesCounterHold() }
-        .onChange(of: privatePeer) { _ in updateNotesCounterHold() }
+        .onChange(of: locationChannelsModel.selectedChannel) { _ in
+            resetThreadSearch()
+            updateNotesCounterHold()
+        }
+        .onChange(of: privatePeer) { _ in
+            resetThreadSearch()
+            updateNotesCounterHold()
+        }
         .environment(\.openURL, OpenURLAction { url in
             // Intercept custom cashu: links created in attributed text
             if let scheme = url.scheme?.lowercased(), scheme == "cashu" || scheme == "lightning" {
@@ -403,6 +434,17 @@ private extension MessageListView {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    func threadSearchEmptyState(fillHeight: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            emptyStateLine(
+                String(localized: "thread.search.no_results", comment: "Empty state when in-thread search finds no matching messages")
+            )
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 12)
+        .frame(maxWidth: .infinity, minHeight: max(0, fillHeight - 24), alignment: .topLeading)
+    }
+
     func emptyStateLine(_ text: String) -> some View {
         // Non-breaking space before the closing asterisk so a tight wrap
         // can't orphan a lone "*" onto its own line.
@@ -504,6 +546,109 @@ private extension MessageListView {
             unseenCount
         )
         return "\(base), \(count)"
+    }
+
+    /// Search is per-conversation: switching threads drops the query and the
+    /// field so a stale filter never applies to a different conversation.
+    func resetThreadSearch() {
+        threadSearchQuery = ""
+        isThreadSearchFieldVisible = false
+    }
+
+    /// Says plainly that older matches are not shown, rather than presenting a
+    /// capped list as if it were everything.
+    @ViewBuilder
+    func threadSearchTruncationNotice(matchCount: Int) -> some View {
+        Text(
+            String(
+                format: String(
+                    localized: "thread.search.truncated",
+                    defaultValue: "showing the newest %lld of %lld matches",
+                    comment: "Shown when in-thread search results were capped; first %lld is the cap, second is the total match count"
+                ),
+                locale: .current,
+                ThreadMessageSearch.resultLimit,
+                matchCount
+            )
+        )
+        .bitchatFont(size: 11)
+        .foregroundColor(palette.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 4)
+    }
+
+    /// Collapsed affordance plus the expanded field. Kept inside the message
+    /// list so the feature needs no changes to either header, and so the same
+    /// code serves the public timeline and the DM sheet.
+    @ViewBuilder
+    var threadSearchBar: some View {
+        if isThreadSearchFieldVisible {
+            threadSearchField
+        } else {
+            HStack {
+                Spacer()
+                Button {
+                    isThreadSearchFieldVisible = true
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.bitchatSystem(size: 12))
+                        .foregroundColor(palette.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(
+                    String(localized: "thread.search.accessibility.label", comment: "Accessibility label for in-thread message search")
+                )
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+        }
+    }
+
+    /// Inline search field for the current conversation.
+    ///
+    /// Deliberately not `.searchable`: that modifier only renders inside a
+    /// `NavigationStack`/`NavigationSplitView`, and the public timeline
+    /// (`ContentView` → `MessageListView`) has no navigation ancestor, so the
+    /// field silently did not appear where most conversation happens. A plain
+    /// field has no such dependency and renders identically in both placements.
+    @ViewBuilder
+    var threadSearchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.bitchatSystem(size: 12))
+                .foregroundColor(palette.secondary)
+            TextField(
+                String(localized: "thread.search.placeholder", comment: "Placeholder for the in-thread message search field"),
+                text: $threadSearchQuery
+            )
+            .textFieldStyle(.plain)
+            .bitchatFont(size: 13)
+            .foregroundColor(palette.primary)
+            .autocorrectionDisabled(true)
+            #if os(iOS)
+            .textInputAutocapitalization(.never)
+            #endif
+            // Scoped to the field: applying this to the list chain relabelled
+            // the whole message list for VoiceOver.
+            .accessibilityLabel(
+                String(localized: "thread.search.accessibility.label", comment: "Accessibility label for in-thread message search")
+            )
+            Button {
+                threadSearchQuery = ""
+                isThreadSearchFieldVisible = false
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.bitchatSystem(size: 12))
+                    .foregroundColor(palette.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(
+                String(localized: "thread.search.close", defaultValue: "close search", comment: "Accessibility label for the button that closes the in-thread search field")
+            )
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
     }
 
     @ViewBuilder
