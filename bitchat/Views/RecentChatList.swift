@@ -18,6 +18,7 @@ struct RecentChatList: View {
     @ThemedPalette private var palette
 
     let chats: [RecentChatRow]
+    var accessibilityHint: String? = nil
     let onTapChat: (PeerID) -> Void
 
     private enum Strings {
@@ -72,7 +73,7 @@ struct RecentChatList: View {
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(accessibilityDescription(for: chat))
                     .accessibilityAddTraits(.isButton)
-                    .accessibilityHint(Strings.openChatHint)
+                    .accessibilityHint(accessibilityHint ?? Strings.openChatHint)
                 }
             }
         }

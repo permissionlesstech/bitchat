@@ -19,6 +19,7 @@ struct MessageListView: View {
     @EnvironmentObject private var privateInboxModel: PrivateInboxModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
+    @EnvironmentObject private var peerListModel: PeerListModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var appChromeModel: AppChromeModel
     @ObservedObject private var nearbyNotes = NearbyNotesCounter.shared
@@ -158,14 +159,16 @@ struct MessageListView: View {
                                         conversationUIModel.resendFailedPrivateMessage(message)
                                     }
                                 }
-                                Button(
-                                    String(
-                                        localized: "content.actions.forward",
-                                        defaultValue: "Forward",
-                                        comment: "Context menu action that opens a picker to forward this message to another conversation"
-                                    )
-                                ) {
-                                    messageToForward = message
+                                if message.senderPeerID != .system && conversationUIModel.mediaAttachment(for: message) == nil {
+                                    Button(
+                                        String(
+                                            localized: "content.actions.forward",
+                                            defaultValue: "Forward",
+                                            comment: "Context menu action that opens a picker to forward this message to another conversation"
+                                        )
+                                    ) {
+                                        messageToForward = message
+                                    }
                                 }
                                 if showsUserActions {
                                     Button("content.actions.block", role: .destructive) {
@@ -291,6 +294,7 @@ struct MessageListView: View {
                     ForwardMessageSheet { peerID in
                         conversationUIModel.forwardMessage(messageToForward.content, to: peerID)
                     }
+                    .environmentObject(peerListModel)
                 }
             }
         }

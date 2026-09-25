@@ -65,6 +65,8 @@ final class PeerListModel: ObservableObject {
     @Published private(set) var visibleGeohashPeerCount = 0
     @Published private(set) var renderID = ""
 
+    var activeChannel: ChannelID { conversations.activeChannel }
+
     private let chatViewModel: ChatViewModel
     private let conversations: ConversationStore
     private let locationChannelsModel: LocationChannelsModel
