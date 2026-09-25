@@ -4,13 +4,16 @@ struct GeohashPeopleList: View {
     @EnvironmentObject private var peerListModel: PeerListModel
     @ThemedPalette private var palette
     let onTapPerson: () -> Void
+    /// People-sheet search query; empty means show every row.
+    var nameFilter: String = ""
     @Environment(\.colorScheme) var colorScheme
     @State private var orderedIDs: [String] = []
 
     private enum Strings {
         static let noneNearby: LocalizedStringKey = "geohash_people.none_nearby"
+        static let noMatches: LocalizedStringKey = "content.people.search.no_matches"
         static let youSuffix: LocalizedStringKey = "geohash_people.you_suffix"
-        static let blockedTooltip = String(localized: "geohash_people.tooltip.blocked", comment: "Tooltip shown next to users blocked in geohash channels")
+        static let blockedTooltip = String(localized: "geohash_people.tooltip.blocked", comment: "Tooltip shown next to people blocked in geohash channels")
         static let unblock: LocalizedStringKey = "geohash_people.action.unblock"
         static let block: LocalizedStringKey = "geohash_people.action.block"
         static let unblockText = String(localized: "geohash_people.action.unblock", comment: "Context menu action to unblock a person")
@@ -32,14 +35,42 @@ struct GeohashPeopleList: View {
                     .padding(.top, 12)
             }
         } else {
-            let people = peerListModel.geohashPeople
-            let currentIDs = people.map(\.id)
+            let allPeople = peerListModel.geohashPeople
+            // Sticky order must track the unfiltered roster — filtering before
+            // `currentIDs` would prune orderedIDs and reshuffle on clear (#1589 Codex).
+            let allIDs = allPeople.map(\.id)
+            let filterActive = !nameFilter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let people = allPeople.filter {
+                PeopleNameFilter.matches($0.displayName, query: nameFilter)
+            }
+            if people.isEmpty && filterActive {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(Strings.noMatches)
+                        .bitchatFont(size: 14)
+                        .foregroundColor(palette.secondary)
+                        .padding(.horizontal)
+                        .padding(.top, 12)
+                }
+                .onAppear {
+                    orderedIDs = allIDs
+                }
+                .onChange(of: allIDs) { ids in
+                    var newOrder = orderedIDs
+                    newOrder.removeAll { !ids.contains($0) }
+                    for id in ids where !newOrder.contains(id) { newOrder.append(id) }
+                    if newOrder != orderedIDs { orderedIDs = newOrder }
+                }
+            } else {
+            let currentIDs = allIDs
 
             let displayIDs = orderedIDs.filter { currentIDs.contains($0) } + currentIDs.filter { !orderedIDs.contains($0) }
-            let nonTele = displayIDs.filter { id in
+            let visibleIDs = displayIDs.filter { id in
+                people.contains(where: { $0.id == id })
+            }
+            let nonTele = visibleIDs.filter { id in
                 !(people.first(where: { $0.id == id })?.isTeleported ?? false)
             }
-            let tele = displayIDs.filter { id in
+            let tele = visibleIDs.filter { id in
                 people.first(where: { $0.id == id })?.isTeleported ?? false
             }
             let finalOrder: [String] = nonTele + tele
@@ -142,7 +173,8 @@ struct GeohashPeopleList: View {
                     }
                 }
             }
-            // Seed and update order outside result builder
+            // Seed and update order outside result builder — always from the
+            // full unfiltered ID list so search does not reshuffle sticky order.
             .onAppear {
                 orderedIDs = currentIDs
             }
@@ -151,6 +183,7 @@ struct GeohashPeopleList: View {
                 newOrder.removeAll { !ids.contains($0) }
                 for id in ids where !newOrder.contains(id) { newOrder.append(id) }
                 if newOrder != orderedIDs { orderedIDs = newOrder }
+            }
             }
         }
     }
