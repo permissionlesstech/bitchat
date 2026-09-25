@@ -602,6 +602,84 @@ struct AppArchitectureTests {
         #expect(peerListModel.recentChatRows.map(\.peerID) == [offlinePeerID])
     }
 
+    @Test("Recent chat rows preview the newest message and hide the open thread")
+    @MainActor
+    func peerListModelPreviewsRecentChatsAndHidesTheOpenThread() async {
+        let viewModel = makeArchitectureViewModel()
+        let textPeerID = PeerID(str: "00000000000000b1")
+        let mediaPeerID = PeerID(str: "00000000000000b2")
+
+        viewModel.seedPrivateChat([
+            BitchatMessage(
+                id: "dm-text-1",
+                sender: "passerby",
+                content: "older message",
+                timestamp: Date(timeIntervalSince1970: 100),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "me",
+                senderPeerID: textPeerID
+            ),
+            BitchatMessage(
+                id: "dm-text-2",
+                sender: "passerby",
+                content: "meet me\nby the bridge",
+                timestamp: Date(timeIntervalSince1970: 200),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "me",
+                senderPeerID: textPeerID
+            )
+        ], for: textPeerID)
+
+        // Media content carries its on-disk filename. The row must show the
+        // marker alone — the filename is meaningless to the reader.
+        viewModel.seedPrivateChat([
+            BitchatMessage(
+                id: "dm-media-1",
+                sender: "stranger",
+                content: MimeType.Category.image.messagePrefix + "9F2A7C41-B0E3.jpg",
+                timestamp: Date(timeIntervalSince1970: 300),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "me",
+                senderPeerID: mediaPeerID
+            )
+        ], for: mediaPeerID)
+
+        let peerListModel = PeerListModel(
+            chatViewModel: viewModel,
+            conversations: viewModel.conversations
+        )
+
+        await waitUntil {
+            peerListModel.recentChatRows.contains { $0.peerID == textPeerID }
+                && peerListModel.recentChatRows.contains { $0.peerID == mediaPeerID }
+        }
+
+        // Newest message wins, and it is flattened to one line.
+        let textRow = peerListModel.recentChatRows.first { $0.peerID == textPeerID }
+        #expect(textRow?.preview == "meet me by the bridge")
+
+        let mediaRow = peerListModel.recentChatRows.first { $0.peerID == mediaPeerID }
+        #expect(mediaRow?.preview == "[image]")
+
+        // A row pointing at the conversation already on screen is noise: the
+        // sheet offers to open what is open.
+        viewModel.selectedPrivateChatPeer = mediaPeerID
+        await waitUntil {
+            !peerListModel.recentChatRows.contains { $0.peerID == mediaPeerID }
+        }
+        #expect(peerListModel.recentChatRows.contains { $0.peerID == textPeerID })
+
+        // Closing it brings the row back — the suppression is a view of the
+        // current selection, not a durable removal.
+        viewModel.selectedPrivateChatPeer = nil
+        await waitUntil {
+            peerListModel.recentChatRows.contains { $0.peerID == mediaPeerID }
+        }
+    }
+
     @Test("PrivateConversationModel resolves canonical header state for the selected DM")
     @MainActor
     func privateConversationModelResolvesSelectedHeaderState() async {
