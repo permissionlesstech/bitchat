@@ -357,9 +357,10 @@ struct BinaryProtocolTests {
     func framedFileCapRoundTrip() throws {
         let targetSize = FileTransferLimits.maxFramedFileBytes
         let payload = Data(repeating: 0x41, count: targetSize)
-        // Highly compressible so the frame stays wire-friendly after compression.
+        // fileTransfer keeps the framed-file ceiling; `.message` is capped at
+        // 128 KiB by PacketPayloadLimits and would fail decode at this size.
         let packet = BitchatPacket(
-            type: MessageType.message.rawValue,
+            type: MessageType.fileTransfer.rawValue,
             senderID: Data(hexString: "0011223344556677") ?? Data(),
             recipientID: nil,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
