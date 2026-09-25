@@ -385,21 +385,24 @@ final class MessageFormattingEngine {
     /// already-kept match's range. Rendering passes that consume the result
     /// (here and in `ChatMessageFormatter`, which has its own copy of the
     /// match-collection logic above) assume non-overlapping,
-    /// strictly-increasing ranges; without this resolution a nested match
-    /// re-renders already-shown text and can walk the render cursor
-    /// backwards, duplicating a trailing slice of content a second time.
+    /// Resolves overlapping match ranges by keeping the earliest-starting match.
     ///
-    /// Ties break by start position only, not length: whichever match starts
-    /// first wins outright, so an outer match (e.g. a URL) always keeps
-    /// priority over a shorter match nested inside it (e.g. an embedded cashu
-    /// token) rather than the other way around. That's intentional for
-    /// rendering — flip it to prefer the inner match only with a matching
-    /// change to how callers render the dropped outer span.
+    /// Matches sort primarily by start position (earlier starts win) and
+    /// secondarily by length descending (longer matches win when start positions
+    /// are equal). Any candidate match whose start location falls inside a
+    /// previously accepted match's range is dropped.
     static func resolveOverlappingMatches<Match>(
         _ matches: [Match],
         range: (Match) -> NSRange
     ) -> [Match] {
-        let sorted = matches.sorted { range($0).location < range($1).location }
+        let sorted = matches.sorted { r0, r1 in
+            let range0 = range(r0)
+            let range1 = range(r1)
+            if range0.location != range1.location {
+                return range0.location < range1.location
+            }
+            return range0.length > range1.length
+        }
         var resolved: [Match] = []
         var occupiedUntil = 0
         for match in sorted {

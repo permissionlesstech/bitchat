@@ -377,11 +377,6 @@ struct MessageFormattingEngineTests {
     }
 
     // MARK: - resolveOverlappingMatches Tests
-    //
-    // Direct coverage for the shared helper `ChatMessageFormatter` also
-    // calls, since its own match-collection logic (a hand-copy of
-    // findAllMatches above) isn't independently unit-testable without a
-    // live ChatViewModel.
 
     @Test func resolveOverlappingMatches_dropsANestedOverlap() {
         let outer = (range: NSRange(location: 0, length: 10), type: "outer")
@@ -390,6 +385,15 @@ struct MessageFormattingEngineTests {
         let resolved = MessageFormattingEngine.resolveOverlappingMatches([outer, nested]) { $0.range }
 
         #expect(resolved.map(\.type) == ["outer"])
+    }
+
+    @Test func resolveOverlappingMatches_equalStartPrefersLongerMatch() {
+        let shorter = (range: NSRange(location: 5, length: 5), type: "shorter")
+        let longer = (range: NSRange(location: 5, length: 15), type: "longer")
+
+        let resolved = MessageFormattingEngine.resolveOverlappingMatches([shorter, longer]) { $0.range }
+
+        #expect(resolved.map(\.type) == ["longer"])
     }
 
     @Test func resolveOverlappingMatches_keepsNonOverlappingMatchesSortedByStart() {
