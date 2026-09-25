@@ -224,18 +224,23 @@ enum TransportConfig {
     static let nostrDMSubscribeLookbackSeconds: TimeInterval = 86400
     // Tolerated clock skew for client-side Nostr DM timestamp windows.
     static let nostrDMMaxClockSkewSeconds: TimeInterval = 900
-    /// Outer gift-wrap / seal `created_at` randomization floor. Matches
-    /// Android `NostrCrypto.randomizeTimestampUpToPast` (up to 48h into the
-    /// past). The actual message time lives on the inner rumor.
-    static let nostrGiftWrapTimestampRandomizationSeconds: TimeInterval = 172_800
+    /// Outer gift-wrap `created_at` randomization floor when *sending*.
+    /// Cap at lookback − skew so a wrap never lands older than
+    /// `nostrDMSubscribeLookbackSeconds` (every installed build still
+    /// subscribes `since: now − 86400`). A deeper draw would silently miss
+    /// half of DMs/acks to peers that have not yet widened their filter.
+    /// Android today draws up to 79_200s (`NIP17_DEFAULT_MAX_PAST_SECONDS`);
+    /// the true send time lives on the inner rumor either way.
+    static let nostrGiftWrapTimestampRandomizationSeconds: TimeInterval =
+        nostrDMSubscribeLookbackSeconds - nostrDMMaxClockSkewSeconds
 
-    // Outer gift-wrap age ceiling. Android (and NIP-17-style clients) may
-    // randomize the wrap's created_at up to 48h into the past; relays that
-    // honor `since` will not deliver those wraps under a 24h filter. The
-    // accept window is 48h plus skew so a wrap at the randomization floor
-    // still clears a mildly slow clock.
+    // Outer gift-wrap age ceiling when *receiving*. Kept at the historical
+    // NIP-17 48h floor (+ skew) so wraps from peers that still randomize
+    // that deep (or that Android's 48h subscribe will deliver) are not
+    // dropped client-side after the relay hands them over. Independent of
+    // the send-side randomization above — do not derive one from the other.
     static let nostrGiftWrapMaxAgeSeconds: TimeInterval =
-        nostrGiftWrapTimestampRandomizationSeconds + nostrDMMaxClockSkewSeconds
+        172_800 + nostrDMMaxClockSkewSeconds
     // A sampled chat message this recent means "a conversation is happening
     // there" for the empty-timeline nearby-activity hint.
     static let uiGeohashChatActivityWindowSeconds: TimeInterval = 900
