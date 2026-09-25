@@ -21,6 +21,7 @@ Chapter 6's items are split by the REQUIRED/capability-gated boundary that chapt
 - [ ] A frame needing more than 255 bytes of padding to reach its target bucket MUST be emitted unpadded instead ([§6](01-wire-format.md#6-padding)).
 - [ ] A decoder MUST attempt unpadded decode first and retry with PKCS#7 stripping only on failure ([§6](01-wire-format.md#6-padding)).
 - [ ] The full `type` byte table MUST be supported for dispatch, and a decoder MUST skip (not reject the enclosing packet for) an unrecognized `type` ([§7](01-wire-format.md#7-message-types)).
+- [ ] An encoder MUST reproduce every `encoded_unpadded`, `encoded_padded`, and `signing_transcript` in [`vectors/wire-format.json`](vectors/wire-format.json), and a decoder MUST recover every packet from both encodings ([§7 below](#7-test-vectors)).
 - [ ] TLV-8 (`type`:1, `length`:1, `value`:≤255 bytes) and TLV-16 (`type`:1, `length`:2 BE, `value`:≤65535 bytes) are structurally distinct, and both framings require a decoder to skip an unrecognized TLV type using its length field rather than reject the enclosing payload ([§8](01-wire-format.md#8-tlv-encodings)).
 
 ## 2. BLE Transport
@@ -119,9 +120,11 @@ Private messages, geohash public channels, relay selection, and courier drops (t
 
 ## 7. Test Vectors
 
+[`vectors/wire-format.json`](vectors/wire-format.json) is the normative test-vector source for the Wire Format chapter ([§2](01-wire-format.md#2-header-layout)–[§6](01-wire-format.md#6-padding)). Each vector gives a packet's fields, its `encoded_unpadded` frame (header and variable sections), its `encoded_padded` frame (the same after the §6 algorithm, including the case where more than 255 pad bytes would be needed and the frame is emitted unpadded), and its `signing_transcript` (the §5 canonical bytes: signature omitted, `ttl` zero, `isRSR` clear, always padded). One vector carries a real Ed25519 signature with its RFC 8032 key seed, so the transcript rule can be checked end to end. An encoder MUST reproduce every frame and transcript, and a decoder MUST recover every packet from both encodings. The file is produced by [`vectors/generate_wire_format_vectors.py`](vectors/generate_wire_format_vectors.py), an encoder written from this chapter's text that shares no code with any client; the Swift client asserts it in `WireFormatVectorTests`.
+
 [`bitchatTests/Noise/NoiseTestVectors.json`](../bitchatTests/Noise/NoiseTestVectors.json) is the normative test-vector source for the `XX` pattern ([§2](03-noise.md#2-live-sessions-the-xx-pattern)): two independently-sourced vectors for `Noise_XX_25519_ChaChaPoly_SHA256`, each giving the initiator/responder static and ephemeral private keys, the handshake prologue, and the full sequence of handshake and transport message payload/ciphertext pairs. An implementation's `XX` handshake and transport encryption MUST reproduce every `ciphertext` in both vectors from the given keys and payloads.
 
-No equivalent vector file exists yet for the `X` pattern, courier envelopes, or the wire-format/BLE framing layers — conformance to those mechanisms is checked against this chapter's checklist items only, not a hex fixture, for this `0.1.0` release.
+No equivalent vector file exists yet for the `X` pattern, courier envelopes, or the BLE fragmentation layer — conformance to those mechanisms is checked against this chapter's checklist items only, not a hex fixture, for this `0.1.0` release.
 
 ## 8. Known Gaps (Non-Normative)
 
