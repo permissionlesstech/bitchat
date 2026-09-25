@@ -176,10 +176,10 @@ extension BLEService: CBPeripheralManagerDelegate {
         // bleQueue: physical retirement now.
         pendingNotifications.removeTarget { $0.identifier.uuidString == centralID }
         linkStateStore.removeSubscribedCentral(central)
-        // A central that disconnects mid-write (walked out of range, backgrounded)
-        // never reaches .decoded or .oversized in BLEInboundWriteBuffer.append, so
-        // its partial buffer would otherwise sit forever -- this is the only
-        // peripheral-role signal CoreBluetooth gives us that a central is gone.
+        // iOS centrals send writes as write-without-response frames. An entry in
+        // pendingWriteBuffers that remains in .waiting is from a frame that failed to
+        // decode. Running this on unsubscription prevents stale residual bytes from
+        // persisting into a future session for this subscribed central.
         pendingWriteBuffers.removeValue(forCentralID: centralID)
 
         // Ensure we're still advertising for other devices to find us

@@ -174,6 +174,39 @@ struct BLEInboundWriteBufferTests {
         }
     }
 
+    @Test
+    func removeStaleBuffersEvictsUntouchedEntries() throws {
+        var buffer = BLEInboundWriteBuffer()
+        let packet = makePacket()
+        let frame = try #require(packet.toBinaryData(padding: false))
+        let splitIndex = max(1, frame.count / 2)
+        let now = Date()
+
+        _ = buffer.append(
+            chunks: [BLEInboundWriteChunk(offset: 0, data: frame.prefix(splitIndex))],
+            for: "stale-central",
+            capBytes: 1024,
+            now: now
+        )
+
+        // Advance clock by 61 seconds to trigger eviction
+        buffer.removeStaleBuffers(olderThan: 60, now: now.addingTimeInterval(61))
+
+        // Pushing remainder to evicted central must not decode
+        let afterEviction = buffer.append(
+            chunks: [BLEInboundWriteChunk(offset: splitIndex, data: frame.suffix(from: splitIndex))],
+            for: "stale-central",
+            capBytes: 1024,
+            now: now.addingTimeInterval(62)
+        )
+
+        if case .waiting = afterEviction {
+            // Expected: stale entry was evicted
+        } else {
+            Issue.record("Expected stale central's buffer to be evicted after timeout")
+        }
+    }
+
     private func makePacket(timestamp: UInt64 = 0x0102030405) -> BitchatPacket {
         BitchatPacket(
             type: MessageType.message.rawValue,
