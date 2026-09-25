@@ -27,6 +27,9 @@ struct LocationChannelsSheet: View {
         static let grantToFind: LocalizedStringKey = "location_channels.grant_to_find"
         static let teleport: LocalizedStringKey = "location_channels.action.teleport"
         static let bookmarked: LocalizedStringKey = "location_channels.bookmarked_section_title"
+        // Same string the settings pane shows under the tor toggle — the
+        // warning belongs wherever the exposure is about to happen.
+        static let torOffWarning = String(localized: "app_info.settings.tor.off_warning", defaultValue: "tor is off: every relay you connect to can see your IP address, including relays carrying your private messages.", comment: "Warning shown under the tor toggle while tor is switched off, stating that relay operators can see the device IP address")
 
         static let quickJoinTitle = String(localized: "location_channels.quick_join.title", defaultValue: "quick join", comment: "Section header in the location channels sheet for the one-tap suggestion of the region channel derived from the device region")
         static func quickJoinDescription(_ regionName: String) -> String {
@@ -125,6 +128,16 @@ struct LocationChannelsSheet: View {
                 Text(Strings.description)
                     .bitchatFont(size: 12)
                     .foregroundColor(palette.secondary)
+
+                // The description's tor claim is only true while tor is on;
+                // when it's off, say what that exposes right where the person
+                // is about to join a channel, not just in settings.
+                if !locationChannelsModel.userTorEnabled {
+                    Text(verbatim: Strings.torOffWarning)
+                        .bitchatFont(size: 11)
+                        .foregroundColor(palette.alertRed)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 Group {
                     switch locationChannelsModel.permissionState {
