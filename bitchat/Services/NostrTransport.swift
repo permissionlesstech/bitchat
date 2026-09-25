@@ -67,7 +67,8 @@ final class NostrTransport: Transport, @unchecked Sendable {
         }
     }
 
-    // Provide BLE short peer ID for BitChat embedding
+    // BLE short peer ID embedded in favorites (recipient-addressed) envelopes.
+    // Geohash envelopes never carry it (see NostrEmbeddedBitChat).
     var senderPeerID = PeerID(str: "")
 
     // Throttle outbound acks — READ receipts and DELIVERED acks, direct and
@@ -315,7 +316,7 @@ extension NostrTransport {
         Task { @MainActor in
             guard !recipientHex.isEmpty else { return }
             SecureLogger.debug("GeoDM: send PM mid=\(messageID.prefix(8))…", category: .session)
-            guard let embedded = NostrEmbeddedBitChat.encodePMForNostrNoRecipient(content: content, messageID: messageID, senderPeerID: senderPeerID) else {
+            guard let embedded = NostrEmbeddedBitChat.encodePMForNostrNoRecipient(content: content, messageID: messageID) else {
                 SecureLogger.error("NostrTransport: failed to embed geohash PM packet", category: .session)
                 return
             }
@@ -382,12 +383,12 @@ extension NostrTransport {
 
             case .deliveredGeohash(let messageID, let recipientHex, let identity):
                 SecureLogger.debug("GeoDM: send DELIVERED mid=\(messageID.prefix(8))…", category: .session)
-                guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .delivered, messageID: messageID, senderPeerID: senderPeerID) else { return }
+                guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .delivered, messageID: messageID) else { return }
                 sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
 
             case .readGeohash(let messageID, let recipientHex, let identity):
                 SecureLogger.debug("GeoDM: send READ mid=\(messageID.prefix(8))…", category: .session)
-                guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .readReceipt, messageID: messageID, senderPeerID: senderPeerID) else { return }
+                guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .readReceipt, messageID: messageID) else { return }
                 sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
             }
         }
