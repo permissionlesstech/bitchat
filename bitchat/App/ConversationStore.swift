@@ -375,6 +375,145 @@ final class ConversationStore: ObservableObject {
 
     let changes = PassthroughSubject<ConversationChange, Never>()
 
+    // MARK: Last-active persistence (#1064)
+
+    /// Persisted last-active conversation, so launch can restore where the
+    /// user left off instead of always dropping into the public mesh
+    /// timeline. Mirrors `LocationStateManager`'s `locationChannel.selected`
+    /// idiom: injected `UserDefaults`, JSON-encoded value. Location channels
+    /// are deliberately NOT restored here — `GeoChannelCoordinator` already
+    /// owns launch-time channel restore; persisting a `.location` marker only
+    /// lets us tell "was in a channel" apart from a first-ever launch.
+    private let storage: UserDefaults
+    private let lastActiveKey = "conversation.lastActive"
+
+    /// True for the duration of a panic wipe. Suppresses `persistLastActive()`
+    /// so the selection/channel resets the wipe performs cannot re-write the
+    /// pointer we are about to remove.
+    private var isPanicWiping = false
+
+    /// Snapshot of the persisted value read once at init, before any launch
+    /// writer (e.g. `GeoChannelCoordinator` re-applying the location channel)
+    /// can overwrite the key. Restore decisions read this, never the disk.
+    private let restoredLastActive: LastActiveRecord?
+
+    /// Codable form of the last-active conversation. `peerID` is a peer's
+    /// `PeerID.id` string (`PeerID` is not itself `Codable`).
+    private struct LastActiveRecord: Codable, Equatable {
+        enum Kind: String, Codable { case mesh, location, direct }
+        let kind: Kind
+        let peerID: String?
+    }
+
+    /// What launch should present, decided purely from `restoredLastActive`.
+    enum LaunchPresentation: Equatable {
+        /// First-ever launch, or a persisted DM. Launch never re-opens the
+        /// DM itself: landing on a name and message history would make
+        /// startup a disclosure to anyone holding an unlocked phone, and the
+        /// old restorability rule selected favorites — the relationships worth
+        /// most to an observer. The list still gets #1064's ask (don't start
+        /// typing into a broadcast nobody chose), and #1598's recent-chats
+        /// section puts the conversation one tap away.
+        case conversationList
+        /// Last-active was a public channel — defer to the existing mesh /
+        /// `GeoChannelCoordinator` restore; do nothing here.
+        case deferToChannelRestore
+    }
+
+    /// Default persistence store for the last-active conversation. Production
+    /// uses `.standard`. Under test, a dedicated scratch suite is used instead
+    /// — wiped at first use per process — so the ~48 no-arg `ConversationStore()`
+    /// tests never pollute the real app's `.standard` `conversation.lastActive`
+    /// and back-to-back local runs never see each other's persisted selection.
+    /// Mirrors `ChatViewModel.defaultReadReceiptsDefaults`.
+    static let defaultStorage: UserDefaults = {
+        guard TestEnvironment.isRunningTests else { return .standard }
+        let suiteName = "chat.bitchat.tests.conversationStore"
+        guard let scratch = UserDefaults(suiteName: suiteName) else { return .standard }
+        scratch.removePersistentDomain(forName: suiteName)
+        return scratch
+    }()
+
+    init(storage: UserDefaults = ConversationStore.defaultStorage) {
+        self.storage = storage
+        if let data = storage.data(forKey: lastActiveKey),
+           let record = try? JSONDecoder().decode(LastActiveRecord.self, from: data) {
+            self.restoredLastActive = record
+        } else {
+            self.restoredLastActive = nil
+        }
+    }
+
+    /// Persists the current foreground conversation. Called from the two
+    /// single-writer selection paths on every switch; an open DM wins over
+    /// the active channel.
+    private func persistLastActive() {
+        // Panic wipe suppresses last-active persistence so the selection/channel
+        // resets that follow it can't re-write the pointer being cleared.
+        guard !isPanicWiping else { return }
+        let record: LastActiveRecord
+        if let peerID = selectedPrivatePeerID {
+            record = LastActiveRecord(kind: .direct, peerID: peerID.id)
+        } else if activeChannel.isLocation {
+            record = LastActiveRecord(kind: .location, peerID: nil)
+        } else {
+            record = LastActiveRecord(kind: .mesh, peerID: nil)
+        }
+        if let data = try? JSONEncoder().encode(record) {
+            storage.set(data, forKey: lastActiveKey)
+        }
+    }
+
+    /// Erases the persisted last-active conversation. Called from the panic
+    /// wipe so a restored DM/channel pointer cannot survive an emergency clear.
+    /// The store owns its injected `storage`, so the key is removed through it
+    /// (never by reaching into `.standard`), and `lastActiveKey` stays private.
+    func clearPersistedLastActive() {
+        storage.removeObject(forKey: lastActiveKey)
+    }
+
+    /// Whether a last-active pointer is on disk right now. Test-only, and it
+    /// exists because the panic wipe's guarantee is that the pointer is *gone*
+    /// — which launch cannot report: an absent record and a surviving
+    /// `.direct` one both present as `.conversationList`, so a test reading
+    /// only the presentation passes while a peer id survives an emergency
+    /// clear. Goes through the same private `lastActiveKey` production uses,
+    /// so renaming the key moves the test with it instead of leaving it
+    /// checking a string nothing writes.
+    var _test_hasPersistedLastActive: Bool {
+        storage.data(forKey: lastActiveKey) != nil
+    }
+
+    /// Begins a panic wipe: suppress last-active persistence so the selection/channel
+    /// resets that follow cannot re-write the pointer we're about to remove.
+    func beginPanicWipe() { isPanicWiping = true }
+
+    /// Finishes a panic wipe: remove the persisted pointer and re-enable persistence.
+    /// MUST be called AFTER all selection/channel state has been reset.
+    func finishPanicWipe() {
+        clearPersistedLastActive()
+        isPanicWiping = false
+    }
+
+    /// Decides what to present at launch from the value persisted last
+    /// session. Pure aside from reading the init snapshot: performs no
+    /// selection mutation and never writes `activeChannel`, so it cannot race
+    /// the location-channel restore.
+    ///
+    /// A persisted DM resolves to the conversation list, not to the DM, which
+    /// makes the peer's addressability irrelevant here — that is why no
+    /// resolvability predicate is threaded in. A restorable peer and a stale
+    /// one take the same branch, so there is nothing left for one to decide.
+    func restoreLastActiveConversation() -> LaunchPresentation {
+        guard let record = restoredLastActive else { return .conversationList }
+        switch record.kind {
+        case .mesh, .location:
+            return .deferToChannelRestore
+        case .direct:
+            return .conversationList
+        }
+    }
+
     // MARK: Intent API
 
     /// Returns the conversation for `id`, creating it (with the cap policy
@@ -556,6 +695,11 @@ final class ConversationStore: ObservableObject {
     func setActiveChannel(_ channelID: ChannelID) {
         if activeChannel != channelID {
             activeChannel = channelID
+            // Persist only on an ACTUAL change. A redundant re-apply of the
+            // current channel (e.g. `GeoChannelCoordinator` re-asserting the
+            // default mesh channel at launch) must not overwrite a persisted
+            // `.direct` record when a DM restore has just failed (#1064).
+            persistLastActive()
         }
         refreshDerivedSelection()
     }
@@ -565,6 +709,9 @@ final class ConversationStore: ObservableObject {
     func setSelectedPrivatePeer(_ peerID: PeerID?) {
         if selectedPrivatePeerID != peerID {
             selectedPrivatePeerID = peerID
+            // Persist only on an actual selection change; the people-sheet
+            // dismissal re-invokes this with the same (nil) value.
+            persistLastActive()
         }
         refreshDerivedSelection()
     }

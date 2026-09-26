@@ -105,7 +105,8 @@ struct ContentView: View {
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.appTheme) private var appTheme
     @Environment(\.scenePhase) private var scenePhase
-    @State private var showSidebar = false
+    // `showSidebar` (the people/conversation-list sheet latch) lives on
+    // `AppChromeModel` so non-view launch code can raise it; see that property.
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: PeerID?
     @FocusState private var isNicknameFieldFocused: Bool
@@ -143,7 +144,7 @@ struct ContentView: View {
     private var usesGlassLayout: Bool { appTheme.usesGlassChrome }
 
     private var isPeopleSheetPresented: Bool {
-        showSidebar || selectedPrivatePeerID != nil
+        appChromeModel.showSidebar || selectedPrivatePeerID != nil
     }
 
     private func rootModalPresentationState(
@@ -269,7 +270,7 @@ struct ContentView: View {
         #endif
         .onChange(of: selectedPrivatePeerID) { newValue in
             if newValue != nil {
-                showSidebar = true
+                appChromeModel.showSidebar = true
             }
             sharedContentImportModel.updateDestination(sharedContentDestination)
             switchComposerDraft(to: ComposerDraftStore.Key.from(
@@ -303,7 +304,7 @@ struct ContentView: View {
                 get: { isPeopleSheetPresented },
                 set: { isPresented in
                     if !isPresented {
-                        showSidebar = false
+                        appChromeModel.showSidebar = false
                         // Scene/background and alert-presentation
                         // reconciliation (Bluetooth-off, recording errors)
                         // are not user requests to leave the conversation.
@@ -320,7 +321,7 @@ struct ContentView: View {
         ) {
             #if os(iOS)
             ContentPeopleSheetView(
-                showSidebar: $showSidebar,
+                showSidebar: $appChromeModel.showSidebar,
                 messageText: $messageText,
                 selectedMessageSender: $selectedMessageSender,
                 selectedMessageSenderID: $selectedMessageSenderID,
@@ -349,7 +350,7 @@ struct ContentView: View {
             .environmentObject(privateInboxModel)
             #else
             ContentPeopleSheetView(
-                showSidebar: $showSidebar,
+                showSidebar: $appChromeModel.showSidebar,
                 messageText: $messageText,
                 selectedMessageSender: $selectedMessageSender,
                 selectedMessageSenderID: $selectedMessageSenderID,
@@ -382,7 +383,7 @@ struct ContentView: View {
             .environmentObject(locationChannelsModel)
         }
         .sheet(isPresented: Binding(
-            get: { appChromeModel.showingFingerprintFor != nil && !showSidebar && selectedPrivatePeerID == nil },
+            get: { appChromeModel.showingFingerprintFor != nil && !appChromeModel.showSidebar && selectedPrivatePeerID == nil },
             set: { _ in appChromeModel.clearFingerprint() }
         )) {
             if let peerID = appChromeModel.showingFingerprintFor {
@@ -392,7 +393,7 @@ struct ContentView: View {
         }
         #if os(iOS)
         .fullScreenCover(isPresented: Binding(
-            get: { showImagePicker && !showSidebar && selectedPrivatePeerID == nil },
+            get: { showImagePicker && !appChromeModel.showSidebar && selectedPrivatePeerID == nil },
             set: { newValue in
                 if !newValue {
                     showImagePicker = false
@@ -408,7 +409,7 @@ struct ContentView: View {
         #endif
         #if os(macOS)
         .sheet(isPresented: Binding(
-            get: { showMacImagePicker && !showSidebar && selectedPrivatePeerID == nil },
+            get: { showMacImagePicker && !appChromeModel.showSidebar && selectedPrivatePeerID == nil },
             set: { newValue in
                 if !newValue {
                     showMacImagePicker = false
@@ -530,7 +531,7 @@ struct ContentView: View {
     private var headerView: some View {
         VStack(spacing: 0) {
             ContentHeaderView(
-                showSidebar: $showSidebar,
+                showSidebar: $appChromeModel.showSidebar,
                 showVerifySheet: $showVerifySheet,
                 isNicknameFieldFocused: $isNicknameFieldFocused,
                 headerHeight: headerHeight,
@@ -581,7 +582,7 @@ struct ContentView: View {
             imagePreviewURL: $imagePreviewURL,
             windowCountPublic: $windowCountPublic,
             windowCountPrivate: $windowCountPrivate,
-            showSidebar: $showSidebar,
+            showSidebar: $appChromeModel.showSidebar,
             isTextFieldFocused: $isTextFieldFocused
         )
     }

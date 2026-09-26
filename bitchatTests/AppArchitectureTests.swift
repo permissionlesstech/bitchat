@@ -501,6 +501,17 @@ struct AppArchitectureTests {
         chromeModel.isLocationChannelsSheetPresented = true
         chromeModel.presentNotices()
         chromeModel.showFingerprint(for: PeerID(str: "peer-3"))
+        // The people/conversation-list sheet counts: ContentView presents it
+        // whenever `showSidebar || selectedPrivatePeerID != nil`, so a latch
+        // left set covers the root timeline exactly like the others. Launch
+        // restore (#1064) can raise it without the person touching anything.
+        chromeModel.showSidebar = true
+        // The OTHER arm of `isPeopleSheetPresented`. Asserting only the latch
+        // would leave the test green while a selected DM kept the sheet over
+        // the wipe result — the selection is cleared by pre-existing code in
+        // ChatViewModel.panicClearAllData, so this pins a cross-model
+        // invariant that neither half owns alone.
+        viewModel.startPrivateChat(with: PeerID(str: "1122334455667788"))
 
         chromeModel.panicClearAllData()
 
@@ -508,6 +519,8 @@ struct AppArchitectureTests {
         #expect(!chromeModel.isLocationChannelsSheetPresented)
         #expect(!chromeModel.isNoticesSheetPresented)
         #expect(chromeModel.showingFingerprintFor == nil)
+        #expect(!chromeModel.showSidebar)
+        #expect(viewModel.selectedPrivateChatPeer == nil)
     }
 
     @Test("Recent chats list direct conversations with people absent from the rosters")
