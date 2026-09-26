@@ -98,7 +98,9 @@ struct VoiceNotePlaybackCoordinatorActivityTests {
 
     @Test("an idle coordinator reports no active playback")
     func idleCoordinator() {
-        #expect(!VoiceNotePlaybackCoordinator().hasActivePlayback)
+        let coordinator = VoiceNotePlaybackCoordinator()
+        #expect(!coordinator.hasActivePlayback)
+        #expect(!coordinator.blocksPrivateChatSwipe)
     }
 
     @Test("activating a controller marks playback active")
@@ -107,6 +109,8 @@ struct VoiceNotePlaybackCoordinatorActivityTests {
         let playback = StubPlayback()
         coordinator.activate(playback)
         #expect(coordinator.hasActivePlayback)
+        // A bare slot holder (live burst stand-in) must not disarm DM swipe.
+        #expect(!coordinator.blocksPrivateChatSwipe)
     }
 
     @Test("deactivating the active controller clears it")
@@ -116,6 +120,7 @@ struct VoiceNotePlaybackCoordinatorActivityTests {
         coordinator.activate(playback)
         coordinator.deactivate(playback)
         #expect(!coordinator.hasActivePlayback)
+        #expect(!coordinator.blocksPrivateChatSwipe)
     }
 
     @Test("a reservation alone does not count as playing")
@@ -126,6 +131,7 @@ struct VoiceNotePlaybackCoordinatorActivityTests {
         let coordinator = VoiceNotePlaybackCoordinator()
         _ = coordinator.reserve(StubPlayback())
         #expect(!coordinator.hasActivePlayback)
+        #expect(!coordinator.blocksPrivateChatSwipe)
     }
 
     @Test("deactivating a controller that does not hold the slot leaves it active")
@@ -137,6 +143,42 @@ struct VoiceNotePlaybackCoordinatorActivityTests {
         #expect(coordinator.hasActivePlayback)
     }
 
+    @Test("a public voice note occupies the slot without blocking DM swipe")
+    func publicNoteDoesNotBlockSwipe() throws {
+        let coordinator = VoiceNotePlaybackCoordinator()
+        let url = try Self.makeSilentVoiceNote()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let controller = VoiceNotePlaybackController(
+            url: url,
+            blocksPrivateChatSwipe: false,
+            exclusivity: coordinator
+        )
+
+        controller.play()
+        #expect(coordinator.hasActivePlayback)
+        #expect(!coordinator.blocksPrivateChatSwipe)
+    }
+
+    @Test("a private voice note blocks DM swipe while it plays")
+    func privateNoteBlocksSwipe() throws {
+        let coordinator = VoiceNotePlaybackCoordinator()
+        let url = try Self.makeSilentVoiceNote()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let controller = VoiceNotePlaybackController(
+            url: url,
+            blocksPrivateChatSwipe: true,
+            exclusivity: coordinator
+        )
+
+        controller.play()
+        #expect(coordinator.hasActivePlayback)
+        #expect(coordinator.blocksPrivateChatSwipe)
+
+        controller.pause()
+        #expect(!coordinator.hasActivePlayback)
+        #expect(!coordinator.blocksPrivateChatSwipe)
+    }
+
     @Test("a controller that pauses releases the slot")
     func pauseReleasesSlot() throws {
         // The slot means audible playback. A paused note holds nothing, and
@@ -145,13 +187,19 @@ struct VoiceNotePlaybackCoordinatorActivityTests {
         let coordinator = VoiceNotePlaybackCoordinator()
         let url = try Self.makeSilentVoiceNote()
         defer { try? FileManager.default.removeItem(at: url) }
-        let controller = VoiceNotePlaybackController(url: url, exclusivity: coordinator)
+        let controller = VoiceNotePlaybackController(
+            url: url,
+            blocksPrivateChatSwipe: true,
+            exclusivity: coordinator
+        )
 
         controller.play()
         #expect(coordinator.hasActivePlayback)
+        #expect(coordinator.blocksPrivateChatSwipe)
 
         controller.pause()
         #expect(!coordinator.hasActivePlayback)
+        #expect(!coordinator.blocksPrivateChatSwipe)
     }
 
     /// A one-frame WAV: enough for AVAudioPlayer to prepare and start.
@@ -182,5 +230,6 @@ struct VoiceNotePlaybackCoordinatorActivityTests {
         coordinator.activate(second)
         #expect(first.pauseCount == 1)
         #expect(coordinator.hasActivePlayback)
+        #expect(!coordinator.blocksPrivateChatSwipe)
     }
 }

@@ -575,13 +575,14 @@ private struct ContentPrivateChatSheetView: View {
             // whole sheet it preempted the composer's press-and-hold mic
             // gesture (a high-priority ancestor drag cancels child gestures
             // within milliseconds — same starvation as the image-reveal bug).
-            // `.subviews` while a note is audible: recognition then belongs to
-            // the waveform's seek drag. Guarding in `onEnded` is not enough --
-            // an armed high-priority ancestor drag starves its descendants
-            // before either gesture ends, so the scrub would still be lost.
+            // `.subviews` while a private note is audible: recognition then
+            // belongs to the waveform's seek drag. Guarding in `onEnded` is
+            // not enough -- an armed high-priority ancestor drag starves its
+            // descendants before either gesture ends, so the scrub would
+            // still be lost. Public notes and live bursts leave swipe armed.
             .highPriorityGesture(
                 swipeToLeaveGesture,
-                including: playbackCoordinator.hasActivePlayback ? .subviews : .all
+                including: playbackCoordinator.blocksPrivateChatSwipe ? .subviews : .all
             )
 
             if !theme.usesGlassChrome {
@@ -618,13 +619,13 @@ private struct ContentPrivateChatSheetView: View {
     private var swipeToLeaveGesture: some Gesture {
         DragGesture(minimumDistance: 25, coordinateSpace: .local)
             .onEnded { value in
-                // Stands down while a voice note is audible: this gesture is
-                // attached with `highPriorityGesture` and would otherwise starve
-                // the waveform's seek drag, and a scrub that drifts right would
-                // end the conversation mid-playback.
+                // Stands down while a private voice note is audible: this
+                // gesture is attached with `highPriorityGesture` and would
+                // otherwise starve the waveform's seek drag, and a scrub that
+                // drifts right would end the conversation mid-playback.
                 guard PrivateChatSwipeToLeavePolicy.shouldLeave(
                     translation: value.translation,
-                    isVoiceNotePlaying: VoiceNotePlaybackCoordinator.shared.hasActivePlayback
+                    isVoiceNotePlaying: VoiceNotePlaybackCoordinator.shared.blocksPrivateChatSwipe
                 ) else { return }
                 withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                     showSidebar = true

@@ -32,6 +32,10 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
     /// Injectable so tests don't fight over the app-wide exclusive-playback
     /// slot (a parallel test's `play()` would pause this controller mid-test).
     private let exclusivity: VoiceNotePlaybackCoordinator
+    /// True when this note renders inside a private-chat message list whose
+    /// swipe-to-leave gesture would starve the waveform seek. Public notes
+    /// and live bursts share the exclusivity slot but do not arm that gesture.
+    let blocksPrivateChatSwipe: Bool
     private var sessionToken: AudioSessionCoordinator.Token?
     /// A session acquire is in flight (it suspends off-main for the blocking
     /// session IPC); gates against double acquisition on rapid play taps.
@@ -39,10 +43,12 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
 
     init(
         url: URL,
+        blocksPrivateChatSwipe: Bool = false,
         sessionCoordinator: AudioSessionCoordinator? = nil,
         exclusivity: VoiceNotePlaybackCoordinator? = nil
     ) {
         self.url = url
+        self.blocksPrivateChatSwipe = blocksPrivateChatSwipe
         self.sessionCoordinatorOverride = sessionCoordinator
         self.exclusivity = exclusivity ?? .shared
         super.init()
@@ -292,6 +298,15 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
 /// when another playback starts (voice notes pause; live bursts stop).
 protocol ExclusivePlayback: AnyObject {
     func pauseForExclusivity()
+    /// When true, private-chat swipe-to-leave stands down so this holder's
+    /// on-screen waveform seek can receive the drag. Defaults to false:
+    /// public-channel notes and live bursts share the slot but do not put a
+    /// seekable waveform under the DM swipe gesture.
+    var blocksPrivateChatSwipe: Bool { get }
+}
+
+extension ExclusivePlayback {
+    var blocksPrivateChatSwipe: Bool { false }
 }
 
 extension VoiceNotePlaybackController: ExclusivePlayback {
@@ -344,20 +359,22 @@ final class VoiceNotePlaybackCoordinator: ObservableObject {
         }
         activeController?.pauseForExclusivity()
         activeController = controller
-        hasActivePlayback = true
+        publishActiveState()
         return true
     }
 
-    /// True while some controller holds the playback slot.
-    ///
-    /// Read by the private-chat swipe-to-leave gesture, which stands down while
-    /// a voice note is audible so a waveform seek is not starved by the
-    /// high-priority ancestor drag. See `PrivateChatSwipeToLeavePolicy`.
-    ///
-    /// Published rather than computed so a view can drop the gesture for the
-    /// duration: a gesture that is armed at all starves its descendants, so
-    /// reading this only once the drag ends comes too late for the seek.
+    /// True while some controller holds the playback slot (note or live burst).
     @Published private(set) var hasActivePlayback: Bool = false
+
+    /// True only while the active holder is a private-chat voice note whose
+    /// waveform seek would be starved by the DM swipe-to-leave gesture.
+    ///
+    /// Public notes playing under a sheet and live bursts still set
+    /// `hasActivePlayback`, but they do not put a seekable waveform on the DM
+    /// message list, so swipe stays armed. Published so the view can drop the
+    /// gesture for the duration: an armed high-priority ancestor starves its
+    /// descendants before either gesture ends. See `PrivateChatSwipeToLeavePolicy`.
+    @Published private(set) var blocksPrivateChatSwipe: Bool = false
 
     func isCurrent(_ reservation: Reservation, for controller: any ExclusivePlayback) -> Bool {
         latestReservation == reservation && latestReservedController === controller
@@ -366,10 +383,15 @@ final class VoiceNotePlaybackCoordinator: ObservableObject {
     func deactivate(_ controller: any ExclusivePlayback) {
         if activeController === controller {
             activeController = nil
-            hasActivePlayback = false
+            publishActiveState()
         }
         if latestReservedController === controller {
             latestReservedController = nil
         }
+    }
+
+    private func publishActiveState() {
+        hasActivePlayback = activeController != nil
+        blocksPrivateChatSwipe = activeController?.blocksPrivateChatSwipe ?? false
     }
 }
