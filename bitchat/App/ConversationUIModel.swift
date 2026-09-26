@@ -78,10 +78,11 @@ final class ConversationUIModel: ObservableObject {
     func block(peerID: PeerID?, displayName: String?) {
         guard let displayName else { return }
 
-        if let peerID, peerID.isGeoChat,
-           let full = chatViewModel.fullNostrHex(forSenderPeerID: peerID) {
+        if let peerID, peerID.isGeoDM || peerID.isGeoChat {
+            // A missing key mapping must not redirect Block to a matching nickname.
+            guard let full = chatViewModel.fullNostrHex(forSenderPeerID: peerID) else { return }
             chatViewModel.blockGeohashUser(pubkeyHexLowercased: full, displayName: displayName)
-        } else if let peerID, !peerID.isGeoDM, !peerID.isGeoChat {
+        } else if let peerID {
             // Mesh: block the peer's stable Noise identity resolved from the
             // tapped peerID rather than re-resolving a display-name string.
             chatViewModel.blockMeshPeer(peerID: peerID, displayName: displayName)

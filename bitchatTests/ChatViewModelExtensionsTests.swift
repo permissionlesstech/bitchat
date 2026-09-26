@@ -161,7 +161,7 @@ struct ChatViewModelPrivateChatExtensionTests {
     
     @Test @MainActor
     func migratePrivateChats_consolidatesHistory_onFingerprintMatch() async {
-        let (viewModel, _) = makeTestableViewModel()
+        let (viewModel, transport) = makeTestableViewModel()
         let oldPeerID = PeerID(str: "OLD_PEER")
         let newPeerID = PeerID(str: "NEW_PEER")
         let fingerprint = "fp_123"
@@ -179,18 +179,135 @@ struct ChatViewModelPrivateChatExtensionTests {
         viewModel.seedPrivateChat([oldMessage], for: oldPeerID)
         viewModel.peerIDToPublicKeyFingerprint[oldPeerID] = fingerprint
         
-        // Setup new peer fingerprint
-        viewModel.peerIDToPublicKeyFingerprint[newPeerID] = fingerprint
+        // The new peer's fingerprint resolves through the transport.
+        transport.peerFingerprints[newPeerID] = fingerprint
         
         // Trigger migration
-        viewModel.migratePrivateChatsIfNeeded(for: newPeerID, senderNickname: "User")
+        viewModel.migratePrivateChatsIfNeeded(for: newPeerID)
         
         // Verify migration
         #expect(viewModel.privateChats[newPeerID]?.count == 1)
         #expect(viewModel.privateChats[newPeerID]?.first?.content == "Old message")
         #expect(viewModel.privateChats[oldPeerID] == nil) // Old chat removed
     }
+
+    @Test @MainActor
+    func handlePrivateMessage_keepsAnotherPeersChatWhenOnlyTheNicknameMatches() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        let firstPeerID = PeerID(str: "aaaaaaaaaaaaaaaa")
+        let secondPeerID = PeerID(str: "bbbbbbbbbbbbbbbb")
+        let firstMessage = BitchatMessage(
+            id: "first-1",
+            sender: "bob",
+            content: "From the first bob",
+            timestamp: Date().addingTimeInterval(-60),
+            isRelay: false,
+            isPrivate: true,
+            senderPeerID: firstPeerID
+        )
+        viewModel.seedPrivateChat([firstMessage], for: firstPeerID)
+        // Both peers resolve a live fingerprint; the first chat was never
+        // opened, so no fingerprint is stored for it.
+        transport.peerFingerprints[firstPeerID] = "fp-1"
+        transport.peerFingerprints[secondPeerID] = "fp-2"
+
+        viewModel.handlePrivateMessage(
+            BitchatMessage(
+                id: "second-1",
+                sender: "bob",
+                content: "From the second bob",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                senderPeerID: secondPeerID
+            )
+        )
+
+        #expect(viewModel.privateChats[firstPeerID]?.map(\.id) == ["first-1"])
+        #expect(viewModel.privateChats[secondPeerID]?.map(\.id) == ["second-1"])
+    }
+
+    @Test @MainActor
+    func handlePrivateMessage_courierJoinPreservesBlockingAndVerification() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        let stablePeerID = PeerID(str: String(repeating: "c", count: 64))
+        let shortPeerID = stablePeerID.toShort()
+        let meshMessage = BitchatMessage(
+            id: "mesh-1",
+            sender: "bob",
+            content: "Over the mesh",
+            timestamp: Date().addingTimeInterval(-60),
+            isRelay: false,
+            isPrivate: true,
+            senderPeerID: shortPeerID
+        )
+        viewModel.seedPrivateChat([meshMessage], for: shortPeerID)
+        // This fixture resolves the mesh sender but has no full-key fingerprint mapping.
+        transport.peerFingerprints[shortPeerID] = "fp-1"
+
+        viewModel.handlePrivateMessage(
+            BitchatMessage(
+                id: "courier-1",
+                sender: "Unknown",
+                content: "By courier",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                senderPeerID: stablePeerID
+            )
+        )
+
+        #expect(viewModel.getFingerprint(for: stablePeerID) == nil)
+        let joined = viewModel.privateChats[stablePeerID] ?? []
+        #expect(Set(joined.map(\.id)) == ["mesh-1", "courier-1"])
+        let meshRowSender = joined.first { $0.id == "mesh-1" }?.senderPeerID
+        #expect(meshRowSender == shortPeerID)
+
+        viewModel.peerIdentityStore.setVerified("fp-1", verified: true)
+        let privateModel = PrivateConversationModel(
+            chatViewModel: viewModel, conversations: viewModel.conversations,
+            locationChannelsModel: LocationChannelsModel(manager: viewModel.locationManager)
+        )
+        let uiModel = ConversationUIModel(
+            chatViewModel: viewModel, privateConversationModel: privateModel,
+            conversations: viewModel.conversations
+        )
+        let meshRow = joined.first { $0.id == "mesh-1" }
+        #expect(meshRow.map { uiModel.showsVerifiedSeal(for: $0) } == true)
+
+        // Blocking from the moved row reaches the peer's identity.
+        if let meshRowSender {
+            viewModel.blockMeshPeer(peerID: meshRowSender, displayName: "bob")
+        }
+        #expect(viewModel.identityManager.isBlocked(fingerprint: "fp-1"))
+    }
     
+    @Test @MainActor
+    func handlePrivateMessage_openingCourierJoinReceiptsOlderMeshHistory() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        let fullID = PeerID(hexData: Data(repeating: 0xCC, count: 32))
+        let shortID = fullID.toShort()
+        transport.reachablePeers = [shortID, fullID]
+        let meshID = "mesh-" + UUID().uuidString
+        let courierID = "courier-" + UUID().uuidString
+        viewModel.handlePrivateMessage(BitchatMessage(id: meshID, sender: "bob", content: "mesh",
+            timestamp: Date().addingTimeInterval(-25 * 3600), isRelay: false,
+            isPrivate: true, senderPeerID: shortID))
+        viewModel.handlePrivateMessage(BitchatMessage(id: courierID, sender: "Unknown", content: "courier",
+            timestamp: Date(), isRelay: false, isPrivate: true, senderPeerID: fullID))
+        #expect(viewModel.privateChats[shortID] == nil)
+        #expect(viewModel.privateChats[fullID]?.first { $0.id == meshID }?.senderPeerID == shortID)
+
+        viewModel.startPrivateChat(with: fullID)
+        for _ in 0..<100 where !transport.sentReadReceipts.contains(where: {
+            $0.receipt.originalMessageID == meshID
+        }) { await Task.yield() }
+        #expect(transport.sentReadReceipts.contains { $0.receipt.originalMessageID == meshID })
+        #expect(transport.sentReadReceipts.contains { $0.receipt.originalMessageID == courierID })
+        #expect(!viewModel.unreadPrivateMessages.contains(fullID))
+        #expect(viewModel.privateChats[fullID]?.first { $0.id == meshID }?.senderPeerID == shortID)
+    }
+
     @Test @MainActor
     func isMessageBlocked_filtersBlockedUsers() async {
         let (viewModel, _) = makeTestableViewModel()
@@ -1405,5 +1522,307 @@ struct ChatViewModelTorExtensionTests {
         viewModel.handleTorBootstrapDidStall()
         try? await Task.sleep(nanoseconds: 50_000_000)
         #expect(viewModel.torStallAnnounced == true)
+    }
+}
+
+
+struct ChatViewModelReplyIdentityTests {
+    private func message(_ id: String, from peerID: PeerID) -> BitchatMessage {
+        BitchatMessage(id: id, sender: "Unknown", content: "Private message",
+                       timestamp: Date(), isRelay: false, isPrivate: true, senderPeerID: peerID)
+    }
+
+    @Test(arguments: [false, true]) @MainActor
+    func sameNameCourierDoesNotChangeOpenChatOrReplyRecipient(originalPeerConnected: Bool) async throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let originalKey = Data(repeating: 0x51, count: 32)
+        let originalPeer = PeerID(publicKey: originalKey)
+        let courierPeer = PeerID(hexData: Data(repeating: 0x52, count: 32))
+        let originalFingerprint = originalKey.sha256Fingerprint()
+        transport.peerFingerprints[originalPeer] = originalFingerprint
+        transport.peerNicknames[originalPeer] = "Unknown"
+        transport.reachablePeers = [originalPeer, courierPeer]
+        if originalPeerConnected {
+            transport.connectedPeers.insert(originalPeer)
+            transport.updatePeerSnapshots([
+                TransportPeerSnapshot(peerID: originalPeer, nickname: "Unknown",
+                                      isConnected: true, noisePublicKey: originalKey, lastSeen: Date())
+            ])
+            let connected = await TestHelpers.waitUntil(
+                { viewModel.connectedPeers.contains(originalPeer) }, timeout: TestConstants.settleTimeout)
+            try #require(connected)
+        } else {
+            #expect(!viewModel.connectedPeers.contains(originalPeer))
+        }
+
+        viewModel.handlePrivateMessage(message("original-history", from: originalPeer))
+        viewModel.startPrivateChat(with: originalPeer)
+        try #require(viewModel.selectedPrivateChatFingerprint == originalFingerprint)
+        try #require(viewModel.getFingerprint(for: courierPeer) == nil)
+        viewModel.handlePrivateMessage(message("courier-arrival", from: courierPeer))
+
+        #expect(viewModel.privateChats[originalPeer]?.map(\.id) == ["original-history"])
+        #expect(viewModel.privateChats[courierPeer]?.map(\.id) == ["courier-arrival"])
+        #expect(viewModel.selectedPrivateChatPeer == originalPeer)
+        viewModel.sendMessage("Reply to the original peer")
+        let sent = try #require(transport.sentPrivateMessages.last)
+        #expect(sent.peerID == originalPeer)
+        #expect(sent.content == "Reply to the original peer")
+    }
+
+    @Test @MainActor
+    func resendingFailedMessageKeepsOriginalRecipientAfterSameNameCourierArrives() async throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let originalKey = Data(repeating: 0x61, count: 32)
+        let originalPeer = PeerID(publicKey: originalKey)
+        let courierPeer = PeerID(hexData: Data(repeating: 0x62, count: 32))
+        transport.peerFingerprints[originalPeer] = originalKey.sha256Fingerprint()
+        transport.peerNicknames[originalPeer] = "Unknown"
+        transport.reachablePeers = [originalPeer, courierPeer]
+        viewModel.startPrivateChat(with: originalPeer)
+        try #require(viewModel.selectedPrivateChatFingerprint == originalKey.sha256Fingerprint())
+        viewModel.sendMessage("Message intended for the original peer")
+        let outgoing = try #require(viewModel.privateChats[originalPeer]?.first {
+            $0.content == "Message intended for the original peer"
+        })
+        try #require(viewModel.setPrivateDeliveryStatus(
+            .failed(reason: "route failed"), forMessageID: outgoing.id, peerID: originalPeer))
+        viewModel.endPrivateChat()
+
+        try #require(viewModel.getFingerprint(for: courierPeer) == nil)
+        viewModel.handlePrivateMessage(message("courier-arrival", from: courierPeer))
+        let owner = try #require(viewModel.privateChats.first {
+            $0.value.contains { $0.id == outgoing.id }
+        }?.key)
+        #expect(owner == originalPeer)
+        let failedMessage = try #require(viewModel.privateChats[owner]?.first { $0.id == outgoing.id })
+        #expect(failedMessage.deliveryStatus == .failed(reason: "route failed"))
+        viewModel.startPrivateChat(with: owner)
+        let privateModel = PrivateConversationModel(
+            chatViewModel: viewModel, conversations: viewModel.conversations,
+            locationChannelsModel: LocationChannelsModel(manager: viewModel.locationManager))
+        let ui = ConversationUIModel(chatViewModel: viewModel, privateConversationModel: privateModel,
+                                     conversations: viewModel.conversations)
+        try #require(ui.isSentByCurrentUser(failedMessage))
+        try #require(ui.mediaAttachment(for: failedMessage) == nil)
+        let sendsBeforeResend = transport.sentPrivateMessages.count
+
+        ui.resendFailedPrivateMessage(failedMessage)
+
+        #expect(transport.sentPrivateMessages.count == sendsBeforeResend + 1)
+        let resent = try #require(transport.sentPrivateMessages.last)
+        #expect(resent.peerID == originalPeer)
+        #expect(resent.content == outgoing.content)
+        #expect(!viewModel.privateChats.values.joined().contains { $0.id == outgoing.id })
+    }
+}
+
+struct ChatViewModelConversationIdentityTests {
+    @Test(arguments: [true, false]) @MainActor
+    func encryptedGeoHistoryStaysWithItsSenderWhenOpeningMeshPeer(matchFullDisplayName: Bool) async throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let sender = try NostrIdentity(privateKeyData: Data(repeating: 0x11, count: 32))
+        let recipient = try NostrIdentity(privateKeyData: Data(repeating: 0x22, count: 32))
+        let geoID = PeerID(nostr_: sender.publicKeyHex)
+        let meshID = PeerID(publicKey: Data(repeating: 0x33, count: 32))
+        let firstID = UUID().uuidString
+        let envelope = try NostrProtocol.createPrivateMessage(
+            content: privateMessageContent(text: "first geo message", messageID: firstID),
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+        viewModel.handleGiftWrap(envelope, id: recipient)
+        let stored = await TestHelpers.waitUntil(
+            { viewModel.privateChats[geoID]?.contains { $0.id == firstID } == true },
+            timeout: TestConstants.settleTimeout
+        )
+        try #require(stored)
+        let original = try #require(viewModel.privateChats[geoID]?.first { $0.id == firstID })
+        #expect(original.sender == "anon#" + sender.publicKeyHex.suffix(4))
+        #expect(original.senderPeerID == geoID)
+        #expect(viewModel.nostrKeyMapping[geoID] == sender.publicKeyHex)
+        #expect(viewModel.privateChats[meshID] == nil)
+
+        let rawName = matchFullDisplayName ? original.sender : "anon"
+        let announcement = AnnouncementPacket(nickname: rawName,
+            noisePublicKey: Data(repeating: 0x33, count: 32),
+            signingPublicKey: Data(repeating: 0x44, count: 32), directNeighbors: nil)
+        let encoded = try #require(announcement.encode())
+        let decoded = try #require(AnnouncementPacket.decode(from: encoded))
+        var registry = BLEPeerRegistry()
+        _ = registry.upsertVerifiedAnnounce(peerID: meshID, nickname: decoded.nickname,
+            noisePublicKey: decoded.noisePublicKey, signingPublicKey: decoded.signingPublicKey,
+            isConnected: true, now: Date())
+        let meshNickname = try #require(registry.nickname(for: meshID, connectedOnly: true))
+        #expect(meshNickname == rawName)
+        transport.peerNicknames[meshID] = meshNickname
+        transport.connectedPeers.insert(meshID)
+        transport.reachablePeers.insert(meshID)
+        #expect(viewModel.hasUnreadMessages(for: geoID))
+        #expect(!viewModel.hasUnreadMessages(for: meshID))
+        viewModel.startPrivateChat(with: meshID)
+        #expect(viewModel.hasUnreadMessages(for: geoID))
+        #expect(!viewModel.hasUnreadMessages(for: meshID))
+        let moved = viewModel.privateChats[meshID]?.first { $0.id == firstID }
+        #expect(viewModel.privateChats[geoID]?.contains { $0.id == firstID } == true)
+        #expect(moved == nil)
+        #expect(viewModel.privateChats[geoID]?.first { $0.id == firstID }?.senderPeerID == geoID)
+
+        viewModel.sendMessage("reply from selected conversation")
+        #expect(transport.sentPrivateMessages.last?.peerID == meshID)
+        #expect(transport.sentPrivateMessages.last?.content == "reply from selected conversation")
+
+        let secondID = UUID().uuidString
+        let nextEnvelope = try NostrProtocol.createPrivateMessage(
+            content: privateMessageContent(text: "second geo message", messageID: secondID),
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+        viewModel.handleGiftWrap(nextEnvelope, id: recipient)
+        let newStored = await TestHelpers.waitUntil(
+            { viewModel.privateChats[geoID]?.contains { $0.id == secondID } == true },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(newStored)
+        #expect(viewModel.privateChats[geoID]?.contains { $0.id == firstID } == true)
+    }
+
+    @Test @MainActor
+    func openingDerivedMeshPeerRetainsKnownSameKeyHistory() async throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let key = Data(repeating: 0x55, count: 32)
+        let fullID = PeerID(hexData: key)
+        let shortID = PeerID(publicKey: key)
+        let messageID = UUID().uuidString
+        viewModel.handlePrivateMessage(BitchatMessage(id: messageID, sender: "Unknown",
+            content: "same key history", timestamp: Date(), isRelay: false,
+            isPrivate: true, senderPeerID: fullID))
+        try #require(viewModel.privateChats[fullID]?.contains { $0.id == messageID } == true)
+        transport.peerNicknames[shortID] = "alice"
+        transport.connectedPeers.insert(shortID)
+        transport.updatePeerSnapshots([TransportPeerSnapshot(peerID: shortID, nickname: "alice",
+            isConnected: true, noisePublicKey: key, lastSeen: Date())])
+        let known = await TestHelpers.waitUntil(
+            { viewModel.unifiedPeerService.getPeer(by: shortID)?.noisePublicKey == key },
+            timeout: TestConstants.settleTimeout)
+        try #require(known)
+        viewModel.startPrivateChat(with: shortID)
+        #expect(viewModel.privateChats[fullID] == nil)
+        #expect(viewModel.privateChats[shortID]?.contains { $0.id == messageID } == true)
+        #expect(viewModel.privateChats[shortID]?.first { $0.id == messageID }?.senderPeerID == shortID)
+    }
+
+}
+
+struct ConversationUIBlockIdentityTests {
+    @MainActor
+    private func uiModel(_ viewModel: ChatViewModel) -> ConversationUIModel {
+        let privateModel = PrivateConversationModel(chatViewModel: viewModel,
+            conversations: viewModel.conversations,
+            locationChannelsModel: LocationChannelsModel(manager: viewModel.locationManager))
+        return ConversationUIModel(chatViewModel: viewModel, privateConversationModel: privateModel,
+            conversations: viewModel.conversations)
+    }
+
+    @MainActor
+    private func registerMeshPeer(_ key: Data, named name: String,
+                                  viewModel: ChatViewModel, transport: MockTransport) async throws -> PeerID {
+        let peer = PeerID(publicKey: key)
+        transport.peerNicknames[peer] = name
+        transport.peerFingerprints[peer] = key.sha256Fingerprint()
+        transport.connectedPeers.insert(peer)
+        transport.updatePeerSnapshots([TransportPeerSnapshot(peerID: peer, nickname: name,
+            isConnected: true, noisePublicKey: key, lastSeen: Date())])
+        let indexed = await TestHelpers.waitUntil(
+            { viewModel.unifiedPeerService.getPeer(by: peer)?.noisePublicKey == key },
+            timeout: TestConstants.settleTimeout)
+        try #require(indexed)
+        return peer
+    }
+
+    @Test(arguments: [false, true]) @MainActor
+    func blockEncryptedGeoDMTargetsSenderDespiteMatchingMeshName(locationChannel: Bool) async throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let sender = try NostrIdentity(privateKeyData: Data(repeating: 0x11, count: 32))
+        let recipient = try NostrIdentity(privateKeyData: Data(repeating: 0x12, count: 32))
+        let geo = PeerID(nostr_: sender.publicKeyHex)
+        let messageID = UUID().uuidString
+        let envelope = try NostrProtocol.createPrivateMessage(
+            content: privateMessageContent(text: "private message", messageID: messageID),
+            recipientPubkey: recipient.publicKeyHex, senderIdentity: sender)
+        viewModel.handleGiftWrap(envelope, id: recipient)
+        let received = await TestHelpers.waitUntil(
+            { viewModel.privateChats[geo]?.contains { $0.id == messageID } == true },
+            timeout: TestConstants.settleTimeout)
+        try #require(received)
+        let row = try #require(viewModel.privateChats[geo]?.first { $0.id == messageID })
+        let meshKey = Data(repeating: 0x13, count: 32)
+        let mesh = try await registerMeshPeer(meshKey, named: row.sender, viewModel: viewModel, transport: transport)
+        viewModel.activeChannel = locationChannel ? .location(GeohashChannel(level: .city, geohash: "s0000")) : .mesh
+        viewModel.startPrivateChat(with: geo)
+        #expect(row.senderPeerID == geo)
+        #expect(viewModel.privateChats[mesh] == nil)
+        uiModel(viewModel).block(peerID: row.senderPeerID, displayName: row.sender)
+        #expect(viewModel.identityManager.isNostrBlocked(pubkeyHexLowercased: sender.publicKeyHex))
+        #expect(!viewModel.identityManager.isBlocked(fingerprint: meshKey.sha256Fingerprint()))
+        #expect(viewModel.privateChats[geo] == nil)
+
+        let nextID = UUID().uuidString
+        let next = try NostrProtocol.createPrivateMessage(
+            content: privateMessageContent(text: "after block", messageID: nextID),
+            recipientPubkey: recipient.publicKeyHex, senderIdentity: sender)
+        viewModel.handleGiftWrap(next, id: recipient)
+        // Blocking removed the mapping. Its return marks the next envelope's handler completion.
+        let processed = await TestHelpers.waitUntil(
+            { viewModel.nostrKeyMapping[geo] == sender.publicKeyHex }, timeout: TestConstants.settleTimeout)
+        #expect(processed)
+        #expect(viewModel.privateChats[geo]?.contains { $0.id == messageID || $0.id == nextID } != true)
+        #expect(!viewModel.sentGeoDeliveryAcks.contains(nextID))
+        #expect(!viewModel.identityManager.isBlocked(fingerprint: meshKey.sha256Fingerprint()))
+    }
+
+    @Test(arguments: [false, true]) @MainActor
+    func blockGeohashWithoutKeyDoesNotFallBackToMatchingMeshName(privateMessage: Bool) async throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let key = Data(repeating: 0x21, count: 32)
+        _ = try await registerMeshPeer(key, named: "same-name", viewModel: viewModel, transport: transport)
+        let pubkey = String(repeating: "ab", count: 32)
+        let geo = privateMessage ? PeerID(nostr_: pubkey) : PeerID(nostr: pubkey)
+        viewModel.activeChannel = .mesh
+        #expect(viewModel.fullNostrHex(forSenderPeerID: geo) == nil)
+        uiModel(viewModel).block(peerID: geo, displayName: "same-name")
+        // The old fallback enqueues a command; observe the block state across that async work.
+        let wrongPeerBlocked = await TestHelpers.waitUntil(
+            { viewModel.identityManager.isBlocked(fingerprint: key.sha256Fingerprint()) },
+            timeout: TestConstants.negativeWaitWindow)
+        #expect(!wrongPeerBlocked)
+        #expect(!viewModel.identityManager.isNostrBlocked(pubkeyHexLowercased: pubkey))
+    }
+
+    @Test @MainActor
+    func blockPublicGeohashUsesMappedKeyDespiteMatchingMeshName() async throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let key = Data(repeating: 0x31, count: 32)
+        _ = try await registerMeshPeer(key, named: "same-name", viewModel: viewModel, transport: transport)
+        let pubkey = String(repeating: "cd", count: 32)
+        let geo = PeerID(nostr: pubkey)
+        viewModel.registerNostrKeyMapping(pubkey, for: geo)
+        uiModel(viewModel).block(peerID: geo, displayName: "same-name")
+        #expect(viewModel.identityManager.isNostrBlocked(pubkeyHexLowercased: pubkey))
+        #expect(!viewModel.identityManager.isBlocked(fingerprint: key.sha256Fingerprint()))
+    }
+
+    @Test @MainActor
+    func blockMeshUsesTappedIdentityDespiteAnotherPeersDisplayName() async throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let key = Data(repeating: 0x41, count: 32)
+        let peer = try await registerMeshPeer(key, named: "alice", viewModel: viewModel, transport: transport)
+        let other = PeerID(publicKey: Data(repeating: 0x42, count: 32))
+        transport.peerNicknames[other] = "bob"
+        transport.peerFingerprints[other] = "other-fingerprint"
+        viewModel.activeChannel = .mesh
+        uiModel(viewModel).block(peerID: peer, displayName: "bob")
+        #expect(viewModel.identityManager.isBlocked(fingerprint: key.sha256Fingerprint()))
+        #expect(!viewModel.identityManager.isBlocked(fingerprint: "other-fingerprint"))
     }
 }

@@ -798,7 +798,7 @@ struct ChatPrivateConversationCoordinatorContextTests {
         context.unreadPrivateMessages = [oldPeerID]
         context.selectedPrivateChatPeer = oldPeerID
 
-        coordinator.migratePrivateChatsIfNeeded(for: newPeerID, senderNickname: "alice")
+        coordinator.migratePrivateChatsIfNeeded(for: newPeerID)
 
         #expect(context.privateChats[oldPeerID] == nil)
         #expect(context.privateChats[newPeerID]?.map(\.id) == ["old-1", "old-2"])
@@ -809,6 +809,108 @@ struct ChatPrivateConversationCoordinatorContextTests {
         #expect(context.migratedChats.map(\.from) == [oldPeerID])
         #expect(context.migratedChats.map(\.to) == [newPeerID])
         #expect(context.notifyUIChangedCount == 1)
+    }
+
+    @Test @MainActor
+    func handlePrivateMessage_keepsAnotherPeersChatWhenOnlyTheNicknameMatches() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let firstPeerID = PeerID(str: "aaaaaaaaaaaaaaaa")
+        let secondPeerID = PeerID(str: "bbbbbbbbbbbbbbbb")
+        context.fingerprintsByPeerID[secondPeerID] = "fp-2"
+        context.privateChats[firstPeerID] = [
+            makeIncomingMessage(id: "first-1", sender: "bob", timestamp: Date().addingTimeInterval(-60), senderPeerID: firstPeerID)
+        ]
+        context.unreadPrivateMessages = [firstPeerID]
+
+        coordinator.handlePrivateMessage(
+            makeIncomingMessage(id: "second-1", sender: "bob", senderPeerID: secondPeerID)
+        )
+
+        #expect(context.privateChats[firstPeerID]?.map(\.id) == ["first-1"])
+        #expect(context.privateChats[secondPeerID]?.map(\.id) == ["second-1"])
+        #expect(context.unreadPrivateMessages == [firstPeerID, secondPeerID])
+    }
+
+    @Test @MainActor
+    func handlePrivateMessage_keepsAnOfflineFavoritesChatWhenOnlyTheNicknameMatches() async {
+        // An offline favorite's Nostr DMs sit on its noise-key ID, with the
+        // favorite's stored nickname as sender.
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let favoritePeerID = PeerID(str: String(repeating: "c", count: 64))
+        let meshPeerID = PeerID(str: "bbbbbbbbbbbbbbbb")
+        context.fingerprintsByPeerID[meshPeerID] = "fp-2"
+        context.privateChats[favoritePeerID] = [
+            makeIncomingMessage(id: "fav-1", sender: "bob", timestamp: Date().addingTimeInterval(-60), senderPeerID: favoritePeerID)
+        ]
+
+        coordinator.handlePrivateMessage(
+            makeIncomingMessage(id: "mesh-1", sender: "bob", senderPeerID: meshPeerID)
+        )
+
+        #expect(context.privateChats[favoritePeerID]?.map(\.id) == ["fav-1"])
+        #expect(context.privateChats[meshPeerID]?.map(\.id) == ["mesh-1"])
+    }
+
+    @Test @MainActor
+    func handlePrivateMessage_keepsUnresolvedCourierSendersApart() async {
+        // Model two courier senders with no peer or fingerprint lookup result.
+        // The transport event handler labels unresolved senders "Unknown".
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let firstSender = PeerID(str: String(repeating: "d", count: 64))
+        let secondSender = PeerID(str: String(repeating: "e", count: 64))
+        context.privateChats[firstSender] = [
+            makeIncomingMessage(id: "first-1", sender: "Unknown", timestamp: Date().addingTimeInterval(-60), senderPeerID: firstSender)
+        ]
+
+        coordinator.handlePrivateMessage(
+            makeIncomingMessage(id: "second-1", sender: "Unknown", senderPeerID: secondSender)
+        )
+
+        #expect(context.privateChats[firstSender]?.map(\.id) == ["first-1"])
+        #expect(context.privateChats[secondSender]?.map(\.id) == ["second-1"])
+    }
+
+    @Test @MainActor
+    func handlePrivateMessage_courierDMFromAnAbsentPeerJoinsItsMeshChat() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let stablePeerID = PeerID(str: String(repeating: "c", count: 64))
+        let shortPeerID = stablePeerID.toShort()
+        context.privateChats[shortPeerID] = [
+            makeIncomingMessage(id: "mesh-1", sender: "bob", timestamp: Date().addingTimeInterval(-60), senderPeerID: shortPeerID)
+        ]
+
+        coordinator.handlePrivateMessage(
+            makeIncomingMessage(id: "courier-1", sender: "Unknown", senderPeerID: stablePeerID)
+        )
+
+        #expect(context.privateChats[shortPeerID] == nil)
+        let joined = context.privateChats[stablePeerID] ?? []
+        #expect(Set(joined.map(\.id)) == ["mesh-1", "courier-1"])
+        // The mesh row keeps its short sender ID.
+        #expect(joined.first { $0.id == "mesh-1" }?.senderPeerID == shortPeerID)
+    }
+
+    @Test @MainActor
+    func handlePrivateMessage_courierDMWhileTheShortIDIsConnectedLandsInTheMeshChat() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let stablePeerID = PeerID(str: String(repeating: "c", count: 64))
+        let shortPeerID = stablePeerID.toShort()
+        context.connectedPeers = [shortPeerID]
+        context.privateChats[shortPeerID] = [
+            makeIncomingMessage(id: "mesh-1", sender: "bob", timestamp: Date().addingTimeInterval(-60), senderPeerID: shortPeerID)
+        ]
+
+        coordinator.handlePrivateMessage(
+            makeIncomingMessage(id: "courier-1", sender: "bob", senderPeerID: stablePeerID)
+        )
+
+        #expect(context.privateChats[stablePeerID] == nil)
+        #expect(Set(context.privateChats[shortPeerID]?.map(\.id) ?? []) == ["mesh-1", "courier-1"])
     }
 
     @Test @MainActor
