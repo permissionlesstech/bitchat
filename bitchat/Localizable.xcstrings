@@ -56139,378 +56139,6 @@
         }
       }
     },
-    "content.header.public_caption" : {
-      "comment" : "Trust caption under the public mesh timeline: this channel is public and reaches nearby devices. Sole carrier of that disclosure — the composer placeholder deliberately does not repeat it (#1595).",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "عام · قريب"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "পাবলিক · কাছাকাছি"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "öffentlich · in der nähe"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "public · nearby"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "público · cerca"
-          }
-        },
-        "fa" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "عمومی · اطراف شما"
-          }
-        },
-        "fil" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "pampubliko · malapit"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "public · à proximité"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ציבורי · קרוב"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "सार्वजनिक · आसपास"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "publik · terdekat"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "pubblico · nelle vicinanze"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "公開 · 近くの人へ"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "공개 · 근처"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "awam · berdekatan"
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "सार्वजनिक · नजिकको"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "openbaar · in de buurt"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "publiczna · w pobliżu"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "público · próximo"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "público · por perto"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "публичное · рядом"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "publikt · i närheten"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "பொது · அருகில்"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "สาธารณะ · ใกล้เคียง"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "herkese açık · yakında"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "публічне · поблизу"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "عوامی · قریبی"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "công khai · gần đây"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "公开 · 附近"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "公開 · 附近"
-          }
-        }
-      }
-    },
-    "content.header.public_caption.a11y" : {
-      "comment" : "Accessibility label for the public mesh trust caption; comma form of content.header.public_caption for VoiceOver.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "عام، قريب"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "পাবলিক, কাছাকাছি"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "öffentlich, in der nähe"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "public, nearby"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "público, cerca"
-          }
-        },
-        "fa" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "عمومی، اطراف شما"
-          }
-        },
-        "fil" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "pampubliko, malapit"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "public, à proximité"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ציבורי, קרוב"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "सार्वजनिक, आसपास"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "publik, terdekat"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "pubblico, nelle vicinanze"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "公開、近くの人へ"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "공개, 근처"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "awam, berdekatan"
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "सार्वजनिक, नजिकको"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "openbaar, in de buurt"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "publiczna, w pobliżu"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "público, próximo"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "público, por perto"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "публичное, рядом"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "publikt, i närheten"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "பொது, அருகில்"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "สาธารณะ, ใกล้เคียง"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "herkese açık, yakında"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "публічне, поблизу"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "عوامی، قریبی"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "công khai, gần đây"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "公开、附近"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "公開、附近"
-          }
-        }
-      }
-    },
     "content.help.verification" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -57445,181 +57073,181 @@
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "رسالة #mesh"
+            "value" : "رسالة #mesh — عام، قريب"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "#mesh-এ বার্তা"
+            "value" : "#mesh-এ বার্তা — পাবলিক, কাছাকাছি"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "nachricht an #mesh"
+            "value" : "nachricht an #mesh — öffentlich, in der nähe"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "message #mesh"
+            "value" : "message #mesh — public, nearby"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "mensaje #mesh"
+            "value" : "mensaje #mesh — público, cerca"
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "پیام به #mesh"
+            "value" : "پیام به #mesh — عمومی، اطراف شما"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "mensahe sa #mesh"
+            "value" : "mensahe sa #mesh — pampubliko, malapit"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "message vers #mesh"
+            "value" : "message vers #mesh — public, à proximité"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "הודעה ל-#mesh"
+            "value" : "הודעה ל-#mesh — ציבורי, קרוב"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "संदेश #mesh"
+            "value" : "संदेश #mesh — सार्वजनिक, आसपास"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "pesan #mesh"
+            "value" : "pesan #mesh — publik, terdekat"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "messaggio a #mesh"
+            "value" : "messaggio a #mesh — pubblico, nelle vicinanze"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "#mesh にメッセージ"
+            "value" : "#mesh にメッセージ — 公開、近くの人へ"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "#mesh 에 메시지"
+            "value" : "#mesh 에 메시지 — 공개, 근처"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "pesan #mesh"
+            "value" : "pesan #mesh — awam, berdekatan"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "#mesh मा सन्देश"
+            "value" : "#mesh मा सन्देश — सार्वजनिक, नजिकको"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "bericht naar #mesh"
+            "value" : "bericht naar #mesh — openbaar, in de buurt"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "wiadomość #mesh"
+            "value" : "wiadomość #mesh — publiczna, w pobliżu"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "mensagem para #mesh"
+            "value" : "mensagem para #mesh — público, próximo"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "mensagem para #mesh"
+            "value" : "mensagem para #mesh — público, por perto"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "сообщение в #mesh"
+            "value" : "сообщение в #mesh — публичное, рядом"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "meddelande #mesh"
+            "value" : "meddelande #mesh — publikt, i närheten"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "#mesh க்கு செய்தி"
+            "value" : "#mesh க்கு செய்தி — பொது, அருகில்"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "ส่งข้อความถึง #mesh"
+            "value" : "ส่งข้อความถึง #mesh — สาธารณะ, ใกล้เคียง"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "mesaj #mesh"
+            "value" : "mesaj #mesh — herkese açık, yakında"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "повідомлення #mesh"
+            "value" : "повідомлення #mesh — публічне, поблизу"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "پیغام #mesh"
+            "value" : "پیغام #mesh — عوامی، قریبی"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "nhắn #mesh"
+            "value" : "nhắn #mesh — công khai, gần đây"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "发消息到 #mesh"
+            "value" : "发消息到 #mesh — 公开、附近"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "發訊息到 #mesh"
+            "value" : "發訊息到 #mesh — 公開、附近"
           }
         }
       }
