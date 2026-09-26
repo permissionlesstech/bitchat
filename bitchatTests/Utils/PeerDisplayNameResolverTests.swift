@@ -18,7 +18,7 @@ struct PeerDisplayNameResolverTests {
         let result = PeerDisplayNameResolver.resolve(
             [
                 (peerID: alice, nickname: "alice", isConnected: true),
-                (peerID: bob, nickname: "bob", isConnected: true),
+                (peerID: bob, nickname: "bob", isConnected: true)
             ],
             selfNickname: "me"
         )
@@ -34,7 +34,7 @@ struct PeerDisplayNameResolverTests {
         let result = PeerDisplayNameResolver.resolve(
             [
                 (peerID: first, nickname: "sam", isConnected: true),
-                (peerID: second, nickname: "sam", isConnected: true),
+                (peerID: second, nickname: "sam", isConnected: true)
             ],
             selfNickname: "me"
         )
@@ -52,7 +52,7 @@ struct PeerDisplayNameResolverTests {
             [
                 (peerID: connectedA, nickname: "sam", isConnected: true),
                 (peerID: connectedB, nickname: "sam", isConnected: true),
-                (peerID: disconnected, nickname: "sam", isConnected: false),
+                (peerID: disconnected, nickname: "sam", isConnected: false)
             ],
             selfNickname: "me"
         )
