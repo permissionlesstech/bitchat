@@ -465,7 +465,6 @@ struct NostrProtocolTests {
         #expect(object["limit"] as? Int == 42)
     }
 
-
     @Test func inboundNostrEventRejectsTooManyTags() throws {
         var eventDict = Self.validInboundEventDict()
         eventDict["tags"] = Array(

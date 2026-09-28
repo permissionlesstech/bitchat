@@ -135,7 +135,6 @@ extension BLEService: CBCentralManagerDelegate {
         }
     }
 
-
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
         radio.handleDiscovery(peripheral, advertisementData: advertisementData, rssi: RSSI)
     }
