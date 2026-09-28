@@ -91,7 +91,7 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
     }
 
     func togglePlayback() {
-        isPlaying ? pause() : play()
+        if isPlaying { pause() } else { play() }
     }
 
     func play() {
