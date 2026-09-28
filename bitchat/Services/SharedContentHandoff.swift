@@ -41,12 +41,13 @@ struct SharedContentPayload: Codable, Sendable, Equatable, Identifiable {
         self.createdAt = createdAt
     }
 
-    static func text(_ content: String, createdAt: Date = Date()) -> SharedContentPayload {
-        SharedContentPayload(kind: .text, content: content, createdAt: createdAt)
+    init(text content: String, createdAt: Date = Date()) {
+        self.init(kind: .text, content: content, createdAt: createdAt)
     }
 
-    /// Keep surrounding words when a shared string contains a link.
-    static func fromSharedText(_ content: String?, title: String? = nil) -> SharedContentPayload? {
+    /// A URL share requires the URL to occupy the entire supplied text.
+    /// Sentences containing a link must reach the composer intact.
+    init?(sharedText content: String?, title: String? = nil) {
         guard let content else { return nil }
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -56,24 +57,25 @@ struct SharedContentPayload: Codable, Sendable, Equatable, Identifiable {
         if let match = detector?.firstMatch(in: trimmed, options: [], range: range),
            match.range == range,
            let url = match.url,
-           let components = URLComponents(string: url.absoluteString),
-           let scheme = components.scheme?.lowercased(),
-           scheme == "http" || scheme == "https",
-           let host = components.host, !host.isEmpty {
-            return SharedContentPayload(kind: .url, content: url.absoluteString, title: title ?? host)
+           let payload = Self(webURL: url, title: title) {
+            self = payload
+        } else {
+            self.init(text: content)
         }
+    }
 
-        return .text(content)
+    init?(webURL url: URL, title: String? = nil) {
+        guard let components = URLComponents(string: url.absoluteString),
+              let webLink = components.webURL?.absoluteString
+        else { return nil }
+        self.init(kind: .url, content: webLink, title: title ?? components.host)
     }
 
     var composerText: String { content }
 
     var preview: String {
-        let normalized = content
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "\n")
-        guard normalized.count > 240 else { return normalized }
-        return String(normalized.prefix(240)) + "…"
+        let n = content.normalized
+        return n.count <= 240 ? n : String(n.prefix(240)) + "…"
     }
 
     func validate(now: Date = Date()) throws {
@@ -92,7 +94,7 @@ struct SharedContentPayload: Codable, Sendable, Equatable, Identifiable {
             guard title.utf8.count <= Self.maxTitleBytes else {
                 throw SharedContentHandoffError.titleTooLarge
             }
-            guard !Self.containsDisallowedControl(in: title, allowsTextLayout: false) else {
+            guard !title.containsDisallowedControl(allowsTextLayout: false) else {
                 throw SharedContentHandoffError.invalidCharacters
             }
         }
@@ -105,30 +107,15 @@ struct SharedContentPayload: Codable, Sendable, Equatable, Identifiable {
 
         switch kind {
         case .text:
-            guard !Self.containsDisallowedControl(in: content, allowsTextLayout: true) else {
+            guard !content.containsDisallowedControl(allowsTextLayout: true) else {
                 throw SharedContentHandoffError.invalidCharacters
             }
         case .url:
-            guard !Self.containsDisallowedControl(in: content, allowsTextLayout: false),
-                  let components = URLComponents(string: content),
-                  let scheme = components.scheme?.lowercased(),
-                  scheme == "http" || scheme == "https",
-                  components.host?.isEmpty == false else {
+            guard !content.containsDisallowedControl(allowsTextLayout: false),
+                  URLComponents(string: content)?.webURL != nil
+            else {
                 throw SharedContentHandoffError.unsupportedURL
             }
-        }
-    }
-
-    private static func containsDisallowedControl(
-        in value: String,
-        allowsTextLayout: Bool
-    ) -> Bool {
-        value.unicodeScalars.contains { scalar in
-            guard CharacterSet.controlCharacters.contains(scalar) else { return false }
-            if allowsTextLayout, scalar == "\n" || scalar == "\r" || scalar == "\t" {
-                return false
-            }
-            return true
         }
     }
 }
@@ -229,5 +216,33 @@ final class SharedContentStore {
         for key in Self.legacyKeys {
             defaults.removeObject(forKey: key)
         }
+    }
+}
+
+private extension URLComponents {
+    var webURL: URL? {
+        guard let scheme = scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              host?.isEmpty == false else {
+            return nil
+        }
+        return url
+    }
+}
+
+private extension String {
+    func containsDisallowedControl(allowsTextLayout: Bool) -> Bool {
+        unicodeScalars.contains { scalar in
+            guard CharacterSet.controlCharacters.contains(scalar) else { return false }
+            if allowsTextLayout, scalar == "\n" || scalar == "\r" || scalar == "\t" {
+                return false
+            }
+            return true
+        }
+    }
+
+    var normalized: String {
+        self.replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
     }
 }
