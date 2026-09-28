@@ -401,7 +401,6 @@ extension NostrTransport {
         }
     }
 
-
     /// Sends a single ack item (invoked by the pacer, one per interval)
     private func sendAckItem(_ item: QueuedAck, generation: UInt64) {
         Task { @MainActor in

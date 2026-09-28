@@ -1514,7 +1514,6 @@ struct ChatViewModelTorExtensionTests {
     }
 }
 
-
 struct ChatViewModelReplyIdentityTests {
     private func message(_ id: String, from peerID: PeerID) -> BitchatMessage {
         BitchatMessage(id: id, sender: "Unknown", content: "Private message",
