@@ -12,12 +12,53 @@ struct SharedContentHandoffTests {
         return (suite, defaults, SharedContentStore(defaults: defaults))
     }
 
+    @Test("Attributed text with an embedded URL keeps the whole message")
+    func attributedTextWithEmbeddedURL() throws {
+        let content = "Meet here: https://example.com at 5"
+        let payload = try #require(SharedContentPayload(sharedText: content))
+        #expect(payload.kind == .text)
+        #expect(payload.composerText == content)
+
+        let context = makeStore()
+        defer { context.defaults.removePersistentDomain(forName: context.suite) }
+        try context.store.stage(payload)
+        #expect(context.store.pending()?.composerText == content)
+    }
+
+    @Test("A URL followed by words remains text")
+    func urlPrefixWithTrailingWords() throws {
+        let content = "https://example.com at 5"
+        let payload = try #require(SharedContentPayload(sharedText: content))
+        #expect(payload.kind == .text)
+        #expect(payload.composerText == content)
+    }
+
+    @Test("Attributed text consisting only of a URL stays a URL share")
+    func attributedTextWithOnlyURL() throws {
+        let payload = try #require(SharedContentPayload(
+            sharedText: " https://example.com/path ", title: "Meeting place"
+        ))
+        #expect(payload.kind == .url)
+        #expect(payload.content == "https://example.com/path")
+        #expect(payload.title == "Meeting place")
+    }
+
+    @Test("URL attachments use the same validated payload constructor")
+    func urlAttachmentPayload() throws {
+        let url = try #require(URL(string: "https://example.com/path"))
+        let payload = try #require(SharedContentPayload(webURL: url, title: "Meeting place"))
+        #expect(payload.kind == .url)
+        #expect(payload.content == url.absoluteString)
+        #expect(payload.title == "Meeting place")
+        #expect(SharedContentPayload(webURL: URL(fileURLWithPath: "/tmp/note.txt")) == nil)
+    }
+
     @Test("A staged share survives an inactive app and a late open")
     func stagedShareSurvivesLateOpen() throws {
         let context = makeStore()
         defer { context.defaults.removePersistentDomain(forName: context.suite) }
         let stagedAt = Date(timeIntervalSince1970: 1_000_000)
-        let payload = SharedContentPayload.text("review me later", createdAt: stagedAt)
+        let payload = SharedContentPayload(text: "review me later", createdAt: stagedAt)
 
         try context.store.stage(payload, now: stagedAt)
 
@@ -42,7 +83,7 @@ struct SharedContentHandoffTests {
         #expect(context.store.pending(now: now) == nil)
         #expect(context.defaults.object(forKey: SharedContentStore.storageKey) == nil)
 
-        let oversized = SharedContentPayload.text(
+        let oversized = SharedContentPayload(text:
             String(repeating: "x", count: SharedContentPayload.maxContentBytes + 1),
             createdAt: now
         )
@@ -60,12 +101,12 @@ struct SharedContentHandoffTests {
             try context.store.stage(unsupportedURL, now: now)
         }
 
-        let misleadingControl = SharedContentPayload.text("safe\u{202E}txt", createdAt: now)
+        let misleadingControl = SharedContentPayload(text: "safe\u{202E}txt", createdAt: now)
         #expect(throws: SharedContentHandoffError.invalidCharacters) {
             try context.store.stage(misleadingControl, now: now)
         }
 
-        let expired = SharedContentPayload.text(
+        let expired = SharedContentPayload(text:
             "too old",
             createdAt: now.addingTimeInterval(-SharedContentPayload.retentionSeconds - 1)
         )
@@ -104,7 +145,7 @@ struct SharedContentHandoffTests {
         let context = makeStore()
         defer { context.defaults.removePersistentDomain(forName: context.suite) }
         let now = Date(timeIntervalSince1970: 3_000_000)
-        let payload = SharedContentPayload.text("do not auto-send", createdAt: now)
+        let payload = SharedContentPayload(text: "do not auto-send", createdAt: now)
         let peer = PeerID(str: "8899aabbccddeeff")
         let privateDestination = SharedContentDestination.privateConversation(
             peerID: peer,
@@ -131,20 +172,20 @@ struct SharedContentHandoffTests {
         let now = Date(timeIntervalSince1970: 4_000_000)
         let model = SharedContentImportModel(store: context.store)
 
-        let first = SharedContentPayload.text("confirmed", createdAt: now)
+        let first = SharedContentPayload(text: "confirmed", createdAt: now)
         try context.store.stage(first, now: now)
         model.refresh(destination: .geohash("u4pruy"), now: now)
         #expect(model.confirm(destination: .geohash("u4pruy"), now: now) == "confirmed")
         #expect(model.confirm(destination: .geohash("u4pruy"), now: now) == nil)
 
-        let second = SharedContentPayload.text("cancelled", createdAt: now)
+        let second = SharedContentPayload(text: "cancelled", createdAt: now)
         try context.store.stage(second, now: now)
         model.refresh(destination: .mesh, now: now)
         model.cancel(destination: .mesh, now: now)
         #expect(model.offer == nil)
         #expect(context.store.pending(now: now) == nil)
 
-        let third = SharedContentPayload.text("panic-wiped", createdAt: now)
+        let third = SharedContentPayload(text: "panic-wiped", createdAt: now)
         try context.store.stage(third, now: now)
         model.refresh(destination: .mesh, now: now)
         model.discardAll()
@@ -159,8 +200,8 @@ struct SharedContentHandoffTests {
         defer { context.defaults.removePersistentDomain(forName: context.suite) }
         let now = Date(timeIntervalSince1970: 5_000_000)
         let model = SharedContentImportModel(store: context.store)
-        let old = SharedContentPayload.text("old", createdAt: now)
-        let newer = SharedContentPayload.text("new", createdAt: now)
+        let old = SharedContentPayload(text: "old", createdAt: now)
+        let newer = SharedContentPayload(text: "new", createdAt: now)
 
         try context.store.stage(old, now: now)
         model.refresh(destination: .mesh, now: now)
