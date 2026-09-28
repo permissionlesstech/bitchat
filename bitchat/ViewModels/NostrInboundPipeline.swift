@@ -117,16 +117,13 @@ final class NostrInboundPipeline {
 
     @MainActor
     func subscribeNostrEvent(_ event: NostrEvent) {
-        guard let context else { return }
         // Cheap rejects (kind, dedup lookup) — duplicates dominate real
         // traffic. The signature was already verified (exactly once, off the
         // main actor) by NostrRelayManager before delivery.
-        guard (event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue
-            || event.kind == NostrProtocol.EventKind.geohashPresence.rawValue),
-              !context.hasProcessedNostrEvent(event.id)
-        else {
-            return
-        }
+        guard let context,
+              !context.hasProcessedNostrEvent(event.id),
+              NostrProtocol.isEphemeralOrGeohash(event)
+        else { return }
 
         context.recordProcessedNostrEvent(event.id)
 
@@ -195,14 +192,9 @@ final class NostrInboundPipeline {
 
     @MainActor
     func handleNostrEvent(_ event: NostrEvent) {
-        guard let context else { return }
         // Cheap rejects (kind, dedup lookup) — the signature was already
         // verified (exactly once, off the main actor) by NostrRelayManager.
-        guard (event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue
-            || event.kind == NostrProtocol.EventKind.geohashPresence.rawValue)
-        else {
-            return
-        }
+        guard let context, NostrProtocol.isEphemeralOrGeohash(event) else { return }
         if context.hasProcessedNostrEvent(event.id) { return }
         context.recordProcessedNostrEvent(event.id)
 

@@ -18,7 +18,6 @@ disabled_rules:
   - force_try
   - vertical_whitespace
   - for_where
-  - control_statement
   - redundant_discardable_let  # SwiftUI breaks without it
   - todo  # TODOs that cite a tracked issue are deliberate markers, not lint debt
   # To be enabled as we fix the issues
