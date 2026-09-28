@@ -18,19 +18,19 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
     private var authenticatedSigningKeys: [String: Data] = [:]
 
     init(_: KeychainManagerProtocol) {}
-    
+
     func forceSave() {}
-    
+
     func getSocialIdentity(for fingerprint: String) -> SocialIdentity? {
         socialIdentities[fingerprint]
     }
-    
+
     func upsertCryptographicIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String?) {}
-    
+
     func getCryptoIdentitiesByPeerIDPrefix(_ peerID: PeerID) -> [CryptographicIdentity] {
         []
     }
-    
+
     func updateSocialIdentity(_ identity: SocialIdentity) {
         socialIdentities[identity.fingerprint] = identity
         if identity.isBlocked {
@@ -39,15 +39,15 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
             blockedFingerprints.remove(identity.fingerprint)
         }
     }
-    
+
     func isFavorite(fingerprint: String) -> Bool {
         false
     }
-    
+
     func isBlocked(fingerprint: String) -> Bool {
         blockedFingerprints.contains(fingerprint) || socialIdentities[fingerprint]?.isBlocked == true
     }
-    
+
     func setBlocked(_ fingerprint: String, isBlocked: Bool) {
         if var identity = socialIdentities[fingerprint] {
             identity.isBlocked = isBlocked
@@ -70,11 +70,11 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
             blockedFingerprints.remove(fingerprint)
         }
     }
-    
+
     func isNostrBlocked(pubkeyHexLowercased: String) -> Bool {
         blockedNostrPubkeys.contains(pubkeyHexLowercased)
     }
-    
+
     func setNostrBlocked(_ pubkeyHexLowercased: String, isBlocked: Bool) {
         if isBlocked {
             blockedNostrPubkeys.insert(pubkeyHexLowercased)
@@ -82,20 +82,20 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
             blockedNostrPubkeys.remove(pubkeyHexLowercased)
         }
     }
-    
+
     func getBlockedNostrPubkeys() -> Set<String> {
         blockedNostrPubkeys
     }
-    
+
     func registerEphemeralSession(peerID: PeerID, handshakeState: HandshakeState) {}
 
     func clearAllIdentityData() {
         privateMediaCapableFingerprints.removeAll()
         authenticatedSigningKeys.removeAll()
     }
-    
+
     func removeEphemeralSession(peerID: PeerID) {}
-    
+
     func setVerified(fingerprint: String, verified: Bool) {}
 
     func isVerified(fingerprint: String) -> Bool {

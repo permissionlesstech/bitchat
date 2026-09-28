@@ -61,7 +61,7 @@ struct FingerprintView: View {
             )
         }
     }
-    
+
     var body: some View {
         let fingerprintState = verificationModel.fingerprintPresentation(for: peerID)
 
@@ -71,14 +71,14 @@ struct FingerprintView: View {
                 Text(Strings.title)
                     .bitchatFont(size: 16, weight: .bold)
                     .foregroundColor(textColor)
-                
+
                 Spacer()
-                
+
                 SheetCloseButton { dismiss() }
                     .foregroundColor(textColor)
             }
             .padding()
-            
+
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     if let icon = fingerprintState.encryptionStatus.icon {
@@ -86,17 +86,17 @@ struct FingerprintView: View {
                             .font(.bitchatSystem(size: 20))
                             .foregroundColor(fingerprintState.encryptionStatus == .noiseVerified ? Color.green : textColor)
                     }
-                    
+
                     VStack(alignment: .leading, spacing: 4) {
                         Text(fingerprintState.peerNickname)
                             .bitchatFont(size: 18, weight: .semibold)
                             .foregroundColor(textColor)
-                        
+
                         Text(fingerprintState.encryptionStatus.description)
                             .bitchatFont(size: 12)
                             .foregroundColor(textColor.opacity(0.7))
                     }
-                    
+
                     Spacer()
                 }
                 .padding()
@@ -122,13 +122,13 @@ struct FingerprintView: View {
                             .foregroundColor(textColor.opacity(0.6))
                     }
                 }
-                
+
                 // Their fingerprint
                 VStack(alignment: .leading, spacing: 8) {
                     Text(Strings.theirFingerprint)
                         .bitchatFont(size: 12, weight: .bold)
                         .foregroundColor(textColor.opacity(0.7))
-                    
+
                     if let fingerprint = fingerprintState.theirFingerprint {
                         Text(formatFingerprint(fingerprint))
                             .bitchatFont(size: 14)
@@ -163,7 +163,7 @@ struct FingerprintView: View {
                     Text(Strings.yourFingerprint)
                         .bitchatFont(size: 12, weight: .bold)
                         .foregroundColor(textColor.opacity(0.7))
-                    
+
                     Text(formatFingerprint(fingerprintState.myFingerprint))
                         .bitchatFont(size: 14)
                         .foregroundColor(textColor)
@@ -185,7 +185,7 @@ struct FingerprintView: View {
                             }
                         }
                 }
-                
+
                 // Vouched (transitively verified) status: shown whenever the
                 // peer isn't explicitly verified but people I verified vouch
                 // for them, independent of the current session state.
@@ -228,7 +228,7 @@ struct FingerprintView: View {
                             .bitchatFont(size: 14, weight: .bold)
                             .foregroundColor(fingerprintState.isVerified ? Color.green : Color.orange)
                             .frame(maxWidth: .infinity)
-                        
+
                         Group {
                             if fingerprintState.isVerified {
                                 Text(Strings.verifiedMessage)
@@ -242,7 +242,7 @@ struct FingerprintView: View {
                             .lineLimit(nil)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity)
-                        
+
                         if !fingerprintState.isVerified {
                             Button(action: {
                                 verificationModel.verifyFingerprint(for: peerID)
@@ -279,7 +279,7 @@ struct FingerprintView: View {
             }
             .padding()
             .frame(maxWidth: 500) // Constrain max width for better readability
-            
+
             Spacer()
         }
         .padding()
@@ -317,12 +317,12 @@ struct FingerprintView: View {
         guard draft != current else { return }
         verificationModel.setLocalPetname(draft.isEmpty ? nil : draft, for: peerID)
     }
-    
+
     private func formatFingerprint(_ fingerprint: String) -> String {
         // Convert to uppercase and format into 4 lines (4 groups of 4 on each line)
         let uppercased = fingerprint.uppercased()
         var formatted = ""
-        
+
         for (index, char) in uppercased.enumerated() {
             // Add space every 4 characters (but not at the start)
             if index > 0 && index % 4 == 0 {
@@ -335,7 +335,7 @@ struct FingerprintView: View {
             }
             formatted += String(char)
         }
-        
+
         return formatted
     }
 }

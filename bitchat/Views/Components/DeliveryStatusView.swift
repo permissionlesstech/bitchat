@@ -143,7 +143,7 @@ struct DeliveryStatusView: View {
         .failed(reason: "Offline"),
         .partiallyDelivered(reached: 2, total: 5)
     ]
-    
+
     List {
         ForEach(statuses, id: \.self) { status in
             HStack {

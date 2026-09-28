@@ -136,7 +136,7 @@ protocol Transport: AnyObject {
     var eventDelegate: TransportEventDelegate? { get set }
     // Peer events (preferred over publishers for UI)
     var peerEventsDelegate: TransportPeerEventsDelegate? { get set }
-    
+
     // Peer snapshots (for non-UI services)
     func currentPeerSnapshots() -> [TransportPeerSnapshot]
 

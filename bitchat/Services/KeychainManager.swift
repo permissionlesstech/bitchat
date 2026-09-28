@@ -358,7 +358,7 @@ final class KeychainManager: KeychainManagerProtocol {
     }
 
     // MARK: - Identity Keys
-    
+
     func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool {
         guard installAccessAllowed() else {
             SecureLogger.logKeyOperation(.save, keyType: key, success: false)
@@ -369,13 +369,13 @@ final class KeychainManager: KeychainManagerProtocol {
         SecureLogger.logKeyOperation(.save, keyType: key, success: result)
         return result
     }
-    
+
     func getIdentityKey(forKey key: String) -> Data? {
         guard installAccessAllowed() else { return nil }
         let fullKey = "identity_\(key)"
         return retrieveData(forKey: fullKey)
     }
-    
+
     func deleteIdentityKey(forKey key: String) -> Bool {
         guard installAccessAllowed() else {
             SecureLogger.logKeyOperation(.delete, keyType: key, success: false)
@@ -563,11 +563,11 @@ final class KeychainManager: KeychainManagerProtocol {
     }
 
     // MARK: - Generic Operations
-    
+
     private func saveData(_ data: Data, forKey key: String) -> Bool {
         // Delete any existing item first to ensure clean state
         _ = delete(forKey: key)
-        
+
         // Build base query
         var base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -608,7 +608,7 @@ final class KeychainManager: KeychainManagerProtocol {
         }
         return false
     }
-    
+
     private func retrieveData(forKey key: String) -> Data? {
         // Base query
         let base: [String: Any] = [
@@ -639,7 +639,7 @@ final class KeychainManager: KeychainManagerProtocol {
         }
         return nil
     }
-    
+
     private func delete(forKey key: String) -> Bool {
         // Base delete query
         let base: [String: Any] = [
@@ -662,7 +662,7 @@ final class KeychainManager: KeychainManagerProtocol {
         #endif
         return status == errSecSuccess || status == errSecItemNotFound
     }
-    
+
     // MARK: - Cleanup
 
     // Delete ALL keychain data for panic mode
@@ -828,9 +828,9 @@ final class KeychainManager: KeychainManagerProtocol {
         }
         return completed
     }
-    
+
     // MARK: - Security Utilities
-    
+
     /// Securely clear sensitive data from memory
     func secureClear(_ data: inout Data) {
         _ = data.withUnsafeMutableBytes { bytes in
@@ -839,7 +839,7 @@ final class KeychainManager: KeychainManagerProtocol {
         }
         data = Data() // Clear the data object
     }
-    
+
     /// Securely clear sensitive string from memory
     func secureClear(_ string: inout String) {
         // Convert to mutable data and clear
@@ -848,7 +848,7 @@ final class KeychainManager: KeychainManagerProtocol {
         }
         string = "" // Clear the string object
     }
-    
+
     // MARK: - Debug
 
     func verifyIdentityKeyExists() -> Bool {

@@ -63,7 +63,7 @@ struct TestConstants {
     static let testNickname2 = "Bob"
     static let testNickname3 = "Charlie"
     static let testNickname4 = "David"
-    
+
     static let testMessage1 = "Hello, World!"
     static let testLongMessage = String(repeating: "This is a long message. ", count: 100)
 }

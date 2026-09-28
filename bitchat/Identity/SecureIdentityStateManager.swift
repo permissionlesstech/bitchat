@@ -98,34 +98,34 @@ import CryptoKit
 protocol SecureIdentityStateManagerProtocol {
     // MARK: Secure Loading/Saving
     func forceSave()
-    
+
     // MARK: Social Identity Management
     func getSocialIdentity(for fingerprint: String) -> SocialIdentity?
-    
+
     // MARK: Cryptographic Identities
     func upsertCryptographicIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String?)
     func getCryptoIdentitiesByPeerIDPrefix(_ peerID: PeerID) -> [CryptographicIdentity]
     func updateSocialIdentity(_ identity: SocialIdentity)
-    
+
     // MARK: Favorites Management
     func isFavorite(fingerprint: String) -> Bool
-    
+
     // MARK: Blocked Users Management
     func isBlocked(fingerprint: String) -> Bool
     func setBlocked(_ fingerprint: String, isBlocked: Bool)
-    
+
     // MARK: Geohash (Nostr) Blocking
     func isNostrBlocked(pubkeyHexLowercased: String) -> Bool
     func setNostrBlocked(_ pubkeyHexLowercased: String, isBlocked: Bool)
     func getBlockedNostrPubkeys() -> Set<String>
-    
+
     // MARK: Ephemeral Session Management
     func registerEphemeralSession(peerID: PeerID, handshakeState: HandshakeState)
 
     // MARK: Cleanup
     func clearAllIdentityData()
     func removeEphemeralSession(peerID: PeerID)
-    
+
     // MARK: Verification
     func setVerified(fingerprint: String, verified: Bool)
     func isVerified(fingerprint: String) -> Bool
@@ -157,17 +157,17 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     private let keychain: KeychainManagerProtocol
     private let cacheKey = "bitchat.identityCache.v2"
     private let encryptionKeyName = "identityCacheEncryptionKey"
-    
+
     // In-memory state
     private var ephemeralSessions: [PeerID: EphemeralIdentity] = [:]
     // Cryptographic identities (including pinned signing keys) live inside
     // `cache` so they persist across app restarts; see IdentityCache.
     private var cache: IdentityCache = IdentityCache()
-    
+
     // Thread safety
     private let queue = DispatchQueue(label: "bitchat.identity.state", attributes: .concurrent)
     private let queueSpecificKey = DispatchSpecificKey<UInt8>()
-    
+
     // Pending-save coalescing flag. Reads/writes are serialized on `queue`.
     //
     // Persistence is SYNCHRONOUS: every mutating API runs its mutate + encrypt
@@ -193,7 +193,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     /// state we must NOT persist (it would overwrite the real cache with data the
     /// next launch can't decrypt) and must NOT delete the existing cache.
     private let encryptionKeyIsEphemeral: Bool
-    
+
     init(_ keychain: KeychainManagerProtocol) {
         self.keychain = keychain
 
@@ -242,7 +242,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
             loadIdentityCache()
         }
     }
-    
+
     deinit {
         // Do NOT dispatch onto `queue` here. `deinit` can run on any thread
         // (including one draining `queue`), and the object is being
@@ -261,15 +261,15 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
             persist(snapshot: cache)
         }
     }
-    
+
     // MARK: - Secure Loading/Saving
-    
+
     private func loadIdentityCache() {
         guard let encryptedData = keychain.getIdentityKey(forKey: cacheKey) else {
             // No existing cache, start fresh
             return
         }
-        
+
         do {
             let sealedBox = try AES.GCM.SealedBox(combined: encryptedData)
             let decryptedData = try AES.GCM.open(sealedBox, using: encryptionKey)
@@ -283,7 +283,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
             )
         }
     }
-    
+
     /// Persists the cache. Always invoked on `queue` under a barrier (its
     /// callers run inside `queue.sync(flags: .barrier)`), so `cache` is read
     /// while serialized. The encode + keychain write are done here (already on
@@ -345,9 +345,9 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
             persist(snapshot: cache)
         }
     }
-    
+
     // MARK: - Social Identity Management
-    
+
     func getSocialIdentity(for fingerprint: String) -> SocialIdentity? {
         queue.sync {
             return cache.socialIdentities[fingerprint]
@@ -502,12 +502,12 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
             cache.authenticatedSigningKeysByFingerprint?[fingerprint]
         }
     }
-    
+
     func updateSocialIdentity(_ identity: SocialIdentity) {
         queue.sync(flags: .barrier) {
             let previousClaimedNickname = self.cache.socialIdentities[identity.fingerprint]?.claimedNickname
             self.cache.socialIdentities[identity.fingerprint] = identity
-            
+
             // Update nickname index
             if let previousClaimedNickname,
                previousClaimedNickname != identity.claimedNickname {
@@ -516,20 +516,20 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
                     self.cache.nicknameIndex.removeValue(forKey: previousClaimedNickname)
                 }
             }
-            
+
             // Add new nickname to index
             if self.cache.nicknameIndex[identity.claimedNickname] == nil {
                 self.cache.nicknameIndex[identity.claimedNickname] = Set<String>()
             }
             self.cache.nicknameIndex[identity.claimedNickname]?.insert(identity.fingerprint)
-            
+
             // Save to keychain
             self.saveIdentityCache()
         }
     }
-    
+
     // MARK: - Favorites Management
-    
+
     func getFavorites() -> Set<String> {
         queue.sync {
             let favorites = cache.socialIdentities.values
@@ -538,7 +538,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
             return Set(favorites)
         }
     }
-    
+
     func setFavorite(_ fingerprint: String, isFavorite: Bool) {
         queue.sync(flags: .barrier) {
             if var identity = self.cache.socialIdentities[fingerprint] {
@@ -560,24 +560,24 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
             self.saveIdentityCache()
         }
     }
-    
+
     func isFavorite(fingerprint: String) -> Bool {
         queue.sync {
             return cache.socialIdentities[fingerprint]?.isFavorite ?? false
         }
     }
-    
+
     // MARK: - Blocked Users Management
-    
+
     func isBlocked(fingerprint: String) -> Bool {
         queue.sync {
             return cache.socialIdentities[fingerprint]?.isBlocked ?? false
         }
     }
-    
+
     func setBlocked(_ fingerprint: String, isBlocked: Bool) {
         SecureLogger.info("User \(isBlocked ? "blocked" : "unblocked"): \(fingerprint)", category: .security)
-        
+
         queue.sync(flags: .barrier) {
             if var identity = self.cache.socialIdentities[fingerprint] {
                 identity.isBlocked = isBlocked
@@ -603,13 +603,13 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     }
 
     // MARK: - Geohash (Nostr) Blocking
-    
+
     func isNostrBlocked(pubkeyHexLowercased: String) -> Bool {
         queue.sync {
             return cache.blockedNostrPubkeys.contains(pubkeyHexLowercased.lowercased())
         }
     }
-    
+
     func setNostrBlocked(_ pubkeyHexLowercased: String, isBlocked: Bool) {
         let key = pubkeyHexLowercased.lowercased()
         queue.sync(flags: .barrier) {
@@ -621,23 +621,23 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
             self.saveIdentityCache()
         }
     }
-    
+
     func getBlockedNostrPubkeys() -> Set<String> {
         queue.sync { cache.blockedNostrPubkeys }
     }
-    
+
     // MARK: - Ephemeral Session Management
-    
+
     func registerEphemeralSession(peerID: PeerID, handshakeState: HandshakeState = .none) {
         queue.async(flags: .barrier) {
             self.ephemeralSessions[peerID] = EphemeralIdentity(handshakeState: handshakeState)
         }
     }
-    
+
     func updateHandshakeState(peerID: PeerID, state: HandshakeState) {
         queue.sync(flags: .barrier) {
             self.ephemeralSessions[peerID]?.handshakeState = state
-            
+
             // If handshake completed, update last interaction
             if case .completed(let fingerprint) = state {
                 self.cache.lastInteractions[fingerprint] = Date()
@@ -645,12 +645,12 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
             }
         }
     }
-    
+
     // MARK: - Cleanup
-    
+
     func clearAllIdentityData() {
         SecureLogger.warning("Clearing all identity data", category: .security)
-        
+
         queue.sync(flags: .barrier) {
             self.cache = IdentityCache()
             self.ephemeralSessions.removeAll()
@@ -660,18 +660,18 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
             SecureLogger.logKeyOperation(.delete, keyType: "identity cache", success: deleted)
         }
     }
-    
+
     func removeEphemeralSession(peerID: PeerID) {
         queue.sync(flags: .barrier) {
             _ = self.ephemeralSessions.removeValue(forKey: peerID)
         }
     }
-    
+
     // MARK: - Verification
-    
+
     func setVerified(fingerprint: String, verified: Bool) {
         SecureLogger.info("Fingerprint \(verified ? "verified" : "unverified"): \(fingerprint)", category: .security)
-        
+
         queue.sync(flags: .barrier) {
             if verified {
                 self.cache.verifiedFingerprints.insert(fingerprint)
@@ -692,13 +692,13 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
             self.saveIdentityCache()
         }
     }
-    
+
     func isVerified(fingerprint: String) -> Bool {
         queue.sync {
             return cache.verifiedFingerprints.contains(fingerprint)
         }
     }
-    
+
     func getVerifiedFingerprints() -> Set<String> {
         queue.sync {
             return cache.verifiedFingerprints

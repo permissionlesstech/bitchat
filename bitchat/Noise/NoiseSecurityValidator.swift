@@ -9,7 +9,7 @@
 import Foundation
 
 struct NoiseSecurityValidator {
-    
+
     /// Validate message size
     static func validateMessageSize(_ data: Data) -> Bool {
         return data.count <= NoiseSecurityConstants.maxMessageSize
@@ -27,7 +27,7 @@ struct NoiseSecurityValidator {
     static func validatePrivateFileCiphertextSize(_ data: Data) -> Bool {
         data.count <= NoiseSecurityConstants.maxPrivateFileCiphertextSize
     }
-    
+
     /// Validate handshake message size
     static func validateHandshakeMessageSize(_ data: Data) -> Bool {
         return data.count <= NoiseSecurityConstants.maxHandshakeMessageSize

@@ -180,9 +180,9 @@ private final class BLEPrivateMediaTransferAdmissionRegistry {
 /// - Emits events exclusively via `BitchatDelegate` for UI.
 /// - ChatViewModel must consume delegate callbacks (`didReceivePublicMessage`, `didReceiveNoisePayload`).
 final class BLEService: NSObject {
-    
+
     // MARK: - Constants
-    
+
     #if DEBUG
     static let serviceUUID = CBUUID(string: "F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5A") // testnet
     #else
@@ -191,7 +191,7 @@ final class BLEService: NSObject {
     static let characteristicUUID = CBUUID(string: "A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D")
     private static let centralRestorationID = "chat.bitchat.ble.central"
     private static let peripheralRestorationID = "chat.bitchat.ble.peripheral"
-    
+
     // Default per-fragment chunk size when link limits are unknown
     private let defaultFragmentSize = TransportConfig.bleDefaultFragmentSize
     private let bleMaxMTU = 512
@@ -200,7 +200,7 @@ final class BLEService: NSObject {
     // Flood/battery controls
     private let maxInFlightAssemblies = TransportConfig.bleMaxInFlightAssemblies // cap concurrent fragment assemblies
     private let highDegreeThreshold = TransportConfig.bleHighDegreeThreshold // for adaptive TTL/probabilistic relays
-    
+
     // MARK: - Core State (5 Essential Collections)
 
     // 1. Consolidated BLE link tracking for both central and peripheral roles.
@@ -238,7 +238,7 @@ final class BLEService: NSObject {
 
     // BCH-01-004: Rate-limiting for subscription-triggered announces.
     var subscriptionAnnounceLimiter = BLESubscriptionAnnounceLimiter()
-    
+
     // 3. Peer Information (single source of truth). Lock-backed so the main
     // actor reads it directly instead of blocking on the engine queue.
     // Mutations come only from the transport's own serial queues — the
@@ -246,7 +246,7 @@ final class BLEService: NSObject {
     // / didUnsubscribeFrom) that mark a peer disconnected the moment its
     // last physical link goes; the store's lock serializes them.
     private let peerRegistry = BLEPeerRegistryStore()
-    
+
     // 4. Efficient Message Deduplication
     private let messageDeduplicator = MessageDeduplicator()
 
@@ -324,10 +324,10 @@ final class BLEService: NSObject {
     // critical sections mutate it without re-entering the engine).
     private let privateMediaSessions = BLEPrivateMediaSessionStore()
     private let incomingFileStore: BLEIncomingFileStore
-    
+
     // Simple announce throttling
     private let announceThrottle = BLEAnnounceThrottle()
-    
+
     // Application state tracking (thread-safe)
     #if os(iOS)
     var isAppActive: Bool = true  // Assume active initially
@@ -341,9 +341,9 @@ final class BLEService: NSObject {
         return _cachedBackgroundTimeRemaining
     }
     #endif
-    
+
     // MARK: - Core BLE Objects
-    
+
     var centralManager: CBCentralManager?
     var peripheralManager: CBPeripheralManager?
     var characteristic: CBMutableCharacteristic?
@@ -351,9 +351,9 @@ final class BLEService: NSObject {
     private let panicLifecycleLock = NSLock()
     private var _isPanicSuspended: Bool
     private var panicLifecycleGeneration: UInt64 = 0
-    
+
     // MARK: - Identity
-    
+
     private var noiseService: NoiseEncryptionService
     /// Injected so tests can compress the quarantine/rollback window;
     /// production always passes the security-constant default.
@@ -365,9 +365,9 @@ final class BLEService: NSObject {
 
     // MARK: - Advertising Privacy
     // No Local Name by default for maximum privacy. No rotating alias.
-    
+
     // MARK: - Queues
-    
+
     /// The engine queue: one serial domain that owns every piece of mesh
     /// protocol state (the former concurrent message queue and the separate
     /// collections queue it guarded state with). BLE throughput is far below
@@ -404,7 +404,7 @@ final class BLEService: NSObject {
         // trap above is exactly what BLEQueueContractTests exists to protect.
         return messageQueue.sync(execute: body)
     }
-    
+
     // Noise messages and typed payloads pending handshake completion.
     private var pendingNoiseSessionQueues = BLENoiseSessionQueues()
     // Queue for notifications that failed due to full queue (bleQueue-owned,
@@ -459,9 +459,9 @@ final class BLEService: NSObject {
     // MARK: - Gossip Sync
     private var gossipSyncManager: GossipSyncManager?
     private let requestSyncManager = RequestSyncManager()
-    
+
     // MARK: - Maintenance Timer
-    
+
     private var maintenanceTimer: DispatchSourceTimer?  // Single timer for all maintenance tasks
     private var maintenanceCounter = 0  // Track maintenance cycles
     private var lastMaintenanceAt = Date.distantPast  // bleQueue-confined; drives background-wake catch-up passes
@@ -480,7 +480,7 @@ final class BLEService: NSObject {
         linkStateStore: linkStateStore,
         recentTraffic: recentTrafficTracker
     )
-    
+
     // Debounced publish to coalesce rapid changes
     private var peerPublishCoalescer = BLEPeerPublishCoalescer()
     private func requestPeerDataPublish() {
@@ -497,9 +497,9 @@ final class BLEService: NSObject {
             break
         }
     }
-    
+
     // MARK: - Initialization
-    
+
     init(
         keychain: KeychainManagerProtocol,
         idBridge: NostrIdentityBridge,
@@ -524,16 +524,16 @@ final class BLEService: NSObject {
         )
         self.identityManager = identityManager
         super.init()
-        
+
         configureNoiseServiceCallbacks(for: noiseService)
         refreshPeerIdentity()
-        
+
         // Set queue key for identification
         messageQueue.setSpecific(key: messageQueueKey, value: ())
         engineScheduler.activate(engineQueue: messageQueue)
         radio.delegate = self
         radio.peripheralDelegate = self
-        
+
         // Set up application state tracking (iOS only)
         #if os(iOS)
         // Check initial state on main thread. The background-budget cache is
@@ -554,7 +554,7 @@ final class BLEService: NSObject {
                 refreshCachedBackgroundTimeRemaining()
             }
         }
-        
+
         // Observe application state changes
         NotificationCenter.default.addObserver(
             self,
@@ -569,7 +569,7 @@ final class BLEService: NSObject {
             object: nil
         )
         #endif
-        
+
         // Tag BLE queue for re-entrancy detection
         bleQueue.setSpecific(key: bleQueueKey, value: ())
         // Link state is owned exclusively by bleQueue; debug builds trap
@@ -579,7 +579,7 @@ final class BLEService: NSObject {
         if !startSuspendedForPanicRecovery {
             initializeBluetoothManagersIfNeeded()
         }
-        
+
         // Single maintenance timer for all periodic tasks (dispatch-based for
         // determinism). Only run it when real Bluetooth managers exist.
         meshBackgroundEnabled = initializeBluetoothManagers
@@ -658,12 +658,12 @@ final class BLEService: NSObject {
         #endif
         radio.central = centralManager
     }
-    
+
     private func restartGossipManager() {
         guard !isPanicSuspended else { return }
         // Stop existing
         gossipSyncManager?.stop()
-        
+
         let config = GossipSyncManager.Config(
             seenCapacity: TransportConfig.syncSeenCapacity,
             gcsMaxBytes: TransportConfig.syncGCSMaxBytes,
@@ -707,7 +707,7 @@ final class BLEService: NSObject {
     }
 
     // No advertising policy to set; we never include Local Name in adverts.
-    
+
     deinit {
         maintenanceTimer?.cancel()
         radio.stopDutyCycle()
@@ -841,7 +841,7 @@ final class BLEService: NSObject {
             sendAnnounce(forceSend: true)
         }
     }
-    
+
     // Ensure this runs on message queue to avoid main thread blocking
     func sendMessage(_ content: String, mentions: [String] = [], to recipientID: PeerID? = nil, messageID: String? = nil, timestamp: Date? = nil) {
         // Call directly if already on messageQueue, otherwise dispatch
@@ -852,17 +852,17 @@ final class BLEService: NSObject {
             return
         }
         guard !isPanicSuspended else { return }
-        
+
         guard content.count <= maxMessageLength else {
             SecureLogger.error("Message too long: \(content.count) chars", category: .session)
             return
         }
-        
+
         if let recipientID {
             sendPrivateMessage(content, to: recipientID, messageID: messageID ?? UUID().uuidString)
             return
         }
-        
+
         // Public broadcast
         // Create packet with explicit fields so we can sign it
         let sendDate = timestamp ?? Date()
@@ -891,7 +891,7 @@ final class BLEService: NSObject {
         // Track our own broadcast for sync
         gossipSyncManager?.onPublicPacketSeen(signedPacket)
     }
-    
+
     // MARK: - Transport Protocol Conformance
 
     // MARK: Delegates
@@ -903,7 +903,7 @@ final class BLEService: NSObject {
     func currentPeerSnapshots() -> [TransportPeerSnapshot] {
         peerRegistry.transportSnapshots(selfNickname: myNickname)
     }
-    
+
     // MARK: Identity
 
     /// Derived from the Noise identity fingerprint. Reads can originate from
@@ -920,9 +920,9 @@ final class BLEService: NSObject {
         // Send announce to notify peers of nickname change (force send)
         sendAnnounce(forceSend: true)
     }
-    
+
     // MARK: Lifecycle
-    
+
     /// Creates and starts the periodic maintenance timer if it is not already
     /// running. Idempotent so it can be called from both `init` and
     /// `startServices()` — the latter matters after a panic reset, where
@@ -961,7 +961,7 @@ final class BLEService: NSObject {
                 options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
             )
         }
-        
+
         // Send initial announce after services are ready
         // Use longer delay to avoid conflicts with other announces
         engineScheduler.schedule(after: TransportConfig.bleInitialAnnounceDelaySeconds) { [weak self] in
@@ -972,7 +972,7 @@ final class BLEService: NSObject {
             self.sendAnnounce(forceSend: true)
         }
     }
-    
+
     func stopServices() {
         let localIdentity = localIdentityState.snapshot()
         // Send leave message synchronously to ensure delivery
@@ -1060,7 +1060,7 @@ final class BLEService: NSObject {
             centralManager?.cancelPeripheralConnection(state.peripheral)
         }
     }
-    
+
     func emergencyDisconnectAll() {
         stopServices()
         clearEmergencySessionState()
@@ -1103,9 +1103,9 @@ final class BLEService: NSObject {
         }
         meshTopology.reset()
     }
-    
+
     // MARK: Connectivity and peers
-    
+
     func isPeerConnected(_ peerID: PeerID) -> Bool {
         // Accept both 16-hex short IDs and 64-hex Noise keys
         return peerRegistry.isConnected(peerID)
@@ -1373,13 +1373,13 @@ final class BLEService: NSObject {
     func getPeerNicknames() -> [PeerID: String] {
         peerRegistry.displayNicknames(selfNickname: myNickname)
     }
-    
+
     // MARK: Protocol utilities
-    
+
     func getFingerprint(for peerID: PeerID) -> String? {
         peerRegistry.fingerprint(for: peerID)
     }
-    
+
     func getNoiseSessionState(for peerID: PeerID) -> LazyHandshakeState {
         if noiseService.hasEstablishedSession(with: peerID) {
             return .established
@@ -1389,7 +1389,7 @@ final class BLEService: NSObject {
             return .none
         }
     }
-    
+
     func triggerHandshake(with peerID: PeerID) {
         // Callers are on the main actor; the handshake broadcast sync-waits
         // on bleQueue for link state, so hop off main first.
@@ -1397,7 +1397,7 @@ final class BLEService: NSObject {
             self?.initiateNoiseHandshake(with: peerID)
         }
     }
-    
+
     // MARK: Noise identity/session access (narrow Transport wrappers)
 
     func noiseSessionPublicKeyData(for peerID: PeerID) -> Data? {
@@ -1485,7 +1485,7 @@ final class BLEService: NSObject {
             }
         }
     }
-    
+
     // Transport protocol conformance helper: simplified public message send
     func sendMessage(_ content: String, mentions: [String]) {
         // Delegate to the full API with default routing
@@ -1495,7 +1495,7 @@ final class BLEService: NSObject {
     func sendMessage(_ content: String, mentions: [String], messageID: String, timestamp: Date) {
         sendMessage(content, mentions: mentions, to: nil, messageID: messageID, timestamp: timestamp)
     }
-    
+
     func sendPrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
         sendPrivateMessage(content, to: peerID, messageID: messageID)
     }
@@ -1847,7 +1847,7 @@ final class BLEService: NSObject {
         )
     }
 
-    
+
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
         // Hop like sendMessage: callers are often on the main actor, and the
         // send path sync-waits on bleQueue for link state — the main thread
@@ -1880,7 +1880,7 @@ final class BLEService: NSObject {
             SecureLogger.debug("🕒 Queued READ receipt for \(peerID.id.prefix(8))… until handshake completes", category: .session)
         }
     }
-    
+
     private func acceptedIngressContext(
         for packet: BitchatPacket,
         claimedSenderID: PeerID,
@@ -1964,7 +1964,7 @@ final class BLEService: NSObject {
     }
 
     // MARK: - Packet Broadcasting
-    
+
     private func broadcastPacket(
         _ packet: BitchatPacket,
         transferId: String? = nil,
@@ -2636,29 +2636,29 @@ final class BLEService: NSObject {
             }
         )
     }
-    
+
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
         SecureLogger.debug("🔔 sendFavoriteNotification peer=\(peerID.id.prefix(8))… isFavorite=\(isFavorite)", category: .session)
-        
+
         // Include Nostr public key in the notification
         var content = isFavorite ? "[FAVORITED]" : "[UNFAVORITED]"
         var includesNostrIdentity = false
-        
+
         // Add our Nostr public key if available
         if let myNostrIdentity = try? idBridge.getCurrentNostrIdentity() {
             content += ":" + myNostrIdentity.npub
             includesNostrIdentity = true
             SecureLogger.debug("📝 Favorite notification includes Nostr npub=\(myNostrIdentity.npub.prefix(16))…", category: .session)
         }
-        
+
         SecureLogger.debug("📤 Sending favorite notification to \(peerID.id.prefix(8))… isFavorite=\(isFavorite) includesNostrIdentity=\(includesNostrIdentity)", category: .session)
         sendPrivateMessage(content, to: peerID, messageID: UUID().uuidString)
     }
-    
+
     func sendBroadcastAnnounce() {
         sendAnnounce()
     }
-    
+
     func sendDeliveryAck(for messageID: String, to peerID: PeerID) {
         // Hop like sendMessage: callers are often on the main actor, and the
         // send path sync-waits on bleQueue for link state — the main thread
@@ -2732,10 +2732,10 @@ final class BLEService: NSObject {
         // Send on main thread
         notifyUI { [weak self] in
             guard let self = self else { return }
-            
+
             // Get current peer list (after removal)
             let currentPeerIDs = self.peerRegistry.peerIDs
-            
+
             self.deliverTransportEvent(.peerDisconnected(peerID))
             self.deliverTransportEvent(.peerListUpdated(currentPeerIDs))
         }
@@ -2762,11 +2762,11 @@ final class BLEService: NSObject {
         }
 
         // Reduced logging - only log errors, not every announce
-        
+
         // Create announce payload with both noise and signing public keys
         let noisePub = noiseService.getStaticPublicKeyData()  // For noise handshakes and peer identification
         let signingPub = noiseService.getSigningPublicKeyData()  // For signature verification
-        
+
         let connectedPeerIDs = peerRegistry.connectedRoutingData
         let localIdentity = localIdentityState.snapshot()
         let advertisedCapabilities = localIdentity.advertisedCapabilities
@@ -2779,12 +2779,12 @@ final class BLEService: NSObject {
             capabilities: advertisedCapabilities,
             bridgeGeohash: advertisedBridgeCell
         )
-        
+
         guard let payload = announcement.encode() else {
             SecureLogger.error("❌ Failed to encode announce packet", category: .session)
             return
         }
-        
+
         // Create packet with signature using the noise private key
         let packet = BitchatPacket(
             type: MessageType.announce.rawValue,
@@ -2795,13 +2795,13 @@ final class BLEService: NSObject {
             signature: nil, // Will be set by signPacket below
             ttl: messageTTL
         )
-        
+
         // Sign the packet using the noise private key
         guard let signedPacket = noiseService.signPacket(packet) else {
             SecureLogger.error("❌ Failed to sign announce packet", category: .security)
             return
         }
-        
+
         broadcastPacket(signedPacket)
         // Ensure our own announce is included in sync state
         gossipSyncManager?.onPublicPacketSeen(signedPacket)
@@ -2812,7 +2812,7 @@ final class BLEService: NSObject {
     }
 
     // MARK: QR Verification over Noise
-    
+
     // MARK: Private Groups
 
     /// Sends creator-signed group state (invite) 1:1 over the Noise session,
@@ -2950,7 +2950,7 @@ extension BLEService: GossipSyncManager.Delegate {
     func signPacketForBroadcast(_ packet: BitchatPacket) -> BitchatPacket {
         return noiseService.signPacket(packet) ?? packet
     }
-    
+
     func getConnectedPeers() -> [PeerID] {
         return onEngine {
             peerRegistry.connectedPeerIDs
@@ -3509,7 +3509,7 @@ enum TransportEventDeliveryGate {
 }
 
 extension BLEService {
-    
+
     /// Notify UI on the MainActor to satisfy Swift concurrency isolation
     private func notifyUI(_ block: @escaping @MainActor () -> Void) {
         // Capture the panic lifecycle before queueing the MainActor hop. A
@@ -4012,7 +4012,7 @@ extension BLEService {
         )
         initiateNoiseReconnectHandshake(with: peerID)
     }
-    
+
     private func configureNoiseServiceCallbacks(for service: NoiseEncryptionService) {
         service.onPeerAuthenticatedWithGeneration = { [weak self] peerID, fingerprint, generation in
             SecureLogger.debug("🔐 Noise session authenticated with \(peerID.id.prefix(8))…, fingerprint: \(fingerprint.prefix(16))…")
@@ -4360,7 +4360,7 @@ extension BLEService {
     }
 
 
-    
+
     private func sendNoisePayload(_ typedPayload: Data, to peerID: PeerID) {
         // Hop like sendMessage: the Transport-facing wrappers (verify/vouch/
         // group payloads) call this from the main actor, and the send path
@@ -5061,9 +5061,9 @@ extension BLEService {
     private func snapshotSubscribedCentrals() -> BLESubscribedCentralSnapshot {
         subscribedCentralSnapshot()
     }
-    
+
     // MARK: Helpers: IDs, selection, and write backpressure
-    
+
     private func writeOrEnqueue(_ data: Data, to peripheral: CBPeripheral, characteristic: CBCharacteristic, priority: BLEOutboundWritePriority) {
         // BLE operations run on bleQueue; keep queue affinity
         bleQueue.async { [weak self] in
@@ -5227,9 +5227,9 @@ extension BLEService {
         // No Local Name; nothing to refresh for advertising policy
     }
     #endif
-    
+
     // MARK: Private Message Handling
-    
+
     private func sendPrivateMessage(_ content: String, to recipientID: PeerID, messageID: String) {
         // Hop like sendMessage: the Transport-facing wrappers call this from
         // the main actor (router sends, favorite notifications), and the send
@@ -5253,9 +5253,9 @@ extension BLEService {
                     SecureLogger.error("Failed to encode private message with TLV")
                     return
                 }
-                
+
                 broadcastPacket(try makeEncryptedNoisePacket(messagePayload, to: recipientID))
-                
+
                 // Notify delegate that message was sent
                 notifyUI { [weak self] in
                     self?.deliverTransportEvent(.messageDeliveryStatusUpdated(messageID: messageID, status: .sent))
@@ -5266,21 +5266,21 @@ extension BLEService {
         } else {
             // Queue message for sending after handshake completes
             SecureLogger.debug("🤝 No session with \(recipientID.id.prefix(8))…, initiating handshake and queueing message", category: .session)
-            
+
             // Queue the message (especially important for favorite notifications)
             onEngine {
                 pendingNoiseSessionQueues.appendPrivateMessage(content: content, messageID: messageID, for: recipientID)
             }
-            
+
             initiateNoiseHandshake(with: recipientID)
-            
+
             // Notify delegate that message is pending
             notifyUI { [weak self] in
                 self?.deliverTransportEvent(.messageDeliveryStatusUpdated(messageID: messageID, status: .sending))
             }
         }
     }
-    
+
     private func initiateNoiseHandshake(with peerID: PeerID) {
         let service = noiseService
         do {
@@ -5355,7 +5355,7 @@ extension BLEService {
             )
         }
     }
-    
+
     private func sendPendingMessagesAfterHandshake(for peerID: PeerID) {
         // Atomically take all pending messages to process (prevents concurrent modification)
         let pendingMessages = onEngine { () -> [BLEPendingPrivateMessage] in
@@ -5409,9 +5409,9 @@ extension BLEService {
             }
         }
     }
-    
+
     // MARK: Fragmentation (Required for messages > BLE MTU)
-    
+
     @discardableResult
     private func sendFragmentedPacket(
         _ packet: BitchatPacket,
@@ -5625,7 +5625,7 @@ extension BLEService {
         }
         return true
     }
-    
+
     // MARK: - Fragmentation (Required for messages > BLE MTU)
 
     private func markFragmentSent(transferId: String) {
@@ -5659,7 +5659,7 @@ extension BLEService {
             }
         }
     }
-    
+
     private func handleFragment(_ packet: BitchatPacket, from peerID: PeerID) {
         if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
             fragmentHandler.handle(packet, from: peerID)
@@ -5696,7 +5696,7 @@ extension BLEService {
             }
         )
     }
-    
+
     // MARK: Link-event port (bleQueue → engine)
 
     /// The single upward entry of the link-layer port: the bleQueue side
@@ -5935,15 +5935,15 @@ extension BLEService {
         let context = BLEReceivePipeline.context(for: packet, localPeerID: myPeerID)
         let senderID = context.senderID
         let messageID = context.messageID
-        
+
         // Only log non-announce packets to reduce noise
         if context.logsHandlingDetails {
             // Log packet details for debugging
             SecureLogger.debug("📦 Handling packet type \(packet.type) from \(senderID.id.prefix(8))…, messageID: \(messageID.prefix(24))…", category: .session)
         }
-        
+
         if dropDuplicatePacketIfNeeded(context: context, messageID: messageID) { return }
-        
+
         // Update peer info without verbose logging - update the peer we received from, not the original sender
         updatePeerLastSeen(peerID)
 
@@ -5990,19 +5990,19 @@ extension BLEService {
 
         case .message:
             handleMessage(packet, from: senderID)
-            
+
         case .requestSync:
             handleRequestSync(packet, from: senderID)
-            
+
         case .noiseHandshake:
             handleNoiseHandshake(packet, from: senderID)
-            
+
         case .noiseEncrypted:
             handleNoiseEncrypted(packet, from: senderID)
-            
+
         case .fragment:
             handleFragment(packet, from: senderID)
-            
+
         case .fileTransfer:
             // Broadcast files that fail sender authentication must not spread
             // to downstream (possibly older, ungated) nodes; skip the relay
@@ -6046,11 +6046,11 @@ extension BLEService {
         case .none:
             SecureLogger.warning("⚠️ Unknown message type: \(packet.type)", category: .session)
         }
-        
+
         if forwardAlongRouteIfNeeded(packet) {
             return
         }
-        
+
         scheduleRelayIfNeeded(packet, senderID: senderID, messageID: messageID)
     }
 
@@ -6099,7 +6099,7 @@ extension BLEService {
         }
         engineScheduler.schedule(after: Double(decision.delayMs) / 1_000, execute: work)
     }
-    
+
     private func handleAnnounce(_ packet: BitchatPacket, from peerID: PeerID) {
         let result = announceHandler.handle(packet, from: peerID)
 
@@ -6647,9 +6647,9 @@ extension BLEService {
         }
         gossipSyncManager?.handleRequestSync(from: peerID, request: req)
     }
-    
+
     // Mention parsing moved to ChatViewModel
-    
+
     private func handleMessage(_ packet: BitchatPacket, from peerID: PeerID) {
         publicMessageHandler.handle(packet, from: peerID)
     }
@@ -6883,7 +6883,7 @@ extension BLEService {
     }
 
     // MARK: Helper Functions
-    
+
     private func sendPendingNoisePayloadsAfterHandshake(for peerID: PeerID) {
         let payloads = onEngine { () -> [BLEPendingTypedPayload] in
             pendingNoiseSessionQueues.takeTypedPayloads(for: peerID)
@@ -6965,7 +6965,7 @@ extension BLEService {
             }
         }
     }
-    
+
     private func updatePeerLastSeen(_ peerID: PeerID) {
         peerRegistry.mutate { $0.updateLastSeen(peerID, at: Date()) }
     }
@@ -6981,7 +6981,7 @@ extension BLEService {
             deliverTransportEvent(.peerDisconnected(peerID))
         }
     }
-    
+
     // NEW: Publish peer snapshots to subscribers and notify Transport delegates
     private func publishFullPeerData() {
         let transportPeers = peerRegistry.transportSnapshots(selfNickname: myNickname)
@@ -6989,9 +6989,9 @@ extension BLEService {
             self?.peerEventsDelegate?.didUpdatePeerSnapshots(transportPeers)
         }
     }
-    
+
     // MARK: Consolidated Maintenance
-    
+
     private func performMaintenance() {
         guard !isPanicSuspended else { return }
         maintenanceCounter += 1
@@ -7020,7 +7020,7 @@ extension BLEService {
                 pm.startAdvertising(BLERadioController.advertisementData())
             }
         }
-        
+
         // Update scanning duty-cycle based on connectivity
         radio.updateScanningDutyCycle(connectedCount: connectedCount)
         radio.updateRSSIThreshold(connectedCount: connectedCount)
@@ -7031,10 +7031,10 @@ extension BLEService {
         // without this, an isolated node surrounded only by weak (distant)
         // peers would queue them all and never connect to anyone.
         radio.tryConnectFromQueue()
-        
+
         // Check peer connectivity every cycle for snappier UI updates
         checkPeerConnectivity()
-        
+
         // Every 30 seconds (3 cycles): Cleanup
         if plan.shouldRunCleanup {
             performCleanup()
@@ -7051,13 +7051,13 @@ extension BLEService {
         drainAllPendingWrites()
 
         // No rotating alias: nothing to refresh
-        
+
         // Reset counter to prevent overflow (every 60 seconds)
         if plan.shouldResetCounter {
             maintenanceCounter = 0
         }
     }
-    
+
     #if os(iOS)
     /// Catch-up maintenance for background wake windows (bleQueue-confined).
     /// Rate-limited to the normal maintenance cadence so a burst of inbound
@@ -7089,7 +7089,7 @@ extension BLEService {
                 hasCentral: state.hasCentral
             )
         }
-        
+
         let changes = peerRegistry.mutate {
             $0.reconcileConnectivity(now: now, linkStates: cachedLinkStates)
         }
@@ -7097,15 +7097,15 @@ extension BLEService {
             SecureLogger.debug("🗑️ Removing stale peer after reachability window: \(removedPeer.peerID.id.prefix(8))… (\(removedPeer.nickname))", category: .session)
             gossipSyncManager?.removeAnnouncementForPeer(removedPeer.peerID)
         }
-        
+
         // Update UI if there were direct disconnections or offline removals
         if !changes.disconnectedPeerIDs.isEmpty || !changes.removedPeers.isEmpty {
             notifyUI { [weak self] in
                 guard let self else { return }
-                
+
                 // Get current peer list (after removal)
                 let currentPeerIDs = self.peerRegistry.peerIDs
-                
+
                 for peerID in changes.disconnectedPeerIDs {
                     self.deliverTransportEvent(.peerDisconnected(peerID))
                 }
@@ -7114,13 +7114,13 @@ extension BLEService {
                 self.deliverTransportEvent(.peerListUpdated(currentPeerIDs))
             }
         }
-        
+
         // Refresh local topology to keep our own entry fresh and sync any changes
         refreshLocalTopology()
         // Prune stale topology nodes (using safe retention window)
         meshTopology.prune(olderThan: 60.0)
     }
-    
+
     private func performCleanup() {
         let now = Date()
 
@@ -7128,10 +7128,10 @@ extension BLEService {
         // eviction. The registry delivers notifications after releasing its
         // lock, so this maintenance pass cannot deadlock a concurrent cancel.
         privateMediaTransferAdmissions.prune(now: now)
-        
+
         // Clean old processed messages efficiently
         messageDeduplicator.cleanup()
-        
+
         // Clean old fragments (> configured seconds old), then ask peers for
         // the specific fragment streams whose reassembly has stalled instead
         // of waiting for the next periodic GCS fragment round.

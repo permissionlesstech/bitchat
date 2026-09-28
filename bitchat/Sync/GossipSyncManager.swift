@@ -718,7 +718,7 @@ final class GossipSyncManager {
         persistArchiveIfDirty()
         requestSyncManager.cleanup() // Cleanup expired sync requests
         responseRateLimiter.prune(now: now)
-        
+
         // One request per due schedule rather than a union filter: each type
         // group gets the full GCS capacity and its own since-cursor, so heavy
         // fragment traffic can't crowd messages out of the filter.
