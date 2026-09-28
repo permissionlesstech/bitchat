@@ -10,14 +10,12 @@ struct ChatUnreadStateResolverTests {
         let context = ChatUnreadPeerContext(
             peerID: peerID,
             noiseKeyPeerID: nil,
-            nostrPeerID: nil,
-            nickname: nil
+            nostrPeerID: nil
         )
 
         #expect(ChatUnreadStateResolver.hasUnreadMessages(
             for: context,
-            unreadPrivateMessages: [peerID],
-            privateChats: [:]
+            unreadPrivateMessages: [peerID]
         ))
     }
 
@@ -28,14 +26,12 @@ struct ChatUnreadStateResolverTests {
         let context = ChatUnreadPeerContext(
             peerID: peerID,
             noiseKeyPeerID: stableID,
-            nostrPeerID: nil,
-            nickname: nil
+            nostrPeerID: nil
         )
 
         #expect(ChatUnreadStateResolver.hasUnreadMessages(
             for: context,
-            unreadPrivateMessages: [stableID],
-            privateChats: [:]
+            unreadPrivateMessages: [stableID]
         ))
     }
 
@@ -46,70 +42,28 @@ struct ChatUnreadStateResolverTests {
         let context = ChatUnreadPeerContext(
             peerID: peerID,
             noiseKeyPeerID: nil,
-            nostrPeerID: nostrID,
-            nickname: nil
+            nostrPeerID: nostrID
         )
 
         #expect(ChatUnreadStateResolver.hasUnreadMessages(
             for: context,
-            unreadPrivateMessages: [nostrID],
-            privateChats: [:]
+            unreadPrivateMessages: [nostrID]
         ))
     }
 
     @Test
-    func temporaryGeoDMWithMatchingNicknameReturnsTrue() {
+    func unrelatedUnreadConversationReturnsFalse() {
         let peerID = PeerID(str: "mesh-peer")
         let geoDM = PeerID(nostr_: "0123456789abcdef")
         let context = ChatUnreadPeerContext(
             peerID: peerID,
             noiseKeyPeerID: nil,
-            nostrPeerID: nil,
-            nickname: "Alice"
-        )
-        let message = BitchatMessage(
-            sender: "alice",
-            content: "hi",
-            timestamp: Date(timeIntervalSince1970: 1),
-            isRelay: false,
-            originalSender: nil,
-            isPrivate: true,
-            recipientNickname: "me",
-            senderPeerID: geoDM
-        )
-
-        #expect(ChatUnreadStateResolver.hasUnreadMessages(
-            for: context,
-            unreadPrivateMessages: [geoDM],
-            privateChats: [geoDM: [message]]
-        ))
-    }
-
-    @Test
-    func unmatchedUnreadStateReturnsFalse() {
-        let peerID = PeerID(str: "mesh-peer")
-        let geoDM = PeerID(nostr_: "0123456789abcdef")
-        let context = ChatUnreadPeerContext(
-            peerID: peerID,
-            noiseKeyPeerID: nil,
-            nostrPeerID: nil,
-            nickname: "Alice"
-        )
-        let message = BitchatMessage(
-            sender: "bob",
-            content: "hi",
-            timestamp: Date(timeIntervalSince1970: 1),
-            isRelay: false,
-            originalSender: nil,
-            isPrivate: true,
-            recipientNickname: "me",
-            senderPeerID: geoDM
+            nostrPeerID: nil
         )
 
         #expect(!ChatUnreadStateResolver.hasUnreadMessages(
             for: context,
-            unreadPrivateMessages: [geoDM],
-            privateChats: [geoDM: [message]]
+            unreadPrivateMessages: [geoDM]
         ))
     }
 }

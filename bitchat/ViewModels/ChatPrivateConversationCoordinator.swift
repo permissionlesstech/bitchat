@@ -274,8 +274,13 @@ final class ChatPrivateConversationCoordinator {
 
     /// Keeps a connected account DM on its short routing ID and an offline DM
     /// on its stable Noise-key ID, folding the other authenticated alias into
-    /// it and handing an open sheet across without closing it.
-    private func consolidateAccountConversationAliases(for peerID: PeerID) -> PeerID {
+    /// it and handing an open sheet across without closing it. The mesh caller
+    /// keeps sender IDs because a short ID can resolve a fingerprint for
+    /// block and verification when its Noise-key ID does not.
+    private func consolidateAccountConversationAliases(
+        for peerID: PeerID,
+        rewritingSenderPeerIDs: Bool = true
+    ) -> PeerID {
         let aliases = accountConversationAliases(for: peerID)
         guard aliases.count > 1 else { return peerID }
 
@@ -285,6 +290,7 @@ final class ChatPrivateConversationCoordinator {
 
         for sourcePeerID in sourcePeerIDs where !context.privateMessages(for: sourcePeerID).isEmpty {
             context.migratePrivateChat(from: sourcePeerID, to: targetPeerID)
+            guard rewritingSenderPeerIDs else { continue }
             // ConversationStore deliberately preserves message values during a
             // generic migration, including its destination-wins rule for
             // duplicate IDs. Rewrite the resulting canonical copies so later
@@ -651,7 +657,7 @@ final class ChatPrivateConversationCoordinator {
         SecureLogger.debug("📥 handlePrivateMessage called for message from \(message.sender)", category: .session)
         let senderPeerID = message.senderPeerID ?? context.getPeerIDForNickname(message.sender)
 
-        guard let peerID = senderPeerID else {
+        guard var peerID = senderPeerID else {
             SecureLogger.warning("⚠️ Could not get peer ID for sender \(message.sender)", category: .session)
             return
         }
@@ -661,7 +667,11 @@ final class ChatPrivateConversationCoordinator {
             return
         }
 
-        migratePrivateChatsIfNeeded(for: peerID, senderNickname: message.sender)
+        // Courier mail uses the Noise-key ID when the short ID has no mesh
+        // registry entry. Both IDs identify the same peer's conversation.
+        // The joined chat stays on the short ID if that peer is connected.
+        peerID = consolidateAccountConversationAliases(for: peerID, rewritingSenderPeerIDs: false)
+        migratePrivateChatsIfNeeded(for: peerID)
 
         if peerID.id.count == 16, let peerNoiseKey = context.noisePublicKey(for: peerID) {
             let stableKeyHex = PeerID(hexData: peerNoiseKey)
@@ -844,7 +854,10 @@ final class ChatPrivateConversationCoordinator {
         )
     }
 
-    func migratePrivateChatsIfNeeded(for peerID: PeerID, senderNickname: String) {
+    // Nicknames are self-chosen and not unique, so only a fingerprint match
+    // migrates here. handlePrivateMessage joins key-derived aliases around
+    // this call: a Noise-key ID's short ID before, a stable-key chat after.
+    func migratePrivateChatsIfNeeded(for peerID: PeerID) {
         let currentFingerprint = context.getFingerprint(for: peerID)
 
         if context.privateMessages(for: peerID).isEmpty {
@@ -880,25 +893,6 @@ final class ChatPrivateConversationCoordinator {
                         "📦 Migrating \(recentMessages.count) recent messages from old peer ID \(oldPeerID) to \(peerID) (fingerprint match)",
                         category: .session
                     )
-                } else if currentFingerprint == nil || oldFingerprint == nil {
-                    let isRelevantChat = recentMessages.contains { msg in
-                        (msg.sender == senderNickname && msg.sender != context.nickname)
-                            || (msg.sender == context.nickname && msg.recipientNickname == senderNickname)
-                    }
-
-                    if isRelevantChat {
-                        didMigrate = true
-                        if recentMessages.count == messages.count {
-                            oldPeerIDsToRemove.append(oldPeerID)
-                        } else {
-                            partiallyMigratedMessages.append(contentsOf: recentMessages)
-                        }
-
-                        SecureLogger.warning(
-                            "📦 Migrating \(recentMessages.count) recent messages from old peer ID \(oldPeerID) to \(peerID) (nickname match)",
-                            category: .session
-                        )
-                    }
                 }
             }
 
