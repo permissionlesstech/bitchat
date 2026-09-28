@@ -67,10 +67,8 @@ struct PacketPayloadCapInteropTests {
             #expect(plan.fragmentPackets.map(\.payload.count).max() == 13 + chunkSize)
 
             var compressedFragments = 0
-            for fragment in plan.fragmentPackets {
-                if try roundTripIsCompressed(fragment) {
-                    compressedFragments += 1
-                }
+            for fragment in plan.fragmentPackets where try roundTripIsCompressed(fragment) {
+                compressedFragments += 1
             }
             #expect(compressedFragments > 0)
         }

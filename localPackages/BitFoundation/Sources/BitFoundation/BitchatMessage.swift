@@ -325,15 +325,13 @@ extension BitchatMessage {
             let mentionCount = Int(dataCopy[offset]); offset += 1
             if mentionCount > 0 {
                 mentions = []
-                for _ in 0..<mentionCount {
-                    if offset < dataCopy.count {
-                        let length = Int(dataCopy[offset]); offset += 1
-                        if offset + length <= dataCopy.count {
-                            if let mention = String(data: dataCopy[offset..<offset+length], encoding: .utf8) {
-                                mentions?.append(mention)
-                            }
-                            offset += length
+                for _ in 0..<mentionCount where offset < dataCopy.count {
+                    let length = Int(dataCopy[offset]); offset += 1
+                    if offset + length <= dataCopy.count {
+                        if let mention = String(data: dataCopy[offset..<offset+length], encoding: .utf8) {
+                            mentions?.append(mention)
                         }
+                        offset += length
                     }
                 }
             }

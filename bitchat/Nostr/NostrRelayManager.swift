@@ -889,12 +889,10 @@ final class NostrRelayManager: ObservableObject {
               let messageString = String(data: messageData, encoding: .utf8) else { return }
 
         // Send unsubscribe to all relays
-        for (relayUrl, connection) in connections {
-            if subscriptions[relayUrl]?.contains(id) == true {
-                subscriptions[relayUrl]?.remove(id)
-                connection.send(.string(messageString)) { _ in
-                    // Local state is cleared before sending so callers can re-subscribe immediately.
-                }
+        for (relayUrl, connection) in connections where subscriptions[relayUrl]?.contains(id) == true {
+            subscriptions[relayUrl]?.remove(id)
+            connection.send(.string(messageString)) { _ in
+                // Local state is cleared before sending so callers can re-subscribe immediately.
             }
         }
     }

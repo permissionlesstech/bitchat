@@ -1016,10 +1016,8 @@ extension NoiseHandshakeState {
         // BCH-01-010: Constant-time check against known bad points
         // We check all points and accumulate matches to avoid early exit timing leaks
         var foundBadPoint = false
-        for badPoint in lowOrderPoints {
-            if constantTimeCompare(keyData, badPoint) {
-                foundBadPoint = true
-            }
+        for badPoint in lowOrderPoints where constantTimeCompare(keyData, badPoint) {
+            foundBadPoint = true
         }
 
         if foundBadPoint {

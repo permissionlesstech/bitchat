@@ -47,7 +47,7 @@ struct MessagePadding {
         // Verify PKCS#7: all last N bytes equal to pad length
         let start = data.count - paddingLength
         let tail = data[start...]
-        for b in tail { if b != last { return data } }
+        for b in tail where b != last { return data }
         return Data(data[..<start])
     }
 
@@ -57,10 +57,8 @@ struct MessagePadding {
         let totalSize = dataSize + 16
 
         // Find smallest block that fits
-        for blockSize in blockSizes {
-            if totalSize <= blockSize {
-                return blockSize
-            }
+        for blockSize in blockSizes where totalSize <= blockSize {
+            return blockSize
         }
 
         // For very large messages, just use the original size
