@@ -15,7 +15,6 @@ disabled_rules:
   - type_name
   - identifier_name
   - implicit_optional_initialization
-  - force_try
   - vertical_whitespace
   - for_where
   - redundant_discardable_let  # SwiftUI breaks without it
