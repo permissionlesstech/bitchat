@@ -25,8 +25,8 @@ final class PrivateChatManager: ObservableObject {
     /// `ChatViewModel`) keep firing on selection changes. Mutate via
     /// `startChat(with:)` / `endChat()`, which route through the store's
     /// `setSelectedPrivatePeer` intent.
-    @Published private(set) var selectedPeer: PeerID? = nil
-    private var selectedPeerMirrorCancellable: AnyCancellable? = nil
+    @Published private(set) var selectedPeer: PeerID?
+    private var selectedPeerMirrorCancellable: AnyCancellable?
 
     var sentReadReceipts: Set<String> = []  // Made accessible for ChatViewModel
 
