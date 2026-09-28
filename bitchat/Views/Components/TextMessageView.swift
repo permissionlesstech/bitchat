@@ -116,8 +116,11 @@ struct TextMessageView: View {
                 let isExpanded = expandedMessageIDs.contains(message.id)
                 let labelKey = isExpanded ? LocalizedStringKey("content.message.show_less") : LocalizedStringKey("content.message.show_more")
                 Button(labelKey) {
-                    if isExpanded { expandedMessageIDs.remove(message.id) }
-                    else { expandedMessageIDs.insert(message.id) }
+                    if isExpanded {
+                        expandedMessageIDs.remove(message.id)
+                    } else {
+                        expandedMessageIDs.insert(message.id)
+                    }
                 }
                 .bitchatFont(size: 11, weight: .medium)
                 .foregroundColor(palette.accentBlue)
