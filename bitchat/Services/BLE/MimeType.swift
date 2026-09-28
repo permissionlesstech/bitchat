@@ -52,7 +52,7 @@ enum MimeType: CaseIterable, Hashable {
         case .octetStream:  .data
         }
     }
-    
+
     var category: Category {
         switch self {
         case .jpeg, .jpg, .png, .gif, .webp:
@@ -83,7 +83,7 @@ enum MimeType: CaseIterable, Hashable {
         case .octetStream:  "application/octet-stream"
         }
     }
-    
+
     var defaultExtension: String {
         switch self {
         case .jpeg, .jpg:           "jpg"
@@ -168,7 +168,7 @@ enum MimeType: CaseIterable, Hashable {
 
     init?(_ mimeString: String?) {
         guard let mimeString else { return nil }
-        
+
         let normalized = mimeString.lowercased()
 
         // Direct match with our canonical list

@@ -48,7 +48,7 @@ struct FragmentationTests {
         #expect(capture.publicMessages.count == 1)
         #expect(capture.publicMessages.first?.content.count == 3_000)
     }
-    
+
     @Test("Duplicate fragment does not break reassembly")
     func duplicateFragmentDoesNotBreakReassembly() async throws {
         let ble = makeBLEService()
@@ -134,17 +134,17 @@ struct FragmentationTests {
             try? FileManager.default.removeItem(at: url)
         }
     }
-    
+
     @Test("Invalid fragment header is ignored")
     func invalidFragmentHeaderIsIgnored() async throws {
         let ble = makeBLEService()
         let capture = CaptureDelegate()
         ble.delegate = capture
-        
+
         let remoteShortID = PeerID(str: "0011223344556677")
         let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 1000)
         let fragments = fragmentPacket(original, fragmentSize: 250)
-        
+
         // Corrupt one fragment: make payload too short (header incomplete)
         var corrupted = fragments
         if !corrupted.isEmpty {
@@ -160,7 +160,7 @@ struct FragmentationTests {
             )
             corrupted[0] = p
         }
-        
+
         for fragment in corrupted {
             ble._test_handlePacket(fragment, fromPeerID: remoteShortID)
         }

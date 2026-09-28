@@ -84,7 +84,7 @@ extension BLEService: CBPeripheralManagerDelegate {
             SecureLogger.warning("⚠️ Unknown peripheral Bluetooth state: \(peripheral.state.rawValue)", category: .session)
         }
     }
-    
+
     #if os(iOS)
     func peripheralManager(_ peripheral: CBPeripheralManager, willRestoreState dict: [String: Any]) {
         guard !isPanicSuspended else {
@@ -117,7 +117,7 @@ extension BLEService: CBPeripheralManagerDelegate {
         }
     }
     #endif
-    
+
     func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?) {
         guard !isPanicSuspended else {
             peripheral.stopAdvertising()
@@ -127,16 +127,16 @@ extension BLEService: CBPeripheralManagerDelegate {
             SecureLogger.error("❌ Failed to add service: \(error.localizedDescription)", category: .session)
             return
         }
-        
+
         SecureLogger.debug("✅ Service added successfully, starting advertising", category: .session)
-        
+
         // Start advertising after service is confirmed added
         let adData = BLERadioController.advertisementData()
         peripheral.startAdvertising(adData)
-        
+
         SecureLogger.debug("📡 Started advertising (LocalName: \((adData[CBAdvertisementDataLocalNameKey] as? String) != nil ? "on" : "off"), ID: \(myPeerID.id.prefix(8))…)", category: .session)
     }
-    
+
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {
         guard !isPanicSuspended else { return }
         let centralUUID = central.identifier.uuidString
@@ -169,7 +169,7 @@ extension BLEService: CBPeripheralManagerDelegate {
             self?.flushDirectedSpool()
         }
     }
-    
+
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
         let centralID = central.identifier.uuidString
         SecureLogger.debug("📤 Central unsubscribed: \(centralID.prefix(8))…", category: .session)
@@ -187,7 +187,7 @@ extension BLEService: CBPeripheralManagerDelegate {
         // link-event port.
         emitLinkEvent(.centralLinkEnded(centralUUID: centralID))
     }
-    
+
     func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager) {
         guard !isPanicSuspended else { return }
         drainPendingNotifications(logPrefix: "✅ Sent")
@@ -238,20 +238,20 @@ extension BLEService: CBPeripheralManagerDelegate {
 
         return sentCount
     }
-    
+
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {
         // Suppress logs for single write requests to reduce noise
         if requests.count > 1 {
             SecureLogger.debug("📥 Received \(requests.count) write requests from central", category: .session)
         }
-        
+
         // IMPORTANT: Respond immediately to prevent timeouts!
         // We must respond within a few milliseconds or the central will timeout
         for request in requests {
             peripheral.respond(to: request, withResult: .success)
         }
         guard !isPanicSuspended else { return }
-        
+
         // Process writes. For long writes, CoreBluetooth may deliver multiple CBATTRequest values with offsets.
         // Combine per-central request values by offset before decoding.
         // Process directly on our message queue to match transport context

@@ -147,15 +147,15 @@ final class NostrTransport: Transport, @unchecked Sendable {
         dependencies: Dependencies? = nil
     ) {
         self.dependencies = dependencies ?? .live(idBridge: idBridge)
-        
+
         setupObservers()
-        
+
         // Synchronously warm the cache to avoid startup race
         let favorites = self.dependencies.loadFavorites()
         let reachable = favorites.values
             .filter { $0.peerNostrPublicKey != nil }
             .map { PeerID(publicKey: $0.peerNoisePublicKey) }
-            
+
         queue.sync(flags: .barrier) {
             self.reachablePeers = Set(reachable)
         }
@@ -189,7 +189,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
             let reachable = favorites.values
                 .filter { $0.peerNostrPublicKey != nil }
                 .map { PeerID(publicKey: $0.peerNoisePublicKey) }
-            
+
             self.queue.async(flags: .barrier) { [weak self] in
                 self?.reachablePeers = Set(reachable)
             }
@@ -213,7 +213,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
     func emergencyDisconnectAll() { /* no-op */ }
 
     func isPeerConnected(_ peerID: PeerID) -> Bool { false }
-    
+
     func isPeerReachable(_ peerID: PeerID) -> Bool {
         // Callers address peers by either the short 16-hex ID or the full
         // 64-hex noise key (offline favorites), so compare in short form.

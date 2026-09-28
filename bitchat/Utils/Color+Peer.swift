@@ -10,7 +10,7 @@ import SwiftUI
 
 extension Color {
     private static var peerColorCache: [String: Color] = [:]
-    
+
     init(peerSeed: String, isDark: Bool) {
         let cacheKey = peerSeed + (isDark ? "|dark" : "|light")
         if let cached = Self.peerColorCache[cacheKey] {
