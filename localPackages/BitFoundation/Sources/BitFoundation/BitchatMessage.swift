@@ -214,14 +214,12 @@ extension BitchatMessage {
             }
         }
 
-
         return data
     }
 
     convenience init?(_ data: Data) {
         // Create an immutable copy to prevent threading issues
         let dataCopy = Data(data)
-
 
         guard dataCopy.count >= 13 else {
             return nil

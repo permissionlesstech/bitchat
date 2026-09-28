@@ -1259,7 +1259,6 @@ final class NostrRelayManager: ObservableObject {
                 // (no per-frame main hop).
                 self.inboundRouter.yield(InboundFrame(message: message), to: relayUrl)
 
-
                 // Continue receiving
                 Task { @MainActor in
                     guard self.connections[relayUrl] === task else { return }
