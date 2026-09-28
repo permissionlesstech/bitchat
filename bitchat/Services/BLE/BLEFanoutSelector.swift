@@ -233,10 +233,8 @@ enum BLEFanoutSelector {
         }
 
         scored.sort { lhs, rhs in
-            for index in 0..<min(lhs.score.count, rhs.score.count) {
-                if lhs.score[index] != rhs.score[index] {
-                    return lhs.score[index] < rhs.score[index]
-                }
+            for index in 0..<min(lhs.score.count, rhs.score.count) where lhs.score[index] != rhs.score[index] {
+                return lhs.score[index] < rhs.score[index]
             }
             return lhs.id < rhs.id
         }

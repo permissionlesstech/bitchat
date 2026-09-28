@@ -124,10 +124,8 @@ enum Bech32 {
         for value in values {
             let b = chk >> 25
             chk = (chk & 0x1ffffff) << 5 ^ Int(value)
-            for i in 0..<5 {
-                if (b >> i) & 1 == 1 {
-                    chk ^= generator[i]
-                }
+            for i in 0..<5 where (b >> i) & 1 == 1 {
+                chk ^= generator[i]
             }
         }
         return chk

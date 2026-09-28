@@ -327,15 +327,13 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
                     filesDir.appendingPathComponent("files/outgoing", isDirectory: true)
                 ]
 
-                for dir in outgoingDirs {
-                    if FileManager.default.fileExists(atPath: dir.path) {
-                        try? FileManager.default.removeItem(at: dir)
-                        try? FileManager.default.createDirectory(
-                            at: dir,
-                            withIntermediateDirectories: true,
-                            attributes: nil
-                        )
-                    }
+                for dir in outgoingDirs where FileManager.default.fileExists(atPath: dir.path) {
+                    try? FileManager.default.removeItem(at: dir)
+                    try? FileManager.default.createDirectory(
+                        at: dir,
+                        withIntermediateDirectories: true,
+                        attributes: nil
+                    )
                 }
             } catch {
                 SecureLogger.error("Failed to clear media files: \(error)", category: .session)

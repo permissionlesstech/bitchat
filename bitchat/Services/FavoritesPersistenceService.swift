@@ -252,10 +252,8 @@ final class FavoritesPersistenceService: ObservableObject {
             SecureLogger.info("✅ Loaded \(relationships.count) favorite relationships", category: .session)
 
             // Log Nostr public key info
-            for relationship in relationships {
-                if relationship.peerNostrPublicKey == nil {
-                    SecureLogger.warning("⚠️ No Nostr public key stored for '\(relationship.peerNickname)'", category: .session)
-                }
+            for relationship in relationships where relationship.peerNostrPublicKey == nil {
+                SecureLogger.warning("⚠️ No Nostr public key stored for '\(relationship.peerNickname)'", category: .session)
             }
 
             // Convert to dictionary, cleaning up duplicates by public key (not nickname)

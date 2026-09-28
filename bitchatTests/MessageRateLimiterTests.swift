@@ -132,10 +132,9 @@ struct MessageRateLimiterTests {
 
         let first = limiter.allow(senderKey: "sender", contentKey: "content-0", now: now)
         var rejected = true
-        for index in 1...100 {
-            if limiter.allow(senderKey: "sender", contentKey: "content-\(index)", now: now) {
-                rejected = false
-            }
+        for index in 1...100 where limiter.allow(senderKey: "sender", contentKey: "content-\(index)", now: now) {
+            rejected = false
+            break
         }
 
         #expect(first)

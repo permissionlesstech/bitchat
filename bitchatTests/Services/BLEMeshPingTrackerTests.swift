@@ -52,8 +52,8 @@ struct BLEMeshPingTrackerTests {
         let linkB = PeerID(str: "bbbbbbbbbbbbbbbb")
 
         var allowedOnA = 0
-        for _ in 0..<(TransportConfig.meshPingInboundMaxPerLink + 5) {
-            if tracker.shouldRespond(toLink: linkA, now: now) { allowedOnA += 1 }
+        for _ in 0..<(TransportConfig.meshPingInboundMaxPerLink + 5) where tracker.shouldRespond(toLink: linkA, now: now) {
+            allowedOnA += 1
         }
         #expect(allowedOnA == TransportConfig.meshPingInboundMaxPerLink)
         // One saturated link must not consume another link's budget.

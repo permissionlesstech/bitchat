@@ -19,8 +19,8 @@ struct SchnorrConcurrencyRepro {
             for _ in 0..<8 {
                 group.addTask {
                     var localFailures = 0
-                    for _ in 0..<250 {
-                        if !signed.isValidSignature() { localFailures += 1 }
+                    for _ in 0..<250 where !signed.isValidSignature() {
+                        localFailures += 1
                     }
                     return localFailures
                 }
@@ -52,8 +52,8 @@ struct SchnorrConcurrencyRepro {
                 group.addTask {
                     if worker < 4 {
                         var localFailures = 0
-                        for _ in 0..<250 {
-                            if !signed.isValidSignature() { localFailures += 1 }
+                        for _ in 0..<250 where !signed.isValidSignature() {
+                            localFailures += 1
                         }
                         return localFailures
                     } else {
