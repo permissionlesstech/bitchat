@@ -97,12 +97,7 @@ final class GeoPresenceTracker {
 
     @MainActor
     func subscribeNostrEvent(_ event: NostrEvent, gh: String) {
-        guard let context else { return }
-        guard (event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue
-            || event.kind == NostrProtocol.EventKind.geohashPresence.rawValue)
-        else {
-            return
-        }
+        guard let context, NostrProtocol.isEphemeralOrGeohash(event) else { return }
         // The signature was already verified (exactly once, off the main
         // actor) by NostrRelayManager before delivery.
         guard shouldProcessGeoSamplingEvent(event.id) else { return }

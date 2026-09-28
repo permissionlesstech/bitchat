@@ -165,7 +165,7 @@ enum Geohash {
             let lon = wrapLongitude(neighbor.lon)
 
             // Skip if we've crossed a pole (latitude clamped to boundary)
-            if (neighbor.lat > 90.0 || neighbor.lat < -90.0) {
+            if neighbor.lat > 90.0 || neighbor.lat < -90.0 {
                 return nil
             }
 
