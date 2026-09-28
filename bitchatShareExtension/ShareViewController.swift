@@ -18,7 +18,6 @@ final class ShareViewController: UIViewController {
     private enum Strings {
         static let nothingToShare = String(localized: "share.status.nothing_to_share", comment: "Shown when the share extension receives no content")
         static let noShareableContent = String(localized: "share.status.no_shareable_content", comment: "Shown when provided content cannot be shared")
-        static let sharedLinkTitleFallback = String(localized: "share.fallback.shared_link_title", comment: "Fallback title when saving a shared link")
         static let savedForReview = String(localized: "share.status.saved_for_review", comment: "Shown after content is staged for review in the main app")
         static let failedToSave = String(localized: "share.status.failed_to_save", comment: "Shown when content cannot be staged for the main app")
     }
@@ -55,11 +54,11 @@ final class ShareViewController: UIViewController {
         }
 
         // Preserve the whole attributed text when it contains more than a URL.
-        if let payload = SharedContentPayload.fromSharedText(
-            item.attributedContentText?.string,
+        if let payload = SharedContentPayload(
+            sharedText: item.attributedContentText?.string,
             title: item.attributedTitle?.string
         ) {
-            stageAndFinish(payload)
+            saveAndFinish(payload)
             return
         }
 
@@ -68,7 +67,7 @@ final class ShareViewController: UIViewController {
         if providers.isEmpty {
             // Fallback: use attributed title as plain text
             if let title = item.attributedTitle?.string, !title.isEmpty {
-                saveAndFinish(text: title)
+                saveAndFinish(SharedContentPayload(text: title))
             } else {
                 finishWithMessage(Strings.noShareableContent)
             }
@@ -78,18 +77,15 @@ final class ShareViewController: UIViewController {
         // Load URL or text asynchronously
         loadFirstURL(from: providers) { [weak self] url in
             guard let self = self else { return }
-            if let url = url {
-                self.saveAndFinish(url: url, title: item.attributedTitle?.string)
+            if let url,
+               let payload = SharedContentPayload(webURL: url, title: item.attributedTitle?.string) {
+                self.saveAndFinish(payload)
             } else {
                 self.loadFirstPlainText(from: providers) { text in
-                    if let payload = SharedContentPayload.fromSharedText(
-                        text,
+                    self.saveAndFinish(SharedContentPayload(
+                        sharedText: text,
                         title: item.attributedTitle?.string
-                    ) {
-                        self.stageAndFinish(payload)
-                    } else {
-                        self.finishWithMessage(Strings.noShareableContent)
-                    }
+                    ))
                 }
             }
         }
@@ -102,18 +98,7 @@ final class ShareViewController: UIViewController {
                 continue
             }
             provider.loadItem(forTypeIdentifier: identifier, options: nil) { item, _ in
-                let result: URL?
-                if let url = item as? URL {
-                    result = url
-                } else if let string = item as? String {
-                    result = URL(string: string)
-                } else if let data = item as? Data,
-                          let string = String(data: data, encoding: .utf8) {
-                    result = URL(string: string)
-                } else {
-                    result = nil
-                }
-                DispatchQueue.main.async { completion(result) }
+                DispatchQueue.main.async { completion(Self.url(from: item)) }
             }
             return
         }
@@ -127,33 +112,28 @@ final class ShareViewController: UIViewController {
             return
         }
         provider.loadItem(forTypeIdentifier: identifier, options: nil) { item, _ in
-            let result: String?
-            if let string = item as? String {
-                result = string
-            } else if let data = item as? Data {
-                result = String(data: data, encoding: .utf8)
-            } else {
-                result = nil
-            }
-            DispatchQueue.main.async { completion(result) }
+            DispatchQueue.main.async { completion(Self.string(from: item)) }
         }
     }
 
+    private static func url(from providerItem: Any?) -> URL? {
+        if let url = providerItem as? URL { return url }
+        if let string = string(from: providerItem) { return URL(string: string) }
+        return nil
+    }
+
+    private static func string(from providerItem: Any?) -> String? {
+        if let string = providerItem as? String { return string }
+        if let data = providerItem as? Data { return String(data: data, encoding: .utf8) }
+        return nil
+    }
+
     // MARK: - Save + Finish
-    private func saveAndFinish(url: URL, title: String?) {
-        let payload = SharedContentPayload(
-            kind: .url,
-            content: url.absoluteString,
-            title: title ?? url.host ?? Strings.sharedLinkTitleFallback
-        )
-        stageAndFinish(payload)
-    }
-
-    private func saveAndFinish(text: String) {
-        stageAndFinish(.text(text))
-    }
-
-    private func stageAndFinish(_ payload: SharedContentPayload) {
+    private func saveAndFinish(_ payload: SharedContentPayload?) {
+        guard let payload else {
+            finishWithMessage(Strings.noShareableContent)
+            return
+        }
         guard let defaults = UserDefaults(suiteName: Self.groupID) else {
             finishWithMessage(Strings.failedToSave)
             return
