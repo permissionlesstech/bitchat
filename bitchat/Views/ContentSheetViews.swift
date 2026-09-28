@@ -9,7 +9,7 @@ import AppKit
 struct ContentPeopleSheetModalPresentationState {
     var isImagePreviewPresented = false
     var isVerificationSheetPresented = false
-    var legacyPrivateMediaConsentRequest: LegacyPrivateMediaConsentRequest? = nil
+    var legacyPrivateMediaConsentRequest: LegacyPrivateMediaConsentRequest?
     var isVoiceAlertPresented = false
     var isMediaPickerPresented = false
 

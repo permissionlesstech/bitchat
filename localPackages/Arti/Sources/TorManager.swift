@@ -90,8 +90,8 @@ public final class TorManager: ObservableObject {
     private var bootstrapGeneration = 0
     private var pathMonitor: NWPathMonitor?
     private var isAppForeground: Bool = true
-    private var lastRestartAt: Date? = nil
-    private var startedAt: Date? = nil  // Tracks initial startup time for grace period
+    private var lastRestartAt: Date?
+    private var startedAt: Date?  // Tracks initial startup time for grace period
     private(set) var allowAutoStart: Bool = false
 
     private init() {}
