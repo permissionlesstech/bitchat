@@ -86,12 +86,12 @@ struct RequestSyncPacket {
 
     static func decode(from data: Data, maxAcceptBytes: Int = 1024) -> RequestSyncPacket? {
         var off = 0
-        var p: Int? = nil
-        var m: UInt32? = nil
-        var payload: Data? = nil
-        var types: SyncTypeFlags? = nil
-        var sinceTimestamp: UInt64? = nil
-        var fragmentIdFilter: String? = nil
+        var p: Int?
+        var m: UInt32?
+        var payload: Data?
+        var types: SyncTypeFlags?
+        var sinceTimestamp: UInt64?
+        var fragmentIdFilter: String?
 
         while off + 3 <= data.count {
             let t = Int(data[off]); off += 1

@@ -310,7 +310,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
     @Published var autocompleteSuggestions: [String] = []
     @Published var showAutocomplete: Bool = false
-    @Published var autocompleteRange: NSRange? = nil
+    @Published var autocompleteRange: NSRange?
     @Published var selectedAutocompleteIndex: Int = 0
 
     // MARK: - Services and Storage
@@ -349,13 +349,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         }
     }
     // Single-writer: mutate only via `setGeoChatSubscriptionID(_:)` / `setGeoDmSubscriptionID(_:)` below.
-    private(set) var geoSubscriptionID: String? = nil
-    private(set) var geoDmSubscriptionID: String? = nil
+    private(set) var geoSubscriptionID: String?
+    private(set) var geoDmSubscriptionID: String?
     var currentGeohash: String? {
         get { locationPresenceStore.currentGeohash }
         set { locationPresenceStore.setCurrentGeohash(newValue) }
     }
-    var cachedGeohashIdentity: (geohash: String, identity: NostrIdentity)? = nil // Cache current geohash identity
+    var cachedGeohashIdentity: (geohash: String, identity: NostrIdentity)? // Cache current geohash identity
     var geoNicknames: [String: String] {
         get { locationPresenceStore.geoNicknames }
         set { locationPresenceStore.replaceGeoNicknames(newValue) }

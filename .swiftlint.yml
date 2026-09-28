@@ -14,7 +14,6 @@ disabled_rules:
   - line_length
   - type_name
   - identifier_name
-  - implicit_optional_initialization
   - vertical_whitespace
   - redundant_discardable_let  # SwiftUI breaks without it
   - todo  # TODOs that cite a tracked issue are deliberate markers, not lint debt

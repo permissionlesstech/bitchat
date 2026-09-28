@@ -9,7 +9,7 @@ struct MeshPeerList: View {
     let onShowFingerprint: (PeerID) -> Void
     /// Optional so existing call sites (and previews/tests) keep compiling;
     /// when absent the block/unblock context-menu entry is hidden.
-    var onToggleBlock: ((MeshPeerRow) -> Void)? = nil
+    var onToggleBlock: ((MeshPeerRow) -> Void)?
     @Environment(\.colorScheme) var colorScheme
 
     @State private var orderedIDs: [String] = []

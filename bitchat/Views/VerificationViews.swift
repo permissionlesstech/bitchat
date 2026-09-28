@@ -116,7 +116,7 @@ struct QRScanView: View {
     @EnvironmentObject private var verificationModel: VerificationModel
     @ThemedPalette private var palette
     var isActive: Bool = true
-    var onSuccess: (() -> Void)? = nil  // Called when verification succeeds
+    var onSuccess: (() -> Void)?  // Called when verification succeeds
     @State private var input = ""
     @State private var result: String = ""
     @State private var lastValid: String = ""
@@ -211,7 +211,7 @@ struct QRScanView: View {
 struct CameraScannerView: UIViewRepresentable {
     typealias UIViewType = PreviewView
     var isActive: Bool
-    var onUnavailable: (() -> Void)? = nil
+    var onUnavailable: (() -> Void)?
     var onCode: (String) -> Void
 
     func makeUIView(context: Context) -> PreviewView {
@@ -250,7 +250,7 @@ struct CameraScannerView: UIViewRepresentable {
 struct CameraScannerView: NSViewRepresentable {
     typealias NSViewType = PreviewView
     var isActive: Bool
-    var onUnavailable: (() -> Void)? = nil
+    var onUnavailable: (() -> Void)?
     var onCode: (String) -> Void
 
     func makeNSView(context: Context) -> PreviewView {

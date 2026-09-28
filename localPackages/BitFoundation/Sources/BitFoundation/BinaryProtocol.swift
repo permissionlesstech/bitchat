@@ -335,14 +335,14 @@ public struct BinaryProtocol {
 
             guard let senderID = readData(senderIDSize) else { return nil }
 
-            var recipientID: Data? = nil
+            var recipientID: Data?
             if hasRecipient {
                 recipientID = readData(recipientIDSize)
                 if recipientID == nil { return nil }
             }
 
             // Route (optional, v2+ only): route bytes are NOT included in payloadLength
-            var route: [Data]? = nil
+            var route: [Data]?
             if hasRoute {
                 guard let routeCount = read8() else { return nil }
                 if routeCount > 0 {
@@ -397,7 +397,7 @@ public struct BinaryProtocol {
                 payload = rawPayload
             }
 
-            var signature: Data? = nil
+            var signature: Data?
             if hasSignature {
                 signature = readData(signatureSize)
                 if signature == nil { return nil }
