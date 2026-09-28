@@ -402,31 +402,33 @@ struct CommandProcessorTests {
     }
 
     @MainActor
-    @Test func paySendsBareTokenInPrivateChat() {
+    @Test func paySendsBareTokenInPrivateChat() throws {
         let context = MockCommandContextProvider()
         let peerID = PeerID(str: "abcd1234abcd1234")
         context.selectedPrivateChatPeer = peerID
         let processor = makePayProcessor(context: context)
 
         // cashu: URI form must be normalized to the bare token before sending
-        switch processor.process("/pay cashu:\(Self.validV3Token)") {
+        let token = try Self.makeV3Token()
+        switch processor.process("/pay cashu:\(token)") {
         case .success(let message):
             #expect(message?.contains("21 sat") == true)
         default:
             Issue.record("Expected success result")
         }
         #expect(context.sentPrivateMessages.count == 1)
-        #expect(context.sentPrivateMessages.first?.content == Self.validV3Token)
+        #expect(context.sentPrivateMessages.first?.content == token)
         #expect(context.sentPrivateMessages.first?.peerID == peerID)
         #expect(context.sentPublicMessages.isEmpty)
     }
 
     @MainActor
-    @Test func payInPublicChannelRequiresExplicitConfirm() {
+    @Test func payInPublicChannelRequiresExplicitConfirm() throws {
         let context = MockCommandContextProvider()
         let processor = makePayProcessor(context: context)
 
-        switch processor.process("/pay \(Self.validV3Token)") {
+        let token = try Self.makeV3Token()
+        switch processor.process("/pay \(token)") {
         case .error(let message):
             #expect(message.contains("public") == true)
         default:
@@ -434,13 +436,13 @@ struct CommandProcessorTests {
         }
         #expect(context.sentPublicMessages.isEmpty)
 
-        switch processor.process("/pay \(Self.validV3Token) public") {
+        switch processor.process("/pay \(token) public") {
         case .success:
             break
         default:
             Issue.record("Expected success with confirm")
         }
-        #expect(context.sentPublicMessages == [Self.validV3Token])
+        #expect(context.sentPublicMessages == [token])
         #expect(context.sentPrivateMessages.isEmpty)
     }
 
@@ -484,7 +486,7 @@ struct CommandProcessorTests {
     }
 
     /// 21-sat single-mint V3 token (proofs of 1+4+16).
-    private static let validV3Token: String = {
+    private static func makeV3Token() throws -> String {
         let json: [String: Any] = [
             "token": [[
                 "mint": "https://mint.example.com",
@@ -492,13 +494,13 @@ struct CommandProcessorTests {
             ]],
             "unit": "sat"
         ]
-        let data = try! JSONSerialization.data(withJSONObject: json)
+        let data = try JSONSerialization.data(withJSONObject: json)
         let b64 = data.base64EncodedString()
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
         return "cashuA" + b64
-    }()
+    }
 
     /// 21-sat single-mint definite-length V4 (CBOR) token (proofs of 1+4+16).
     private static let validV4Token: String = {

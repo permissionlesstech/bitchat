@@ -28,7 +28,7 @@ struct CashuTokenDecoderTests {
         entries: [(mint: String, amounts: [Int])],
         unit: String? = "sat",
         memo: String? = nil
-    ) -> String {
+    ) throws -> String {
         var json: [String: Any] = [
             "token": entries.map { entry in
                 [
@@ -41,7 +41,7 @@ struct CashuTokenDecoderTests {
         ]
         if let unit { json["unit"] = unit }
         if let memo { json["memo"] = memo }
-        let data = try! JSONSerialization.data(withJSONObject: json)
+        let data = try JSONSerialization.data(withJSONObject: json)
         return "cashuA" + base64URL(data)
     }
 
@@ -105,8 +105,8 @@ struct CashuTokenDecoderTests {
 
     // MARK: - V3 Decode
 
-    @Test func v3DecodeValidToken() {
-        let token = makeV3Token(
+    @Test func v3DecodeValidToken() throws {
+        let token = try makeV3Token(
             entries: [("https://mint.example.com", [2, 8])],
             unit: "sat",
             memo: "thanks!"
@@ -121,8 +121,8 @@ struct CashuTokenDecoderTests {
         #expect(info?.displayAmount == "10 sat")
     }
 
-    @Test func v3AmountSumsAcrossEntriesAndProofs() {
-        let token = makeV3Token(entries: [
+    @Test func v3AmountSumsAcrossEntriesAndProofs() throws {
+        let token = try makeV3Token(entries: [
             ("https://a.mint.example", [1, 2, 4]),
             ("https://b.mint.example", [8, 16])
         ])
@@ -132,14 +132,14 @@ struct CashuTokenDecoderTests {
         #expect(info?.mintHost == "a.mint.example")
     }
 
-    @Test func v3MissingUnitDefaultsToSatForDisplay() {
-        let token = makeV3Token(entries: [("https://mint.example.com", [5])], unit: nil)
+    @Test func v3MissingUnitDefaultsToSatForDisplay() throws {
+        let token = try makeV3Token(entries: [("https://mint.example.com", [5])], unit: nil)
         let info = CashuTokenDecoder.decode(token)
         #expect(info?.unit == nil)
         #expect(info?.displayAmount == "5 sat")
     }
 
-    @Test func v3RejectsNonsenseAmounts() {
+    @Test func v3RejectsNonsenseAmounts() throws {
         // Negative and absurd amounts must not poison the sum
         let json: [String: Any] = [
             "token": [[
@@ -150,12 +150,12 @@ struct CashuTokenDecoderTests {
                 ]
             ] as [String: Any]]
         ]
-        let token = "cashuA" + base64URL(try! JSONSerialization.data(withJSONObject: json))
+        let token = "cashuA" + base64URL(try JSONSerialization.data(withJSONObject: json))
         #expect(CashuTokenDecoder.decode(token)?.amount == 3)
     }
 
-    @Test func v3MemoIsSanitizedForDisplay() {
-        let token = makeV3Token(
+    @Test func v3MemoIsSanitizedForDisplay() throws {
+        let token = try makeV3Token(
             entries: [("https://mint.example.com", [1])],
             memo: "line1\nline2\u{0007}" + String(repeating: "x", count: 300)
         )
@@ -190,8 +190,8 @@ struct CashuTokenDecoderTests {
 
     // MARK: - Strict Mode (used by the /pay SEND path)
 
-    @Test func strictAcceptsValidV3WithPositiveAmount() {
-        let token = makeV3Token(entries: [("https://mint.example.com", [2, 8])])
+    @Test func strictAcceptsValidV3WithPositiveAmount() throws {
+        let token = try makeV3Token(entries: [("https://mint.example.com", [2, 8])])
         let info = CashuTokenDecoder.decode(token, strict: true)
         #expect(info?.version == "A")
         #expect(info?.amount == 10)
@@ -219,7 +219,7 @@ struct CashuTokenDecoderTests {
         #expect(CashuTokenDecoder.decode(truncated, strict: true) == nil)
     }
 
-    @Test func strictRejectsAmountlessToken() {
+    @Test func strictRejectsAmountlessToken() throws {
         // A well-formed V3 token that carries no positive proof amount.
         let json: [String: Any] = [
             "token": [[
@@ -227,23 +227,23 @@ struct CashuTokenDecoderTests {
                 "proofs": [["amount": 0, "id": "x", "secret": "s", "C": "c"] as [String: Any]]
             ] as [String: Any]]
         ]
-        let token = "cashuA" + base64URL(try! JSONSerialization.data(withJSONObject: json))
+        let token = "cashuA" + base64URL(try JSONSerialization.data(withJSONObject: json))
         #expect(CashuTokenDecoder.decode(token)?.amount == nil)
         #expect(CashuTokenDecoder.decode(token, strict: true) == nil)
     }
 
     // MARK: - URI Form and Normalization
 
-    @Test func uriFormsDecode() {
-        let token = makeV3Token(entries: [("https://mint.example.com", [7])])
+    @Test func uriFormsDecode() throws {
+        let token = try makeV3Token(entries: [("https://mint.example.com", [7])])
         for wrapped in ["cashu:\(token)", "cashu://\(token)", "CASHU:\(token)"] {
             #expect(CashuTokenDecoder.bareToken(from: wrapped) == token, "failed for \(wrapped)")
             #expect(CashuTokenDecoder.decode(wrapped)?.amount == 7)
         }
     }
 
-    @Test func percentEncodedURIDecodes() {
-        let token = makeV3Token(entries: [("https://mint.example.com", [7])])
+    @Test func percentEncodedURIDecodes() throws {
+        let token = try makeV3Token(entries: [("https://mint.example.com", [7])])
         let encoded = token.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
         #expect(CashuTokenDecoder.decode("cashu:\(encoded)")?.amount == 7)
     }
@@ -257,8 +257,8 @@ struct CashuTokenDecoderTests {
 
     // MARK: - Adversarial Input (never crash, fail closed)
 
-    @Test func truncatedTokensNeverCrash() {
-        let v3 = makeV3Token(entries: [("https://mint.example.com", [1, 2, 4, 8])], memo: "memo")
+    @Test func truncatedTokensNeverCrash() throws {
+        let v3 = try makeV3Token(entries: [("https://mint.example.com", [1, 2, 4, 8])], memo: "memo")
         let v4 = makeV4Token(memo: "memo", amounts: [1, 2, 4, 8])
         for token in [v3, v4] {
             for length in stride(from: 0, to: token.count, by: 3) {
@@ -285,7 +285,7 @@ struct CashuTokenDecoderTests {
         #expect(CashuTokenDecoder.decode(huge) == nil)
     }
 
-    @Test func absurdAmountsFailClosed() {
+    @Test func absurdAmountsFailClosed() throws {
         // Each proof exceeds the per-proof sanity cap: skipped, no amount.
         let perProofJSON: [String: Any] = [
             "token": [[
@@ -293,7 +293,7 @@ struct CashuTokenDecoderTests {
                 "proofs": [["amount": Int64.max / 2, "id": "x", "secret": "s", "C": "c"] as [String: Any]]
             ] as [String: Any]]
         ]
-        let perProofToken = "cashuA" + base64URL(try! JSONSerialization.data(withJSONObject: perProofJSON))
+        let perProofToken = "cashuA" + base64URL(try JSONSerialization.data(withJSONObject: perProofJSON))
         #expect(CashuTokenDecoder.decode(perProofToken)?.amount == nil)
 
         // Individually plausible proofs whose *sum* overflows the cap: the
@@ -306,7 +306,7 @@ struct CashuTokenDecoderTests {
                 }
             ] as [String: Any]]
         ]
-        let sumToken = "cashuA" + base64URL(try! JSONSerialization.data(withJSONObject: sumJSON))
+        let sumToken = "cashuA" + base64URL(try JSONSerialization.data(withJSONObject: sumJSON))
         #expect(CashuTokenDecoder.decode(sumToken) == nil)
     }
 
@@ -322,13 +322,13 @@ struct CashuTokenDecoderTests {
 
     // MARK: - Detection Ranges (message scanning)
 
-    @Test func detectionFindsWholeMessageToken() {
-        let token = makeV3Token(entries: [("https://mint.example.com", [1])])
+    @Test func detectionFindsWholeMessageToken() throws {
+        let token = try makeV3Token(entries: [("https://mint.example.com", [1])])
         #expect(token.extractCashuLinks() == [token])
     }
 
-    @Test func detectionFindsEmbeddedAndURITokens() {
-        let token = makeV3Token(entries: [("https://mint.example.com", [1])])
+    @Test func detectionFindsEmbeddedAndURITokens() throws {
+        let token = try makeV3Token(entries: [("https://mint.example.com", [1])])
         let message = "here you go: cashu:\(token) enjoy!"
         // The regex matches the token embedded after the scheme
         #expect(message.extractCashuLinks() == [token])
@@ -337,8 +337,8 @@ struct CashuTokenDecoderTests {
         #expect(embedded.extractCashuLinks() == [token])
     }
 
-    @Test func detectionDeduplicatesRepeatedTokens() {
-        let token = makeV3Token(entries: [("https://mint.example.com", [1])])
+    @Test func detectionDeduplicatesRepeatedTokens() throws {
+        let token = try makeV3Token(entries: [("https://mint.example.com", [1])])
         let message = "\(token) and again \(token)"
         #expect(message.extractCashuLinks() == [token])
     }

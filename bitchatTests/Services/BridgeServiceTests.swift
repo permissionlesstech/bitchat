@@ -59,11 +59,11 @@ struct BridgeServiceTests {
         init(
             enabled: Bool = true,
             verifyEventSignature: @escaping (NostrEvent) -> Bool = { $0.isValidSignature() }
-        ) {
+        ) throws {
             let suite = "BridgeServiceTests-\(UUID().uuidString)"
             defaults = UserDefaults(suiteName: suite)!
             defaults.removePersistentDomain(forName: suite)
-            identity = try! NostrIdentity.generate()
+            identity = try NostrIdentity.generate()
             let clock = clock
             service = BridgeService(
                 defaults: defaults,
@@ -178,7 +178,7 @@ struct BridgeServiceTests {
     // MARK: - Lifecycle & rendezvous
 
     @Test func enablingOpensSubscriptionForCellAndNeighbors() throws {
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
 
         #expect(fixture.service.activeCell == Self.cell)
@@ -188,11 +188,11 @@ struct BridgeServiceTests {
         #expect(fixture.service.subscribedCells.count == 9)
     }
 
-    @Test func missingCellRequestsALocationFix() {
+    @Test func missingCellRequestsALocationFix() throws {
         // Field bug: the bridge waited passively for availableChannels,
         // which only flow while some other feature pumps location. Bridging
         // without a cell must ask for a fix itself.
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.locationCell = nil
         fixture.service.refreshRendezvous()
 
@@ -205,8 +205,8 @@ struct BridgeServiceTests {
         #expect(fixture.service.activeCell == Self.cell)
     }
 
-    @Test func noLocationFallsBackToMeshAdvertisedCell() {
-        let fixture = Fixture(enabled: true)
+    @Test func noLocationFallsBackToMeshAdvertisedCell() throws {
+        let fixture = try Fixture(enabled: true)
         fixture.locationCell = nil
         fixture.meshAdvertisedCell = "u4prux"
         fixture.service.refreshRendezvous()
@@ -214,8 +214,8 @@ struct BridgeServiceTests {
         #expect(fixture.service.activeCell == "u4prux")
     }
 
-    @Test func disablingClosesSubscriptionAndClearsState() {
-        let fixture = Fixture(enabled: true)
+    @Test func disablingClosesSubscriptionAndClearsState() throws {
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         fixture.service.setEnabled(false)
 
@@ -224,8 +224,8 @@ struct BridgeServiceTests {
         #expect(fixture.service.bridgedPeerCount == 0)
     }
 
-    @Test func togglePersistsAcrossInstances() {
-        let fixture = Fixture(enabled: true)
+    @Test func togglePersistsAcrossInstances() throws {
+        let fixture = try Fixture(enabled: true)
         let revived = BridgeService(defaults: fixture.defaults)
         #expect(revived.isEnabled)
     }
@@ -233,7 +233,7 @@ struct BridgeServiceTests {
     // MARK: - Outgoing
 
     @Test func outgoingPublishesSignedRendezvousEventWithOriginCoordinates() throws {
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let sender = PeerID(str: "0011223344556677")
         let timestamp = Date()
@@ -261,7 +261,7 @@ struct BridgeServiceTests {
         // ID) would make old receivers inject-dedup away every message from
         // a sender after their first — so element 1 must be the
         // per-message-unique stable ID itself.
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let sender = PeerID(str: "0011223344556677")
         let timestamp = Date()
@@ -284,8 +284,8 @@ struct BridgeServiceTests {
         ])
     }
 
-    @Test func nearbyOnlySuppressesTheBridgedCopy() {
-        let fixture = Fixture(enabled: true)
+    @Test func nearbyOnlySuppressesTheBridgedCopy() throws {
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         fixture.service.nearbyOnly = true
 
@@ -296,7 +296,7 @@ struct BridgeServiceTests {
     }
 
     @Test func outgoingWithoutRelaysDepositsWithBridgePeer() throws {
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         fixture.relaysConnected = false
         fixture.bridgePeers = [PeerID(str: "abcdef0123456789")]
@@ -315,7 +315,7 @@ struct BridgeServiceTests {
         // backfill then re-delivered the device's own pre-restart events as
         // "bridged". Self-recognition by the deterministic rendezvous pubkey
         // must catch them with no cache state at all.
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let ownOldEvent = try NostrProtocol.createBridgeMeshEvent(
             content: "sent before the restart",
@@ -333,8 +333,8 @@ struct BridgeServiceTests {
         #expect(fixture.service.bridgedPeerCount == 0)
     }
 
-    @Test func ownEventComingBackFromSubscriptionIsIgnored() {
-        let fixture = Fixture(enabled: true)
+    @Test func ownEventComingBackFromSubscriptionIsIgnored() throws {
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         fixture.service.bridgeOutgoing(content: "echo me", senderPeerID: PeerID(str: "0011223344556677"), timestamp: Date())
         let ownEvent = fixture.published[0].event
@@ -349,7 +349,7 @@ struct BridgeServiceTests {
     // MARK: - Subscription ingress
 
     @Test func remoteMessageInjectsAndDownlinks() throws {
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let event = try makeRemoteEvent()
 
@@ -372,7 +372,7 @@ struct BridgeServiceTests {
     @Test func jitterHoldoffSuppressesAlreadyBroadcastEvents() throws {
         // Two gateways, one island: while our drain waits out the jitter,
         // the other gateway's fromBridge broadcast arrives — ours must yield.
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let event = try makeRemoteEvent()
 
@@ -389,7 +389,7 @@ struct BridgeServiceTests {
     }
 
     @Test func neighborCellEventIsAccepted() throws {
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let neighbor = try #require(Geohash.neighbors(of: Self.cell).first)
         let event = try makeRemoteEvent(cell: neighbor)
@@ -400,7 +400,7 @@ struct BridgeServiceTests {
     }
 
     @Test func outOfRingCellEventIsRejected() throws {
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let event = try makeRemoteEvent(cell: "9q8yyk")
 
@@ -411,7 +411,7 @@ struct BridgeServiceTests {
     }
 
     @Test func locallySeenMessageIsNeitherInjectedNorDownlinked() throws {
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let content = "heard on the radio"
         // The radio copy's timeline row keys on the same derived stable ID.
@@ -429,7 +429,7 @@ struct BridgeServiceTests {
     }
 
     @Test func bridgeFirstThenAuthenticatedRadioReplacesAliasesAndCancelsDownlink() throws {
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let content = "bridge arrived first"
         let radioMessageID = stableID(content: content)
@@ -456,7 +456,7 @@ struct BridgeServiceTests {
     }
 
     @Test func disablingBridgeDoesNotForgetAliasNeededByLaterRadioCopy() throws {
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let content = "radio arrives after opt-out"
         let event = try makeRemoteEvent(content: content)
@@ -469,7 +469,7 @@ struct BridgeServiceTests {
     }
 
     @Test func aliasPruningUsesExactRowLivenessWithoutDeletingHistory() throws {
-        let fixture = Fixture(enabled: true, verifyEventSignature: { _ in true })
+        let fixture = try Fixture(enabled: true, verifyEventSignature: { _ in true })
         fixture.service.refreshRendezvous()
 
         func event(index: Int) -> NostrEvent {
@@ -532,7 +532,7 @@ struct BridgeServiceTests {
         // A remote signer can copy public radio coordinates and content. That
         // suppresses only the duplicate row; it cannot mark the signing key as
         // local and hide the signer's later bridge traffic from the people UI.
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let identity = try NostrIdentity.generate()
         let content = "island echo"
@@ -554,7 +554,7 @@ struct BridgeServiceTests {
         // then sign under another Nostr key and arrive first. Public mesh
         // coordinates are only a radio-copy hint; signed event IDs own bridge
         // dedup, so the attacker cannot reserve the genuine event's slot.
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let spoof = try makeRemoteEvent(content: "the exact victim message")
         let genuine = try makeRemoteEvent(content: "the exact victim message")
@@ -575,7 +575,7 @@ struct BridgeServiceTests {
         // claiming the genuine message's stable ID there — over different
         // content — must still key on its signed event ID, so it cannot
         // pre-poison the genuine message's dedup slot.
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let genuineID = stableID(content: "the real message")
         let identity = try NostrIdentity.generate()
@@ -600,7 +600,7 @@ struct BridgeServiceTests {
     @Test func oldFormatMeshTagAlsoUsesAuthenticatedEventID() throws {
         // A 2-element `m` tag from an old sender is just as unauthenticated as
         // the current coordinates; the signed event ID remains authoritative.
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let identity = try NostrIdentity.generate()
         let legacy = try NostrEvent(
@@ -617,7 +617,7 @@ struct BridgeServiceTests {
     }
 
     @Test func duplicateSubscriptionEventInjectsOnce() throws {
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let event = try makeRemoteEvent()
 
@@ -630,7 +630,7 @@ struct BridgeServiceTests {
     }
 
     @Test func presenceCountsParticipantWithoutInjection() throws {
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
 
         fixture.service.handleRendezvousEvent(try makePresenceEvent())
@@ -640,7 +640,7 @@ struct BridgeServiceTests {
     }
 
     @Test func participantStateIsCappedUnderRotatingKeyFlood() throws {
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
 
         for _ in 0..<(BridgeService.Limits.maxParticipants + 20) {
@@ -652,7 +652,7 @@ struct BridgeServiceTests {
     }
 
     @Test func relayIngressRateLimitsOneSigningKey() throws {
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let identity = try NostrIdentity.generate()
 
@@ -669,7 +669,7 @@ struct BridgeServiceTests {
 
     @Test func invalidIngressCannotTriggerUnboundedSignatureVerification() throws {
         var verificationCount = 0
-        let fixture = Fixture(enabled: true) { _ in
+        let fixture = try Fixture(enabled: true) { _ in
             verificationCount += 1
             return false
         }
@@ -687,7 +687,7 @@ struct BridgeServiceTests {
     }
 
     @Test func staleParticipantsAgeOutOfTheCount() throws {
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         fixture.service.handleRendezvousEvent(try makePresenceEvent())
         #expect(fixture.service.bridgedPeerCount == 1)
@@ -700,7 +700,7 @@ struct BridgeServiceTests {
     }
 
     @Test func staleEventIsRejected() throws {
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let event = try makeRemoteEvent()
         fixture.advance(BridgeService.Limits.maxEventAgeSeconds + 60)
@@ -713,7 +713,7 @@ struct BridgeServiceTests {
     // MARK: - Downlink budget
 
     @Test func downlinkRespectsPerMinuteBudgetAndDrainsLater() throws {
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
 
         for _ in 0..<(BridgeService.Limits.downlinkEventsPerMinute + 5) {
@@ -732,7 +732,7 @@ struct BridgeServiceTests {
 
     @Test func fromBridgeBroadcastInjectsForMeshOnlyReceiver() throws {
         // Reception is not gated on the toggle: passive radio.
-        let fixture = Fixture(enabled: false)
+        let fixture = try Fixture(enabled: false)
         let event = try makeRemoteEvent()
 
         fixture.service.handleMeshCarrier(
@@ -746,7 +746,7 @@ struct BridgeServiceTests {
     }
 
     @Test func fromBridgeBroadcastDedupsAcrossMeshPaths() throws {
-        let fixture = Fixture(enabled: false)
+        let fixture = try Fixture(enabled: false)
         let event = try makeRemoteEvent()
         let packet = try carrier(event, direction: .fromBridge)
         let peer = PeerID(str: "aabbccdd00112233")
@@ -760,7 +760,7 @@ struct BridgeServiceTests {
     @Test func meshCarriedEventIsNeverRebroadcast() throws {
         // Loop rule 1: a second gateway hearing a fromBridge broadcast must
         // not downlink the same event when its own subscription delivers it.
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let event = try makeRemoteEvent()
 
@@ -777,7 +777,7 @@ struct BridgeServiceTests {
     }
 
     @Test func directedFromBridgeIsMalformedAndDropped() throws {
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
 
         fixture.service.handleMeshCarrier(
@@ -790,7 +790,7 @@ struct BridgeServiceTests {
     }
 
     @Test func tamperedCarrierEventIsRejected() throws {
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let event = try makeRemoteEvent()
         let dict: [String: Any] = [
@@ -816,7 +816,7 @@ struct BridgeServiceTests {
     // MARK: - Uplink deposits (gateway role)
 
     @Test func validDepositIsPublishedWhenRelaysUp() throws {
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let event = try makeRemoteEvent()
 
@@ -833,7 +833,7 @@ struct BridgeServiceTests {
     }
 
     @Test func depositQueuesWhileRelaysDownAndFlushesOnReconnect() throws {
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         fixture.relaysConnected = false
         let event = try makeRemoteEvent()
@@ -852,7 +852,7 @@ struct BridgeServiceTests {
     }
 
     @Test func depositRequiresBridgeToggle() throws {
-        let fixture = Fixture(enabled: false)
+        let fixture = try Fixture(enabled: false)
 
         fixture.service.handleMeshCarrier(
             try carrier(makeRemoteEvent(), direction: .toBridge),
@@ -865,7 +865,7 @@ struct BridgeServiceTests {
     }
 
     @Test func depositRateLimitBoundsPerDepositor() throws {
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let depositor = PeerID(str: "aabbccdd00112233")
 
@@ -883,7 +883,7 @@ struct BridgeServiceTests {
     @Test func depositedEventIsNeverDownlinkedBack() throws {
         // Loop rule 2: our own relay subscription redelivering an event we
         // uplinked must not burn airtime broadcasting it back.
-        let fixture = Fixture(enabled: true)
+        let fixture = try Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let event = try makeRemoteEvent()
 
