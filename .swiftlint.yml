@@ -30,6 +30,5 @@ disabled_rules:
   - type_body_length
   - file_length
   - large_tuple
-  - force_cast
   - multiple_closures_with_trailing_closure
   - nesting
