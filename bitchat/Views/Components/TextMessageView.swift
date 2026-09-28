@@ -72,7 +72,7 @@ struct TextMessageView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .lineLimit(isLong && !isExpanded ? TransportConfig.uiLongMessageLineLimit : nil)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                
+
                 // Delivery status indicator for private messages. Tappable:
                 // .help() tooltips only exist on macOS, so iOS users get the
                 // explanation as a caption under the row instead.
@@ -110,7 +110,7 @@ struct TextMessageView: View {
                         .padding(.top, 2)
                 }
             }
-            
+
             // Expand/Collapse for very long messages
             if message.content.isLongForDisplay() {
                 let isExpanded = expandedMessageIDs.contains(message.id)
@@ -172,7 +172,7 @@ struct TextMessageView: View {
         privateConversationModel: privateConversationModel,
         conversations: viewModel.conversations
     )
-    
+
     Group {
         List {
             TextMessageView(message: .preview)
@@ -181,7 +181,7 @@ struct TextMessageView: View {
                 .listRowBackground(EmptyView())
         }
         .environment(\.colorScheme, .light)
-        
+
         List {
             TextMessageView(message: .preview)
                 .listRowSeparator(.hidden)

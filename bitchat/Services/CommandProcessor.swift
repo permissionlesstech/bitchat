@@ -100,14 +100,14 @@ final class CommandProcessor {
         self.meshService = meshService
         self.identityManager = identityManager
     }
-    
+
     /// Process a command string
     @MainActor
     func process(_ command: String) -> CommandResult {
         let parts = command.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
         guard let cmd = parts.first else { return .error(message: String(localized: "command.error.invalid", defaultValue: "invalid command", comment: "Error for an empty or unparseable slash command")) }
         let args = parts.count > 1 ? String(parts[1]) : ""
-        
+
         // Geohash context: disable favoriting in public geohash or GeoDM
         let inGeoPublic: Bool = {
             switch contextProvider?.activeChannel ?? .mesh {
@@ -196,16 +196,16 @@ final class CommandProcessor {
     }
 
     // MARK: - Command Handlers
-    
+
     private func handleMessage(_ args: String) -> CommandResult {
         let parts = args.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
         guard !parts.isEmpty else {
             return .error(message: String(localized: "command.msg.usage", defaultValue: "usage: /msg @nickname [message]", comment: "Usage hint for /msg"))
         }
-        
+
         let targetName = String(parts[0])
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
-        
+
         guard let peerID = contextProvider?.getPeerIDForNickname(nickname) else {
             return .error(message: String(format: String(localized: "command.msg.not_found", defaultValue: "'%@' not found", comment: "Error when /msg can't resolve the nickname"), locale: .current, nickname))
         }
@@ -216,10 +216,10 @@ final class CommandProcessor {
             let message = String(parts[1])
             contextProvider?.sendPrivateMessage(message, to: peerID)
         }
-        
+
         return .success(message: String(format: String(localized: "command.msg.started", defaultValue: "started private chat with %@", comment: "Confirmation after /msg opens a private chat"), locale: .current, nickname))
     }
-    
+
     private func handleWho() -> CommandResult {
         // Show geohash participants when in a geohash channel; otherwise mesh peers
         switch contextProvider?.activeChannel ?? .mesh {
@@ -243,7 +243,7 @@ final class CommandProcessor {
             return .success(message: String(format: String(localized: "command.who.online", defaultValue: "online: %@", comment: "Reply to /who; placeholder is the list of names"), locale: .current, onlineList))
         }
     }
-    
+
     private func handleClear() -> CommandResult {
         if let peerID = contextProvider?.selectedPrivateChatPeer {
             contextProvider?.clearPrivateChat(peerID)
@@ -252,22 +252,22 @@ final class CommandProcessor {
         }
         return .handled
     }
-    
+
     private func handleEmote(_ args: String, command: String, action: String, emoji: String, suffix: String = "") -> CommandResult {
         let targetName = args.trimmed
         guard !targetName.isEmpty else {
             return .error(message: String(format: String(localized: "command.action.usage", defaultValue: "usage: /%@ <nickname>", comment: "Usage hint for a command that takes a nickname; placeholder is the command name"), locale: .current, command))
         }
-        
+
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
-        
+
         guard let targetPeerID = contextProvider?.getPeerIDForNickname(nickname),
               let myNickname = contextProvider?.nickname else {
             return .error(message: String(format: String(localized: "command.action.not_found", defaultValue: "cannot %1$@ %2$@: not found", comment: "Error when an action command can't resolve its target; placeholders are the command and the nickname"), locale: .current, command, nickname))
         }
-        
+
         let emoteContent = "* \(emoji) \(myNickname) \(action) \(nickname)\(suffix) *"
-        
+
         if contextProvider?.selectedPrivateChatPeer != nil {
             // In private chat
             if let peerNickname = meshService?.peerNickname(peerID: targetPeerID) {
@@ -292,13 +292,13 @@ final class CommandProcessor {
             let publicEcho = "\(emoji) \(myNickname) \(action) \(nickname)\(suffix)"
             contextProvider?.addPublicSystemMessage(publicEcho)
         }
-        
+
         return .handled
     }
-    
+
     private func handleBlock(_ args: String) -> CommandResult {
         let targetName = args.trimmed
-        
+
         if targetName.isEmpty {
             // List blocked users (mesh) and geohash (Nostr) blocks
             let meshBlocked = contextProvider?.blockedUsers ?? []
@@ -332,9 +332,9 @@ final class CommandProcessor {
             let geoList = geoNames.isEmpty ? "none" : geoNames.sorted().joined(separator: ", ")
             return .success(message: String(format: String(localized: "command.block.list", defaultValue: "blocked peers: %1$@ | geohash blocks: %2$@", comment: "Reply to /block with no argument; placeholders are the mesh and geohash block lists"), locale: .current, meshList, geoList))
         }
-        
+
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
-        
+
         if let peerID = contextProvider?.getPeerIDForNickname(nickname),
            let fingerprint = meshService?.getFingerprint(for: peerID) {
             if identityManager.isBlocked(fingerprint: fingerprint) {
@@ -370,18 +370,18 @@ final class CommandProcessor {
             identityManager.setNostrBlocked(pub, isBlocked: true)
             return .success(message: String(format: String(localized: "command.block.done_geo", defaultValue: "blocked %@ in geohash chats", comment: "Confirmation after blocking a geohash participant"), locale: .current, nickname))
         }
-        
+
         return .error(message: String(format: String(localized: "command.block.failed", defaultValue: "cannot block %@: not found or unable to verify identity", comment: "Error when /block can't resolve or verify the target"), locale: .current, nickname))
     }
-    
+
     private func handleUnblock(_ args: String) -> CommandResult {
         let targetName = args.trimmed
         guard !targetName.isEmpty else {
             return .error(message: String(localized: "command.unblock.usage", defaultValue: "usage: /unblock <nickname>", comment: "Usage hint for /unblock"))
         }
-        
+
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
-        
+
         if let peerID = contextProvider?.getPeerIDForNickname(nickname),
            let fingerprint = meshService?.getFingerprint(for: peerID) {
             if !identityManager.isBlocked(fingerprint: fingerprint) {
@@ -400,7 +400,7 @@ final class CommandProcessor {
         }
         return .error(message: String(format: String(localized: "command.unblock.failed", defaultValue: "cannot unblock %@: not found", comment: "Error when /unblock can't resolve the target"), locale: .current, nickname))
     }
-    
+
     private static var groupUsage: String { String(localized: "command.group.usage", defaultValue: "usage: /group create <name> · invite @name · remove @name · leave · list", comment: "Usage hint for /group subcommands") }
 
     private func handleGroup(_ args: String) -> CommandResult {
@@ -572,5 +572,5 @@ final class CommandProcessor {
             ? String(format: String(localized: "command.fav.added", defaultValue: "added %@ to favorites", comment: "Confirmation after /fav"), locale: .current, nickname)
             : String(format: String(localized: "command.fav.removed", defaultValue: "removed %@ from favorites", comment: "Confirmation after /unfav"), locale: .current, nickname))
     }
-    
+
 }

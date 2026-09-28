@@ -134,8 +134,8 @@ extension BLEService: CBCentralManagerDelegate {
             SecureLogger.warning("⚠️ Unknown Bluetooth state: \(central.state.rawValue)", category: .session)
         }
     }
-    
-    
+
+
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
         radio.handleDiscovery(peripheral, advertisementData: advertisementData, rssi: RSSI)
     }
@@ -157,16 +157,16 @@ extension BLEService: CBCentralManagerDelegate {
 
         // Update state to connected
         linkStateStore.markConnected(peripheral)
-        
+
         // Reset backoff state on success
         radio.recordConnectionSuccess(peripheralID: peripheralID)
 
         SecureLogger.debug("✅ Connected: \(peripheral.name ?? "Unknown") [\(peripheralID)]", category: .session)
-        
+
         // Discover services
         peripheral.discoverServices([BLEService.serviceUUID])
     }
-    
+
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         let peripheralID = peripheral.identifier.uuidString
 
@@ -214,7 +214,7 @@ extension BLEService: CBCentralManagerDelegate {
         // Attempt to fill freed slot from queue
         bleQueue.async { [weak self] in self?.radio.tryConnectFromQueue() }
     }
-    
+
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         let peripheralID = peripheral.identifier.uuidString
 
@@ -243,36 +243,36 @@ extension BLEService: CBPeripheralDelegate {
             }
             return
         }
-        
+
         guard let services = peripheral.services else {
             SecureLogger.warning("⚠️ No services discovered for \(peripheral.name ?? "Unknown")", category: .session)
             return
         }
-        
+
         guard let service = services.first(where: { $0.uuid == BLEService.serviceUUID }) else {
             // Not a BitChat peer - disconnect
             centralManager?.cancelPeripheralConnection(peripheral)
             return
         }
-        
+
         // Discovering BLE characteristics
         peripheral.discoverCharacteristics([BLEService.characteristicUUID], for: service)
     }
-    
+
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         guard !isPanicSuspended else { return }
         if let error = error {
             SecureLogger.error("❌ Error discovering characteristics for \(peripheral.name ?? "Unknown"): \(error.localizedDescription)", category: .session)
             return
         }
-        
+
         guard let characteristic = service.characteristics?.first(where: { $0.uuid == BLEService.characteristicUUID }) else {
             SecureLogger.warning("⚠️ No matching characteristic found for \(peripheral.name ?? "Unknown")", category: .session)
             return
         }
-        
+
         // Found characteristic
-        
+
         // Log characteristic properties for debugging
         var properties: [String] = []
         if characteristic.properties.contains(.read) { properties.append("read") }
@@ -281,21 +281,21 @@ extension BLEService: CBPeripheralDelegate {
         if characteristic.properties.contains(.notify) { properties.append("notify") }
         if characteristic.properties.contains(.indicate) { properties.append("indicate") }
         // Characteristic properties: \(properties.joined(separator: ", "))
-        
+
         // Verify characteristic supports reliable writes
         if !characteristic.properties.contains(.write) {
             SecureLogger.warning("⚠️ Characteristic doesn't support reliable writes (withResponse)!", category: .session)
         }
-        
+
         // Store characteristic in our consolidated structure
         let peripheralID = peripheral.identifier.uuidString
         linkStateStore.updateCharacteristic(characteristic, forPeripheralID: peripheralID)
-        
+
         // Subscribe for notifications
         if characteristic.properties.contains(.notify) {
             peripheral.setNotifyValue(true, for: characteristic)
             SecureLogger.debug("🔔 Subscribed to notifications from \(peripheral.name ?? "Unknown")", category: .session)
-            
+
             // Send announce after subscription is confirmed (force send for new connection)
             engineScheduler.schedule(after: TransportConfig.blePostSubscribeAnnounceDelaySeconds) { [weak self] in
                 self?.sendAnnounce(forceSend: true)
@@ -306,14 +306,14 @@ extension BLEService: CBPeripheralDelegate {
             SecureLogger.warning("⚠️ Characteristic does not support notifications", category: .session)
         }
     }
-    
+
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         guard !isPanicSuspended else { return }
         if let error = error {
             SecureLogger.error("❌ Error receiving notification: \(error.localizedDescription)", category: .session)
             return
         }
-        
+
         guard let data = characteristic.value, !data.isEmpty else {
             SecureLogger.warning("⚠️ No data in notification", category: .session)
             return
@@ -346,7 +346,7 @@ extension BLEService: CBPeripheralDelegate {
         if result.reset {
             SecureLogger.error("❌ Invalid BLE frame length; reset notification stream", category: .session)
         }
-        
+
         // Attribution — spoof rejection, announce binding, ingress
         // recording — is engine work now (the engine owns the bindings).
         // Frames hop up in decode order; the engine's serial slot ordering
@@ -366,7 +366,7 @@ extension BLEService: CBPeripheralDelegate {
             ))
         }
     }
-    
+
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
         if let error = error {
             SecureLogger.error("❌ Write failed to \(peripheral.name ?? peripheral.identifier.uuidString): \(error.localizedDescription)", category: .session)
@@ -375,7 +375,7 @@ extension BLEService: CBPeripheralDelegate {
             SecureLogger.debug("✅ Write confirmed to \(peripheral.name ?? peripheral.identifier.uuidString)", category: .session)
         }
     }
-    
+
     func peripheralIsReady(toSendWriteWithoutResponse peripheral: CBPeripheral) {
         guard !isPanicSuspended else { return }
         // Resume queued writes for this peripheral - called when canSendWriteWithoutResponse becomes true again
@@ -384,7 +384,7 @@ extension BLEService: CBPeripheralDelegate {
         }
         drainPendingWrites(for: peripheral)
     }
-    
+
     func peripheral(_ peripheral: CBPeripheral, didModifyServices invalidatedServices: [CBService]) {
         guard !isPanicSuspended else { return }
         SecureLogger.warning("⚠️ Services modified for \(peripheral.name ?? peripheral.identifier.uuidString)", category: .session)
@@ -405,14 +405,14 @@ extension BLEService: CBPeripheralDelegate {
         SecureLogger.debug("🔄 BitChat service changed for \(peripheral.name ?? peripheral.identifier.uuidString), rediscovering", category: .session)
         peripheral.discoverServices([BLEService.serviceUUID])
     }
-    
+
     func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
         guard !isPanicSuspended else { return }
         if let error = error {
             SecureLogger.error("❌ Error updating notification state: \(error.localizedDescription)", category: .session)
         } else {
             SecureLogger.debug("🔔 Notification state updated for \(peripheral.name ?? peripheral.identifier.uuidString): \(characteristic.isNotifying ? "ON" : "OFF")", category: .session)
-            
+
             // If notifications are now on, send an announce to ensure this peer knows about us
             if characteristic.isNotifying {
                 // Sending announce after subscription

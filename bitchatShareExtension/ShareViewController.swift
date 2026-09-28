@@ -22,7 +22,7 @@ final class ShareViewController: UIViewController {
         static let savedForReview = String(localized: "share.status.saved_for_review", comment: "Shown after content is staged for review in the main app")
         static let failedToSave = String(localized: "share.status.failed_to_save", comment: "Shown when content cannot be staged for the main app")
     }
-    
+
     private let statusLabel: UILabel = {
         let l = UILabel()
         l.translatesAutoresizingMaskIntoConstraints = false

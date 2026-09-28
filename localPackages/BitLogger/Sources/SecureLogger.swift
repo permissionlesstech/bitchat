@@ -58,25 +58,25 @@ func os_log(_ message: StaticString, log: OSLog, type: OSLogType, _ args: CVarAr
 /// Centralized security-aware logging framework
 /// Provides safe logging that filters sensitive data and security events
 public final class SecureLogger {
-    
+
     // MARK: - Timestamp Formatter
-    
+
     private static let timestampFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm:ss.SSS"
         formatter.timeZone = TimeZone.current
         return formatter
     }()
-    
+
     // MARK: - Log Levels
-    
+
     enum LogLevel {
         case debug
         case info
         case warning
         case error
         case fault
-        
+
         fileprivate var order: Int {
             switch self {
             case .debug: return 0
@@ -86,7 +86,7 @@ public final class SecureLogger {
             case .fault: return 4
             }
         }
-        
+
         var osLogType: OSLogType {
             switch self {
             case .debug: return .debug
@@ -121,7 +121,7 @@ public final class SecureLogger {
 // MARK: - Public Logging Methods
 
 public extension SecureLogger {
-    
+
     // Each wrapper checks the level BEFORE evaluating the autoclosure so
     // filtered messages never pay for string interpolation — this matters on
     // hot paths that log per packet/event. Debug compiles out of release
@@ -157,7 +157,7 @@ public extension SecureLogger {
         log(message(), category: category, level: .error, file: file, line: line, function: function)
         #endif
     }
-    
+
     /// Log errors with context
     static func error(_ error: Error, context: @autoclosure () -> String, category: OSLog = .noise,
                       file: String = #file, line: Int = #line, function: String = #function) {
@@ -165,7 +165,7 @@ public extension SecureLogger {
         let location = formatLocation(file: file, line: line, function: function)
         let sanitized = context().sanitized()
         let errorDesc = error.localizedDescription.sanitized()
-        
+
         #if DEBUG
         os_log("%{public}@ Error in %{public}@: %{public}@", log: category, type: .error, location, sanitized, errorDesc)
         #else
@@ -178,14 +178,14 @@ public extension SecureLogger {
 // MARK: Security Event Logging
 
 public extension SecureLogger {
-    
+
     enum SecurityEvent {
         case handshakeStarted(peerID: String)
         case handshakeCompleted(peerID: String)
         case handshakeFailed(peerID: String, error: String)
         case sessionExpired(peerID: String)
         case authenticationFailed(peerID: String)
-        
+
         var message: String {
             switch self {
             case .handshakeStarted(let peerID):
@@ -201,15 +201,15 @@ public extension SecureLogger {
             }
         }
     }
-    
+
     static func info(_ event: SecurityEvent, file: String = #file, line: Int = #line, function: String = #function) {
         logSecurityEvent(event, level: .info, file: file, line: line, function: function)
     }
-    
+
     static func warning(_ event: SecurityEvent, file: String = #file, line: Int = #line, function: String = #function) {
         logSecurityEvent(event, level: .warning, file: file, line: line, function: function)
     }
-    
+
     static func error(_ event: SecurityEvent, file: String = #file, line: Int = #line, function: String = #function) {
         logSecurityEvent(event, level: .error, file: file, line: line, function: function)
     }
@@ -218,17 +218,17 @@ public extension SecureLogger {
 // MARK: - Convenience Extensions
 
 public extension SecureLogger {
-    
+
     enum KeyOperation: String, CustomStringConvertible {
         case load
         case create
         case generate
         case delete
         case save
-        
+
         public var description: String { rawValue }
     }
-    
+
     /// Log key management operations
     static func logKeyOperation(_ operation: KeyOperation, keyType: String, success: Bool = true,
                                 file: String = #file, line: Int = #line, function: String = #function) {
@@ -256,7 +256,7 @@ private extension SecureLogger {
         os_log("%{public}@", log: category, type: level.osLogType, sanitized)
         #endif
     }
-    
+
     /// Log a security event
     static func logSecurityEvent(_ event: SecurityEvent, level: LogLevel = .info,
                                  file: String, line: Int, function: String) {
@@ -267,7 +267,7 @@ private extension SecureLogger {
         os_log("%{public}@", log: .security, type: level.osLogType, message)
         #endif
     }
-    
+
     /// Format location information for logging
     static func formatLocation(file: String, line: Int, function: String) -> String {
         let fileName = (file as NSString).lastPathComponent
