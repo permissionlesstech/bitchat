@@ -1687,7 +1687,6 @@ private final class TransferCancellationRecorder: @unchecked Sendable {
         return transferIDs.contains(transferID)
     }
 
-
     func reason(for transferID: String) -> String? {
         lock.lock()
         defer { lock.unlock() }
