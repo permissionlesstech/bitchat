@@ -208,19 +208,38 @@ struct PacketsTests {
     }
 
     @Test
-    func authenticatedPeerStateRejectsAnUnreadableCeilingRatherThanIgnoringIt() {
+    func malformedOptionalCeilingsPreserveAuthenticatedIdentity() throws {
         let key = Data(repeating: 0x44, count: 32)
         let prefix = Data([0x01]) + makeTLV(type: 0x01, value: Data([0x00, 0x01]))
             + makeTLV(type: 0x02, value: key)
-        let ceiling = makeTLV(type: 0x03, value: Data([0x01, 0x00]))
+        let valid = makeTLV(type: 0x03, value: Data([0x04, 0x00]))
+        let malformed: [Data] = [
+            makeTLV(type: 0x03, value: Data([0x00, 0x00])),
+            makeTLV(type: 0x03, value: Data([0x01])),
+            makeTLV(type: 0x03, value: Data([0x00, 0x00, 0x01, 0x00])),
+            valid + valid,
+            makeTLV(type: 0x03, value: Data([0x01])) + valid,
+            Data([0x03]),
+            Data([0x03, 0x02, 0x01])
+        ]
+        for tail in malformed {
+            let decoded = try #require(AuthenticatedPeerStatePacket.decode(from: prefix + tail))
+            #expect(decoded.signingPublicKey == key)
+            #expect(decoded.capabilities.contains(.privateMedia))
+            #expect(decoded.maxReassemblyFragments == 256)
+        }
+    }
 
-        // Zero means "reassembles nothing" — never a value we should honour.
-        #expect(AuthenticatedPeerStatePacket.decode(from: prefix + makeTLV(type: 0x03, value: Data([0x00, 0x00]))) == nil)
-        // Wrong width: a 1- or 4-byte field is a different encoding, not ours.
-        #expect(AuthenticatedPeerStatePacket.decode(from: prefix + makeTLV(type: 0x03, value: Data([0x01]))) == nil)
-        #expect(AuthenticatedPeerStatePacket.decode(from: prefix + makeTLV(type: 0x03, value: Data([0x00, 0x00, 0x01, 0x00]))) == nil)
-        // Two ceilings are ambiguous; picking either one is a guess.
-        #expect(AuthenticatedPeerStatePacket.decode(from: prefix + ceiling + ceiling) == nil)
+    @Test
+    func malformedCeilingBeforeRequiredFieldsDoesNotHideThem() throws {
+        let key = Data(repeating: 0x44, count: 32)
+        let payload = Data([0x01]) + makeTLV(type: 0x03, value: Data([0x01]))
+            + makeTLV(type: 0x01, value: Data([0x00, 0x01]))
+            + makeTLV(type: 0x02, value: key)
+        let decoded = try #require(AuthenticatedPeerStatePacket.decode(from: payload))
+        #expect(decoded.signingPublicKey == key)
+        #expect(decoded.capabilities.contains(.privateMedia))
+        #expect(decoded.maxReassemblyFragments == 256)
     }
 
     @Test

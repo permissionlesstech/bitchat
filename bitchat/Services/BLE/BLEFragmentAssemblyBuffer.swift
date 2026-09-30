@@ -55,17 +55,9 @@ struct BLEFragmentHeader: Equatable {
 }
 
 struct BLEFragmentAssemblyBuffer {
-    /// The largest fragment count this client will ever begin reassembling.
-    ///
-    /// A sender cannot know this by inspection, so it is also the value we
-    /// advertise to authenticated peers (`AuthenticatedPeerStatePacket`'s
-    /// `maxReassemblyFragments` TLV). Naming it keeps the guard below and the
-    /// advertised number from drifting apart: a client that raises one and
-    /// forgets the other either rejects media it promised to accept, or
-    /// promises more than it can hold.
-    ///
-    /// Bounded by `UInt16.max` because the wire header carries `total` as a
-    /// big-endian `UInt16`.
+    /// Header sanity bound, independent of the per-type byte budget below.
+    /// This is not an advertised capacity: 10,000 large fragments would exceed
+    /// that byte budget long before reaching the count limit.
     static let maxReassemblyFragments = 10_000
 
     enum AppendResult: Equatable {

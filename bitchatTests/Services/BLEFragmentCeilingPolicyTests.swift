@@ -71,9 +71,9 @@ struct BLEFragmentCeilingPolicyTests {
     }
 
     @Test
-    func anAdvertisedCeilingAboveTheMigrationCapLiftsItForThatPeer() {
-        // A peer that speaks 0x21 has told us the deployed-Android assumption
-        // behind the 256 cap does not describe it.
+    func anAdvertisedCeilingNeverLiftsTheRawMigrationCap() {
+        // An authenticated count is not permission to relax raw fallback;
+        // only encrypted media can use a value above the migration ceiling.
         let decision = BLEFragmentCeilingPolicy.decide(
             packetType: fileTransfer,
             isDirectedToPeer: true,
@@ -81,8 +81,8 @@ struct BLEFragmentCeilingPolicyTests {
         )
 
         #expect(decision.source == .negotiated)
-        #expect(decision.maxFragments == 1024)
-        #expect(decision.admits(fragmentCount: 1024))
+        #expect(decision.maxFragments == 256)
+        #expect(!decision.admits(fragmentCount: 257))
     }
 
     @Test
@@ -101,7 +101,7 @@ struct BLEFragmentCeilingPolicyTests {
 
     @Test
     func aZeroAdvertisementFallsBackRatherThanBlockingEveryTransfer() {
-        // The decoder rejects a zero on the wire, so this can only arrive from
+        // The decoder replaces a zero on the wire with 256, so this can only arrive from
         // a future caller passing one through. Treat it as absent: refusing
         // every fragment to that peer would be a worse failure than the proxy.
         let decision = BLEFragmentCeilingPolicy.decide(
@@ -143,21 +143,28 @@ struct BLEFragmentCeilingPolicyTests {
     }
 
     @Test
-    func advertisingOurOwnCeilingRoundTripsThroughTheWireField() throws {
-        // The advertised number has to fit the 2-byte TLV, or we would ship a
-        // truncated ceiling that reads as a much smaller buffer.
-        let local = BLEFragmentAssemblyBuffer.maxReassemblyFragments
-        #expect(local > 0)
-        #expect(local <= Int(UInt16.max))
-
-        let packet = AuthenticatedPeerStatePacket(
-            capabilities: [.privateMedia],
-            signingPublicKey: Data(repeating: 0x11, count: 32),
-            maxReassemblyFragments: UInt16(local)
+    func encryptedMediaCanUseAPeerLimitAbove256() {
+        let decision = BLEFragmentCeilingPolicy.decide(
+            packetType: noiseEncrypted, isDirectedToPeer: true, negotiatedCeiling: 1024
         )
-        let encoded = try #require(packet.encode())
-        let decoded = try #require(AuthenticatedPeerStatePacket.decode(from: encoded))
-        let advertised = try #require(decoded.maxReassemblyFragments)
-        #expect(Int(advertised) == local)
+        #expect(decision.maxFragments == 1024)
+        #expect(decision.admits(fragmentCount: 1024))
+        #expect(!decision.admits(fragmentCount: 1025))
+    }
+
+    @Test
+    func rawMediaStillHonorsALowerPeerLimit() {
+        let decision = BLEFragmentCeilingPolicy.decide(
+            packetType: fileTransfer, isDirectedToPeer: true, negotiatedCeiling: 1
+        )
+        #expect(decision.maxFragments == 1)
+        #expect(!decision.admits(fragmentCount: 2))
+    }
+
+    @Test
+    func preflightSkipsUnnegotiatedEncryptedMedia() {
+        #expect(!BLEFragmentCeilingPolicy.requiresPreflight(packetType: noiseEncrypted, negotiatedCeiling: nil))
+        #expect(BLEFragmentCeilingPolicy.requiresPreflight(packetType: noiseEncrypted, negotiatedCeiling: 256))
+        #expect(BLEFragmentCeilingPolicy.requiresPreflight(packetType: fileTransfer, negotiatedCeiling: nil))
     }
 }

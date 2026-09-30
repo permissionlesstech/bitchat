@@ -168,28 +168,25 @@ struct AnnouncementPacket {
 /// - TLV `0x03`: optional 2-byte big-endian reassembly fragment ceiling
 ///
 /// Unknown TLVs are skipped for forward compatibility. Unknown versions,
-/// duplicates, non-canonical capability fields, and malformed lengths are
-/// rejected without changing authenticated state.
+/// duplicate required fields, non-canonical capabilities, and malformed required
+/// lengths are rejected. An unreadable optional ceiling preserves identity and
+/// capabilities while selecting the conservative fragment limit.
 struct AuthenticatedPeerStatePacket: Equatable {
     static let currentVersion: UInt8 = 1
     static let signingPublicKeyLength = 32
     static let maxReassemblyFragmentsLength = 2
+    static let malformedReassemblyFragmentCeiling: UInt16 = 256
 
     let capabilities: PeerCapabilities
     let signingPublicKey: Data
     /// How many BLE fragments this peer will reassemble for one packet, as it
     /// reported inside the established Noise session.
     ///
-    /// The `.privateMedia` capability bit says a peer understands encrypted
-    /// media; it says nothing about how much of it that peer can hold. Before
-    /// this TLV existed, senders inferred the ceiling from the packet type —
-    /// 256 for the directed migration fallback, the full local ceiling for
-    /// anything encrypted — which is only correct while every client that
-    /// implements `0x20` also has a large reassembler.
-    ///
-    /// `nil` means the peer did not advertise one, which is the case for every
-    /// client released before this TLV. Senders fall back to the type proxy
-    /// there; see `BLEFragmentCeilingPolicy`.
+    /// The `.privateMedia` capability bit does not describe reassembly capacity.
+    /// A missing limit preserves existing sender behavior; this cannot protect
+    /// unadvertised encrypted receivers with a smaller fragment limit.
+    /// See `BLEFragmentCeilingPolicy` for the conservative malformed-field and
+    /// raw migration limits.
     let maxReassemblyFragments: UInt16?
 
     init(
@@ -214,7 +211,7 @@ struct AuthenticatedPeerStatePacket: Equatable {
         guard !capabilityBytes.isEmpty, capabilityBytes.count <= 8 else { return nil }
         // Zero would advertise a peer that can reassemble nothing, which is
         // indistinguishable in effect from refusing every fragmented packet.
-        // Omit the TLV instead of putting a meaningless number on the wire.
+        // Reject zero rather than putting a meaningless number on the wire.
         if let maxReassemblyFragments { guard maxReassemblyFragments > 0 else { return nil } }
 
         var data = Data([Self.currentVersion])
@@ -239,13 +236,26 @@ struct AuthenticatedPeerStatePacket: Equatable {
         var capabilities: PeerCapabilities?
         var signingPublicKey: Data?
         var maxReassemblyFragments: UInt16?
+        var sawReassemblyCeiling = false
 
         while offset < data.count {
-            guard offset + 2 <= data.count else { return nil }
+            guard offset + 2 <= data.count else {
+                if data[offset] == TLVType.maxReassemblyFragments.rawValue {
+                    maxReassemblyFragments = malformedReassemblyFragmentCeiling
+                    break
+                }
+                return nil
+            }
             let typeRaw = data[offset]
             let length = Int(data[offset + 1])
             offset += 2
-            guard offset + length <= data.count else { return nil }
+            guard offset + length <= data.count else {
+                if typeRaw == TLVType.maxReassemblyFragments.rawValue {
+                    maxReassemblyFragments = malformedReassemblyFragmentCeiling
+                    break
+                }
+                return nil
+            }
             let value = Data(data[offset..<(offset + length)])
             offset += length
 
@@ -267,16 +277,21 @@ struct AuthenticatedPeerStatePacket: Equatable {
                 signingPublicKey = value
 
             case .maxReassemblyFragments:
-                // Rejected rather than skipped: a peer that meant to constrain
-                // us but sent a field we cannot read must not be treated as
-                // having said nothing, because "said nothing" falls back to
-                // the permissive type proxy.
-                guard maxReassemblyFragments == nil,
-                      value.count == Self.maxReassemblyFragmentsLength else { return nil }
+                // This optional extension must not discard the authenticated
+                // capabilities and signing key. Ambiguous or unreadable limits
+                // retain those fields and select the conservative 256 fallback.
+                guard !sawReassemblyCeiling else {
+                    maxReassemblyFragments = malformedReassemblyFragmentCeiling
+                    continue
+                }
+                sawReassemblyCeiling = true
+                guard value.count == Self.maxReassemblyFragmentsLength else {
+                    maxReassemblyFragments = malformedReassemblyFragmentCeiling
+                    continue
+                }
                 let decoded = (UInt16(value[value.startIndex]) << 8)
                     | UInt16(value[value.startIndex + 1])
-                guard decoded > 0 else { return nil }
-                maxReassemblyFragments = decoded
+                maxReassemblyFragments = decoded > 0 ? decoded : malformedReassemblyFragmentCeiling
             }
         }
 
