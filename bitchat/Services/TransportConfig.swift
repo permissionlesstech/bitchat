@@ -227,9 +227,11 @@ enum TransportConfig {
     // Outer gift-wrap age ceiling. Android (and NIP-17-style clients) may
     // randomize the wrap's created_at up to 48h into the past; relays that
     // honor `since` will not deliver those wraps under a 24h filter. The
-    // accept window is 48h plus skew so a wrap at the randomization floor
-    // still clears a mildly slow clock.
-    static let nostrGiftWrapMaxAgeSeconds: TimeInterval = 172_800 + 900
+    // envelope may then wait offline for the full inner-rumor delivery window.
+    // Keep that grace in the outer gate and relay filter; the inner timestamp
+    // still independently enforces message freshness after decryption.
+    static let nostrGiftWrapMaxAgeSeconds: TimeInterval = 172_800
+        + nostrDMSubscribeLookbackSeconds + nostrDMMaxClockSkewSeconds
     // A sampled chat message this recent means "a conversation is happening
     // there" for the empty-timeline nearby-activity hint.
     static let uiGeohashChatActivityWindowSeconds: TimeInterval = 900
