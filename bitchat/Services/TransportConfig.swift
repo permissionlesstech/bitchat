@@ -269,7 +269,10 @@ enum TransportConfig {
     // Reconnect delays get ±20% random jitter so relays that dropped together
     // (e.g. a network blip) don't thundering-herd the same reconnect instant.
     static let nostrRelayBackoffJitterRatio: Double = 0.2
-    static let nostrRelayDefaultFetchLimit: Int = 100
+    // Randomized envelope timestamps can put a recent DM behind older rumors.
+    // Match the existing location backfill allowance, while keeping requests bounded.
+    // Relays may impose a lower cap; this is not complete history pagination.
+    static let nostrGiftWrapFetchLimit: Int = 1000
     // How many consecutive Tor-readiness waits (each bounded by TorManager's
     // bootstrap deadline) to attempt before unblocking pending EOSE callers.
     static let nostrTorReadyMaxWaitAttempts: Int = 3

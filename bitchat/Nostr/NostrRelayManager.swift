@@ -1867,7 +1867,7 @@ struct NostrFilter: Encodable {
         filter.kinds = [1059] // Gift wrap kind
         filter.since = since?.timeIntervalSince1970.toInt()
         filter.tagFilters = ["p": [pubkey]]
-        filter.limit = TransportConfig.nostrRelayDefaultFetchLimit // reasonable limit
+        filter.limit = TransportConfig.nostrGiftWrapFetchLimit
         return filter
     }
 
