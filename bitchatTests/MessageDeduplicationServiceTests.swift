@@ -122,6 +122,22 @@ struct LRUDeduplicationCacheTests {
         #expect(cache.contains("b"))
     }
 
+    @Test func ordinaryEvictionBoundsOrderStorage() {
+        let cache = LRUDeduplicationCache<Int>(capacity: 2)
+        var peakStorage = 0
+
+        for value in 0..<10_000 {
+            cache.record("key\(value)", value: value)
+            peakStorage = max(peakStorage, cache.orderStorageCountForTesting)
+            #expect(cache.count == min(value + 1, 2))
+            #expect(cache.orderStorageCountForTesting <= 33)
+        }
+
+        #expect(peakStorage == 33)
+        #expect(cache.value(for: "key9998") == 9_998)
+        #expect(cache.value(for: "key9999") == 9_999)
+    }
+
     @Test func removal_thenReplacementPreservesLiveCapacity() {
         let cache = LRUDeduplicationCache<Int>(capacity: 3)
         cache.record("a", value: 1)
@@ -151,6 +167,14 @@ struct LRUDeduplicationCacheTests {
         #expect(cache.value(for: "a") == 4)
         #expect(cache.contains("b"))
         #expect(cache.contains("c"))
+
+        cache.record("d", value: 5)
+
+        #expect(cache.count == 3)
+        #expect(!cache.contains("b"))
+        #expect(cache.value(for: "a") == 4)
+        #expect(cache.contains("c"))
+        #expect(cache.contains("d"))
     }
 
     @Test func updatingLiveKeyDoesNotRefreshInsertionOrder() {
@@ -169,24 +193,41 @@ struct LRUDeduplicationCacheTests {
     @Test func repeatedRemovalAndReinsertionCompactsStaleNodes() {
         let cache = LRUDeduplicationCache<Int>(capacity: 3)
         cache.record("a", value: 0)
+        cache.record("b", value: 1)
+        cache.record("c", value: 2)
+        var peakStorage = cache.orderStorageCountForTesting
 
         for value in 1...1_001 {
             cache.remove("a")
+            peakStorage = max(peakStorage, cache.orderStorageCountForTesting)
+            #expect(cache.orderStorageCountForTesting <= 34)
             cache.record("a", value: value)
+            peakStorage = max(peakStorage, cache.orderStorageCountForTesting)
+            #expect(cache.orderStorageCountForTesting <= 34)
+            #expect(cache.count == 3)
+            #expect(cache.value(for: "b") == 1)
+            #expect(cache.value(for: "c") == 2)
         }
 
-        #expect(cache.count == 1)
+        #expect(peakStorage == 34)
+        #expect(cache.count == 3)
         #expect(cache.value(for: "a") == 1_001)
-        #expect(cache.orderStorageCountForTesting <= 32)
 
-        cache.record("b", value: 1)
-        cache.record("c", value: 2)
         cache.record("d", value: 3)
-
-        #expect(!cache.contains("a"))
-        #expect(cache.contains("b"))
+        #expect(!cache.contains("b"))
         #expect(cache.contains("c"))
+        #expect(cache.value(for: "a") == 1_001)
+
+        cache.record("e", value: 4)
+        #expect(!cache.contains("c"))
+        #expect(cache.value(for: "a") == 1_001)
+
+        cache.record("f", value: 5)
+        #expect(!cache.contains("a"))
+        #expect(cache.count == 3)
         #expect(cache.contains("d"))
+        #expect(cache.contains("e"))
+        #expect(cache.contains("f"))
     }
 
     // MARK: - Edge Cases

@@ -30,6 +30,7 @@ final class LRUDeduplicationCache<Value> {
     private var head: Int = 0
     private var nextGeneration: UInt64 = 0
     private let capacity: Int
+    private let compactionThreshold = 32
 
     /// Creates a new LRU cache with the specified capacity.
     /// - Parameter capacity: Maximum number of entries before eviction
@@ -112,9 +113,12 @@ final class LRUDeduplicationCache<Value> {
 
     private func compactIfNeeded() {
         let unconsumedCount = order.count - head
+        // Each live key has exactly one generation-matching node at or after head.
+        // Updates retain that node; reinsertion creates a new generation, so the
+        // remaining unconsumed nodes are stale and can be counted by subtraction.
         let staleNodeCount = unconsumedCount - map.count
-        let shouldDropConsumedPrefix = head >= 32 && head * 2 >= order.count
-        let shouldRemoveStaleNodes = staleNodeCount >= 32 && staleNodeCount * 2 >= unconsumedCount
+        let shouldDropConsumedPrefix = head >= compactionThreshold && head * 2 >= order.count
+        let shouldRemoveStaleNodes = staleNodeCount >= compactionThreshold && staleNodeCount * 2 >= unconsumedCount
 
         guard shouldDropConsumedPrefix || shouldRemoveStaleNodes else { return }
 
