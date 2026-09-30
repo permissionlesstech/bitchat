@@ -173,7 +173,7 @@ proof = Ed25519-Sign(signingPrivateKey,
                      || noiseStaticPublicKey (32 bytes))
 ```
 
-Sent as a new TLV in `AuthenticatedPeerStatePacket`, whose existing structure already carries a version byte, a canonicality-checked capability TLV, and the 32-byte signing key. The receiver verifies:
+Reserved as TLV `0x04` in `AuthenticatedPeerStatePacket` (`0x03` is the optional reassembly fragment-count ceiling), whose existing structure already carries a version byte, a canonicality-checked capability TLV, and the 32-byte signing key. The receiver verifies:
 
 - **that the `noiseStaticPublicKey` inside the proof is byte-equal to the remote static key the Noise session actually established** — see below, this one is load-bearing, and
 - the signature against the signing key in the same packet, **and**

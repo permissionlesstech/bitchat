@@ -189,4 +189,73 @@ struct BLEPrivateMediaSessionStoreTests {
         )
         #expect(store.markPeerStateSend(for: peer, echo: false))
     }
+
+    // MARK: - Negotiated reassembly ceiling
+
+    @Test func negotiatedCeilingIsReadableOnlyForTheGenerationThatStatedIt() {
+        let store = BLEPrivateMediaSessionStore()
+        let generation = UUID()
+        _ = store.beginAuthenticatedGeneration(
+            for: peer, fingerprint: fingerprint, generation: generation
+        )
+        #expect(store.negotiatedFragmentCeiling(for: peer) == nil)
+
+        _ = store.applyAuthenticatedPeerState(
+            for: peer,
+            fingerprint: fingerprint,
+            generation: generation,
+            capabilities: [.privateMedia],
+            maxReassemblyFragments: 128
+        )
+        #expect(store.negotiatedFragmentCeiling(for: peer) == 128)
+
+        // A rekey replaces the counterpart's session state. The old ceiling
+        // was a statement by whoever held that session, and the replacement
+        // may be a different client entirely, so it must not be inherited.
+        //
+        // Two independent mechanisms enforce this: `beginAuthenticatedGeneration`
+        // drops the observation, and the accessor refuses one whose pinned
+        // generation is not current. Removing either alone still passes; this
+        // expectation fails once both are gone, which is the invariant it is
+        // here to hold rather than any single line of it.
+        _ = store.beginAuthenticatedGeneration(
+            for: peer, fingerprint: fingerprint, generation: UUID()
+        )
+        #expect(store.negotiatedFragmentCeiling(for: peer) == nil)
+    }
+
+    @Test func peerStateWithoutACeilingLeavesTheSenderOnTheTypeProxy() {
+        let store = BLEPrivateMediaSessionStore()
+        let generation = UUID()
+        _ = store.beginAuthenticatedGeneration(
+            for: peer, fingerprint: fingerprint, generation: generation
+        )
+        // Every client released before TLV 0x03 lands here.
+        _ = store.applyAuthenticatedPeerState(
+            for: peer,
+            fingerprint: fingerprint,
+            generation: generation,
+            capabilities: [.privateMedia]
+        )
+        #expect(store.negotiatedFragmentCeiling(for: peer) == nil)
+    }
+
+    @Test func clearingTheSessionDropsTheNegotiatedCeiling() {
+        let store = BLEPrivateMediaSessionStore()
+        let generation = UUID()
+        _ = store.beginAuthenticatedGeneration(
+            for: peer, fingerprint: fingerprint, generation: generation
+        )
+        _ = store.applyAuthenticatedPeerState(
+            for: peer,
+            fingerprint: fingerprint,
+            generation: generation,
+            capabilities: [.privateMedia],
+            maxReassemblyFragments: 512
+        )
+        #expect(store.negotiatedFragmentCeiling(for: peer) == 512)
+
+        _ = store.clearSession(for: peer)
+        #expect(store.negotiatedFragmentCeiling(for: peer) == nil)
+    }
 }
