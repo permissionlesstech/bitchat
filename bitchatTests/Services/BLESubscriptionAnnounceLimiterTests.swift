@@ -82,10 +82,7 @@ struct BLESubscriptionAnnounceLimiterTests {
             }
         }
 
-        #expect(admittedAt != nil, "a central that keeps trying must eventually be re-admitted")
-        if let admittedAt {
-            #expect(admittedAt >= maxBackoff, "re-admitted early at +\(admittedAt)s")
-        }
+        #expect(admittedAt == maxBackoff, "re-admission must occur exactly at the capped backoff")
     }
 
     @Test("a hammering central is still held off for the whole backoff")
@@ -104,4 +101,21 @@ struct BLESubscriptionAnnounceLimiterTests {
             #expect(decision != .allowed, "admitted early at +\(step)s")
         }
     }
+
+    @Test("continuous retries admit exactly once per capped backoff")
+    func continuousRetriesPreserveSteadyStateRate() {
+        var limiter = BLESubscriptionAnnounceLimiter()
+        let start = Date(timeIntervalSince1970: 3_000)
+        var admissions: [Int] = []
+
+        #expect(TransportConfig.bleSubscriptionRateLimitMaxBackoffSeconds
+            < TransportConfig.bleSubscriptionRateLimitWindowSeconds)
+        for second in 0..<90 {
+            if limiter.decision(for: "central-flapping", now: start.addingTimeInterval(Double(second))) == .allowed {
+                admissions.append(second)
+            }
+        }
+        #expect(admissions == [0, 30, 60])
+    }
+
 }
