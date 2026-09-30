@@ -339,7 +339,7 @@ struct BinaryProtocolTests {
             }
         }
         let packet = BitchatPacket(
-            type: MessageType.message.rawValue,
+            type: MessageType.fileTransfer.rawValue,
             senderID: Data(hexString: "0011223344556677") ?? Data(),
             recipientID: nil,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
@@ -351,6 +351,25 @@ struct BinaryProtocolTests {
         // Encode must refuse the same ceiling decode enforces — otherwise we emit
         // frames that every honest peer (including ourselves) silently drops.
         #expect(BinaryProtocol.encode(packet) == nil)
+    }
+
+    @Test("Decode rejects a hand-built v2 media frame past the framed-file cap")
+    func oversizedInboundMediaFrameIsRejected() {
+        // Built independently of encode so the inbound payloadLength guard stays
+        // covered after encode starts refusing the same size on the way out.
+        let oversizedLength = FileTransferLimits.maxFramedFileBytes + 1
+        var frame = Data()
+        frame.reserveCapacity((BinaryProtocol.headerSize(for: 2) ?? 16) + BinaryProtocol.senderIDSize)
+        frame.append(2) // version
+        frame.append(MessageType.fileTransfer.rawValue)
+        frame.append(1) // ttl
+        frame.append(contentsOf: [UInt8](repeating: 0, count: 8)) // timestamp
+        frame.append(0) // flags: no recipient / signature / compression / route
+        var beLength = UInt32(oversizedLength).bigEndian
+        withUnsafeBytes(of: &beLength) { frame.append(contentsOf: $0) }
+        frame.append(contentsOf: [UInt8](repeating: 0x11, count: BinaryProtocol.senderIDSize))
+        // Payload body intentionally omitted — the length check must fire first.
+        #expect(BinaryProtocol.decode(frame) == nil)
     }
 
     @Test("Round-trip a payload exactly at the framed file cap")
