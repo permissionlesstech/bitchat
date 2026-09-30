@@ -858,8 +858,16 @@ struct BLEServiceCoreTests {
         // The responder deadline also arms during the setup handshake below,
         // where a stalled runner would let a short one tear the half-open
         // responder down. It is unlosable here and fired explicitly.
+        //
+        // The engine clock is injected for the same reason. With an unlosable
+        // deadline the quarantine lasts until this test fires it, and on a
+        // slow runner the real 5s capability-proof watchdog armed at the
+        // setup authentication can expire inside it. Its drain cannot
+        // encrypt under a quarantined session and drops the parked payload,
+        // so the final drain comes up one packet short.
         let ble = makeService(
-            noiseResponderHandshakeTimeout: TestConstants.unlosableInterval
+            noiseResponderHandshakeTimeout: TestConstants.unlosableInterval,
+            engineScheduler: BLEEngineManualScheduler()
         )
         let alice = NoiseEncryptionService(keychain: MockKeychain())
         let mallory = NoiseEncryptionService(keychain: MockKeychain())
@@ -959,8 +967,8 @@ struct BLEServiceCoreTests {
         #expect(outbound.count(ofType: .noiseEncrypted) == 0)
 
         // The capability-proof watchdog armed at the original authentication
-        // is still live and can genuinely reach its real 5s deadline here on
-        // a stalled CI runner. Fire it deterministically: its drain must
+        // is still live, and on the injected clock it expires only when
+        // fired. Fire it here, while the restore is current: its drain must
         // respect the deferred-until-convergence state instead of encrypting
         // the parked queues under the restored keys (the exact silent loss
         // the defer path exists to prevent). The retry below then still
