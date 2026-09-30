@@ -174,4 +174,51 @@ struct TestTimingHygieneTests {
         #expect(TestConstants.settleTimeout >= TestConstants.minimumSettleTimeout)
         #expect(TestConstants.minimumSettleTimeout > TestConstants.defaultTimeout)
     }
+
+    /// Noise handshake timeouts in `NoiseEncryptionServiceTests` must not use
+    /// production-scale literals unless the expiry itself is under test (#1737).
+    /// Setup handshakes run under the same timer as the scenario; inject an
+    /// unlosable default and fire `_test_fireOrdinary*Timeout` where needed.
+    @Test func noiseEncryptionServiceTestsAvoidInjectedProductionHandshakeTimeouts() throws {
+        let minimumHandshakeTimeout: TimeInterval = 86_400
+        let path = Self.testsRoot
+            .appendingPathComponent("Services/NoiseEncryptionServiceTests.swift")
+        let text = try String(contentsOf: path, encoding: .utf8)
+        let lines = text.components(separatedBy: .newlines)
+        let pattern = try NSRegularExpression(
+            pattern: #"NoiseEncryptionService\s*\([^)]*ordinary(?:Responder)?HandshakeTimeout:\s*([0-9]+(?:\.[0-9]+)?)"#
+        )
+        var offenders: [String] = []
+        for (index, line) in lines.enumerated() {
+            var waived = line.contains(Self.waiver)
+            var back = index - 1
+            while !waived, back >= 0 {
+                let above = lines[back].trimmingCharacters(in: .whitespaces)
+                guard above.hasPrefix("//") else { break }
+                waived = above.contains(Self.waiver)
+                back -= 1
+            }
+            guard !waived else { continue }
+            let range = NSRange(line.startIndex..., in: line)
+            guard let match = pattern.firstMatch(in: line, range: range),
+                  let valueRange = Range(match.range(at: 1), in: line),
+                  let value = TimeInterval(line[valueRange]),
+                  value < minimumHandshakeTimeout
+            else { continue }
+            offenders.append(
+                "NoiseEncryptionServiceTests.swift:\(index + 1) — \(value)s: \(line.trimmingCharacters(in: .whitespaces))"
+            )
+        }
+        #expect(
+            offenders.isEmpty,
+            """
+            Injected handshake timeouts below \(minimumHandshakeTimeout)s flake when \
+            the runner stalls between synchronous handshake steps. Default \
+            services through `makeNoiseService()`, fire `_test_fireOrdinary*Timeout` \
+            for expiry tests, or add "\(Self.waiver) <reason>".
+
+            \(offenders.joined(separator: "\n"))
+            """
+        )
+    }
 }

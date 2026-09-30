@@ -79,6 +79,11 @@ final class NoiseSessionManager {
     private var delayedHandshakeRecoveryWorkItems: [PeerID: DispatchWorkItem] = [:]
     private var handshakeRecoveryCallbackIDs: [PeerID: UUID] = [:]
     private var pendingHandshakeRecoveryIDs: [PeerID: UUID] = [:]
+    /// While positive, handshake timeout work items are registered but not
+    /// dispatched. Tests use this around synchronous multi-step handshakes so
+    /// a stalled runner cannot fire a timer between consecutive calls.
+    private var handshakeTimeoutDispatchSuspendedDepth = 0
+    private var ordinaryInitiatorTimeoutFireAt: [PeerID: DispatchTime] = [:]
     private let sessionFactory: (PeerID, NoiseRole) -> NoiseSession
     private let localPeerID: PeerID
     private let ordinaryHandshakeTimeout: TimeInterval
@@ -846,40 +851,56 @@ final class NoiseSessionManager {
         cancelOrdinaryInitiatorTimeoutLocked(for: peerID)
         ordinaryInitiatorRetryNotifications[peerID] = notifyOnTimeout
         let timeout = DispatchWorkItem(flags: .barrier) { [weak self, weak session] in
-            guard let self,
-                  let session,
-                  let current = self.sessions[peerID],
-                  current === session,
-                  current.role == .initiator,
-                  current.getState() == .handshaking else {
-                return
-            }
-
-            _ = self.sessions.removeValue(forKey: peerID)
-            self.sessionGenerations.removeValue(forKey: peerID)
-            self.ordinaryInitiationIDs.removeValue(forKey: peerID)
-            self.ordinaryInitiatorTimeouts.removeValue(forKey: peerID)
-            self.ordinaryInitiatorRetryNotifications.removeValue(forKey: peerID)
-            self.recentOrdinaryInitiatorCompletions.removeValue(forKey: peerID)
-            session.reset()
-            SecureLogger.debug(
-                "Ordinary initiator handshake with \(peerID) timed out",
-                category: .session
+            guard let self, let session else { return }
+            self.completeOrdinaryInitiatorTimeoutLocked(
+                session,
+                for: peerID
             )
-
-            if notifyOnTimeout {
-                self.requestHandshakeRecovery(for: peerID)
-            }
         }
         ordinaryInitiatorTimeouts[peerID] = timeout
-        managerQueue.asyncAfter(
-            deadline: .now() + ordinaryHandshakeTimeout,
-            execute: timeout
+        let fireAt = DispatchTime.now() + ordinaryHandshakeTimeout
+        ordinaryInitiatorTimeoutFireAt[peerID] = fireAt
+        if handshakeTimeoutDispatchSuspendedDepth == 0 {
+            managerQueue.asyncAfter(deadline: fireAt, execute: timeout)
+        }
+    }
+
+    private func completeOrdinaryInitiatorTimeoutLocked(
+        _ session: NoiseSession,
+        for peerID: PeerID
+    ) {
+        guard let current = sessions[peerID],
+              current === session,
+              current.role == .initiator,
+              current.getState() == .handshaking else {
+            ordinaryInitiatorTimeouts.removeValue(forKey: peerID)
+            ordinaryInitiatorTimeoutFireAt.removeValue(forKey: peerID)
+            return
+        }
+
+        let notifyOnTimeout =
+            ordinaryInitiatorRetryNotifications[peerID] ?? false
+        _ = sessions.removeValue(forKey: peerID)
+        sessionGenerations.removeValue(forKey: peerID)
+        ordinaryInitiationIDs.removeValue(forKey: peerID)
+        ordinaryInitiatorTimeouts.removeValue(forKey: peerID)
+        ordinaryInitiatorTimeoutFireAt.removeValue(forKey: peerID)
+        ordinaryInitiatorRetryNotifications.removeValue(forKey: peerID)
+        recentOrdinaryInitiatorCompletions.removeValue(forKey: peerID)
+        session.reset()
+        SecureLogger.debug(
+            "Ordinary initiator handshake with \(peerID) timed out",
+            category: .session
         )
+
+        if notifyOnTimeout {
+            requestHandshakeRecovery(for: peerID)
+        }
     }
 
     private func cancelOrdinaryInitiatorTimeoutLocked(for peerID: PeerID) {
         ordinaryInitiatorTimeouts.removeValue(forKey: peerID)?.cancel()
+        ordinaryInitiatorTimeoutFireAt.removeValue(forKey: peerID)
         ordinaryInitiatorRetryNotifications.removeValue(forKey: peerID)
     }
 
@@ -970,7 +991,9 @@ final class NoiseSessionManager {
             }
         }
         ordinaryResponderTimeouts[peerID] = timeout
-        managerQueue.asyncAfter(deadline: deadline, execute: timeout)
+        if handshakeTimeoutDispatchSuspendedDepth == 0 {
+            managerQueue.asyncAfter(deadline: deadline, execute: timeout)
+        }
     }
 
     private func cancelOrdinaryResponderTimeoutLocked(
@@ -1028,6 +1051,63 @@ final class NoiseSessionManager {
     }
 
     #if DEBUG
+    func _test_setHandshakeTimeoutDispatchSuspended(_ suspended: Bool) {
+        managerQueue.sync(flags: .barrier) {
+            if suspended {
+                handshakeTimeoutDispatchSuspendedDepth += 1
+            } else {
+                guard handshakeTimeoutDispatchSuspendedDepth > 0 else { return }
+                handshakeTimeoutDispatchSuspendedDepth -= 1
+                guard handshakeTimeoutDispatchSuspendedDepth == 0 else { return }
+                armDeferredHandshakeTimeoutsLocked()
+            }
+        }
+    }
+
+    func _test_ordinaryInitiatorTimeoutFireAt(for peerID: PeerID) -> DispatchTime? {
+        managerQueue.sync {
+            ordinaryInitiatorTimeoutFireAt[peerID]
+        }
+    }
+
+    func _test_fireOrdinaryInitiatorTimeout(for peerID: PeerID) {
+        managerQueue.sync(flags: .barrier) {
+            guard let pending = ordinaryInitiatorTimeouts
+                .removeValue(forKey: peerID) else {
+                return
+            }
+            ordinaryInitiatorTimeoutFireAt.removeValue(forKey: peerID)
+            pending.perform()
+        }
+    }
+
+    func _test_fireOrdinaryResponderTimeout(for peerID: PeerID) {
+        managerQueue.sync(flags: .barrier) {
+            guard let pending = ordinaryResponderTimeouts
+                .removeValue(forKey: peerID) else {
+                return
+            }
+            pending.perform()
+        }
+    }
+
+    private func armDeferredHandshakeTimeoutsLocked() {
+        for (peerID, workItem) in ordinaryInitiatorTimeouts {
+            guard !workItem.isCancelled,
+                  let fireAt = ordinaryInitiatorTimeoutFireAt[peerID] else {
+                continue
+            }
+            managerQueue.asyncAfter(deadline: fireAt, execute: workItem)
+        }
+        for (peerID, workItem) in ordinaryResponderTimeouts {
+            guard !workItem.isCancelled,
+                  let fireAt = ordinaryResponderDeadlines[peerID] else {
+                continue
+            }
+            managerQueue.asyncAfter(deadline: fireAt, execute: workItem)
+        }
+    }
+
     /// Fires a pending suppressed-initiation recovery immediately instead of
     /// waiting out the completion-grace timer, so tests can inject a grace
     /// period too large to lose against a starved runner and still exercise
