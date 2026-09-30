@@ -700,7 +700,11 @@ struct NoiseEncryptionServiceTests {
         #expect(fireAt.uptimeNanoseconds >= minimumFireAt)
         service._test_fireOrdinaryInitiatorTimeout(for: peerID)
         #expect(!service.hasSession(with: peerID))
-        #expect(recorder.timeoutCount == 1)
+        let recorded = await TestHelpers.waitUntil(
+            { recorder.timeoutCount == 1 },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(recorded)
     }
 
     @Test("Duplicate spoofed message one cannot extend rollback or repause during cooldown")
@@ -737,7 +741,11 @@ struct NoiseEncryptionServiceTests {
 
         bob._test_fireOrdinaryResponderTimeout(for: alicePeerID)
         #expect(bob.hasEstablishedSession(with: alicePeerID))
-        #expect(recovery.timeoutCount == 1)
+        let recorded = await TestHelpers.waitUntil(
+            { recovery.timeoutCount == 1 },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(recorded)
 
         // Still inside cooldown: the same unauthenticated initiation is
         // coalesced without removing the restored outbound generation.
@@ -883,7 +891,11 @@ struct NoiseEncryptionServiceTests {
         }
 
         modern._test_fireOrdinaryInitiatorTimeout(for: endpoints.lowerPeerID)
-        #expect(recovery.requests.count == 1)
+        let requested = await TestHelpers.waitUntil(
+            { recovery.requests.count == 1 },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(requested)
         let recoveryRequest = try #require(recovery.requests.first)
         let retryMessage1 = try #require(
             try claimPreparedRecoveryPayload(
@@ -1686,11 +1698,6 @@ private final class HandshakeStartRecorder: @unchecked Sendable {
         return storedTimeoutCount
     }
 
-    var firstTimeoutUptimeNanoseconds: UInt64? {
-        lock.lock()
-        defer { lock.unlock() }
-        return storedTimeoutUptimes.first
-    }
 
     func record(message: Data?) {
         guard let message else { return }

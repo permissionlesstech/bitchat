@@ -179,9 +179,7 @@ struct TestTimingHygieneTests {
     /// production-scale literals unless the expiry itself is under test (#1737).
     /// Setup handshakes run under the same timer as the scenario; inject an
     /// unlosable default and fire `_test_fireOrdinary*Timeout` where needed.
-    @Test func noiseEncryptionServiceTestsAvoidInjectedProductionHandshakeTimeouts()
-        throws
-    {
+    @Test func noiseEncryptionServiceTestsAvoidInjectedProductionHandshakeTimeouts() throws {
         let minimumHandshakeTimeout: TimeInterval = 86_400
         let path = Self.testsRoot
             .appendingPathComponent("Services/NoiseEncryptionServiceTests.swift")
