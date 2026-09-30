@@ -29,7 +29,7 @@ struct NoiseEncryptionServiceTests {
 
     @Test("Announce and packet signatures round-trip and detect tampering")
     func announceAndPacketSignaturesRoundTrip() throws {
-        let service = NoiseEncryptionService(keychain: MockKeychain())
+        let service = makeNoiseService()
         let signingPublicKey = service.getSigningPublicKeyData()
         let noisePublicKey = service.getStaticPublicKeyData()
 
@@ -89,8 +89,8 @@ struct NoiseEncryptionServiceTests {
 
     @Test("Service-level handshake, encryption, and fingerprint lifecycle work")
     func handshakeEncryptionAndFingerprintLifecycle() async throws {
-        let alice = NoiseEncryptionService(keychain: MockKeychain())
-        let bob = NoiseEncryptionService(keychain: MockKeychain())
+        let alice = makeNoiseService()
+        let bob = makeNoiseService()
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
         let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
         let recorder = AuthenticationRecorder()
@@ -138,9 +138,9 @@ struct NoiseEncryptionServiceTests {
 
     @Test("Handshake rejects a claimed peer ID that does not match the authenticated static key")
     func handshakeRejectsClaimedPeerIDStaticKeyMismatch() async throws {
-        let receiver = NoiseEncryptionService(keychain: MockKeychain())
-        let claimedAlice = NoiseEncryptionService(keychain: MockKeychain())
-        let mallory = NoiseEncryptionService(keychain: MockKeychain())
+        let receiver = makeNoiseService()
+        let claimedAlice = makeNoiseService()
+        let mallory = makeNoiseService()
         let receiverPeerID = PeerID(publicKey: receiver.getStaticPublicKeyData())
         let claimedAlicePeerID = PeerID(publicKey: claimedAlice.getStaticPublicKeyData())
         let recorder = AuthenticationRecorder()
@@ -173,9 +173,9 @@ struct NoiseEncryptionServiceTests {
 
     @Test("Failed forged reconnect restores the established peer session")
     func forgedReconnectRestoresEstablishedSession() async throws {
-        let alice = NoiseEncryptionService(keychain: MockKeychain())
-        let receiver = NoiseEncryptionService(keychain: MockKeychain())
-        let mallory = NoiseEncryptionService(keychain: MockKeychain())
+        let alice = makeNoiseService()
+        let receiver = makeNoiseService()
+        let mallory = makeNoiseService()
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
         let receiverPeerID = PeerID(publicKey: receiver.getStaticPublicKeyData())
         let recorder = AuthenticationRecorder()
@@ -223,8 +223,8 @@ struct NoiseEncryptionServiceTests {
 
     @Test("Valid ordinary rehandshake atomically replaces the established session")
     func validOrdinaryRehandshakeReplacesEstablishedSession() throws {
-        let alice = NoiseEncryptionService(keychain: MockKeychain())
-        let receiver = NoiseEncryptionService(keychain: MockKeychain())
+        let alice = makeNoiseService()
+        let receiver = makeNoiseService()
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
         let receiverPeerID = PeerID(publicKey: receiver.getStaticPublicKeyData())
 
@@ -249,8 +249,8 @@ struct NoiseEncryptionServiceTests {
 
     @Test("Automatic rekey exposes and completes its exact handshake bytes")
     func automaticRekeyHandshakeIsNotStranded() throws {
-        let alice = NoiseEncryptionService(keychain: MockKeychain())
-        let bob = NoiseEncryptionService(keychain: MockKeychain())
+        let alice = makeNoiseService()
+        let bob = makeNoiseService()
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
         let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
         try establishSessions(alice: alice, bob: bob)
@@ -309,8 +309,8 @@ struct NoiseEncryptionServiceTests {
 
     @Test("Large private-file payloads use the bounded Noise extension")
     func largePrivateFileNoiseRoundTrip() throws {
-        let alice = NoiseEncryptionService(keychain: MockKeychain())
-        let bob = NoiseEncryptionService(keychain: MockKeychain())
+        let alice = makeNoiseService()
+        let bob = makeNoiseService()
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
         let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
         try establishSessions(alice: alice, bob: bob)
@@ -358,8 +358,8 @@ struct NoiseEncryptionServiceTests {
 
     @Test("Concurrent BLE starts preserve one ordinary attempt")
     func duplicateHandshakeIfNeededPreservesFirstAttempt() throws {
-        let alice = NoiseEncryptionService(keychain: MockKeychain())
-        let bob = NoiseEncryptionService(keychain: MockKeychain())
+        let alice = makeNoiseService()
+        let bob = makeNoiseService()
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
         let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
         let starts = HandshakeInitiationRecorder()
@@ -401,13 +401,13 @@ struct NoiseEncryptionServiceTests {
     @Test("Restarted peer establishes against a retained ordinary session")
     func restartedPeerCompletesRetainedRemoteRehandshake() throws {
         let aliceKeychain = MockKeychain()
-        let alice = NoiseEncryptionService(keychain: aliceKeychain)
-        let bob = NoiseEncryptionService(keychain: MockKeychain())
+        let alice = makeNoiseService(keychain: aliceKeychain)
+        let bob = makeNoiseService()
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
         let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
         try establishSessions(alice: alice, bob: bob)
 
-        let restartedAlice = NoiseEncryptionService(keychain: aliceKeychain)
+        let restartedAlice = makeNoiseService(keychain: aliceKeychain)
         let attempt = try #require(
             try restartedAlice.initiateHandshakeIfNeeded(with: bobPeerID)
         )
@@ -621,10 +621,7 @@ struct NoiseEncryptionServiceTests {
 
     @Test("Ordinary timeout produces exactly one bounded retry")
     func ordinaryInitiationTimeoutIsBounded() async throws {
-        let service = NoiseEncryptionService(
-            keychain: MockKeychain(),
-            ordinaryHandshakeTimeout: 0.03
-        )
+        let service = makeNoiseService()
         let peerID = PeerID(str: "1021324354657687")
         let recorder = HandshakeStartRecorder()
         service.onHandshakeRecoveryRequired = { [weak service] request in
@@ -650,16 +647,21 @@ struct NoiseEncryptionServiceTests {
         #expect(
             service.claimHandshakeInitiation(first, for: peerID) != nil
         )
+        // The unanswered attempt expires and hands over its one retry. The
+        // recovery callback is dispatched, so wait for it to claim the retry.
+        #expect(service._test_fireOrdinaryInitiatorTimeout(for: peerID))
         let retried = await TestHelpers.waitUntil(
             { recorder.messages.count == 1 },
-            timeout: TestConstants.longTimeout
+            timeout: TestConstants.settleTimeout
         )
-        #expect(retried)
-        let retryExpired = await TestHelpers.waitUntil(
-            { !service.hasSession(with: peerID) },
-            timeout: TestConstants.longTimeout
-        )
-        #expect(retryExpired)
+        try #require(retried)
+        // The retry expires too, and must not mint another. A request is
+        // recorded before its callback is dispatched; with nothing left to
+        // answer it, one minted here would stay on record.
+        service.onHandshakeRecoveryRequired = nil
+        #expect(service._test_fireOrdinaryInitiatorTimeout(for: peerID))
+        #expect(!service.hasSession(with: peerID))
+        #expect(!service._test_hasPendingHandshakeRecovery(for: peerID))
         #expect(recorder.timeoutCount == 1)
         #expect(recorder.errorCount == 0)
     }
@@ -667,10 +669,11 @@ struct NoiseEncryptionServiceTests {
     @Test("Claim gives an attempt a full on-wire timeout window")
     func handshakeClaimRearmsDeadline() async throws {
         let timeoutInterval: TimeInterval = 1
-        let service = NoiseEncryptionService(
-            keychain: MockKeychain(),
-            ordinaryHandshakeTimeout: timeoutInterval
-        )
+        // test-timing-ok: the real deadline is what this test measures, and
+        // it is where the initiator timer is seen to fire unprompted. Every
+        // other test expires it by hook, which would still pass if the timer
+        // were never scheduled.
+        let service = NoiseEncryptionService(keychain: MockKeychain(), ordinaryHandshakeTimeout: timeoutInterval)
         let peerID = PeerID(str: "1021324354657687")
         let recorder = HandshakeStartRecorder()
         service.onHandshakeRecoveryRequired = { [weak service] request in
@@ -686,14 +689,24 @@ struct NoiseEncryptionServiceTests {
             )
         )
         try? await Task.sleep(nanoseconds: 500_000_000)
-        let claimed = service.claimHandshakeInitiation(attempt, for: peerID)
         let claimedAt = DispatchTime.now().uptimeNanoseconds
-        #expect(claimed == attempt.payload)
+        let claimed = service.claimHandshakeInitiation(attempt, for: peerID)
+        // A stall that outlasts the first deadline leaves nothing to claim.
+        // Such a run shows that the timer fires and nothing about re-arming,
+        // so it is inconclusive below instead of red.
+        let outrunByFirstDeadline =
+            claimed == nil && !service.hasSession(with: peerID)
+
         let expired = await TestHelpers.waitUntil(
             { recorder.timeoutCount == 1 },
-            timeout: 5
+            timeout: TestConstants.settleTimeout
         )
         #expect(expired)
+        #expect(!service.hasSession(with: peerID))
+        #expect(recorder.timeoutCount == 1)
+        guard !outrunByFirstDeadline else { return }
+
+        #expect(claimed == attempt.payload)
         let firedAt = try #require(recorder.firstTimeoutUptimeNanoseconds)
         try #require(firedAt >= claimedAt)
         let elapsed = TimeInterval(firedAt - claimedAt) / 1_000_000_000
@@ -701,24 +714,13 @@ struct NoiseEncryptionServiceTests {
         // claim. Measure on the timeout queue instead of relying on a task to
         // resume inside a narrow pre-deadline window under parallel CI load.
         #expect(elapsed >= timeoutInterval * 0.75)
-        #expect(!service.hasSession(with: peerID))
-        #expect(recorder.timeoutCount == 1)
     }
 
     @Test("Duplicate spoofed message one cannot extend rollback or repause during cooldown")
     func pacedMessageOneCannotHoldOutboundPaused() async throws {
-        let alice = NoiseEncryptionService(keychain: MockKeychain())
-        let bob = NoiseEncryptionService(
-            keychain: MockKeychain(),
-            // Generous for the same reason as the quarantine-restore test
-            // (#1483): this timeout also arms during the `establishSessions`
-            // setup handshake below, where bob is the responder. At 0.06 a
-            // preempted runner could fire it mid-setup, tear down the half-open
-            // responder, and make message 3 be answered as a fresh initiation.
-            ordinaryResponderHandshakeTimeout: 1.0,
-            ordinaryReconnectRollbackCooldown: 0.3
-        )
-        let mallory = NoiseEncryptionService(keychain: MockKeychain())
+        let alice = makeNoiseService()
+        let bob = makeNoiseService()
+        let mallory = makeNoiseService()
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
         let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
         let recovery = HandshakeStartRecorder()
@@ -735,23 +737,27 @@ struct NoiseEncryptionServiceTests {
                 message: spoofedMessage1
             )
         )
-        // Exercise replacement before yielding: the test runner may resume a
-        // short sleep after the fixed responder deadline under parallel load.
+        let rollbackDeadline = try #require(
+            bob._test_ordinaryResponderDeadline(for: alicePeerID)
+        )
+        // The duplicate replaces the incomplete responder but must keep the
+        // rollback deadline the first one set.
         _ = try #require(
             try bob.processHandshakeMessage(
                 from: alicePeerID,
                 message: spoofedMessage1
             )
         )
-
-        let restored = await TestHelpers.waitUntil(
-            { bob.hasEstablishedSession(with: alicePeerID) },
-            timeout: TestConstants.longTimeout
+        #expect(
+            bob._test_ordinaryResponderDeadline(for: alicePeerID)
+                == rollbackDeadline
         )
-        #expect(restored)
+
+        #expect(bob._test_fireOrdinaryResponderTimeout(for: alicePeerID))
+        #expect(bob.hasEstablishedSession(with: alicePeerID))
         let callbackArrived = await TestHelpers.waitUntil(
             { recovery.timeoutCount == 1 },
-            timeout: TestConstants.longTimeout
+            timeout: TestConstants.settleTimeout
         )
         #expect(callbackArrived)
 
@@ -778,21 +784,8 @@ struct NoiseEncryptionServiceTests {
 
     @Test("Lost reconnect message three restores then retries once")
     func lostReconnectCompletionGetsOneLocalRetry() async throws {
-        let alice = NoiseEncryptionService(
-            keychain: MockKeychain(),
-            ordinaryHandshakeTimeout: 0.04
-        )
-        let bob = NoiseEncryptionService(
-            keychain: MockKeychain(),
-            ordinaryHandshakeTimeout: 0.04,
-            // Also arms during the `establishSessions` setup handshake below,
-            // where bob is the responder. Observed failing on a loaded CI
-            // runner with exactly the signature #1483 documented: the setup's
-            // `#expect(finalMessage == nil)` saw a 96-byte message 2, because
-            // the half-open responder had already been torn down and message 3
-            // was answered as a fresh initiation.
-            ordinaryResponderHandshakeTimeout: 1.0
-        )
+        let alice = makeNoiseService()
+        let bob = makeNoiseService()
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
         let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
         try establishSessions(alice: alice, bob: bob)
@@ -823,27 +816,26 @@ struct NoiseEncryptionServiceTests {
         )
         // Drop message 3. Bob restores its old receive-only transport and
         // initiates one bounded convergence retry; drop that message 1 too.
+        #expect(bob._test_fireOrdinaryResponderTimeout(for: alicePeerID))
         let retryPrepared = await TestHelpers.waitUntil(
             { recovery.messages.count == 1 },
-            timeout: TestConstants.longTimeout
+            timeout: TestConstants.settleTimeout
         )
-        #expect(retryPrepared)
-        let retryExpired = await TestHelpers.waitUntil(
-            { !bob.hasSession(with: alicePeerID) },
-            timeout: TestConstants.longTimeout
-        )
-        #expect(retryExpired)
+        try #require(retryPrepared)
+        // "Once": a request is recorded before its callback is dispatched;
+        // with nothing left to answer it, one minted by the expiring retry
+        // would stay on record.
+        bob.onHandshakeRecoveryRequired = nil
+        #expect(bob._test_fireOrdinaryInitiatorTimeout(for: alicePeerID))
+        #expect(!bob.hasSession(with: alicePeerID))
+        #expect(!bob._test_hasPendingHandshakeRecovery(for: alicePeerID))
         #expect(recovery.timeoutCount == 1)
         #expect(recovery.errorCount == 0)
     }
 
     @Test("Deterministic responder recovers once from an always-yield peer")
     func yieldedResponderRecoversFromLegacyDoubleYield() async throws {
-        let timeoutInterval: TimeInterval = 1
-        let endpoints = orderedServices(
-            ordinaryHandshakeTimeout: timeoutInterval,
-            ordinaryResponderHandshakeTimeout: timeoutInterval
-        )
+        let endpoints = orderedServices()
         let modern = endpoints.higher
         let legacy = endpoints.lower
         let recovery = HandshakeStartRecorder()
@@ -918,7 +910,7 @@ struct NoiseEncryptionServiceTests {
 
         let recoveryRequested = await TestHelpers.waitUntil(
             { recovery.requests.count == 1 },
-            timeout: 5
+            timeout: TestConstants.settleTimeout
         )
         #expect(recoveryRequested)
         let recoveryRequest = try #require(recovery.requests.first)
@@ -944,8 +936,22 @@ struct NoiseEncryptionServiceTests {
             from: endpoints.higherPeerID,
             message: retryMessage3
         )
-        try? await Task.sleep(
-            nanoseconds: UInt64(timeoutInterval * 1_200_000_000)
+        // Convergence leaves no handshake timer armed and no recovery
+        // requested, so nothing remains that could spend a second one.
+        #expect(
+            !modern._test_fireOrdinaryInitiatorTimeout(
+                for: endpoints.lowerPeerID
+            )
+        )
+        #expect(
+            !modern._test_fireOrdinaryResponderTimeout(
+                for: endpoints.lowerPeerID
+            )
+        )
+        #expect(
+            !modern._test_hasPendingHandshakeRecovery(
+                for: endpoints.lowerPeerID
+            )
         )
         #expect(recovery.timeoutCount == 1)
         let ciphertext = try modern.encrypt(
@@ -964,19 +970,13 @@ struct NoiseEncryptionServiceTests {
     func immediateLegacyRestartDuringCompletionGrace() async throws {
         // The grace period must still be open when the restart initiation
         // arrives below. A small value races the wall clock on a starved
-        // runner, so inject one no test run can outlive; the recovery half
-        // is then fired explicitly instead of waiting out the timer.
-        let unlosableGracePeriod: TimeInterval = 600
+        // runner, so the factory's is one no test run can outlive; the
+        // recovery half is then fired explicitly instead of waiting out the
+        // timer.
         let firstKeychain = MockKeychain()
         let secondKeychain = MockKeychain()
-        let first = NoiseEncryptionService(
-            keychain: firstKeychain,
-            recentInitiatorCompletionGracePeriod: unlosableGracePeriod
-        )
-        let second = NoiseEncryptionService(
-            keychain: secondKeychain,
-            recentInitiatorCompletionGracePeriod: unlosableGracePeriod
-        )
+        let first = makeNoiseService(keychain: firstKeychain)
+        let second = makeNoiseService(keychain: secondKeychain)
         let firstPeerID = PeerID(publicKey: first.getStaticPublicKeyData())
         let secondPeerID = PeerID(publicKey: second.getStaticPublicKeyData())
 
@@ -1000,7 +1000,7 @@ struct NoiseEncryptionServiceTests {
         }
         try establishSessions(alice: lower, bob: higher)
 
-        let restartedHigher = NoiseEncryptionService(keychain: higherKeychain)
+        let restartedHigher = makeNoiseService(keychain: higherKeychain)
         let recovery = HandshakeStartRecorder()
         lower.onHandshakeRecoveryRequired = { [weak lower] request in
             guard let lower else { return }
@@ -1078,8 +1078,8 @@ struct NoiseEncryptionServiceTests {
 
     @Test("Atomic reconnect retires old sending keys before message one")
     func atomicReconnectQueuesUntilOrdinaryHandshakeCompletes() throws {
-        let alice = NoiseEncryptionService(keychain: MockKeychain())
-        let bob = NoiseEncryptionService(keychain: MockKeychain())
+        let alice = makeNoiseService()
+        let bob = makeNoiseService()
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
         let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
 
@@ -1117,8 +1117,8 @@ struct NoiseEncryptionServiceTests {
 
     @Test("Inbound reconnect quarantines old sending keys until identity proof")
     func inboundReconnectQuarantinesOldTransport() throws {
-        let restarted = NoiseEncryptionService(keychain: MockKeychain())
-        let retained = NoiseEncryptionService(keychain: MockKeychain())
+        let restarted = makeNoiseService()
+        let retained = makeNoiseService()
         let restartedPeerID = PeerID(publicKey: restarted.getStaticPublicKeyData())
         let retainedPeerID = PeerID(publicKey: retained.getStaticPublicKeyData())
 
@@ -1178,8 +1178,8 @@ struct NoiseEncryptionServiceTests {
 
     @Test("Malformed handshake bytes cannot tear down an established session")
     func establishedSessionIgnoresNonInitialHandshakeGarbage() throws {
-        let alice = NoiseEncryptionService(keychain: MockKeychain())
-        let bob = NoiseEncryptionService(keychain: MockKeychain())
+        let alice = makeNoiseService()
+        let bob = makeNoiseService()
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
         let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
         try establishSessions(alice: alice, bob: bob)
@@ -1203,9 +1203,9 @@ struct NoiseEncryptionServiceTests {
 
     @Test("Forged reconnect restores the quarantined transport")
     func forgedReconnectRestoresQuarantinedTransport() throws {
-        let alice = NoiseEncryptionService(keychain: MockKeychain())
-        let bob = NoiseEncryptionService(keychain: MockKeychain())
-        let mallory = NoiseEncryptionService(keychain: MockKeychain())
+        let alice = makeNoiseService()
+        let bob = makeNoiseService()
+        let mallory = makeNoiseService()
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
         let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
 
@@ -1250,21 +1250,10 @@ struct NoiseEncryptionServiceTests {
     }
 
     @Test("Lost reconnect completion restores the quarantined transport")
-    func timedOutReconnectRestoresQuarantinedTransport() async throws {
-        let alice = NoiseEncryptionService(keychain: MockKeychain())
-        // The injected responder timeout also arms during the ordinary setup
-        // handshake below (bob is its responder), where the only work between
-        // message 1 and message 3 is two consecutive synchronous statements.
-        // It must be generous enough that a preempted runner cannot let the
-        // timeout fire mid-setup and tear down the half-open responder — at
-        // 20ms a loaded 2-core CI runner did exactly that, so message 3 was
-        // answered as a fresh initiation (96-byte message 2) and nothing was
-        // ever quarantined.
-        let bob = NoiseEncryptionService(
-            keychain: MockKeychain(),
-            ordinaryResponderHandshakeTimeout: 1.0
-        )
-        let mallory = NoiseEncryptionService(keychain: MockKeychain())
+    func timedOutReconnectRestoresQuarantinedTransport() throws {
+        let alice = makeNoiseService()
+        let bob = makeNoiseService()
+        let mallory = makeNoiseService()
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
         let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
 
@@ -1278,15 +1267,10 @@ struct NoiseEncryptionServiceTests {
         )
         #expect(!bob.hasEstablishedSession(with: alicePeerID))
 
-        // Poll instead of sleeping a fixed interval: the responder timeout
-        // fires on bob's manager queue at the quarantine deadline, and a
-        // starved runner can delay that work item well past the deadline.
-        let restored = await TestHelpers.waitUntil(
-            { bob.hasEstablishedSession(with: alicePeerID) },
-            timeout: TestConstants.longTimeout
-        )
+        // Message 3 never arrives; the responder deadline expires.
+        #expect(bob._test_fireOrdinaryResponderTimeout(for: alicePeerID))
         try #require(
-            restored,
+            bob.hasEstablishedSession(with: alicePeerID),
             "Responder timeout should restore the quarantined transport"
         )
         let oldTransport = try alice.encrypt(
@@ -1299,10 +1283,33 @@ struct NoiseEncryptionServiceTests {
         )
     }
 
+    @Test("Responder timeout expires an unanswered handshake unprompted")
+    func ordinaryResponderTimeoutFiresOnItsOwn() async throws {
+        let alice = makeNoiseService()
+        // test-timing-ok: every other test expires the responder by hook,
+        // which would still pass if the timer were never scheduled. Nothing
+        // below has to happen before this deadline, so a stall only delays
+        // the result.
+        let bob = NoiseEncryptionService(keychain: MockKeychain(), ordinaryResponderHandshakeTimeout: 0.05)
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
+
+        let message1 = try alice.initiateHandshake(with: bobPeerID)
+        _ = try #require(
+            try bob.processHandshakeMessage(from: alicePeerID, message: message1)
+        )
+
+        let expired = await TestHelpers.waitUntil(
+            { !bob.hasSession(with: alicePeerID) },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(expired)
+    }
+
     @Test("Failed reconnect authorization preserves the established transport")
     func failedReconnectAuthorizationPreservesSession() throws {
-        let alice = NoiseEncryptionService(keychain: MockKeychain())
-        let bob = NoiseEncryptionService(keychain: MockKeychain())
+        let alice = makeNoiseService()
+        let bob = makeNoiseService()
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
         let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
 
@@ -1339,7 +1346,7 @@ struct NoiseEncryptionServiceTests {
 
     @Test("Encrypt without a session requests handshake and decrypt without session fails")
     func handshakeRequiredAndSessionNotEstablishedErrors() throws {
-        let service = NoiseEncryptionService(keychain: MockKeychain())
+        let service = makeNoiseService()
         let peerID = PeerID(str: "1021324354657687")
         var requestedPeerID: PeerID?
 
@@ -1367,7 +1374,7 @@ struct NoiseEncryptionServiceTests {
     @Test("Clearing persistent identity removes saved keys")
     func clearPersistentIdentityRemovesSavedKeys() {
         let keychain = MockKeychain()
-        let service = NoiseEncryptionService(keychain: keychain)
+        let service = makeNoiseService(keychain: keychain)
 
         #expect(service.getStaticPublicKeyData().count == 32)
         #expect(service.getSigningPublicKeyData().count == 32)
@@ -1387,8 +1394,8 @@ struct NoiseEncryptionServiceTests {
 
     @Test("Responder completion state spans ordinary XX message three")
     func responderCompletionStateTracksOrdinaryHandshake() throws {
-        let alice = NoiseEncryptionService(keychain: MockKeychain())
-        let bob = NoiseEncryptionService(keychain: MockKeychain())
+        let alice = makeNoiseService()
+        let bob = makeNoiseService()
         let alicePeerID = PeerID(
             publicKey: alice.getStaticPublicKeyData()
         )
@@ -1430,8 +1437,8 @@ struct NoiseEncryptionServiceTests {
 
     @Test("Transport readiness rejection spends no message budget")
     func transportReadinessRejectionSpendsNoMessageBudget() throws {
-        let alice = NoiseEncryptionService(keychain: MockKeychain())
-        let bob = NoiseEncryptionService(keychain: MockKeychain())
+        let alice = makeNoiseService()
+        let bob = makeNoiseService()
         let alicePeerID = PeerID(
             publicKey: alice.getStaticPublicKeyData()
         )
@@ -1508,29 +1515,41 @@ struct NoiseEncryptionServiceTests {
     }
 }
 
-private func orderedServices(
-    ordinaryHandshakeTimeout: TimeInterval =
-        NoiseSecurityConstants.ordinaryHandshakeTimeout,
-    ordinaryResponderHandshakeTimeout: TimeInterval =
-        NoiseSecurityConstants.ordinaryResponderHandshakeTimeout
-) -> (
+/// Builds a service in which no time window can close while a test is still
+/// stepping through the state it guards. Tests drive a handshake as
+/// consecutive synchronous calls; a starved runner that stalls between two of
+/// them lets any window sized to the work close first. A handshake timeout
+/// then tears the half-open session down, so message 3 is answered as a fresh
+/// initiation. Raising the value (20 ms to 1 s in #1483/#1491) only scaled
+/// with the stall, and the production defaults were outrun too (#1737). The
+/// completion grace and the rollback cooldown are windows of the same kind.
+///
+/// It takes no timing parameters on purpose. A test whose subject is expiry
+/// fires it with `_test_fireOrdinaryInitiatorTimeout` /
+/// `_test_fireOrdinaryResponderTimeout`. A test that has to watch a real
+/// timer builds its own service, which `TestTimingHygieneTests` flags unless
+/// it carries a waiver saying why.
+private func makeNoiseService(
+    keychain: KeychainManagerProtocol = MockKeychain()
+) -> NoiseEncryptionService {
+    // test-timing-ok: the one sanctioned construction site.
+    NoiseEncryptionService(
+        keychain: keychain,
+        ordinaryHandshakeTimeout: TestConstants.unlosableInterval,
+        ordinaryResponderHandshakeTimeout: TestConstants.unlosableInterval,
+        recentInitiatorCompletionGracePeriod: TestConstants.unlosableInterval,
+        ordinaryReconnectRollbackCooldown: TestConstants.unlosableInterval
+    )
+}
+
+private func orderedServices() -> (
     lower: NoiseEncryptionService,
     lowerPeerID: PeerID,
     higher: NoiseEncryptionService,
     higherPeerID: PeerID
 ) {
-    let first = NoiseEncryptionService(
-        keychain: MockKeychain(),
-        ordinaryHandshakeTimeout: ordinaryHandshakeTimeout,
-        ordinaryResponderHandshakeTimeout:
-            ordinaryResponderHandshakeTimeout
-    )
-    let second = NoiseEncryptionService(
-        keychain: MockKeychain(),
-        ordinaryHandshakeTimeout: ordinaryHandshakeTimeout,
-        ordinaryResponderHandshakeTimeout:
-            ordinaryResponderHandshakeTimeout
-    )
+    let first = makeNoiseService()
+    let second = makeNoiseService()
     let firstPeerID = PeerID(publicKey: first.getStaticPublicKeyData())
     let secondPeerID = PeerID(publicKey: second.getStaticPublicKeyData())
     if firstPeerID < secondPeerID {

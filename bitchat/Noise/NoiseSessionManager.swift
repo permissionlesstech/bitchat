@@ -1046,6 +1046,55 @@ final class NoiseSessionManager {
             requestHandshakeRecovery(for: peerID)
         }
     }
+
+    /// Fires a pending ordinary initiator handshake timeout immediately
+    /// instead of waiting out the real timer. A test stepping a handshake
+    /// through consecutive synchronous calls loses to any short timeout the
+    /// moment a starved runner stalls between two of them, so tests inject a
+    /// timeout no run can outlive and expire the handshake here.
+    ///
+    /// Returns whether a timeout was armed, so a test can also assert that
+    /// none is.
+    func _test_fireOrdinaryInitiatorTimeout(for peerID: PeerID) -> Bool {
+        managerQueue.sync(flags: .barrier) {
+            firePendingTimeoutLocked(ordinaryInitiatorTimeouts[peerID])
+        }
+    }
+
+    /// Responder counterpart of `_test_fireOrdinaryInitiatorTimeout`. Also
+    /// expires the rollback quarantine, which shares the responder deadline.
+    func _test_fireOrdinaryResponderTimeout(for peerID: PeerID) -> Bool {
+        managerQueue.sync(flags: .barrier) {
+            firePendingTimeoutLocked(ordinaryResponderTimeouts[peerID])
+        }
+    }
+
+    /// The deadline the pending ordinary responder timeout is scheduled for,
+    /// so tests can assert it is preserved rather than wait it out.
+    func _test_ordinaryResponderDeadline(for peerID: PeerID) -> DispatchTime? {
+        managerQueue.sync {
+            ordinaryResponderDeadlines[peerID]
+        }
+    }
+
+    /// Whether a recovery has been requested and not yet prepared or
+    /// cancelled. The request is recorded before its callback is dispatched,
+    /// so a test can assert "no further retry" without waiting for one.
+    func _test_hasPendingHandshakeRecovery(for peerID: PeerID) -> Bool {
+        managerQueue.sync {
+            pendingHandshakeRecoveryIDs[peerID] != nil
+        }
+    }
+
+    /// Runs the scheduled work item itself, so the hook exercises exactly
+    /// what the timer would have, then cancels it so the real deadline
+    /// cannot run it a second time.
+    private func firePendingTimeoutLocked(_ pending: DispatchWorkItem?) -> Bool {
+        guard let pending, !pending.isCancelled else { return false }
+        pending.perform()
+        pending.cancel()
+        return true
+    }
     #endif
 
     private func requestHandshakeRecovery(

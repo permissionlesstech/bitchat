@@ -855,7 +855,12 @@ struct BLEServiceCoreTests {
     /// has to wait for the convergence handshake and use its new session.
     @Test
     func timeoutRestoredSessionDefersQueueDrainUntilConvergence() async throws {
-        let ble = makeService(noiseResponderHandshakeTimeout: 0.3)
+        // The responder deadline also arms during the setup handshake below,
+        // where a stalled runner would let a short one tear the half-open
+        // responder down. It is unlosable here and fired explicitly.
+        let ble = makeService(
+            noiseResponderHandshakeTimeout: TestConstants.unlosableInterval
+        )
         let alice = NoiseEncryptionService(keychain: MockKeychain())
         let mallory = NoiseEncryptionService(keychain: MockKeychain())
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
@@ -929,10 +934,9 @@ struct BLEServiceCoreTests {
             ttl: 7
         )
         ble._test_handlePacket(reconnectPacket, fromPeerID: alicePeerID)
-        // The responder's message 2 is a monotonic quarantine signal; the
-        // secure-delivery dip itself only lasts until the responder deadline,
-        // which parallel test load can outrun. (The recovery gate keeps the
-        // convergence retry's message 1 out of the tap until released.)
+        // The responder's message 2 signals that the quarantine is in place
+        // and its deadline armed. (The recovery gate keeps the convergence
+        // retry's message 1 out of the tap until released.)
         let responderReady = await TestHelpers.waitUntil(
             { outbound.count(ofType: .noiseHandshake) >= 1 },
             timeout: TestConstants.longTimeout
@@ -942,6 +946,7 @@ struct BLEServiceCoreTests {
 
         // The responder timeout restores the quarantined generation; the
         // gate guarantees its handler runs before the convergence retry.
+        #expect(ble._test_fireNoiseResponderTimeout(for: alicePeerID))
         let restoreRan = await TestHelpers.waitUntil(
             { reconciled.count(for: alicePeerID) == 1 },
             timeout: TestConstants.longTimeout
