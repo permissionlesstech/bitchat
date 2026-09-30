@@ -20,6 +20,7 @@ protocol GeoPresenceContext: AnyObject {
     func parseMentions(from content: String) -> [String]
 
     func recordGeoParticipant(pubkeyHex: String, geohash: String)
+    func removeGeoParticipant(pubkeyHex: String)
     func geoParticipantCount(for geohash: String) -> Int
     func markGeoTeleported(_ pubkeyHexLowercased: String)
 
@@ -107,11 +108,15 @@ final class GeoPresenceTracker {
         // actor) by NostrRelayManager before delivery.
         guard shouldProcessGeoSamplingEvent(event.id) else { return }
 
+        if context.isNostrBlocked(pubkeyHexLowercased: event.pubkey.lowercased()) {
+            context.removeGeoParticipant(pubkeyHex: event.pubkey)
+            return
+        }
+
         let existingCount = context.geoParticipantCount(for: gh)
         context.recordGeoParticipant(pubkeyHex: event.pubkey, geohash: gh)
 
         guard let content = event.content.trimmedOrNilIfEmpty else { return }
-        if context.isNostrBlocked(pubkeyHexLowercased: event.pubkey.lowercased()) { return }
         if let my = try? context.deriveNostrIdentity(forGeohash: gh),
            my.publicKeyHex.lowercased() == event.pubkey.lowercased() {
             return

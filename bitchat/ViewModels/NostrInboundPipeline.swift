@@ -30,6 +30,7 @@ protocol NostrInboundPipelineContext: AnyObject {
     /// Records the Nostr pubkey behind a (possibly virtual) peer ID.
     func registerNostrKeyMapping(_ pubkey: String, for peerID: PeerID)
     func recordGeoParticipant(pubkeyHex: String)
+    func removeGeoParticipant(pubkeyHex: String)
 
     // MARK: Inbound public messages
     /// `powBits` is the validated NIP-13 difficulty of the source event
@@ -129,6 +130,11 @@ final class NostrInboundPipeline {
         }
 
         context.recordProcessedNostrEvent(event.id)
+
+        if context.isNostrBlocked(pubkeyHexLowercased: event.pubkey.lowercased()) {
+            context.removeGeoParticipant(pubkeyHex: event.pubkey)
+            return
+        }
 
         if let gh = context.currentGeohash,
            let myGeoIdentity = try? context.deriveNostrIdentity(forGeohash: gh),

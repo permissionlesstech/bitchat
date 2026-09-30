@@ -28,6 +28,8 @@ protocol GeohashParticipantContext: AnyObject {
     func displayNameForPubkey(_ pubkeyHex: String) -> String
     /// Returns true if the pubkey is blocked
     func isBlocked(_ pubkeyHexLowercased: String) -> Bool
+    /// Returns one consistent blocklist snapshot for a participant count query.
+    func blockedPubkeysSnapshot() -> Set<String>
 }
 
 /// Tracks participants across multiple geohash channels
@@ -101,10 +103,15 @@ final class GeohashParticipantTracker: ObservableObject {
     /// Remove a participant from all geohashes (used when blocking)
     func removeParticipant(pubkeyHex: String) {
         let key = pubkeyHex.lowercased()
+        var removed = false
         for (gh, var map) in participants {
-            map.removeValue(forKey: key)
+            guard map.removeValue(forKey: key) != nil else { continue }
             participants[gh] = map
+            removed = true
         }
+        guard removed else { return }
+        // Publishing visiblePeople also invalidates counts for inactive geohashes
+        // and preserves the peer-list subscription's existing refresh semantics.
         refresh()
     }
 
@@ -112,8 +119,9 @@ final class GeohashParticipantTracker: ObservableObject {
     func participantCount(for geohash: String) -> Int {
         let cutoff = Date().addingTimeInterval(activityCutoff)
         let map = participants[geohash] ?? [:]
+        let blockedPubkeys = context?.blockedPubkeysSnapshot() ?? []
         return map.filter { key, lastSeen in
-            lastSeen >= cutoff && context?.isBlocked(key) != true
+            lastSeen >= cutoff && !blockedPubkeys.contains(key)
         }.count
     }
 

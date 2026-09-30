@@ -618,4 +618,8 @@ private final class PresenceTestParticipantContext: GeohashParticipantContext {
     func isBlocked(_ pubkeyHexLowercased: String) -> Bool {
         blockedPubkeys.contains(pubkeyHexLowercased.lowercased())
     }
+
+    func blockedPubkeysSnapshot() -> Set<String> {
+        blockedPubkeys
+    }
 }

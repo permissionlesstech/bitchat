@@ -1383,6 +1383,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         publicConversationCoordinator.isBlocked(pubkeyHexLowercased)
     }
 
+    func blockedPubkeysSnapshot() -> Set<String> {
+        identityManager.getBlockedNostrPubkeys()
+    }
+
     // Geohash block helpers
     @MainActor
     func isGeohashUserBlocked(pubkeyHexLowercased: String) -> Bool {
