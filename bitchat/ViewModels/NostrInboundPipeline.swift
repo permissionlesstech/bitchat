@@ -347,6 +347,16 @@ final class NostrInboundPipeline {
         }
         if alreadyProcessed { return }
 
+        // Cheap outer-wrap gate before the NIP-17 unwrap (two ECDH+ChaCha
+        // rounds). Android may stamp wraps up to 48h into the past; a
+        // future-dated wrap beyond skew is never legitimate for our clients.
+        guard Self.isAcceptableGiftWrapTimestamp(giftWrap.created_at) else {
+            if verbose {
+                SecureLogger.warning("GeoDM: dropping gift-wrap with implausible outer timestamp id=\(giftWrap.id.prefix(8))…", category: .session)
+            }
+            return
+        }
+
         guard let (content, senderPubkey, rumorTs) = try? NostrProtocol.decryptPrivateMessage(
             giftWrap: giftWrap,
             recipientIdentity: id
@@ -445,6 +455,11 @@ final class NostrInboundPipeline {
             (context.currentNostrIdentity(), self.wipeGeneration)
         }
         guard let currentIdentity else { return }
+
+        guard Self.isAcceptableGiftWrapTimestamp(giftWrap.created_at) else {
+            SecureLogger.warning("Dropping Nostr DM with implausible outer gift-wrap timestamp id=\(giftWrap.id.prefix(8))…", category: .session)
+            return
+        }
 
         do {
             let (content, senderPubkey, rumorTimestamp) = try NostrProtocol.decryptPrivateMessage(
@@ -555,18 +570,26 @@ final class NostrInboundPipeline {
 }
 
 extension NostrInboundPipeline {
-    /// Client-side mirror of the relay-side `since` filter on DM
-    /// subscriptions: a relay that ignores `since` — or replays archived
-    /// events — must not inject stale or future-dated DMs. The inner rumor
-    /// timestamp is the sender's true send time (only the outer gift wrap
-    /// is randomized per NIP-17), so the plausible window is the
-    /// subscription lookback plus tolerated clock skew on both ends.
+    /// Inner-message freshness, independent of the wider outer-wrap relay
+    /// filter. The rumor carries the sender's true send time, so accepting an
+    /// older randomized envelope must not admit stale or future-dated DMs.
     /// Internal (not private) so tests can pin the window directly.
     static func isPlausibleRumorTimestamp(_ ts: Int, now: Date = Date()) -> Bool {
         let age = now.timeIntervalSince1970 - TimeInterval(ts)
         return age >= -TransportConfig.nostrDMMaxClockSkewSeconds
             && age <= TransportConfig.nostrDMSubscribeLookbackSeconds
                 + TransportConfig.nostrDMMaxClockSkewSeconds
+    }
+
+    /// Accept an outer gift-wrap `created_at` that is not in the far future
+    /// and not older than the randomization ceiling plus the inner delivery
+    /// window and clock skew. Checked before decrypt so a hostile relay
+    /// cannot force ECDH work with
+    /// ancient or far-future wraps.
+    static func isAcceptableGiftWrapTimestamp(_ createdAt: Int, now: Date = Date()) -> Bool {
+        let age = now.timeIntervalSince1970 - TimeInterval(createdAt)
+        return age >= -TransportConfig.nostrDMMaxClockSkewSeconds
+            && age <= TransportConfig.nostrGiftWrapMaxAgeSeconds
     }
 }
 

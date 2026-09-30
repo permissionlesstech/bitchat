@@ -164,7 +164,7 @@ final class GeohashSubscriptionManager {
             context.setGeoDmSubscriptionID(dmSub)
             let dmFilter = NostrFilter.giftWrapsFor(
                 pubkey: identity.publicKeyHex,
-                since: Date().addingTimeInterval(-TransportConfig.nostrDMSubscribeLookbackSeconds)
+                since: Date().addingTimeInterval(-TransportConfig.nostrGiftWrapMaxAgeSeconds)
             )
             NostrRelayManager.shared.subscribe(filter: dmFilter, id: dmSub) { [weak self] giftWrap in
                 Task { @MainActor [weak self] in
@@ -262,7 +262,7 @@ final class GeohashSubscriptionManager {
         }
         let dmFilter = NostrFilter.giftWrapsFor(
             pubkey: identity.publicKeyHex,
-            since: Date().addingTimeInterval(-TransportConfig.nostrDMSubscribeLookbackSeconds)
+            since: Date().addingTimeInterval(-TransportConfig.nostrGiftWrapMaxAgeSeconds)
         )
         NostrRelayManager.shared.subscribe(filter: dmFilter, id: dmSub) { [weak self] giftWrap in
             Task { @MainActor [weak self] in
@@ -390,7 +390,7 @@ final class GeohashSubscriptionManager {
 
         let filter = NostrFilter.giftWrapsFor(
             pubkey: currentIdentity.publicKeyHex,
-            since: Date().addingTimeInterval(-TransportConfig.nostrDMSubscribeLookbackSeconds)
+            since: Date().addingTimeInterval(-TransportConfig.nostrGiftWrapMaxAgeSeconds)
         )
 
         context.nostrRelayManager?.subscribe(filter: filter, id: "chat-messages") { [weak self] event in

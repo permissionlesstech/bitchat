@@ -171,10 +171,11 @@ final class MessageDeduplicationService {
     private let nostrAckCache: LRUDeduplicationCache<Bool>
 
     /// Optional cross-launch persistence for the Nostr event cache. BitChat
-    /// randomizes private-envelope timestamps, so DM subscriptions look back 24h and
-    /// relays redeliver the same events on every launch; without this record
-    /// each relaunch reprocesses old PMs and acks. Nil (tests, macOS callers
-    /// that don't opt in) keeps the cache purely in-memory.
+    /// and peer clients randomize private-envelope timestamps (up to ~48h
+    /// into the past on Android), so DM subscriptions look back across that
+    /// window and relays redeliver the same events on every launch; without
+    /// this record each relaunch reprocesses old PMs and acks. Nil (tests,
+    /// macOS callers that don't opt in) keeps the cache purely in-memory.
     private let nostrEventStore: NostrProcessedEventStore?
     private let nostrEventCapacity: Int
     private var persistScheduled = false
