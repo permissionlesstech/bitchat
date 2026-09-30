@@ -70,7 +70,9 @@ struct NostrEnvelopeTimestampRandomizationTests {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let lookback = TransportConfig.nostrDMSubscribeLookbackSeconds
         let maxPast = TransportConfig.nostrGiftWrapTimestampRandomizationSeconds
-        #expect(maxPast == lookback - TransportConfig.nostrDMMaxClockSkewSeconds)
+        // Match Android's 22h draw (two-hour margin under the 24h subscribe).
+        #expect(maxPast == 79_200)
+        #expect(maxPast < lookback - TransportConfig.nostrDMMaxClockSkewSeconds)
         for _ in 0..<200 {
             let ts = NostrProtocol.randomizedEnvelopeTimestamp(now: now)
             #expect(ts <= now)

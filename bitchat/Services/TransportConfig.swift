@@ -225,14 +225,14 @@ enum TransportConfig {
     // Tolerated clock skew for client-side Nostr DM timestamp windows.
     static let nostrDMMaxClockSkewSeconds: TimeInterval = 900
     /// Outer gift-wrap `created_at` randomization floor when *sending*.
-    /// Cap at lookback − skew so a wrap never lands older than
-    /// `nostrDMSubscribeLookbackSeconds` (every installed build still
-    /// subscribes `since: now − 86400`). A deeper draw would silently miss
-    /// half of DMs/acks to peers that have not yet widened their filter.
-    /// Android today draws up to 79_200s (`NIP17_DEFAULT_MAX_PAST_SECONDS`);
-    /// the true send time lives on the inner rumor either way.
-    static let nostrGiftWrapTimestampRandomizationSeconds: TimeInterval =
-        nostrDMSubscribeLookbackSeconds - nostrDMMaxClockSkewSeconds
+    /// Match Android's `NIP17_DEFAULT_MAX_PAST_SECONDS` (79_200 = 22h): every
+    /// installed build still subscribes `since: now − 86400`, and that window
+    /// keeps receding after send, so lookback − skew (85_500) still loses DMs
+    /// to a peer who comes online hours later. The two-hour margin reserves
+    /// room for that recession until #1706's wider subscribe is everywhere.
+    /// Accept stays at 48h+skew below so older Android wraps still clear.
+    /// The true send time lives on the inner rumor either way.
+    static let nostrGiftWrapTimestampRandomizationSeconds: TimeInterval = 79_200
 
     // Outer gift-wrap age ceiling when *receiving*. Kept at the historical
     // NIP-17 48h floor (+ skew) so wraps from peers that still randomize
