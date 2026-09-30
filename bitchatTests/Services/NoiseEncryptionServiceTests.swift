@@ -1722,4 +1722,3 @@ private final class HandshakeStartRecorder: @unchecked Sendable {
         lock.unlock()
     }
 }
-
