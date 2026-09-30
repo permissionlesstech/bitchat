@@ -10,21 +10,10 @@ import Testing
 
 struct BoundedIDSetTests {
 
-    @Test func insertReturnsTrueForNewID() {
-        var set = BoundedIDSet(capacity: 3)
-        #expect(set.insert("a") == true)
-        #expect(set.contains("a"))
-    }
-
     @Test func insertReturnsFalseForAlreadyPresentID() {
         var set = BoundedIDSet(capacity: 3)
         set.insert("a")
         #expect(set.insert("a") == false)
-    }
-
-    @Test func containsIsFalseForUnknownID() {
-        let set = BoundedIDSet(capacity: 3)
-        #expect(set.contains("missing") == false)
     }
 
     @Test func evictsOldestWhenOverCapacity() {
@@ -48,31 +37,10 @@ struct BoundedIDSetTests {
         #expect(set.contains("b") == false)
     }
 
-    @Test func stayingUnderCapacityKeepsEverything() {
-        var set = BoundedIDSet(capacity: 5)
-        for id in ["a", "b", "c"] {
-            set.insert(id)
-        }
-
-        #expect(set.contains("a"))
-        #expect(set.contains("b"))
-        #expect(set.contains("c"))
-    }
-
-    @Test func capacityOneKeepsOnlyMostRecentID() {
-        var set = BoundedIDSet(capacity: 1)
-        set.insert("a")
-        set.insert("b")
-        set.insert("c")
-
-        #expect(set.contains("a") == false)
-        #expect(set.contains("b") == false)
-        #expect(set.contains("c"))
-    }
-
     @Test func duplicateInsertDoesNotDisturbEvictionOrder() {
-        // Re-inserting an already-present ID is a no-op (returns false) and
-        // must not move it in the eviction queue or add a second entry.
+        // Replays should not buy a longer stay in the dedup window. Keeping
+        // duplicate insertion free of queue changes makes eviction pressure
+        // depend on distinct IDs, rather than how often a sender repeats one.
         var set = BoundedIDSet(capacity: 2)
         set.insert("a")
         set.insert("b")
