@@ -677,9 +677,8 @@ struct NoiseEncryptionServiceTests {
         let peerID = PeerID(str: "1021324354657687")
         let recorder = HandshakeStartRecorder()
         service.onHandshakeRecoveryRequired = { [weak service] request in
-            let firedAt = DispatchTime.now().uptimeNanoseconds
             service?.cancelHandshakeRecovery(request)
-            recorder.recordTimeout(at: firedAt)
+            recorder.recordTimeout()
         }
 
         let attempt = try #require(
@@ -1672,7 +1671,6 @@ private final class HandshakeStartRecorder: @unchecked Sendable {
     private var storedRequests: [NoiseHandshakeRecoveryRequest] = []
     private var storedErrorCount = 0
     private var storedTimeoutCount = 0
-    private var storedTimeoutUptimes: [UInt64] = []
 
     var messages: [Data] {
         lock.lock()
@@ -1718,12 +1716,10 @@ private final class HandshakeStartRecorder: @unchecked Sendable {
         lock.unlock()
     }
 
-    func recordTimeout(
-        at uptimeNanoseconds: UInt64 = DispatchTime.now().uptimeNanoseconds
-    ) {
+    func recordTimeout() {
         lock.lock()
         storedTimeoutCount += 1
-        storedTimeoutUptimes.append(uptimeNanoseconds)
         lock.unlock()
     }
 }
+
