@@ -274,10 +274,9 @@ final class BLEService: NSObject {
     // Prekey bundles that arrived before their owner's verified announce bound
     // a signing key. Over the air a bundle can still arrive before the
     // announce it depends on; we retain the latest such bundle per owner
-    // (bounded) and re-attempt attribution when the announce lands.
-    // Engine-confined.
-    private var pendingPrekeyBundles: [PeerID: BitchatPacket] = [:]
-    private static let pendingPrekeyBundleCap = 64
+    // (bounded, with an age sweep) and re-attempt attribution when the announce
+    // lands. Engine-confined.
+    private var pendingPrekeyBundles = BLEPendingPrekeyBundleStore()
     // Gateway mode: sink for received nostrCarrier packets (set by app
     // wiring, called on the main actor after transport-level checks) and the
     // runtime-toggled capability bits ORed into `PeerCapabilities.localSupported`
@@ -4885,7 +4884,7 @@ extension BLEService {
             return
         }
         // Look up the announce-bound signing key and stash-if-unbound in ONE
-        // barrier: the receive queue is concurrent, so this bundle can race
+        // serial engine operation: this bundle can arrive
         // ahead of the announce that binds the key. Reading the live registry
         // and stashing atomically closes the check-then-act gap against
         // handleAnnounce's drain (see drainPendingPrekeyBundles).
@@ -4900,12 +4899,11 @@ extension BLEService {
             where candidate.publicKey == bundle.noiseStaticPublicKey {
                 if let key = candidate.signingPublicKey { return key }
             }
-            // No binding yet: retain the latest bundle per owner, bounded, and
-            // retry once the verified announce lands.
-            if pendingPrekeyBundles[owner] != nil
-                || pendingPrekeyBundles.count < Self.pendingPrekeyBundleCap {
-                pendingPrekeyBundles[owner] = packet
-            }
+            // No binding yet: retain the latest bundle per owner and retry
+            // once the verified announce lands. The stash evicts its oldest
+            // entry at the cap and sweeps expired ones, so a burst of bundles
+            // from owners that never announce cannot wedge it shut.
+            pendingPrekeyBundles.stash(packet, for: owner)
             return nil
         }
         guard let signingKey else {
@@ -4931,11 +4929,13 @@ extension BLEService {
 
     /// Re-attempt any prekey bundle that arrived before this owner's announce
     /// bound a signing key. Called from handleAnnounce after a verified
-    /// announce, in a barrier ordered after the registry write, so a bundle
-    /// stashed before the write is always observed here.
+    /// announce, on the serial engine after the registry write, so a bundle
+    /// stashed before the write is always observed here. A bundle whose owner
+    /// took longer than the stash TTL to announce is dropped instead — the
+    /// TTL exceeds packet dedup age so subsequent gossip can be admitted.
     private func drainPendingPrekeyBundles(for owner: PeerID) {
         let pending: BitchatPacket? = onEngine {
-            pendingPrekeyBundles.removeValue(forKey: owner)
+            pendingPrekeyBundles.take(for: owner)
         }
         guard let packet = pending,
               let bundle = PrekeyBundle.decode(packet.payload),
