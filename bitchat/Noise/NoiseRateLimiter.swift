@@ -26,7 +26,7 @@ final class NoiseRateLimiter {
     /// `BLEAnnounceThrottle`); this one read `Date()` inline, which is why its
     /// time-dependent behaviour had no coverage. Injected here instead of
     /// threading a parameter through nine call sites.
-    private let currentDate: () -> Date
+    private let now: () -> Date
 
     /// Sweeping every peer on every admission would put an O(peers) walk on the
     /// message path, which runs up to `maxGlobalMessagesPerSecond` times a
@@ -34,23 +34,25 @@ final class NoiseRateLimiter {
     /// inside their own windows.
     private static let pruneInterval: TimeInterval = 1
 
-    init(currentDate: @escaping () -> Date = Date.init) {
-        self.currentDate = currentDate
+    init(now: @escaping () -> Date = Date.init) {
+        self.now = now
     }
 
-    /// Peers currently retained in either map. Mirrors
-    /// `BLESubscriptionAnnounceLimiter.trackedCentralCount`.
-    var trackedPeerCount: Int {
-        queue.sync {
-            Set(handshakeTimestamps.keys).union(messageTimestamps.keys).count
-        }
+    /// Retention is separate for pre-authentication handshakes and messages
+    /// from established sessions because they have different expiry windows.
+    var trackedHandshakePeerCount: Int {
+        queue.sync { handshakeTimestamps.count }
     }
-    
+
+    var trackedMessagePeerCount: Int {
+        queue.sync { messageTimestamps.count }
+    }
+
     func allowHandshake(from peerID: PeerID) -> Bool {
         return queue.sync(flags: .barrier) {
-            let now = currentDate()
+            let now = self.now()
             pruneStalePeersLocked(now: now)
-            let oneMinuteAgo = now.addingTimeInterval(-60)
+            let oneMinuteAgo = now.addingTimeInterval(-NoiseSecurityConstants.handshakeRateLimitWindow)
             
             // Check global rate limit first
             globalHandshakeTimestamps = globalHandshakeTimestamps.filter { $0 > oneMinuteAgo }
@@ -78,9 +80,9 @@ final class NoiseRateLimiter {
     
     func allowMessage(from peerID: PeerID) -> Bool {
         return queue.sync(flags: .barrier) {
-            let now = currentDate()
+            let now = self.now()
             pruneStalePeersLocked(now: now)
-            let oneSecondAgo = now.addingTimeInterval(-1)
+            let oneSecondAgo = now.addingTimeInterval(-NoiseSecurityConstants.messageRateLimitWindow)
             
             // Check global rate limit first
             globalMessageTimestamps = globalMessageTimestamps.filter { $0 > oneSecondAgo }
@@ -121,13 +123,13 @@ final class NoiseRateLimiter {
         guard elapsed >= Self.pruneInterval || elapsed < 0 else { return }
         lastPrune = now
 
-        let handshakeCutoff = now.addingTimeInterval(-60)
+        let handshakeCutoff = now.addingTimeInterval(-NoiseSecurityConstants.handshakeRateLimitWindow)
         handshakeTimestamps = handshakeTimestamps.compactMapValues { timestamps in
             let recent = timestamps.filter { $0 > handshakeCutoff }
             return recent.isEmpty ? nil : recent
         }
 
-        let messageCutoff = now.addingTimeInterval(-1)
+        let messageCutoff = now.addingTimeInterval(-NoiseSecurityConstants.messageRateLimitWindow)
         messageTimestamps = messageTimestamps.compactMapValues { timestamps in
             let recent = timestamps.filter { $0 > messageCutoff }
             return recent.isEmpty ? nil : recent

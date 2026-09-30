@@ -81,22 +81,22 @@ final class NoiseRateLimiterTests: XCTestCase {
 
     func test_handshakeMap_doesNotRetainPeersPastTheirWindow() {
         let clock = TestClock(Date(timeIntervalSince1970: 10_000))
-        let limiter = NoiseRateLimiter(currentDate: { clock.now })
+        let limiter = NoiseRateLimiter(now: { clock.now })
 
         // A burst of one-shot peers, each handshaking once and never returning.
         // Stay inside the global per-minute budget so every one is admitted.
-        let peerCount = min(20, NoiseSecurityConstants.maxGlobalHandshakesPerMinute - 1)
+        let peerCount = 20
         for index in 0..<peerCount {
             XCTAssertTrue(limiter.allowHandshake(from: makePeerID(index + 1)))
         }
-        XCTAssertEqual(limiter.trackedPeerCount, peerCount)
+        XCTAssertEqual(limiter.trackedHandshakePeerCount, peerCount)
 
         // Past the one-minute handshake window, none of them is still relevant.
-        clock.advance(61)
-        _ = limiter.allowHandshake(from: makePeerID(200))
+        clock.advance(NoiseSecurityConstants.handshakeRateLimitWindow + 1)
+        XCTAssertTrue(limiter.allowHandshake(from: makePeerID(200)))
 
         XCTAssertEqual(
-            limiter.trackedPeerCount,
+            limiter.trackedHandshakePeerCount,
             1,
             "departed peers must not be retained once their handshake window has passed"
         )
@@ -104,29 +104,47 @@ final class NoiseRateLimiterTests: XCTestCase {
 
     func test_messageMap_doesNotRetainPeersPastTheirWindow() {
         let clock = TestClock(Date(timeIntervalSince1970: 20_000))
-        let limiter = NoiseRateLimiter(currentDate: { clock.now })
+        let limiter = NoiseRateLimiter(now: { clock.now })
 
-        let peerCount = min(10, NoiseSecurityConstants.maxGlobalMessagesPerSecond - 1)
+        let peerCount = 10
         for index in 0..<peerCount {
             XCTAssertTrue(limiter.allowMessage(from: makePeerID(index + 1)))
         }
-        XCTAssertEqual(limiter.trackedPeerCount, peerCount)
+        XCTAssertEqual(limiter.trackedMessagePeerCount, peerCount)
 
-        clock.advance(2)
-        _ = limiter.allowMessage(from: makePeerID(200))
+        clock.advance(NoiseSecurityConstants.messageRateLimitWindow + 1)
+        XCTAssertTrue(limiter.allowMessage(from: makePeerID(200)))
 
         XCTAssertEqual(
-            limiter.trackedPeerCount,
+            limiter.trackedMessagePeerCount,
             1,
             "departed peers must not be retained once their message window has passed"
         )
+    }
+
+    func test_pruningUsesEachMapsWindow() {
+        let clock = TestClock(Date(timeIntervalSince1970: 25_000))
+        let limiter = NoiseRateLimiter(now: { clock.now })
+        let peerID = makePeerID(1)
+        XCTAssertTrue(limiter.allowHandshake(from: peerID))
+        XCTAssertTrue(limiter.allowMessage(from: peerID))
+
+        clock.advance(NoiseSecurityConstants.messageRateLimitWindow)
+        XCTAssertTrue(limiter.allowHandshake(from: makePeerID(2)))
+        XCTAssertEqual(limiter.trackedMessagePeerCount, 0)
+        XCTAssertEqual(limiter.trackedHandshakePeerCount, 2)
+
+        clock.advance(NoiseSecurityConstants.handshakeRateLimitWindow)
+        XCTAssertTrue(limiter.allowMessage(from: peerID))
+        XCTAssertEqual(limiter.trackedHandshakePeerCount, 0)
+        XCTAssertEqual(limiter.trackedMessagePeerCount, 1)
     }
 
     func test_pruningKeepsAPeerStillInsideItsWindow() {
         // The counterpart: pruning must not discard a peer whose budget is still
         // being enforced, or the limit becomes trivially bypassable by waiting.
         let clock = TestClock(Date(timeIntervalSince1970: 30_000))
-        let limiter = NoiseRateLimiter(currentDate: { clock.now })
+        let limiter = NoiseRateLimiter(now: { clock.now })
         let peerID = makePeerID(7)
 
         for _ in 0..<NoiseSecurityConstants.maxHandshakesPerMinute {
@@ -140,18 +158,18 @@ final class NoiseRateLimiterTests: XCTestCase {
             limiter.allowHandshake(from: peerID),
             "a peer still inside its window must stay rate limited across a prune"
         )
-        XCTAssertEqual(limiter.trackedPeerCount, 1)
+        XCTAssertEqual(limiter.trackedHandshakePeerCount, 1)
     }
 
     func test_pruneRecoversAfterBackwardClockStep() {
         let clock = TestClock(Date(timeIntervalSince1970: 40_000))
-        let limiter = NoiseRateLimiter(currentDate: { clock.now })
+        let limiter = NoiseRateLimiter(now: { clock.now })
 
         // Plant lastPrune ahead of wall time.
         XCTAssertTrue(limiter.allowHandshake(from: makePeerID(1)))
         clock.advance(-100) // now = 39_900; lastPrune = 40_000
 
-        let peerCount = min(20, NoiseSecurityConstants.maxGlobalHandshakesPerMinute - 1)
+        let peerCount = 20
         for index in 0..<peerCount {
             XCTAssertTrue(limiter.allowHandshake(from: makePeerID(index + 10)))
         }
@@ -159,14 +177,14 @@ final class NoiseRateLimiterTests: XCTestCase {
         // Expire that cohort while lastPrune is still in the future without
         // the fix (elapsed stays negative). With the fix, prune runs and the
         // aged cohort is reclaimed.
-        clock.advance(61) // now = 39_961
-        _ = limiter.allowHandshake(from: makePeerID(200))
+        clock.advance(NoiseSecurityConstants.handshakeRateLimitWindow + 1) // now = 39_961
+        XCTAssertTrue(limiter.allowHandshake(from: makePeerID(200)))
 
         XCTAssertLessThanOrEqual(
-            limiter.trackedPeerCount,
+            limiter.trackedHandshakePeerCount,
             2,
             "a backwards clock step must not latch pruning off"
         )
-        XCTAssertGreaterThanOrEqual(limiter.trackedPeerCount, 1)
+        XCTAssertGreaterThanOrEqual(limiter.trackedHandshakePeerCount, 1)
     }
 }
