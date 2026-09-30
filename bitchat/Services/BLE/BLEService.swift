@@ -1333,7 +1333,12 @@ final class BLEService: NSObject {
         )
         guard expiration.expired else { return }
         let policy = privateMediaSendPolicy(to: peerID)
-        if !expiration.deferredOutbound {
+        // The drain encrypts under the current session and never re-queues.
+        // With the handshake still in flight past this deadline, every
+        // encryption would fail and each parked ack, receipt or payload would
+        // be dropped; leave them for the handshake-completion drain instead.
+        if !expiration.deferredOutbound,
+           noiseService.hasEstablishedSession(with: peerID) {
             sendPendingNoisePayloadsAfterHandshake(for: peerID)
         }
         completePrivateMediaPolicyResolution(expiration.completions, with: policy)
@@ -3316,6 +3321,14 @@ extension BLEService {
             scheduler.1,
             scheduler.2
         )
+    }
+
+    /// Typed payloads parked for `peerID` behind a handshake, with or
+    /// without a transfer ID (acks and receipts carry none).
+    func _test_pendingTypedPayloadCount(for peerID: PeerID) -> Int {
+        onEngine {
+            pendingNoiseSessionQueues.typedPayloadCount(for: peerID)
+        }
     }
 
     func _test_privateMediaAdmissionEntryCount() -> Int {

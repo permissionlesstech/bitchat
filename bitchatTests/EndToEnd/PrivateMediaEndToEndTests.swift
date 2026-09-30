@@ -863,6 +863,50 @@ struct PrivateMediaEndToEndTests {
     }
 
     @Test
+    func proofTimeoutBeforeHandshakeLeavesParkedAckForTheSession() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("private-media-proof-timeout-parked-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let alice = makeService(baseDirectory: root.appendingPathComponent("alice", isDirectory: true))
+        let bob = makeService(baseDirectory: root.appendingPathComponent("bob", isDirectory: true))
+        alice._test_seedConnectedPeer(
+            bob.myPeerID,
+            nickname: "Bob",
+            capabilities: .privateMedia,
+            noisePublicKey: bob.noiseStaticPublicKeyData()
+        )
+
+        // No session yet: resolving the media policy arms the 5 s proof
+        // watchdog and starts a handshake, which on a multi-hop mesh can
+        // take longer than that.
+        let recorder = PrivateMediaPolicyRecorder()
+        alice.resolvePrivateMediaSendPolicy(to: bob.myPeerID) { recorder.record($0) }
+        let registered = await TestHelpers.waitUntil(
+            { alice._test_hasPendingPrivateMediaPolicyResolution(for: bob.myPeerID) },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(registered)
+        #expect(!alice.canDeliverSecurely(to: bob.myPeerID))
+
+        // An ack owed to Bob parks behind that same handshake.
+        alice.sendDeliveryAck(for: "earlier-message-from-bob", to: bob.myPeerID)
+        await alice._test_drainNoiseMessagePipeline()
+        #expect(alice._test_pendingTypedPayloadCount(for: bob.myPeerID) == 1)
+
+        alice._test_forcePrivateMediaProofTimeout(for: bob.myPeerID)
+        let resolved = await TestHelpers.waitUntil(
+            { recorder.snapshot() == .legacyRequiresConsent },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(resolved)
+
+        // The watchdog settles the media policy. It must not consume the ack:
+        // with no session the ack cannot be encrypted, and a drained payload
+        // is never re-queued, so it would be lost for good.
+        #expect(alice._test_pendingTypedPayloadCount(for: bob.myPeerID) == 1)
+    }
+
+    @Test
     func authenticatedFingerprintMismatchCannotPoisonCapabilityPin() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("private-media-key-mismatch-\(UUID().uuidString)", isDirectory: true)
