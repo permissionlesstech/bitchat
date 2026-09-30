@@ -6,6 +6,7 @@
 // For more information, see <https://unlicense.org>
 //
 
+import BitLogger
 import BitFoundation
 import Foundation
 
@@ -19,8 +20,8 @@ import Foundation
 /// public, so anyone in radio range can mint entries for owners that will never
 /// announce. The store therefore bounds itself two ways: oldest-by-insertion
 /// eviction at the cap, and an age sweep that drops entries whose owner never
-/// showed up. Announces repeat every few seconds, so a genuine entry is drained
-/// long before the TTL; an unattributable one is garbage by then.
+/// showed up. The TTL exceeds the packet dedup window so delayed announces
+/// can still drain a bundle while duplicate gossip cannot re-supply it.
 ///
 /// Both bounds matter. Refusing new entries at a full cap — with no expiry —
 /// lets a single burst of unattributable bundles wedge the stash for the rest
@@ -37,9 +38,11 @@ struct BLEPendingPrekeyBundleStore {
     private struct Entry {
         let packet: BitchatPacket
         let stashedAt: Date
+        let sequence: UInt64
     }
 
     private let config: Config
+    private var insertionSequence: UInt64 = 0
     private var entries: [PeerID: Entry] = [:]
 
     init(config: Config = Config()) {
@@ -54,13 +57,20 @@ struct BLEPendingPrekeyBundleStore {
     mutating func stash(_ packet: BitchatPacket, for owner: PeerID, now: Date = Date()) {
         sweepExpired(now: now)
         let capacity = max(1, config.capacity)
+        var evictedCount = 0
         if entries[owner] == nil {
             while entries.count >= capacity {
-                guard let oldest = entries.min(by: { $0.value.stashedAt < $1.value.stashedAt })?.key else { break }
+                guard let oldest = entries.min(by: { $0.value.sequence < $1.value.sequence })?.key else { break }
                 entries.removeValue(forKey: oldest)
+                evictedCount += 1
             }
         }
-        entries[owner] = Entry(packet: packet, stashedAt: now)
+        if evictedCount > 0 {
+            // Bounds proof: capacity eviction removed unverified bundles.
+            SecureLogger.warning("Evicted \(evictedCount) pending prekey bundle(s) over cap", category: .session)
+        }
+        insertionSequence &+= 1
+        entries[owner] = Entry(packet: packet, stashedAt: now, sequence: insertionSequence)
     }
 
     /// Removes and returns `owner`'s stashed bundle, if one is still live. The
@@ -74,6 +84,12 @@ struct BLEPendingPrekeyBundleStore {
 
     private mutating func sweepExpired(now: Date) {
         guard !entries.isEmpty else { return }
+        let previousCount = entries.count
         entries = entries.filter { now.timeIntervalSince($0.value.stashedAt) <= config.ttlSeconds }
+        let removedCount = previousCount - entries.count
+        if removedCount > 0 {
+            // Bounds proof: the age sweep removed expired unverified bundles.
+            SecureLogger.warning("Swept \(removedCount) expired pending prekey bundle(s)", category: .session)
+        }
     }
 }

@@ -427,9 +427,10 @@ enum TransportConfig {
     // announce binds a signing key. Nothing about a stashed bundle is verified
     // yet and anyone can mint one for an owner that never announces, so the
     // stash is bounded both ways: oldest-by-insertion eviction at the cap, plus
-    // an age sweep. The TTL is many announce intervals
-    // (bleAnnounceIntervalSeconds), so a genuine bundle is always drained well
-    // inside it.
+    // an age sweep. Keep the TTL above messageDedupMaxAgeSeconds (300s),
+    // which prevents unchanged gossip from re-supplying a dropped bundle.
+    // Connected announces use 15±4s (sparse) or 30±8s (dense), not the
+    // disconnected 4s cadence; the stash also tolerates delayed announces.
     static let prekeyBundlePendingCap: Int = 64
-    static let prekeyBundlePendingTTLSeconds: TimeInterval = 120.0
+    static let prekeyBundlePendingTTLSeconds: TimeInterval = 600.0
 }

@@ -119,4 +119,28 @@ struct BLEPendingPrekeyBundleStoreTests {
         #expect(store.take(for: owner(1), now: t0.addingTimeInterval(11)) != nil)
         #expect(store.take(for: owner(0), now: t0.addingTimeInterval(11))?.payload == Data([8]))
     }
+
+    @Test
+    func backwardClockStepDoesNotChangeEvictionOrder() {
+        var store = BLEPendingPrekeyBundleStore(config: .init(capacity: 2, ttlSeconds: 60))
+        store.stash(packet(1), for: owner(1), now: t0)
+        store.stash(packet(2), for: owner(2), now: t0.addingTimeInterval(-10))
+        store.stash(packet(3), for: owner(3), now: t0.addingTimeInterval(-9))
+
+        #expect(store.take(for: owner(1), now: t0) == nil)
+        #expect(store.take(for: owner(2), now: t0)?.payload == Data([2]))
+        #expect(store.take(for: owner(3), now: t0)?.payload == Data([3]))
+    }
+
+    @Test
+    func defaultTTLRetainsBundleThroughoutDedupWindow() {
+        #expect(TransportConfig.prekeyBundlePendingTTLSeconds > TransportConfig.messageDedupMaxAgeSeconds)
+        var store = BLEPendingPrekeyBundleStore()
+        store.stash(packet(1), for: owner(1), now: t0)
+
+        #expect(store.take(for: owner(1), now: t0.addingTimeInterval(
+            TransportConfig.messageDedupMaxAgeSeconds
+        ))?.payload == Data([1]))
+    }
+
 }

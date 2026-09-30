@@ -4884,7 +4884,7 @@ extension BLEService {
             return
         }
         // Look up the announce-bound signing key and stash-if-unbound in ONE
-        // barrier: the receive queue is concurrent, so this bundle can race
+        // serial engine operation: this bundle can arrive
         // ahead of the announce that binds the key. Reading the live registry
         // and stashing atomically closes the check-then-act gap against
         // handleAnnounce's drain (see drainPendingPrekeyBundles).
@@ -4929,10 +4929,10 @@ extension BLEService {
 
     /// Re-attempt any prekey bundle that arrived before this owner's announce
     /// bound a signing key. Called from handleAnnounce after a verified
-    /// announce, in a barrier ordered after the registry write, so a bundle
+    /// announce, on the serial engine after the registry write, so a bundle
     /// stashed before the write is always observed here. A bundle whose owner
     /// took longer than the stash TTL to announce is dropped instead — the
-    /// owner re-gossips bundles, so waiting on a stale one buys nothing.
+    /// TTL exceeds packet dedup age so subsequent gossip can be admitted.
     private func drainPendingPrekeyBundles(for owner: PeerID) {
         let pending: BitchatPacket? = onEngine {
             pendingPrekeyBundles.take(for: owner)
