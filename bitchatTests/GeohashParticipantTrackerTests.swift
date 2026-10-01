@@ -8,6 +8,7 @@
 
 import Testing
 import Foundation
+import Combine
 @testable import bitchat
 
 /// Mock context for testing
@@ -16,6 +17,8 @@ final class MockParticipantContext: GeohashParticipantContext {
     var blockedPubkeys: Set<String> = []
     var nicknameMap: [String: String] = [:]
     var selfPubkey: String?
+    var blockLookupCount = 0
+    var blockSnapshotCount = 0
 
     func displayNameForPubkey(_ pubkeyHex: String) -> String {
         let suffix = String(pubkeyHex.suffix(4))
@@ -29,7 +32,13 @@ final class MockParticipantContext: GeohashParticipantContext {
     }
 
     func isBlocked(_ pubkeyHexLowercased: String) -> Bool {
-        blockedPubkeys.contains(pubkeyHexLowercased.lowercased())
+        blockLookupCount += 1
+        return blockedPubkeys.contains(pubkeyHexLowercased.lowercased())
+    }
+
+    func blockedPubkeysSnapshot() -> Set<String> {
+        blockSnapshotCount += 1
+        return blockedPubkeys
     }
 }
 
@@ -129,6 +138,155 @@ struct GeohashParticipantTrackerTests {
         let people = tracker.getVisiblePeople()
         #expect(people.count == 1)
         #expect(people.first?.id == "pubkey1")
+    }
+
+    @Test func recordParticipant_ignoresBlockedParticipant() {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        context.blockedPubkeys = ["blocked"]
+        tracker.configure(context: context)
+        tracker.setActiveGeohash("abc123")
+
+        tracker.recordParticipant(pubkeyHex: "BLOCKED")
+
+        #expect(tracker.participantCount(for: "abc123") == 0)
+        #expect(tracker.getVisiblePeople().isEmpty)
+    }
+
+    @Test func participantCount_excludesParticipantBlockedAfterRecording() {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        tracker.setActiveGeohash("abc123")
+        tracker.recordParticipant(pubkeyHex: "later-blocked")
+
+        context.blockedPubkeys.insert("later-blocked")
+        tracker.refresh()
+
+        #expect(tracker.participantCount(for: "abc123") == 0)
+        #expect(tracker.visiblePeople.isEmpty)
+    }
+
+    @Test func recordParticipant_blockedRepeatRemovesStaleVisibleParticipant() {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        tracker.setActiveGeohash("abc123")
+        tracker.recordParticipant(pubkeyHex: "later-blocked")
+
+        context.blockedPubkeys.insert("later-blocked")
+        tracker.recordParticipant(pubkeyHex: "LATER-BLOCKED")
+
+        #expect(tracker.participantCount(for: "abc123") == 0)
+        #expect(tracker.visiblePeople.isEmpty)
+    }
+
+    @Test func participantCount_matchesVisiblePeopleWithMixedBlockStatus() {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        tracker.setActiveGeohash("abc123")
+        tracker.recordParticipant(pubkeyHex: "visible")
+        tracker.recordParticipant(pubkeyHex: "later-blocked")
+
+        context.blockedPubkeys.insert("later-blocked")
+        tracker.refresh()
+
+        #expect(tracker.participantCount(for: "abc123") == 1)
+        #expect(tracker.visiblePeople.count == 1)
+        #expect(tracker.visiblePeople.first?.id == "visible")
+    }
+
+    @Test func participantCount_withoutContext_preservesRecordedParticipants() {
+        let tracker = GeohashParticipantTracker()
+
+        tracker.recordParticipant(pubkeyHex: "participant", geohash: "abc123")
+
+        #expect(tracker.participantCount(for: "abc123") == 1)
+    }
+
+    @Test func blockedRecord_doesNotReappearAfterUnblocking() {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        context.blockedPubkeys = ["blocked"]
+        tracker.configure(context: context)
+
+        tracker.recordParticipant(pubkeyHex: "BLOCKED", geohash: "inactive")
+        context.blockedPubkeys.removeAll()
+
+        #expect(tracker.participantCount(for: "inactive") == 0)
+    }
+
+    @Test func blockedRepeat_purgesEveryGeohashBeforeUnblocking() {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        tracker.recordParticipant(pubkeyHex: "later-blocked", geohash: "first")
+        tracker.recordParticipant(pubkeyHex: "later-blocked", geohash: "second")
+
+        context.blockedPubkeys = ["later-blocked"]
+        tracker.recordParticipant(pubkeyHex: "LATER-BLOCKED", geohash: "second")
+        context.blockedPubkeys.removeAll()
+
+        #expect(tracker.participantCount(for: "first") == 0)
+        #expect(tracker.participantCount(for: "second") == 0)
+    }
+
+    @Test func blockedInactiveRepeat_publishesOnlyActualRemoval() {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        tracker.setActiveGeohash("active")
+        tracker.recordParticipant(pubkeyHex: "visible", geohash: "active")
+        tracker.recordParticipant(pubkeyHex: "later-blocked", geohash: "inactive")
+
+        var changes = 0
+        var visiblePublications = 0
+        let changeToken = tracker.objectWillChange.sink { changes += 1 }
+        let visibleToken = tracker.$visiblePeople.dropFirst().sink { _ in visiblePublications += 1 }
+        defer {
+            changeToken.cancel()
+            visibleToken.cancel()
+        }
+
+        context.blockedPubkeys = ["never-tracked"]
+        tracker.recordParticipant(pubkeyHex: "NEVER-TRACKED", geohash: "inactive")
+        #expect(changes == 0)
+        #expect(visiblePublications == 0)
+
+        context.blockedPubkeys = ["later-blocked"]
+        tracker.recordParticipant(pubkeyHex: "LATER-BLOCKED", geohash: "inactive")
+
+        #expect(changes == 1)
+        #expect(visiblePublications == 1)
+        #expect(tracker.visiblePeople.map(\.id) == ["visible"])
+
+        tracker.recordParticipant(pubkeyHex: "later-blocked", geohash: "inactive")
+        tracker.removeParticipant(pubkeyHex: "absent")
+
+        #expect(changes == 1)
+        #expect(visiblePublications == 1)
+        context.blockedPubkeys.removeAll()
+        #expect(tracker.participantCount(for: "inactive") == 0)
+    }
+
+    @Test func participantCount_usesOneBlocklistSnapshotPerQuery() {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        for index in 0..<100 {
+            tracker.recordParticipant(pubkeyHex: "key\(index)", geohash: "inactive")
+        }
+        context.blockedPubkeys = ["key0", "key99"]
+        context.blockLookupCount = 0
+        context.blockSnapshotCount = 0
+
+        #expect(tracker.participantCount(for: "inactive") == 98)
+        #expect(context.blockSnapshotCount == 1)
+        #expect(context.blockLookupCount == 0)
+        #expect(tracker.participantCount(for: "empty") == 0)
+        #expect(context.blockSnapshotCount == 2)
+        #expect(context.blockLookupCount == 0)
     }
 
     @Test func getVisiblePeople_usesDisplayNameFromContext() async {

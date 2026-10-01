@@ -714,6 +714,7 @@ private final class PerfNostrContext: ChatNostrContext {
     private(set) var participantRecords = 0
     func recordGeoParticipant(pubkeyHex: String) { participantRecords += 1 }
     func recordGeoParticipant(pubkeyHex: String, geohash: String) { participantRecords += 1 }
+    func removeGeoParticipant(pubkeyHex: String) {}
     func geoParticipantCount(for geohash: String) -> Int { 0 }
     func setGeoNickname(_ nickname: String, forPubkey pubkeyHex: String) { geoNicknames[pubkeyHex.lowercased()] = nickname }
     func markGeoTeleported(_ pubkeyHexLowercased: String) { teleportedKeys.insert(pubkeyHexLowercased) }

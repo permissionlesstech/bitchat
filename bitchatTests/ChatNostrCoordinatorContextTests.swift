@@ -153,6 +153,7 @@ private final class MockChatNostrContext: ChatNostrContext {
     private(set) var activeParticipantGeohashes: [String?] = []
     private(set) var recordedParticipants: [String] = []
     private(set) var recordedSampledParticipants: [(pubkeyHex: String, geohash: String)] = []
+    private(set) var removedParticipantKeys: [String] = []
     private(set) var clearTeleportedGeoCount = 0
     private(set) var clearGeoNicknamesCount = 0
     var visiblePeople: [GeoPerson] = []
@@ -164,6 +165,13 @@ private final class MockChatNostrContext: ChatNostrContext {
 
     func recordGeoParticipant(pubkeyHex: String, geohash: String) {
         recordedSampledParticipants.append((pubkeyHex, geohash))
+    }
+
+    func removeGeoParticipant(pubkeyHex: String) {
+        let key = pubkeyHex.lowercased()
+        removedParticipantKeys.append(key)
+        recordedParticipants.removeAll { $0.lowercased() == key }
+        recordedSampledParticipants.removeAll { $0.pubkeyHex.lowercased() == key }
     }
 
     func geoParticipantCount(for geohash: String) -> Int {
@@ -543,6 +551,58 @@ struct ChatNostrCoordinatorContextTests {
 /// cooldown. The cooldown tests stop short of the live notification center by
 /// pre-seeding the timeline append as a duplicate.
 struct GeoPresenceTrackerTests {
+
+    @Test(arguments: [false, true]) @MainActor
+    func sampledBlockedActivity_isRejectedAndPurgesStaleParticipant(wasRecorded: Bool) {
+        let context = MockChatNostrContext()
+        let tracker = GeoPresenceTracker(context: context)
+        let key = String(repeating: "b", count: 64)
+        var event = NostrEvent(
+            pubkey: key.uppercased(), createdAt: Date(), kind: .ephemeralEvent,
+            tags: [["n", "blocked"]], content: "spam"
+        )
+        event.id = "blocked-sampled-event"
+        if wasRecorded {
+            context.recordGeoParticipant(pubkeyHex: key, geohash: "inactive")
+        }
+        context.blockedNostrPubkeys = [key]
+
+        tracker.subscribeNostrEvent(event, gh: "inactive")
+        context.blockedNostrPubkeys.removeAll()
+
+        #expect(context.removedParticipantKeys == [key])
+        #expect(context.recordedSampledParticipants.isEmpty)
+        #expect(context.geoParticipantCount(for: "inactive") == 0)
+        #expect(context.appendedGeohashMessages.isEmpty)
+        #expect(context.lastGeoNotificationAt.isEmpty)
+    }
+
+    @Test(arguments: [false, true]) @MainActor
+    func inboundBlockedActivity_isRejectedBeforePresenceAndNicknameWrites(wasRecorded: Bool) {
+        let context = MockChatNostrContext()
+        let presence = GeoPresenceTracker(context: context)
+        let pipeline = NostrInboundPipeline(context: context, presence: presence)
+        let key = String(repeating: "b", count: 64)
+        var event = NostrEvent(
+            pubkey: key.uppercased(), createdAt: Date(), kind: .geohashPresence,
+            tags: [["n", "blocked"]], content: ""
+        )
+        event.id = "blocked-inbound-event"
+        if wasRecorded {
+            context.recordGeoParticipant(pubkeyHex: key)
+        }
+        context.blockedNostrPubkeys = [key]
+
+        pipeline.subscribeNostrEvent(event)
+        context.blockedNostrPubkeys.removeAll()
+
+        #expect(context.recordedNostrEventIDs == [event.id])
+        #expect(context.removedParticipantKeys == [key])
+        #expect(context.recordedParticipants.isEmpty)
+        #expect(context.geoNicknames.isEmpty)
+        #expect(context.nostrKeyMapping.isEmpty)
+        #expect(context.handledPublicMessages.isEmpty)
+    }
 
     @Test @MainActor
     func samplingEventDedup_evictsOldestBeyondLRUCap() {
