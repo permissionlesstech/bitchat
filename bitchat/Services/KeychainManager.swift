@@ -9,6 +9,7 @@
 import BitLogger
 import BitFoundation
 import Foundation
+import os
 import Security
 
 enum KeychainInstallLifecycleAction: Equatable {
@@ -23,40 +24,59 @@ enum KeychainInstallLifecycleAction: Equatable {
 /// A blocked caller may perform one synchronous reconciliation attempt.
 /// Concurrent callers fail closed instead of reading while that cleanup is
 /// in flight. Once reconciliation succeeds, access remains open.
-final class KeychainInstallAccessGate: @unchecked Sendable {
-    private let lock = NSLock()
-    private var blocked = false
-    private var reconciliationInProgress = false
+final class KeychainInstallAccessGate: Sendable {
+    private let lock = OSAllocatedUnfairLock(initialState: (blocked: false, reconciliationInProgress: false))
 
     func block() {
-        lock.lock()
-        blocked = true
-        lock.unlock()
+        lock.withLock { state in
+            state.blocked = true
+        }
     }
 
+    /// Admit a caller, running reconciliation on its behalf if the install
+    /// lifecycle is blocked.
+    ///
+    /// `reconcile` is deliberately invoked outside the lock so a slow keychain
+    /// cleanup never blocks every other caller. It must not re-enter the gate
+    /// on the same thread (by calling `block()` or `allowsAccess` again):
+    /// `reconcile` runs with no lock held, so a re-entrant call fails closed
+    /// (returns false) instead of deadlocking, reporting access denied while
+    /// the cleanup it triggered is still in flight.
     func allowsAccess(reconcile: () -> Bool) -> Bool {
-        lock.lock()
-        if !blocked {
-            lock.unlock()
+        let shouldReconcile: KeychainAccessDecision = lock.withLock { state in
+            if !state.blocked {
+                return .allowed
+            }
+            if state.reconciliationInProgress {
+                return .retryLater
+            }
+            state.reconciliationInProgress = true
+            return .reconcile
+        }
+
+        switch shouldReconcile {
+        case .allowed:
             return true
-        }
-        guard !reconciliationInProgress else {
-            lock.unlock()
+        case .retryLater:
             return false
+        case .reconcile:
+            let completed = reconcile()
+            lock.withLock { state in
+                if completed {
+                    state.blocked = false
+                }
+                state.reconciliationInProgress = false
+            }
+            return completed
         }
-        reconciliationInProgress = true
-        lock.unlock()
-
-        let completed = reconcile()
-
-        lock.lock()
-        if completed {
-            blocked = false
-        }
-        reconciliationInProgress = false
-        lock.unlock()
-        return completed
     }
+}
+
+/// Internal tri-state for the reconciliation decision.
+private enum KeychainAccessDecision {
+    case allowed
+    case retryLater
+    case reconcile
 }
 
 final class KeychainManager: KeychainManagerProtocol {

@@ -272,4 +272,151 @@ struct PreviewKeychainManagerTests {
             service: "chat.bitchat.future-custom"
         ) == replacementCustom)
     }
+
+    @Test("Concurrent callers cannot race the install access gate")
+    func concurrentCallersDoNotRaceTheGate() {
+        let gate = KeychainInstallAccessGate()
+        gate.block()
+
+        let recorder = GateReconcileRecorder()
+        let reconcileEntered = DispatchSemaphore(value: 0)
+        let releaseReconcile = DispatchSemaphore(value: 0)
+        let completed = DispatchSemaphore(value: 0)
+
+        let reconcile: @Sendable () -> Bool = {
+            recorder.started()
+            reconcileEntered.signal()
+            releaseReconcile.wait()
+            recorder.finished()
+            return true
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.concurrentPerform(iterations: 16) { _ in
+                _ = gate.allowsAccess(reconcile: reconcile)
+                completed.signal()
+            }
+        }
+
+        // The first caller to acquire the gate is now blocked inside the
+        // reconcile closure, with reconciliationInProgress set.
+        #expect(reconcileEntered.wait(
+            timeout: .now() + TestConstants.settleTimeout
+        ) == .success)
+
+        // A caller arriving while reconciliation is in flight must fail
+        // closed instead of racing the cleanup. A benign closure proves the
+        // gate never ran a second cleanup: a regression flips the flag and
+        // fails the expectation instead of deadlocking on the shared blocking
+        // reconcile closure.
+        var mustNotRun = false
+        #expect(!gate.allowsAccess(reconcile: {
+            mustNotRun = true
+            return true
+        }))
+        #expect(!mustNotRun)
+
+        releaseReconcile.signal()
+        for _ in 0..<16 {
+            #expect(completed.wait(
+                timeout: .now() + TestConstants.settleTimeout
+            ) == .success)
+        }
+
+        // The gate must have serialized the reconciliation: exactly one
+        // caller ran the closure, and no two callers ever ran it at once.
+        #expect(recorder.reconcileCount == 1)
+        #expect(recorder.maxConcurrent == 1)
+    }
+
+    @Test("Re-entering the gate from reconcile fails closed without a second cleanup")
+    func reentrantReconcileFailsClosed() {
+        let gate = KeychainInstallAccessGate()
+        gate.block()
+
+        let enteredReconcile = DispatchSemaphore(value: 0)
+        let reentryReturned = DispatchSemaphore(value: 0)
+        let secondReconcileRan = DispatchSemaphore(value: 0)
+        let outerCompleted = DispatchSemaphore(value: 0)
+
+        let reconcile: @Sendable () -> Bool = {
+            enteredReconcile.signal()
+            // Deliberate contract violation: calling back into the gate from
+            // inside the reconcile closure. `reconcile` runs outside the lock,
+            // so this must not deadlock; it observes the in-flight
+            // reconciliation and fails closed without starting a second
+            // cleanup.
+            _ = gate.allowsAccess(reconcile: {
+                secondReconcileRan.signal()
+                return true
+            })
+            reentryReturned.signal()
+            return true
+        }
+
+        DispatchQueue.global().async {
+            _ = gate.allowsAccess(reconcile: reconcile)
+            outerCompleted.signal()
+        }
+
+        #expect(enteredReconcile.wait(
+            timeout: .now() + TestConstants.settleTimeout
+        ) == .success)
+
+        // The re-entrant call returns promptly rather than deadlocking...
+        #expect(reentryReturned.wait(
+            timeout: .now() + TestConstants.settleTimeout
+        ) == .success)
+        // ...fails closed, and never runs a second reconciliation. Negative
+        // wait, so the short named window is intentional.
+        #expect(secondReconcileRan.wait(
+            timeout: .now() + TestConstants.negativeWaitWindow
+        ) == .timedOut)
+
+        // The outer cleanup still completes and restores access.
+        #expect(outerCompleted.wait(
+            timeout: .now() + TestConstants.settleTimeout
+        ) == .success)
+        var reconcileCount = 0
+        #expect(gate.allowsAccess(reconcile: {
+            reconcileCount += 1
+            return true
+        }))
+        #expect(reconcileCount == 0)
+    }
+}
+
+/// Records reconcile-closure overlap across threads so a test can assert the
+/// install access gate serializes reconciliation.
+private final class GateReconcileRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedReconcileCount = 0
+    private var storedActive = 0
+    private var storedMaxConcurrent = 0
+
+    func started() {
+        lock.lock()
+        storedReconcileCount += 1
+        storedActive += 1
+        storedMaxConcurrent = max(storedMaxConcurrent, storedActive)
+        lock.unlock()
+    }
+
+    func finished() {
+        lock.lock()
+        storedActive -= 1
+        lock.unlock()
+    }
+
+    var reconcileCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedReconcileCount
+    }
+
+    var maxConcurrent: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedMaxConcurrent
+    }
 }
