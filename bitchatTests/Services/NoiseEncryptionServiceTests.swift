@@ -1484,7 +1484,7 @@ struct NoiseEncryptionServiceTests {
 
         #expect(NoiseMessage.decodeWithError(from: Data("bad".utf8)) == nil)
 
-        let binary = message.toBinaryData()
+        let binary = try #require(message.toBinaryData())
         let roundTripped = try #require(NoiseMessage.fromBinaryData(binary), "Expected binary decode")
         #expect(roundTripped.type == message.type)
         #expect(roundTripped.sessionID == message.sessionID)
