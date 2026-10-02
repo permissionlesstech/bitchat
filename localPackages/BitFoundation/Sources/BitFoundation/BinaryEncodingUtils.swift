@@ -7,6 +7,7 @@
 
 import struct Foundation.Data
 import struct Foundation.Date
+import struct Foundation.UUID
 
 // MARK: - Binary Encoding Utilities
 
@@ -35,144 +36,132 @@ extension Data {
         }
     }
     
-    public mutating func appendString(_ string: String, maxLength: Int = 255) {
-        guard let data = string.data(using: .utf8) else { return }
+    /// Returns false without modifying the destination when the length field
+    /// cannot represent the requested limit. Truncation preserves UTF-8.
+    @discardableResult
+    public mutating func appendString(_ string: String, maxLength: Int = 255) -> Bool {
+        guard (0...65535).contains(maxLength) else { return false }
+        var bytes = Data(string.utf8.prefix(maxLength))
+        while String(data: bytes, encoding: .utf8) == nil {
+            bytes.removeLast()
+        }
+        return appendData(bytes, maxLength: maxLength)
+    }
+
+    @discardableResult
+    public mutating func appendData(_ data: Data, maxLength: Int = 65535) -> Bool {
+        guard (0...65535).contains(maxLength) else { return false }
         let length = Swift.min(data.count, maxLength)
-        
         if maxLength <= 255 {
-            self.append(UInt8(length))
+            append(UInt8(length))
         } else {
-            self.appendUInt16(UInt16(length))
+            appendUInt16(UInt16(length))
         }
-        
-        self.append(data.prefix(length))
+        append(data.prefix(length))
+        return true
     }
-    
-    public mutating func appendData(_ data: Data, maxLength: Int = 65535) {
-        let length = Swift.min(data.count, maxLength)
-        
-        if maxLength <= 255 {
-            self.append(UInt8(length))
+
+    @discardableResult
+    public mutating func appendDate(_ date: Date) -> Bool {
+        let milliseconds = date.timeIntervalSince1970 * 1000
+        // Double(UInt64.max) rounds up to 2^64, which is not representable.
+        guard milliseconds.isFinite, milliseconds >= 0,
+              milliseconds < Double(UInt64.max) else { return false }
+        appendUInt64(UInt64(milliseconds))
+        return true
+    }
+
+    /// Accept canonical UUIDs and the compact 32-hex form. Invalid IDs must
+    /// not silently become a zero-padded or truncated different ID.
+    @discardableResult
+    public mutating func appendUUID(_ uuid: String) -> Bool {
+        let compact: String
+        if uuid.utf8.count == 32 {
+            compact = uuid
+        } else if let value = UUID(uuidString: uuid) {
+            compact = value.uuidString.replacingOccurrences(of: "-", with: "")
         } else {
-            self.appendUInt16(UInt16(length))
+            return false
         }
-        
-        self.append(data.prefix(length))
+        guard compact.utf8.count == 32,
+              let bytes = Data(hexString: compact), bytes.count == 16 else { return false }
+        append(bytes)
+        return true
     }
-    
-    public mutating func appendDate(_ date: Date) {
-        let timestamp = UInt64(date.timeIntervalSince1970 * 1000) // milliseconds
-        self.appendUInt64(timestamp)
-    }
-    
-    public mutating func appendUUID(_ uuid: String) {
-        // Convert UUID string to 16 bytes
-        var uuidData = Data(count: 16)
-        
-        let cleanUUID = uuid.replacingOccurrences(of: "-", with: "")
-        var index = cleanUUID.startIndex
-        
-        for i in 0..<16 {
-            guard index < cleanUUID.endIndex else { break }
-            let nextIndex = cleanUUID.index(index, offsetBy: 2)
-            if let byte = UInt8(String(cleanUUID[index..<nextIndex]), radix: 16) {
-                uuidData[i] = byte
-            }
-            index = nextIndex
-        }
-        
-        self.append(uuidData)
-    }
-    
+
     // MARK: Reading
     
+    /// Offsets are byte counts relative to this Data value, including slices.
+    /// Check by subtraction so hostile offsets/counts cannot overflow.
+    @usableFromInline
+    func binaryRange(at offset: Int, count length: Int) -> Range<Int>? {
+        guard offset >= 0, length >= 0, offset <= count,
+              length <= count - offset else { return nil }
+        let first = index(startIndex, offsetBy: offset)
+        return first..<index(first, offsetBy: length)
+    }
+
     @inlinable public func readUInt8(at offset: inout Int) -> UInt8? {
-        guard offset >= 0 && offset < self.count else { return nil }
-        let value = self[offset]
+        guard let range = binaryRange(at: offset, count: 1) else { return nil }
+        let value = self[range.lowerBound]
         offset += 1
         return value
     }
-    
+
     @inlinable func readUInt16(at offset: inout Int) -> UInt16? {
-        guard offset + 2 <= self.count else { return nil }
-        let value = UInt16(self[offset]) << 8 | UInt16(self[offset + 1])
+        guard let range = binaryRange(at: offset, count: 2) else { return nil }
+        let value = self[range].reduce(UInt16(0)) { ($0 << 8) | UInt16($1) }
         offset += 2
         return value
     }
-    
+
     @inlinable func readUInt32(at offset: inout Int) -> UInt32? {
-        guard offset + 4 <= self.count else { return nil }
-        let value = UInt32(self[offset]) << 24 |
-                   UInt32(self[offset + 1]) << 16 |
-                   UInt32(self[offset + 2]) << 8 |
-                   UInt32(self[offset + 3])
+        guard let range = binaryRange(at: offset, count: 4) else { return nil }
+        let value = self[range].reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
         offset += 4
         return value
     }
-    
+
     @inlinable func readUInt64(at offset: inout Int) -> UInt64? {
-        guard offset + 8 <= self.count else { return nil }
-        var value: UInt64 = 0
-        for i in 0..<8 {
-            value = (value << 8) | UInt64(self[offset + i])
-        }
+        guard let range = binaryRange(at: offset, count: 8) else { return nil }
+        let value = self[range].reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
         offset += 8
         return value
     }
-    
+
     public func readString(at offset: inout Int, maxLength: Int = 255) -> String? {
-        let length: Int
-        
-        if maxLength <= 255 {
-            guard let len = readUInt8(at: &offset) else { return nil }
-            length = Int(len)
-        } else {
-            guard let len = readUInt16(at: &offset) else { return nil }
-            length = Int(len)
-        }
-        
-        guard offset + length <= self.count else { return nil }
-        
-        let stringData = self[offset..<offset + length]
-        offset += length
-        
-        return String(data: stringData, encoding: .utf8)
+        var cursor = offset
+        guard let bytes = readData(at: &cursor, maxLength: maxLength),
+              let value = String(data: bytes, encoding: .utf8) else { return nil }
+        offset = cursor
+        return value
     }
-    
+
     public func readData(at offset: inout Int, maxLength: Int = 65535) -> Data? {
+        guard (0...65535).contains(maxLength) else { return nil }
+        var cursor = offset
         let length: Int
-        
         if maxLength <= 255 {
-            guard let len = readUInt8(at: &offset) else { return nil }
-            length = Int(len)
+            guard let value = readUInt8(at: &cursor) else { return nil }
+            length = Int(value)
         } else {
-            guard let len = readUInt16(at: &offset) else { return nil }
-            length = Int(len)
+            guard let value = readUInt16(at: &cursor) else { return nil }
+            length = Int(value)
         }
-        
-        guard offset + length <= self.count else { return nil }
-        
-        let data = self[offset..<offset + length]
-        offset += length
-        
-        return data
+        guard length <= maxLength,
+              let bytes = readFixedBytes(at: &cursor, count: length) else { return nil }
+        offset = cursor
+        return bytes
     }
-    
+
     public func readDate(at offset: inout Int) -> Date? {
         guard let timestamp = readUInt64(at: &offset) else { return nil }
         return Date(timeIntervalSince1970: Double(timestamp) / 1000.0)
     }
-    
+
     public func readUUID(at offset: inout Int) -> String? {
-        guard offset + 16 <= self.count else { return nil }
-        
-        let uuidData = self[offset..<offset + 16]
-        offset += 16
-        
-        // Convert 16 bytes to UUID string format
-        let uuid = uuidData.hexEncodedString()
-        
-        // Insert hyphens at proper positions: 8-4-4-4-12
+        guard let bytes = readFixedBytes(at: &offset, count: 16) else { return nil }
+        let uuid = bytes.hexEncodedString()
         var result = ""
         for (index, char) in uuid.enumerated() {
             if index == 8 || index == 12 || index == 16 || index == 20 {
@@ -180,16 +169,13 @@ extension Data {
             }
             result.append(char)
         }
-        
         return result.uppercased()
     }
-    
+
     public func readFixedBytes(at offset: inout Int, count: Int) -> Data? {
-        guard offset + count <= self.count else { return nil }
-        
-        let data = self[offset..<offset + count]
+        guard let range = binaryRange(at: offset, count: count) else { return nil }
+        let bytes = self[range]
         offset += count
-        
-        return data
+        return bytes
     }
 }

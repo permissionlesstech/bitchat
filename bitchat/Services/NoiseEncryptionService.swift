@@ -1152,10 +1152,10 @@ struct NoiseMessage: Codable {
     
     // MARK: - Binary Encoding
     
-    func toBinaryData() -> Data {
+    func toBinaryData() -> Data? {
         var data = Data()
         data.appendUInt8(type)
-        data.appendUUID(sessionID)
+        guard data.appendUUID(sessionID) else { return nil }
         data.appendData(payload)
         return data
     }

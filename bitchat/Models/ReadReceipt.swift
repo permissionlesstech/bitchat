@@ -43,10 +43,10 @@ struct ReadReceipt: Codable {
     
     // MARK: - Binary Encoding
     
-    func toBinaryData() -> Data {
+    func toBinaryData() -> Data? {
         var data = Data()
-        data.appendUUID(originalMessageID)
-        data.appendUUID(receiptID)
+        guard data.appendUUID(originalMessageID),
+              data.appendUUID(receiptID) else { return nil }
         // ReaderID as 8-byte hex string
         var readerData = Data()
         var tempID = readerID.id
@@ -61,7 +61,7 @@ struct ReadReceipt: Codable {
             readerData.append(0)
         }
         data.append(readerData)
-        data.appendDate(timestamp)
+        guard data.appendDate(timestamp) else { return nil }
         data.appendString(readerNickname)
         return data
     }

@@ -33,7 +33,7 @@ struct ReadReceiptTests {
         )
 
         let decoded = try #require(
-            ReadReceipt.fromBinaryData(receipt.toBinaryData()),
+            ReadReceipt.fromBinaryData(try #require(receipt.toBinaryData())),
             "Receipt should decode from binary data"
         )
 
@@ -43,6 +43,14 @@ struct ReadReceiptTests {
         #expect(decoded.readerNickname == receipt.readerNickname)
     }
 
+    @Test("Binary encode rejects a malformed original message ID")
+    func binaryEncodeRejectsMalformedMessageID() {
+        let receipt = ReadReceipt(originalMessageID: "a",
+                                  readerID: PeerID(str: "0011223344556677"),
+                                  readerNickname: "Test")
+        #expect(receipt.toBinaryData() == nil)
+    }
+
     @Test("Binary decode rejects truncated data")
     func binaryDecodeRejectsTruncatedData() {
         #expect(ReadReceipt.fromBinaryData(Data()) == nil)
@@ -50,13 +58,13 @@ struct ReadReceiptTests {
     }
 
     @Test("Binary decode rejects stale timestamps")
-    func binaryDecodeRejectsStaleTimestamp() {
+    func binaryDecodeRejectsStaleTimestamp() throws {
         let receipt = ReadReceipt(
             originalMessageID: UUID().uuidString,
             readerID: PeerID(str: "0011223344556677"),
             readerNickname: "Carol"
         )
-        var data = receipt.toBinaryData()
+        var data = try #require(receipt.toBinaryData())
 
         data.replaceSubrange(40..<48, with: Data(repeating: 0, count: 8))
 
