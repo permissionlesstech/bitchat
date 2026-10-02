@@ -32,8 +32,9 @@ struct ReadReceiptTests {
             readerNickname: "Bob"
         )
 
+        let encoded = try #require(receipt.toBinaryData())
         let decoded = try #require(
-            ReadReceipt.fromBinaryData(try #require(receipt.toBinaryData())),
+            ReadReceipt.fromBinaryData(encoded),
             "Receipt should decode from binary data"
         )
 
