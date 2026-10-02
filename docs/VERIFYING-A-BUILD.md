@@ -83,7 +83,8 @@ Do not rely on the app looking right. A modified build has no reason to look dif
 
 Cutting a release:
 
-- Push the tag. `source-manifest.yml` runs and attaches `SOURCE-MANIFEST.txt` to the release; if the release does not exist yet, collect the manifest from the workflow artifact and attach it when you publish.
+- Push the tag. `source-manifest.yml` produces an attested `SOURCE-MANIFEST.txt` and attaches it if the release already exists. Publishing a release (including a prerelease) also runs the workflow, so a release created after its tag receives the manifest. The workflow artifact remains available if an upload needs to be recovered manually.
+- For a manual run, select the same workflow run ref as the requested source ref. The workflow checks that the checked-out commit equals the run's `GITHUB_SHA` before creating an attestation; a request to attest a different commit fails.
 - Sign the tag (`git tag -s`). A signed tag lets anyone verify the release came from a key you control, independent of GitHub. This needs a published key fingerprint to be useful — see the gap below.
 - Note the commit hash somewhere outside this repository. If the repository is taken down, a hash recorded elsewhere is what lets people verify a mirror.
 

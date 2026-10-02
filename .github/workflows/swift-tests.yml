@@ -7,6 +7,13 @@ on:
   pull_request:
 
 jobs:
+  source-workflow-tests:
+    name: Source workflow regression tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 -m unittest discover -s scripts/tests -p "test_*.py" -v
+
   test:
     name: Run Swift Tests (${{ matrix.name }})
     runs-on: macos-latest
