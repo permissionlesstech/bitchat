@@ -40,6 +40,7 @@ extension ChatViewModel {
     @objc func handleTorDidBecomeReady() {
         Task { @MainActor in
             self.torStallAnnounced = false
+            self.torBlocked = false
             // Only announce "restarted" if we actually restarted this session
             if self.torRestartPending {
                 // Post only in geohash channels (queue if not active)
@@ -68,6 +69,7 @@ extension ChatViewModel {
             // runtime preference is what says whether anyone is waiting on
             // Tor. Turning Tor off mid-bootstrap must not read as blocking.
             guard NetworkActivationService.persistedTorPreference() else { return }
+            self.torBlocked = true
             guard !self.torStallAnnounced else { return }
             self.torStallAnnounced = true
             self.addGeohashOnlySystemMessage(
@@ -86,6 +88,9 @@ extension ChatViewModel {
             self.torInitialReadyAnnounced = false
             self.torRestartPending = false
             self.torStallAnnounced = false
+            // Turning tor off means nobody is waiting on it; turning it on
+            // starts a fresh attempt. Either way the stall banner resets.
+            self.torBlocked = false
         }
     }
 }

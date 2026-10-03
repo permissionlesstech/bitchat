@@ -68,22 +68,29 @@ struct NoiseProtocolTests {
     private let bobKey = Curve25519.KeyAgreement.PrivateKey()
     private let mockKeychain = MockKeychain()
     
-    private let alicePeerID = PeerID(str: UUID().uuidString)
-    private let bobPeerID = PeerID(str: UUID().uuidString)
-    
+    // Manager sessions are keyed by the remote peer. Keep the historical
+    // names, but derive each wire ID from the static key that the
+    // corresponding manager authenticates during the handshake.
+    private var alicePeerID: PeerID {
+        PeerID(publicKey: bobKey.publicKey.rawRepresentation)
+    }
+    private var bobPeerID: PeerID {
+        PeerID(publicKey: aliceKey.publicKey.rawRepresentation)
+    }
+
     private let aliceSession: NoiseSession
     private let bobSession: NoiseSession
-    
+
     init() {
         aliceSession = NoiseSession(
-            peerID: alicePeerID,
+            peerID: PeerID(publicKey: bobKey.publicKey.rawRepresentation),
             role: .initiator,
             keychain: mockKeychain,
             localStaticKey: aliceKey
         )
-        
+
         bobSession = NoiseSession(
-            peerID: bobPeerID,
+            peerID: PeerID(publicKey: aliceKey.publicKey.rawRepresentation),
             role: .responder,
             keychain: mockKeychain,
             localStaticKey: bobKey

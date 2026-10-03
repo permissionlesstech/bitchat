@@ -115,13 +115,18 @@ struct PrivateChatE2ETests {
         
         let aliceManager = NoiseSessionManager(localStaticKey: aliceKey, keychain: mockKeychain)
         let bobManager = NoiseSessionManager(localStaticKey: bobKey, keychain: mockKeychain)
-        
+
+        // Manager sessions are keyed by key-derived wire IDs: handshake
+        // completion fails closed on IDs the remote key can't vouch for.
+        let aliceNoiseID = PeerID(publicKey: aliceKey.publicKey.rawRepresentation)
+        let bobNoiseID = PeerID(publicKey: bobKey.publicKey.rawRepresentation)
+
         // Establish encrypted session
         do {
-            let handshake1 = try aliceManager.initiateHandshake(with: bob.peerID)
-            let handshake2 = try bobManager.handleIncomingHandshake(from: alice.peerID, message: handshake1)!
-            let handshake3 = try aliceManager.handleIncomingHandshake(from: bob.peerID, message: handshake2)!
-            _ = try bobManager.handleIncomingHandshake(from: alice.peerID, message: handshake3)
+            let handshake1 = try aliceManager.initiateHandshake(with: bobNoiseID)
+            let handshake2 = try bobManager.handleIncomingHandshake(from: aliceNoiseID, message: handshake1)!
+            let handshake3 = try aliceManager.handleIncomingHandshake(from: bobNoiseID, message: handshake2)!
+            _ = try bobManager.handleIncomingHandshake(from: aliceNoiseID, message: handshake3)
         } catch {
             Issue.record("Failed to establish Noise session: \(error)")
         }
@@ -134,7 +139,7 @@ struct PrivateChatE2ETests {
                    let message = BitchatMessage(packet.payload),
                    message.isPrivate {
                     do {
-                        let encrypted = try aliceManager.encrypt(packet.payload, for: bob.peerID)
+                        let encrypted = try aliceManager.encrypt(packet.payload, for: bobNoiseID)
                         let encryptedPacket = BitchatPacket(
                             type: 0x02, // Encrypted message type
                             senderID: packet.senderID,
@@ -155,7 +160,7 @@ struct PrivateChatE2ETests {
                 // Decrypt incoming encrypted messages
                 if packet.type == 0x02 {
                     do {
-                        let decrypted = try bobManager.decrypt(packet.payload, from: alice.peerID)
+                        let decrypted = try bobManager.decrypt(packet.payload, from: aliceNoiseID)
                         if let message = BitchatMessage(decrypted) {
                             #expect(message.content == TestConstants.testMessage1)
                             #expect(message.isPrivate)

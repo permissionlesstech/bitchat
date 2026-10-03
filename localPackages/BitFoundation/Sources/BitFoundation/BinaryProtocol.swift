@@ -46,7 +46,8 @@
 /// ## Compression Strategy
 /// - Automatic compression for payloads > 256 bytes
 /// - zlib compression for broad compatibility on Apple platforms
-/// - Original size stored for decompression
+/// - Original size stored for decompression; decoded payloads, compressed or
+///   not, are capped per message type (see `PacketPayloadLimits`)
 /// - Flag bit indicates compressed payload
 ///
 /// ## Flag Bits
@@ -355,6 +356,10 @@ public struct BinaryProtocol {
             }
 
             // Payload: payloadLength is exactly the payload size (+ compression preamble if compressed)
+            // Per-type ceiling on the decoded payload, compressed or not,
+            // checked before any allocation: see PacketPayloadLimits for why
+            // one frame-wide cap is not enough.
+            let maxPayloadSize = PacketPayloadLimits.maxPayloadBytes(forType: type)
             let payload: Data
             if isCompressed {
                 guard payloadLength >= lengthFieldBytes else { return nil }
@@ -366,13 +371,15 @@ public struct BinaryProtocol {
                     guard let rawSize = read16() else { return nil }
                     originalSize = Int(rawSize)
                 }
-                guard originalSize >= 0 && originalSize <= FileTransferLimits.maxFramedFileBytes else { return nil }
+                guard originalSize >= 0 && originalSize <= maxPayloadSize else {
+                    SecureLogger.debug("🚫 Compressed payload for type \(type) declares \(originalSize) bytes (cap \(maxPayloadSize))", category: .security)
+                    return nil
+                }
                 let compressedSize = payloadLength - lengthFieldBytes
                 guard compressedSize > 0, let compressed = readData(compressedSize) else { return nil }
 
-                let compressionRatio = Double(originalSize) / Double(compressedSize)
-                guard compressionRatio <= 50_000.0 else {
-                    SecureLogger.warning("🚫 Suspicious compression ratio: \(String(format: "%.0f", compressionRatio)):1", category: .security)
+                guard originalSize <= compressedSize * PacketPayloadLimits.maxDeflateRatio else {
+                    SecureLogger.debug("🚫 Impossible compression ratio: \(originalSize) bytes from \(compressedSize)", category: .security)
                     return nil
                 }
 
@@ -380,6 +387,12 @@ public struct BinaryProtocol {
                       decompressed.count == originalSize else { return nil }
                 payload = decompressed
             } else {
+                // Uncompressed payloads get the same ceiling, or a large frame
+                // could arrive as small compressed fragments and be reassembled.
+                guard payloadLength <= maxPayloadSize else {
+                    SecureLogger.debug("🚫 Payload for type \(type) is \(payloadLength) bytes (cap \(maxPayloadSize))", category: .security)
+                    return nil
+                }
                 guard let rawPayload = readData(payloadLength) else { return nil }
                 payload = rawPayload
             }

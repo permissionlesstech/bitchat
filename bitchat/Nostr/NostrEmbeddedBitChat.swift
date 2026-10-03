@@ -55,7 +55,8 @@ struct NostrEmbeddedBitChat {
     }
 
     /// Build a `bitchat1:` ACK (delivered/read) without an embedded recipient peer ID (geohash DMs).
-    static func encodeAckForNostrNoRecipient(type: NoisePayloadType, messageID: String, senderPeerID: PeerID) -> String? {
+    /// The sender ID is random per envelope; see `unlinkableSenderID()`.
+    static func encodeAckForNostrNoRecipient(type: NoisePayloadType, messageID: String) -> String? {
         guard type == .delivered || type == .readReceipt else { return nil }
 
         var payload = Data([type.rawValue])
@@ -63,7 +64,7 @@ struct NostrEmbeddedBitChat {
 
         let packet = BitchatPacket(
             type: MessageType.noiseEncrypted.rawValue,
-            senderID: Data(hexString: senderPeerID.id) ?? Data(),
+            senderID: unlinkableSenderID(),
             recipientID: nil,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: payload,
@@ -76,7 +77,8 @@ struct NostrEmbeddedBitChat {
     }
 
     /// Build a `bitchat1:` payload without an embedded recipient peer ID (used for geohash DMs).
-    static func encodePMForNostrNoRecipient(content: String, messageID: String, senderPeerID: PeerID) -> String? {
+    /// The sender ID is random per envelope; see `unlinkableSenderID()`.
+    static func encodePMForNostrNoRecipient(content: String, messageID: String) -> String? {
         let pm = PrivateMessagePacket(messageID: messageID, content: content)
         guard let tlv = pm.encode() else { return nil }
 
@@ -85,7 +87,7 @@ struct NostrEmbeddedBitChat {
 
         let packet = BitchatPacket(
             type: MessageType.noiseEncrypted.rawValue,
-            senderID: Data(hexString: senderPeerID.id) ?? Data(),
+            senderID: unlinkableSenderID(),
             recipientID: nil,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: payload,
@@ -95,6 +97,18 @@ struct NostrEmbeddedBitChat {
 
         guard let data = packet.toBinaryData() else { return nil }
         return "bitchat1:" + base64URLEncode(data)
+    }
+
+    /// Sender ID for the recipient-less envelopes above. They go out under a
+    /// per-geohash identity (and as the acks for inbound account DMs), where
+    /// no receiver reads this field: iOS and Android both key these
+    /// conversations on the Nostr sender pubkey. The mesh peer ID must never
+    /// go here: it is the stable Noise fingerprint prefix, so anyone who DMs
+    /// a geohash identity (and gets the automatic DELIVERED ack back) could
+    /// link that persona to the device and to its other geohash personas.
+    /// Fresh random bytes per envelope keep even our own envelopes unlinkable.
+    private static func unlinkableSenderID() -> Data {
+        Data((0..<BinaryProtocol.senderIDSize).map { _ in UInt8.random(in: .min ... .max) })
     }
 
     private static func normalizeRecipientPeerID(_ recipientPeerID: PeerID) -> PeerID {

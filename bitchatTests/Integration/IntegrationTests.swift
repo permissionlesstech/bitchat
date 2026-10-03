@@ -18,10 +18,10 @@ struct IntegrationTests {
     private var helper = TestNetworkHelper()
     
     init() {
-        helper.createNode("Alice", peerID: PeerID(str: UUID().uuidString))
-        helper.createNode("Bob", peerID: PeerID(str: UUID().uuidString))
-        helper.createNode("Charlie", peerID: PeerID(str: UUID().uuidString))
-        helper.createNode("David", peerID: PeerID(str: UUID().uuidString))
+        helper.createNode("Alice")
+        helper.createNode("Bob")
+        helper.createNode("Charlie")
+        helper.createNode("David")
     }
     
     // MARK: - Multi-Peer Scenarios
@@ -266,9 +266,11 @@ struct IntegrationTests {
             helper.nodes["Alice"]!.sendPrivateMessage("Before restart", to: helper.nodes["Bob"]!.peerID, recipientNickname: "Bob")
         }
         
-        // Simulate Bob restart by recreating his Noise manager
+        // Simulate Bob restart by recreating his Noise manager. A new static
+        // key means a new key-derived wire ID, just like production.
         let bobKey = Curve25519.KeyAgreement.PrivateKey()
         helper.noiseManagers["Bob"] = NoiseSessionManager(localStaticKey: bobKey, keychain: helper.mockKeychain)
+        helper.nodes["Bob"]!.myPeerID = PeerID(publicKey: bobKey.publicKey.rawRepresentation)
         
         // Re-establish Noise handshake explicitly via managers
         do {
@@ -320,7 +322,7 @@ struct IntegrationTests {
     @Test func largeScaleNetwork() async throws {
         // Create larger network
         for i in 5...10 {
-            helper.createNode("Node\(i)", peerID: PeerID(str: "PEER\(i)"))
+            helper.createNode("Node\(i)")
         }
         
         // Connect in ring topology with cross-connections

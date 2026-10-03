@@ -466,12 +466,14 @@ final class ChatGroupCoordinator {
     /// Accepts creator-signed group state arriving as an invite. The Noise
     /// session peer must BE the creator, the signature must verify against
     /// the creator key pinned in the roster, and we must be in the roster.
+    /// For a group we already hold, the creator must be the stored one.
     func handleGroupInvitePayload(from peerID: PeerID, payload: Data) {
         applyGroupState(from: peerID, payload: payload, isInvite: true)
     }
 
-    /// Accepts creator-signed state updates (rotation/roster). A state whose
-    /// roster no longer includes us means we were removed: drop the group.
+    /// Accepts creator-signed state updates (rotation/roster). A state from
+    /// the stored creator whose roster no longer includes us means we were
+    /// removed: drop the group.
     func handleGroupKeyUpdatePayload(from peerID: PeerID, payload: Data) {
         applyGroupState(from: peerID, payload: payload, isInvite: false)
     }
@@ -558,6 +560,30 @@ private extension ChatGroupCoordinator {
         let myFingerprint = context.myNoiseFingerprint()
         let existing = context.groupStore.group(withID: state.groupID)
 
+        if let existing {
+            // A group keeps the creator it was created with. The checks above
+            // only prove the sender is the creator the state names — anyone
+            // passes them by naming themselves and self-signing — so pin the
+            // creator's fingerprint AND signing key to the stored group.
+            // Both existing-group checks run before the removal branch, which
+            // drops the group without ever reaching `upsert`'s own pin.
+            guard existing.hasSameCreator(as: state.asGroup) else {
+                SecureLogger.warning(
+                    "Dropping group state claiming creator \(state.creatorFingerprint.prefix(8))… for a group created by \(existing.creatorFingerprint.prefix(8))…",
+                    category: .security
+                )
+                return
+            }
+            // Never regress the epoch: state travels over live Noise sessions,
+            // so an older epoch here is a stale (or misbehaving) creator
+            // device. That includes a stale removal, which must not undo a
+            // later re-invite.
+            guard state.epoch >= existing.epoch else {
+                SecureLogger.warning("Dropping stale group state (epoch \(state.epoch) < \(existing.epoch))", category: .security)
+                return
+            }
+        }
+
         // A creator-signed roster that no longer includes us is a removal.
         guard state.members.contains(where: { $0.fingerprint == myFingerprint }) else {
             if let existing {
@@ -573,13 +599,6 @@ private extension ChatGroupCoordinator {
                 ))
                 context.notifyUIChanged()
             }
-            return
-        }
-
-        // Never regress the epoch: state travels over live Noise sessions,
-        // so an older epoch here is a stale (or misbehaving) creator device.
-        if let existing, state.epoch < existing.epoch {
-            SecureLogger.warning("Dropping stale group state (epoch \(state.epoch) < \(existing.epoch))", category: .security)
             return
         }
 

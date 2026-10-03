@@ -69,7 +69,11 @@ private func makeArchitectureMessage(
 
 @MainActor
 private func waitUntil(
-    timeoutNanoseconds: UInt64 = 3_000_000_000,
+    // Settle deadline, not a latency budget (see TestConstants.settleTimeout):
+    // the old 3s default flaked on CI the moment a Combine hop through
+    // receive(on: .main) was starved. Every caller waits for a condition to
+    // become true, so passing runs return immediately.
+    timeoutNanoseconds: UInt64 = UInt64(TestConstants.settleTimeout * 1_000_000_000),
     pollNanoseconds: UInt64 = 20_000_000,
     _ condition: @escaping @MainActor () -> Bool
 ) async {
@@ -456,6 +460,146 @@ struct AppArchitectureTests {
 
         chromeModel.clearFingerprint()
         #expect(chromeModel.showingFingerprintFor == nil)
+    }
+
+    @Test("Triple-tap panic entry point only raises the confirmation dialog")
+    @MainActor
+    func requestPanicWipeAsksBeforeDestroying() {
+        let viewModel = makeArchitectureViewModel()
+        let privateInboxModel = PrivateInboxModel(conversations: ConversationStore())
+        let chromeModel = AppChromeModel(chatViewModel: viewModel, privateInboxModel: privateInboxModel)
+        viewModel.seedPublicMessages([
+            BitchatMessage(
+                id: "keep-1",
+                sender: "Tester",
+                content: "still here",
+                timestamp: Date(),
+                isRelay: false
+            )
+        ])
+
+        chromeModel.requestPanicWipe()
+
+        // The gesture must never wipe directly — a fumbled tap on the logo
+        // (single-tap opens App Info) cannot be allowed to destroy identity.
+        #expect(chromeModel.showPanicConfirmation)
+        #expect(viewModel.messages.map(\.id) == ["keep-1"])
+    }
+
+    @Test("Panic wipe dismisses chrome sheets so its outcome is visible")
+    @MainActor
+    func panicWipeDismissesChromePresentation() {
+        let viewModel = makeArchitectureViewModel()
+        let privateInboxModel = PrivateInboxModel(conversations: ConversationStore())
+        let chromeModel = AppChromeModel(chatViewModel: viewModel, privateInboxModel: privateInboxModel)
+
+        // The App Info danger-zone path wipes while its own sheet is up; the
+        // success message and the failed-wipe banner both render on the root
+        // timeline, so any sheet left presented would hide the one signal
+        // that says whether the wipe worked.
+        chromeModel.presentAppInfo()
+        chromeModel.isLocationChannelsSheetPresented = true
+        chromeModel.presentNotices()
+        chromeModel.showFingerprint(for: PeerID(str: "peer-3"))
+
+        chromeModel.panicClearAllData()
+
+        #expect(!chromeModel.isAppInfoPresented)
+        #expect(!chromeModel.isLocationChannelsSheetPresented)
+        #expect(!chromeModel.isNoticesSheetPresented)
+        #expect(chromeModel.showingFingerprintFor == nil)
+    }
+
+    @Test("Recent chats list direct conversations with people absent from the rosters")
+    @MainActor
+    func peerListModelSurfacesRecentChatsForAbsentPeers() async {
+        let viewModel = makeArchitectureViewModel()
+        let offlinePeerID = PeerID(str: "00000000000000aa")
+        let groupPeerID = PeerID(groupID: Data(repeating: 0xAB, count: 16))
+
+        // A DM thread from a passerby who has since gone offline: not in
+        // allPeers, not a favorite — previously unreachable once read.
+        viewModel.seedPrivateChat([
+            BitchatMessage(
+                id: "dm-1",
+                sender: "passerby",
+                content: "hello from the train",
+                timestamp: Date(timeIntervalSince1970: 100),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "me",
+                senderPeerID: offlinePeerID
+            )
+        ], for: offlinePeerID)
+        // Group threads have their own section and must not duplicate here.
+        viewModel.seedPrivateChat([
+            BitchatMessage(
+                id: "gm-1",
+                sender: "member",
+                content: "group hello",
+                timestamp: Date(timeIntervalSince1970: 200),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "me",
+                senderPeerID: groupPeerID
+            )
+        ], for: groupPeerID)
+
+        let peerListModel = PeerListModel(
+            chatViewModel: viewModel,
+            conversations: viewModel.conversations
+        )
+
+        await waitUntil {
+            peerListModel.recentChatRows.contains { $0.peerID == offlinePeerID }
+        }
+
+        #expect(peerListModel.recentChatRows.map(\.peerID) == [offlinePeerID])
+        #expect(peerListModel.recentChatRows.first?.lastActivity == Date(timeIntervalSince1970: 100))
+        // The roster doesn't list this peer — that's exactly why the row exists.
+        #expect(!peerListModel.meshRows.contains { $0.peerID == offlinePeerID })
+
+        // A geoDM thread resolves through the Nostr mapping (bare-key
+        // fallback here), never resolveNickname's mesh-only anon fallback.
+        let pubkeyHex = String(repeating: "ab", count: 32)
+        let geoDMPeer = PeerID(nostr_: pubkeyHex)
+        viewModel.seedPrivateChat([
+            BitchatMessage(
+                id: "geo-1",
+                sender: "stranger",
+                content: "hello from another cell",
+                timestamp: Date(timeIntervalSince1970: 300),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "me",
+                senderPeerID: geoDMPeer
+            )
+        ], for: geoDMPeer)
+
+        await waitUntil {
+            peerListModel.recentChatRows.contains { $0.peerID == geoDMPeer }
+        }
+        let geoRow = peerListModel.recentChatRows.first { $0.peerID == geoDMPeer }
+        #expect(geoRow?.displayName == geoDMPeer.bare)
+
+        // While that person is visible in the geohash roster, the chat row
+        // collapses — same absent-from-rosters contract as mesh.
+        //
+        // Re-assert the tracker state on every poll: the view model's own
+        // channel binding delivers its initial .mesh selection asynchronously
+        // and resets the active participant geohash when it lands
+        // (GeohashSubscriptionManager.setActiveParticipantGeohash(nil)) — on
+        // a loaded parallel runner that reset arrives AFTER this setup and
+        // the dedup can never happen. Both calls are idempotent, so the
+        // interference heals on the next poll while a genuine dedup failure
+        // still times out.
+        await waitUntil {
+            viewModel.participantTracker.setActiveGeohash("u4pruy")
+            viewModel.participantTracker.recordParticipant(pubkeyHex: pubkeyHex, geohash: "u4pruy")
+            return !peerListModel.recentChatRows.contains { $0.peerID == geoDMPeer }
+        }
+        #expect(!peerListModel.recentChatRows.contains { $0.peerID == geoDMPeer })
+        #expect(peerListModel.recentChatRows.map(\.peerID) == [offlinePeerID])
     }
 
     @Test("PrivateConversationModel resolves canonical header state for the selected DM")

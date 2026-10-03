@@ -1,4 +1,4 @@
-import BitFoundation
+@testable import BitFoundation
 import Foundation
 import Testing
 @testable import bitchat
@@ -173,6 +173,77 @@ struct BLEFragmentHandlerTests {
     }
 
     @Test
+    func reassembledPacketPastItsTypeCapNeverReachesThePipeline() throws {
+        // A large uncompressed inner frame streamed as compressed fragments
+        // (each zero-filled chunk is a few dozen bytes on air) through the
+        // real fragmenter and assembly buffer. One byte past the type's cap still fits the
+        // assembly, whose ceiling adds framing, so decode must stop it.
+        for type in [MessageType.message, .announce] {
+            let cap = PacketPayloadLimits.maxPayloadBytes(forType: type.rawValue)
+            var buffer = BLEFragmentAssemblyBuffer()
+            let recorder = Recorder()
+            recorder.appendResult = { header in
+                buffer.append(header, maxInFlightAssemblies: 8)
+            }
+            let handler = makeHandler(recorder: recorder)
+
+            for payloadSize in [cap, cap + 1] {
+                let inner = BitchatPacket(
+                    type: type.rawValue,
+                    senderID: Data(hexString: "99AABBCCDDEEFF00") ?? Data(),
+                    recipientID: nil,
+                    timestamp: 900_000,
+                    payload: uncompressiblePrefixThenZeros(count: payloadSize),
+                    signature: nil,
+                    ttl: 5,
+                    version: payloadSize > Int(UInt16.max) ? 2 : 1
+                )
+                for fragment in try fragmentsAsReceived(inner) {
+                    handler.handle(fragment, from: remotePeerID)
+                }
+            }
+
+            #expect(
+                recorder.reinjectedPackets.map(\.packet.payload.count) == [cap],
+                "\(type.description) past its cap must not be reassembled into the pipeline"
+            )
+        }
+    }
+
+    @Test
+    func reassembledPacketOfAnotherTypeThanItsFragmentsClaimIsDropped() throws {
+        let innerPacket = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: Data(hexString: "99AABBCCDDEEFF00") ?? Data(),
+            recipientID: nil,
+            timestamp: 900_000,
+            payload: Data("hello".utf8),
+            signature: nil,
+            ttl: 5
+        )
+        let reassembled = try #require(innerPacket.toBinaryData())
+
+        let recorder = Recorder()
+        recorder.appendResult = { header in
+            .complete(header: header, reassembledData: reassembled, started: false)
+        }
+        let handler = makeHandler(recorder: recorder)
+        // A file-transfer claim buys a framed-file-sized assembly; the
+        // packet it produced must be a file transfer.
+        let packet = makeFragmentPacket(
+            sender: remotePeerID,
+            index: 1,
+            total: 2,
+            originalType: MessageType.fileTransfer.rawValue
+        )
+
+        handler.handle(packet, from: remotePeerID)
+
+        #expect(recorder.ingressChecks.isEmpty)
+        #expect(recorder.reinjectedPackets.isEmpty)
+    }
+
+    @Test
     func undecodableReassembledDataIsDropped() {
         let recorder = Recorder()
         recorder.appendResult = { header in
@@ -198,6 +269,43 @@ struct BLEFragmentHandlerTests {
         #expect(recorder.appendedHeaders.count == 1)
         #expect(recorder.ingressChecks.isEmpty)
         #expect(recorder.reinjectedPackets.isEmpty)
+    }
+
+    /// Every byte value once, then zeros: the encoder leaves the inner
+    /// payload uncompressed (100% byte diversity), while the zero chunks
+    /// compress inside their fragments.
+    private func uncompressiblePrefixThenZeros(count: Int) -> Data {
+        var payload = Data((0...255).map { UInt8($0) })
+        payload.append(Data(count: count - payload.count))
+        return payload
+    }
+
+    /// Fragments `packet` with the real planner, then puts each fragment
+    /// through the wire codec as a receiver would.
+    private func fragmentsAsReceived(_ packet: BitchatPacket) throws -> [BitchatPacket] {
+        let request = BLEOutboundFragmentTransferRequest(
+            packet: packet,
+            pad: false,
+            maxChunk: nil,
+            directedPeer: nil,
+            transferId: nil
+        )
+        let plan = try #require(BLEOutboundFragmentPlanner.makePlan(
+            for: request,
+            defaultChunkSize: TransportConfig.bleDefaultFragmentSize,
+            bleMaxMTU: 512
+        ))
+        var compressedFragments = 0
+        let received = try plan.fragmentPackets.map { fragment in
+            let frame = try #require(fragment.toBinaryData())
+            if frame[BinaryProtocol.Offsets.flags] & BinaryProtocol.Flags.isCompressed != 0 {
+                compressedFragments += 1
+            }
+            return try #require(BinaryProtocol.decode(frame))
+        }
+        // All but the first (the diverse bytes) and a short tail.
+        #expect(compressedFragments >= received.count - 2)
+        return received
     }
 
     private func makeFragmentPacket(

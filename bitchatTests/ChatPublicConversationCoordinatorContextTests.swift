@@ -350,6 +350,68 @@ struct ChatPublicConversationCoordinatorContextTests {
         #expect(context.enqueuedMessages.first?.conversationID == .geohash(geohash))
     }
 
+    /// A peer-chosen wire timestamp near UInt64.max comes back from Date as
+    /// 2^64 ms; keying an archived echo on it used to trap the main actor —
+    /// a remote crash on receipt, and on every launch once archived.
+    @Test @MainActor
+    func handlePublicMessage_uint64MaxTimestamp_neitherTrapsNorBreaksEchoDedup() async {
+        let context = MockChatPublicConversationContext()
+        let coordinator = ChatPublicConversationCoordinator(context: context)
+        let senderPeerID = PeerID(str: "aabbccddeeff0011")
+        // Same conversion as BLEPublicMessageHandler / the archive decoder.
+        let wireMax = Date(timeIntervalSince1970: Double(UInt64.max) / 1000)
+
+        // Launch-time echo seeding path.
+        coordinator.registerArchivedEcho(senderPeerID: senderPeerID, timestamp: wireMax, content: "echoed")
+        // Live path: a copy of the seeded echo is still recognized...
+        coordinator.handlePublicMessage(BitchatMessage(
+            id: "live-copy",
+            sender: "alice",
+            content: "echoed",
+            timestamp: wireMax,
+            isRelay: false,
+            senderPeerID: senderPeerID
+        ))
+        #expect(context.enqueuedMessageIDs.isEmpty)
+
+        // ...and a fresh message with the same timestamp is delivered.
+        coordinator.handlePublicMessage(BitchatMessage(
+            id: "live-new",
+            sender: "alice",
+            content: "new",
+            timestamp: wireMax,
+            isRelay: false,
+            senderPeerID: senderPeerID
+        ))
+        #expect(context.enqueuedMessageIDs == ["live-new"])
+    }
+
+    @Test @MainActor
+    func archivedEchoKey_isTotalForAnyDate() async {
+        let sender = PeerID(str: "aabbccddeeff0011")
+        func key(_ date: Date) -> String {
+            ChatPublicConversationCoordinator.archivedEchoKey(senderPeerID: sender, timestamp: date, content: "x")
+        }
+
+        // Ordinary timestamps keep the integer-millisecond key.
+        #expect(key(Date(timeIntervalSince1970: 1_700_000_000.123)) == "aabbccddeeff0011|1700000000123|x")
+
+        // Out-of-range dates key deterministically instead of trapping.
+        let extremes = [
+            Date(timeIntervalSince1970: Double(UInt64.max) / 1000),
+            Date(timeIntervalSince1970: -1),
+            Date(timeIntervalSince1970: .infinity),
+            Date(timeIntervalSince1970: -.infinity),
+            Date(timeIntervalSince1970: .nan),
+            .distantFuture,
+            .distantPast
+        ]
+        for date in extremes {
+            #expect(key(date).hasPrefix("aabbccddeeff0011|"))
+        }
+        #expect(key(extremes[0]) != key(Date(timeIntervalSince1970: 1_700_000_000)))
+    }
+
     /// `/clear` on the mesh timeline used to only record a watermark, leaving
     /// the archive on disk for up to its freshness window — so someone who
     /// cleared before a police stop had deleted nothing. It must now erase the
