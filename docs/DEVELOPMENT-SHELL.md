@@ -26,7 +26,9 @@ If Command Line Tools are selected instead of full Xcode, the shell prints a
 setup hint and `just check` rejects that configuration. Complete Xcode's first
 launch setup and license acceptance outside the shell.
 
-The nixpkgs URL pins an immutable revision. On first use Nix generates
+The nixpkgs URL pins an immutable 26.05 Darwin revision that supports both
+architectures. Newer nixpkgs releases can drop Intel macOS support, so check
+both outputs before updating. On first use Nix generates
 `flake.lock`; retain it when updating the tool set. To update intentionally,
 change the pinned revision, regenerate the lock file, and check both Darwin
 shells. See the [Nix flake documentation](https://wiki.nixos.org/wiki/Flakes)
