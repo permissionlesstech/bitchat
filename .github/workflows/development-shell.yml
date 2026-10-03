@@ -27,6 +27,6 @@ jobs:
       - uses: actions/checkout@v5
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
       - name: Evaluate both Darwin shells
-        run: nix flake check --all-systems --no-build
+        run: nix flake check --no-update-lock-file --all-systems --no-build
       - name: Check selected Xcode from the shell
-        run: nix develop --command just check
+        run: nix develop --no-update-lock-file --command just check

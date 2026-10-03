@@ -28,8 +28,8 @@ launch setup and license acceptance outside the shell.
 
 The nixpkgs URL pins an immutable 26.05 Darwin revision that supports both
 architectures. Newer nixpkgs releases can drop Intel macOS support, so check
-both outputs before updating. On first use Nix generates
-`flake.lock`; retain it when updating the tool set. To update intentionally,
+both outputs before updating. The committed
+`flake.lock` also records its content hash. To update intentionally,
 change the pinned revision, regenerate the lock file, and check both Darwin
 shells. See the [Nix flake documentation](https://wiki.nixos.org/wiki/Flakes)
 and [nix develop reference](https://nix.dev/manual/nix/stable/command-ref/new-cli/nix3-develop.html).
