@@ -1,0 +1,32 @@
+name: Development shell
+
+on:
+  pull_request:
+    paths:
+      - flake.nix
+      - flake.lock
+      - Justfile
+      - .github/workflows/development-shell.yml
+  push:
+    branches: [main]
+    paths:
+      - flake.nix
+      - flake.lock
+      - Justfile
+      - .github/workflows/development-shell.yml
+
+permissions:
+  contents: read
+
+jobs:
+  shell:
+    name: Check Darwin development shells
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+      - name: Evaluate both Darwin shells
+        run: nix flake check --all-systems --no-build
+      - name: Check selected Xcode from the shell
+        run: nix develop --command just check
