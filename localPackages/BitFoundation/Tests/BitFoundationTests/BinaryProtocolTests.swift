@@ -368,7 +368,9 @@ struct BinaryProtocolTests {
         var beLength = UInt32(oversizedLength).bigEndian
         withUnsafeBytes(of: &beLength) { frame.append(contentsOf: $0) }
         frame.append(contentsOf: [UInt8](repeating: 0x11, count: BinaryProtocol.senderIDSize))
-        // Payload body intentionally omitted — the length check must fire first.
+        // Include the complete body: otherwise a missing size guard would still
+        // return nil because the input is truncated, hiding that regression.
+        frame.append(Data(repeating: 0x41, count: oversizedLength))
         #expect(BinaryProtocol.decode(frame) == nil)
     }
 
