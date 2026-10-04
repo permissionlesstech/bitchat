@@ -64,7 +64,7 @@ final class BinaryEncodingUtilsTests: XCTestCase {
 
         offset = 0
         XCTAssertNil(shortData.readString(at: &offset))
-        XCTAssertEqual(offset, 1)
+        XCTAssertEqual(offset, 0)
 
         offset = 0
         XCTAssertNil(shortData.readFixedBytes(at: &offset, count: 2))
@@ -89,6 +89,6 @@ final class BinaryEncodingUtilsTests: XCTestCase {
         var offset = 0
 
         XCTAssertNil(invalidUTF8.readString(at: &offset, maxLength: 300))
-        XCTAssertEqual(offset, invalidUTF8.count)
+        XCTAssertEqual(offset, 0)
     }
 }
