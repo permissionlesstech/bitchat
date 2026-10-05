@@ -80,6 +80,18 @@ struct BLEDirectedRelaySpoolTests {
         #expect(spool.isEmpty)
     }
 
+    @Test
+    func retainedWireBytesCountAgainstTheBudget() throws {
+        let original = makePacket(payload: [UInt8](repeating: 0x41, count: 100))
+        let frame = try #require(original.toBinaryData(padding: false))
+        let decoded = try #require(BitchatPacket.from(frame))
+        #expect(decoded.retainedPayloadBytes > decoded.payload.count)
+        var spool = BLEDirectedRelaySpool(capacity: 10, byteBudget: decoded.payload.count)
+        let inserted = spool.enqueue(packet: decoded, recipient: PeerID(str: "1122334455667788"), messageID: "synthetic", enqueuedAt: Date())
+        #expect(!inserted)
+        #expect(spool.isEmpty)
+    }
+
     // MARK: - Bounds
 
     @Test

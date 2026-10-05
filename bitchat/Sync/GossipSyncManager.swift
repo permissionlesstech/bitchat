@@ -14,26 +14,26 @@ final class GossipSyncManager {
     private struct PacketStore {
         private(set) var packets: [String: BitchatPacket] = [:]
         private(set) var order: [String] = []
-        /// Sum of retained payload sizes, maintained on every insert/remove.
+        /// Sum of decoded payload sizes and retained compressed payload sizes in this store.
         private var payloadBytes = 0
 
         /// Evicts oldest-first until both the count and the byte budget hold.
         /// The count cap alone let a few max-size packets per slot pin
         /// hundreds of MB; the budget bounds memory whatever the sizes.
         mutating func insert(idHex: String, packet: BitchatPacket, capacity: Int, byteBudget: Int) {
-            guard capacity > 0, packet.payload.count <= byteBudget else { return }
+            guard capacity > 0, packet.retainedPayloadBytes <= byteBudget else { return }
             if let existing = packets[idHex] {
-                payloadBytes += packet.payload.count - existing.payload.count
+                payloadBytes += packet.retainedPayloadBytes - existing.retainedPayloadBytes
                 packets[idHex] = packet
             } else {
                 packets[idHex] = packet
                 order.append(idHex)
-                payloadBytes += packet.payload.count
+                payloadBytes += packet.retainedPayloadBytes
             }
             while order.count > capacity || payloadBytes > byteBudget {
                 let victim = order.removeFirst()
                 if let evicted = packets.removeValue(forKey: victim) {
-                    payloadBytes -= evicted.payload.count
+                    payloadBytes -= evicted.retainedPayloadBytes
                 }
             }
         }
@@ -51,7 +51,7 @@ final class GossipSyncManager {
                 guard let packet = packets[key] else { continue }
                 if shouldRemove(packet) {
                     packets.removeValue(forKey: key)
-                    payloadBytes -= packet.payload.count
+                    payloadBytes -= packet.retainedPayloadBytes
                 } else {
                     nextOrder.append(key)
                 }
@@ -669,8 +669,8 @@ final class GossipSyncManager {
                 droppedAny = true
                 continue
             }
-            guard keptBytes + packet.payload.count <= config.messageByteBudget else { break }
-            keptBytes += packet.payload.count
+            guard keptBytes + packet.retainedPayloadBytes <= config.messageByteBudget else { break }
+            keptBytes += packet.retainedPayloadBytes
             kept.append((PacketIdUtil.computeId(packet).hexEncodedString(), packet))
         }
         for entry in kept.reversed() {

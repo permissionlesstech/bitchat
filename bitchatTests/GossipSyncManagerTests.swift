@@ -979,6 +979,31 @@ struct GossipSyncManagerTests {
         #expect(!FileManager.default.fileExists(atPath: poisonOnlyURL.path))
     }
 
+    @Test func retainedWireBytesCountForLiveAndArchivedMessages() async throws {
+        let original = try makeBudgetPackets(type: .message)[0]
+        let frame = try #require(original.toBinaryData(padding: false))
+        let decoded = try #require(BitchatPacket.from(frame))
+        #expect(decoded.retainedPayloadBytes > decoded.payload.count)
+        var config = GossipSyncManager.Config()
+        config.messageByteBudget = decoded.payload.count
+        let live = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: RequestSyncManager())
+        live.onPublicPacketSeen(decoded)
+        let livePackets = await withCheckedContinuation { continuation in
+            live.collectPublicMessagePackets { continuation.resume(returning: $0) }
+        }
+        #expect(livePackets.isEmpty)
+
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("wire-budget-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let archive = GossipMessageArchive(fileURL: url)
+        archive.save([frame])
+        let restored = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: RequestSyncManager(), archive: archive)
+        let restoredPackets = await withCheckedContinuation { continuation in
+            restored.collectPublicMessagePackets { continuation.resume(returning: $0) }
+        }
+        #expect(restoredPackets.isEmpty)
+    }
+
     // MARK: - Byte budgets
 
     /// Three 100-byte packets from distinct senders, oldest first.

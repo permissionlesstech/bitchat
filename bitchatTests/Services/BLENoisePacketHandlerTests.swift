@@ -1213,6 +1213,35 @@ struct BLENoisePacketHandlerTests {
     }
 
     @Test
+    func deferredByteBudgetIncludesReceivedCompression() throws {
+        let recorder = Recorder()
+        recorder.hasSession = true
+        recorder.awaitingResponderHandshake = true
+        recorder.decryptResult = .failure(CryptoKitError.authenticationFailure)
+        let handler = makeHandler(recorder: recorder)
+        let firstPeer = PeerID(str: "0000000000000001")
+        let secondPeer = PeerID(str: "0000000000000002")
+        let large = BitchatPacket(
+            type: MessageType.noiseEncrypted.rawValue,
+            senderID: Data(hexString: firstPeer.id)!, recipientID: localPeerIDData,
+            timestamp: 1_000_000,
+            payload: Data(repeating: 0x41, count: NoiseSecurityConstants.maxPrivateFileCiphertextSize),
+            signature: nil, ttl: 3, version: 2
+        )
+        let frame = try #require(large.toBinaryData(padding: false))
+        let decoded = try #require(BitchatPacket.from(frame))
+        #expect(decoded.retainedPayloadBytes > decoded.payload.count)
+        handler.handleEncrypted(decoded, from: firstPeer)
+        handler.handleEncrypted(makeEncryptedPacket(recipientID: localPeerIDData, payload: Data(count: 256 * 1024)), from: secondPeer)
+        recorder.awaitingResponderHandshake = false
+        recorder.decryptResult = .success(Data([NoisePayloadType.delivered.rawValue, 0x01]))
+        handler.handleSessionAuthenticated(firstPeer)
+        handler.handleSessionAuthenticated(secondPeer)
+        #expect(recorder.deliveries.count == 1)
+        #expect(recorder.deliveries.first?.peerID == firstPeer)
+    }
+
+    @Test
     func expiredEarlyCiphertextIsNotRetried() {
         let recorder = Recorder()
         recorder.hasSession = true

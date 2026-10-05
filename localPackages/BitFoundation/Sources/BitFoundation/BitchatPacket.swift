@@ -8,6 +8,11 @@
 
 import struct Foundation.Data
 
+// Within retained wire metadata, a nil compressed body represents an uncompressed payload.
+struct PacketWirePayload: Codable {
+    let compressedBytes: Data?
+}
+
 /// The core packet structure for all BitChat protocol messages.
 /// Encapsulates all data needed for routing through the mesh network,
 /// including TTL for hop limiting and optional encryption.
@@ -23,6 +28,50 @@ public struct BitchatPacket: Codable {
     public var ttl: UInt8
     public var route: [Data]?
     public var isRSR: Bool
+    // Retained by wire decoding or restored from Codable metadata.
+    // Changes to TTL, route, and RSR do not change the immutable payload.
+    var wirePayload: PacketWirePayload?
+
+    /// Payload buffers retained by this packet, excluding headers and signatures.
+    public var retainedPayloadBytes: Int {
+        payload.count + (wirePayload?.compressedBytes?.count ?? 0)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case version, type, senderID, recipientID, timestamp, payload, signature, ttl, route, isRSR, wirePayload
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            type: try values.decode(UInt8.self, forKey: .type),
+            senderID: try values.decode(Data.self, forKey: .senderID),
+            recipientID: try values.decodeIfPresent(Data.self, forKey: .recipientID),
+            timestamp: try values.decode(UInt64.self, forKey: .timestamp),
+            payload: try values.decode(Data.self, forKey: .payload),
+            signature: try values.decodeIfPresent(Data.self, forKey: .signature),
+            ttl: try values.decode(UInt8.self, forKey: .ttl),
+            version: try values.decode(UInt8.self, forKey: .version),
+            route: try values.decodeIfPresent([Data].self, forKey: .route),
+            isRSR: try values.decode(Bool.self, forKey: .isRSR)
+        )
+        let stored = try values.decodeIfPresent(PacketWirePayload.self, forKey: .wirePayload)
+        if let compressed = stored?.compressedBytes {
+            // Check that retained compressed bytes expand to the decoded payload,
+            // subject to the payload-size and inflation-ratio limits below.
+            guard !compressed.isEmpty,
+                  compressed.count <= FileTransferLimits.maxFramedFileBytes,
+                  payload.count <= PacketPayloadLimits.maxPayloadBytes(forType: type),
+                  payload.count <= compressed.count * PacketPayloadLimits.maxDeflateRatio,
+                  CompressionUtil.decompress(compressed, originalSize: payload.count) == payload else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .wirePayload, in: values,
+                    debugDescription: "Stored wire payload does not match decoded payload"
+                )
+            }
+        }
+        wirePayload = stored
+    }
     
     public init(type: UInt8, senderID: Data, recipientID: Data?, timestamp: UInt64, payload: Data, signature: Data?, ttl: UInt8, version: UInt8 = 1, route: [Data]? = nil, isRSR: Bool = false) {
         self.version = version
@@ -46,23 +95,13 @@ public struct BitchatPacket: Codable {
         toBinaryData(padding: true)
     }
     
-    /// Create binary representation for signing (without signature and TTL fields)
-    /// TTL is excluded because it changes during packet relay operations
+    /// Encode signing bytes with the signature omitted and TTL and RSR set to zero.
     public func toBinaryDataForSigning() -> Data? {
-        // Create a copy without signature and with fixed TTL for signing
-        // TTL must be excluded because it changes during relay
-        let unsignedPacket = BitchatPacket(
-            type: type,
-            senderID: senderID,
-            recipientID: recipientID,
-            timestamp: timestamp,
-            payload: payload,
-            signature: nil, // Remove signature for signing
-            ttl: 0, // Use fixed TTL=0 for signing to ensure relay compatibility
-            version: version,
-            route: route,
-            isRSR: false // RSR flag is mutable and not part of the signature
-        )
+        // Keep the retained payload encoding in the unsigned copy.
+        var unsignedPacket = self
+        unsignedPacket.signature = nil
+        unsignedPacket.ttl = 0
+        unsignedPacket.isRSR = false
         return BinaryProtocol.encode(unsignedPacket)
     }
     
