@@ -192,4 +192,16 @@ struct ChatComposerCoordinatorContextTests {
         )
         #expect(Set(mentions) == ["alice", "me", "me#0011"])
     }
+
+    @Test @MainActor
+    func parseMentions_matchesUnicodeEquivalentNicknames() {
+        let context = MockChatComposerContext()
+        let coordinator = ChatComposerCoordinator(context: context)
+        let precomposed = "caf\u{00E9}"
+        let decomposed = "cafe\u{0301}"
+        context.meshNicknamesByPeerID = [PeerID(str: "1111111111111111"): precomposed]
+
+        let mentions = coordinator.parseMentions(from: "hi @\(decomposed)")
+        #expect(mentions == [precomposed])
+    }
 }
