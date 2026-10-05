@@ -65,7 +65,7 @@ struct AppInfoView: View {
             static let tabInfo = String(localized: "app_info.tab.info", defaultValue: "info", comment: "Segmented control label for the info pane of the app info sheet")
 
             static let iconTitle = String(localized: "app_info.settings.icon.title", defaultValue: "HOME SCREEN ICON", comment: "Section header (uppercase) for alternate app icon picker") // periphery:ignore - iOS App Info settings UI
-            static let iconSubtitle = String(localized: "app_info.settings.icon.subtitle", defaultValue: "optional low-profile icons. the real app name still shows in settings and search — this only changes the home-screen glyph.", comment: "Caption under the alternate app icon picker explaining the limits of disguise") // periphery:ignore - iOS App Info settings UI
+            static let iconSubtitle = String(localized: "app_info.settings.icon.subtitle", defaultValue: "optional low-profile icons. the home-screen label still reads “bitchat”, and the real name still shows in settings and search — this only changes the glyph.", comment: "Caption under the alternate app icon picker explaining the limits of disguise") // periphery:ignore - iOS App Info settings UI
 
             static let connectivityTitle = String(localized: "app_info.settings.connectivity.title", defaultValue: "CONNECTIVITY", comment: "Section header (uppercase) for the connectivity toggles: mesh bridge, internet gateway, tor routing")
 
