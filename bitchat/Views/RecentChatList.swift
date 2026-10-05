@@ -19,11 +19,14 @@ struct RecentChatList: View {
 
     let chats: [RecentChatRow]
     let onTapChat: (PeerID) -> Void
+    /// Clears the unread badge without opening the conversation.
+    var onClearUnread: ((PeerID) -> Void)? = nil
 
     private enum Strings {
         static let header = String(localized: "chats.section.header", defaultValue: "chats", comment: "Section header above recent direct conversations in the people sheet")
         static let unread = String(localized: "mesh_peers.state.unread", comment: "State label for a peer with unread private messages")
         static let newMessagesTooltip = String(localized: "mesh_peers.tooltip.new_messages", comment: "Tooltip for the unread messages indicator")
+        static let markRead = String(localized: "conversation.action.mark_read", comment: "Context menu action that clears the unread badge for one conversation")
         static let openChatHint = String(localized: "chats.accessibility.open_hint", defaultValue: "opens this conversation", comment: "Accessibility hint on a recent chat row explaining activation opens the direct conversation")
     }
 
@@ -69,10 +72,24 @@ struct RecentChatList: View {
                     .padding(.vertical, 6)
                     .contentShape(Rectangle())
                     .onTapGesture { onTapChat(chat.peerID) }
+                    .contextMenu {
+                        if chat.hasUnread, let onClearUnread {
+                            Button(Strings.markRead) {
+                                onClearUnread(chat.peerID)
+                            }
+                        }
+                    }
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(accessibilityDescription(for: chat))
                     .accessibilityAddTraits(.isButton)
                     .accessibilityHint(Strings.openChatHint)
+                    .accessibilityActions {
+                        if chat.hasUnread, let onClearUnread {
+                            Button(Strings.markRead) {
+                                onClearUnread(chat.peerID)
+                            }
+                        }
+                    }
                 }
             }
         }
