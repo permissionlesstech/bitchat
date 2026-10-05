@@ -37,7 +37,7 @@ struct LargeTopologyTests {
 
     private func makeNodes(_ names: [String]) {
         for name in names {
-            helper.createNode(name, peerID: PeerID(str: UUID().uuidString))
+            helper.createNode(name)
         }
     }
 

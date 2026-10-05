@@ -260,8 +260,10 @@ final class NotificationService {
     }
 
     func sendNetworkAvailableNotification(peerCount: Int) {
-        let title = "👥 bitchatters nearby!"
-        let body = peerCount == 1 ? "1 person around" : "\(peerCount) people around"
+        let title = String(localized: "notification.nearby.title", defaultValue: "👥 bitchatters nearby!", comment: "Title of the local notification when mesh peers come into range")
+        let body = peerCount == 1
+            ? String(localized: "notification.nearby.body_one", defaultValue: "1 person around", comment: "Body of the nearby notification for exactly one peer")
+            : String(format: String(localized: "notification.nearby.body_many", defaultValue: "%lld people around", comment: "Body of the nearby notification; placeholder is the peer count"), locale: .current, peerCount)
         // Fixed identifier so iOS updates the existing notification instead of creating new ones
         let identifier = "network-available"
 

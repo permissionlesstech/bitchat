@@ -63,7 +63,7 @@ struct MacImagePickerView: View {
                 .resizable()
                 .scaledToFit()
         } else {
-            Text("No image selected")
+            Text(String(localized: "image_picker.none_selected", defaultValue: "no image selected", comment: "Placeholder shown in the image picker before a selection"))
         }
         Button("Show") { isPresented = true }
     }

@@ -343,8 +343,7 @@ struct ChatNostrCoordinatorContextTests {
         let sender = try NostrIdentity.generate()
         let embedded = try #require(NostrEmbeddedBitChat.encodePMForNostrNoRecipient(
             content: "psst",
-            messageID: "gm-1",
-            senderPeerID: PeerID(str: "aabbccddeeff0011")
+            messageID: "gm-1"
         ))
         let giftWrap = try NostrProtocol.createPrivateMessage(
             content: embedded,
@@ -356,7 +355,7 @@ struct ChatNostrCoordinatorContextTests {
 
         // The NIP-17 unwrap runs off the main actor; wait for the hop back.
         let convKey = PeerID(nostr_: sender.publicKeyHex)
-        let routed = await TestHelpers.waitUntil({ context.handledPrivateMessages.count == 1 })
+        let routed = await TestHelpers.waitUntil({ context.handledPrivateMessages.count == 1 }, timeout: TestConstants.settleTimeout)
         #expect(routed)
         #expect(context.recordedNostrEventIDs == [giftWrap.id])
         #expect(context.nostrKeyMapping[convKey] == sender.publicKeyHex)
@@ -386,8 +385,7 @@ struct ChatNostrCoordinatorContextTests {
         let sender = try NostrIdentity.generate()
         let embedded = try #require(NostrEmbeddedBitChat.encodePMForNostrNoRecipient(
             content: "pre-wipe secret",
-            messageID: "gm-wipe-1",
-            senderPeerID: PeerID(str: "aabbccddeeff0011")
+            messageID: "gm-wipe-1"
         ))
         let giftWrap = try NostrProtocol.createPrivateMessage(
             content: embedded,
@@ -412,7 +410,7 @@ struct ChatNostrCoordinatorContextTests {
         // The pipeline itself stays usable: a gift wrap spawned AFTER the
         // wipe (new generation) still decrypts and delivers.
         coordinator.inbound.handleGiftWrap(giftWrap, id: recipient)
-        let delivered = await TestHelpers.waitUntil({ context.handledPrivateMessages.count == 1 })
+        let delivered = await TestHelpers.waitUntil({ context.handledPrivateMessages.count == 1 }, timeout: TestConstants.settleTimeout)
         #expect(delivered)
     }
 

@@ -6,6 +6,7 @@
 //
 
 import BitFoundation
+import CoreBluetooth
 import SwiftUI
 
 private struct MessageDisplayItem: Identifiable {
@@ -176,7 +177,7 @@ struct MessageListView: View {
                 // sightings, live hints) stays visible below it instead of
                 // vanishing the moment echoes exist.
                 if privatePeer == nil, showsAmbientFooter(messageItems: messageItems) {
-                    MeshEmptyStateView(compact: true)
+                    MeshEmptyStateView(compact: true, bluetoothAvailable: bluetoothCanScan)
                         .padding(.horizontal, 12)
                         .padding(.top, 20)
                         .padding(.bottom, 8)
@@ -296,6 +297,15 @@ struct MessageListView: View {
 }
 
 private extension MessageListView {
+    /// Whether the radio could be scanning at all — the empty-state radar
+    /// must not sweep over a switched-off or denied radio.
+    var bluetoothCanScan: Bool {
+        switch appChromeModel.bluetoothState {
+        case .poweredOff, .unauthorized, .unsupported: return false
+        default: return true
+        }
+    }
+
     var currentContextKey: String {
         if let peer = privatePeer {
             return "dm:\(peer)"
@@ -373,7 +383,10 @@ private extension MessageListView {
         VStack(alignment: .leading, spacing: 6) {
             switch locationChannelsModel.selectedChannel {
             case .mesh:
-                MeshEmptyStateView(fillHeight: max(0, fillHeight - 24))
+                MeshEmptyStateView(
+                    fillHeight: max(0, fillHeight - 24),
+                    bluetoothAvailable: bluetoothCanScan
+                )
             case .location(let channel):
                 emptyStateLine(
                     String(
