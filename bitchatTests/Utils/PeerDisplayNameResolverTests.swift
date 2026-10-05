@@ -43,7 +43,39 @@ struct PeerDisplayNameResolverTests {
         #expect(result[second] == "sam#" + String(second.id.prefix(4)))
     }
 
+    @Test func disconnectedPeerIsExemptFromSuffixingAndFromCollisionCounting() {
+        let connectedA = PeerID(str: "aaaa000000000000")
+        let connectedB = PeerID(str: "bbbb000000000000")
+        let disconnected = PeerID(str: "cccc000000000000")
 
+        let result = PeerDisplayNameResolver.resolve(
+            [
+                (peerID: connectedA, nickname: "sam", isConnected: true),
+                (peerID: connectedB, nickname: "sam", isConnected: true),
+                (peerID: disconnected, nickname: "sam", isConnected: false)
+            ],
+            selfNickname: "me"
+        )
+
+        // The two connected peers still collide with each other and get suffixed.
+        #expect(result[connectedA] == "sam#" + String(connectedA.id.prefix(4)))
+        #expect(result[connectedB] == "sam#" + String(connectedB.id.prefix(4)))
+        // The disconnected peer is never suffixed, regardless of collisions.
+        #expect(result[disconnected] == "sam")
+    }
+
+    @Test func selfNicknameTriggersSuffixOnLoneRemotePeer() {
+        // Only one remote peer shares the nickname, but it collides with the
+        // local user's own current nickname, so it still gets suffixed.
+        let remote = PeerID(str: "dddd000000000000")
+
+        let result = PeerDisplayNameResolver.resolve(
+            [(peerID: remote, nickname: "me", isConnected: true)],
+            selfNickname: "me"
+        )
+
+        #expect(result[remote] == "me#" + String(remote.id.prefix(4)))
+    }
 
     @Test func emptyPeerListReturnsEmptyMap() {
         let result = PeerDisplayNameResolver.resolve([], selfNickname: "me")
