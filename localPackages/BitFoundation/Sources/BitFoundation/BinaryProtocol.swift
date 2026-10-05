@@ -372,14 +372,20 @@ public struct BinaryProtocol {
                     originalSize = Int(rawSize)
                 }
                 guard originalSize >= 0 && originalSize <= maxPayloadSize else {
-                    SecureLogger.debug("🚫 Compressed payload for type \(type) declares \(originalSize) bytes (cap \(maxPayloadSize))", category: .security)
+                    SecureLogger.warning(
+                        "Rejected compressed payload for type \(type): declared original size \(originalSize) bytes exceeds cap \(maxPayloadSize)",
+                        category: .security
+                    )
                     return nil
                 }
                 let compressedSize = payloadLength - lengthFieldBytes
                 guard compressedSize > 0, let compressed = readData(compressedSize) else { return nil }
 
                 guard originalSize <= compressedSize * PacketPayloadLimits.maxDeflateRatio else {
-                    SecureLogger.debug("🚫 Impossible compression ratio: \(originalSize) bytes from \(compressedSize)", category: .security)
+                    SecureLogger.warning(
+                        "Rejected compressed payload for type \(type): impossible ratio \(originalSize) bytes from \(compressedSize) compressed",
+                        category: .security
+                    )
                     return nil
                 }
 
@@ -390,7 +396,10 @@ public struct BinaryProtocol {
                 // Uncompressed payloads get the same ceiling, or a large frame
                 // could arrive as small compressed fragments and be reassembled.
                 guard payloadLength <= maxPayloadSize else {
-                    SecureLogger.debug("🚫 Payload for type \(type) is \(payloadLength) bytes (cap \(maxPayloadSize))", category: .security)
+                    SecureLogger.warning(
+                        "Rejected uncompressed payload for type \(type): \(payloadLength) bytes exceeds cap \(maxPayloadSize)",
+                        category: .security
+                    )
                     return nil
                 }
                 guard let rawPayload = readData(payloadLength) else { return nil }
