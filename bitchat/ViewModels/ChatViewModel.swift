@@ -1642,6 +1642,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         MeshEchoSettings.reset()
         NotificationPrivacySettings.reset()
         ComposerDraftStore.reset()
+        // Back to confirm-first: a wiped device should come back with the
+        // gesture armed, not silently off because that was the old setting.
+        PanicWipeSettings.reset()
         // A hand-added relay names an operator someone chose to route through,
         // which is the kind of trace a wipe should not leave behind.
         NostrRelaySettings.reset()
