@@ -134,11 +134,21 @@ public struct BinaryProtocol {
         let version = packet.version
         guard version == 1 || version == 2 else { return nil }
 
-        // Try to compress payload when beneficial, keeping original size for later decoding
+        // Reuse a received payload encoding, or try compression for a locally constructed packet.
         var payload = packet.payload
         var isCompressed = false
         var originalPayloadSize: Int?
-        if CompressionUtil.shouldCompress(payload) {
+        if let received = packet.wirePayload {
+            // Recompression can produce different signed bytes. Reuse the retained
+            // payload representation for encoding and signing-byte reconstruction.
+            if let compressed = received.compressedBytes {
+                let maxRepresentable = version == 2 ? Int(UInt32.max) : Int(UInt16.max)
+                guard payload.count <= maxRepresentable else { return nil }
+                originalPayloadSize = payload.count
+                payload = compressed
+                isCompressed = true
+            }
+        } else if CompressionUtil.shouldCompress(payload) {
             // Only compress when we can represent the original length in the outbound frame
             let maxRepresentable = version == 2 ? Int(UInt32.max) : Int(UInt16.max)
             if payload.count <= maxRepresentable,
@@ -360,6 +370,7 @@ public struct BinaryProtocol {
             // checked before any allocation: see PacketPayloadLimits for why
             // one frame-wide cap is not enough.
             let maxPayloadSize = PacketPayloadLimits.maxPayloadBytes(forType: type)
+            var receivedCompressed: Data?
             let payload: Data
             if isCompressed {
                 guard payloadLength >= lengthFieldBytes else { return nil }
@@ -385,6 +396,7 @@ public struct BinaryProtocol {
 
                 guard let decompressed = CompressionUtil.decompress(compressed, originalSize: originalSize),
                       decompressed.count == originalSize else { return nil }
+                receivedCompressed = compressed
                 payload = decompressed
             } else {
                 // Uncompressed payloads get the same ceiling, or a large frame
@@ -405,7 +417,7 @@ public struct BinaryProtocol {
 
             guard offset <= buf.count else { return nil }
 
-            return BitchatPacket(
+            var decoded = BitchatPacket(
                 type: type,
                 senderID: senderID,
                 recipientID: recipientID,
@@ -417,6 +429,8 @@ public struct BinaryProtocol {
                 route: route,
                 isRSR: isRSR
             )
+            decoded.wirePayload = PacketWirePayload(compressedBytes: receivedCompressed)
+            return decoded
         }
     }
 }
