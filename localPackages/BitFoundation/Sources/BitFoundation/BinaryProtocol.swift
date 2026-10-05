@@ -396,7 +396,10 @@ public struct BinaryProtocol {
                 // Uncompressed payloads get the same ceiling, or a large frame
                 // could arrive as small compressed fragments and be reassembled.
                 guard payloadLength <= maxPayloadSize else {
-                    SecureLogger.debug("🚫 Payload for type \(type) is \(payloadLength) bytes (cap \(maxPayloadSize))", category: .security)
+                    SecureLogger.warning(
+                        "Rejected uncompressed payload for type \(type): \(payloadLength) bytes exceeds cap \(maxPayloadSize)",
+                        category: .security
+                    )
                     return nil
                 }
                 guard let rawPayload = readData(payloadLength) else { return nil }
