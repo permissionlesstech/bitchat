@@ -37,6 +37,11 @@ protocol ChatPeerListContext: AnyObject {
     /// Posts the "bitchatters nearby" local notification.
     func notifyNetworkAvailable(peerCount: Int)
 
+    /// True when this peer should not count toward the nearby-notification
+    /// empty→populated transition (blocked peers, or peers the user muted
+    /// for proximity alerts — typically their own other devices).
+    func suppressesNearbyNotification(for peerID: PeerID) -> Bool
+
     /// Records peers seen within range for the daily ambient sightings tally.
     func recordMeshSightings(peerIDs: [PeerID])
 }
@@ -145,12 +150,19 @@ private extension ChatPeerListCoordinator {
         invalidateNetworkEmptyTimer()
         context.recordMeshSightings(peerIDs: meshPeers)
 
-        let newPeers = meshPeerSet.subtracting(recentlySeenPeers)
-        // Record every sighted peer even when no notification fires. A peer
+        // Only peers that aren't blocked / proximity-muted count toward the
+        // empty→populated notification. Muted-only meshes stay "empty" for
+        // that gate so a stranger joining later still alerts.
+        let countablePeers = meshPeers.filter { !context.suppressesNearbyNotification(for: $0) }
+        guard !countablePeers.isEmpty else { return }
+
+        let countableSet = Set(countablePeers)
+        let newPeers = countableSet.subtracting(recentlySeenPeers)
+        // Record every countable peer even when no notification fires. A peer
         // first seen during the cooldown (or while already meshed) must not
         // still count as "new" at some later peer-list event — that re-fired
         // the notification while devices sat idle and connected.
-        recentlySeenPeers.formUnion(meshPeerSet)
+        recentlySeenPeers.formUnion(countableSet)
 
         let cameFromEmpty = meshWasEmpty
         meshWasEmpty = false
@@ -159,9 +171,9 @@ private extension ChatPeerListCoordinator {
 
         if Date().timeIntervalSince(lastNetworkNotificationTime) >= notificationCooldownSeconds {
             lastNetworkNotificationTime = Date()
-            context.notifyNetworkAvailable(peerCount: meshPeers.count)
+            context.notifyNetworkAvailable(peerCount: countablePeers.count)
             SecureLogger.info(
-                "👥 Sent bitchatters nearby notification for \(meshPeers.count) mesh peers (new: \(newPeers.count))",
+                "👥 Sent bitchatters nearby notification for \(countablePeers.count) mesh peers (new: \(newPeers.count))",
                 category: .session
             )
         }
