@@ -4,13 +4,16 @@ struct GeohashPeopleList: View {
     @EnvironmentObject private var peerListModel: PeerListModel
     @ThemedPalette private var palette
     let onTapPerson: () -> Void
+    /// People-sheet search query; empty means show every row.
+    var nameFilter: String = ""
     @Environment(\.colorScheme) var colorScheme
     @State private var orderedIDs: [String] = []
 
     private enum Strings {
         static let noneNearby: LocalizedStringKey = "geohash_people.none_nearby"
+        static let noMatches: LocalizedStringKey = "content.people.search.no_matches"
         static let youSuffix: LocalizedStringKey = "geohash_people.you_suffix"
-        static let blockedTooltip = String(localized: "geohash_people.tooltip.blocked", comment: "Tooltip shown next to users blocked in geohash channels")
+        static let blockedTooltip = String(localized: "geohash_people.tooltip.blocked", comment: "Tooltip shown next to people blocked in geohash channels")
         static let unblock: LocalizedStringKey = "geohash_people.action.unblock"
         static let block: LocalizedStringKey = "geohash_people.action.block"
         static let unblockText = String(localized: "geohash_people.action.unblock", comment: "Context menu action to unblock a person")
@@ -32,7 +35,19 @@ struct GeohashPeopleList: View {
                     .padding(.top, 12)
             }
         } else {
-            let people = peerListModel.geohashPeople
+            let people = peerListModel.geohashPeople.filter {
+                PeopleNameFilter.matches($0.displayName, query: nameFilter)
+            }
+            let filterActive = !nameFilter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            if people.isEmpty && filterActive {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(Strings.noMatches)
+                        .bitchatFont(size: 14)
+                        .foregroundColor(palette.secondary)
+                        .padding(.horizontal)
+                        .padding(.top, 12)
+                }
+            } else {
             let currentIDs = people.map(\.id)
 
             let displayIDs = orderedIDs.filter { currentIDs.contains($0) } + currentIDs.filter { !orderedIDs.contains($0) }
@@ -151,6 +166,7 @@ struct GeohashPeopleList: View {
                 newOrder.removeAll { !ids.contains($0) }
                 for id in ids where !newOrder.contains(id) { newOrder.append(id) }
                 if newOrder != orderedIDs { orderedIDs = newOrder }
+            }
             }
         }
     }

@@ -10,12 +10,15 @@ struct MeshPeerList: View {
     /// Optional so existing call sites (and previews/tests) keep compiling;
     /// when absent the block/unblock context-menu entry is hidden.
     var onToggleBlock: ((MeshPeerRow) -> Void)? = nil
+    /// People-sheet search query; empty means show every row.
+    var nameFilter: String = ""
     @Environment(\.colorScheme) var colorScheme
 
     @State private var orderedIDs: [String] = []
 
     private enum Strings {
         static let noneNearby: LocalizedStringKey = "geohash_people.none_nearby"
+        static let noMatches: LocalizedStringKey = "content.people.search.no_matches"
         static let blockedTooltip = String(localized: "geohash_people.tooltip.blocked", comment: "Tooltip shown next to a blocked peer indicator")
         static let newMessagesTooltip = String(localized: "mesh_peers.tooltip.new_messages", comment: "Tooltip for the unread messages indicator")
         static let connected = String(localized: "content.accessibility.connected_mesh", comment: "Accessibility label for mesh-connected peer indicator")
@@ -41,13 +44,20 @@ struct MeshPeerList: View {
         let displayIDs = orderedIDs.filter { currentIDs.contains($0) } + currentIDs.filter { !orderedIDs.contains($0) }
         let peers: [MeshPeerRow] = displayIDs.compactMap { id in
             peerListModel.meshRows.first(where: { $0.id == id })
-        }
+        }.filter { PeopleNameFilter.matches($0.displayName, query: nameFilter) }
+        let filterActive = !nameFilter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
         if peerListModel.meshRows.isEmpty {
             // Match the section's row rhythm (same size, indent, and vertical
             // padding as a peer row) so the empty state reads as the list's
             // only line, not a floating caption.
             Text(Strings.noneNearby)
+                .bitchatFont(size: 14)
+                .foregroundColor(palette.secondary)
+                .padding(.horizontal)
+                .padding(.vertical, 4)
+        } else if peers.isEmpty && filterActive {
+            Text(Strings.noMatches)
                 .bitchatFont(size: 14)
                 .foregroundColor(palette.secondary)
                 .padding(.horizontal)
