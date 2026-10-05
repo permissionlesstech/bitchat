@@ -64,9 +64,14 @@ private final class MockChatPeerListContext: ChatPeerListContext {
 
     // Notifications
     private(set) var networkAvailableNotifications: [Int] = []
+    var suppressedNearbyPeerIDs: Set<PeerID> = []
 
     func notifyNetworkAvailable(peerCount: Int) {
         networkAvailableNotifications.append(peerCount)
+    }
+
+    func suppressesNearbyNotification(for peerID: PeerID) -> Bool {
+        suppressedNearbyPeerIDs.contains(peerID)
     }
 
     // Sightings
@@ -278,5 +283,56 @@ struct ChatPeerListCoordinatorContextTests {
         coordinator.didUpdatePeerList([peerA])
         await drainMainActorTasks()
         #expect(context.networkAvailableNotifications.isEmpty)
+    }
+
+    @Test @MainActor
+    func didUpdatePeerList_mutedPeersDoNotTriggerNearbyNotification() async {
+        let context = MockChatPeerListContext()
+        let coordinator = ChatPeerListCoordinator(context: context)
+        let mutedPeer = PeerID(str: "0011223344556677")
+        let stranger = PeerID(str: "8899aabbccddeeff")
+        context.connectedMeshPeers = [mutedPeer, stranger]
+        context.suppressedNearbyPeerIDs = [mutedPeer]
+
+        // Only the muted (own) device is nearby: stay quiet.
+        coordinator.didUpdatePeerList([mutedPeer])
+        await drainMainActorTasks()
+        #expect(context.networkAvailableNotifications.isEmpty)
+
+        // A stranger joining after muted-only mesh still alerts.
+        coordinator.didUpdatePeerList([mutedPeer, stranger])
+        await drainMainActorTasks()
+        #expect(context.networkAvailableNotifications == [1])
+    }
+
+    @Test @MainActor
+    func didUpdatePeerList_mutedOnlyMeshResetsEmptyGateForNextStranger() async {
+        let context = MockChatPeerListContext()
+        let coordinator = ChatPeerListCoordinator(context: context, notificationCooldownSeconds: 0)
+        let mutedPeer = PeerID(str: "0011223344556677")
+        let stranger = PeerID(str: "8899aabbccddeeff")
+        context.connectedMeshPeers = [mutedPeer, stranger]
+        context.suppressedNearbyPeerIDs = [mutedPeer]
+
+        // First stranger alerts and marks the mesh populated.
+        coordinator.didUpdatePeerList([mutedPeer, stranger])
+        await drainMainActorTasks()
+        #expect(context.networkAvailableNotifications == [1])
+
+        // Stranger leaves; only the muted peer remains. Reset-path count
+        // must treat that as empty (activeMeshPeerCount excludes muted).
+        context.connectedMeshPeers = [mutedPeer]
+        context.activeMeshPeerCountValue = 0
+        coordinator.didUpdatePeerList([mutedPeer])
+        await drainMainActorTasks()
+        coordinator.handleNetworkEmptyTimerFired()
+
+        // A later stranger must alert again — the muted peer must not pin
+        // meshWasEmpty to false forever.
+        context.connectedMeshPeers = [mutedPeer, stranger]
+        context.activeMeshPeerCountValue = 1
+        coordinator.didUpdatePeerList([mutedPeer, stranger])
+        await drainMainActorTasks()
+        #expect(context.networkAvailableNotifications == [1, 1])
     }
 }

@@ -1307,6 +1307,33 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         peerIdentityCoordinator.isPeerBlocked(peerID)
     }
 
+    @MainActor
+    func suppressesNearbyNotification(for peerID: PeerID) -> Bool {
+        guard let fingerprint = getFingerprint(for: peerID) else { return false }
+        return identityManager.suppressesNearbyNotification(fingerprint: fingerprint)
+    }
+
+    @MainActor
+    func isNearbyNotificationMuted(for peerID: PeerID) -> Bool {
+        guard let fingerprint = getFingerprint(for: peerID) else { return false }
+        return identityManager.isNearbyNotificationMuted(fingerprint: fingerprint)
+    }
+
+    @MainActor
+    func setNearbyNotificationMuted(for peerID: PeerID, muted: Bool) {
+        guard let fingerprint = getFingerprint(for: peerID) else {
+            // Pre-handshake peers have no Noise fingerprint yet — the mute
+            // key is fingerprint-stable, so there is nothing to persist.
+            SecureLogger.debug(
+                "🔇 Nearby-notification mute no-op for \(peerID.id.prefix(8))… (no fingerprint yet)",
+                category: .session
+            )
+            return
+        }
+        identityManager.setNearbyNotificationMuted(fingerprint, muted: muted)
+        objectWillChange.send()
+    }
+
     // Helper method to update selectedPrivateChatPeer if fingerprint matches
     @MainActor
     func updatePrivateChatPeerIfNeeded() {
