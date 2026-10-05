@@ -372,7 +372,10 @@ public struct BinaryProtocol {
                     originalSize = Int(rawSize)
                 }
                 guard originalSize >= 0 && originalSize <= maxPayloadSize else {
-                    SecureLogger.debug("🚫 Compressed payload for type \(type) declares \(originalSize) bytes (cap \(maxPayloadSize))", category: .security)
+                    SecureLogger.warning(
+                        "Rejected compressed payload for type \(type): declared original size \(originalSize) bytes exceeds cap \(maxPayloadSize)",
+                        category: .security
+                    )
                     return nil
                 }
                 let compressedSize = payloadLength - lengthFieldBytes
