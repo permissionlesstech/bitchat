@@ -27,6 +27,21 @@ struct PeerDisplayNameResolverTests {
         #expect(result[bob] == "bob")
     }
 
+    @Test func connectedCollisionSuffixesBothPeers() {
+        let first = PeerID(str: "1111000000000000")
+        let second = PeerID(str: "2222000000000000")
+
+        let result = PeerDisplayNameResolver.resolve(
+            [
+                (peerID: first, nickname: "sam", isConnected: true),
+                (peerID: second, nickname: "sam", isConnected: true)
+            ],
+            selfNickname: "me"
+        )
+
+        #expect(result[first] == "sam#" + String(first.id.prefix(4)))
+        #expect(result[second] == "sam#" + String(second.id.prefix(4)))
+    }
 
 
 
