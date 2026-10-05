@@ -174,6 +174,8 @@ public struct BinaryProtocol {
         let originalSizeFieldBytes = isCompressed ? lengthFieldBytes : 0
         // payloadLength in header is payload-only (does NOT include route bytes)
         let payloadDataSize = payload.count + originalSizeFieldBytes
+        // The decoder caps the framed payload, including the compression preamble.
+        guard payloadDataSize <= FileTransferLimits.maxFramedFileBytes else { return nil }
 
         if version == 1 && payloadDataSize > Int(UInt16.max) { return nil }
         if version == 2 && payloadDataSize > Int(UInt32.max) { return nil }
