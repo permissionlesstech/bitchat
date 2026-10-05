@@ -106,6 +106,12 @@ final class PeerListModel: ObservableObject {
         chatViewModel.startPrivateChat(with: peerID)
     }
 
+    /// Clears the unread badge for one direct or group conversation without
+    /// opening it or sending read receipts.
+    func clearUnread(for peerID: PeerID) {
+        chatViewModel.markPrivateChatRead(peerID)
+    }
+
     func toggleFavorite(peerID: PeerID) {
         chatViewModel.toggleFavorite(peerID: peerID)
     }

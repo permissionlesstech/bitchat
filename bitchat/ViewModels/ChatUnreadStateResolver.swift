@@ -40,4 +40,39 @@ enum ChatUnreadStateResolver {
             return firstMessage.sender.lowercased() == peerNickname
         }
     }
+
+    /// Peer IDs in `unreadPrivateMessages` that resolve to the same
+    /// conversation badge as `hasUnreadMessages(for:)`.
+    static func matchingUnreadPeerIDs(
+        for context: ChatUnreadPeerContext,
+        unreadPrivateMessages: Set<PeerID>,
+        privateChats: [PeerID: [BitchatMessage]]
+    ) -> Set<PeerID> {
+        var matching = Set<PeerID>()
+
+        if unreadPrivateMessages.contains(context.peerID) {
+            matching.insert(context.peerID)
+        }
+
+        if let noiseKeyPeerID = context.noiseKeyPeerID,
+           unreadPrivateMessages.contains(noiseKeyPeerID) {
+            matching.insert(noiseKeyPeerID)
+        }
+
+        if let nostrPeerID = context.nostrPeerID,
+           unreadPrivateMessages.contains(nostrPeerID) {
+            matching.insert(nostrPeerID)
+        }
+
+        if let peerNickname = context.nickname?.lowercased(), !peerNickname.isEmpty {
+            for unreadPeerID in unreadPrivateMessages where unreadPeerID.isGeoDM {
+                guard let firstMessage = privateChats[unreadPeerID]?.first else { continue }
+                if firstMessage.sender.lowercased() == peerNickname {
+                    matching.insert(unreadPeerID)
+                }
+            }
+        }
+
+        return matching
+    }
 }

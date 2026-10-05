@@ -660,7 +660,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     /// sending stays in `PrivateChatManager.markAsRead`).
     @MainActor
     func markPrivateChatRead(_ peerID: PeerID) {
-        conversations.markRead(.directPeer(peerID))
+        var idsToClear = peerIdentityCoordinator.unreadPeerIDsMatching(for: peerID)
+        idsToClear.insert(peerID)
+        for id in idsToClear {
+            conversations.markRead(.directPeer(id))
+        }
     }
 
     /// Empties the peer's chat but keeps the conversation alive (`/clear`).
