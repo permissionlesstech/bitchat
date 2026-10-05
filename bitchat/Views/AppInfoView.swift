@@ -221,6 +221,21 @@ struct AppInfoView: View {
                 title: "app_info.privacy.ephemeral.title",
                 description: "app_info.privacy.ephemeral.description"
             )
+            /// Explains the iOS 26 “accessory would like to open bitchat”
+            /// modal from wake-on-proximity (#1427 / #1396).
+            static let wakeProximity = AppInfoFeatureInfo(
+                icon: "antenna.radiowaves.left.and.right",
+                resolvedTitle: String(
+                    localized: "app_info.privacy.wake_proximity.title",
+                    defaultValue: "Background mesh wake",
+                    comment: "App Info privacy feature title explaining BLE wake-on-proximity"
+                ),
+                resolvedDescription: String(
+                    localized: "app_info.privacy.wake_proximity.description",
+                    defaultValue: "while closed, nearby peers may reopen bitchat over bluetooth so the mesh can reach you — the ios “accessory would like to open bitchat” prompt is that wake, and is safe to allow",
+                    comment: "App Info privacy feature description for the iOS accessory wake modal"
+                )
+            )
             static let panic = AppInfoFeatureInfo(
                 icon: "hand.raised.fill",
                 title: "app_info.privacy.panic.title",
@@ -813,6 +828,8 @@ struct AppInfoView: View {
                 FeatureRow(info: Strings.Privacy.noTracking)
 
                 FeatureRow(info: Strings.Privacy.ephemeral)
+
+                FeatureRow(info: Strings.Privacy.wakeProximity)
 
                 FeatureRow(info: Strings.Privacy.panic)
             }
