@@ -15,6 +15,10 @@ import Foundation
 /// of those sigils; leave it on otherwise. The composer TextField only exposes
 /// the text (not a live selection), so callers pass the caret — typically the
 /// end of the string, matching autocomplete.
+///
+/// Mid-string caret is a known v1 limitation: when callers only know
+/// `text.count`, moving the caret back into an existing `/` `@` `#` token
+/// still leaves autocorrect on. Plumb selection through when SwiftUI exposes it.
 enum ComposerAutocorrect {
     /// Sigils that mean "exact token, don't rewrite me".
     static let specialPrefixes: Set<Character> = ["/", "@", "#"]
