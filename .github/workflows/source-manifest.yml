@@ -15,10 +15,12 @@ on:
   push:
     tags:
       - 'v*'
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Tag or commit to produce a manifest for'
+        description: 'Tag or commit to produce a manifest for (must match the workflow run ref)'
         required: true
 
 permissions:
@@ -27,6 +29,13 @@ permissions:
 jobs:
   manifest:
     runs-on: ubuntu-latest
+    # A tag-push run and the later release publication must not race uploads.
+    concurrency:
+      group: source-manifest-${{ github.event.inputs.ref || github.ref }}
+      cancel-in-progress: false
+    env:
+      SOURCE_REF: ${{ github.event.inputs.ref || github.ref_name }}
+      RELEASE_TAG: ${{ github.event.release.tag_name || github.ref_name }}
     permissions:
       contents: write      # attach the manifest to the release
       id-token: write      # provenance attestation
@@ -38,11 +47,19 @@ jobs:
           # Full history so the commit the tag names can be recorded exactly.
           fetch-depth: 0
 
+      - name: Verify source provenance
+        run: |
+          set -euo pipefail
+          if [ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]; then
+            echo "error: select the same workflow run ref as the requested source ref" >&2
+            exit 1
+          fi
+
       - name: Build manifest
         id: build
         run: |
           set -euo pipefail
-          ref_name="${{ github.event.inputs.ref || github.ref_name }}"
+          ref_name="$SOURCE_REF"
           commit="$(git rev-parse HEAD)"
           tree="$(git rev-parse HEAD^{tree})"
 
@@ -98,15 +115,16 @@ jobs:
           path: SOURCE-MANIFEST.txt
 
       - name: Attach to release
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        if: github.event_name == 'release' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           # A tag may be pushed before its release exists; only attach when
-          # there is a release to attach to, and never fail the run over it.
-          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
-            gh release upload "${{ github.ref_name }}" SOURCE-MANIFEST.txt --clobber
+          # there is a release to attach to. Publication runs this workflow
+          # again, so a tag-first release does not require a manual upload.
+          if [ "$GITHUB_EVENT_NAME" = "release" ] || gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" SOURCE-MANIFEST.txt --clobber
           else
-            echo "no release for ${{ github.ref_name }} yet; manifest is available as a workflow artifact"
+            echo "no release for $RELEASE_TAG yet; manifest is available as a workflow artifact"
           fi
