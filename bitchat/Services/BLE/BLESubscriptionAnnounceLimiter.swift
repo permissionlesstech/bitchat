@@ -41,8 +41,18 @@ struct BLESubscriptionAnnounceLimiter {
             existing.currentBackoffSeconds * TransportConfig.bleSubscriptionRateLimitBackoffFactor,
             TransportConfig.bleSubscriptionRateLimitMaxBackoffSeconds
         )
+        // `lastAnnounceTime` deliberately keeps the time of the last *allowed*
+        // announce. It is the reference for both the backoff and
+        // `pruneStaleEntries`, so refreshing it on a rejection restarts the
+        // tracking window on every attempt — a central resubscribing faster
+        // than the maximum backoff could then never reach the window and
+        // stayed suppressed for as long as it kept trying.
+        // 9cd955a intentionally reset blocked attempts after the remediation
+        // in 99896bc; 193cfdc extracted the limiter without that rationale.
+        // Keeping the allowed timestamp preserves backoff while permitting
+        // recovery during a continuous retry stream.
         states[centralID] = State(
-            lastAnnounceTime: now,
+            lastAnnounceTime: existing.lastAnnounceTime,
             attemptCount: newAttemptCount,
             currentBackoffSeconds: newBackoff
         )
