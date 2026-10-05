@@ -382,7 +382,10 @@ public struct BinaryProtocol {
                 guard compressedSize > 0, let compressed = readData(compressedSize) else { return nil }
 
                 guard originalSize <= compressedSize * PacketPayloadLimits.maxDeflateRatio else {
-                    SecureLogger.debug("🚫 Impossible compression ratio: \(originalSize) bytes from \(compressedSize)", category: .security)
+                    SecureLogger.warning(
+                        "Rejected compressed payload for type \(type): impossible ratio \(originalSize) bytes from \(compressedSize) compressed",
+                        category: .security
+                    )
                     return nil
                 }
 
