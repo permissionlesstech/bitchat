@@ -13579,6 +13579,936 @@
         }
       }
     },
+    "message.link.copy" : {
+      "comment" : "Context-menu action that copies a bitchat:// deep link to this message",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نسخ رابط الرسالة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "বার্তার লিঙ্ক কপি করো"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nachrichtenlink kopieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "copy message link"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "copiar enlace del mensaje"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "کپی پیوند پیام"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kopyahin ang link ng mensahe"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "copier le lien du message"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "העתקת קישור להודעה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "संदेश लिंक कॉपी करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "salin tautan pesan"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "copia link del messaggio"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "メッセージリンクをコピー"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "메시지 링크 복사"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "salin pautan mesej"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सन्देश लिङ्क कपी गर्नुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "berichtlink kopiëren"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kopiuj link do wiadomości"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "copiar ligação da mensagem"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "copiar link da mensagem"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "скопировать ссылку на сообщение"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kopiera meddelandelänk"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "செய்தி இணைப்பை நகலெடு"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "คัดลอกลิงก์ข้อความ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesaj bağlantısını kopyala"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "скопіювати посилання на повідомлення"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پیغام کا لنک کاپی کریں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sao chép liên kết tin nhắn"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制消息链接"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "複製訊息連結"
+          }
+        }
+      }
+    },
+    "message.link.plaintext" : {
+      "comment" : "Plain-text payload when copying a message deep link; %@ is the bitchat:// URL",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "افتح في bitchat: %@"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat-এ খোলো: %@"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "in bitchat öffnen: %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "open in bitchat: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abrir en bitchat: %@"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "در bitchat باز کنید: %@"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "buksan sa bitchat: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ouvrir dans bitchat : %@"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פתיחה ב-bitchat: %@"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat में खोलें: %@"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "buka di bitchat: %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apri in bitchat: %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat で開く: %@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat에서 열기: %@"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "buka dalam bitchat: %@"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat मा खोल्नुहोस्: %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "openen in bitchat: %@"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "otwórz w bitchat: %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abrir no bitchat: %@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abrir no bitchat: %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "открыть в bitchat: %@"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "öppna i bitchat: %@"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat இல் திற: %@"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เปิดใน bitchat: %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat'te aç: %@"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "відкрити в bitchat: %@"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat میں کھولیں: %@"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mở trong bitchat: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 bitchat 中打开：%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 bitchat 中開啟：%@"
+          }
+        }
+      }
+    },
+    "message.link.precision_warning.confirm" : {
+      "comment" : "Confirms copying a message link that discloses a fine-precision geohash",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انسخ على أي حال"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "তবুও কপি করো"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "trotzdem kopieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "copy anyway"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "copiar de todos modos"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "به‌هرحال کپی کن"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kopyahin pa rin"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "copier quand même"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "להעתיק בכל זאת"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "फिर भी कॉपी करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tetap salin"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "copia comunque"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "それでもコピー"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "그래도 복사"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "salin juga"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "जे भए पनि कपी गर्नुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "toch kopiëren"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kopiuj mimo to"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "copiar mesmo assim"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "copiar mesmo assim"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "всё равно скопировать"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kopiera ändå"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இருப்பினும் நகலெடு"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "คัดลอกต่อไป"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yine de kopyala"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "усе одно скопіювати"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پھر بھی کاپی کریں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vẫn sao chép"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仍然复制"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仍然複製"
+          }
+        }
+      }
+    },
+    "message.link.precision_warning.message" : {
+      "comment" : "Body of the confirmation before copying a fine-precision geohash message link",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يحمل هذا الرابط geohash القناة، وهو يغطي منطقة صغيرة. كل من تلصقه له يعرف اهتمامك بذلك المكان، لا مجرد أنك تستخدم bitchat."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "এই লিঙ্কে চ্যানেলের geohash আছে, যা ছোট একটি এলাকা ঢাকে। যাকে পেস্ট করবে সে ওই জায়গার প্রতি আগ্রহ জানবে, শুধু bitchat ব্যবহারের কথা নয়।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dieser link enthält den geohash des kanals, der ein kleines gebiet abdeckt. wem du ihn einfügst, erfährt interesse an diesem ort — nicht nur, dass jemand bitchat nutzt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "this link carries the channel geohash, which covers a small area. anyone you paste it to learns interest in that place, not only that someone uses bitchat."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "este enlace lleva el geohash del canal, que cubre un área pequeña. a quien se lo pegues sabrá tu interés por ese lugar, no solo que alguien usa bitchat."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "این پیوند geohash کانال را دارد که ناحیه‌ای کوچک را می‌پوشاند. هرکس آن را ببیند از علاقه به آن مکان آگاه می‌شود، نه فقط استفاده از bitchat."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dala ng link na ito ang geohash ng channel, na maliit na lugar. malalaman ng pinagpi-paste mo ang interes sa lugar na iyon, hindi lang na may gumagamit ng bitchat."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ce lien contient le geohash du canal, qui couvre une petite zone. la personne à qui tu le colles apprend un intérêt pour ce lieu, pas seulement que quelqu'un utilise bitchat."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הקישור נושא את ה-geohash של הערוץ, שמכסה שטח קטן. מי שתדביק לו ילמד על עניין באותו מקום, לא רק שמישהו משתמש ב-bitchat."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "इस लिंक में चैनल का geohash है, जो छोटे क्षेत्र को कवर करता है। जिसे भी पेस्ट करोगे उसे उस जगह में रुचि का पता चलेगा, सिर्फ bitchat उपयोग का नहीं।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tautan ini membawa geohash kanal yang mencakup area kecil. siapa pun yang kamu kirimi tahu ketertarikan pada tempat itu, bukan sekadar bahwa seseorang memakai bitchat."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "questo link contiene il geohash del canale, che copre un'area piccola. chi lo riceve apprende un interesse per quel luogo, non solo che qualcuno usa bitchat."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このリンクにはチャンネルの geohash が含まれ、狭い範囲を示します。貼り付けた相手にはその場所への関心が伝わります。bitchat の利用だけではありません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 링크에는 좁은 범위를 가리키는 채널 geohash가 들어 있습니다. 붙여넣는 상대는 그 장소에 대한 관심까지 알게 됩니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pautan ini membawa geohash saluran yang meliputi kawasan kecil. sesiapa yang anda tampal akan tahu minat terhadap tempat itu, bukan sekadar penggunaan bitchat."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "यो लिङ्कमा च्यानलको geohash छ, जसले सानो क्षेत्र समेट्छ। तपाईंले पेस्ट गर्ने जोसुकैले त्यो ठाउँप्रतिको चासो थाहा पाउँछ।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "deze link bevat de geohash van het kanaal, die een klein gebied beslaat. wie hem krijgt, leert interesse in die plek — niet alleen dat iemand bitchat gebruikt."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ten link zawiera geohash kanału obejmujący mały obszar. każdy, komu go wkleisz, pozna zainteresowanie tym miejscem, nie tylko to, że ktoś używa bitchat."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "esta ligação contém o geohash do canal, que cobre uma área pequena. quem a receber fica a saber do interesse nesse local, não apenas que alguém usa o bitchat."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "este link contém o geohash do canal, que cobre uma área pequena. quem receber fica sabendo do interesse naquele lugar, não apenas que alguém usa o bitchat."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ссылка содержит geohash канала, охватывающий небольшую область. тот, кому вы её вставите, узнает об интересе к этому месту, а не только о том, что кто-то пользуется bitchat."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "länken innehåller kanalens geohash, som täcker ett litet område. den du klistrar in den till får veta om intresse för platsen, inte bara att någon använder bitchat."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இந்த இணைப்பில் சேனலின் geohash உள்ளது, இது சிறிய பகுதியைக் குறிக்கிறது. ஒட்டுபவருக்கு அந்த இடத்தின் மீதான ஆர்வம் தெரியும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ลิงก์นี้มี geohash ของช่องซึ่งครอบคลุมพื้นที่เล็ก ๆ ใครที่คุณวางให้จะรู้ถึงความสนใจในสถานที่นั้น ไม่ใช่แค่ว่ามีคนใช้ bitchat"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bu bağlantı, küçük bir alanı kapsayan kanal geohash'ini taşır. yapıştırdığın kişi o yere duyulan ilgiyi öğrenir, yalnızca bitchat kullanıldığını değil."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "це посилання містить geohash каналу, що охоплює невелику ділянку. той, кому ви його вставите, дізнається про інтерес до того місця, а не лише що хтось користується bitchat."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اس لنک میں چینل کا geohash ہے جو چھوٹے علاقے کا احاطہ کرتا ہے۔ جسے بھی پیسٹ کریں گے وہ اس جگہ میں دلچسپی جان لے گا۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "liên kết này mang geohash của kênh, bao phủ một khu vực nhỏ. người bạn dán cho sẽ biết sự quan tâm tới nơi đó, không chỉ là ai đó dùng bitchat."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此链接包含频道的 geohash，覆盖范围很小。你粘贴给谁，谁就知道你对那个地点的兴趣，而不只是有人在用 bitchat。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此連結包含頻道的 geohash，涵蓋範圍很小。你貼給誰，誰就知道你對那個地點的興趣，而不只是有人在用 bitchat。"
+          }
+        }
+      }
+    },
+    "message.link.precision_warning.title" : {
+      "comment" : "Title of the confirmation before copying a message link that carries a fine-precision geohash",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نسخ رابط موقع دقيق؟"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "নির্দিষ্ট অবস্থানের লিঙ্ক কপি করবে?"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "einen präzisen standortlink kopieren?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "copy a precise location link?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿copiar un enlace de ubicación precisa?"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پیوند مکان دقیق کپی شود؟"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kopyahin ang link ng tumpak na lokasyon?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "copier un lien de localisation précise ?"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "להעתיק קישור למיקום מדויק?"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सटीक स्थान लिंक कॉपी करें?"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "salin tautan lokasi presisi?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "copiare un link di posizione precisa?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "詳細な位置のリンクをコピーしますか？"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "정확한 위치 링크를 복사할까요?"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "salin pautan lokasi tepat?"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सटीक स्थानको लिङ्क कपी गर्ने?"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "een precieze locatielink kopiëren?"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "skopiować link do dokładnej lokalizacji?"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "copiar uma ligação de localização precisa?"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "copiar um link de localização precisa?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "скопировать ссылку с точным местом?"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kopiera en exakt platslänk?"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "துல்லியமான இட இணைப்பை நகலெடுக்கவா?"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "คัดลอกลิงก์ตำแหน่งที่แม่นยำไหม"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hassas konum bağlantısı kopyalansın mı?"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "скопіювати посилання з точним місцем?"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "درست مقام کا لنک کاپی کریں؟"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sao chép liên kết vị trí chính xác?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制精确位置链接？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "複製精確位置連結？"
+          }
+        }
+      }
+    },
     "notification.nearby.body_many" : {
       "comment" : "Body of the nearby notification; placeholder is the peer count",
       "extractionState" : "manual",
