@@ -1,8 +1,8 @@
 {
   description = "BitChat macOS development tools with the selected Apple Xcode";
 
-  # Pin the input revision so the tools do not drift before a lock file exists.
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/c9fe7d12cd78d1adcd12dd15e24432dde5b155a0";
+  # Pin 26.05 Darwin: newer nixpkgs releases drop Intel macOS support.
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/e49322d1ec25b45f7c587c5fd69ac826d1a57dbc";
 
   outputs = { nixpkgs, ... }:
     let
