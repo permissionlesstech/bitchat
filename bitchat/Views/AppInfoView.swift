@@ -35,7 +35,7 @@ struct AppInfoView: View {
     /// start, so surface the restart hint.
     @State private var showLanguageRestartNote = false
     #if os(iOS)
-    @State private var selectedAppIcon = AlternateAppIconSettings.selected
+    @State private var selectedAppIcon = AlternateAppIconSettings.selected(in: .standard)
     #endif
 
     private enum Pane: String {
