@@ -255,7 +255,7 @@ final class ChatPeerIdentityCoordinator {
     }
 
     @MainActor
-    func hasUnreadMessages(for peerID: PeerID) -> Bool {
+    func unreadPeerContext(for peerID: PeerID) -> ChatUnreadPeerContext {
         var noiseKeyPeerID: PeerID?
         var nostrPeerID: PeerID?
 
@@ -266,11 +266,25 @@ final class ChatPeerIdentityCoordinator {
             }
         }
 
-        let unreadContext = ChatUnreadPeerContext(
+        return ChatUnreadPeerContext(
             peerID: peerID,
             noiseKeyPeerID: noiseKeyPeerID,
             nostrPeerID: nostrPeerID
         )
+    }
+
+    @MainActor
+    func unreadPeerIDsMatching(for peerID: PeerID) -> Set<PeerID> {
+        ChatUnreadStateResolver.matchingUnreadPeerIDs(
+            for: unreadPeerContext(for: peerID),
+            unreadPrivateMessages: context.unreadPrivateMessages,
+            privateChats: context.privateChats
+        )
+    }
+
+    @MainActor
+    func hasUnreadMessages(for peerID: PeerID) -> Bool {
+        let unreadContext = unreadPeerContext(for: peerID)
 
         return ChatUnreadStateResolver.hasUnreadMessages(
             for: unreadContext,

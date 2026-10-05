@@ -385,6 +385,9 @@ private struct ContentPeopleListView: View {
                             onTapChat: { peerID in
                                 peerListModel.startConversation(with: peerID)
                                 showSidebar = true
+                            },
+                            onClearUnread: { peerID in
+                                peerListModel.clearUnread(for: peerID)
                             }
                         )
                     } else {
@@ -410,6 +413,9 @@ private struct ContentPeopleListView: View {
                                 } else {
                                     appEnvironmentModels?.conversationUIModel.block(peerID: peer.peerID, displayName: peer.displayName)
                                 }
+                            },
+                            onClearUnread: { peerID in
+                                peerListModel.clearUnread(for: peerID)
                             }
                         )
                         // People in this area but beyond radio range, and
@@ -420,6 +426,9 @@ private struct ContentPeopleListView: View {
                             onTapGroup: { peerID in
                                 peerListModel.startConversation(with: peerID)
                                 showSidebar = true
+                            },
+                            onClearUnread: { peerID in
+                                peerListModel.clearUnread(for: peerID)
                             }
                         )
                         // Conversations with people no roster above lists
@@ -465,6 +474,7 @@ private extension ContentPeopleListView {
 
 private struct ContentPrivateChatSheetView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
+    @EnvironmentObject private var privateInboxModel: PrivateInboxModel
 
     @Binding var showSidebar: Bool
     let draftModel: ComposerDraftModel
@@ -532,6 +542,26 @@ private struct ContentPrivateChatSheetView: View {
                                 headerState.isFavorite
                                 ? String(localized: "content.accessibility.remove_favorite", comment: "Accessibility label to remove a favorite")
                                 : String(localized: "content.accessibility.add_favorite", comment: "Accessibility label to add a favorite")
+                            )
+                        }
+
+                        if let peerID = privateConversationModel.selectedPeerID,
+                           privateInboxModel.unreadPeerIDs.contains(peerID) {
+                            Button(action: {
+                                privateConversationModel.clearUnreadForSelectedConversation()
+                            }) {
+                                Image(systemName: "envelope.open.fill")
+                                    .font(.bitchatSystem(size: 14))
+                                    .foregroundColor(.orange)
+                                    .frame(width: 32, height: 32)
+                                    .contentShape(Rectangle().inset(by: -6))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(
+                                String(localized: "conversation.accessibility.mark_read", comment: "Accessibility label for clearing unread on the open conversation")
+                            )
+                            .help(
+                                String(localized: "conversation.tooltip.mark_read", comment: "Tooltip for clearing unread on the open conversation")
                             )
                         }
                     }
