@@ -14,6 +14,12 @@ private struct MessageDisplayItem: Identifiable {
     let message: BitchatMessage
 }
 
+/// A message-link copy held back pending the fine-precision confirmation.
+struct PendingMessageLinkCopy {
+    let messageID: String
+    let scope: MessageDeepLink.Scope
+}
+
 struct MessageListView: View {
     @EnvironmentObject private var publicChatModel: PublicChatModel
     @EnvironmentObject private var privateInboxModel: PrivateInboxModel
@@ -34,6 +40,11 @@ struct MessageListView: View {
     @Binding var imagePreviewURL: URL?
     @Binding var windowCountPublic: Int
     @Binding var windowCountPrivate: [PeerID: Int]
+    /// Message a `bitchat://` link asked us to reveal. Consumed once the
+    /// destination conversation has rendered, so the row exists to scroll to.
+    @State private var pendingDeepLinkMessageID: String?
+    @State private var pendingLinkCopy: PendingMessageLinkCopy?
+    @State private var showLinkPrecisionWarning = false
     @Binding var showSidebar: Bool
 
     var isTextFieldFocused: FocusState<Bool>.Binding
@@ -152,6 +163,18 @@ struct MessageListView: View {
                                     pb.setString(message.content, forType: .string)
                                     #endif
                                 }
+                                Button(String(localized: "message.link.copy", defaultValue: "copy message link", comment: "Context-menu action that copies a bitchat:// deep link to this message")) {
+                                    let scope: MessageDeepLink.Scope = {
+                                        if let peer = privatePeer {
+                                            return .direct(peerID: peer)
+                                        }
+                                        if case .location(let channel) = locationChannelsModel.selectedChannel {
+                                            return .geohash(channel.geohash)
+                                        }
+                                        return .mesh
+                                    }()
+                                    requestCopyMessageLink(for: message.id, scope: scope)
+                                }
                                 if isResendableFailedMessage(message) {
                                     Button("content.actions.resend") {
                                         conversationUIModel.resendFailedPrivateMessage(message)
@@ -216,6 +239,26 @@ struct MessageListView: View {
             }
             .onChange(of: locationChannelsModel.selectedChannel) { newChannel in
                 onSelectedChannelChange(newChannel, proxy: proxy)
+            }
+            // Runs after the destination conversation has rendered, so the
+            // target row exists in the hierarchy for scrollTo to find.
+            .onChange(of: pendingDeepLinkMessageID) { _ in
+                revealPendingDeepLinkMessage(proxy: proxy)
+            }
+            .confirmationDialog(
+                String(localized: "message.link.precision_warning.title", defaultValue: "copy a precise location link?", comment: "Title of the confirmation before copying a message link that carries a fine-precision geohash"),
+                isPresented: $showLinkPrecisionWarning,
+                titleVisibility: .visible
+            ) {
+                Button(String(localized: "message.link.precision_warning.confirm", defaultValue: "copy anyway", comment: "Confirms copying a message link that discloses a fine-precision geohash")) {
+                    if let pending = pendingLinkCopy {
+                        copyMessageLink(for: pending.messageID, scope: pending.scope)
+                    }
+                    pendingLinkCopy = nil
+                }
+                Button("common.cancel", role: .cancel) { pendingLinkCopy = nil }
+            } message: {
+                Text(String(localized: "message.link.precision_warning.message", defaultValue: "this link carries the channel geohash, which covers a small area. anyone you paste it to learns interest in that place, not only that someone uses bitchat.", comment: "Body of the confirmation before copying a fine-precision geohash message link"))
             }
             .confirmationDialog(
                 selectedMessageSender.map { "@\($0)" } ?? String(localized: "content.actions.title", comment: "Fallback title for the message action sheet"),
@@ -529,6 +572,72 @@ private extension MessageListView {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// Copies a message link, warning first when the link would disclose a
+    /// fine-precision geohash.
+    ///
+    /// A geohash link carries the channel's location at whatever precision the
+    /// channel uses, and a pasteboard is a wide surface. Same gate #1513 put in
+    /// front of invite sharing, reusing its threshold so the two agree.
+    func requestCopyMessageLink(for messageID: String, scope: MessageDeepLink.Scope) {
+        if case .geohash(let geohash) = scope, ChannelShare.shouldWarn(forGeohash: geohash) {
+            pendingLinkCopy = PendingMessageLinkCopy(messageID: messageID, scope: scope)
+            showLinkPrecisionWarning = true
+            return
+        }
+        copyMessageLink(for: messageID, scope: scope)
+    }
+
+    func copyMessageLink(for messageID: String, scope: MessageDeepLink.Scope) {
+        let payload = MessageDeepLink.plainText(for: messageID, scope: scope)
+        #if os(iOS)
+        UIPasteboard.general.string = payload
+        #else
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(payload, forType: .string)
+        #endif
+    }
+
+    /// Scrolls to the message a `bitchat://…?mid=` link pointed at.
+    ///
+    /// Grows the render window first when the target sits behind it: an
+    /// unrendered row is not in the hierarchy and `scrollTo` would silently do
+    /// nothing. Unknown IDs are dropped — the message may simply not have
+    /// reached this device.
+    func revealPendingDeepLinkMessage(proxy: ScrollViewProxy) {
+        guard let messageID = pendingDeepLinkMessageID else { return }
+        pendingDeepLinkMessageID = nil
+
+        let all = conversationMessages(for: privatePeer)
+        guard let index = all.firstIndex(where: { $0.id == messageID }) else { return }
+
+        let contextKey: String = {
+            if let peer = privatePeer {
+                return "dm:\(peer)"
+            }
+            return locationChannelsModel.selectedChannel.contextKey
+        }()
+
+        if let peer = privatePeer {
+            let current = windowCountPrivate[peer] ?? TransportConfig.uiWindowInitialCountPrivate
+            windowCountPrivate[peer] = MessageDeepLink.windowCount(
+                toReveal: index, inTotal: all.count, current: current
+            )
+        } else {
+            windowCountPublic = MessageDeepLink.windowCount(
+                toReveal: index, inTotal: all.count, current: windowCountPublic
+            )
+        }
+
+        let rowID = MessageDeepLink.rowID(contextKey: contextKey, messageID: messageID)
+        // One hop so the widened window has rendered before we scroll into it.
+        DispatchQueue.main.async {
+            withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                proxy.scrollTo(rowID, anchor: .center)
+            }
+        }
+    }
+
     func expandWindow(ifNeededFor message: BitchatMessage,
                       allMessages: [BitchatMessage],
                       privatePeer: PeerID?,
@@ -587,6 +696,26 @@ private extension MessageListView {
             let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
             guard (2...12).contains(gh.count), gh.allSatisfy({ allowed.contains($0) }) else { return }
             locationChannelsModel.openLocationChannel(for: gh)
+            pendingDeepLinkMessageID = MessageDeepLink.messageID(from: url)
+
+        case "mesh":
+            privateConversationModel.endConversation()
+            locationChannelsModel.select(.mesh)
+            pendingDeepLinkMessageID = MessageDeepLink.messageID(from: url)
+            withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                showSidebar = false
+            }
+
+        case "dm":
+            // The path comes from any app or webpage; an unvalidated string
+            // would open a conversation against an identity that never
+            // existed. Same class of gate the geohash case applies.
+            guard let peerID = MessageDeepLink.directConversationTarget(fromPath: url.path) else { return }
+            privateConversationModel.openConversation(for: peerID)
+            pendingDeepLinkMessageID = MessageDeepLink.messageID(from: url)
+            withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                showSidebar = true
+            }
 
         default:
             return
