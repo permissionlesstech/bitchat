@@ -44639,6 +44639,192 @@
         }
       }
     },
+  "content.actions.forward" : {
+    "comment" : "Context menu action that opens a picker to forward this message to another conversation",
+    "extractionState" : "manual",
+    "localizations" : {
+      "ar" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "إعادة توجيه"
+        }
+      },
+      "bn" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "ফরওয়ার্ড"
+        }
+      },
+      "de" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Weiterleiten"
+        }
+      },
+      "en" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Forward"
+        }
+      },
+      "es" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Reenviar"
+        }
+      },
+      "fa" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "هدایت"
+        }
+      },
+      "fil" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "I-forward"
+        }
+      },
+      "fr" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Transférer"
+        }
+      },
+      "he" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "העבר"
+        }
+      },
+      "hi" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "फॉरवर्ड करें"
+        }
+      },
+      "id" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Teruskan"
+        }
+      },
+      "it" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Inoltra"
+        }
+      },
+      "ja" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "転送"
+        }
+      },
+      "ko" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "전달"
+        }
+      },
+      "ms" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Majukan"
+        }
+      },
+      "ne" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "फॉरवर्ड गर्नुहोस्"
+        }
+      },
+      "nl" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Doorsturen"
+        }
+      },
+      "pl" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Przekaż"
+        }
+      },
+      "pt" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Reencaminhar"
+        }
+      },
+      "pt-BR" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Encaminhar"
+        }
+      },
+      "ru" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Переслать"
+        }
+      },
+      "sv" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Vidarebefordra"
+        }
+      },
+      "ta" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "முன்னோக்கி அனுப்பு"
+        }
+      },
+      "th" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "ส่งต่อ"
+        }
+      },
+      "tr" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "İlet"
+        }
+      },
+      "uk" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Переслати"
+        }
+      },
+      "ur" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "فارورڈ کریں"
+        }
+      },
+      "vi" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Chuyển tiếp"
+        }
+      },
+      "zh-Hans" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "转发"
+        }
+      },
+      "zh-Hant" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "轉發"
+        }
+      }
+    }
+  },
     "content.actions.hug" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -65506,6 +65692,750 @@
         }
       }
     },
+  "forward.accessibility.forward_hint" : {
+    "comment" : "Accessibility hint for selecting a target to forward a message to",
+    "extractionState" : "manual",
+    "localizations" : {
+      "ar" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "يعيد توجيه الرسالة إلى هذه المحادثة"
+        }
+      },
+      "bn" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "এই কথোপকথনে বার্তা ফরওয়ার্ড করে"
+        }
+      },
+      "de" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "leitet die Nachricht an diese Unterhaltung weiter"
+        }
+      },
+      "en" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "forwards message to this conversation"
+        }
+      },
+      "es" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "reenvía el mensaje a esta conversación"
+        }
+      },
+      "fa" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "پیام را به این گفتگو هدایت می‌کند"
+        }
+      },
+      "fil" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "ina-forward ang mensahe sa pag-uusap na ito"
+        }
+      },
+      "fr" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "transfère le message à cette conversation"
+        }
+      },
+      "he" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "מעביר את ההודעה לשיחה זו"
+        }
+      },
+      "hi" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "संदेश को इस बातचीत में फॉरवर्ड करता है"
+        }
+      },
+      "id" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "meneruskan pesan ke percakapan ini"
+        }
+      },
+      "it" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "inoltra il messaggio a questa conversazione"
+        }
+      },
+      "ja" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "この会話にメッセージを転送します"
+        }
+      },
+      "ko" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "이 대화로 메시지를 전달합니다"
+        }
+      },
+      "ms" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "memajukan mesej ke perbualan ini"
+        }
+      },
+      "ne" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "यस कुराकानीमा सन्देश फॉरवर्ड गर्दछ"
+        }
+      },
+      "nl" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "stuurt bericht door naar dit gesprek"
+        }
+      },
+      "pl" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "przekazuje wiadomość do tej rozmowy"
+        }
+      },
+      "pt" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "reencaminha a mensagem para esta conversa"
+        }
+      },
+      "pt-BR" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "encaminha a mensagem para esta conversa"
+        }
+      },
+      "ru" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "пересылает сообщение в этот чат"
+        }
+      },
+      "sv" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "vidarebefordrar meddelandet till denna konversation"
+        }
+      },
+      "ta" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "இந்த உரையாடலுக்கு செய்தியை முன்னோக்கி அனுப்புகிறது"
+        }
+      },
+      "th" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "ส่งต่อข้อความไปยังการสนทนานี้"
+        }
+      },
+      "tr" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "mesajı bu konuşmaya iletir"
+        }
+      },
+      "uk" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "пересилає повідомлення в цю розмову"
+        }
+      },
+      "ur" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "پیام اس بات چیت میں فارورڈ کرتا ہے"
+        }
+      },
+      "vi" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "chuyển tiếp tin nhắn tới cuộc trò chuyện này"
+        }
+      },
+      "zh-Hans" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "将消息转发至此对话"
+        }
+      },
+      "zh-Hant" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "將訊息轉發至此對話"
+        }
+      }
+    }
+  },
+  "forward.no_recipients" : {
+    "comment" : "Empty state shown in the forward-message sheet when there is nobody to pick",
+    "extractionState" : "manual",
+    "localizations" : {
+      "ar" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "لا يوجد مستلمون للإعادة بعد — لا يوجد أقران معروفون أو محادثات حديثة."
+        }
+      },
+      "bn" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "এখনও ফরওয়ার্ড করার মতো কেউ নেই — কোনো পরিচিত সমকক্ষ বা সাম্প্রতিক কথোপকথন নেই।"
+        }
+      },
+      "de" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Noch niemand zum Weiterleiten vorhanden — keine bekannten Peers oder kürzliche Unterhaltungen."
+        }
+      },
+      "en" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "No one to forward to yet — no known peers or recent conversations."
+        }
+      },
+      "es" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Aún no hay a quién reenviar: no hay pares conocidos ni conversaciones recientes."
+        }
+      },
+      "fa" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "هنوز کسی برای هدایت وجود ندارد — هیچ همتای شناخته‌شده یا گفتگوی اخیری وجود ندارد."
+        }
+      },
+      "fil" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Wala pang mapapadalhan ng forward — walang kilalang peer o kamakailang pag-uusap."
+        }
+      },
+      "fr" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Personne à qui transférer pour l'instant — aucun pair connu ni conversation récente."
+        }
+      },
+      "he" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "אין עדיין למי להעביר — אין עמיתים מוכרים או שיחות אחרונות."
+        }
+      },
+      "hi" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "फॉरवर्ड करने के लिए अभी कोई नहीं है — कोई ज्ञात पीयर या हालिया बातचीत नहीं है।"
+        }
+      },
+      "id" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Belum ada tujuan penerusan — tidak ada rekan yang dikenal atau percakapan terbaru."
+        }
+      },
+      "it" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Nessun destinatario a cui inoltrare — nessun peer noto o conversazione recente."
+        }
+      },
+      "ja" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "転送先がまだありません。既知のピアや recent 会話はありません。"
+        }
+      },
+      "ko" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "전달할 대상이 아직 없습니다 — 알려진 피어나 최근 대화가 없습니다."
+        }
+      },
+      "ms" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Belum ada penerima untuk dimajukan — tiada rakan sebayanya yang diketahui atau perbualan terkini."
+        }
+      },
+      "ne" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "फॉरवर्ड गर्नका लागि अझै कोही छैन — कुनै ज्ञात पियर वा भर्खरका कुराकानीहरू छैनन्।"
+        }
+      },
+      "nl" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Nog niemand om naar door te sturen — geen bekende peers of recente gesprekken."
+        }
+      },
+      "pl" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Brak odbiorców do przekazania — brak znanych rówieśników lub niedawnych rozmów."
+        }
+      },
+      "pt" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Ninguém para reencaminhar ainda — sem pares conhecidos ou conversas recentes."
+        }
+      },
+      "pt-BR" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Ninguém para encaminhar ainda — nenhum peer conhecido ou conversa recente."
+        }
+      },
+      "ru" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Пока некому переслать: нет известных пиров или недавних чатов."
+        }
+      },
+      "sv" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Ingen att vidarebefordra till ännu — inga kända kamrater eller senaste konversationer."
+        }
+      },
+      "ta" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "இன்னும் முன்னோக்கி அனுப்ப யாருமில்லை — தெரிந்த சக தொடர்புகளோ அல்லது சமீபத்திய உரையாடல்களோ இல்லை."
+        }
+      },
+      "th" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "ยังไม่มีผู้รับที่จะส่งต่อ — ไม่พบเพื่อนที่รู้จักหรือการสนทนาล่าสุด"
+        }
+      },
+      "tr" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "İletilecek henüz kimse yok — bilinen eşler veya son konuşmalar yok."
+        }
+      },
+      "uk" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Поки немає кому переслати — немає відомих пірів або нещодавніх розмов."
+        }
+      },
+      "ur" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "ابھی فارورڈ کرنے کے لیے کوئی نہیں ہے — کوئی معروف پیئرز یا حالیہ بات چیت نہیں ہے۔"
+        }
+      },
+      "vi" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Chưa có ai để chuyển tiếp — không có ngang hàng đã biết hoặc cuộc trò chuyện gần đây."
+        }
+      },
+      "zh-Hans" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "暂无可转发的对象 — 没有已知的节点或最近的对话。"
+        }
+      },
+      "zh-Hant" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "暫無可轉發的對象 — 沒有已知的節點或最近的對話。"
+        }
+      }
+    }
+  },
+  "forward.peers_header" : {
+    "comment" : "Section header above known peers in the forward-message sheet",
+    "extractionState" : "manual",
+    "localizations" : {
+      "ar" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "أشخاص"
+        }
+      },
+      "bn" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "মানুষ"
+        }
+      },
+      "de" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Personen"
+        }
+      },
+      "en" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "people"
+        }
+      },
+      "es" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "personas"
+        }
+      },
+      "fa" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "افراد"
+        }
+      },
+      "fil" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "mga tao"
+        }
+      },
+      "fr" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "personnes"
+        }
+      },
+      "he" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "אנשים"
+        }
+      },
+      "hi" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "लोग"
+        }
+      },
+      "id" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "orang"
+        }
+      },
+      "it" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "persone"
+        }
+      },
+      "ja" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "人"
+        }
+      },
+      "ko" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "사람들"
+        }
+      },
+      "ms" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "orang"
+        }
+      },
+      "ne" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "मानिसहरू"
+        }
+      },
+      "nl" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "mensen"
+        }
+      },
+      "pl" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "ludzie"
+        }
+      },
+      "pt" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "pessoas"
+        }
+      },
+      "pt-BR" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "pessoas"
+        }
+      },
+      "ru" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "люди"
+        }
+      },
+      "sv" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "personer"
+        }
+      },
+      "ta" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "ஆட்கள்"
+        }
+      },
+      "th" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "ผู้คน"
+        }
+      },
+      "tr" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "kişiler"
+        }
+      },
+      "uk" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "люди"
+        }
+      },
+      "ur" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "لوگ"
+        }
+      },
+      "vi" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "mọi người"
+        }
+      },
+      "zh-Hans" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "人员"
+        }
+      },
+      "zh-Hant" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "人員"
+        }
+      }
+    }
+  },
+  "forward.title" : {
+    "comment" : "Title of the sheet for picking who to forward a message to",
+    "extractionState" : "manual",
+    "localizations" : {
+      "ar" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "إعادة توجيه إلى…"
+        }
+      },
+      "bn" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "এখানে ফরওয়ার্ড করুন…"
+        }
+      },
+      "de" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Weiterleiten an…"
+        }
+      },
+      "en" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Forward to…"
+        }
+      },
+      "es" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Reenviar a…"
+        }
+      },
+      "fa" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "هدایت به…"
+        }
+      },
+      "fil" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "I-forward sa…"
+        }
+      },
+      "fr" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Transférer à…"
+        }
+      },
+      "he" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "העבר אל…"
+        }
+      },
+      "hi" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "इनको फॉरवर्ड करें…"
+        }
+      },
+      "id" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Teruskan ke…"
+        }
+      },
+      "it" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Inoltra a…"
+        }
+      },
+      "ja" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "転送先…"
+        }
+      },
+      "ko" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "전달 대상…"
+        }
+      },
+      "ms" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Majukan kepada…"
+        }
+      },
+      "ne" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "फॉरवर्ड गर्नुहोस्…"
+        }
+      },
+      "nl" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Doorsturen naar…"
+        }
+      },
+      "pl" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Przekaż do…"
+        }
+      },
+      "pt" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Reencaminhar para…"
+        }
+      },
+      "pt-BR" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Encaminhar para…"
+        }
+      },
+      "ru" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Переслать…"
+        }
+      },
+      "sv" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Vidarebefordra till…"
+        }
+      },
+      "ta" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "இதற்கு முன்னோக்கி அனுப்பு…"
+        }
+      },
+      "th" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "ส่งต่อไปยัง…"
+        }
+      },
+      "tr" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Şuna ilet…"
+        }
+      },
+      "uk" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Переслати…"
+        }
+      },
+      "ur" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "فارورڈ کریں…"
+        }
+      },
+      "vi" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "Chuyển tiếp tới…"
+        }
+      },
+      "zh-Hans" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "转发至…"
+        }
+      },
+      "zh-Hant" : {
+        "stringUnit" : {
+          "state" : "translated",
+          "value" : "轉發至…"
+        }
+      }
+    }
+  },
     "geohash_people.action.block" : {
       "extractionState" : "manual",
       "localizations" : {
