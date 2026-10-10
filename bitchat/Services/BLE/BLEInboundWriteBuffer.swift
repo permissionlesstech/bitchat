@@ -49,9 +49,13 @@ struct BLEInboundWriteBuffer {
                 lastEnd = 0
             }
 
-            // Reject malformed writes before touching the buffer: a negative
-            // offset traps `Data.replaceSubrange`, and non-monotonic or
-            // overlapping offsets corrupt previously written bytes.
+            // Reject malformed writes before touching the buffer. The ATT
+            // offset field is UInt16, so a negative offset cannot arrive
+            // over the air; the `offset < 0` guard is defense-in-depth for
+            // this Int-based API, where it would trap
+            // `Data.replaceSubrange`. The reachable hardening is the
+            // overlap check: non-monotonic or overlapping offsets would
+            // silently rewrite already-buffered bytes of a pending frame.
             guard chunk.offset >= 0, chunk.offset >= lastEnd else {
                 let metadata = BLEInboundWriteAppendMetadata(
                     accumulatedBytes: combined.count,

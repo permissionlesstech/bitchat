@@ -245,14 +245,17 @@ extension BLEService: CBPeripheralManagerDelegate {
             SecureLogger.debug("📥 Received \(requests.count) write requests from central", category: .session)
         }
 
-        // While panic-suspended we drop everything; still ACK so centrals
-        // do not stall waiting on a response.
-        guard !isPanicSuspended else {
-            for request in requests {
-                peripheral.respond(to: request, withResult: .success)
-            }
-            return
+        // IMPORTANT: Respond immediately to prevent timeouts!
+        // We must respond within a few milliseconds or the central will timeout.
+        // Always ACK with .success, even for malformed writes dropped as
+        // .invalid below: our centrals write with .withoutResponse, so an ATT
+        // error never reaches the peer that matters, and CoreBluetooth does
+        // not distinguish with/without-response here. The poisoned buffer is
+        // still discarded internally so a later clean frame can decode.
+        for request in requests {
+            peripheral.respond(to: request, withResult: .success)
         }
+        guard !isPanicSuspended else { return }
 
         // Process writes. For long writes, CoreBluetooth may deliver multiple CBATTRequest values with offsets.
         // Combine per-central request values by offset before decoding.
@@ -272,20 +275,6 @@ extension BLEService: CBPeripheralManagerDelegate {
                 for: centralUUID,
                 capBytes: TransportConfig.blePendingWriteBufferCapBytes
             )
-
-            // IMPORTANT: respond within a few milliseconds or the central will
-            // time out. Reject malformed writes with an ATT error instead of a
-            // silent success, so a central sending poisoned offsets learns the
-            // write failed instead of retrying into a cleared buffer.
-            if case .invalid = result {
-                for request in group {
-                    peripheral.respond(to: request, withResult: .invalidOffset)
-                }
-            } else {
-                for request in group {
-                    peripheral.respond(to: request, withResult: .success)
-                }
-            }
 
             switch result {
             case let .decoded(packet, metadata):
