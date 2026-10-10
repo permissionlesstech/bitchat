@@ -126,6 +126,135 @@ struct BLEInboundWriteBufferTests {
         }
     }
 
+    @Test
+    func appendRejectsNegativeOffsetAndClearsBuffer() throws {
+        var buffer = BLEInboundWriteBuffer()
+        _ = buffer.append(
+            chunks: [BLEInboundWriteChunk(offset: 0, data: Data(repeating: 0x01, count: 4))],
+            for: "central-1",
+            capBytes: 1024
+        )
+
+        let result = buffer.append(
+            chunks: [BLEInboundWriteChunk(offset: -1, data: Data([0x02]))],
+            for: "central-1",
+            capBytes: 1024
+        )
+
+        if case let .invalid(metadata) = result {
+            #expect(metadata.offsets == [-1])
+        } else {
+            Issue.record("Expected negative offset to be rejected")
+        }
+
+        // The poisoned buffer was cleared, so a clean full frame still decodes.
+        let packet = makePacket(timestamp: 0x123)
+        let frame = try #require(packet.toBinaryData(padding: false))
+        let decoded = buffer.append(
+            chunks: [BLEInboundWriteChunk(offset: 0, data: frame)],
+            for: "central-1",
+            capBytes: 1024
+        )
+
+        if case let .decoded(decodedPacket, _) = decoded {
+            #expect(decodedPacket.timestamp == packet.timestamp)
+        } else {
+            Issue.record("Expected clean frame to decode after invalid write reset the buffer")
+        }
+    }
+
+    @Test
+    func appendRejectsOverlappingChunks() {
+        var buffer = BLEInboundWriteBuffer()
+
+        let result = buffer.append(
+            chunks: [
+                BLEInboundWriteChunk(offset: 0, data: Data(repeating: 0x01, count: 8)),
+                BLEInboundWriteChunk(offset: 4, data: Data(repeating: 0x02, count: 4))
+            ],
+            for: "central-1",
+            capBytes: 1024
+        )
+
+        if case let .invalid(metadata) = result {
+            #expect(metadata.offsets == [0, 4])
+        } else {
+            Issue.record("Expected overlapping chunks to be rejected")
+        }
+    }
+
+    @Test
+    func appendRejectsNonMonotonicChunks() {
+        var buffer = BLEInboundWriteBuffer()
+
+        let result = buffer.append(
+            chunks: [
+                BLEInboundWriteChunk(offset: 8, data: Data(repeating: 0x01, count: 4)),
+                BLEInboundWriteChunk(offset: 4, data: Data(repeating: 0x02, count: 4))
+            ],
+            for: "central-1",
+            capBytes: 1024
+        )
+
+        if case let .invalid(metadata) = result {
+            #expect(metadata.offsets == [8, 4])
+        } else {
+            Issue.record("Expected non-monotonic chunks to be rejected")
+        }
+    }
+
+    @Test
+    func appendTreatsOffsetZeroOnStaleBufferAsRestart() throws {
+        var buffer = BLEInboundWriteBuffer()
+        let packet = makePacket(timestamp: 0x456)
+        let frame = try #require(packet.toBinaryData(padding: false))
+        let splitIndex = max(1, frame.count / 2)
+
+        // Stale partial frame left pending from an earlier write.
+        _ = buffer.append(
+            chunks: [BLEInboundWriteChunk(offset: 0, data: frame.prefix(splitIndex))],
+            for: "central-1",
+            capBytes: 1024
+        )
+
+        // A fresh `.withoutResponse` write lands at offset 0 and replaces it
+        // instead of being rejected as an overlap with the stale bytes.
+        let result = buffer.append(
+            chunks: [BLEInboundWriteChunk(offset: 0, data: frame)],
+            for: "central-1",
+            capBytes: 1024
+        )
+
+        if case let .decoded(decoded, metadata) = result {
+            #expect(decoded.timestamp == packet.timestamp)
+            #expect(metadata.offsets == [0])
+        } else {
+            Issue.record("Expected offset-0 write to restart the stale buffer")
+        }
+    }
+
+    @Test
+    func appendRejectsOverlapWithPreviouslyBufferedBytes() {
+        var buffer = BLEInboundWriteBuffer()
+        _ = buffer.append(
+            chunks: [BLEInboundWriteChunk(offset: 0, data: Data(repeating: 0x01, count: 8))],
+            for: "central-1",
+            capBytes: 1024
+        )
+
+        let result = buffer.append(
+            chunks: [BLEInboundWriteChunk(offset: 4, data: Data(repeating: 0x02, count: 4))],
+            for: "central-1",
+            capBytes: 1024
+        )
+
+        if case let .invalid(metadata) = result {
+            #expect(metadata.offsets == [4])
+        } else {
+            Issue.record("Expected overlap with buffered bytes to be rejected")
+        }
+    }
+
     private func makePacket(timestamp: UInt64 = 0x0102030405) -> BitchatPacket {
         BitchatPacket(
             type: MessageType.message.rawValue,

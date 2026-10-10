@@ -244,14 +244,19 @@ extension BLEService: CBPeripheralManagerDelegate {
         if requests.count > 1 {
             SecureLogger.debug("📥 Received \(requests.count) write requests from central", category: .session)
         }
-        
+
         // IMPORTANT: Respond immediately to prevent timeouts!
-        // We must respond within a few milliseconds or the central will timeout
+        // We must respond within a few milliseconds or the central will timeout.
+        // Always ACK with .success, even for malformed writes dropped as
+        // .invalid below: our centrals write with .withoutResponse, so an ATT
+        // error never reaches the peer that matters, and CoreBluetooth does
+        // not distinguish with/without-response here. The poisoned buffer is
+        // still discarded internally so a later clean frame can decode.
         for request in requests {
             peripheral.respond(to: request, withResult: .success)
         }
         guard !isPanicSuspended else { return }
-        
+
         // Process writes. For long writes, CoreBluetooth may deliver multiple CBATTRequest values with offsets.
         // Combine per-central request values by offset before decoding.
         // Process directly on our message queue to match transport context
@@ -283,6 +288,11 @@ extension BLEService: CBPeripheralManagerDelegate {
             case let .oversized(metadata):
                 logAccumulatedCentralWrite(metadata, centralUUID: centralUUID)
                 SecureLogger.warning("⚠️ Dropping oversized pending write buffer (\(metadata.accumulatedBytes) bytes) for central \(centralUUID.prefix(8))…", category: .session)
+                logFailedSingleWriteIfNeeded(hasMultiple: hasMultiple, sortedRequests: sorted)
+
+            case let .invalid(metadata):
+                logAccumulatedCentralWrite(metadata, centralUUID: centralUUID)
+                SecureLogger.warning("⚠️ Dropping malformed pending write (offsets=\(metadata.offsets)) for central \(centralUUID.prefix(8))…", category: .session)
                 logFailedSingleWriteIfNeeded(hasMultiple: hasMultiple, sortedRequests: sorted)
             }
         }
