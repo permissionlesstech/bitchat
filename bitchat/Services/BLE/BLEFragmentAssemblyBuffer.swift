@@ -97,9 +97,14 @@ struct BLEFragmentAssemblyBuffer {
     ) -> AppendResult {
         let started = startAssemblyIfNeeded(for: header, maxInFlightAssemblies: maxInFlightAssemblies, now: now)
 
-        let currentSize = fragmentsByKey[header.key]?.values.reduce(0) { $0 + $1.count } ?? 0
+        let held = fragmentsByKey[header.key]
+        let currentSize = held?.values.reduce(0) { $0 + $1.count } ?? 0
         let limit = Self.assemblyLimit(for: header.originalType)
-        let projectedSize = currentSize + header.fragmentData.count
+        // A re-delivered index replaces what it held rather than adding to
+        // it: fragments bypass dedup and sync re-serves held indexes, so a
+        // duplicate near the cap must not tip a valid assembly over it.
+        let replacedSize = held?[header.index]?.count ?? 0
+        let projectedSize = currentSize - replacedSize + header.fragmentData.count
 
         guard projectedSize <= limit else {
             fragmentsByKey.removeValue(forKey: header.key)
@@ -200,15 +205,12 @@ struct BLEFragmentAssemblyBuffer {
         }
     }
 
+    /// The largest frame a packet of the claimed type could decode from:
+    /// framed-file scale only for media (a large noiseEncrypted packet can be
+    /// an E2E-encrypted private file, validated after decrypt), link or
+    /// message scale for everything else. The handler drops a reassembled
+    /// packet whose type differs from the claim.
     private static func assemblyLimit(for originalType: UInt8) -> Int {
-        if originalType == MessageType.fileTransfer.rawValue
-            || originalType == MessageType.noiseEncrypted.rawValue {
-            // Allow headroom for TLV metadata and binary framing overhead.
-            // A large noiseEncrypted packet can be an E2E-encrypted private
-            // file; its authenticated plaintext is validated after decrypt.
-            return FileTransferLimits.maxFramedFileBytes
-        }
-
-        return FileTransferLimits.maxPayloadBytes
+        PacketPayloadLimits.maxFrameBytes(forType: originalType)
     }
 }

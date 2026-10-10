@@ -446,6 +446,27 @@ struct ChatPeerIdentityCoordinatorContextTests {
         context.peerIDsByNickname["carol"] = meshPeer
         #expect(coordinator.getPeerIDForNickname("carol") == meshPeer)
     }
+
+    @Test @MainActor
+    func getPeerIDForNickname_inGeohashChannel_refusesAmbiguousBaseName() async {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        let aliceA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        let aliceB = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        context.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pruy"))
+        context.geohashPeople = [
+            GeoPerson(id: aliceA, displayName: "alice#aaaa", lastSeen: Date()),
+            GeoPerson(id: aliceB, displayName: "alice#bbbb", lastSeen: Date())
+        ]
+        context.geoNicknames[aliceA] = "alice"
+        context.geoNicknames[aliceB] = "alice"
+        context.peerIDsByNickname["alice"] = PeerID(str: "1122334455667788")
+
+        #expect(coordinator.getPeerIDForNickname("alice") == nil)
+        #expect(coordinator.getPeerIDForNickname("alice#aaaa") == PeerID(nostr_: aliceA))
+        #expect(coordinator.getPeerIDForNickname("alice#bbbb") == PeerID(nostr_: aliceB))
+    }
+
     @Test @MainActor
     func toggleFavorite_forNoiseKeyPeer_usesInjectedFavoritesStore() async {
         let context = MockChatPeerIdentityContext()

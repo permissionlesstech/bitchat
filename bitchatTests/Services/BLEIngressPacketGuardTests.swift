@@ -119,7 +119,7 @@ struct BLEIngressPacketGuardTests {
         )))
     }
 
-    @Test("valid RSR packets use bound peer validation and bypass timestamp skew")
+    @Test("valid RSR packets use bound peer validation and bypass the past timestamp bound")
     func validRSRUsesBoundPeerAndBypassesTimestamp() throws {
         let local = PeerID(str: "0011223344556677")
         let bound = PeerID(str: "1122334455667788")
@@ -139,6 +139,61 @@ struct BLEIngressPacketGuardTests {
 
         #expect(context.receivedFromPeerID == bound)
         #expect(context.validationPeerID == bound)
+    }
+
+    @Test("valid RSR packets dated beyond the skew window are rejected")
+    func futureDatedRSRIsRejected() throws {
+        // Sync replies may replay old packets but never future-dated ones:
+        // UInt64.max used to reach the UI (and trap) or pin the gossip store.
+        let local = PeerID(str: "0011223344556677")
+        let bound = PeerID(str: "1122334455667788")
+        let sender = PeerID(str: "8899aabbccddeeff")
+        let nowMs: UInt64 = 1_000_000
+        let skewMs: UInt64 = 120_000
+
+        func evaluateRSR(timestamp: UInt64) -> Result<BLEIngressPacketContext, BLEIngressPacketGuard.Rejection> {
+            var packet = makePacket(sender: sender, timestamp: timestamp)
+            packet.isRSR = true
+            return BLEIngressPacketGuard.evaluate(
+                packet: packet,
+                claimedSenderID: sender,
+                boundPeerID: bound,
+                localPeerID: local,
+                directAnnounceTTL: 7,
+                nowMs: nowMs,
+                maxTimestampSkewMs: skewMs,
+                isValidSyncResponse: { $0 == bound }
+            )
+        }
+
+        #expect(evaluateRSR(timestamp: .max) == .failure(.timestampSkew(
+            peerID: bound,
+            skewMs: .max - nowMs,
+            maxSkewMs: skewMs
+        )))
+        #expect(evaluateRSR(timestamp: nowMs + skewMs + 1) == .failure(.timestampSkew(
+            peerID: bound,
+            skewMs: skewMs + 1,
+            maxSkewMs: skewMs
+        )))
+        // The edge of the window is still tolerated clock skew.
+        let edgeContext = try #require(success(evaluateRSR(timestamp: nowMs + skewMs)))
+        #expect(edgeContext.validationPeerID == bound)
+
+        // Reassembled inner packets are checked through validatePayload alone.
+        var innerPacket = makePacket(sender: sender, timestamp: .max)
+        innerPacket.isRSR = true
+        let innerResult = BLEIngressPacketGuard.validatePayload(
+            innerPacket,
+            from: sender,
+            nowMs: nowMs,
+            maxTimestampSkewMs: skewMs,
+            isValidSyncResponse: { _ in true }
+        )
+        guard case .failure(.timestampSkew) = innerResult else {
+            Issue.record("Expected a future-dated reassembled RSR packet to be rejected, got \(innerResult)")
+            return
+        }
     }
 
     @Test("invalid RSR packets are rejected")

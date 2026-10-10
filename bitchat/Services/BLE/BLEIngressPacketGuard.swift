@@ -16,7 +16,7 @@ enum BLEIngressPacketGuard {
         localPeerID: PeerID,
         directAnnounceTTL: UInt8,
         nowMs: UInt64 = UInt64(Date().timeIntervalSince1970 * 1000),
-        maxTimestampSkewMs: UInt64 = 120_000,
+        maxTimestampSkewMs: UInt64 = TransportConfig.bleMaxTimestampSkewMs,
         isValidSyncResponse: (PeerID) -> Bool
     ) -> Result<BLEIngressPacketContext, Rejection> {
         let contextResult = BLEIngressLinkRegistry.packetContext(
@@ -55,17 +55,25 @@ enum BLEIngressPacketGuard {
         _ packet: BitchatPacket,
         from peerID: PeerID,
         nowMs: UInt64 = UInt64(Date().timeIntervalSince1970 * 1000),
-        maxTimestampSkewMs: UInt64 = 120_000,
+        maxTimestampSkewMs: UInt64 = TransportConfig.bleMaxTimestampSkewMs,
         isValidSyncResponse: (PeerID) -> Bool
     ) -> Result<Void, Rejection> {
+        let packetTime = packet.timestamp
         if packet.isRSR {
             guard isValidSyncResponse(peerID) else {
                 return .failure(.invalidRSR(peerID: peerID))
             }
+            // Sync replies legitimately replay old packets, so only the past
+            // bound is waived. A far-future packet is never legitimate: it
+            // would outlive every gossip freshness window, drag requesters'
+            // since-cursors past all real history, and pin itself below live
+            // chat.
+            guard packetTime <= nowMs || packetTime - nowMs <= maxTimestampSkewMs else {
+                return .failure(.timestampSkew(peerID: peerID, skewMs: packetTime - nowMs, maxSkewMs: maxTimestampSkewMs))
+            }
             return .success(())
         }
 
-        let packetTime = packet.timestamp
         let skew = packetTime > nowMs ? packetTime - nowMs : nowMs - packetTime
         guard skew <= maxTimestampSkewMs else {
             return .failure(.timestampSkew(peerID: peerID, skewMs: skew, maxSkewMs: maxTimestampSkewMs))

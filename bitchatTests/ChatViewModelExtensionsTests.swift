@@ -452,7 +452,7 @@ struct ChatViewModelNostrExtensionTests {
             )
         ], for: convKey)
 
-        let content = try ackContent(type: .delivered, messageID: messageID, senderPeerID: PeerID(str: "0123456789abcdef"))
+        let content = try ackContent(type: .delivered, messageID: messageID)
         let giftWrap = try NostrProtocol.createPrivateMessage(
             content: content,
             recipientPubkey: recipient.publicKeyHex,
@@ -490,7 +490,7 @@ struct ChatViewModelNostrExtensionTests {
             )
         ], for: convKey)
 
-        let content = try ackContent(type: .readReceipt, messageID: messageID, senderPeerID: PeerID(str: "0123456789abcdef"))
+        let content = try ackContent(type: .readReceipt, messageID: messageID)
         let giftWrap = try NostrProtocol.createPrivateMessage(
             content: content,
             recipientPubkey: recipient.publicKeyHex,
@@ -516,8 +516,7 @@ struct ChatViewModelNostrExtensionTests {
 
         let content = try privateMessageContent(
             text: "Hello from gift wrap",
-            messageID: messageID,
-            senderPeerID: PeerID(str: "0123456789abcdef")
+            messageID: messageID
         )
         let giftWrap = try NostrProtocol.createPrivateMessage(
             content: content,
@@ -548,8 +547,7 @@ struct ChatViewModelNostrExtensionTests {
 
         let content = try privateMessageContent(
             text: "Blocked",
-            messageID: messageID,
-            senderPeerID: PeerID(str: "0123456789abcdef")
+            messageID: messageID
         )
         let giftWrap = try NostrProtocol.createPrivateMessage(
             content: content,
@@ -559,14 +557,17 @@ struct ChatViewModelNostrExtensionTests {
 
         viewModel.handleGiftWrap(giftWrap, id: recipient)
 
-        // Gift-wrap decryption runs off the main actor; wait for the ack
-        // (sent even for blocked senders) to know processing finished.
-        let didAck = await TestHelpers.waitUntil(
-            { viewModel.sentGeoDeliveryAcks.contains(messageID) },
+        // Gift-wrap decryption runs off the main actor. The key mapping is
+        // registered in the same main-actor hop that runs the PM handler, so
+        // once it shows up the handler has already returned.
+        let didProcess = await TestHelpers.waitUntil(
+            { viewModel.nostrKeyMapping[convKey] == sender.publicKeyHex },
             timeout: TestConstants.settleTimeout
         )
-        #expect(didAck)
+        #expect(didProcess)
         #expect(viewModel.privateChats[convKey] == nil)
+        // A blocked sender gets nothing back, not even a DELIVERED ack.
+        #expect(!viewModel.sentGeoDeliveryAcks.contains(messageID))
     }
 
     @Test @MainActor
@@ -591,7 +592,7 @@ struct ChatViewModelNostrExtensionTests {
             )
         ], for: convKey)
 
-        let content = try ackContent(type: .delivered, messageID: messageID, senderPeerID: PeerID(str: "0123456789abcdef"))
+        let content = try ackContent(type: .delivered, messageID: messageID)
         let giftWrap = try NostrProtocol.createPrivateMessage(
             content: content,
             recipientPubkey: recipient.publicKeyHex,
@@ -1262,22 +1263,20 @@ private func base64URLEncode(_ data: Data) -> String {
         .replacingOccurrences(of: "=", with: "")
 }
 
-private func ackContent(type: NoisePayloadType, messageID: String, senderPeerID: PeerID) throws -> String {
+private func ackContent(type: NoisePayloadType, messageID: String) throws -> String {
     if let content = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(
         type: type,
-        messageID: messageID,
-        senderPeerID: senderPeerID
+        messageID: messageID
     ) {
         return content
     }
     throw ChatViewModelExtensionsTestError.invalidAckContent
 }
 
-private func privateMessageContent(text: String, messageID: String, senderPeerID: PeerID) throws -> String {
+private func privateMessageContent(text: String, messageID: String) throws -> String {
     if let content = NostrEmbeddedBitChat.encodePMForNostrNoRecipient(
         content: text,
-        messageID: messageID,
-        senderPeerID: senderPeerID
+        messageID: messageID
     ) {
         return content
     }

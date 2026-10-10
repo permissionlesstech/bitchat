@@ -173,6 +173,9 @@ struct NostrTransportTests {
         #expect(privateMessage.messageID == "pm-1")
         #expect(privateMessage.content == "hello over nostr")
         #expect(result.packet.recipientID == shortPeerID.routingData)
+        // Favorites DMs keep the mesh sender ID: the recipient already binds
+        // this npub to our Noise key.
+        #expect(result.packet.senderID == transport.senderPeerID.routingData)
         #expect(probe.pendingGiftWrapIDs.isEmpty)
     }
 
@@ -257,6 +260,7 @@ struct NostrTransportTests {
         #expect(result.payload.type == .delivered)
         #expect(String(data: result.payload.data, encoding: .utf8) == "ack-1")
         #expect(result.packet.recipientID == fullPeerID.toShort().routingData)
+        #expect(result.packet.senderID == transport.senderPeerID.routingData)
     }
 
     @Test("Geohash private message registers pending gift wrap")
@@ -298,6 +302,66 @@ struct NostrTransportTests {
         #expect(privateMessage.content == "geo hello")
         #expect(result.packet.recipientID == nil)
         #expect(probe.pendingGiftWrapIDs == [event.id])
+    }
+
+    @Test("Geohash envelopes never carry the mesh peer ID")
+    @MainActor
+    func geohashEnvelopesNeverCarryMeshPeerID() async throws {
+        let keychain = MockKeychain()
+        let idBridge = NostrIdentityBridge(keychain: keychain)
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let probe = NostrTransportProbe()
+        let transport = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            dependencies: makeDependencies(
+                currentIdentity: { sender },
+                registerPendingGiftWrap: probe.recordPendingGiftWrap(id:),
+                sendEvent: probe.record(event:),
+                scheduleAfter: { delay, action in
+                    probe.enqueueScheduledAction(delay: delay, action: action)
+                }
+            )
+        )
+        // Even a transport that knows the mesh peer ID must not embed it
+        // under a geohash identity: whoever receives the envelope (including
+        // the automatic DELIVERED ack) could link that persona to the device.
+        let meshPeerID = PeerID(str: "0123456789abcdef")
+        let meshIDBytes = try #require(meshPeerID.routingData)
+        transport.senderPeerID = meshPeerID
+
+        transport.sendPrivateMessageGeohash(
+            content: "geo hello",
+            toRecipientHex: recipient.publicKeyHex,
+            from: sender,
+            messageID: "geo-pm"
+        )
+        transport.sendDeliveryAckGeohash(for: "geo-delivered", toRecipientHex: recipient.publicKeyHex, from: sender)
+        transport.sendReadReceiptGeohash("geo-read", toRecipientHex: recipient.publicKeyHex, from: sender)
+
+        // The PM goes out directly; the two acks share the pacer, so the
+        // second leaves only once the queued throttle action runs.
+        let sentFirst = await TestHelpers.waitUntil(
+            { probe.sentEvents.count == 2 && probe.scheduledActionCount == 1 },
+            timeout: TestConstants.settleTimeout
+        )
+        try #require(sentFirst, "Expected the PM and the first paced ack")
+        try #require(probe.runNextScheduledAction(), "Expected queued throttle action after first ack")
+        let sentAll = await TestHelpers.waitUntil({ probe.sentEvents.count == 3 }, timeout: TestConstants.settleTimeout)
+        try #require(sentAll, "Expected the second paced ack")
+
+        let envelopes = try probe.sentEvents.map { try decodeEmbeddedPayload(from: $0, recipient: recipient) }
+        #expect(Set(envelopes.map(\.payload.type)) == [.privateMessage, .delivered, .readReceipt])
+        for envelope in envelopes {
+            #expect(envelope.packet.recipientID == nil)
+            #expect(envelope.packet.senderID.count == BinaryProtocol.senderIDSize)
+            #expect(envelope.packet.senderID != meshIDBytes)
+            #expect(envelope.packetData.range(of: meshIDBytes) == nil)
+        }
+        // Fresh random bytes per envelope, so the field can't tie two
+        // envelopes (or two geohash identities) to one sender either.
+        #expect(Set(envelopes.map(\.packet.senderID)).count == envelopes.count)
     }
 
     @Test("Read receipt queue sends in order and waits for scheduler")
@@ -456,7 +520,7 @@ struct NostrTransportTests {
     private func decodeEmbeddedPayload(
         from event: NostrEvent,
         recipient: NostrIdentity
-    ) throws -> (packet: BitchatPacket, payload: NoisePayload, senderPubkey: String) {
+    ) throws -> (packet: BitchatPacket, payload: NoisePayload, senderPubkey: String, packetData: Data) {
         let (content, senderPubkey, _) = try NostrProtocol.decryptPrivateMessage(
             giftWrap: event,
             recipientIdentity: recipient
@@ -470,7 +534,7 @@ struct NostrTransportTests {
               let payload = NoisePayload.decode(packet.payload) else {
             throw NostrTransportTestError.invalidPacket
         }
-        return (packet, payload, senderPubkey)
+        return (packet, payload, senderPubkey, packetData)
     }
 
     private func decodePrivateMessage(from payload: NoisePayload) throws -> PrivateMessagePacket {

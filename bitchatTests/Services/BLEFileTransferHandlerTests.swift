@@ -953,7 +953,7 @@ struct BLEFileTransferHandlerTests {
     }
 
     @Test
-    func malformedPayloadIsTrackedForSyncButDropped() {
+    func malformedPayloadIsRelayedButNeverTrackedForSync() {
         let recorder = Recorder()
         recorder.peers = [remotePeerID: makePeerInfo(remotePeerID, nickname: "Alice", isVerified: true, signingPublicKey: sampleSigningKey)]
         recorder.signatureVerifies = true
@@ -971,8 +971,9 @@ struct BLEFileTransferHandlerTests {
         // Local decode failures are not proof of forgery; the packet stays relayable.
         #expect(handler.handle(packet, from: remotePeerID))
 
-        // Sync tracking happens before payload validation, matching the original order.
-        #expect(recorder.trackedPackets.count == 1)
+        // But the gossip store re-serves whatever it tracks, so validation
+        // runs first and an undecodable payload never enters it.
+        #expect(recorder.trackedPackets.isEmpty)
         #expect(recorder.quotaReservations.isEmpty)
         #expect(recorder.saveCalls.isEmpty)
         #expect(recorder.deliveredMessages.isEmpty)
@@ -988,7 +989,39 @@ struct BLEFileTransferHandlerTests {
 
         #expect(handler.handle(packet, from: remotePeerID))
 
-        #expect(recorder.trackedPackets.count == 1)
+        #expect(recorder.trackedPackets.isEmpty)
+        #expect(recorder.quotaReservations.isEmpty)
+        #expect(recorder.saveCalls.isEmpty)
+        #expect(recorder.deliveredMessages.isEmpty)
+    }
+
+    @Test
+    func oversizedBroadcastFileIsRelayedButNeverTrackedForSync() {
+        let recorder = Recorder()
+        recorder.peers = [remotePeerID: makePeerInfo(remotePeerID, nickname: "Alice", isVerified: true, signingPublicKey: sampleSigningKey)]
+        recorder.signatureVerifies = true
+        let handler = makeHandler(recorder: recorder)
+        // A CONTENT TLV one byte over the file cap: it fits the framed-file
+        // ceiling at decode, so only payload validation can stop it.
+        let oversizedCount = FileTransferLimits.maxPayloadBytes + 1
+        var length = UInt32(oversizedCount).bigEndian
+        var payload = Data([0x04])
+        withUnsafeBytes(of: &length) { payload.append(contentsOf: $0) }
+        payload.append(Data(repeating: 0x41, count: oversizedCount))
+        let packet = BitchatPacket(
+            type: MessageType.fileTransfer.rawValue,
+            senderID: Data(hexString: remotePeerID.id) ?? Data(),
+            recipientID: nil,
+            timestamp: 900_000,
+            payload: payload,
+            signature: Data(repeating: 0x5A, count: 64),
+            ttl: TransportConfig.messageTTLDefault,
+            version: 2
+        )
+
+        #expect(handler.handle(packet, from: remotePeerID))
+
+        #expect(recorder.trackedPackets.isEmpty)
         #expect(recorder.quotaReservations.isEmpty)
         #expect(recorder.saveCalls.isEmpty)
         #expect(recorder.deliveredMessages.isEmpty)

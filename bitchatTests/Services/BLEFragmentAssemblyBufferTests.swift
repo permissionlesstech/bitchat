@@ -84,12 +84,13 @@ struct BLEFragmentAssemblyBufferTests {
     func appendOversizedAssemblyDropsPartialState() throws {
         var buffer = BLEFragmentAssemblyBuffer()
         let fragmentID = Data(repeating: 0x05, count: 8)
+        let limit = PacketPayloadLimits.maxFrameBytes(forType: MessageType.message.rawValue)
         let first = try #require(BLEFragmentHeader(packet: makeFragmentPacket(
             fragmentID: fragmentID,
             index: 0,
             total: 2,
             originalType: MessageType.message.rawValue,
-            fragmentData: Data(repeating: 0x01, count: FileTransferLimits.maxPayloadBytes)
+            fragmentData: Data(repeating: 0x01, count: limit)
         )))
         let oversized = try #require(BLEFragmentHeader(packet: makeFragmentPacket(
             fragmentID: fragmentID,
@@ -102,9 +103,9 @@ struct BLEFragmentAssemblyBufferTests {
         _ = buffer.append(first, maxInFlightAssemblies: 8)
         let result = buffer.append(oversized, maxInFlightAssemblies: 8)
 
-        if case let .oversized(_, projectedSize, limit, started) = result {
-            #expect(projectedSize == FileTransferLimits.maxPayloadBytes + 1)
-            #expect(limit == FileTransferLimits.maxPayloadBytes)
+        if case let .oversized(_, projectedSize, reportedLimit, started) = result {
+            #expect(projectedSize == limit + 1)
+            #expect(reportedLimit == limit)
             #expect(!started)
         } else {
             Issue.record("Expected oversized fragment assembly to be evicted")
@@ -114,6 +115,77 @@ struct BLEFragmentAssemblyBufferTests {
             #expect(started)
         } else {
             Issue.record("Expected later fragment to start a clean assembly")
+        }
+    }
+
+    @Test
+    func redeliveredIndexNearTheLimitDoesNotEvictTheAssembly() throws {
+        // Fragments bypass dedup and sync re-serves held indexes, so a
+        // duplicate must replace its index's bytes, not count them twice.
+        var buffer = BLEFragmentAssemblyBuffer()
+        let fragmentID = Data(repeating: 0x06, count: 8)
+        let limit = PacketPayloadLimits.maxFrameBytes(forType: MessageType.message.rawValue)
+        func fragment(_ index: Int, bytes: Int) throws -> BLEFragmentHeader {
+            try #require(BLEFragmentHeader(packet: makeFragmentPacket(
+                fragmentID: fragmentID,
+                index: index,
+                total: 3,
+                originalType: MessageType.message.rawValue,
+                fragmentData: Data(repeating: UInt8(index + 1), count: bytes)
+            )))
+        }
+        let large = try fragment(0, bytes: limit - 2)
+
+        _ = buffer.append(large, maxInFlightAssemblies: 8)
+        _ = buffer.append(try fragment(1, bytes: 1), maxInFlightAssemblies: 8)
+        guard case .stored = buffer.append(large, maxInFlightAssemblies: 8) else {
+            Issue.record("Expected a re-delivered index to keep the assembly")
+            return
+        }
+
+        if case let .complete(_, data, _) = buffer.append(try fragment(2, bytes: 1), maxInFlightAssemblies: 8) {
+            #expect(data.count == limit)
+        } else {
+            Issue.record("Expected the assembly to complete at its limit")
+        }
+    }
+
+    @Test
+    func assemblyIsHeldToTheFrameItsClaimedTypeCanFill() throws {
+        // Not a flat 1 MiB for every type: an assembly claiming a
+        // link-scale or message-scale type is cut off just past the largest
+        // frame that type could still decode from.
+        let claims: [(type: MessageType, id: UInt8)] = [(.fragment, 0x30), (.announce, 0x40), (.message, 0x50)]
+        for claim in claims {
+            var buffer = BLEFragmentAssemblyBuffer()
+            let limit = PacketPayloadLimits.maxFrameBytes(forType: claim.type.rawValue)
+            #expect(limit < FileTransferLimits.maxPayloadBytes / 4)
+
+            let atLimit = try #require(BLEFragmentHeader(packet: makeFragmentPacket(
+                fragmentID: Data(repeating: claim.id, count: 8),
+                index: 0,
+                total: 1,
+                originalType: claim.type.rawValue,
+                fragmentData: Data(repeating: 0x01, count: limit)
+            )))
+            if case let .complete(_, data, _) = buffer.append(atLimit, maxInFlightAssemblies: 8) {
+                #expect(data.count == limit)
+            } else {
+                Issue.record("Expected a \(claim.type.description) assembly at its frame ceiling to complete")
+            }
+
+            let pastLimit = try #require(BLEFragmentHeader(packet: makeFragmentPacket(
+                fragmentID: Data(repeating: claim.id + 1, count: 8),
+                index: 0,
+                total: 1,
+                originalType: claim.type.rawValue,
+                fragmentData: Data(repeating: 0x01, count: limit + 1)
+            )))
+            if case let .oversized(_, _, reportedLimit, _) = buffer.append(pastLimit, maxInFlightAssemblies: 8) {
+                #expect(reportedLimit == limit)
+            } else {
+                Issue.record("Expected a \(claim.type.description) assembly past its frame ceiling to be evicted")
+            }
         }
     }
 

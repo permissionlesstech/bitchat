@@ -9,6 +9,11 @@ enum TransportConfig {
     static let bleMaxInFlightAssemblies: Int = 128          // Cap concurrent fragment assemblies
     static let bleHighDegreeThreshold: Int = 6              // For adaptive TTL/probabilistic relays
     static let bleMaxConcurrentTransfers: Int = 2           // Limit simultaneous large media sends
+    // Clock skew tolerated on received packet timestamps. Live packets must
+    // sit within ± this of local time; sync replies may be arbitrarily old
+    // but never further ahead than this, and the gossip store applies the
+    // same future bound so nothing future-dated is stored, served or restored.
+    static let bleMaxTimestampSkewMs: UInt64 = 120_000
     // Bounded wait for the session-authenticated capability proof used by
     // private-media migration. Expiry never auto-sends clear bytes; it only
     // resolves to the existing one-shot consent or downgrade-blocked path.
@@ -314,6 +319,14 @@ enum TransportConfig {
     // on each maintenance flush until the window lapses; a longer window lets
     // brief link gaps (walking between rooms, reconnect churn) heal themselves.
     static let bleDirectedSpoolWindowSeconds: TimeInterval = 60.0
+    // The spool evicts oldest-first past either bound. Only noiseEncrypted
+    // and noiseHandshake packets are spooled, and relayed ones arrive as
+    // single frames (larger sends travel as fragments, which are never
+    // spooled), so ordinary entries are a few hundred bytes. The byte budget
+    // still fits one packet at the framed-file decompression cap (~1.13 MiB)
+    // plus hundreds of ordinary DMs.
+    static let bleDirectedSpoolCapacity: Int = 512
+    static let bleDirectedSpoolByteBudget: Int = 2 * 1024 * 1024
 
     // Log/UI debounce windows
     // Shorter debounce so UI reacts faster while still suppressing duplicate callbacks

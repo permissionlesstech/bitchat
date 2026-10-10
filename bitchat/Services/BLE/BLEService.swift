@@ -1943,7 +1943,7 @@ final class BLEService: NSObject {
 
     private func logValidRSR(from peerID: PeerID) {
         guard logRateLimiter.shouldLog(key: "valid-rsr:\(peerID.id)") else { return }
-        SecureLogger.debug("Valid RSR packet from \(peerID.id.prefix(8))… - skipping timestamp check", category: .security)
+        SecureLogger.debug("Valid RSR packet from \(peerID.id.prefix(8))… - skipping past-timestamp check", category: .security)
     }
 
     private func logSelfLoopback(packetType: UInt8, linkDescription: String) {
