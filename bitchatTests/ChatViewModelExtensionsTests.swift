@@ -848,7 +848,9 @@ struct ChatViewModelIntentOperationTests {
     @Test @MainActor
     func pruneSentReadReceipts_dropsStaleIDsAndReturnsRemovedCount() async {
         let (viewModel, _) = makeTestableViewModel()
-        viewModel.sentReadReceipts = ["keep-1", "keep-2", "drop-1", "drop-2"]
+        for id in ["keep-1", "keep-2", "drop-1", "drop-2"] {
+            viewModel.markReadReceiptSent(id)
+        }
 
         let removed = viewModel.pruneSentReadReceipts(keeping: ["keep-1", "keep-2", "unrelated"])
 

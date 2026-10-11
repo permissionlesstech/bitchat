@@ -66,6 +66,14 @@ final class ChatViewModelBootstrapper {
         return Set(receipts)
     }
 
+    static func persistReadReceipts(_ receipts: Set<String>, userDefaults: UserDefaults) {
+        if let data = try? JSONEncoder().encode(Array(receipts)) {
+            userDefaults.set(data, forKey: "sentReadReceipts")
+        } else {
+            SecureLogger.error("❌ Failed to encode read receipts for persistence", category: .session)
+        }
+    }
+
     func configure() {
         wireServiceGraph()
         bindFeatureObjectChanges()
@@ -90,12 +98,6 @@ private extension ChatViewModelBootstrapper {
         viewModel.privateChatManager.conversationStore = viewModel.conversations
         viewModel.privateChatManager.messageRouter = viewModel.messageRouter
         viewModel.privateChatManager.unifiedPeerService = viewModel.unifiedPeerService
-        viewModel.privateChatManager.markReceiptHandled = { [weak viewModel] messageID in
-            viewModel?.markReadReceiptSent(messageID)
-        }
-        viewModel.privateChatManager.releaseReceiptClaim = { [weak viewModel] messageID in
-            viewModel?.unmarkReadReceiptsSent([messageID])
-        }
         viewModel.unifiedPeerService.messageRouter = viewModel.messageRouter
         // Surface silent outbox drops (attempt cap, TTL expiry, overflow
         // eviction) as a visible failure. The store's no-downgrade rule does

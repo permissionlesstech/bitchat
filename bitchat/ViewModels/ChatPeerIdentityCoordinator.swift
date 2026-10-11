@@ -112,8 +112,9 @@ extension ChatViewModel: ChatPeerIdentityContext {
     // and the conversation-store sync methods are shared requirements with
     // the other contexts or satisfied by existing `ChatViewModel` members.
     // The single-writer intent op `syncReadReceiptsForSentMessages(for:)`
-    // lives next to its backing state in `ChatViewModel`. The members below
-    // flatten nested service accesses into intent-named calls.
+    // lives in `ChatViewModel` and forwards to the set's owner,
+    // `PrivateChatManager`. The members below flatten nested service accesses
+    // into intent-named calls.
 
     @discardableResult
     func consolidatePrivateMessages(for peerID: PeerID, peerNickname: String) -> Bool {

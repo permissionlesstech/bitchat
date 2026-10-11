@@ -94,9 +94,9 @@ extension ChatViewModel: ChatTransportEventContext {
     // `cacheStablePeerID(_:for:)`, and `cachedStablePeerID(for:)` are shared
     // requirements with the other contexts or satisfied by existing
     // `ChatViewModel` members. The single-writer intent op
-    // `unmarkReadReceiptsSent(_:)` lives next to its backing state in
-    // `ChatViewModel`. The members below flatten nested service accesses into
-    // intent-named calls.
+    // `unmarkReadReceiptsSent(_:)` lives in `ChatViewModel` and forwards to
+    // the set's owner, `PrivateChatManager`. The members below flatten nested
+    // service accesses into intent-named calls.
 
     func unifiedPeer(for peerID: PeerID) -> BitchatPeer? {
         unifiedPeerService.getPeer(by: peerID)

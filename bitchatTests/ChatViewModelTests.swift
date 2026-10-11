@@ -17,6 +17,7 @@ import BitFoundation
 @MainActor
 private func makeTestableViewModel(
     keychain injectedKeychain: MockKeychain? = nil,
+    readReceiptsDefaults: UserDefaults? = nil,
     panicMediaWipe: (() throws -> Void)? = nil,
     panicRecoveryOperations: PanicRecoveryOperations? = nil,
     panicNetworkLifecycle: PanicNetworkLifecycle = .noop
@@ -32,6 +33,7 @@ private func makeTestableViewModel(
         idBridge: idBridge,
         identityManager: identityManager,
         transport: transport,
+        readReceiptsDefaults: readReceiptsDefaults,
         panicMediaWipe: panicMediaWipe,
         panicRecoveryOperations: panicRecoveryOperations,
         panicNetworkLifecycle: panicNetworkLifecycle
@@ -462,9 +464,8 @@ struct ChatViewModelServiceLifecycleTests {
         #expect(!sentReadReceipt)
 
         // ...while the chat is still marked read locally and the receipt is
-        // recorded as handled in BOTH tracking sets (the lifecycle pass
-        // dedups against the owner's persisted set, the manager against its
-        // own), so re-enabling the setting never fires a retroactive burst
+        // recorded as handled in the one set both read paths dedup against,
+        // so re-enabling the setting never fires a retroactive burst
         // disclosing past reading activity from either path.
         #expect(!viewModel.unreadPrivateMessages.contains(peerID))
         #expect(viewModel.sentReadReceipts.contains("read-2"))
@@ -472,10 +473,10 @@ struct ChatViewModelServiceLifecycleTests {
     }
 
     /// Regression for the two-set asymmetry: a message read while viewing a
-    /// chat with receipts OFF is withheld on the *coordinator* path (which
-    /// records only the view-model set). `PrivateChatManager.markAsRead`
-    /// re-scans on every chat open and dedups against its OWN set, so before
-    /// the fix, re-enabling the setting and reopening the chat fired a receipt
+    /// chat with receipts OFF is withheld on the *coordinator* path, which
+    /// used to record only the view model's set, while
+    /// `PrivateChatManager.markAsRead` re-scans every chat open against its
+    /// own. So re-enabling the setting and reopening the chat fired a receipt
     /// for that already-read message — a delayed disclosure of reading done
     /// while the setting was off. Drives the real inbound delegate path, not
     /// the manager-withhold path the test above covers.
@@ -524,27 +525,24 @@ struct ChatViewModelServiceLifecycleTests {
         #expect(!leaked)
     }
 
-    /// Guards the second half of the fix: `unmarkReadReceiptsSent` must clear
-    /// BOTH sets, or they drift apart — markAsRead guards on the manager set,
-    /// the lifecycle pass on the view model's.
+    /// The view model's receipt ops must act on the manager's set, the only
+    /// copy, rather than keep a second one: two sets kept in step from
+    /// opposite directions are how the read paths drifted apart.
     @Test @MainActor
-    func unmarkReadReceiptsSentClearsBothSets() {
+    func viewModelReceiptOpsActOnTheManagersSet() {
         let (viewModel, _) = makeTestableViewModel()
         viewModel.markReadReceiptSent("m-1")
-        #expect(viewModel.sentReadReceipts.contains("m-1"))
         #expect(viewModel.privateChatManager.sentReadReceipts.contains("m-1"))
 
         viewModel.unmarkReadReceiptsSent(["m-1"])
-        #expect(!viewModel.sentReadReceipts.contains("m-1"))
         #expect(!viewModel.privateChatManager.sentReadReceipts.contains("m-1"))
     }
 
     /// Regression for the duplicate a reopen used to emit: opening a chat
-    /// runs the manager's read scan (claims in the manager set, routes
-    /// asynchronously) and then the lifecycle pass, which dedups against the
-    /// view model's set. Until the manager bridged its successful claims back,
-    /// that second scan saw an unclaimed id and routed the receipt again —
-    /// twice per open, and twice more after a reconnect cleared both sets.
+    /// runs the manager's read scan (claims, routes asynchronously) and then
+    /// the lifecycle pass. While the two deduped against different sets, that
+    /// second scan saw an unclaimed id and routed the receipt again — twice
+    /// per open, and twice more after a reconnect released the claim.
     @Test @MainActor
     func readReceiptSentOnceOnOpenAndOnceMoreAfterReconnect() async {
         let (viewModel, transport) = makeTestableViewModel()
@@ -582,14 +580,13 @@ struct ChatViewModelServiceLifecycleTests {
         _ = await TestHelpers.waitUntil({ receiptCount() > 1 }, timeout: TestConstants.negativeWaitWindow)
         #expect(receiptCount() == 1)
 
-        // A disconnect clears both claims so the receipt can be re-sent — but
+        // A disconnect releases the claim so the receipt can be re-sent — but
         // it runs inside a Task, so drain before reopening or the reopen would
-        // still see both sets claiming the id.
+        // still see the id claimed.
         viewModel.endPrivateChat()
         transport.simulateDisconnect(peerID)
         #expect(await TestHelpers.waitUntil({
             !viewModel.sentReadReceipts.contains("read-reopen")
-                && !viewModel.privateChatManager.sentReadReceipts.contains("read-reopen")
         }, timeout: TestConstants.settleTimeout))
 
         transport.simulateConnect(peerID, nickname: "Alice")
@@ -599,6 +596,64 @@ struct ChatViewModelServiceLifecycleTests {
         _ = await TestHelpers.waitUntil({ receiptCount() > 2 }, timeout: TestConstants.negativeWaitWindow)
         // The one original plus a single retry — not a pair per open.
         #expect(receiptCount() == 2)
+    }
+
+    /// Regression for the relaunch gap: only the view model's set was
+    /// persisted and loaded at launch, so the manager's chat-open scan began
+    /// every session empty. A DM read while receipts were off is withheld and
+    /// claimed; after a relaunch it is fetched again (the 24 h relay
+    /// lookback), and the first chat open after re-enabling receipts sent the
+    /// receipt anyway — disclosing a read made while the setting was off.
+    @Test @MainActor
+    func withheldReceiptStaysWithheldAcrossRelaunch() async {
+        let suiteName = "chat.bitchat.tests.readReceipts.relaunch.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let peerID = PeerID(str: "0000000000000044")
+
+        func openChat(on viewModel: ChatViewModel, _ transport: MockTransport) {
+            transport.simulateConnect(peerID, nickname: "Alice")
+            let message = BitchatMessage(
+                id: "read-relaunch",
+                sender: "Alice",
+                content: "read while receipts were off",
+                timestamp: Date(),
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: true,
+                recipientNickname: viewModel.nickname,
+                senderPeerID: peerID,
+                mentions: nil
+            )
+            viewModel.seedPrivateChat([message], for: peerID)
+            viewModel.markPrivateChatUnread(peerID)
+            viewModel.startPrivateChat(with: peerID)
+        }
+
+        // First launch, receipts off: the open withholds the receipt and
+        // claims it, and the claim is persisted.
+        do {
+            let (viewModel, transport) = makeTestableViewModel(readReceiptsDefaults: defaults)
+            viewModel.sendsReadReceipts = { false }
+            viewModel.privateChatManager.sendsReadReceipts = { false }
+            openChat(on: viewModel, transport)
+            #expect(await TestHelpers.waitUntil({
+                viewModel.sentReadReceipts.contains("read-relaunch")
+            }, timeout: TestConstants.settleTimeout))
+            #expect(!transport.sentReadReceipts.contains { $0.receipt.originalMessageID == "read-relaunch" })
+        }
+
+        // Relaunch on the same store with receipts back on, and the DM
+        // fetched again. Opening the chat must not send the receipt.
+        let (viewModel, transport) = makeTestableViewModel(readReceiptsDefaults: defaults)
+        viewModel.sendsReadReceipts = { true }
+        viewModel.privateChatManager.sendsReadReceipts = { true }
+        openChat(on: viewModel, transport)
+
+        let leaked = await TestHelpers.waitUntil({
+            transport.sentReadReceipts.contains { $0.receipt.originalMessageID == "read-relaunch" }
+        }, timeout: TestConstants.negativeWaitWindow)
+        #expect(!leaked)
     }
 
     @Test @MainActor
@@ -1067,7 +1122,7 @@ struct ChatViewModelPeerTests {
             senderPeerID: peerID
         )
         viewModel.seedPrivateChat([incoming], for: peerID)
-        viewModel.sentReadReceipts.insert(incoming.id)
+        viewModel.markReadReceiptSent(incoming.id)
 
         viewModel.didReceiveTransportEvent(.peerConnected(peerID))
 

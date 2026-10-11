@@ -148,16 +148,11 @@ struct PrivateChatManagerTests {
     @Test @MainActor
     func markAsRead_failedRouteReleasesClaimForRetry() async {
         // No reachable transport: the receipt is not sent, and the eager
-        // claim must be released so a later read scan retries. The release
-        // goes through the owner's bridge (it holds the other set), so stand
-        // in for the bootstrapper's wiring here.
+        // claim must be released so a later read scan retries.
         let transport = MockTransport()
         let router = MessageRouter(transports: [transport])
         let (manager, store) = Self.makeManager(transport: transport)
         manager.messageRouter = router
-        manager.releaseReceiptClaim = { [weak manager] messageID in
-            manager?.forgetReadReceiptsSent([messageID])
-        }
 
         let peerID = PeerID(str: "00000000000000DF")
 
@@ -308,10 +303,8 @@ struct PrivateChatManagerTests {
             store.append(message, to: .directPeer(peerID))
         }
 
-        var externalReceipts = Set<String>()
-        manager.syncReadReceiptsForSentMessages(peerID: peerID, nickname: "Me", externalReceipts: &externalReceipts)
+        manager.syncReadReceiptsForSentMessages(peerID: peerID, nickname: "Me")
 
-        #expect(externalReceipts == Set(["sent-read", "sent-delivered"]))
         #expect(manager.sentReadReceipts == Set(["sent-read", "sent-delivered"]))
     }
 

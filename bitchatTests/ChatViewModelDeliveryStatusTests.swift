@@ -454,7 +454,8 @@ struct ChatViewModelDeliveryStatusTests {
             deliveryStatus: .sent
         )
         viewModel.seedPrivateChat([message], for: peerID)
-        viewModel.sentReadReceipts = ["keep-receipt", "drop-receipt"]
+        viewModel.markReadReceiptSent("keep-receipt")
+        viewModel.markReadReceiptSent("drop-receipt")
         viewModel.isStartupPhase = false
 
         viewModel.cleanupOldReadReceipts()
