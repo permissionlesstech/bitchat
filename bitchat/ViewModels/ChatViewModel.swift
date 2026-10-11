@@ -445,11 +445,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     // Single-writer: mutate only via `setPublicBatching(_:)` below.
     @Published private(set) var isBatchingPublic: Bool = false
 
-    // Backing store for `sentReadReceipts` persistence. `.standard` in
-    // production; injectable so tests can use a scratch suite that does not
-    // leak state between runs.
-    let readReceiptsDefaults: UserDefaults
-
     /// Default read-receipt persistence store. Production uses `.standard`.
     /// Under test, every instance gets its own scratch suite: a per-process
     /// shared suite let one test's persisted receipts leak into another
@@ -1197,7 +1192,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         self.deduplicationService = services.deduplicationService
         self.publicMessagePipeline = services.publicMessagePipeline
         let readReceiptsDefaults = readReceiptsDefaults ?? Self.defaultReadReceiptsDefaults()
-        self.readReceiptsDefaults = readReceiptsDefaults
         // The manager owns the receipt set; seed it before wiring
         // persistence so the restore isn't written straight back.
         services.privateChatManager.restoreReadReceipts(
