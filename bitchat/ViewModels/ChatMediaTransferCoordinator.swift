@@ -650,7 +650,7 @@ final class ChatMediaTransferCoordinator {
                         try? FileManager.default.removeItem(at: processedURL)
                         return
                     }
-                    self.sendImage(from: processedURL)
+                    self.sendProcessedImage(from: processedURL)
                 }
             } catch {
                 SecureLogger.error("Image processing failed: \(error)", category: .session)
@@ -681,7 +681,7 @@ final class ChatMediaTransferCoordinator {
                         try? FileManager.default.removeItem(at: processedURL)
                         return
                     }
-                    self.sendImage(from: processedURL)
+                    self.sendProcessedImage(from: processedURL)
                 }
             } catch {
                 SecureLogger.error("Image processing failed: \(error)", category: .session)
@@ -691,6 +691,22 @@ final class ChatMediaTransferCoordinator {
     #endif
 
     func sendImage(from sourceURL: URL, cleanup: (() -> Void)? = nil) {
+        sendImage(from: sourceURL, cleanup: cleanup, prepareImagePacket: prepareImagePacket)
+    }
+
+    private func sendProcessedImage(from outputURL: URL) {
+        sendImage(
+            from: outputURL,
+            cleanup: { try? FileManager.default.removeItem(at: outputURL) },
+            prepareImagePacket: { try ChatMediaPreparation.prepareProcessedImagePacket(at: $0) }
+        )
+    }
+
+    private func sendImage(
+        from sourceURL: URL,
+        cleanup: (() -> Void)?,
+        prepareImagePacket: @escaping @Sendable (URL) throws -> ChatPreparedImage
+    ) {
         guard context.canSendMediaInCurrentContext else {
             SecureLogger.info("Image send blocked outside mesh/private context", category: .session)
             cleanup?()
@@ -709,7 +725,6 @@ final class ChatMediaTransferCoordinator {
             return
         }
 
-        let prepareImagePacket = self.prepareImagePacket
         let barrier = imagePreparationBarrier
         Task.detached(priority: .userInitiated) { [weak self, barrier] in
             do {
