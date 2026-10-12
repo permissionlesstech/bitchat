@@ -142,7 +142,8 @@ final class CommandProcessor {
             if inGeoPublic || inGeoDM { return .error(message: String(localized: "command.error.groups_mesh_only", defaultValue: "groups are only for mesh peers in #mesh", comment: "Error when a group command is used outside the mesh channel")) }
             return handleGroup(args)
         case "/list":
-            if inGeoPublic || inGeoDM { return .error(message: String(localized: "command.error.groups_mesh_only", defaultValue: "groups are only for mesh peers in #mesh", comment: "Error when a group command is used outside the mesh channel")) }
+            // Group chats open over any public channel; the coordinator
+            // rejects /list outside one.
             return handleChecklist(args)
         case "/fav":
             if inGeoPublic || inGeoDM { return .error(message: String(localized: "command.error.favorites_mesh_only", defaultValue: "favorites are only for mesh peers in #mesh", comment: "Error when a favorites command is used outside the mesh channel")) }

@@ -82,17 +82,18 @@ enum CommandInfo: String, Identifiable {
         if !isGeoPublic {
             commands.append(.pay)
         }
+        // /list edits the open group's shared checklist; elsewhere it only
+        // errors, so it's suggested inside group chats alone, whatever the
+        // public channel is.
+        if isGroupChat {
+            commands.append(.list)
+        }
         // The processor rejects favorites, groups, and mesh diagnostics in
         // geohash contexts, so only suggest them where they work: mesh.
         if isGeoPublic || isGeoDM {
             return commands
         }
         commands += [.favorite, .unfavorite, .ping, .trace, .group]
-        // /list edits the open group's shared checklist; elsewhere it only
-        // errors, so it's suggested inside group chats alone.
-        if isGroupChat {
-            commands.append(.list)
-        }
         return commands
     }
 }

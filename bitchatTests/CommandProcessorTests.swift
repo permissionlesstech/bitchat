@@ -574,6 +574,19 @@ struct CommandProcessorTests {
     }
 
     @MainActor
+    @Test func listStillWorksWhileTheTimelineIsOnAGeohash() async {
+        let context = MockCommandContextProvider()
+        let processor = CommandProcessor(contextProvider: context, meshService: nil, identityManager: MockIdentityManager(MockKeychain()))
+        let channel = ChannelID.location(GeohashChannel(level: .city, geohash: "u4pruy"))
+
+        await withSelectedChannel(channel, context: context) {
+            _ = processor.process("/list done 1")
+        }
+
+        #expect(context.checklistCommands.map(\.subcommand) == ["done"])
+    }
+
+    @MainActor
     @Test func malformedListCommandsShowUsageWithoutForwarding() async {
         let context = MockCommandContextProvider()
         let processor = CommandProcessor(contextProvider: context, meshService: nil, identityManager: MockIdentityManager(MockKeychain()))
@@ -596,6 +609,7 @@ struct CommandProcessorTests {
     @Test func listIsSuggestedOnlyInsideGroupChats() {
         #expect(CommandInfo.all(isGeoPublic: false, isGeoDM: false).contains(.list) == false)
         #expect(CommandInfo.all(isGeoPublic: false, isGeoDM: false, isGroupChat: true).contains(.list))
+        #expect(CommandInfo.all(isGeoPublic: true, isGeoDM: false, isGroupChat: true).contains(.list))
         #expect(CommandInfo.list.alias == "/list")
         #expect(CommandInfo.list.placeholder != nil)
     }
