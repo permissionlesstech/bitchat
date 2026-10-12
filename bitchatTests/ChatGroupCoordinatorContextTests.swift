@@ -556,4 +556,48 @@ struct ChatGroupCoordinatorContextTests {
         let update = try #require(try GroupCrypto.openMessage(envelope, key: groupKey).listUpdate)
         #expect(GroupListCoding.decode(update, notAfterMs: .max)?.isSnapshot == true)
     }
+
+    @Test
+    func rowNumbersMeanTheListAsLastShown() throws {
+        let (context, coordinator, _) = try makeJoinedGroup()
+        let start = nowMs
+        let list = context.groupStore.lists
+        list.merge(addition("water", seed: 1, by: member, atMs: start), intoGroupID: groupID)
+        list.merge(addition("maps", seed: 2, by: member, atMs: start + 1), intoGroupID: groupID)
+        list.merge(addition("stove", seed: 3, by: member, atMs: start + 2), intoGroupID: groupID)
+        _ = coordinator.showChecklist()
+
+        // Someone else drops "water" before we act on what we saw.
+        let removal: GroupListDelta = [listItemID(1): GroupListItemState(removed: GroupListStamp(timestampMs: start + 10, author: member.member.signingKey))]
+        coordinator.handleGroupMessagePayload(try listUpdatePayload(removal, from: member), timestamp: Date())
+
+        _ = coordinator.setChecklistItem(checked: true, itemNumber: 2)
+        #expect(list.list(forGroupID: groupID).items.first { $0.text == "maps" }?.isChecked == true)
+        #expect(list.list(forGroupID: groupID).items.first { $0.text == "stove" }?.isChecked == false)
+
+        // The reply re-showed the list, so numbers follow it from here on.
+        _ = coordinator.removeChecklistItem(itemNumber: 2)
+        #expect(list.list(forGroupID: groupID).items.map(\.text) == ["maps"])
+    }
+
+    @Test
+    func aRowRemovedSinceItWasShownIsNotSwappedForAnother() throws {
+        let (context, coordinator, _) = try makeJoinedGroup()
+        let start = nowMs
+        let list = context.groupStore.lists
+        list.merge(addition("water", seed: 1, by: member, atMs: start), intoGroupID: groupID)
+        list.merge(addition("maps", seed: 2, by: member, atMs: start + 1), intoGroupID: groupID)
+        _ = coordinator.showChecklist()
+
+        let removal: GroupListDelta = [listItemID(1): GroupListItemState(removed: GroupListStamp(timestampMs: start + 10, author: member.member.signingKey))]
+        coordinator.handleGroupMessagePayload(try listUpdatePayload(removal, from: member), timestamp: Date())
+        context.clearRecordedEffects()
+
+        guard case .error = coordinator.setChecklistItem(checked: true, itemNumber: 1) else {
+            Issue.record("Expected an error for a row removed since it was shown")
+            return
+        }
+        #expect(list.list(forGroupID: groupID).items.allSatisfy { !$0.isChecked })
+        #expect(context.broadcastPayloads.isEmpty)
+    }
 }

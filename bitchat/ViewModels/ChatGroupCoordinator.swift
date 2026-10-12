@@ -182,6 +182,10 @@ final class ChatGroupCoordinator {
     static let listResendInterval: TimeInterval = 10 * 60
 
     private var lastListSnapshotAt: [Data: Date] = [:]
+    /// Row IDs in the order each group's list was last shown, so `/list
+    /// done 2` means the row that was 2 on screen even if a remote edit
+    /// has shifted the list since.
+    private var shownChecklistItemIDs: [Data: [Data]] = [:]
 
     init(context: any ChatGroupContext) {
         self.context = context
@@ -450,6 +454,7 @@ final class ChatGroupCoordinator {
     func showChecklist() -> CommandResult {
         guard let group = selectedGroup() else { return notInGroupError }
         let items = context.groupStore.lists.list(forGroupID: group.groupID).items
+        shownChecklistItemIDs[group.groupID] = items.map(\.id)
         guard !items.isEmpty else {
             return .success(message: String(localized: "system.group.list.empty", comment: "Reply to /list when the open group's shared list has no rows"))
         }
@@ -790,10 +795,13 @@ private extension ChatGroupCoordinator {
         ))
     }
 
+    /// The row shown as `number`, or nil when that row has since been
+    /// removed, rather than whatever slid into its place.
     func checklistItem(number: Int, in group: BitchatGroup) -> GroupList.Item? {
         let items = context.groupStore.lists.list(forGroupID: group.groupID).items
-        guard number >= 1, number <= items.count else { return nil }
-        return items[number - 1]
+        let ids = shownChecklistItemIDs[group.groupID] ?? items.map(\.id)
+        guard number >= 1, number <= ids.count else { return nil }
+        return items.first { $0.id == ids[number - 1] }
     }
 
     /// Applies a local edit, floods it to the group, and answers with the
