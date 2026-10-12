@@ -23,7 +23,7 @@ final class BoardManager: ObservableObject {
     private let transport: Transport
     /// Keys whose endorsements count as confirmation (verified or vouched
     /// peers). Read per call so a fresh verification shows up immediately.
-    private let trustedSigningKeys: () -> Set<Data>
+    private let trustedSigningKeys: @Sendable () -> Set<Data>
     /// Board broadcast rides the mesh only; absent on other transports.
     private var boardTransport: MeshBoardBroadcasting? { transport as? MeshBoardBroadcasting }
     /// Publishes a bridged kind-1 note (expiring with the board post via
@@ -41,12 +41,15 @@ final class BoardManager: ObservableObject {
     init(
         transport: Transport,
         store: BoardStore = .shared,
-        trustedSigningKeys: (() -> Set<Data>)? = nil,
+        trustedSigningKeys: (@Sendable () -> Set<Data>)? = nil,
         publishToNostr: ((String, String, String, UInt64, Bool) -> String?)? = nil,
         deleteFromNostr: ((String, String) -> Void)? = nil
     ) {
         self.transport = transport
         self.trustedSigningKeys = trustedSigningKeys ?? { [] }
+        if let trustedSigningKeys {
+            store.setTrustedEndorsers(trustedSigningKeys)
+        }
         self.publishToNostr = publishToNostr ?? Self.livePublishToNostr
         self.deleteFromNostr = deleteFromNostr ?? Self.liveDeleteFromNostr
         store.$postsSnapshot
@@ -111,6 +114,7 @@ final class BoardManager: ObservableObject {
         let signingBytes = BoardEndorsementPacket.signingBytes(
             postID: post.postID,
             postAuthorSigningKey: post.authorSigningKey,
+            postDigest: post.digest,
             endorserSigningKey: signingKey,
             endorsedAt: endorsedAt
         )
@@ -121,6 +125,7 @@ final class BoardManager: ObservableObject {
         let endorsement = BoardEndorsementPacket(
             postID: post.postID,
             postAuthorSigningKey: post.authorSigningKey,
+            postDigest: post.digest,
             endorserSigningKey: signingKey,
             endorsedAt: endorsedAt,
             signature: signature

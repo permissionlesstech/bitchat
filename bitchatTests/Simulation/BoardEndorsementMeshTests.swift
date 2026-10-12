@@ -50,12 +50,14 @@ struct BoardEndorsementMeshTests {
         let signingBytes = BoardEndorsementPacket.signingBytes(
             postID: post.postID,
             postAuthorSigningKey: post.authorSigningKey,
+            postDigest: post.digest,
             endorserSigningKey: key,
             endorsedAt: endorsedAt
         )
         return BoardEndorsementPacket(
             postID: post.postID,
             postAuthorSigningKey: post.authorSigningKey,
+            postDigest: post.digest,
             endorserSigningKey: key,
             endorsedAt: endorsedAt,
             signature: try #require(service.noiseSignData(signingBytes))
