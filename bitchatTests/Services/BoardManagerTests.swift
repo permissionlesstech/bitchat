@@ -209,4 +209,20 @@ struct BoardManagerTests {
         let manager = makeManager(trusted: [Curve25519.Signing.PrivateKey().publicKey.rawRepresentation])
         #expect(manager.confirmationCount(for: try makePost()) == 0)
     }
+
+    // MARK: - Notices row label
+
+    @Test func rowLabelAnnouncesConfirmationAfterUrgency() {
+        let label = NoticesView.Strings.rowAccessibilityLabel(author: "scout", content: "bridge out", urgent: true, confirmations: 2)
+        let urgent = NoticesView.Strings.urgentBadge
+        let confirmed = NoticesView.Strings.confirmedBadge(2)
+        #expect(label.hasPrefix("\(urgent), \(confirmed), "))
+        #expect(label.contains("bridge out"))
+    }
+
+    @Test func rowLabelOmitsConfirmationWhenNobodyTrustedConfirmed() {
+        let label = NoticesView.Strings.rowAccessibilityLabel(author: "scout", content: "bridge out", urgent: true)
+        #expect(!label.contains(NoticesView.Strings.confirmedBadge(0)))
+        #expect(label.hasPrefix("\(NoticesView.Strings.urgentBadge), "))
+    }
 }
