@@ -3,8 +3,8 @@
 // bitchat
 //
 // Persistence for private groups: symmetric keys in the keychain, metadata
-// (roster, name, epoch) as protected JSON in Application Support. Both are
-// dropped by the panic wipe.
+// (roster, name, epoch) and shared lists as protected JSON in Application
+// Support. All of it is dropped by the panic wipe.
 //
 // This is free and unencumbered software released into the public domain.
 // For more information, see <https://unlicense.org>
@@ -21,6 +21,9 @@ final class GroupStore: ObservableObject {
     /// All groups this device is a member of, in creation/join order.
     @Published private(set) var groups: [BitchatGroup] = []
 
+    /// Each group's shared checklist; removed with the group.
+    let lists: GroupListStore
+
     private let keychain: KeychainManagerProtocol
     private let fileURL: URL?
 
@@ -28,8 +31,11 @@ final class GroupStore: ObservableObject {
     ///   when `persistsToDisk` is false.
     init(keychain: KeychainManagerProtocol, persistsToDisk: Bool = true, fileURL: URL? = nil) {
         self.keychain = keychain
-        self.fileURL = persistsToDisk ? (fileURL ?? Self.defaultFileURL()) : nil
+        let resolvedURL = persistsToDisk ? (fileURL ?? Self.defaultFileURL()) : nil
+        self.fileURL = resolvedURL
+        self.lists = GroupListStore(fileURL: resolvedURL?.deletingLastPathComponent().appendingPathComponent("lists.json"))
         loadFromDisk()
+        lists.prune(keeping: Set(groups.map(\.groupID)))
     }
 
     // MARK: - Reads
@@ -124,6 +130,7 @@ final class GroupStore: ObservableObject {
     func removeGroup(withID groupID: Data) {
         groups.removeAll { $0.groupID == groupID }
         _ = keychain.deleteIdentityKey(forKey: Self.keychainKey(for: groupID))
+        lists.remove(groupID: groupID)
         persist()
     }
 
@@ -135,6 +142,7 @@ final class GroupStore: ObservableObject {
             _ = keychain.deleteIdentityKey(forKey: Self.keychainKey(for: group.groupID))
         }
         groups.removeAll()
+        lists.wipe()
         if let fileURL {
             try? FileManager.default.removeItem(at: fileURL)
         }
