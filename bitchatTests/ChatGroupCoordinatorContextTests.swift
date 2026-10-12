@@ -8,6 +8,8 @@
 // `MockChatGroupContext.fingerprintsByPeerID` (what `meshFingerprint(for:)`
 // reports for the authenticated session peer). Store-level pinning is
 // covered by `GroupStoreTests`; wire/crypto by `GroupProtocolTests`.
+// The shared-list tests pass real sealed updates between two members'
+// coordinators to check that edits made apart converge.
 //
 
 import CryptoKit
@@ -153,8 +155,8 @@ struct ChatGroupCoordinatorContextTests {
     /// Joins the group through the coordinator (the creator's invite), opens
     /// its chat, and clears the join side effects. Both the creator and the
     /// attacker hold Noise sessions with us.
-    private func makeJoinedGroup() throws -> (MockChatGroupContext, ChatGroupCoordinator, BitchatGroup) {
-        let context = MockChatGroupContext(identity: me)
+    private func makeJoinedGroup(as identity: TestIdentity? = nil) throws -> (MockChatGroupContext, ChatGroupCoordinator, BitchatGroup) {
+        let context = MockChatGroupContext(identity: identity ?? me)
         let coordinator = ChatGroupCoordinator(context: context)
         context.fingerprintsByPeerID[creator.peerID] = creator.fingerprint
         context.fingerprintsByPeerID[attacker.peerID] = attacker.fingerprint
@@ -450,6 +452,58 @@ struct ChatGroupCoordinatorContextTests {
             return
         }
         #expect(context.broadcastPayloads.isEmpty)
+    }
+
+    @Test
+    func membersWhoEditApartConvergeOnceTheirEditsMeet() throws {
+        let (alice, aliceCoordinator, _) = try makeJoinedGroup()
+        let (bob, bobCoordinator, _) = try makeJoinedGroup(as: member)
+
+        // Together: alice starts the list and bob receives it.
+        _ = aliceCoordinator.addChecklistItem("water")
+        _ = aliceCoordinator.addChecklistItem("maps")
+        alice.broadcastPayloads.forEach { bobCoordinator.handleGroupMessagePayload($0, timestamp: Date()) }
+        alice.clearRecordedEffects()
+        bob.clearRecordedEffects()
+        #expect(bob.groupStore.lists.list(forGroupID: groupID) == alice.groupStore.lists.list(forGroupID: groupID))
+
+        // Apart: both edit the same rows with no link between them.
+        _ = aliceCoordinator.setChecklistItem(checked: true, itemNumber: 1)
+        _ = aliceCoordinator.removeChecklistItem(itemNumber: 2)
+        _ = aliceCoordinator.addChecklistItem("stove")
+        _ = bobCoordinator.setChecklistItem(checked: true, itemNumber: 2)
+        _ = bobCoordinator.removeChecklistItem(itemNumber: 1)
+        _ = bobCoordinator.addChecklistItem("bear spray")
+        #expect(alice.groupStore.lists.list(forGroupID: groupID) != bob.groupStore.lists.list(forGroupID: groupID))
+
+        // Back in range: gossip delivers each side's edits, in reverse order.
+        alice.broadcastPayloads.reversed().forEach { bobCoordinator.handleGroupMessagePayload($0, timestamp: Date()) }
+        bob.broadcastPayloads.reversed().forEach { aliceCoordinator.handleGroupMessagePayload($0, timestamp: Date()) }
+
+        let aliceList = alice.groupStore.lists.list(forGroupID: groupID)
+        let bobList = bob.groupStore.lists.list(forGroupID: groupID)
+        #expect(aliceList == bobList)
+        // Each removal sticks, even against the other side's check.
+        #expect(Set(aliceList.items.map(\.text)) == ["stove", "bear spray"])
+    }
+
+    @Test
+    func aSnapshotCatchesUpAMemberWhoMissedEveryEdit() throws {
+        let (alice, aliceCoordinator, _) = try makeJoinedGroup()
+        let (bob, bobCoordinator, _) = try makeJoinedGroup(as: member)
+
+        _ = aliceCoordinator.addChecklistItem("water")
+        _ = aliceCoordinator.addChecklistItem("maps")
+        _ = aliceCoordinator.setChecklistItem(checked: true, itemNumber: 1)
+        _ = aliceCoordinator.removeChecklistItem(itemNumber: 2)
+        alice.clearRecordedEffects()
+
+        aliceCoordinator.broadcastListSnapshot(forGroupID: groupID)
+        let snapshot = try #require(alice.broadcastPayloads.first)
+        bobCoordinator.handleGroupMessagePayload(snapshot, timestamp: Date())
+
+        #expect(bob.groupStore.lists.list(forGroupID: groupID).items == alice.groupStore.lists.list(forGroupID: groupID).items)
+        #expect(bob.localPrivateSystemMessages.isEmpty)
     }
 
     @Test
