@@ -175,6 +175,9 @@ final class ChatGroupCoordinator {
     /// Head start the invite or key update gets over the list snapshot, so
     /// the receiver holds the new epoch key when the snapshot lands.
     private static let listSnapshotDelayNanoseconds: UInt64 = 2_000_000_000
+    /// Members resend after a rotation too, spread out so they don't all
+    /// flood at once.
+    private static let memberSnapshotDelayRange: ClosedRange<UInt64> = 2_000_000_000...5_000_000_000
     /// Floor between snapshots of one group triggered by sessions coming up.
     static let listResendInterval: TimeInterval = 10 * 60
 
@@ -766,6 +769,11 @@ private extension ChatGroupCoordinator {
             context.notifyPrivateMessage(from: inviter, message: notice, peerID: state.asGroup.peerID)
         } else if isInvite == false, let existing, state.epoch > existing.epoch {
             SecureLogger.info("Group '\(state.name)' rotated to epoch \(state.epoch)", category: .session)
+            // The creator may not hold every edit, so members resend too.
+            scheduleListSnapshot(
+                forGroupID: state.groupID,
+                delayNanoseconds: UInt64.random(in: Self.memberSnapshotDelayRange)
+            )
         }
         context.notifyUIChanged()
     }
@@ -807,9 +815,9 @@ private extension ChatGroupCoordinator {
         return showChecklist()
     }
 
-    func scheduleListSnapshot(forGroupID groupID: Data) {
+    func scheduleListSnapshot(forGroupID groupID: Data, delayNanoseconds: UInt64 = listSnapshotDelayNanoseconds) {
         Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: Self.listSnapshotDelayNanoseconds)
+            try? await Task.sleep(nanoseconds: delayNanoseconds)
             self?.broadcastListSnapshot(forGroupID: groupID)
         }
     }
