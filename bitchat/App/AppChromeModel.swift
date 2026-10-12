@@ -36,7 +36,13 @@ final class AppChromeModel: ObservableObject {
     private var prepareForPanic: (@MainActor () -> Void)?
 
     /// Bulletin-board coordinator, created on first use of the board sheet.
-    private(set) lazy var boardManager = BoardManager(transport: chatViewModel.meshService)
+    private(set) lazy var boardManager: BoardManager = {
+        let identityManager = chatViewModel.identityManager
+        return BoardManager(
+            transport: chatViewModel.meshService,
+            trustedSigningKeys: { identityManager.trustedSigningKeys() }
+        )
+    }()
 
     init(
         chatViewModel: ChatViewModel,
