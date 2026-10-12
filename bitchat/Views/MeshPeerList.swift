@@ -38,9 +38,12 @@ struct MeshPeerList: View {
 
     var body: some View {
         let currentIDs = peerListModel.meshRows.map(\.id)
-        let displayIDs = orderedIDs.filter { currentIDs.contains($0) } + currentIDs.filter { !orderedIDs.contains($0) }
+        let currentIDSet = Set(currentIDs)
+        let orderedIDSet = Set(orderedIDs)
+        let displayIDs = orderedIDs.filter { currentIDSet.contains($0) } + currentIDs.filter { !orderedIDSet.contains($0) }
+        let peerByID = Dictionary(peerListModel.meshRows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let peers: [MeshPeerRow] = displayIDs.compactMap { id in
-            peerListModel.meshRows.first(where: { $0.id == id })
+            peerByID[id]
         }
 
         if peerListModel.meshRows.isEmpty {
@@ -234,9 +237,10 @@ struct MeshPeerList: View {
                 orderedIDs = currentIDs
             }
             .onChange(of: currentIDs) { ids in
-                var newOrder = orderedIDs
-                newOrder.removeAll { !ids.contains($0) }
-                for id in ids where !newOrder.contains(id) { newOrder.append(id) }
+                let currentIDSet = Set(ids)
+                var newOrder = orderedIDs.filter { currentIDSet.contains($0) }
+                var knownIDs = Set(newOrder)
+                for id in ids where knownIDs.insert(id).inserted { newOrder.append(id) }
                 if newOrder != orderedIDs { orderedIDs = newOrder }
             }
         }

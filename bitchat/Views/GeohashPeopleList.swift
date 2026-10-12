@@ -34,17 +34,19 @@ struct GeohashPeopleList: View {
         } else {
             let people = peerListModel.geohashPeople
             let currentIDs = people.map(\.id)
+            let currentIDSet = Set(currentIDs)
+            let orderedIDSet = Set(orderedIDs)
+            let personByID = Dictionary(uniqueKeysWithValues: people.map { ($0.id, $0) })
 
-            let displayIDs = orderedIDs.filter { currentIDs.contains($0) } + currentIDs.filter { !orderedIDs.contains($0) }
+            let displayIDs = orderedIDs.filter { currentIDSet.contains($0) } + currentIDs.filter { !orderedIDSet.contains($0) }
             let nonTele = displayIDs.filter { id in
-                !(people.first(where: { $0.id == id })?.isTeleported ?? false)
+                !(personByID[id]?.isTeleported ?? false)
             }
             let tele = displayIDs.filter { id in
-                people.first(where: { $0.id == id })?.isTeleported ?? false
+                personByID[id]?.isTeleported ?? false
             }
             let finalOrder: [String] = nonTele + tele
             let firstID = finalOrder.first
-            let personByID = Dictionary(uniqueKeysWithValues: people.map { ($0.id, $0) })
 
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(finalOrder.filter { personByID[$0] != nil }, id: \.self) { pid in
@@ -147,9 +149,10 @@ struct GeohashPeopleList: View {
                 orderedIDs = currentIDs
             }
             .onChange(of: currentIDs) { ids in
-                var newOrder = orderedIDs
-                newOrder.removeAll { !ids.contains($0) }
-                for id in ids where !newOrder.contains(id) { newOrder.append(id) }
+                let currentIDSet = Set(ids)
+                var newOrder = orderedIDs.filter { currentIDSet.contains($0) }
+                var knownIDs = Set(newOrder)
+                for id in ids where knownIDs.insert(id).inserted { newOrder.append(id) }
                 if newOrder != orderedIDs { orderedIDs = newOrder }
             }
         }
