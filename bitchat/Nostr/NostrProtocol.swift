@@ -883,7 +883,8 @@ struct NostrEvent: Codable {
         ] as [Any]
         
         let data = try JSONSerialization.data(withJSONObject: serialized, options: [.withoutEscapingSlashes])
-        return (data.sha256Fingerprint(), data.sha256Hash())
+        let hash = data.sha256Hash()
+        return (hash.hexEncodedString(), hash)
     }
     
     func jsonString() throws -> String {
