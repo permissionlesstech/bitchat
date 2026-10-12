@@ -346,6 +346,10 @@ private final class TestIdentityManager: SecureIdentityStateManagerProtocol {
         nil
     }
 
+    func trustedSigningKeys() -> Set<Data> {
+        []
+    }
+
     func mostRecentlyVerifiedFingerprints(limit: Int, excluding fingerprint: String) -> [String] {
         []
     }
