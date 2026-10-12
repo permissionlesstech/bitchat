@@ -120,6 +120,9 @@ final class BoardStore {
     private let queue = DispatchQueue(label: "chat.bitchat.board.store")
     private let fileURL: URL?
     private let now: () -> Date
+    /// Signing keys this device trusts, read on `queue` when endorsement
+    /// slots run out (see `setTrustedEndorsers`).
+    private var trustedEndorsers: @Sendable () -> Set<Data> = { [] }
 
     /// - Parameter fileURL: Overrides the on-disk location (tests). Ignored
     ///   when `persistsToDisk` is false.
@@ -127,6 +130,13 @@ final class BoardStore {
         self.now = now
         self.fileURL = persistsToDisk ? (fileURL ?? Self.defaultFileURL()) : nil
         loadFromDisk()
+    }
+
+    /// Lets endorsements from people this device trusts keep a slot when a
+    /// post's (or the store's) endorsement budget is full, so a burst of
+    /// freshly minted keys can't crowd out the confirmations that count.
+    func setTrustedEndorsers(_ provider: @escaping @Sendable () -> Set<Data>) {
+        queue.sync { trustedEndorsers = provider }
     }
 
     // MARK: - Ingest
@@ -355,12 +365,23 @@ final class BoardStore {
         }) else { return .duplicate }
 
         if let target = posts.first(where: { $0.post.postID == endorsement.postID })?.post {
-            guard target.authorSigningKey == endorsement.postAuthorSigningKey else { return .rejected }
-            let stored = endorsements.filter { !$0.isOrphan && $0.endorsement.postID == endorsement.postID }.count
-            // First come keeps the slot: evicting by recency would let a burst
-            // of fresh keys push out endorsements that already counted. A
-            // full post still relays the endorsement for peers with room.
-            guard stored < Limits.maxEndorsementsPerPost else { return .accepted }
+            guard target.authorSigningKey == endorsement.postAuthorSigningKey,
+                  target.digest == endorsement.postDigest else { return .rejected }
+            let stored = endorsements.filter { !$0.isOrphan && $0.endorsement.postID == endorsement.postID }
+            if stored.count >= Limits.maxEndorsementsPerPost {
+                // First come keeps the slot: evicting by recency would let a
+                // burst of fresh keys push out endorsements that already
+                // counted. The one exception is a trusted endorser, who takes
+                // the newest untrusted slot. A full post still relays the
+                // endorsement for peers with room.
+                let trusted = trustedEndorsers()
+                guard trusted.contains(endorsement.endorserSigningKey),
+                      let displaced = endorsements.lastIndex(where: {
+                          !$0.isOrphan && $0.endorsement.postID == endorsement.postID
+                              && !trusted.contains($0.endorsement.endorserSigningKey)
+                      }) else { return .accepted }
+                endorsements.remove(at: displaced)
+            }
             endorsements.append(StoredEndorsement(
                 endorsement: endorsement,
                 packet: packet,
@@ -391,24 +412,31 @@ final class BoardStore {
     }
 
     /// A newly arrived post claims the endorsements that raced ahead of it.
-    /// Ones naming a different author key were never about this post.
+    /// Ones naming a different author key or post digest were never about
+    /// this post. Trusted endorsers are adopted first when there are more
+    /// candidates than slots.
     private func adoptOrphanEndorsementsLocked(for post: BoardPostPacket) {
+        let digest = post.digest
         endorsements.removeAll {
             $0.isOrphan
                 && $0.endorsement.postID == post.postID
-                && $0.endorsement.postAuthorSigningKey != post.authorSigningKey
+                && ($0.endorsement.postAuthorSigningKey != post.authorSigningKey || $0.endorsement.postDigest != digest)
         }
-        var adopted = 0
+        let candidates = endorsements.indices.filter {
+            endorsements[$0].isOrphan && endorsements[$0].endorsement.postID == post.postID
+        }
+        guard !candidates.isEmpty else { return }
+        let trusted = trustedEndorsers()
+        let ordered = candidates.filter { trusted.contains(endorsements[$0].endorsement.endorserSigningKey) }
+            + candidates.filter { !trusted.contains(endorsements[$0].endorsement.endorserSigningKey) }
         var overflow = Set<Data>()
-        for index in endorsements.indices
-        where endorsements[index].isOrphan && endorsements[index].endorsement.postID == post.postID {
-            guard adopted < Limits.maxEndorsementsPerPost else {
+        for (rank, index) in ordered.enumerated() {
+            guard rank < Limits.maxEndorsementsPerPost else {
                 overflow.insert(endorsements[index].endorsement.endorserSigningKey)
                 continue
             }
             endorsements[index].isOrphan = false
             endorsements[index].retainUntil = post.expiresAt
-            adopted += 1
         }
         if !overflow.isEmpty {
             endorsements.removeAll {
@@ -433,14 +461,22 @@ final class BoardStore {
         }
     }
 
-    /// Global cap, oldest received first, orphans before endorsements that
-    /// already count toward a live post.
+    /// Global cap, oldest received first: orphans before endorsements that
+    /// already count toward a live post, and within each, untrusted
+    /// endorsers before trusted ones.
     private func enforceEndorsementCapLocked() {
         let excess = endorsements.count - Limits.maxEndorsements
         guard excess > 0 else { return }
-        let orphanOffsets = endorsements.enumerated().filter { $0.element.isOrphan }.map(\.offset)
-        let matchedOffsets = endorsements.enumerated().filter { !$0.element.isOrphan }.map(\.offset)
-        let drop = Set((orphanOffsets + matchedOffsets).prefix(excess))
+        let trusted = trustedEndorsers()
+        func offsets(orphan: Bool, trusted isTrusted: Bool) -> [Int] {
+            endorsements.enumerated().filter {
+                $0.element.isOrphan == orphan
+                    && trusted.contains($0.element.endorsement.endorserSigningKey) == isTrusted
+            }.map(\.offset)
+        }
+        let evictionOrder = offsets(orphan: true, trusted: false) + offsets(orphan: true, trusted: true)
+            + offsets(orphan: false, trusted: false) + offsets(orphan: false, trusted: true)
+        let drop = Set(evictionOrder.prefix(excess))
         endorsements = endorsements.enumerated().filter { !drop.contains($0.offset) }.map(\.element)
     }
 

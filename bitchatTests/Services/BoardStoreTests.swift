@@ -342,18 +342,22 @@ struct BoardStoreTests {
         of post: BoardPostPacket,
         endorser: Curve25519.Signing.PrivateKey,
         endorsedAt: UInt64,
-        postAuthorKey: Data? = nil
+        postAuthorKey: Data? = nil,
+        postDigest: Data? = nil
     ) throws -> (wire: BoardWire, packet: BitchatPacket) {
         let authorKey = postAuthorKey ?? post.authorSigningKey
+        let digest = postDigest ?? post.digest
         let endorserKey = endorser.publicKey.rawRepresentation
         let endorsement = BoardEndorsementPacket(
             postID: post.postID,
             postAuthorSigningKey: authorKey,
+            postDigest: digest,
             endorserSigningKey: endorserKey,
             endorsedAt: endorsedAt,
             signature: try endorser.signature(for: BoardEndorsementPacket.signingBytes(
                 postID: post.postID,
                 postAuthorSigningKey: authorKey,
+                postDigest: digest,
                 endorserSigningKey: endorserKey,
                 endorsedAt: endorsedAt
             ))
@@ -493,6 +497,87 @@ struct BoardStoreTests {
         let late = try makeEndorsement(of: entry.post, endorser: Curve25519.Signing.PrivateKey(), endorsedAt: baseMs + 100)
         #expect(store.ingest(late.wire, packet: late.packet) == .accepted)
         #expect(store.endorserKeys(forPostID: entry.post.postID) == firstKeys)
+    }
+
+    @Test func trustedEndorserTakesTheNewestUntrustedSlotOnAFullPost() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let trustedEndorser = Curve25519.Signing.PrivateKey()
+        let trustedKey = trustedEndorser.publicKey.rawRepresentation
+        store.setTrustedEndorsers { [trustedKey] }
+        let entry = try makePost(author: Curve25519.Signing.PrivateKey(), createdAt: baseMs)
+        store.ingest(entry.wire, packet: entry.packet)
+
+        var flood: [Data] = []
+        for index in 0..<BoardStore.Limits.maxEndorsementsPerPost {
+            let endorser = Curve25519.Signing.PrivateKey()
+            flood.append(endorser.publicKey.rawRepresentation)
+            let endorsement = try makeEndorsement(of: entry.post, endorser: endorser, endorsedAt: baseMs + UInt64(index))
+            store.ingest(endorsement.wire, packet: endorsement.packet)
+        }
+
+        let trusted = try makeEndorsement(of: entry.post, endorser: trustedEndorser, endorsedAt: baseMs + 100)
+        #expect(store.ingest(trusted.wire, packet: trusted.packet) == .accepted)
+        let stored = store.endorserKeys(forPostID: entry.post.postID)
+        #expect(stored.count == BoardStore.Limits.maxEndorsementsPerPost)
+        #expect(stored == Array(flood.dropLast()) + [trustedKey])
+    }
+
+    @Test func trustedOrphanEndorsersAreAdoptedFirst() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let trustedEndorser = Curve25519.Signing.PrivateKey()
+        let trustedKey = trustedEndorser.publicKey.rawRepresentation
+        store.setTrustedEndorsers { [trustedKey] }
+        let entry = try makePost(author: Curve25519.Signing.PrivateKey(), createdAt: baseMs)
+
+        // More orphans than slots, the trusted one arriving last. The orphan
+        // global cap is larger than the per-post cap, so all of them wait.
+        for index in 0..<BoardStore.Limits.maxEndorsementsPerPost {
+            let endorsement = try makeEndorsement(of: entry.post, endorser: Curve25519.Signing.PrivateKey(), endorsedAt: baseMs + UInt64(index))
+            store.ingest(endorsement.wire, packet: endorsement.packet)
+        }
+        let trusted = try makeEndorsement(of: entry.post, endorser: trustedEndorser, endorsedAt: baseMs + 100)
+        store.ingest(trusted.wire, packet: trusted.packet)
+
+        store.ingest(entry.wire, packet: entry.packet)
+        let stored = store.endorserKeys(forPostID: entry.post.postID)
+        #expect(stored.count == BoardStore.Limits.maxEndorsementsPerPost)
+        #expect(stored.contains(trustedKey))
+    }
+
+    @Test func endorsementOfADifferentVersionOfThePostIsRejected() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let entry = try makePost(author: Curve25519.Signing.PrivateKey(), createdAt: baseMs)
+        store.ingest(entry.wire, packet: entry.packet)
+
+        // Signed for other content under the same ID and author.
+        let endorsement = try makeEndorsement(
+            of: entry.post,
+            endorser: Curve25519.Signing.PrivateKey(),
+            endorsedAt: baseMs + 1,
+            postDigest: Data(repeating: 0xAB, count: BoardWireConstants.postDigestLength)
+        )
+        #expect(store.ingest(endorsement.wire, packet: endorsement.packet) == .rejected)
+        #expect(store.endorserKeys(forPostID: entry.post.postID).isEmpty)
+    }
+
+    @Test func orphanEndorsementOfADifferentVersionIsDroppedWhenThePostLands() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let entry = try makePost(author: Curve25519.Signing.PrivateKey(), createdAt: baseMs)
+        let endorsement = try makeEndorsement(
+            of: entry.post,
+            endorser: Curve25519.Signing.PrivateKey(),
+            endorsedAt: baseMs + 1,
+            postDigest: Data(repeating: 0xAB, count: BoardWireConstants.postDigestLength)
+        )
+        #expect(store.ingest(endorsement.wire, packet: endorsement.packet) == .accepted)
+
+        store.ingest(entry.wire, packet: entry.packet)
+        #expect(store.endorserKeys(forPostID: entry.post.postID).isEmpty)
+        #expect(store.syncCandidates().count == 1)
     }
 
     @Test func orphanEndorsementPerEndorserCapEvictsOldest() throws {

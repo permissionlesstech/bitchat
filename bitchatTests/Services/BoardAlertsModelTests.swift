@@ -224,6 +224,7 @@ struct BoardAlertsModelTests {
         BoardEndorsementPacket(
             postID: post.postID,
             postAuthorSigningKey: post.authorSigningKey,
+            postDigest: post.digest,
             endorserSigningKey: Data(repeating: 9, count: 32),
             endorsedAt: baseMs + 1,
             signature: Data(repeating: 2, count: 64)

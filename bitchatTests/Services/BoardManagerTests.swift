@@ -67,11 +67,13 @@ struct BoardManagerTests {
         return .endorsement(BoardEndorsementPacket(
             postID: post.postID,
             postAuthorSigningKey: post.authorSigningKey,
+            postDigest: post.digest,
             endorserSigningKey: endorserKey,
             endorsedAt: endorsedAt,
             signature: try endorser.signature(for: BoardEndorsementPacket.signingBytes(
                 postID: post.postID,
                 postAuthorSigningKey: post.authorSigningKey,
+                postDigest: post.digest,
                 endorserSigningKey: endorserKey,
                 endorsedAt: endorsedAt
             ))
