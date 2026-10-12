@@ -1,7 +1,7 @@
 import BitFoundation
 import Foundation
 
-struct BLEPendingPrivateMessage: Equatable {
+struct BLEPendingPrivateMessage: Hashable {
     let content: String
     let messageID: String
 }
@@ -27,7 +27,9 @@ struct BLENoiseSessionQueues {
     }
 
     mutating func appendPrivateMessage(content: String, messageID: String, for peerID: PeerID) {
-        privateMessagesByPeerID[peerID, default: []].append(BLEPendingPrivateMessage(content: content, messageID: messageID))
+        let message = BLEPendingPrivateMessage(content: content, messageID: messageID)
+        guard !(privateMessagesByPeerID[peerID]?.contains(message) ?? false) else { return }
+        privateMessagesByPeerID[peerID, default: []].append(message)
     }
 
     mutating func takePrivateMessages(for peerID: PeerID) -> [BLEPendingPrivateMessage] {
@@ -38,7 +40,9 @@ struct BLENoiseSessionQueues {
 
     mutating func prependPrivateMessages(_ messages: [BLEPendingPrivateMessage], for peerID: PeerID) {
         guard !messages.isEmpty else { return }
-        privateMessagesByPeerID[peerID, default: []].insert(contentsOf: messages, at: 0)
+        var seen = Set<BLEPendingPrivateMessage>()
+        privateMessagesByPeerID[peerID] = (messages + (privateMessagesByPeerID[peerID] ?? []))
+            .filter { seen.insert($0).inserted }
     }
 
     mutating func appendTypedPayload(_ payload: Data, transferId: String? = nil, for peerID: PeerID) {

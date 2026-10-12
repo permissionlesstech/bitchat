@@ -5,6 +5,48 @@ import Testing
 
 struct BLENoiseSessionQueuesTests {
     @Test
+    func exactPendingDuplicatesCoalesceWithoutSuppressingDistinctMessagesOrLaterRetries() {
+        let peerID = PeerID(str: "aaaaaaaaaaaaaaaa")
+        let otherPeer = PeerID(str: "bbbbbbbbbbbbbbbb")
+        var queues = BLENoiseSessionQueues()
+
+        queues.appendPrivateMessage(content: "hello", messageID: "m1", for: peerID)
+        queues.appendPrivateMessage(content: "hello", messageID: "m1", for: peerID)
+        queues.appendPrivateMessage(content: "changed", messageID: "m1", for: peerID)
+        queues.appendPrivateMessage(content: "hello", messageID: "m2", for: peerID)
+        queues.appendPrivateMessage(content: "hello", messageID: "m1", for: otherPeer)
+
+        #expect(queues.takePrivateMessages(for: peerID) == [
+            BLEPendingPrivateMessage(content: "hello", messageID: "m1"),
+            BLEPendingPrivateMessage(content: "changed", messageID: "m1"),
+            BLEPendingPrivateMessage(content: "hello", messageID: "m2")
+        ])
+        #expect(queues.takePrivateMessages(for: otherPeer) == [
+            BLEPendingPrivateMessage(content: "hello", messageID: "m1")
+        ])
+
+        queues.appendPrivateMessage(content: "hello", messageID: "m1", for: peerID)
+        #expect(queues.takePrivateMessages(for: peerID) == [
+            BLEPendingPrivateMessage(content: "hello", messageID: "m1")
+        ])
+    }
+
+    @Test
+    func failedPrependCoalescesOverlapsAndKeepsFailedMessagesFirst() {
+        let peerID = PeerID(str: "aaaaaaaaaaaaaaaa")
+        let failed = BLEPendingPrivateMessage(content: "retry", messageID: "m1")
+        var queues = BLENoiseSessionQueues()
+        queues.appendPrivateMessage(content: "new", messageID: "m2", for: peerID)
+        queues.appendPrivateMessage(content: failed.content, messageID: failed.messageID, for: peerID)
+        queues.prependPrivateMessages([failed, failed], for: peerID)
+
+        #expect(queues.takePrivateMessages(for: peerID) == [
+            failed,
+            BLEPendingPrivateMessage(content: "new", messageID: "m2")
+        ])
+    }
+
+    @Test
     func privateMessagesDrainInPeerOrderAndClearOnlyThatPeer() {
         let firstPeer = PeerID(str: "aaaaaaaaaaaaaaaa")
         let secondPeer = PeerID(str: "bbbbbbbbbbbbbbbb")
