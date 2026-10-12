@@ -105,7 +105,15 @@ struct GroupList: Codable, Equatable {
         return Array(ordered.prefix(Self.maxVisibleItems))
     }
 
-    var isEmpty: Bool { items.isEmpty }
+    /// Every record, for a full resend. A removed row only needs its removal
+    /// (it outranks any add or check), so tombstones travel without their
+    /// text and a full list stays well inside one group message.
+    var snapshot: GroupListDelta {
+        records.mapValues { state in
+            guard let removed = state.removed else { return state }
+            return GroupListItemState(removed: removed)
+        }
+    }
 
     /// Joins `delta` into the list and reports whether any row changed.
     @discardableResult
