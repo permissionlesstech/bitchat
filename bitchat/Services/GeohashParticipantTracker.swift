@@ -51,6 +51,7 @@ final class GeohashParticipantTracker: ObservableObject {
 
     /// Timer for periodic refresh
     private var refreshTimer: Timer?
+    private var lastPruneAt: Date?
 
     init(activityCutoff: TimeInterval = -300) { // default 5 minutes
         self.activityCutoff = activityCutoff
@@ -79,9 +80,11 @@ final class GeohashParticipantTracker: ObservableObject {
 
     /// Record activity from a participant in a specific geohash
     func recordParticipant(pubkeyHex: String, geohash: String) {
+        let now = Date()
+        pruneExpiredParticipantsIfNeeded(at: now)
         let key = pubkeyHex.lowercased()
         var map = participants[geohash] ?? [:]
-        map[key] = Date()
+        map[key] = now
         participants[geohash] = map
         
         // Always notify observers that state has changed so counts in UI update
@@ -127,7 +130,20 @@ final class GeohashParticipantTracker: ObservableObject {
 
     /// Refresh the visible people list
     func refresh() {
+        pruneExpiredParticipantsIfNeeded(at: Date())
         visiblePeople = getVisiblePeople()
+    }
+
+    private func pruneExpiredParticipantsIfNeeded(at now: Date) {
+        if let lastPruneAt, now >= lastPruneAt, now.timeIntervalSince(lastPruneAt) < 30 {
+            return
+        }
+        let cutoff = now.addingTimeInterval(activityCutoff)
+        participants = participants.compactMapValues { map in
+            let active = map.filter { $0.value >= cutoff }
+            return active.isEmpty ? nil : active
+        }
+        lastPruneAt = now
     }
 
     /// Start the periodic refresh timer
@@ -149,6 +165,7 @@ final class GeohashParticipantTracker: ObservableObject {
     /// Clear all participant data
     func clear() {
         participants.removeAll()
+        lastPruneAt = nil
         visiblePeople = []
     }
 
