@@ -198,6 +198,8 @@ final class BoardStore {
                 retainUntilOverride: retainUntilOverride,
                 publishSnapshot: publishSnapshot
             )
+        case .endorsement:
+            return .rejected
         }
     }
 
