@@ -176,6 +176,8 @@ final class BoardStore {
             return ingestPostLocked(post, packet: packet, rawPacket: rawPacket, nowMs: nowMs)
         case .tombstone(let tombstone):
             return ingestTombstoneLocked(tombstone, packet: packet, rawPacket: rawPacket, nowMs: nowMs, retainUntilOverride: retainUntilOverride)
+        case .endorsement:
+            return .rejected
         }
     }
 
