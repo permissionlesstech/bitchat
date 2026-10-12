@@ -82,8 +82,12 @@ final class BoardManager: ObservableObject {
     /// strangers are stored and relayed but never counted here.
     func confirmationCount(for post: BoardPostPacket) -> Int {
         guard let endorsers = endorsements[post.postID], !endorsers.isEmpty else { return 0 }
-        let trusted = trustedSigningKeys()
-        return Set(endorsers).filter { trusted.contains($0) && $0 != post.authorSigningKey }.count
+        return Self.trustedConfirmationCount(endorsers: endorsers, trusted: trustedSigningKeys(), author: post.authorSigningKey)
+    }
+
+    /// Distinct trusted endorsers, never counting the author.
+    nonisolated static func trustedConfirmationCount(endorsers: [Data], trusted: Set<Data>, author: Data) -> Int {
+        Set(endorsers).filter { trusted.contains($0) && $0 != author }.count
     }
 
     func hasEndorsed(_ post: BoardPostPacket) -> Bool {

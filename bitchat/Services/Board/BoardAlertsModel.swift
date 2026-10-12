@@ -18,6 +18,8 @@ import Foundation
 ///   arrive together.
 /// - Every other new pin just marks the header's pin icon until the notices
 ///   sheet is opened.
+/// - A recent urgent pin that someone we trust endorses gets one more line
+///   saying so, the first time it happens.
 @MainActor
 final class BoardAlertsModel: ObservableObject {
     struct Dependencies {
@@ -26,6 +28,9 @@ final class BoardAlertsModel: ObservableObject {
         /// Appends a local system line to a scope's chat timeline
         /// (geohash, or "" for mesh chat).
         var emitSystemLine: @MainActor (_ content: String, _ geohash: String) -> Void
+        /// The endorsed post and how many trusted people now confirm it, or
+        /// nil when the post is not known here.
+        var confirmation: @MainActor (BoardEndorsementPacket) -> (post: BoardPostPacket, trustedCount: Int)? = { _ in nil }
         var now: () -> Date = Date.init
         /// Schedules the collapsed flush of pending urgent alerts; tests
         /// inject a synchronous hook.
@@ -51,10 +56,13 @@ final class BoardAlertsModel: ObservableObject {
     /// PostIDs already handled this session, so store eviction/re-sync churn
     /// can't re-alert. Bounded by session wire volume (32-byte strings).
     private var handledPostIDs = Set<String>()
+    /// Urgent posts already announced as confirmed this session.
+    private var confirmedPostIDs = Set<String>()
     private var pendingUrgent: [String: [BoardPostPacket]] = [:]
     private var flushScheduled = false
     private let dependencies: Dependencies
     private var cancellable: AnyCancellable?
+    private var endorsementCancellable: AnyCancellable?
     private var wipeCancellable: AnyCancellable?
 
     private enum Strings {
@@ -73,10 +81,19 @@ final class BoardAlertsModel: ObservableObject {
                 count
             )
         }
+
+        static func urgentConfirmed(author: String, count: Int, content: String) -> String {
+            String(
+                format: String(localized: "notices.alert.urgent_confirmed", defaultValue: "📌 urgent notice from @%1$@ confirmed by people you trust (%2$lld): %3$@", comment: "Local chat line when people the user verified or vouched for endorse an urgent notice. Placeholders: author, number of trusted confirmations, notice text"),
+                locale: .current,
+                author, count, content
+            )
+        }
     }
 
     init(
         arrivals: AnyPublisher<BoardPostPacket, Never>,
+        endorsements: AnyPublisher<BoardEndorsementPacket, Never> = Empty(completeImmediately: false).eraseToAnyPublisher(),
         wipes: AnyPublisher<Void, Never> = Empty(completeImmediately: false).eraseToAnyPublisher(),
         dependencies: Dependencies
     ) {
@@ -85,6 +102,11 @@ final class BoardAlertsModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] post in
                 self?.handleArrival(post)
+            }
+        endorsementCancellable = endorsements
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] endorsement in
+                self?.handleEndorsement(endorsement)
             }
         wipeCancellable = wipes
             .receive(on: DispatchQueue.main)
@@ -110,6 +132,7 @@ final class BoardAlertsModel: ObservableObject {
     func reset() {
         pendingUrgent.removeAll()
         handledPostIDs.removeAll()
+        confirmedPostIDs.removeAll()
         guard !unseenPostScopes.isEmpty else { return }
         unseenPostScopes.removeAll()
     }
@@ -134,6 +157,28 @@ final class BoardAlertsModel: ObservableObject {
                 self?.flushPendingUrgent()
             }
         }
+    }
+
+    /// One line per urgent post, the first time a trusted endorsement lands
+    /// while the post is still recent. Later endorsements only move the
+    /// count shown in the notices sheet.
+    func handleEndorsement(_ endorsement: BoardEndorsementPacket) {
+        let postID = endorsement.postID.hexEncodedString()
+        guard !confirmedPostIDs.contains(postID),
+              let (post, trustedCount) = dependencies.confirmation(endorsement),
+              trustedCount > 0,
+              post.isUrgent,
+              !dependencies.isOwnPost(post) else {
+            return
+        }
+        let createdAt = Date(timeIntervalSince1970: TimeInterval(post.createdAt) / 1000)
+        guard dependencies.now().timeIntervalSince(createdAt) <= Self.inlineRecencyWindow else { return }
+        confirmedPostIDs.insert(postID)
+        let author = post.authorNickname.trimmedOrNilIfEmpty ?? "anon"
+        dependencies.emitSystemLine(
+            Strings.urgentConfirmed(author: author, count: trustedCount, content: Self.truncated(post.content)),
+            post.geohash
+        )
     }
 
     private func flushPendingUrgent() {
