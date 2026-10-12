@@ -81,8 +81,8 @@ protocol MeshGroupMessaging: AnyObject {
     func broadcastGroupMessage(_ envelope: Data)
 }
 
-/// Bulletin board: broadcast a pre-signed board payload (post or
-/// tombstone) so it spreads over relay and gossip sync.
+/// Bulletin board: broadcast a pre-signed board payload (post, tombstone,
+/// or endorsement) so it spreads over relay and gossip sync.
 protocol MeshBoardBroadcasting: AnyObject {
     func sendBoardPayload(_ payload: Data)
 }
