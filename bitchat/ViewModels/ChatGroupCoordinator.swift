@@ -152,6 +152,12 @@ final class ChatGroupCoordinator {
     private unowned let context: any ChatGroupContext
 
     private static let maxGroupNameLength = 40
+    /// How far ahead of our clock a list edit may be stamped before its
+    /// registers are dropped.
+    private static let listMaxFutureSkew: TimeInterval = 10 * 60
+    /// Head start the invite or key update gets over the list snapshot, so
+    /// the receiver holds the new epoch key when the snapshot lands.
+    private static let listSnapshotDelayNanoseconds: UInt64 = 2_000_000_000
 
     init(context: any ChatGroupContext) {
         self.context = context
@@ -251,6 +257,7 @@ final class ChatGroupCoordinator {
 
         context.sendGroupInvitePayload(payload, to: peerID)
         distributeState(payload, group: updated, excluding: [identity.fingerprint], type: .keyUpdate)
+        scheduleListSnapshot(forGroupID: updated.groupID)
 
         return .success(message: String(
             format: String(localized: "system.group.invited", comment: "System message after inviting someone; placeholders are the nickname and the group name"),
@@ -293,6 +300,7 @@ final class ChatGroupCoordinator {
 
         distributeState(payload, group: rotated, excluding: [], type: .keyUpdate)
         notifyRemovedMember(member, rotated: rotated)
+        scheduleListSnapshot(forGroupID: rotated.groupID)
 
         return .success(message: String(
             format: String(localized: "system.group.removed_member", comment: "System message after removing a member and rotating the key; placeholder is the nickname"),
@@ -390,6 +398,44 @@ final class ChatGroupCoordinator {
         context.notifyUIChanged()
     }
 
+    // MARK: - Shared list
+
+    /// Seals a list delta under the group's current epoch and floods it like
+    /// a chat message, so gossip sync backfills it for members who are away.
+    @discardableResult
+    func broadcastListDelta(_ delta: GroupListDelta, groupID: Data) -> Bool {
+        guard let group = context.groupStore.group(withID: groupID),
+              let key = context.groupStore.key(forGroupID: groupID),
+              let update = GroupListCoding.encode(delta) else { return false }
+        do {
+            let payload = try GroupCrypto.sealListUpdate(
+                update,
+                messageID: UUID().uuidString,
+                senderNickname: context.nickname,
+                senderSigningKey: context.mySigningPublicKey(),
+                timestampMs: UInt64(Date().timeIntervalSince1970 * 1000),
+                groupID: group.groupID,
+                epoch: group.epoch,
+                key: key,
+                sign: { [weak context] data in context?.signWithNoiseKey(data) }
+            )
+            context.broadcastGroupMessagePayload(payload)
+            return true
+        } catch {
+            SecureLogger.error("Failed to seal group list update: \(error)", category: .encryption)
+            return false
+        }
+    }
+
+    /// Resends the whole list under the current epoch. Edits sealed under an
+    /// older epoch stop opening once the key rotates, so after a roster
+    /// change this is how a newcomer, and anyone who missed edits, catches up.
+    func broadcastListSnapshot(forGroupID groupID: Data) {
+        let snapshot = context.groupStore.lists.list(forGroupID: groupID).snapshot
+        guard !snapshot.isEmpty else { return }
+        broadcastListDelta(snapshot, groupID: groupID)
+    }
+
     // MARK: - Receiving
 
     /// Decrypt-verify path for an incoming 0x25 broadcast. Drops silently for
@@ -424,6 +470,11 @@ final class ChatGroupCoordinator {
         // blocked member, consistent with every other inbound path.
         guard !context.isFingerprintBlocked(member.fingerprint) else {
             SecureLogger.debug("Dropping group message from blocked member", category: .security)
+            return
+        }
+
+        if let update = plaintext.listUpdate {
+            applyListUpdate(update, from: member, senderNickname: plaintext.senderNickname, group: group)
             return
         }
 
@@ -625,5 +676,57 @@ private extension ChatGroupCoordinator {
             SecureLogger.info("Group '\(state.name)' rotated to epoch \(state.epoch)", category: .session)
         }
         context.notifyUIChanged()
+    }
+
+    func scheduleListSnapshot(forGroupID groupID: Data) {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: Self.listSnapshotDelayNanoseconds)
+            self?.broadcastListSnapshot(forGroupID: groupID)
+        }
+    }
+
+    /// Merges a roster member's list update. Only a merge that changed a row
+    /// is surfaced, so gossip replays and repeated snapshots stay silent.
+    func applyListUpdate(_ update: Data, from member: GroupMember, senderNickname: String, group: BitchatGroup) {
+        let notAfterMs = UInt64(Date().addingTimeInterval(Self.listMaxFutureSkew).timeIntervalSince1970 * 1000)
+        guard let delta = GroupListCoding.decode(update, notAfterMs: notAfterMs) else {
+            SecureLogger.warning("Dropping malformed group list update", category: .security)
+            return
+        }
+        let lists = context.groupStore.lists
+        let before = lists.list(forGroupID: group.groupID)
+        guard lists.merge(delta, intoGroupID: group.groupID) else { return }
+
+        let actor = member.nickname.isEmpty ? senderNickname : member.nickname
+        let after = lists.list(forGroupID: group.groupID)
+        if let line = Self.listActivityLine(before: before, after: after, delta: delta, actor: actor) {
+            context.addLocalPrivateSystemMessage(line, to: group.peerID)
+        }
+        context.notifyUIChanged()
+    }
+
+    /// A chat line describing a single-row edit. Snapshots and other
+    /// multi-row merges only refresh the list.
+    static func listActivityLine(before: GroupList, after: GroupList, delta: GroupListDelta, actor: String) -> String? {
+        guard delta.count == 1, let id = delta.keys.first, let now = after.records[id] else { return nil }
+        let previous = before.records[id]
+        guard let text = now.added?.text ?? previous?.added?.text else { return nil }
+        let wasLive = previous?.isLive ?? false
+        let wasChecked = previous?.checked?.value ?? false
+        let isChecked = now.checked?.value ?? false
+
+        let format: String
+        if now.isLive && !wasLive {
+            format = String(localized: "system.group.list.added", comment: "Group chat line when a member adds a row to the shared list; placeholders are the member and the row text")
+        } else if wasLive && !now.isLive {
+            format = String(localized: "system.group.list.removed", comment: "Group chat line when a member removes a row from the shared list; placeholders are the member and the row text")
+        } else if now.isLive && isChecked != wasChecked {
+            format = isChecked
+                ? String(localized: "system.group.list.checked", comment: "Group chat line when a member checks off a row of the shared list; placeholders are the member and the row text")
+                : String(localized: "system.group.list.unchecked", comment: "Group chat line when a member unchecks a row of the shared list; placeholders are the member and the row text")
+        } else {
+            return nil
+        }
+        return String(format: format, locale: .current, actor, text)
     }
 }

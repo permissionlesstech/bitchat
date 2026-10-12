@@ -49,14 +49,17 @@ private final class MockChatGroupContext: ChatGroupContext {
     func isFingerprintBlocked(_ fingerprint: String) -> Bool { false }
 
     // Transport (outbound state is not exercised by these tests)
+    private(set) var broadcastPayloads: [Data] = []
+
     func sendGroupInvitePayload(_ payload: Data, to peerID: PeerID) {}
     func sendGroupKeyUpdatePayload(_ payload: Data, to peerID: PeerID) {}
-    func broadcastGroupMessagePayload(_ payload: Data) {}
+    func broadcastGroupMessagePayload(_ payload: Data) { broadcastPayloads.append(payload) }
 
     // Conversation intents
     private(set) var removedPrivateChats: [PeerID] = []
     private(set) var endPrivateChatCount = 0
     private(set) var systemMessages: [String] = []
+    private(set) var localPrivateSystemMessages: [(content: String, peerID: PeerID)] = []
 
     @discardableResult
     func appendPrivateMessage(_ message: BitchatMessage, to peerID: PeerID) -> Bool { true }
@@ -65,7 +68,9 @@ private final class MockChatGroupContext: ChatGroupContext {
     func startPrivateChat(with peerID: PeerID) {}
     func endPrivateChat() { endPrivateChatCount += 1 }
     func addSystemMessage(_ content: String) { systemMessages.append(content) }
-    func addLocalPrivateSystemMessage(_ content: String, to peerID: PeerID) {}
+    func addLocalPrivateSystemMessage(_ content: String, to peerID: PeerID) {
+        localPrivateSystemMessages.append((content, peerID))
+    }
     func notifyUIChanged() {}
     func notifyPrivateMessage(from senderName: String, message: String, peerID: PeerID) {}
 
@@ -73,6 +78,8 @@ private final class MockChatGroupContext: ChatGroupContext {
         removedPrivateChats.removeAll()
         endPrivateChatCount = 0
         systemMessages.removeAll()
+        localPrivateSystemMessages.removeAll()
+        broadcastPayloads.removeAll()
     }
 }
 
@@ -298,5 +305,113 @@ struct ChatGroupCoordinatorContextTests {
         )
         coordinator.handleGroupKeyUpdatePayload(from: creator.peerID, payload: staleRemoval)
         expectUnchanged(context, joined: joined)
+    }
+
+    // MARK: Shared list
+
+    private var nowMs: UInt64 { UInt64(Date().timeIntervalSince1970 * 1000) }
+
+    private func listItemID(_ seed: UInt8) -> Data {
+        Data(repeating: seed, count: GroupList.itemIDLength)
+    }
+
+    private func addition(_ text: String, seed: UInt8, by author: TestIdentity, atMs timestampMs: UInt64) -> GroupListDelta {
+        [listItemID(seed): GroupListItemState(added: .init(stamp: GroupListStamp(timestampMs: timestampMs, author: author.member.signingKey), text: text))]
+    }
+
+    /// A list update sealed by `sender` under the joined group's key.
+    private func listUpdatePayload(_ delta: GroupListDelta, from sender: TestIdentity, epoch: UInt32? = nil) throws -> Data {
+        try GroupCrypto.sealListUpdate(
+            try #require(GroupListCoding.encode(delta)),
+            messageID: UUID().uuidString,
+            senderNickname: sender.nickname,
+            senderSigningKey: sender.member.signingKey,
+            timestampMs: nowMs,
+            groupID: groupID,
+            epoch: epoch ?? joinedEpoch,
+            key: groupKey,
+            sign: sender.sign
+        )
+    }
+
+    @Test
+    func memberListEditMergesAndPostsOneLine() throws {
+        let (context, coordinator, joined) = try makeJoinedGroup()
+        let payload = try listUpdatePayload(addition("water", seed: 1, by: member, atMs: nowMs), from: member)
+
+        coordinator.handleGroupMessagePayload(payload, timestamp: Date())
+        #expect(context.groupStore.lists.list(forGroupID: groupID).items.map(\.text) == ["water"])
+        #expect(context.localPrivateSystemMessages.count == 1)
+        #expect(context.localPrivateSystemMessages.first?.peerID == joined.peerID)
+
+        // A gossip replay of the same edit changes nothing and stays quiet.
+        coordinator.handleGroupMessagePayload(payload, timestamp: Date())
+        #expect(context.localPrivateSystemMessages.count == 1)
+    }
+
+    @Test
+    func listEditFromOutsideTheRosterIsDropped() throws {
+        let (context, coordinator, _) = try makeJoinedGroup()
+        // The attacker holds the group key but is not pinned in the roster.
+        let payload = try listUpdatePayload(addition("bogus", seed: 1, by: attacker, atMs: nowMs), from: attacker)
+
+        coordinator.handleGroupMessagePayload(payload, timestamp: Date())
+        #expect(context.groupStore.lists.list(forGroupID: groupID).records.isEmpty)
+        #expect(context.localPrivateSystemMessages.isEmpty)
+    }
+
+    @Test
+    func listEditFromAnOldEpochIsDropped() throws {
+        let (context, coordinator, _) = try makeJoinedGroup()
+        let payload = try listUpdatePayload(addition("stale", seed: 1, by: member, atMs: nowMs), from: member, epoch: joinedEpoch - 1)
+
+        coordinator.handleGroupMessagePayload(payload, timestamp: Date())
+        #expect(context.groupStore.lists.list(forGroupID: groupID).records.isEmpty)
+    }
+
+    @Test
+    func snapshotsMergeWithoutChatLines() throws {
+        let (context, coordinator, _) = try makeJoinedGroup()
+        var snapshot = addition("water", seed: 1, by: creator, atMs: nowMs)
+        snapshot.merge(addition("maps", seed: 2, by: member, atMs: nowMs + 1)) { lhs, _ in lhs }
+
+        coordinator.handleGroupMessagePayload(try listUpdatePayload(snapshot, from: creator), timestamp: Date())
+        #expect(context.groupStore.lists.list(forGroupID: groupID).items.map(\.text) == ["water", "maps"])
+        #expect(context.localPrivateSystemMessages.isEmpty)
+    }
+
+    @Test
+    func farFutureListEditsDoNotLand() throws {
+        let (context, coordinator, _) = try makeJoinedGroup()
+        let dayAhead = nowMs + 24 * 60 * 60 * 1000
+        let payload = try listUpdatePayload(addition("later", seed: 1, by: member, atMs: dayAhead), from: member)
+
+        coordinator.handleGroupMessagePayload(payload, timestamp: Date())
+        #expect(context.groupStore.lists.list(forGroupID: groupID).items.isEmpty)
+    }
+
+    @Test
+    func broadcastListEditOpensForOtherMembers() throws {
+        let (context, coordinator, _) = try makeJoinedGroup()
+        let delta = addition("water", seed: 1, by: me, atMs: nowMs)
+
+        #expect(coordinator.broadcastListDelta(delta, groupID: groupID))
+        let sent = try #require(context.broadcastPayloads.last)
+        let envelope = try #require(GroupMessageEnvelope.decode(sent))
+        let plaintext = try GroupCrypto.openMessage(envelope, key: groupKey)
+        #expect(plaintext.senderSigningKey == me.member.signingKey)
+        let update = try #require(plaintext.listUpdate)
+        #expect(GroupListCoding.decode(update, notAfterMs: .max) == delta)
+    }
+
+    @Test
+    func emptyListsSendNoSnapshot() throws {
+        let (context, coordinator, _) = try makeJoinedGroup()
+        coordinator.broadcastListSnapshot(forGroupID: groupID)
+        #expect(context.broadcastPayloads.isEmpty)
+
+        context.groupStore.lists.merge(addition("water", seed: 1, by: member, atMs: nowMs), intoGroupID: groupID)
+        coordinator.broadcastListSnapshot(forGroupID: groupID)
+        #expect(context.broadcastPayloads.count == 1)
     }
 }
