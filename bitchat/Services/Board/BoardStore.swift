@@ -172,6 +172,15 @@ final class BoardStore {
         }
     }
 
+    /// The live post with this ID, if any.
+    func post(withID postID: Data) -> BoardPostPacket? {
+        let nowMs = currentMs()
+        return queue.sync {
+            pruneExpiredLocked(nowMs: nowMs)
+            return posts.first { $0.post.postID == postID }?.post
+        }
+    }
+
     /// Endorser signing keys stored for one post, oldest endorsement first.
     func endorserKeys(forPostID postID: Data) -> [Data] {
         let nowMs = currentMs()
