@@ -443,7 +443,7 @@ private struct ContentPeopleListView: View {
                 // the ScrollView centers it — headers and empty states
                 // floated mid-screen on iPhone.
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .id(peerListModel.renderID)
+                .id(ConversationID(channelID: locationChannelsModel.selectedChannel))
             }
         }
         .sheet(isPresented: $showVerifySheet) {

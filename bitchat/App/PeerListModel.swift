@@ -63,7 +63,6 @@ final class PeerListModel: ObservableObject {
     @Published private(set) var reachableMeshPeerCount = 0
     @Published private(set) var connectedMeshPeerCount = 0
     @Published private(set) var visibleGeohashPeerCount = 0
-    @Published private(set) var renderID = ""
 
     private let chatViewModel: ChatViewModel
     private let conversations: ConversationStore
@@ -274,20 +273,6 @@ final class PeerListModel: ObservableObject {
         visibleGeohashPeerCount = geohashPeople.count
         self.groupRows = groupRows
         self.recentChatRows = recentChatRows
-        renderID = (
-            meshRows.map {
-                "\($0.id)-\($0.displayName)-\($0.isConnected)-\($0.isReachable)-\($0.hasUnread)-\($0.isFavorite)-\($0.isBlocked)"
-            } +
-            geohashPeople.map {
-                "geo:\($0.id)-\($0.isTeleported)-\($0.isBlocked)-\($0.displayName)"
-            } +
-            groupRows.map {
-                "group:\($0.id)-\($0.name)-\($0.memberCount)-\($0.hasUnread)"
-            } +
-            recentChatRows.map {
-                "chat:\($0.id)-\($0.displayName)-\($0.hasUnread)"
-            }
-        ).joined(separator: "|")
     }
 
     /// Direct conversations with people absent from the rosters above:

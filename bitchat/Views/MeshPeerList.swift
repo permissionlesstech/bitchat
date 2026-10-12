@@ -54,8 +54,7 @@ struct MeshPeerList: View {
                 .padding(.vertical, 4)
         } else {
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(0..<peers.count, id: \.self) { idx in
-                    let peer = peers[idx]
+                ForEach(peers) { peer in
                     let isMe = peer.isMe
                     HStack(spacing: 4) {
                         let assigned = peerListModel.colorForMeshPeer(id: peer.peerID, isDark: colorScheme == .dark)
