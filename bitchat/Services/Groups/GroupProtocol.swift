@@ -418,12 +418,25 @@ struct GroupMessagePlaintext: Equatable {
 
 // MARK: - Shared list wire form
 
-/// Binary form of a `GroupListDelta`, carried sealed inside a group message:
-/// version byte, 16-bit record count, then per record the item ID, a flags
-/// byte naming the registers present, and each register as a big-endian
-/// timestamp, the author's 32-byte signing key, and its value.
+/// A decoded list update: one person's edit, or a full resend of someone's
+/// list that should merge without posting activity lines.
+struct GroupListUpdate: Equatable {
+    let delta: GroupListDelta
+    let isSnapshot: Bool
+}
+
+/// Binary form of a `GroupListUpdate`, carried sealed inside a group message:
+/// version byte, kind byte (edit or snapshot), 16-bit record count, then per
+/// record the item ID, a flags byte naming the registers present, and each
+/// register as a big-endian timestamp, the author's 32-byte signing key, and
+/// its value.
 enum GroupListCoding {
     static let version: UInt8 = 1
+
+    private enum Kind {
+        static let edit: UInt8 = 0
+        static let snapshot: UInt8 = 1
+    }
 
     private enum Flag {
         static let added: UInt8 = 0x01
@@ -434,9 +447,9 @@ enum GroupListCoding {
 
     private static let authorLength = 32
 
-    static func encode(_ delta: GroupListDelta) -> Data? {
+    static func encode(_ delta: GroupListDelta, isSnapshot: Bool = false) -> Data? {
         guard !delta.isEmpty, delta.count <= GroupList.maxRecords else { return nil }
-        var out = Data([version])
+        var out = Data([version, isSnapshot ? Kind.snapshot : Kind.edit])
         appendUInt16(UInt16(delta.count), to: &out)
         // Sorted so the same delta always encodes to the same bytes.
         for (id, state) in delta.sorted(by: { $0.key.lexicographicallyPrecedes($1.key) }) {
@@ -467,9 +480,10 @@ enum GroupListCoding {
     /// Decodes a delta, rejecting anything malformed outright. Registers
     /// stamped after `notAfterMs` are dropped: a future-dated register would
     /// otherwise win every later edit to its row.
-    static func decode(_ data: Data, notAfterMs: UInt64) -> GroupListDelta? {
+    static func decode(_ data: Data, notAfterMs: UInt64) -> GroupListUpdate? {
         var reader = Reader(data: data)
         guard reader.byte() == version,
+              let kind = reader.byte(), kind == Kind.edit || kind == Kind.snapshot,
               let count = reader.uint16(),
               count > 0, Int(count) <= GroupList.maxRecords else { return nil }
         var delta: GroupListDelta = [:]
@@ -504,7 +518,7 @@ enum GroupListCoding {
             delta[id] = delta[id].map { $0.merged(with: state) } ?? state
         }
         guard reader.isAtEnd else { return nil }
-        return delta
+        return GroupListUpdate(delta: delta, isSnapshot: kind == Kind.snapshot)
     }
 
     private static func appendUInt16(_ value: UInt16, to out: inout Data) {

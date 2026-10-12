@@ -44,7 +44,17 @@ struct GroupListWireTests {
     func deltaRoundTripsAndEncodesDeterministically() throws {
         let encoded = try #require(GroupListCoding.encode(sampleDelta))
         #expect(GroupListCoding.encode(sampleDelta) == encoded)
-        #expect(GroupListCoding.decode(encoded, notAfterMs: farFuture) == sampleDelta)
+        #expect(GroupListCoding.decode(encoded, notAfterMs: farFuture) == GroupListUpdate(delta: sampleDelta, isSnapshot: false))
+    }
+
+    @Test
+    func snapshotsAreMarkedAsSuch() throws {
+        let encoded = try #require(GroupListCoding.encode(sampleDelta, isSnapshot: true))
+        #expect(GroupListCoding.decode(encoded, notAfterMs: farFuture) == GroupListUpdate(delta: sampleDelta, isSnapshot: true))
+
+        var unknownKind = encoded
+        unknownKind[unknownKind.startIndex + 1] = 7
+        #expect(GroupListCoding.decode(unknownKind, notAfterMs: farFuture) == nil)
     }
 
     @Test
@@ -60,12 +70,12 @@ struct GroupListWireTests {
         #expect(GroupListCoding.decode(badVersion, notAfterMs: farFuture) == nil)
 
         // Flags of the first record (sorted: itemID(1)) sit after version,
-        // count, and the 16-byte ID.
+        // kind, count, and the 16-byte ID.
         var unknownFlag = encoded
-        unknownFlag[unknownFlag.startIndex + 3 + 16] |= 0x80
+        unknownFlag[unknownFlag.startIndex + 4 + 16] |= 0x80
         #expect(GroupListCoding.decode(unknownFlag, notAfterMs: farFuture) == nil)
 
-        #expect(GroupListCoding.decode(Data([GroupListCoding.version, 0, 0]), notAfterMs: farFuture) == nil)
+        #expect(GroupListCoding.decode(Data([GroupListCoding.version, 0, 0, 0]), notAfterMs: farFuture) == nil)
     }
 
     @Test
@@ -81,7 +91,7 @@ struct GroupListWireTests {
     @Test
     func futureDatedRegistersAreDropped() throws {
         let encoded = try #require(GroupListCoding.encode(sampleDelta))
-        let decoded = try #require(GroupListCoding.decode(encoded, notAfterMs: 15))
+        let decoded = try #require(GroupListCoding.decode(encoded, notAfterMs: 15)?.delta)
         #expect(decoded[itemID(1)]?.added != nil)
         #expect(decoded[itemID(1)]?.checked == nil)
         #expect(decoded[itemID(2)]?.removed == nil)
@@ -103,13 +113,13 @@ struct GroupListWireTests {
         list.merge(delta)
         #expect(list.items.count == GroupList.maxVisibleItems)
 
-        let encoded = try #require(GroupListCoding.encode(list.snapshot))
+        let encoded = try #require(GroupListCoding.encode(list.snapshot, isSnapshot: true))
         // A v1 frame carries 65,535 bytes; leave room for the inner TLVs,
         // the AEAD tag, and the envelope.
         #expect(encoded.count < 60_000)
 
         var restored = GroupList()
-        restored.merge(try #require(GroupListCoding.decode(encoded, notAfterMs: farFuture)))
+        restored.merge(try #require(GroupListCoding.decode(encoded, notAfterMs: farFuture)?.delta))
         #expect(restored.items == list.items)
     }
 

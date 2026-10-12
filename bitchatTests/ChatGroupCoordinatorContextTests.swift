@@ -322,9 +322,9 @@ struct ChatGroupCoordinatorContextTests {
     }
 
     /// A list update sealed by `sender` under the joined group's key.
-    private func listUpdatePayload(_ delta: GroupListDelta, from sender: TestIdentity, epoch: UInt32? = nil) throws -> Data {
+    private func listUpdatePayload(_ delta: GroupListDelta, from sender: TestIdentity, epoch: UInt32? = nil, isSnapshot: Bool = false) throws -> Data {
         try GroupCrypto.sealListUpdate(
-            try #require(GroupListCoding.encode(delta)),
+            try #require(GroupListCoding.encode(delta, isSnapshot: isSnapshot)),
             messageID: UUID().uuidString,
             senderNickname: sender.nickname,
             senderSigningKey: sender.member.signingKey,
@@ -383,6 +383,16 @@ struct ChatGroupCoordinatorContextTests {
     }
 
     @Test
+    func aOneRowSnapshotStaysQuiet() throws {
+        let (context, coordinator, _) = try makeJoinedGroup()
+        let snapshot = addition("water", seed: 1, by: creator, atMs: nowMs)
+
+        coordinator.handleGroupMessagePayload(try listUpdatePayload(snapshot, from: creator, isSnapshot: true), timestamp: Date())
+        #expect(context.groupStore.lists.list(forGroupID: groupID).items.map(\.text) == ["water"])
+        #expect(context.localPrivateSystemMessages.isEmpty)
+    }
+
+    @Test
     func farFutureListEditsDoNotLand() throws {
         let (context, coordinator, _) = try makeJoinedGroup()
         let dayAhead = nowMs + 24 * 60 * 60 * 1000
@@ -403,7 +413,7 @@ struct ChatGroupCoordinatorContextTests {
         let plaintext = try GroupCrypto.openMessage(envelope, key: groupKey)
         #expect(plaintext.senderSigningKey == me.member.signingKey)
         let update = try #require(plaintext.listUpdate)
-        #expect(GroupListCoding.decode(update, notAfterMs: .max) == delta)
+        #expect(GroupListCoding.decode(update, notAfterMs: .max) == GroupListUpdate(delta: delta, isSnapshot: false))
     }
 
     private func successMessage(_ result: CommandResult) -> String? {

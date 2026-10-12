@@ -467,10 +467,10 @@ final class ChatGroupCoordinator {
     /// Seals a list delta under the group's current epoch and floods it like
     /// a chat message, so gossip sync backfills it for members who are away.
     @discardableResult
-    func broadcastListDelta(_ delta: GroupListDelta, groupID: Data) -> Bool {
+    func broadcastListDelta(_ delta: GroupListDelta, groupID: Data, isSnapshot: Bool = false) -> Bool {
         guard let group = context.groupStore.group(withID: groupID),
               let key = context.groupStore.key(forGroupID: groupID),
-              let update = GroupListCoding.encode(delta) else { return false }
+              let update = GroupListCoding.encode(delta, isSnapshot: isSnapshot) else { return false }
         do {
             let payload = try GroupCrypto.sealListUpdate(
                 update,
@@ -497,7 +497,7 @@ final class ChatGroupCoordinator {
     func broadcastListSnapshot(forGroupID groupID: Data) {
         let snapshot = context.groupStore.lists.list(forGroupID: groupID).snapshot
         guard !snapshot.isEmpty else { return }
-        broadcastListDelta(snapshot, groupID: groupID)
+        broadcastListDelta(snapshot, groupID: groupID, isSnapshot: true)
     }
 
     // MARK: - Receiving
@@ -790,24 +790,27 @@ private extension ChatGroupCoordinator {
     /// is surfaced, so gossip replays and repeated snapshots stay silent.
     func applyListUpdate(_ update: Data, from member: GroupMember, senderNickname: String, group: BitchatGroup) {
         let notAfterMs = UInt64(Date().addingTimeInterval(Self.listMaxFutureSkew).timeIntervalSince1970 * 1000)
-        guard let delta = GroupListCoding.decode(update, notAfterMs: notAfterMs) else {
+        guard let decoded = GroupListCoding.decode(update, notAfterMs: notAfterMs) else {
             SecureLogger.warning("Dropping malformed group list update", category: .security)
             return
         }
         let lists = context.groupStore.lists
         let before = lists.list(forGroupID: group.groupID)
-        guard lists.merge(delta, intoGroupID: group.groupID) else { return }
+        guard lists.merge(decoded.delta, intoGroupID: group.groupID) else { return }
 
-        let actor = member.nickname.isEmpty ? senderNickname : member.nickname
-        let after = lists.list(forGroupID: group.groupID)
-        if let line = Self.listActivityLine(before: before, after: after, delta: delta, actor: actor) {
-            context.addLocalPrivateSystemMessage(line, to: group.peerID)
+        // A resend only catches us up; it never reads as someone's edit.
+        if !decoded.isSnapshot {
+            let actor = member.nickname.isEmpty ? senderNickname : member.nickname
+            let after = lists.list(forGroupID: group.groupID)
+            if let line = Self.listActivityLine(before: before, after: after, delta: decoded.delta, actor: actor) {
+                context.addLocalPrivateSystemMessage(line, to: group.peerID)
+            }
         }
         context.notifyUIChanged()
     }
 
-    /// A chat line describing a single-row edit. Snapshots and other
-    /// multi-row merges only refresh the list.
+    /// A chat line describing a single-row edit. Multi-row merges only
+    /// refresh the list.
     static func listActivityLine(before: GroupList, after: GroupList, delta: GroupListDelta, actor: String) -> String? {
         guard delta.count == 1, let id = delta.keys.first, let now = after.records[id] else { return nil }
         let previous = before.records[id]
