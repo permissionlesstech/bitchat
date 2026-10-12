@@ -75,6 +75,7 @@ private final class MockChatGroupContext: ChatGroupContext {
     }
     func notifyUIChanged() {}
     func notifyPrivateMessage(from senderName: String, message: String, peerID: PeerID) {}
+    func addPeerAuthenticatedObserver(_ handler: @escaping (PeerID, String) -> Void) {}
 
     func clearRecordedEffects() {
         removedPrivateChats.removeAll()
@@ -525,5 +526,34 @@ struct ChatGroupCoordinatorContextTests {
         context.groupStore.lists.merge(addition("water", seed: 1, by: member, atMs: nowMs), intoGroupID: groupID)
         coordinator.broadcastListSnapshot(forGroupID: groupID)
         #expect(context.broadcastPayloads.count == 1)
+    }
+
+    @Test
+    func aMemberComingBackGetsTheListResentAtMostEveryTenMinutes() throws {
+        let (context, coordinator, _) = try makeJoinedGroup()
+        let start = Date()
+
+        coordinator.memberSessionEstablished(fingerprint: member.fingerprint, now: start)
+        #expect(context.broadcastPayloads.isEmpty) // nothing on the list yet
+
+        context.groupStore.lists.merge(addition("water", seed: 1, by: member, atMs: nowMs), intoGroupID: groupID)
+        coordinator.memberSessionEstablished(fingerprint: attacker.fingerprint, now: start)
+        coordinator.memberSessionEstablished(fingerprint: me.fingerprint, now: start)
+        #expect(context.broadcastPayloads.isEmpty) // not a fellow member
+
+        coordinator.memberSessionEstablished(fingerprint: member.fingerprint, now: start)
+        #expect(context.broadcastPayloads.count == 1)
+        coordinator.memberSessionEstablished(fingerprint: creator.fingerprint, now: start.addingTimeInterval(60))
+        #expect(context.broadcastPayloads.count == 1)
+        coordinator.memberSessionEstablished(
+            fingerprint: creator.fingerprint,
+            now: start.addingTimeInterval(ChatGroupCoordinator.listResendInterval + 1)
+        )
+        #expect(context.broadcastPayloads.count == 2)
+
+        let sent = try #require(context.broadcastPayloads.last)
+        let envelope = try #require(GroupMessageEnvelope.decode(sent))
+        let update = try #require(try GroupCrypto.openMessage(envelope, key: groupKey).listUpdate)
+        #expect(GroupListCoding.decode(update, notAfterMs: .max)?.isSnapshot == true)
     }
 }

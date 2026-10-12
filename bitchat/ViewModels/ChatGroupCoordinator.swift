@@ -54,6 +54,7 @@ protocol ChatGroupContext: AnyObject {
     func addLocalPrivateSystemMessage(_ content: String, to peerID: PeerID)
     func notifyUIChanged()
     func notifyPrivateMessage(from senderName: String, message: String, peerID: PeerID)
+    func addPeerAuthenticatedObserver(_ handler: @escaping (PeerID, String) -> Void)
 }
 
 extension ChatViewModel: ChatGroupContext {
@@ -174,9 +175,36 @@ final class ChatGroupCoordinator {
     /// Head start the invite or key update gets over the list snapshot, so
     /// the receiver holds the new epoch key when the snapshot lands.
     private static let listSnapshotDelayNanoseconds: UInt64 = 2_000_000_000
+    /// Floor between snapshots of one group triggered by sessions coming up.
+    static let listResendInterval: TimeInterval = 10 * 60
+
+    private var lastListSnapshotAt: [Data: Date] = [:]
 
     init(context: any ChatGroupContext) {
         self.context = context
+    }
+
+    /// Registers the session-established hook; call once at bootstrap.
+    func setupNoiseCallbacks() {
+        context.addPeerAuthenticatedObserver { [weak self] _, fingerprint in
+            DispatchQueue.main.async { [weak self] in
+                self?.memberSessionEstablished(fingerprint: fingerprint)
+            }
+        }
+    }
+
+    /// Group messages aren't kept across relaunches, so a member coming back
+    /// may have missed edits that gossip no longer holds for us. When a
+    /// fellow member's session comes up, resend each shared list, at most
+    /// once per group per `listResendInterval`.
+    func memberSessionEstablished(fingerprint: String, now: Date = Date()) {
+        guard fingerprint != context.myNoiseFingerprint() else { return }
+        for group in context.groupStore.groups where group.members.contains(where: { $0.fingerprint == fingerprint }) {
+            if let last = lastListSnapshotAt[group.groupID], now.timeIntervalSince(last) < Self.listResendInterval {
+                continue
+            }
+            broadcastListSnapshot(forGroupID: group.groupID, now: now)
+        }
     }
 
     // MARK: - Commands
@@ -494,10 +522,10 @@ final class ChatGroupCoordinator {
     /// Resends the whole list under the current epoch. Edits sealed under an
     /// older epoch stop opening once the key rotates, so after a roster
     /// change this is how a newcomer, and anyone who missed edits, catches up.
-    func broadcastListSnapshot(forGroupID groupID: Data) {
+    func broadcastListSnapshot(forGroupID groupID: Data, now: Date = Date()) {
         let snapshot = context.groupStore.lists.list(forGroupID: groupID).snapshot
-        guard !snapshot.isEmpty else { return }
-        broadcastListDelta(snapshot, groupID: groupID, isSnapshot: true)
+        guard !snapshot.isEmpty, broadcastListDelta(snapshot, groupID: groupID, isSnapshot: true) else { return }
+        lastListSnapshotAt[groupID] = now
     }
 
     // MARK: - Receiving

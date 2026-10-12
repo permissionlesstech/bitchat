@@ -1965,6 +1965,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     func setupNoiseCallbacks() {
         verificationCoordinator.setupNoiseCallbacks()
         vouchCoordinator.setupNoiseCallbacks()
+        groupCoordinator.setupNoiseCallbacks()
     }
 
     /// Whether the fingerprint currently counts as vouched (≥1 valid vouch
