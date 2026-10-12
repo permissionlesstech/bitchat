@@ -93,6 +93,7 @@ final class BoardStore {
     private let queue = DispatchQueue(label: "chat.bitchat.board.store")
     private let fileURL: URL?
     private let now: () -> Date
+    private var isRestoring = false
 
     /// - Parameter fileURL: Overrides the on-disk location (tests). Ignored
     ///   when `persistsToDisk` is false.
@@ -299,6 +300,7 @@ final class BoardStore {
     }
 
     private func publishSnapshotLocked() {
+        guard !isRestoring else { return }
         let snapshot = posts.map(\.post)
         DispatchQueue.main.async { [weak self] in
             self?.postsSnapshot = snapshot
@@ -343,6 +345,11 @@ final class BoardStore {
         }
         let nowMs = currentMs()
         queue.sync {
+            isRestoring = true
+            defer {
+                isRestoring = false
+                publishSnapshotLocked()
+            }
             for entry in payloads {
                 guard let packet = BitchatPacket.from(entry.packet),
                       packet.type == MessageType.boardPost.rawValue,
@@ -350,7 +357,6 @@ final class BoardStore {
                       wire.verifySignature() else { continue }
                 _ = ingestLocked(wire, packet: packet, rawPacket: entry.packet, nowMs: nowMs, retainUntilOverride: entry.retainUntil)
             }
-            publishSnapshotLocked()
         }
     }
 

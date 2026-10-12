@@ -7,6 +7,7 @@
 //
 
 import BitFoundation
+import Combine
 import CryptoKit
 import Foundation
 import Testing
@@ -337,6 +338,42 @@ struct BoardStoreTests {
     }
 
     // MARK: - Persistence and wipe
+
+    @Test @MainActor
+    func restorePublishesOnlyFinalSnapshotAndLiveIngestionStillPublishes() async throws {
+        let fileURL = tempFileURL()
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let clock = MutableClock(now: baseDate)
+        let author = Curve25519.Signing.PrivateKey()
+        let first = makeStore(clock: clock, fileURL: fileURL)
+        for index in 0..<3 {
+            let entry = try makePost(author: author, createdAt: baseMs + UInt64(index))
+            #expect(first.ingest(entry.wire, packet: entry.packet) == .accepted)
+        }
+
+        // Main-actor initialization lets us subscribe before queued restore
+        // publications run; exclude the property's initial empty value.
+        let restored = makeStore(clock: clock, fileURL: fileURL)
+        var snapshots: [[Data]] = []
+        let subscription = restored.$postsSnapshot.dropFirst().sink { posts in
+            snapshots.append(posts.map(\.postID))
+        }
+        defer { subscription.cancel() }
+        let expectedIDs = restored.posts(forGeohash: "9q8yy").map(\.postID)
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+        #expect(snapshots == [expectedIDs])
+
+        snapshots.removeAll()
+        let live = try makePost(author: author, createdAt: baseMs + 3)
+        #expect(restored.ingest(live.wire, packet: live.packet) == .accepted)
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+        #expect(snapshots.count == 1)
+        #expect(snapshots.first?.contains(live.post.postID) == true)
+    }
 
     @Test func persistsAcrossRestart() throws {
         let fileURL = tempFileURL()
