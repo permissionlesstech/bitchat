@@ -9,6 +9,7 @@ struct BLEOutboundFragmentTransferRequest {
     let transferId: String?
     let requireDirectPeerLink: Bool
     let requireNoiseAuthenticatedPeerLink: Bool
+    private let implicitContentKey: String?
 
     init(
         packet: BitchatPacket,
@@ -26,18 +27,24 @@ struct BLEOutboundFragmentTransferRequest {
         self.transferId = transferId
         self.requireDirectPeerLink = requireDirectPeerLink
         self.requireNoiseAuthenticatedPeerLink = requireNoiseAuthenticatedPeerLink
+        // Implicit file requests always need a digest when submitted. Explicit
+        // requests also serve planner-only preflight, so keep their hashing lazy.
+        if transferId == nil, packet.type == MessageType.fileTransfer.rawValue {
+            implicitContentKey = packet.payload.sha256Hex()
+        } else {
+            implicitContentKey = nil
+        }
     }
 
     var resolvedTransferId: String? {
-        if let transferId { return transferId }
-        guard packet.type == MessageType.fileTransfer.rawValue else { return nil }
-        return packet.payload.sha256Hex()
+        transferId ?? implicitContentKey
     }
 
     /// Content identity independent of the caller-chosen transfer ID: the
     /// same file resent through another path (gossip-sync replay, retry)
     /// arrives with a different explicit transferId but identical payload.
     var contentKey: String? {
+        if transferId == nil { return implicitContentKey }
         guard packet.type == MessageType.fileTransfer.rawValue else { return nil }
         return packet.payload.sha256Hex()
     }
