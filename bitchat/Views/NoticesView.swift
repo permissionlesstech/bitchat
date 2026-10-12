@@ -248,6 +248,7 @@ struct NoticesView: View {
         static let placeholder = String(localized: "board.compose.placeholder", defaultValue: "post a notice…", comment: "Placeholder for the board composer text field")
         static let send = String(localized: "board.accessibility.post", defaultValue: "Post notice", comment: "Accessibility label for the board post button")
         static let deleteAction = String(localized: "board.action.delete", defaultValue: "delete", comment: "Delete action for own board posts")
+        static let confirmAction = String(localized: "board.action.confirm", defaultValue: "confirm", comment: "Action to vouch for someone else's urgent board post; people who verified you see it as a confirmation")
         static let expiryLabel = String(localized: "board.compose.expiry", defaultValue: "expires in", comment: "Label for the board post expiry picker")
         static let permanentOption = String(localized: "notices.expiry.permanent", defaultValue: "permanent", comment: "Accessibility label for the ∞ (never expires) option in the geo notes expiry picker")
         static let closeHint = String(localized: "notices.accessibility.close", defaultValue: "Close notices", comment: "Accessibility label for the notices close button")
@@ -282,13 +283,24 @@ struct NoticesView: View {
             )
         }
 
-        static func rowAccessibilityLabel(author: String, content: String, urgent: Bool) -> String {
+        static func confirmedBadge(_ count: Int) -> String {
+            String(
+                format: String(localized: "board.confirmed_badge", defaultValue: "confirmed (%lld)", comment: "Badge on an urgent board post endorsed by people the user verified or vouched for; placeholder is how many"),
+                locale: .current,
+                count
+            )
+        }
+
+        static func rowAccessibilityLabel(author: String, content: String, urgent: Bool, confirmations: Int = 0) -> String {
             let base = String(
                 format: String(localized: "board.accessibility.post_row", defaultValue: "Notice from %@: %@", comment: "Accessibility label for a board post row"),
                 locale: .current,
                 author, content
             )
-            return urgent ? "\(urgentBadge), \(base)" : base
+            var prefix: [String] = []
+            if urgent { prefix.append(urgentBadge) }
+            if confirmations > 0 { prefix.append(confirmedBadge(confirmations)) }
+            return prefix.isEmpty ? base : (prefix + [base]).joined(separator: ", ")
         }
     }
 
@@ -599,7 +611,7 @@ private struct GeoNoticesList: View {
 private struct NoticesList: View {
     let items: [NoticeItem]
     let showsSource: Bool
-    let board: BoardManager
+    @ObservedObject var board: BoardManager
     let notesManager: LocationNotesManager?
 
     @ThemedPalette private var palette
@@ -722,8 +734,25 @@ private struct NoticesList: View {
         }
     }
 
+    private func confirmations(_ item: NoticeItem) -> Int {
+        guard case .board(let post) = item.source else { return 0 }
+        return board.confirmationCount(for: post)
+    }
+
+    private func canEndorse(_ item: NoticeItem) -> Bool {
+        guard case .board(let post) = item.source else { return false }
+        return board.canEndorse(post)
+    }
+
+    private func endorse(_ item: NoticeItem) {
+        guard case .board(let post) = item.source else { return }
+        board.endorsePost(post)
+    }
+
     private func row(_ item: NoticeItem) -> some View {
         let isOwn = canDelete(item)
+        let confirmed = confirmations(item)
+        let endorsable = canEndorse(item)
         return VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
                 if item.isUrgent {
@@ -733,6 +762,14 @@ private struct NoticesList: View {
                     Text(Strings.urgentBadge)
                         .bitchatFont(size: 11, weight: .semibold)
                         .foregroundColor(palette.alertRed)
+                }
+                if confirmed > 0 {
+                    Image(systemName: "checkmark.shield.fill")
+                        .font(.bitchatSystem(size: 11))
+                        .foregroundColor(palette.accent)
+                    Text(Strings.confirmedBadge(confirmed))
+                        .bitchatFont(size: 11, weight: .semibold)
+                        .foregroundColor(palette.accent)
                 }
                 Text(verbatim: "@\(item.author)")
                     .bitchatFont(size: 12, weight: .semibold)
@@ -747,6 +784,17 @@ private struct NoticesList: View {
                 Spacer()
                 if showsSource {
                     sourceBadge(item)
+                }
+                if endorsable {
+                    Button {
+                        endorse(item)
+                    } label: {
+                        Image(systemName: "checkmark.shield")
+                            .font(.bitchatSystem(size: 12))
+                            .foregroundColor(palette.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Strings.confirmAction)
                 }
                 if isOwn {
                     Button {
@@ -766,10 +814,23 @@ private struct NoticesList: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Strings.rowAccessibilityLabel(author: item.author, content: item.content, urgent: item.isUrgent))
+        .accessibilityLabel(Strings.rowAccessibilityLabel(author: item.author, content: item.content, urgent: item.isUrgent, confirmations: confirmed))
         .accessibilityActions {
+            if endorsable {
+                Button(Strings.confirmAction) { endorse(item) }
+            }
             if isOwn {
                 Button(Strings.deleteAction) { delete(item) }
+            }
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            if endorsable {
+                Button {
+                    endorse(item)
+                } label: {
+                    Label(Strings.confirmAction, systemImage: "checkmark.shield")
+                }
+                .tint(palette.accent)
             }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
