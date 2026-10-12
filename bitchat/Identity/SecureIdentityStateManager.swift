@@ -140,6 +140,7 @@ protocol SecureIdentityStateManagerProtocol {
     func markVouchBatchSent(to fingerprint: String, at date: Date)
     func signingPublicKey(forFingerprint fingerprint: String) -> Data?
     func mostRecentlyVerifiedFingerprints(limit: Int, excluding fingerprint: String) -> [String]
+    func trustedSigningKeys() -> Set<Data>
 
     // MARK: Noise-authenticated announcement identity
     func bindAuthenticatedSigningPublicKey(_ signingPublicKey: Data, fingerprint: String)
@@ -841,6 +842,27 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     /// The peer's announce-bound Ed25519 signing key, if seen this session.
     func signingPublicKey(forFingerprint fingerprint: String) -> Data? {
         queue.sync { cache.cryptographicIdentities[fingerprint]?.signingPublicKey }
+    }
+
+    /// Ed25519 keys of peers whose word counts for board confirmations: ones
+    /// I verified, plus ones vouched for by someone I verified. Only
+    /// Noise-authenticated bindings qualify, so an announce that merely
+    /// claims a trusted peer's key cannot borrow its standing.
+    func trustedSigningKeys() -> Set<Data> {
+        trustedSigningKeys(now: Date())
+    }
+
+    func trustedSigningKeys(now: Date) -> Set<Data> {
+        queue.sync {
+            let bindings = cache.authenticatedSigningKeysByFingerprint ?? [:]
+            var keys = Set<Data>()
+            for (fingerprint, key) in bindings
+            where cache.verifiedFingerprints.contains(fingerprint)
+                || !validVouchersLocked(for: fingerprint, now: now).isEmpty {
+                keys.insert(key)
+            }
+            return keys
+        }
     }
 
     /// Verified fingerprints ordered most recently verified first (entries

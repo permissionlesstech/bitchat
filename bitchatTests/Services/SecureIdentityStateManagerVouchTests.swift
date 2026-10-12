@@ -317,6 +317,59 @@ struct SecureIdentityStateManagerVouchTests {
         #expect(reloaded.validVouchers(for: vouchee).count == 1)
     }
 
+    // MARK: - Trusted signing keys (board confirmations)
+
+    @Test
+    func trustedSigningKeys_includesVerifiedAndVouchedAuthenticatedKeys() {
+        let manager = makeManager()
+        let stranger = String(repeating: "0c", count: 32)
+        let voucherKey = Data(repeating: 0xA1, count: 32)
+        let voucheeKey = Data(repeating: 0xB1, count: 32)
+        let strangerKey = Data(repeating: 0xC1, count: 32)
+        manager.bindAuthenticatedSigningPublicKey(voucherKey, fingerprint: voucher)
+        manager.bindAuthenticatedSigningPublicKey(voucheeKey, fingerprint: vouchee)
+        manager.bindAuthenticatedSigningPublicKey(strangerKey, fingerprint: stranger)
+        #expect(manager.trustedSigningKeys().isEmpty)
+
+        manager.setVerified(fingerprint: voucher, verified: true)
+        #expect(manager.trustedSigningKeys() == [voucherKey])
+
+        manager.recordVouch(voucheeFingerprint: vouchee, voucherFingerprint: voucher, timestamp: Date())
+        #expect(manager.trustedSigningKeys() == [voucherKey, voucheeKey])
+    }
+
+    @Test
+    func trustedSigningKeys_ignoresVerifiedPeerWithoutAuthenticatedBinding() {
+        let manager = makeManager()
+        manager.setVerified(fingerprint: voucher, verified: true)
+        #expect(manager.trustedSigningKeys().isEmpty)
+    }
+
+    @Test
+    func trustedSigningKeys_dropsVoucheeWhenVoucherIsUnverified() {
+        let manager = makeManager()
+        let voucheeKey = Data(repeating: 0xB2, count: 32)
+        manager.bindAuthenticatedSigningPublicKey(voucheeKey, fingerprint: vouchee)
+        manager.setVerified(fingerprint: voucher, verified: true)
+        manager.recordVouch(voucheeFingerprint: vouchee, voucherFingerprint: voucher, timestamp: Date())
+        #expect(manager.trustedSigningKeys().contains(voucheeKey))
+
+        manager.setVerified(fingerprint: voucher, verified: false)
+        #expect(!manager.trustedSigningKeys().contains(voucheeKey))
+    }
+
+    @Test
+    func trustedSigningKeys_dropsExpiredVouch() {
+        let manager = makeManager()
+        let voucheeKey = Data(repeating: 0xB3, count: 32)
+        manager.bindAuthenticatedSigningPublicKey(voucheeKey, fingerprint: vouchee)
+        manager.setVerified(fingerprint: voucher, verified: true)
+        manager.recordVouch(voucheeFingerprint: vouchee, voucherFingerprint: voucher, timestamp: Date())
+
+        let later = Date().addingTimeInterval(VouchAttestation.maxAge + 60)
+        #expect(!manager.trustedSigningKeys(now: later).contains(voucheeKey))
+    }
+
     // MARK: - Helpers
 
     private func waitUntil(
