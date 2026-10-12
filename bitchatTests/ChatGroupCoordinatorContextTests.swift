@@ -404,6 +404,54 @@ struct ChatGroupCoordinatorContextTests {
         #expect(GroupListCoding.decode(update, notAfterMs: .max) == delta)
     }
 
+    private func successMessage(_ result: CommandResult) -> String? {
+        if case .success(let message) = result { return message }
+        return nil
+    }
+
+    @Test
+    func listCommandsEditTheOpenGroupAndBroadcast() throws {
+        let (context, coordinator, _) = try makeJoinedGroup()
+
+        let added = successMessage(coordinator.addChecklistItem("bear spray"))
+        #expect(added?.hasSuffix("1. [ ] bear spray") == true)
+        #expect(context.broadcastPayloads.count == 1)
+
+        let checked = successMessage(coordinator.setChecklistItem(checked: true, itemNumber: 1))
+        #expect(checked?.hasSuffix("1. [x] bear spray") == true)
+        #expect(context.broadcastPayloads.count == 2)
+
+        // Already checked: nothing to send, the list is just shown again.
+        _ = coordinator.setChecklistItem(checked: true, itemNumber: 1)
+        #expect(context.broadcastPayloads.count == 2)
+
+        _ = coordinator.removeChecklistItem(itemNumber: 1)
+        #expect(context.broadcastPayloads.count == 3)
+        #expect(context.groupStore.lists.list(forGroupID: groupID).items.isEmpty)
+        // Our own edits never post activity lines.
+        #expect(context.localPrivateSystemMessages.isEmpty)
+    }
+
+    @Test
+    func listCommandsNeedAnOpenGroupAndARealRow() throws {
+        let (context, coordinator, _) = try makeJoinedGroup()
+
+        guard case .error = coordinator.removeChecklistItem(itemNumber: 3) else {
+            Issue.record("Expected an error for a missing row")
+            return
+        }
+        context.selectedPrivateChatPeer = nil
+        guard case .error = coordinator.addChecklistItem("water") else {
+            Issue.record("Expected an error outside a group chat")
+            return
+        }
+        guard case .error = coordinator.showChecklist() else {
+            Issue.record("Expected an error outside a group chat")
+            return
+        }
+        #expect(context.broadcastPayloads.isEmpty)
+    }
+
     @Test
     func emptyListsSendNoSnapshot() throws {
         let (context, coordinator, _) = try makeJoinedGroup()

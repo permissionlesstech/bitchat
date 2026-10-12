@@ -83,6 +83,12 @@ protocol CommandContextProvider: AnyObject {
     func groupRemove(nickname: String) -> CommandResult
     func groupLeave() -> CommandResult
     func groupList() -> CommandResult
+    // /list subcommands: the open group's shared checklist. Item numbers are
+    // 1-based positions in the list as last shown.
+    func checklistShow() -> CommandResult
+    func checklistAdd(_ text: String) -> CommandResult
+    func checklistSetChecked(_ checked: Bool, itemNumber: Int) -> CommandResult
+    func checklistRemove(itemNumber: Int) -> CommandResult
 }
 
 /// Processes chat commands in a focused, efficient way
@@ -135,6 +141,9 @@ final class CommandProcessor {
         case "/group":
             if inGeoPublic || inGeoDM { return .error(message: String(localized: "command.error.groups_mesh_only", defaultValue: "groups are only for mesh peers in #mesh", comment: "Error when a group command is used outside the mesh channel")) }
             return handleGroup(args)
+        case "/list":
+            if inGeoPublic || inGeoDM { return .error(message: String(localized: "command.error.groups_mesh_only", defaultValue: "groups are only for mesh peers in #mesh", comment: "Error when a group command is used outside the mesh channel")) }
+            return handleChecklist(args)
         case "/fav":
             if inGeoPublic || inGeoDM { return .error(message: String(localized: "command.error.favorites_mesh_only", defaultValue: "favorites are only for mesh peers in #mesh", comment: "Error when a favorites command is used outside the mesh channel")) }
             return handleFavorite(args, add: true)
@@ -424,6 +433,32 @@ final class CommandProcessor {
             return provider.groupList()
         default:
             return .error(message: Self.groupUsage)
+        }
+    }
+
+    private static var checklistUsage: String { String(localized: "command.list.usage", defaultValue: "usage: /list · add <item> · done <n> · undo <n> · remove <n>", comment: "Usage hint for /list subcommands; command words stay verbatim") }
+
+    private func handleChecklist(_ args: String) -> CommandResult {
+        let parts = args.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+        guard let provider = contextProvider else { return .handled }
+        guard let subcommand = parts.first else {
+            return provider.checklistShow()
+        }
+        let rest = parts.count > 1 ? String(parts[1]).trimmingCharacters(in: .whitespaces) : ""
+
+        switch subcommand {
+        case "add":
+            guard !rest.isEmpty else { return .error(message: Self.checklistUsage) }
+            return provider.checklistAdd(rest)
+        case "done", "undo", "remove":
+            guard let number = Int(rest), number > 0 else { return .error(message: Self.checklistUsage) }
+            switch subcommand {
+            case "done": return provider.checklistSetChecked(true, itemNumber: number)
+            case "undo": return provider.checklistSetChecked(false, itemNumber: number)
+            default: return provider.checklistRemove(itemNumber: number)
+            }
+        default:
+            return .error(message: Self.checklistUsage)
         }
     }
 

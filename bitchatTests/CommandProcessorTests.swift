@@ -559,6 +559,48 @@ struct CommandProcessorTests {
     }
 
     @MainActor
+    @Test func listSubcommandsForwardToTheChecklist() async {
+        let context = MockCommandContextProvider()
+        let processor = CommandProcessor(contextProvider: context, meshService: nil, identityManager: MockIdentityManager(MockKeychain()))
+
+        await withSelectedChannel(.mesh, context: context) {
+            for command in ["/list", "/list add  bear spray ", "/list done 2", "/list undo 2", "/list remove 1"] {
+                _ = processor.process(command)
+            }
+        }
+
+        #expect(context.checklistCommands.map(\.subcommand) == ["show", "add", "done", "undo", "remove"])
+        #expect(context.checklistCommands.map(\.argument) == ["", "bear spray", "2", "2", "1"])
+    }
+
+    @MainActor
+    @Test func malformedListCommandsShowUsageWithoutForwarding() async {
+        let context = MockCommandContextProvider()
+        let processor = CommandProcessor(contextProvider: context, meshService: nil, identityManager: MockIdentityManager(MockKeychain()))
+
+        let results = await withSelectedChannel(.mesh, context: context) {
+            ["/list add", "/list done", "/list done two", "/list remove 0", "/list tidy"].map { processor.process($0) }
+        }
+
+        for result in results {
+            guard case .error(let message) = result else {
+                Issue.record("Expected a usage error")
+                continue
+            }
+            #expect(message.hasPrefix("usage: /list"))
+        }
+        #expect(context.checklistCommands.isEmpty)
+    }
+
+    @MainActor
+    @Test func listIsSuggestedOnlyInsideGroupChats() {
+        #expect(CommandInfo.all(isGeoPublic: false, isGeoDM: false).contains(.list) == false)
+        #expect(CommandInfo.all(isGeoPublic: false, isGeoDM: false, isGroupChat: true).contains(.list))
+        #expect(CommandInfo.list.alias == "/list")
+        #expect(CommandInfo.list.placeholder != nil)
+    }
+
+    @MainActor
     private func setSelectedChannel(
         _ channel: ChannelID,
         context: MockCommandContextProvider? = nil,
@@ -702,6 +744,29 @@ private final class MockCommandContextProvider: CommandContextProvider {
 
     func groupList() -> CommandResult {
         groupCommands.append(("list", ""))
+        return .handled
+    }
+
+    // Checklist: same recording, item numbers stringified.
+    private(set) var checklistCommands: [(subcommand: String, argument: String)] = []
+
+    func checklistShow() -> CommandResult {
+        checklistCommands.append(("show", ""))
+        return .handled
+    }
+
+    func checklistAdd(_ text: String) -> CommandResult {
+        checklistCommands.append(("add", text))
+        return .handled
+    }
+
+    func checklistSetChecked(_ checked: Bool, itemNumber: Int) -> CommandResult {
+        checklistCommands.append((checked ? "done" : "undo", "\(itemNumber)"))
+        return .handled
+    }
+
+    func checklistRemove(itemNumber: Int) -> CommandResult {
+        checklistCommands.append(("remove", "\(itemNumber)"))
         return .handled
     }
 }

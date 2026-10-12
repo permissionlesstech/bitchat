@@ -282,6 +282,10 @@ private final class DiagnosticsMockContext: CommandContextProvider {
     func groupRemove(nickname: String) -> CommandResult { .handled }
     func groupLeave() -> CommandResult { .handled }
     func groupList() -> CommandResult { .handled }
+    func checklistShow() -> CommandResult { .handled }
+    func checklistAdd(_ text: String) -> CommandResult { .handled }
+    func checklistSetChecked(_ checked: Bool, itemNumber: Int) -> CommandResult { .handled }
+    func checklistRemove(itemNumber: Int) -> CommandResult { .handled }
     func addLocalPrivateSystemMessage(_ content: String, to peerID: PeerID) {}
     func addPublicSystemMessage(_ content: String) {}
     func toggleFavorite(peerID: PeerID) {}

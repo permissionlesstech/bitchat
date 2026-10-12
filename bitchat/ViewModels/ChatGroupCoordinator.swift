@@ -141,6 +141,22 @@ extension ChatViewModel: ChatGroupContext {
     func groupList() -> CommandResult {
         groupCoordinator.listGroups()
     }
+
+    func checklistShow() -> CommandResult {
+        groupCoordinator.showChecklist()
+    }
+
+    func checklistAdd(_ text: String) -> CommandResult {
+        groupCoordinator.addChecklistItem(text)
+    }
+
+    func checklistSetChecked(_ checked: Bool, itemNumber: Int) -> CommandResult {
+        groupCoordinator.setChecklistItem(checked: checked, itemNumber: itemNumber)
+    }
+
+    func checklistRemove(itemNumber: Int) -> CommandResult {
+        groupCoordinator.removeChecklistItem(itemNumber: itemNumber)
+    }
 }
 
 /// Owns the private-groups feature: creating groups, creator-managed invites
@@ -399,6 +415,54 @@ final class ChatGroupCoordinator {
     }
 
     // MARK: - Shared list
+
+    func showChecklist() -> CommandResult {
+        guard let group = selectedGroup() else { return notInGroupError }
+        let items = context.groupStore.lists.list(forGroupID: group.groupID).items
+        guard !items.isEmpty else {
+            return .success(message: String(localized: "system.group.list.empty", comment: "Reply to /list when the open group's shared list has no rows"))
+        }
+        let header = String(
+            format: String(localized: "system.group.list.header", comment: "Header line above the shared list rows; placeholder is the group name"),
+            locale: .current,
+            group.name
+        )
+        let rows = items.enumerated().map { index, item in
+            "\(index + 1). [\(item.isChecked ? "x" : " ")] \(item.text)"
+        }
+        return .success(message: ([header] + rows).joined(separator: "\n"))
+    }
+
+    func addChecklistItem(_ text: String) -> CommandResult {
+        guard let group = selectedGroup() else { return notInGroupError }
+        guard context.groupStore.lists.list(forGroupID: group.groupID).items.count < GroupList.maxVisibleItems else {
+            return .error(message: String(
+                format: String(localized: "system.group.list.full", comment: "Error when adding to a shared list that is at its row cap; placeholder is the cap"),
+                locale: .current,
+                GroupList.maxVisibleItems
+            ))
+        }
+        let itemID = Data((0..<GroupList.itemIDLength).map { _ in UInt8.random(in: .min ... .max) })
+        return applyLocalListEdit(in: group) { list, author, nowMs in
+            list.add(text: text, id: itemID, author: author, nowMs: nowMs)
+        }
+    }
+
+    func setChecklistItem(checked: Bool, itemNumber: Int) -> CommandResult {
+        guard let group = selectedGroup() else { return notInGroupError }
+        guard let item = checklistItem(number: itemNumber, in: group) else { return noSuchItemError(itemNumber) }
+        return applyLocalListEdit(in: group) { list, author, nowMs in
+            list.setChecked(checked, id: item.id, author: author, nowMs: nowMs)
+        }
+    }
+
+    func removeChecklistItem(itemNumber: Int) -> CommandResult {
+        guard let group = selectedGroup() else { return notInGroupError }
+        guard let item = checklistItem(number: itemNumber, in: group) else { return noSuchItemError(itemNumber) }
+        return applyLocalListEdit(in: group) { list, author, nowMs in
+            list.remove(id: item.id, author: author, nowMs: nowMs)
+        }
+    }
 
     /// Seals a list delta under the group's current epoch and floods it like
     /// a chat message, so gossip sync backfills it for members who are away.
@@ -676,6 +740,43 @@ private extension ChatGroupCoordinator {
             SecureLogger.info("Group '\(state.name)' rotated to epoch \(state.epoch)", category: .session)
         }
         context.notifyUIChanged()
+    }
+
+    var notInGroupError: CommandResult {
+        .error(message: String(localized: "system.group.not_in_group", comment: "Error when a group command requires an open group chat"))
+    }
+
+    func noSuchItemError(_ itemNumber: Int) -> CommandResult {
+        .error(message: String(
+            format: String(localized: "system.group.list.no_such_item", comment: "Error when /list names a row number that is not on the shared list; placeholder is the number"),
+            locale: .current,
+            itemNumber
+        ))
+    }
+
+    func checklistItem(number: Int, in group: BitchatGroup) -> GroupList.Item? {
+        let items = context.groupStore.lists.list(forGroupID: group.groupID).items
+        guard number >= 1, number <= items.count else { return nil }
+        return items[number - 1]
+    }
+
+    /// Applies a local edit, floods it to the group, and answers with the
+    /// updated list. An edit that changes nothing (already checked, say)
+    /// just shows the list.
+    func applyLocalListEdit(in group: BitchatGroup, _ change: (inout GroupList, Data, UInt64) -> GroupListDelta?) -> CommandResult {
+        let author = context.mySigningPublicKey()
+        guard author.count == 32 else {
+            return .error(message: String(localized: "system.group.identity_unavailable", comment: "Error when the local identity is not ready for group operations"))
+        }
+        let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+        guard let delta = context.groupStore.lists.edit(groupID: group.groupID, { change(&$0, author, nowMs) }) else {
+            return showChecklist()
+        }
+        guard broadcastListDelta(delta, groupID: group.groupID) else {
+            return .error(message: String(localized: "system.group.send_failed", comment: "System message when sealing a group message fails"))
+        }
+        context.notifyUIChanged()
+        return showChecklist()
     }
 
     func scheduleListSnapshot(forGroupID groupID: Data) {
