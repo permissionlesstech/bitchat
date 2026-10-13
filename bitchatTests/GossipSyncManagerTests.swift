@@ -1002,6 +1002,20 @@ struct GossipSyncManagerTests {
             restored.collectPublicMessagePackets { continuation.resume(returning: $0) }
         }
         #expect(restoredPackets.isEmpty)
+        restored._performMaintenanceSynchronously(now: Date())
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+
+        // A budget that fits the retained representation restores and keeps the archive.
+        archive.save([frame])
+        config.messageByteBudget = decoded.retainedPayloadBytes
+        let accepted = GossipSyncManager(myPeerID: myPeerID, config: config,
+            requestSyncManager: RequestSyncManager(), archive: archive)
+        let acceptedPackets = await withCheckedContinuation { continuation in
+            accepted.collectPublicMessagePackets { continuation.resume(returning: $0) }
+        }
+        #expect(acceptedPackets.count == 1)
+        accepted._performMaintenanceSynchronously(now: Date())
+        #expect(archive.load() == [frame])
     }
 
     // MARK: - Byte budgets
@@ -1157,5 +1171,92 @@ private final class RecordingDelegate: GossipSyncManager.Delegate {
     
     func getConnectedPeers() -> [PeerID] {
         return connectedPeers
+    }
+}
+
+
+extension GossipSyncManagerTests {
+    @Test func compressedReplacementReleasesPreviousByteAccounting() async throws {
+        let now = UInt64(Date().timeIntervalSince1970 * 1000)
+        let sender = Data(repeating: 1, count: 8)
+        let content = Data(repeating: 0x41, count: 32)
+        let large = try RetainedPacketTestFixture.packet(sender: sender, timestamp: now, payload: content, emptyBlocks: 20)
+        let small = try RetainedPacketTestFixture.packet(sender: sender, timestamp: now, payload: content)
+        let other = try RetainedPacketTestFixture.packet(sender: Data(repeating: 2, count: 8), timestamp: now, payload: content)
+        #expect(PacketIdUtil.computeId(large) == PacketIdUtil.computeId(small))
+        var config = GossipSyncManager.Config()
+        config.messageByteBudget = large.retainedPayloadBytes
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: RequestSyncManager())
+        manager.onPublicPacketSeen(large)
+        manager.onPublicPacketSeen(small)
+        manager.onPublicPacketSeen(other)
+        let packets = await withCheckedContinuation { continuation in
+            manager.collectPublicMessagePackets { continuation.resume(returning: $0) }
+        }
+        #expect(packets.count == 2)
+        #expect(packets.contains { $0.senderID == sender && $0.retainedPayloadBytes == small.retainedPayloadBytes })
+    }
+
+    @Test func compressedEvictionAndRemovalReleaseTheirByteAccounting() async throws {
+        let now = UInt64(Date().timeIntervalSince1970 * 1000)
+        let content = Data(repeating: 0x41, count: 32)
+        let packets = try (1...4).map { index in
+            try RetainedPacketTestFixture.packet(sender: Data(repeating: UInt8(index), count: 8), timestamp: now, payload: content)
+        }
+        var config = GossipSyncManager.Config()
+        config.messageByteBudget = 2 * packets[0].retainedPayloadBytes
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: RequestSyncManager())
+        packets.prefix(3).forEach(manager.onPublicPacketSeen)
+        let afterEviction = await withCheckedContinuation { continuation in
+            manager.collectPublicMessagePackets { continuation.resume(returning: $0) }
+        }
+        #expect(Set(afterEviction.map(\.senderID)) == Set(packets[1...2].map(\.senderID)))
+        manager.removePublicMessages(from: PeerID(hexData: packets[1].senderID))
+        manager.onPublicPacketSeen(packets[3])
+        let afterRemoval = await withCheckedContinuation { continuation in
+            manager.collectPublicMessagePackets { continuation.resume(returning: $0) }
+        }
+        #expect(Set(afterRemoval.map(\.senderID)) == Set(packets[2...3].map(\.senderID)))
+    }
+
+    @Test func archiveRestoreUsesRetainedBytesToSelectTheNewestPrefix() async throws {
+        let now = UInt64(Date().timeIntervalSince1970 * 1000)
+        let content = Data(repeating: 0x41, count: 32)
+        let oldest = try RetainedPacketTestFixture.packet(sender: Data(repeating: 1, count: 8), timestamp: now - 2, payload: content)
+        let oversized = try RetainedPacketTestFixture.packet(sender: Data(repeating: 2, count: 8), timestamp: now - 1, payload: content, emptyBlocks: 40)
+        let newest = try RetainedPacketTestFixture.packet(sender: Data(repeating: 3, count: 8), timestamp: now, payload: content)
+        var config = GossipSyncManager.Config()
+        config.messageByteBudget = oldest.retainedPayloadBytes + newest.retainedPayloadBytes
+        #expect(oversized.retainedPayloadBytes > config.messageByteBudget)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("synthetic-retained-prefix-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let archive = GossipMessageArchive(fileURL: url)
+        archive.save(try [oldest, oversized, newest].map { try #require($0.toBinaryData(padding: false)) })
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: RequestSyncManager(), archive: archive)
+        let restored = await withCheckedContinuation { continuation in
+            manager.collectPublicMessagePackets { continuation.resume(returning: $0) }
+        }
+        #expect(restored.map(\.senderID) == [newest.senderID])
+    }
+}
+
+
+extension GossipSyncManagerTests {
+    @Test func oversizedRetainedRepresentationDoesNotEvictStoredMessages() async throws {
+        let now = UInt64(Date().timeIntervalSince1970 * 1000)
+        let content = Data(repeating: 0x41, count: 32)
+        let accepted = try RetainedPacketTestFixture.packet(sender: Data(repeating: 1, count: 8), timestamp: now, payload: content)
+        let oversized = try RetainedPacketTestFixture.packet(sender: Data(repeating: 2, count: 8), timestamp: now, payload: content, emptyBlocks: 20)
+        var config = GossipSyncManager.Config()
+        config.messageByteBudget = accepted.retainedPayloadBytes
+        #expect(oversized.payload.count <= config.messageByteBudget)
+        #expect(oversized.retainedPayloadBytes > config.messageByteBudget)
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: RequestSyncManager())
+        manager.onPublicPacketSeen(accepted)
+        manager.onPublicPacketSeen(oversized)
+        let retained = await withCheckedContinuation { continuation in
+            manager.collectPublicMessagePackets { continuation.resume(returning: $0) }
+        }
+        #expect(retained.map(\.senderID) == [accepted.senderID])
     }
 }

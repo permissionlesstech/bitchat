@@ -36,7 +36,7 @@ struct PacketWireEncodingTests {
     }
 
     @Test(arguments: [UInt8(1), UInt8(2)], [false, true])
-    func receivedEncodingSurvivesVerificationRelayAndPersistence(version: UInt8, compressed: Bool) throws {
+    func receivedEncodingPreservesSigningBytesThroughBinaryAndCodableRoundTrips(version: UInt8, compressed: Bool) throws {
         let key = try Curve25519.Signing.PrivateKey(rawRepresentation: Data(repeating: 7, count: 32))
         let signedBytes = frame(version: version, compressed: compressed)
         let signature = try key.signature(for: signedBytes)
@@ -61,7 +61,7 @@ struct PacketWireEncodingTests {
     }
 
     @Test(arguments: [false, true])
-    func smallForeignFramesKeepSigningPadding(compressed: Bool) throws {
+    func smallReceivedFramesPreservePaddedSigningBytes(compressed: Bool) throws {
         let content = Data(repeating: 0x41, count: 128)
         var encoded = content
         if compressed {
@@ -90,7 +90,7 @@ struct PacketWireEncodingTests {
     }
 
     @Test(arguments: [false, true])
-    func receivedRouteSurvivesRelayAndPersistence(compressed: Bool) throws {
+    func receivedRouteSurvivesBinaryAndCodableRoundTrips(compressed: Bool) throws {
         let route = [Data(repeating: 0x33, count: 8), Data(repeating: 0x44, count: 8)]
         var signedBytes = frame(version: 2, compressed: compressed)
         signedBytes[11] |= BinaryProtocol.Flags.hasRoute
@@ -117,7 +117,7 @@ struct PacketWireEncodingTests {
         #expect(key.publicKey.isValidSignature(signature, for: reconstructed))
     }
 
-    @Test func alteredSignedFieldsDoNotVerify() throws {
+    @Test func alteredSenderTimestampSignatureAndRouteDoNotVerify() throws {
         let key = try Curve25519.Signing.PrivateKey(rawRepresentation: Data(repeating: 7, count: 32))
         let original = frame(version: 2, compressed: true)
         let signature = try key.signature(for: original)

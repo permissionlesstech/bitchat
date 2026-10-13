@@ -13,10 +13,7 @@ struct PacketWirePayload: Codable {
     let compressedBytes: Data?
 }
 
-/// The core packet structure for all BitChat protocol messages.
-/// Encapsulates all data needed for routing through the mesh network,
-/// including TTL for hop limiting and optional encryption.
-/// - Note: Packets larger than BLE MTU (512 bytes) are automatically fragmented
+/// Packet fields and payload data used for binary encoding and signing.
 public struct BitchatPacket: Codable {
     public let version: UInt8
     public let type: UInt8
@@ -32,7 +29,7 @@ public struct BitchatPacket: Codable {
     // Changes to TTL, route, and RSR do not change the immutable payload.
     var wirePayload: PacketWirePayload?
 
-    /// Payload buffers retained by this packet, excluding headers and signatures.
+    /// Decoded and retained compressed payload byte counts, excluding headers and signatures.
     public var retainedPayloadBytes: Int {
         payload.count + (wirePayload?.compressedBytes?.count ?? 0)
     }
@@ -57,16 +54,16 @@ public struct BitchatPacket: Codable {
         )
         let stored = try values.decodeIfPresent(PacketWirePayload.self, forKey: .wirePayload)
         if let compressed = stored?.compressedBytes {
-            // Check that retained compressed bytes expand to the decoded payload,
-            // subject to the payload-size and inflation-ratio limits below.
+            // Saved compressed bytes must decode to the saved payload within these limits.
             guard !compressed.isEmpty,
-                  compressed.count <= FileTransferLimits.maxFramedFileBytes,
+                  compressed.count <= PacketPayloadLimits.maxPayloadBytes(forType: type),
                   payload.count <= PacketPayloadLimits.maxPayloadBytes(forType: type),
                   payload.count <= compressed.count * PacketPayloadLimits.maxDeflateRatio,
-                  CompressionUtil.decompress(compressed, originalSize: payload.count) == payload else {
+                  // An extra output byte exposes a stream longer than the saved payload.
+                  CompressionUtil.decompress(compressed, originalSize: payload.count + 1) == payload else {
                 throw DecodingError.dataCorruptedError(
                     forKey: .wirePayload, in: values,
-                    debugDescription: "Stored wire payload does not match decoded payload"
+                    debugDescription: "Stored wire payload exceeds limits or does not match decoded payload"
                 )
             }
         }

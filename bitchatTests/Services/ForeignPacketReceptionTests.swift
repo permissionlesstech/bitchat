@@ -46,7 +46,7 @@ struct ForeignPacketReceptionTests {
         handler.handle(packet, from: remote)
         return count
     }
-    @Test func deliveryRelayAndTampering() throws {
+    @Test func receivedEncodingsPassHandlerAndSigningChecks() throws {
         let unsigned = try #require(Data(base64Encoded: Self.androidUnsignedFrame))
         let packet = try #require(BitchatPacket.from(unsigned))
         let payload = packet.payload
@@ -90,7 +90,7 @@ struct ForeignPacketReceptionTests {
             #expect(delivered(altered, key: key.publicKey.rawRepresentation) == 0)
         }
     }
-    @Test func fragmentedAndroidMessage() throws {
+    @Test func fragmentedAndroidFixtureReassemblesAndVerifies() throws {
         let signing = try #require(Data(base64Encoded: Self.androidUnsignedFrame))
         var wire = signing
         wire[2] = 3
@@ -121,7 +121,7 @@ struct ForeignPacketReceptionTests {
                     reassembled += 1
                     deliveredCount += delivered(packet, key: key.publicKey.rawRepresentation)
                 }))
-        // Android FragmentManager uses 454-byte chunks for a v1 broadcast with a recipient.
+        // Split the fixture into 454-byte chunks to exercise multi-fragment reassembly.
         let chunkSize = 454
         let total = (wire.count + chunkSize - 1) / chunkSize
         for index in (0..<total).reversed() {
@@ -172,4 +172,112 @@ struct ForeignPacketReceptionTests {
         + "E3XEuJxVc8+3/2tWZtNDU6nKHuQ+pI3luDS+Vg0nT2qVC6QH7+a3/8g/qnICXx1svdm2G1fTYv+vXNL/46t09sxpMZ+G2G6h"
         + "7UFu9D2E1CMpl5xLbQ/1sk/Z7eoHevt2tTcPL2wKZ/83w6pScGyUu9VytquSfqdDDW9VHe3V9YqH0itoqqXU49jt9a2QtjMX"
         + "sEsq7Ng165+GVmdFbdVUl9xW1/b3Xw=="
+}
+
+
+extension ForeignPacketReceptionTests {
+    @Test(arguments: [false, true])
+    func syntheticSignedMessagePassesServiceIngress(fragmented: Bool) async throws {
+        let signingKey = try Curve25519.Signing.PrivateKey(rawRepresentation: Data(repeating: 7, count: 32))
+        let senderKeychain = MockKeychain()
+        #expect(senderKeychain.saveIdentityKey(signingKey.rawRepresentation, forKey: "ed25519SigningKey"))
+        let sender = BLEService(keychain: senderKeychain,
+            idBridge: NostrIdentityBridge(keychain: MockKeychainHelper()),
+            identityManager: MockIdentityManager(senderKeychain), initializeBluetoothManagers: false,
+            engineScheduler: BLEEngineManualScheduler())
+        let receiverKeychain = MockKeychain()
+        let receiver = BLEService(keychain: receiverKeychain,
+            idBridge: NostrIdentityBridge(keychain: MockKeychainHelper()),
+            identityManager: MockIdentityManager(receiverKeychain), initializeBluetoothManagers: false,
+            engineScheduler: BLEEngineManualScheduler())
+        let capture = ForeignIngressCapture()
+        let outbound = ForeignIngressCapture()
+        receiver.eventDelegate = capture
+        sender._test_onOutboundPacket = { outbound.record($0) }
+        sender.setNickname("SyntheticSender")
+        sender._test_resetAnnounceThrottle()
+        sender._test_forceAnnounce()
+        sender._test_fenceEngine()
+        let announce = try #require(outbound.packets.first { $0.type == MessageType.announce.rawValue })
+        let announceBytes = try #require(announce.toBinaryData(padding: false))
+        let link = BLEIngressLinkID.central("synthetic-foreign-ingress")
+        receiver._test_ingestFrame(try #require(BitchatPacket.from(announceBytes)), link: link)
+        receiver._test_fenceEngine()
+        #expect(receiver._test_centralBinding("synthetic-foreign-ingress") == sender.myPeerID)
+        let senderBytes = try #require(Data(hexString: sender.myPeerID.id))
+        let now = UInt64(Date().timeIntervalSince1970 * 1000)
+        let content = String(repeating: "synthetic foreign message ", count: 80)
+        let payload = Data(content.utf8)
+        var preimage = RetainedPacketTestFixture.frame(sender: senderBytes, timestamp: now, payload: payload)
+        preimage[2] = 0
+        let signature = try signingKey.signature(for: preimage)
+        var wire = preimage
+        wire[2] = 3
+        wire[11] |= BinaryProtocol.Flags.hasSignature
+        wire.append(signature)
+        if fragmented {
+            let chunkSize = 454
+            let count = (wire.count + chunkSize - 1) / chunkSize
+            for index in (0..<count).reversed() {
+                var chunk = Data([0, 1, 2, 3, 4, 5, 6, 7])
+                chunk.append(contentsOf: [UInt8(index >> 8), UInt8(index & 255),
+                    UInt8(count >> 8), UInt8(count & 255), MessageType.message.rawValue])
+                chunk.append(wire[(index * chunkSize)..<min(wire.count, (index + 1) * chunkSize)])
+                let fragment = BitchatPacket(type: MessageType.fragment.rawValue, senderID: senderBytes,
+                    recipientID: nil, timestamp: now, payload: chunk, signature: nil, ttl: 3)
+                let bytes = try #require(fragment.toBinaryData(padding: false))
+                receiver._test_ingestFrame(try #require(BitchatPacket.from(bytes)), link: link)
+            }
+            await receiver._test_drainFragmentPipeline()
+        } else {
+            receiver._test_ingestFrame(try #require(BitchatPacket.from(wire)), link: link)
+        }
+        receiver._test_fenceEngine()
+        await receiver._test_drainFragmentPipeline()
+        #expect(capture.count(content) == 1)
+        let nativeContent = "synthetic native control"
+        let native = BitchatPacket(type: MessageType.message.rawValue, senderID: senderBytes,
+            recipientID: nil, timestamp: now + 1, payload: Data(nativeContent.utf8), signature: nil, ttl: 0)
+        let nativePreimage = try #require(native.toBinaryDataForSigning())
+        var signedNative = native
+        signedNative.signature = try signingKey.signature(for: nativePreimage)
+        let nativeWire = try #require(signedNative.toBinaryData(padding: false))
+        receiver._test_ingestFrame(try #require(BitchatPacket.from(nativeWire)), link: link)
+        receiver._test_fenceEngine()
+        await receiver._test_drainFragmentPipeline()
+        #expect(capture.count(nativeContent) == 1)
+        var invalid = wire
+        invalid[10] ^= 1
+        receiver._test_ingestFrame(try #require(BitchatPacket.from(invalid)), link: link)
+        receiver._test_fenceEngine()
+        await receiver._test_drainFragmentPipeline()
+        #expect(capture.count(content) == 1)
+    }
+}
+
+private final class ForeignIngressCapture: TransportEventDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedPackets: [BitchatPacket] = []
+    private var messages: [String] = []
+    var packets: [BitchatPacket] {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedPackets
+    }
+    func record(_ packet: BitchatPacket) {
+        lock.lock()
+        storedPackets.append(packet)
+        lock.unlock()
+    }
+    func didReceiveTransportEvent(_ event: TransportEvent) {
+        guard case let .publicMessageReceived(_, _, content, _, _) = event else { return }
+        lock.lock()
+        messages.append(content)
+        lock.unlock()
+    }
+    func count(_ content: String) -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return messages.filter { $0 == content }.count
+    }
 }
