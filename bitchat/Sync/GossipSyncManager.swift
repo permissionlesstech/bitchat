@@ -14,26 +14,25 @@ final class GossipSyncManager {
     private struct PacketStore {
         private(set) var packets: [String: BitchatPacket] = [:]
         private(set) var order: [String] = []
-        /// Sum of retained payload sizes, maintained on every insert/remove.
+        /// Sum of decoded payload sizes and retained compressed payload sizes in this store.
         private var payloadBytes = 0
 
         /// Evicts oldest-first until both the count and the byte budget hold.
-        /// The count cap alone let a few max-size packets per slot pin
-        /// hundreds of MB; the budget bounds memory whatever the sizes.
+        /// The byte budget limits retained payload bytes as packet sizes vary.
         mutating func insert(idHex: String, packet: BitchatPacket, capacity: Int, byteBudget: Int) {
-            guard capacity > 0, packet.payload.count <= byteBudget else { return }
+            guard capacity > 0, packet.retainedPayloadBytes <= byteBudget else { return }
             if let existing = packets[idHex] {
-                payloadBytes += packet.payload.count - existing.payload.count
+                payloadBytes += packet.retainedPayloadBytes - existing.retainedPayloadBytes
                 packets[idHex] = packet
             } else {
                 packets[idHex] = packet
                 order.append(idHex)
-                payloadBytes += packet.payload.count
+                payloadBytes += packet.retainedPayloadBytes
             }
             while order.count > capacity || payloadBytes > byteBudget {
                 let victim = order.removeFirst()
                 if let evicted = packets.removeValue(forKey: victim) {
-                    payloadBytes -= evicted.payload.count
+                    payloadBytes -= evicted.retainedPayloadBytes
                 }
             }
         }
@@ -51,7 +50,7 @@ final class GossipSyncManager {
                 guard let packet = packets[key] else { continue }
                 if shouldRemove(packet) {
                     packets.removeValue(forKey: key)
-                    payloadBytes -= packet.payload.count
+                    payloadBytes -= packet.retainedPayloadBytes
                 } else {
                     nextOrder.append(key)
                 }
@@ -646,15 +645,10 @@ final class GossipSyncManager {
 
     // MARK: - Archive (public message persistence)
 
-    /// Rebuild the public message store from disk on launch, dropping
-    /// anything that aged out while the app was dead — or that is dated in
-    /// the future, which an older build could have archived from a sync
-    /// reply. Any drop rewrites the file so it is purged from disk too.
-    ///
-    /// Bounded like live intake: entries are stored oldest-first, so walk
-    /// them newest-first and stop once the count or byte budget is spent. An
-    /// oversized archive then costs at most one budget of decode work at
-    /// launch instead of re-inflating everything it holds.
+    /// Restore archived public messages within the count and retained-payload
+    /// byte budgets, starting with the newest entries. Invalid or out-of-window
+    /// entries are skipped. Decoding precedes the byte-budget check.
+    /// Restoration or rejected entries mark the archive for its next flush.
     private func restoreArchivedMessages() {
         guard let archive else { return }
         let capacity = max(1, config.seenCapacity)
@@ -669,8 +663,11 @@ final class GossipSyncManager {
                 droppedAny = true
                 continue
             }
-            guard keptBytes + packet.payload.count <= config.messageByteBudget else { break }
-            keptBytes += packet.payload.count
+            guard keptBytes + packet.retainedPayloadBytes <= config.messageByteBudget else {
+                droppedAny = true
+                break
+            }
+            keptBytes += packet.retainedPayloadBytes
             kept.append((PacketIdUtil.computeId(packet).hexEncodedString(), packet))
         }
         for entry in kept.reversed() {
