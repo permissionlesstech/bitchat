@@ -298,6 +298,10 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
             let sealedBox = try AES.GCM.SealedBox(combined: encryptedData)
             let decryptedData = try AES.GCM.open(sealedBox, using: encryptionKey)
             cache = try JSONDecoder().decode(IdentityCache.self, from: decryptedData)
+            // Runs inside `init`, before `queue` is reachable by anyone else,
+            // so mutating `cache` here needs no barrier — same as the lines
+            // around it.
+            if migrateTrustedNicknamesLocked() { persist(snapshot: cache) }
         } catch {
             cache = IdentityCache()
             let deleted = keychain.deleteIdentityKey(forKey: cacheKey)
@@ -308,6 +312,62 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         }
     }
     
+    /// Which seals a backfill would bind, and to what.
+    ///
+    /// Separated from the cache so the policy can be tested directly, rather
+    /// than by forging an old build's keychain blob. Returns nil when there is
+    /// nothing to do, so the caller only rewrites the keychain when it must.
+    static func trustedNicknameBackfill(verified: Set<String>,
+                                        vouchees: Set<String>,
+                                        socialIdentities: [String: SocialIdentity],
+                                        existing: [String: String]?) -> [String: String]? {
+        var pinned = existing ?? [:]
+        var migrated = 0
+        for fingerprint in verified.union(vouchees) where pinned[fingerprint] == nil {
+            // No recorded name means no honest baseline; left unbound on
+            // purpose, and the readers fail closed on it.
+            guard let claimed = socialIdentities[fingerprint]?.claimedNickname,
+                  !claimed.isEmpty else { continue }
+            pinned[fingerprint] = claimed
+            migrated += 1
+        }
+        return migrated > 0 ? pinned : nil
+    }
+
+    /// Backfills a baseline for trust that predates name binding.
+    ///
+    /// Without this, a peer verified on an older build has no baseline, and the
+    /// only thing that would ever give it one is the lazy pin in
+    /// `upsertCryptographicIdentity` — which fires on the NEXT announce and
+    /// captures whatever the key is claiming by then. If the key has already
+    /// renamed, that pins the new name and cements the rename as the thing the
+    /// seal was earned under, which is worse than having no baseline at all:
+    /// it looks bound.
+    ///
+    /// `claimedNickname` is the better source precisely because it was written
+    /// before this upgrade — the last name the key was seen under while the old
+    /// build still trusted it. An attacker cannot time a rename against a value
+    /// that is already on disk.
+    private func migrateTrustedNicknamesLocked() -> Bool {
+        var vouchees = Set<String>()
+        for (vouchee, records) in cache.vouchesByVouchee ?? [:] where !records.isEmpty {
+            vouchees.insert(vouchee)
+        }
+        guard let pinned = Self.trustedNicknameBackfill(
+            verified: cache.verifiedFingerprints,
+            vouchees: vouchees,
+            socialIdentities: cache.socialIdentities,
+            existing: cache.trustedNicknames
+        ) else { return false }
+        let added = pinned.count - (cache.trustedNicknames?.count ?? 0)
+        cache.trustedNicknames = pinned
+        SecureLogger.info(
+            "Bound \(added) pre-existing trust seal(s) to the last name each key was seen under",
+            category: .security
+        )
+        return true
+    }
+
     /// Persists the cache. Always invoked on `queue` under a barrier (its
     /// callers run inside `queue.sync(flags: .barrier)`), so `cache` is read
     /// while serialized. The encode + keychain write are done here (already on
@@ -782,9 +842,10 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     /// would suppress the seal of the peer being impersonated, exactly when it
     /// matters most.
     ///
-    /// Fails OPEN on a missing baseline on purpose: peers trusted by builds
-    /// before this existed have none, and dropping their seals on upgrade would
-    /// train users to ignore the signal.
+    /// Fails CLOSED on a missing baseline. `migrateTrustedNicknamesLocked`
+    /// gives every pre-existing seal a baseline at load, so the remaining
+    /// unbound case is trust in a key that has never announced a name — and a
+    /// name-bound seal over no name is a claim this code cannot support.
     func trustedNicknameMismatch(fingerprint: String) -> Bool {
         queue.sync { liveNameMismatchLocked(fingerprint) }
     }
@@ -803,8 +864,12 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     func sealAppliesToRow(fingerprint: String, renderedSender: String, senderPeerID: PeerID?) -> Bool {
         queue.sync {
             guard cache.verifiedFingerprints.contains(fingerprint) else { return false }
+            // Fails CLOSED. Migration binds every seal for which a name was
+            // ever recorded, so reaching here means we hold trust in a key we
+            // have never seen announce anything — there is no name this seal
+            // can honestly be said to cover, so it does not cover this row.
             guard let pinned = cache.trustedNicknames?[fingerprint], !pinned.isEmpty
-            else { return true }                                  // nothing bound: fail open
+            else { return false }
             // No petname escape here, unlike the live check: the formatter
             // renders `message.sender`, never a petname, so a petname does not
             // stand between the reader and a spoofed name on this row.
@@ -814,8 +879,14 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
 
     /// Requires `queue`.
     private func liveNameMismatchLocked(_ fingerprint: String) -> Bool {
+        // Say nothing about keys we hold no trust in: "renamed since trust" is
+        // meaningless without trust, and today's callers all gate on it anyway.
+        // Stating it here keeps a future caller from inheriting a false signal.
+        let trusted = cache.verifiedFingerprints.contains(fingerprint)
+            || !(cache.vouchesByVouchee?[fingerprint] ?? []).isEmpty
+        guard trusted else { return false }
         guard let pinned = cache.trustedNicknames?[fingerprint], !pinned.isEmpty
-        else { return false }
+        else { return true }
         let social = cache.socialIdentities[fingerprint]
         // A local petname outranks the claimed nickname everywhere a LIVE name
         // is displayed, so there is nothing to spoof and the seal stands.

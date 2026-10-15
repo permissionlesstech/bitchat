@@ -94,11 +94,17 @@ struct SecureIdentityStateManagerNicknameBindingTests {
         // The usual case: the vouch arrives over Noise from someone else and
         // the vouchee is not in our announce set yet, so there is no name to
         // bind to at record time.
+        //
+        // The seal is withheld for that window rather than shown unbound. This
+        // used to assert the opposite — "nothing is bound yet, so nothing can
+        // mismatch" — which is true of the predicate but wrong as a product
+        // rule: it is the same fail-open that let pre-binding seals survive a
+        // rename for ever. The window closes on the first announce, below.
         let manager = makeManager()
         manager.setVerified(fingerprint: voucher, verified: true)
         manager.recordVouch(voucheeFingerprint: vouchee, voucherFingerprint: voucher, timestamp: Date())
-        #expect(!manager.trustedNicknameMismatch(fingerprint: vouchee),
-                "nothing is bound yet, so nothing can mismatch")
+        #expect(manager.trustedNicknameMismatch(fingerprint: vouchee),
+                "the seal is withheld until there is a name it can cover")
 
         announce(manager, vouchee, as: "ravi")
         #expect(!manager.trustedNicknameMismatch(fingerprint: vouchee))
@@ -136,6 +142,100 @@ struct SecureIdentityStateManagerNicknameBindingTests {
 
         #expect(!manager.trustedNicknameMismatch(fingerprint: vouchee),
                 "known gap, pinned here so it is explicit rather than a surprise")
+    }
+
+    // MARK: - Trust that predates the binding
+
+    private func social(_ fingerprint: String, claiming nickname: String) -> SocialIdentity {
+        SocialIdentity(fingerprint: fingerprint,
+                       localPetname: nil,
+                       claimedNickname: nickname,
+                       trustLevel: .unknown,
+                       isFavorite: false,
+                       isBlocked: false,
+                       notes: nil)
+    }
+
+    @Test
+    func aSealFromBeforeTheBindingIsBoundToTheLastNameItWasSeenUnder() {
+        // The upgrade case. An older build recorded the trust and the name but
+        // had nowhere to bind them together; the backfill joins them using the
+        // name already on disk, so the seal is covered from the first launch
+        // rather than from whenever the key next happens to announce.
+        let pinned = SecureIdentityStateManager.trustedNicknameBackfill(
+            verified: [vouchee],
+            vouchees: [],
+            socialIdentities: [vouchee: social(vouchee, claiming: "ravi")],
+            existing: nil
+        )
+
+        #expect(pinned?[vouchee] == "ravi")
+    }
+
+    @Test
+    func theBackfillCoversVouchedPeersNotJustVerifiedOnes() {
+        let pinned = SecureIdentityStateManager.trustedNicknameBackfill(
+            verified: [],
+            vouchees: [vouchee],
+            socialIdentities: [vouchee: social(vouchee, claiming: "ravi")],
+            existing: nil
+        )
+
+        #expect(pinned?[vouchee] == "ravi")
+    }
+
+    @Test
+    func theBackfillNeverReanchorsABaselineAlreadyEarned() {
+        // A seal earned under the new build already carries the name it was
+        // earned under. Re-deriving it from the current claim would hand a
+        // renamed key exactly the re-anchoring the binding exists to prevent.
+        let pinned = SecureIdentityStateManager.trustedNicknameBackfill(
+            verified: [vouchee],
+            vouchees: [],
+            socialIdentities: [vouchee: social(vouchee, claiming: "medic")],
+            existing: [vouchee: "ravi"]
+        )
+
+        #expect(pinned == nil, "nothing to do, so nothing is rewritten")
+    }
+
+    @Test
+    func aKeyWeHaveNeverSeenAnnounceIsLeftUnbound() {
+        // There is no honest baseline to invent here. Left unbound so the
+        // readers fail closed rather than binding to the next thing claimed.
+        let pinned = SecureIdentityStateManager.trustedNicknameBackfill(
+            verified: [vouchee],
+            vouchees: [],
+            socialIdentities: [:],
+            existing: nil
+        )
+
+        #expect(pinned == nil)
+    }
+
+    @Test
+    func trustWithNoNameBehindItDoesNotSealARow() {
+        // The remainder after migration: trusted, but nothing was ever recorded
+        // for it. A name-bound seal over no name is a claim this cannot support.
+        let manager = makeManager()
+        manager.setVerified(fingerprint: vouchee, verified: true)
+
+        #expect(!manager.sealAppliesToRow(fingerprint: vouchee,
+                                          renderedSender: "medic",
+                                          senderPeerID: nil),
+                "fails closed: no baseline, so the seal covers no name")
+        #expect(manager.trustedNicknameMismatch(fingerprint: vouchee),
+                "and the live seal is withheld for the same reason")
+    }
+
+    @Test
+    func anUntrustedKeyIsNotReportedAsRenamed() {
+        // "Renamed since trust" is meaningless without trust. Callers gate on
+        // it today; this keeps a future one from inheriting a false signal.
+        let manager = makeManager()
+        announce(manager, vouchee, as: "ravi")
+
+        #expect(!manager.trustedNicknameMismatch(fingerprint: vouchee))
     }
 
     // MARK: - Not fooled by display decoration
