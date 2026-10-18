@@ -1,0 +1,16 @@
+name: MeshChat iOS build
+on:
+  push:
+    branches: [ios-app]
+    paths: ['MeshChatiOS/**', '.github/workflows/meshchat-ios.yml']
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: MeshChatiOS
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen && xcodegen generate
+      - run: xcodebuild -project MeshChat.xcodeproj -scheme MeshChat -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build 2>&1 | tee build.log
