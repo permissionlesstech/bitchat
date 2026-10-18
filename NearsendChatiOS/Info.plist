@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>NearsendChat</string>
+	<string>Nearsend Chat</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -21,9 +21,9 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>NearsendChat uses Bluetooth to find and message people near you without internet.</string>
+	<string>Nearsend Chat uses Bluetooth to find and message people near you without internet.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>NearsendChat uses the local network to reach nearby devices.</string>
+	<string>Nearsend Chat uses the local network to reach nearby devices.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>
