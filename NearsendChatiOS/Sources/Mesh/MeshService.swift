@@ -10,7 +10,7 @@ protocol MeshTransport {
 
 /// UI-facing state. Backed by simulated data until a transport is wired in.
 @MainActor
-final class MeshStore: ObservableObject {
+final class ChatStore: ObservableObject {
     @Published var peers: [Peer] = []
     @Published var conversations: [Conversation] = []
     @Published var nickname = "anon-\(Int.random(in: 1000...9999))"

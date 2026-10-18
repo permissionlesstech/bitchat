@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ChatsView: View {
-    @EnvironmentObject var store: MeshStore
+    @EnvironmentObject var store: ChatStore
     @State private var query = ""
     @State private var path: [String] = UserDefaults.standard.bool(forKey: "openThread") ? ["a"] : []
 

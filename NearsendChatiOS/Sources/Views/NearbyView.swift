@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct NearbyView: View {
-    @EnvironmentObject var store: MeshStore
+    @EnvironmentObject var store: ChatStore
     @State private var selected: Peer?
     @State private var chat: Peer?
 

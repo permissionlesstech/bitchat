@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>MeshChat</string>
+	<string>NearsendChat</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -21,9 +21,9 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>MeshChat uses Bluetooth to find and message people near you without internet.</string>
+	<string>NearsendChat uses Bluetooth to find and message people near you without internet.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>MeshChat uses the local network to reach nearby devices.</string>
+	<string>NearsendChat uses the local network to reach nearby devices.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>

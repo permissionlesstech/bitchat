@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct IdentityView: View {
-    @EnvironmentObject var store: MeshStore
+    @EnvironmentObject var store: ChatStore
 
     var body: some View {
         NavigationStack {

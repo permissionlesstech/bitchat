@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ThreadView: View {
-    @EnvironmentObject var store: MeshStore
+    @EnvironmentObject var store: ChatStore
     let conversationID: String
     let peer: Peer
     @State private var draft = ""

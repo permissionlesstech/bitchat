@@ -1,8 +1,8 @@
 import SwiftUI
 
 @main
-struct MeshChatApp: App {
-    @StateObject private var store = MeshStore()
+struct NearsendChatApp: App {
+    @StateObject private var store = ChatStore()
     @AppStorage("onboarded") private var onboarded = false
 
     init() {
@@ -26,7 +26,7 @@ struct MeshChatApp: App {
 }
 
 struct RootView: View {
-    @EnvironmentObject var store: MeshStore
+    @EnvironmentObject var store: ChatStore
     @AppStorage("tab") private var tab = 0
     var body: some View {
         TabView(selection: $tab) {

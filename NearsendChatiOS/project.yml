@@ -1,6 +1,6 @@
-name: MeshChat
+name: NearsendChat
 options:
-  bundleIdPrefix: dev.meshchat
+  bundleIdPrefix: app.nearsend
   deploymentTarget:
     iOS: "17.0"
 settings:
@@ -9,20 +9,20 @@ settings:
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
 targets:
-  MeshChat:
+  NearsendChat:
     type: application
     platform: iOS
     sources: [Sources]
     info:
       path: Info.plist
       properties:
-        CFBundleDisplayName: MeshChat
+        CFBundleDisplayName: Nearsend Chat
         UILaunchScreen: {}
         UIUserInterfaceStyle: Dark
-        NSBluetoothAlwaysUsageDescription: MeshChat uses Bluetooth to find and message people near you without internet.
-        NSLocalNetworkUsageDescription: MeshChat uses the local network to reach nearby devices.
+        NSBluetoothAlwaysUsageDescription: Nearsend Chat uses Bluetooth to find and message people near you without internet.
+        NSLocalNetworkUsageDescription: Nearsend Chat uses the local network to reach nearby devices.
         UIBackgroundModes: [bluetooth-central, bluetooth-peripheral]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.meshchat.app
+        PRODUCT_BUNDLE_IDENTIFIER: app.nearsend.chat
         GENERATE_INFOPLIST_FILE: NO
