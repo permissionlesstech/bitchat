@@ -15,6 +15,7 @@
 		932A3B628956D826782DA903 /* IdentityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3035BF11BB223029CA61FBE /* IdentityView.swift */; };
 		BC55CF1D950DBF3637488042 /* ThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A8156C4CF0D5D5CDE983A47 /* ThreadView.swift */; };
 		C718AC7AD68C0EC4CD32DB90 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D241971198B28D215DA0998F /* OnboardingView.swift */; };
+		D52B97E33BE72926F55921D1 /* BLETransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF6E2160A336370766CF8911 /* BLETransport.swift */; };
 		E259DC715A0201B116936F54 /* MeshService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FE7E11464E41C885097BF69 /* MeshService.swift */; };
 		F861B1D61D3F1B6D29567FE3 /* Anton-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 232B4FB3BF6F535A13312310 /* Anton-Regular.ttf */; };
 /* End PBXBuildFile section */
@@ -31,12 +32,14 @@
 		D296A62CD2EF81230FB8554E /* ChatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatsView.swift; sourceTree = "<group>"; };
 		D3035BF11BB223029CA61FBE /* IdentityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentityView.swift; sourceTree = "<group>"; };
 		D8713D3EE3FA89477F528CE2 /* NearsendChat.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = NearsendChat.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		FF6E2160A336370766CF8911 /* BLETransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLETransport.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
 		33B9B63351746A5E400B6B86 /* Mesh */ = {
 			isa = PBXGroup;
 			children = (
+				FF6E2160A336370766CF8911 /* BLETransport.swift */,
 				2FE7E11464E41C885097BF69 /* MeshService.swift */,
 			);
 			path = Mesh;
@@ -182,6 +185,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D52B97E33BE72926F55921D1 /* BLETransport.swift in Sources */,
 				7E9D2AC431AF9BC052D1E9BC /* ChatsView.swift in Sources */,
 				932A3B628956D826782DA903 /* IdentityView.swift in Sources */,
 				E259DC715A0201B116936F54 /* MeshService.swift in Sources */,
