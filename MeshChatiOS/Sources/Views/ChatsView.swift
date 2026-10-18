@@ -3,13 +3,14 @@ import SwiftUI
 struct ChatsView: View {
     @EnvironmentObject var store: MeshStore
     @State private var query = ""
+    @State private var path: [String] = UserDefaults.standard.bool(forKey: "openThread") ? ["a"] : []
 
     private var filtered: [Conversation] {
         query.isEmpty ? store.conversations : store.conversations.filter { $0.peer.name.localizedCaseInsensitiveContains(query) }
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ZStack {
                 Backdrop()
                 if filtered.isEmpty {
@@ -22,11 +23,14 @@ struct ChatsView: View {
                     ScrollView {
                         LazyVStack(spacing: 10) {
                             ForEach(filtered) { c in
-                                NavigationLink { ThreadView(conversationID: c.id, peer: c.peer) } label: { row(c) }.buttonStyle(.plain)
+                                NavigationLink(value: c.id) { row(c) }.buttonStyle(.plain)
                             }
                         }.padding(.horizontal, 20)
                     }
                 }
+            }
+            .navigationDestination(for: String.self) { id in
+                if let c = store.conversations.first(where: { $0.id == id }) { ThreadView(conversationID: c.id, peer: c.peer) }
             }
             .navigationTitle("Chats")
             .searchable(text: $query, prompt: "Search")
