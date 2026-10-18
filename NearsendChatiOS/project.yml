@@ -18,7 +18,7 @@ targets:
       properties:
         CFBundleDisplayName: Nearsend Chat
         UILaunchScreen: {}
-        UIUserInterfaceStyle: Dark
+        UIAppFonts: [Anton-Regular.ttf]
         NSBluetoothAlwaysUsageDescription: Nearsend Chat uses Bluetooth to find and message people near you without internet.
         NSLocalNetworkUsageDescription: Nearsend Chat uses the local network to reach nearby devices.
         UIBackgroundModes: [bluetooth-central, bluetooth-peripheral]

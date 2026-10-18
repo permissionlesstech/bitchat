@@ -2,23 +2,22 @@ import SwiftUI
 
 struct NearbyView: View {
     @EnvironmentObject var store: ChatStore
-    @State private var selected: Peer?
     @State private var chat: Peer?
 
     var body: some View {
         NavigationStack {
             ZStack {
-                Backdrop()
+                SkyBackground()
                 ScrollView {
-                    VStack(spacing: 20) {
+                    VStack(spacing: 16) {
+                        PageTitle(text: "Nearby").padding(.top, 8)
                         header
-                        RadarView(peers: store.peers, selected: $selected)
-                            .frame(height: 340)
+                        Card(padding: 12) { RadarView(peers: store.peers).frame(height: 320) }
                         peerList
                     }.padding(.horizontal, 20).padding(.bottom, 24)
                 }
             }
-            .navigationTitle("Nearby")
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(item: $chat) { p in ThreadView(conversationID: p.id, peer: p) }
         }
     }
@@ -27,12 +26,12 @@ struct NearbyView: View {
         Card {
             HStack {
                 VStack(alignment: .leading, spacing: 6) {
-                    StatusPill(text: store.meshActive ? "Mesh active · offline" : "Mesh paused", color: store.meshActive ? Theme.mint : Theme.warn)
+                    StatusPill(text: store.meshActive ? "Mesh active · offline" : "Mesh paused", color: store.meshActive ? Theme.secure : Theme.inkSecondary)
                     Text("\(store.peers.count) people in range").font(.title3.weight(.semibold))
-                    Text("\(store.relayedCount) reachable via relay").font(.footnote).foregroundStyle(Theme.textSecondary)
+                    Text("\(store.relayedCount) reachable via relay").font(.footnote).foregroundStyle(Theme.inkSecondary)
                 }
                 Spacer()
-                Toggle("", isOn: $store.meshActive).labelsHidden()
+                Toggle("", isOn: $store.meshActive).labelsHidden().tint(Theme.actionBlue)
             }
         }
     }
@@ -47,10 +46,10 @@ struct NearbyView: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 HStack(spacing: 4) {
                                     Text(p.name).font(.headline)
-                                    if p.verified { Image(systemName: "checkmark.seal.fill").foregroundStyle(Theme.cyan).font(.caption) }
+                                    if p.verified { Image(systemName: "checkmark.seal.fill").foregroundStyle(Theme.actionBlue).font(.caption) }
                                 }
                                 Text(p.hops == 1 ? "Direct · \(p.rssi) dBm" : "\(p.hops) hops via relay")
-                                    .font(.footnote).foregroundStyle(Theme.textSecondary)
+                                    .font(.footnote).foregroundStyle(Theme.inkSecondary)
                             }
                             Spacer()
                             SignalBars(rssi: p.rssi)
@@ -69,7 +68,7 @@ struct SignalBars: View {
         HStack(alignment: .bottom, spacing: 2) {
             ForEach(1...4, id: \.self) { i in
                 RoundedRectangle(cornerRadius: 1.5)
-                    .fill(i <= level ? Theme.mint : Color.white.opacity(0.15))
+                    .fill(i <= level ? Theme.actionBlue : Theme.inkSecondary.opacity(0.3))
                     .frame(width: 4, height: CGFloat(4 + i * 4))
             }
         }
@@ -78,8 +77,8 @@ struct SignalBars: View {
 
 struct RadarView: View {
     let peers: [Peer]
-    @Binding var selected: Peer?
     @State private var sweep = 0.0
+    private let tail = 0.16 // fraction of a turn the fading tail covers
 
     var body: some View {
         GeometryReader { g in
@@ -87,23 +86,40 @@ struct RadarView: View {
             let c = CGPoint(x: g.size.width / 2, y: g.size.height / 2)
             ZStack {
                 ForEach(1...4, id: \.self) { i in
-                    Circle().stroke(Color.white.opacity(0.07), lineWidth: 1)
+                    Circle().stroke(Theme.ink.opacity(0.10), lineWidth: 1)
                         .frame(width: size * CGFloat(i) / 4, height: size * CGFloat(i) / 4)
                 }
-                AngularGradient(colors: [Theme.mint.opacity(0.0), Theme.mint.opacity(0.35)], center: .center, angle: .degrees(-60))
-                    .clipShape(Circle())
-                    .frame(width: size, height: size)
-                    .rotationEffect(.degrees(sweep))
-                    .mask(Circle().frame(width: size, height: size))
-                Circle().fill(Theme.accent).frame(width: 14, height: 14)
-                    .shadow(color: Theme.mint, radius: 10)
+                Rectangle().fill(Theme.ink.opacity(0.08)).frame(width: 1, height: size)
+                Rectangle().fill(Theme.ink.opacity(0.08)).frame(width: size, height: 1)
+
+                // Thin sweep: a short fading tail that ends in a bright leading edge at 3 o'clock, then rotates.
+                ZStack {
+                    AngularGradient(stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: .clear, location: 1 - tail),
+                        .init(color: Theme.actionBlue.opacity(0.45), location: 0.999),
+                        .init(color: .clear, location: 1),
+                    ], center: .center)
+                    .mask(Circle())
+                    Rectangle().fill(Theme.actionBlue)
+                        .frame(width: size / 2, height: 2)
+                        .offset(x: size / 4)
+                }
+                .frame(width: size, height: size)
+                .rotationEffect(.degrees(sweep))
+
+                Circle().fill(Theme.actionBlue).frame(width: 14, height: 14)
+                    .overlay(Circle().stroke(.white, lineWidth: 2))
+                    .shadow(color: Theme.actionBlue.opacity(0.6), radius: 8)
+
                 ForEach(peers) { p in
                     let r = radius(p) * size / 2
                     let a = angle(p)
                     VStack(spacing: 3) {
-                        Circle().fill(p.hops == 1 ? Theme.mint : Theme.violet).frame(width: 12, height: 12)
-                            .shadow(color: (p.hops == 1 ? Theme.mint : Theme.violet).opacity(0.8), radius: 8)
-                        Text(p.name).font(.caption2).foregroundStyle(Theme.textSecondary)
+                        Circle().fill(p.hops == 1 ? Theme.actionBlue : Color.white)
+                            .overlay(Circle().stroke(Theme.actionBlue, lineWidth: 2))
+                            .frame(width: 13, height: 13)
+                        Text(p.name).font(.caption2.weight(.medium)).foregroundStyle(Theme.ink)
                     }
                     .position(x: c.x + cos(a) * r, y: c.y + sin(a) * r)
                     .animation(.easeInOut(duration: 1), value: p.rssi)
@@ -114,10 +130,6 @@ struct RadarView: View {
     }
 
     /// RSSI -40 → near centre, -95 → edge
-    private func radius(_ p: Peer) -> CGFloat {
-        CGFloat(min(1, max(0.18, Double(-40 - p.rssi) / 55)))
-    }
-    private func angle(_ p: Peer) -> CGFloat {
-        CGFloat(abs(p.id.hashValue % 360)) * .pi / 180
-    }
+    private func radius(_ p: Peer) -> CGFloat { CGFloat(min(1, max(0.18, Double(-40 - p.rssi) / 55))) }
+    private func angle(_ p: Peer) -> CGFloat { CGFloat(abs(p.id.hashValue % 360)) * .pi / 180 }
 }

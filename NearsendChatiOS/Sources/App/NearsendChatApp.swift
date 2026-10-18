@@ -8,7 +8,7 @@ struct NearsendChatApp: App {
     init() {
         let a = UITabBarAppearance()
         a.configureWithTransparentBackground()
-        a.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
+        a.backgroundEffect = UIBlurEffect(style: .systemThinMaterial)
         UITabBar.appearance().standardAppearance = a
         UITabBar.appearance().scrollEdgeAppearance = a
     }
@@ -19,8 +19,7 @@ struct NearsendChatApp: App {
                 if onboarded { RootView() } else { OnboardingView { onboarded = true } }
             }
             .environmentObject(store)
-            .preferredColorScheme(.dark)
-            .tint(Theme.mint)
+            .tint(Theme.link)
         }
     }
 }

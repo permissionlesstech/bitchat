@@ -8,32 +8,38 @@ struct OnboardingView: View {
     private let pages: [(icon: String, title: String, body: String)] = [
         ("antenna.radiowaves.left.and.right", "Chat without internet", "Messages hop phone to phone over Bluetooth. No signal, no SIM, no account."),
         ("point.3.connected.trianglepath.dotted", "Every phone is a relay", "The more people nearby, the further your message travels."),
-        ("lock.shield.fill", "Private by design", "Direct messages are end-to-end encrypted. Nothing is stored on a server."),
+        ("lock.shield.fill", "Private by design", "Nothing is stored on a server. End-to-end encryption is on the roadmap."),
     ]
 
     var body: some View {
         ZStack {
-            Backdrop()
+            SkyBackground()
             VStack(spacing: 0) {
-                HStack { Spacer(); StatusPill(text: "Early development", color: Theme.warn) }.padding(.horizontal, 24).padding(.top, 8)
+                HStack {
+                    Text("NEARSEND").font(Theme.display(22)).foregroundStyle(.white)
+                    Spacer()
+                    SkyPill { Text("Early development").font(.caption.weight(.medium)) }.scaleEffect(0.85, anchor: .trailing)
+                }.padding(.horizontal, 24).padding(.top, 8)
                 TabView(selection: $page) {
                     ForEach(pages.indices, id: \.self) { i in
                         VStack(spacing: 28) {
                             ZStack {
                                 ForEach(0..<3) { r in
-                                    Circle().stroke(Theme.mint.opacity(0.25 - Double(r) * 0.07), lineWidth: 1)
-                                        .frame(width: 120 + CGFloat(r) * 50, height: 120 + CGFloat(r) * 50)
-                                        .scaleEffect(pulse ? 1.12 : 0.95)
+                                    Circle().stroke(.white.opacity(0.5 - Double(r) * 0.14), lineWidth: 1)
+                                        .frame(width: 130 + CGFloat(r) * 56, height: 130 + CGFloat(r) * 56)
+                                        .scaleEffect(pulse ? 1.1 : 0.95)
                                         .animation(.easeInOut(duration: 2.2).repeatForever().delay(Double(r) * 0.25), value: pulse)
                                 }
-                                Image(systemName: pages[i].icon)
-                                    .font(.system(size: 54, weight: .light))
-                                    .foregroundStyle(Theme.accent)
-                            }.frame(height: 260)
-                            VStack(spacing: 12) {
-                                Text(pages[i].title).font(.system(size: 30, weight: .bold, design: .rounded)).multilineTextAlignment(.center)
-                                Text(pages[i].body).font(.body).foregroundStyle(Theme.textSecondary).multilineTextAlignment(.center)
-                            }.padding(.horizontal, 32)
+                                Image(systemName: pages[i].icon).font(.system(size: 46, weight: .regular))
+                                    .foregroundStyle(Theme.actionBlue)
+                                    .frame(width: 112, height: 112)
+                                    .glass(radius: 56)
+                            }.frame(height: 270)
+                            VStack(spacing: 16) {
+                                Text(pages[i].title.uppercased()).font(Theme.display(40)).foregroundStyle(.white)
+                                    .multilineTextAlignment(.center).shadow(color: Color(hex: 0x0C2444, opacity: 0.35), radius: 8, y: 2)
+                                SkyPill { Text(pages[i].body).font(.body.weight(.medium)).multilineTextAlignment(.center) }
+                            }.padding(.horizontal, 24)
                         }.tag(i)
                     }
                 }

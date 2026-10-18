@@ -12,28 +12,29 @@ struct ChatsView: View {
     var body: some View {
         NavigationStack(path: $path) {
             ZStack {
-                Backdrop()
-                if filtered.isEmpty {
+                SkyBackground()
+                ScrollView {
                     VStack(spacing: 12) {
-                        Image(systemName: "bubble.left.and.text.bubble.right").font(.system(size: 44, weight: .light)).foregroundStyle(Theme.accent)
-                        Text("No conversations yet").font(.headline)
-                        Text("Open Nearby and tap someone to say hi.").font(.footnote).foregroundStyle(Theme.textSecondary)
-                    }
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 10) {
-                            ForEach(filtered) { c in
-                                NavigationLink(value: c.id) { row(c) }.buttonStyle(.plain)
+                        PageTitle(text: "Chats").padding(.top, 8)
+                        if filtered.isEmpty {
+                            Card {
+                                VStack(spacing: 8) {
+                                    Image(systemName: "bubble.left.and.text.bubble.right").font(.system(size: 36)).foregroundStyle(Theme.actionBlue)
+                                    Text("No conversations yet").font(.headline)
+                                    Text("Open Nearby and tap someone to say hi.").font(.footnote).foregroundStyle(Theme.inkSecondary)
+                                }.frame(maxWidth: .infinity)
                             }
-                        }.padding(.horizontal, 20)
-                    }
+                        }
+                        ForEach(filtered) { c in
+                            NavigationLink(value: c.id) { row(c) }.buttonStyle(.plain)
+                        }
+                    }.padding(.horizontal, 20)
                 }
             }
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: String.self) { id in
                 if let c = store.conversations.first(where: { $0.id == id }) { ThreadView(conversationID: c.id, peer: c.peer) }
             }
-            .navigationTitle("Chats")
-            .searchable(text: $query, prompt: "Search")
         }
     }
 
@@ -45,14 +46,14 @@ struct ChatsView: View {
                     HStack {
                         Text(c.peer.name).font(.headline)
                         Spacer()
-                        if let d = c.last?.date { Text(d, style: .time).font(.caption).foregroundStyle(Theme.textSecondary) }
+                        if let d = c.last?.date { Text(d, style: .time).font(.caption).foregroundStyle(Theme.inkSecondary) }
                     }
                     HStack {
-                        Text(c.last?.text ?? "").font(.subheadline).foregroundStyle(Theme.textSecondary).lineLimit(1)
+                        Text(c.last?.text ?? "").font(.subheadline).foregroundStyle(Theme.inkSecondary).lineLimit(1)
                         Spacer()
                         if c.unread > 0 {
-                            Text("\(c.unread)").font(.caption.bold()).foregroundStyle(.black)
-                                .padding(.horizontal, 7).padding(.vertical, 3).background(Theme.accent, in: Capsule())
+                            Text("\(c.unread)").font(.caption.bold()).foregroundStyle(.white)
+                                .padding(.horizontal, 7).padding(.vertical, 3).background(Theme.actionBlue, in: Capsule())
                         }
                     }
                 }
