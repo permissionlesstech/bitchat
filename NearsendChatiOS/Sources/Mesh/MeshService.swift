@@ -72,9 +72,13 @@ final class ChatStore: ObservableObject {
                 try? await Task.sleep(for: .milliseconds(900)); update(m.id, in: id, .delivered)
             }
         } else {
-            transport?.send(text, to: id) { [weak self] ok in
-                Task { @MainActor in self?.update(m.id, in: id, ok ? .delivered : .failed) }
-            } ?? update(m.id, in: id, .failed)
+            if let transport {
+                transport.send(text, to: id) { [weak self] ok in
+                    Task { @MainActor in self?.update(m.id, in: id, ok ? .delivered : .failed) }
+                }
+            } else {
+                update(m.id, in: id, .failed)
+            }
         }
     }
 
