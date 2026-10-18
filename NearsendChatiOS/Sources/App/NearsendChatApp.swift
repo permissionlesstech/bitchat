@@ -20,6 +20,8 @@ struct NearsendChatApp: App {
             }
             .environmentObject(store)
             .tint(Theme.link)
+            .onAppear { if onboarded { store.startIfNeeded() } }
+            .onChange(of: onboarded) { _, v in if v { store.startIfNeeded() } }
         }
     }
 }

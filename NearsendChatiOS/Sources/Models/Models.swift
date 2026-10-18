@@ -8,7 +8,7 @@ struct Peer: Identifiable, Hashable {
     var verified: Bool = false
 }
 
-enum DeliveryState { case sending, sent, relayed, delivered }
+enum DeliveryState { case sending, sent, relayed, delivered, failed }
 
 struct Message: Identifiable, Hashable {
     let id = UUID()

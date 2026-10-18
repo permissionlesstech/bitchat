@@ -26,14 +26,33 @@ struct NearbyView: View {
         Card {
             HStack {
                 VStack(alignment: .leading, spacing: 6) {
-                    StatusPill(text: store.meshActive ? "Mesh active · offline" : "Mesh paused", color: store.meshActive ? Theme.secure : Theme.inkSecondary)
-                    Text("\(store.peers.count) people in range").font(.title3.weight(.semibold))
-                    Text("\(store.relayedCount) reachable via relay").font(.footnote).foregroundStyle(Theme.inkSecondary)
+                    StatusPill(text: statusText, color: statusOK ? Theme.secure : Theme.inkSecondary)
+                    Text("\(store.peers.count) \(store.peers.count == 1 ? "person" : "people") in range").font(.title3.weight(.semibold))
+                    Text(subtitle).font(.footnote).foregroundStyle(Theme.inkSecondary)
                 }
                 Spacer()
                 Toggle("", isOn: $store.meshActive).labelsHidden().tint(Theme.actionBlue)
             }
         }
+    }
+
+    private var statusOK: Bool { store.meshActive && (store.simulated || store.bluetoothState == "ready") }
+    private var statusText: String {
+        if !store.meshActive { return "Mesh paused" }
+        if store.simulated { return "Demo data · simulator" }
+        switch store.bluetoothState {
+        case "ready": return "Bluetooth live · offline"
+        case "off": return "Bluetooth is off"
+        case "unauthorized": return "Bluetooth not allowed"
+        case "unsupported": return "Bluetooth unsupported"
+        default: return "Starting Bluetooth…"
+        }
+    }
+    private var subtitle: String {
+        if store.bluetoothState == "unauthorized" && !store.simulated { return "Allow Bluetooth for Nearsend Chat in Settings" }
+        if store.bluetoothState == "off" && !store.simulated { return "Turn Bluetooth on to find people nearby" }
+        if store.peers.isEmpty && !store.simulated { return "Open the app on another iPhone to connect" }
+        return "\(store.relayedCount) reachable via relay"
     }
 
     private var peerList: some View {

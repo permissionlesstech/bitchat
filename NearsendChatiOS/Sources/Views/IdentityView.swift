@@ -14,6 +14,7 @@ struct IdentityView: View {
                             VStack(spacing: 12) {
                                 Avatar(name: store.nickname, size: 88)
                                 TextField("Nickname", text: $store.nickname)
+                                    .onSubmit { store.applyNickname() }
                                     .multilineTextAlignment(.center)
                                     .font(.system(size: 22, weight: .semibold, design: .rounded))
                                 StatusPill(text: "No account · no phone number")

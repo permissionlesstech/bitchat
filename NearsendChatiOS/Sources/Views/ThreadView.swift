@@ -28,6 +28,8 @@ struct ThreadView: View {
                 composer
             }
         }
+        .onAppear { store.ensureConversation(peer); store.markRead(conversationID) }
+        .onChange(of: messages.count) { _, _ in store.markRead(conversationID) }
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
         .toolbar {
@@ -87,6 +89,7 @@ struct Bubble: View {
         case .sent: "checkmark"
         case .relayed: "arrow.triangle.branch"
         case .delivered: "checkmark.circle.fill"
+        case .failed: "exclamationmark.triangle.fill"
         }
     }
 }
