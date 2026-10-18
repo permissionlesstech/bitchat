@@ -14,7 +14,7 @@ jobs:
         working-directory: MeshChatiOS
     steps:
       - uses: actions/checkout@v4
-      - run: brew install xcodegen && xcodegen generate
+      - run: brew install xcodegen && xcodegen generate && sed -i '' 's/objectVersion = 77;/objectVersion = 56;/; s/preferredProjectObjectVersion = 77;/preferredProjectObjectVersion = 56;/' MeshChat.xcodeproj/project.pbxproj
       - run: xcodebuild -project MeshChat.xcodeproj -scheme MeshChat -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build 2>&1 | tee build.log
       - name: Screenshots
         run: |
