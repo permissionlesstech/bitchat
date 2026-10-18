@@ -16,9 +16,11 @@
 		BC55CF1D950DBF3637488042 /* ThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A8156C4CF0D5D5CDE983A47 /* ThreadView.swift */; };
 		C718AC7AD68C0EC4CD32DB90 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D241971198B28D215DA0998F /* OnboardingView.swift */; };
 		E259DC715A0201B116936F54 /* MeshService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FE7E11464E41C885097BF69 /* MeshService.swift */; };
+		F861B1D61D3F1B6D29567FE3 /* Anton-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 232B4FB3BF6F535A13312310 /* Anton-Regular.ttf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		232B4FB3BF6F535A13312310 /* Anton-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Anton-Regular.ttf"; sourceTree = "<group>"; };
 		27189BBA0B50CECDDF775F67 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		28CEAE65B3A970BA018742F3 /* NearbyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyView.swift; sourceTree = "<group>"; };
 		2A8156C4CF0D5D5CDE983A47 /* ThreadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadView.swift; sourceTree = "<group>"; };
@@ -47,6 +49,7 @@
 				A25487A719C9B9AE4615AD42 /* DesignSystem */,
 				33B9B63351746A5E400B6B86 /* Mesh */,
 				50C99FD8F74016CCE05F40BA /* Models */,
+				C65EAE6EEE41526ED9B12E75 /* Resources */,
 				E5C5B6B1EDB70D5A2817D98D /* Views */,
 			);
 			path = Sources;
@@ -84,6 +87,14 @@
 			path = DesignSystem;
 			sourceTree = "<group>";
 		};
+		C65EAE6EEE41526ED9B12E75 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				232B4FB3BF6F535A13312310 /* Anton-Regular.ttf */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		E5C5B6B1EDB70D5A2817D98D /* Views */ = {
 			isa = PBXGroup;
 			children = (
@@ -112,6 +123,7 @@
 			buildConfigurationList = 12278562F2C999D275CB2F0A /* Build configuration list for PBXNativeTarget "NearsendChat" */;
 			buildPhases = (
 				5ABB5D211558593C3E26CC1B /* Sources */,
+				7B4B6E6E395620458050A740 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -153,6 +165,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		7B4B6E6E395620458050A740 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F861B1D61D3F1B6D29567FE3 /* Anton-Regular.ttf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		5ABB5D211558593C3E26CC1B /* Sources */ = {

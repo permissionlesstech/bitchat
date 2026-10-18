@@ -24,6 +24,10 @@
 	<string>Nearsend Chat uses Bluetooth to find and message people near you without internet.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Nearsend Chat uses the local network to reach nearby devices.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Anton-Regular.ttf</string>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>
@@ -31,7 +35,5 @@
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
-	<key>UIUserInterfaceStyle</key>
-	<string>Dark</string>
 </dict>
 </plist>
