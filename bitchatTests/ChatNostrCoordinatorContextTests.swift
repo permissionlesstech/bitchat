@@ -598,8 +598,7 @@ struct ChatNostrCoordinatorContextTests {
 
     @Test(arguments: [false, true]) @MainActor
     func processNostrMessage_rejectsLegacyDowngradeBeforeDelivery(pinDuringDecode: Bool)
-        async throws
-    {
+        async throws {
         let context = MockChatNostrContext()
         let coordinator = ChatNostrCoordinator(context: context)
         let recipient = try NostrIdentity.generate()

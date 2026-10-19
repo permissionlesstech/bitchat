@@ -167,8 +167,7 @@ struct BLENoisePacketHandlerTests {
                     )
                     return recorder.authorizeNoisePayload
                 },
-                deliverNoisePayload: {
-                    peerID, type, payload, timestamp, _ in
+                deliverNoisePayload: { peerID, type, payload, timestamp, _ in
                     recorder.deliveries.append(
                         (peerID, type, payload, timestamp)
                     )

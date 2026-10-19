@@ -782,8 +782,7 @@ final class NostrRelayManager: ObservableObject {
             let requestState = SubscriptionRequestState(messageString: messageString, relayURLs: Set(urls))
             let previousRequestState = subscriptionRequestState[id]
             if subscriptionGenerations[id] == nil
-                || previousRequestState != requestState
-            {
+                || previousRequestState != requestState {
                 nextSubscriptionGeneration &+= 1
                 subscriptionGenerations[id] = nextSubscriptionGeneration
                 removeRecentInboundEvents(forSubscriptionID: id)
@@ -801,8 +800,7 @@ final class NostrRelayManager: ObservableObject {
             }
             messageHandlers[id] = handler
             if previousRequestState == requestState,
-               subscriptionStateExists(id: id, requestState: requestState)
-            {
+               subscriptionStateExists(id: id, requestState: requestState) {
                 return true
             }
 
@@ -1285,8 +1283,7 @@ final class NostrRelayManager: ObservableObject {
             toSend[id] = (pending.messageString, generation)
         }
         for (id, state) in subscriptionRequestState
-        where state.relayURLs.contains(relayUrl)
-        {
+        where state.relayURLs.contains(relayUrl) {
             guard let generation = subscriptionGenerations[id] else {
                 continue
             }
@@ -1330,8 +1327,7 @@ final class NostrRelayManager: ObservableObject {
                         self.subscriptions[relayUrl, default: [:]][id] =
                             generation
                         if self.pendingSubscriptions[relayUrl]?[id]?
-                            .messageString == messageString
-                        {
+                            .messageString == messageString {
                             self.pendingSubscriptions[relayUrl]?
                                 .removeValue(forKey: id)
                         }

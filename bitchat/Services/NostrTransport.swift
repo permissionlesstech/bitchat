@@ -537,7 +537,6 @@ extension NostrTransport {
                     )
                     return .ndrRequired
                 }
-                break
             case .failed:
                 SecureLogger.error(
                     "NostrTransport: active NDR session failed; refusing legacy downgrade",

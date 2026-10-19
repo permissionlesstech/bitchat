@@ -1874,8 +1874,7 @@ private final class PacketTap: @unchecked Sendable {
 
 private final class AuthenticatedTransportStateEventRecorder:
     TransportEventDelegate,
-    @unchecked Sendable
-{
+    @unchecked Sendable {
     private let lock = NSLock()
     private var updatedPeerIDs: [PeerID] = []
 

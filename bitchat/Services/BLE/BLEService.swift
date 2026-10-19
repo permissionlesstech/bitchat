@@ -5826,8 +5826,7 @@ extension BLEService {
         let sendFragment: (BitchatPacket) -> Bool = { [weak self] fragmentPacket in
             guard let self else { return false }
             if let expected =
-                    request.requiredAuthenticatedTransportState
-            {
+                    request.requiredAuthenticatedTransportState {
                 guard let directedPeer = request.directedPeer,
                       BLEAuthenticatedTransportAdmission.isCurrent(
                         expected: expected,

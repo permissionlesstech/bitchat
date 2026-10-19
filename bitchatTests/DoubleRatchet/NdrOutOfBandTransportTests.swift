@@ -133,8 +133,7 @@ private final class FakeNdrRetryScheduler {
 
 @MainActor
 private final class ControllableNdrSessionMarkerStore:
-    NdrSessionMarkerStoring
-{
+    NdrSessionMarkerStoring {
     enum Failure: Error {
         case mark
         case clear
@@ -812,8 +811,7 @@ struct NdrOutOfBandTransportTests {
     )
     @MainActor
     func pinnedFavoriteRebindRetiresAcrossGateOffAndReenable()
-        throws
-    {
+        throws {
         let storage = try makeTempDir(label: "favorite-rebind-gate-off")
         let markerStore = InMemoryNdrSessionMarkerStore()
         let nostrKeychain = MockKeychain()
@@ -2244,8 +2242,7 @@ struct NdrOutOfBandTransportTests {
     @Test("A failed marker precommit makes zero native OOB mutation")
     @MainActor
     func establishedMarkerWriteFailureIsRetriableBeforeNativeResponse()
-        throws
-    {
+        throws {
         let local = try NostrIdentity.generate()
         let peer = try NostrIdentity.generate()
         let localStorage = try makeTempDir(label: "marker-write-local")
@@ -2805,14 +2802,12 @@ struct NdrOutOfBandTransportTests {
 
         for event in firstRelay.sentEvents
             .dropFirst(firstRelayEventCount)
-        where event.kind == 1060
-        {
+        where event.kind == 1060 {
             secondService.processInboundRelayEvent(event)
         }
         for event in secondRelay.sentEvents
             .dropFirst(secondRelayEventCount)
-        where event.kind == 1060
-        {
+        where event.kind == 1060 {
             firstService.processInboundRelayEvent(event)
         }
 

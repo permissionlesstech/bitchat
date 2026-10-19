@@ -652,8 +652,7 @@ final class NostrInboundPipeline {
             }
             if let expiresAtSeconds,
                self.now().timeIntervalSince1970
-                >= TimeInterval(expiresAtSeconds)
-            {
+                >= TimeInterval(expiresAtSeconds) {
                 // The native delivery remains durable while decoding hops
                 // actors. Recheck immediately before every app mutation so a
                 // message that expires during that work drains without ever

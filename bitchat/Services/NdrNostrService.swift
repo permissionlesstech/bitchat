@@ -71,8 +71,7 @@ final class InMemoryNdrSessionMarkerStore: NdrSessionMarkerStoring {
 
 @MainActor
 private final class KeychainNdrSessionMarkerStore:
-    NdrSessionMarkerStoring
-{
+    NdrSessionMarkerStoring {
     private static let service = "chat.bitchat.ndr.session-markers"
     private static let key = "established-identities"
     private let keychain: KeychainManagerProtocol
@@ -323,8 +322,7 @@ final class NdrNostrService {
             if try sessionMarkerStore.contains(
                 identityPubkeyHex: pubkey
             ),
-                !Self.hasDurablePairwiseState(at: storageURL)
-            {
+                !Self.hasDurablePairwiseState(at: storageURL) {
                 throw NdrSessionStateError.missingEstablishedState
             }
             let newManager = try PairwiseManager.newWithStoragePath(
@@ -1012,8 +1010,7 @@ final class NdrNostrService {
         }
         if hitBatchLimit,
            synchronousAckSucceeded
-            || processedActionCount > synchronousAcks.count
-        {
+            || processedActionCount > synchronousAcks.count {
             schedulePendingActionContinuation(
                 manager: manager,
                 epoch: epoch
@@ -1067,8 +1064,7 @@ final class NdrNostrService {
         transientRetryAttempts[actionID] = attempt + 1
         let retryToken = UUID()
         scheduledTransientRetryTokens[actionID] = retryToken
-        retryScheduler(Self.transientRetryDelays[attempt]) {
-            [weak self, manager] in
+        retryScheduler(Self.transientRetryDelays[attempt]) { [weak self, manager] in
             guard let self,
                   self.isCurrent(manager, epoch: epoch),
                   self.scheduledTransientRetryTokens[actionID] == retryToken,

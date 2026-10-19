@@ -1208,14 +1208,12 @@ struct NostrTransportTests {
 
         for event in senderRelay.sentEvents
             .dropFirst(senderRelayIndex)
-        where event.kind == 1060
-        {
+        where event.kind == 1060 {
             recipientService.processInboundRelayEvent(event)
         }
         for event in recipientRelay.sentEvents
             .dropFirst(recipientRelayIndex)
-        where event.kind == 1060
-        {
+        where event.kind == 1060 {
             senderService.processInboundRelayEvent(event)
         }
 
