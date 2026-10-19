@@ -659,6 +659,19 @@ final class NostrInboundPipeline {
                 // being mapped, persisted, or notified.
                 return .consumed
             }
+            // Decryption and decoding cross actor boundaries. A pin or
+            // identity rebind in that interval must take effect before any
+            // mapping, message or acknowledgement reaches the app.
+            switch source {
+            case .legacy1059:
+                guard context.canAcceptLegacyNostrDM(from: senderPubkey) else {
+                    return .consumed
+                }
+            case .ndr:
+                guard self.findNoiseKey(for: routingPubkey) == actualSenderNoiseKey else {
+                    return .retry
+                }
+            }
             context.registerNostrKeyMapping(routingPubkey, for: targetPeerID)
 
             switch payload.type {
