@@ -23,6 +23,10 @@ jobs:
         with:
           submodules: true
 
+      - name: Select validated Xcode
+        # Matches the toolchain used by the upstream app/iOS green run.
+        run: sudo xcodes select "$(cat .xcode-version)"
+
       - name: Build NdrFfi from pinned source
         run: |
           rust_version="$(tr -d '[:space:]' < localPackages/NdrFfi/RUST_TOOLCHAIN)"
