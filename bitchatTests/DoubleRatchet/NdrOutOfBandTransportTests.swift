@@ -1368,6 +1368,92 @@ struct NdrOutOfBandTransportTests {
         )
     }
 
+    @Test("A successful BLE handoff retries a failed durable OOB acknowledgement")
+    @MainActor
+    func outOfBandAcknowledgementFailureRetriesWithoutReconnect() async throws {
+        let relay = FakeRelayManager()
+        let retryScheduler = FakeNdrRetryScheduler()
+        let storage = try makeTempDir(label: "oob-ack-retry")
+        defer { try? FileManager.default.removeItem(at: storage) }
+        let service = NdrNostrService(
+            relayManager: relay,
+            rolloutEnabled: true,
+            storageDirectoryProvider: { storage },
+            retryScheduler: retryScheduler.schedule
+        )
+        let (viewModel, transport, favoritesService) = makeViewModel(ndrService: service)
+        let localIdentity = try #require(try viewModel.idBridge.getCurrentNostrIdentity())
+        let remoteIdentity = try NostrIdentity.generate()
+        let remoteService = try makeService(label: "oob-ack-retry-peer")
+        remoteService.configureIfNeeded(identity: remoteIdentity)
+        let noiseKey = try #require(Data(hexString: remoteIdentity.publicKeyHex))
+        let peerID = PeerID(str: "2132435465768798")
+        let binding = AuthenticatedPeerTransportState(
+            capabilities: [.doubleRatchet],
+            sessionGeneration: UUID(),
+            noisePublicKey: noiseKey
+        )
+        installMutualFavorite(in: favoritesService, noiseKey: noiseKey, nostrIdentity: remoteIdentity)
+        defer { removeFavorite(in: favoritesService, noiseKey: noiseKey) }
+        transport.authenticatedPeerTransportStates[peerID] = binding
+        transport.ndrSendResults = [true, true]
+
+        let invite = try #require(remoteService.currentInviteEventJson())
+        viewModel.handleNdrEventPayload(from: peerID, payload: Data(invite.utf8))
+        #expect(transport.sentNdrEvents.count == 1)
+        #expect(relay.sentEvents.isEmpty)
+
+        // The mock schedules its BLE completion on MainActor. Make storage
+        // unavailable before yielding, after native acceptance has committed.
+        let stateDirectory = storage.appendingPathComponent("pairwise-v1")
+            .appendingPathComponent(localIdentity.publicKeyHex)
+        let backup = storage.appendingPathComponent("saved-state")
+        do {
+            try FileManager.default.moveItem(at: stateDirectory, to: backup)
+            defer {
+                try? FileManager.default.removeItem(at: stateDirectory)
+                try? FileManager.default.moveItem(at: backup, to: stateDirectory)
+            }
+            try Data("temporarily unavailable".utf8).write(to: stateDirectory)
+            let scheduled = await TestHelpers.waitUntil(
+                { !retryScheduler.scheduled.isEmpty },
+                timeout: TestConstants.settleTimeout
+            )
+            #expect(scheduled)
+            #expect(relay.sentEvents.isEmpty)
+        }
+
+        #expect(retryScheduler.requestedDelays == [0.25])
+        retryScheduler.runNext()
+        let completed = await TestHelpers.waitUntil(
+            { relay.sentEvents.contains { $0.kind == 1060 } },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(completed)
+        #expect(transport.sentNdrEvents.count == 2)
+        let response = try #require(transport.sentNdrEvents.first?.eventJson)
+        #expect(transport.sentNdrEvents.allSatisfy {
+            $0.eventJson == response && $0.expectedTransportState == binding
+        })
+        #expect(retryScheduler.scheduled.isEmpty)
+        #expect(service.pendingOutOfBandActions(
+            forAuthenticatedPeerPubkeyHex: remoteIdentity.publicKeyHex
+        ).isEmpty)
+
+        // The receiver accepts retransmission without replacing the session.
+        for _ in 0..<2 {
+            _ = remoteService.processOutOfBandEventJson(
+                response,
+                expectedPeerPubkeyHex: localIdentity.publicKeyHex,
+                persistEstablishedBinding: { true }
+            )
+        }
+        for event in relay.sentEvents where event.kind == 1060 {
+            remoteService.processInboundRelayEvent(event)
+        }
+        #expect(remoteService.hasActiveSession(with: localIdentity.publicKeyHex))
+    }
+
     @Test("Every failed OOB retry revalidates Noise generation and favorite")
     @MainActor
     func outOfBandRetryRejectsStaleBindingsAndRemainsDurable() async throws {
