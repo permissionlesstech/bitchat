@@ -967,17 +967,19 @@ final class NdrNostrService {
                         return
                     }
                     self.inFlightActionIDs.remove(action.actionId)
-                    if disposition == .consumed {
+                    if disposition == .consumed,
+                       self.acknowledge(
+                        [action.actionId],
+                        manager: manager,
+                        epoch: epoch
+                       ) {
                         self.deferredActionIDs.remove(action.actionId)
-                        if !self.acknowledge(
-                            [action.actionId],
+                    } else {
+                        self.deferForTransientRetry(
+                            action.actionId,
                             manager: manager,
                             epoch: epoch
-                        ) {
-                            self.deferredActionIDs.insert(action.actionId)
-                        }
-                    } else {
-                        self.deferredActionIDs.insert(action.actionId)
+                        )
                     }
                 }
 

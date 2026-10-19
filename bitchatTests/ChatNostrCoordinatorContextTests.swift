@@ -818,8 +818,8 @@ struct GeoPresenceTrackerTests {
         #expect(context.recordedNostrEventIDs == [rumor.id])
     }
 
-    @Test(arguments: [false, true]) @MainActor
-    func ndrDelivery_marksPrivateMessageAsPairwiseOnly(rebindDuringDecode: Bool) async throws {
+    @Test(arguments: [false, true], [false, true]) @MainActor
+    func ndrDelivery_marksPrivateMessageAsPairwiseOnly(rebindDuringDecode: Bool, cancelDuringDecode: Bool) async throws {
         let context = MockChatNostrContext()
         let recipient = try NostrIdentity.generate()
         let sender = try NostrIdentity.generate()
@@ -856,8 +856,11 @@ struct GeoPresenceTrackerTests {
             presence: GeoPresenceTracker(context: context)
         )
         var disposition: NdrDeliveryDisposition?
-        if rebindDuringDecode {
-            context.onNdrBindingRead = { [weak context] in context?.allowsNdrBinding = false }
+        if rebindDuringDecode || cancelDuringDecode {
+            context.onNdrBindingRead = { [weak context] in
+                if rebindDuringDecode { context?.allowsNdrBinding = false }
+                if cancelDuringDecode { withUnsafeCurrentTask { $0?.cancel() } }
+            }
         }
 
         pipeline.handleNdrDecryptedMessage(
@@ -875,7 +878,7 @@ struct GeoPresenceTrackerTests {
         )
 
         #expect(completed)
-        if rebindDuringDecode {
+        if rebindDuringDecode || cancelDuringDecode {
             #expect(disposition == .retry)
             #expect(context.handledPrivateMessages.isEmpty)
             #expect(context.nostrKeyMapping.isEmpty)

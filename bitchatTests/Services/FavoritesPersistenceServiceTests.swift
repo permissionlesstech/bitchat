@@ -556,6 +556,56 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
         )
     }
 
+    func test_failedInitialBindingWriteIsNotPublishedAndCanBeRetried() throws {
+        for addedLocally in [true, false] {
+            let keychain = MockKeychain()
+            let service = FavoritesPersistenceService(keychain: keychain)
+            let peerKey = Data(repeating: 0x50, count: 32)
+            let identity = try NostrIdentity.generate()
+            // Start with the other half of a favorite relationship, without
+            // the Nostr association needed for authenticated bootstrap.
+            if addedLocally {
+                service.updatePeerFavoritedUs(peerNoisePublicKey: peerKey, favorited: true)
+            } else {
+                service.addFavorite(peerNoisePublicKey: peerKey, peerNickname: "Pending binding")
+            }
+            let before = service.getFavoriteStatus(for: peerKey)
+            let assignIdentity = {
+                if addedLocally {
+                    service.addFavorite(
+                        peerNoisePublicKey: peerKey,
+                        peerNostrPublicKey: identity.npub,
+                        peerNickname: "Durable binding"
+                    )
+                } else {
+                    service.updatePeerFavoritedUs(
+                        peerNoisePublicKey: peerKey,
+                        favorited: true,
+                        peerNostrPublicKey: identity.npub
+                    )
+                }
+            }
+            keychain.simulatedGenericSaveFailureKeys.insert(storageKey)
+            assignIdentity()
+
+            for current in [service, FavoritesPersistenceService(keychain: keychain)] {
+                XCTAssertEqual(current.getFavoriteStatus(for: peerKey), before)
+                XCTAssertFalse(current.isMutualFavorite(peerKey))
+                XCTAssertNil(current.getFavoriteStatus(for: peerKey)?.peerNostrPublicKey)
+                XCTAssertFalse(current.isNdrRequired(for: peerKey))
+            }
+
+            keychain.simulatedGenericSaveFailureKeys.remove(storageKey)
+            assignIdentity()
+            XCTAssertTrue(service.isMutualFavorite(peerKey))
+            XCTAssertTrue(service.markNdrRequired(for: peerKey))
+            let restarted = FavoritesPersistenceService(keychain: keychain)
+            XCTAssertEqual(restarted.getFavoriteStatus(for: peerKey)?.peerNostrPublicKey, identity.npub)
+            XCTAssertTrue(restarted.isNdrRequired(for: peerKey))
+            XCTAssertFalse(restarted.canAcceptLegacyNostrDM(from: identity.publicKeyHex))
+        }
+    }
+
     func test_pinWriteFailureFailsClosedForBindingsAndLegacyInbound()
         throws
     {

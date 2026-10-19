@@ -509,7 +509,7 @@ final class NostrInboundPipeline {
                 expiresAtSeconds: message.expiresAtSeconds,
                 source: .ndr
             )
-            guard self.wipeGeneration == wipeGeneration else {
+            guard !Task.isCancelled, self.wipeGeneration == wipeGeneration else {
                 completion(.retry)
                 return
             }
@@ -586,7 +586,7 @@ final class NostrInboundPipeline {
         expiresAtSeconds: UInt64? = nil,
         source: NostrPrivateMessageSource
     ) async -> NdrDeliveryDisposition {
-        guard let context else { return .retry }
+        guard !Task.isCancelled, let context else { return .retry }
         if content.hasPrefix("verify:") {
             return .consumed
         }
@@ -599,6 +599,7 @@ final class NostrInboundPipeline {
         let packet: BitchatPacket? = await MainActor.run {
             Self.decodeEmbeddedBitChatPacket(from: content)
         }
+        guard !Task.isCancelled else { return .retry }
         guard let packet else {
             SecureLogger.error("Failed to decode embedded BitChat packet from Nostr DM", category: .session)
             return .consumed
@@ -625,7 +626,7 @@ final class NostrInboundPipeline {
 
         let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTimestamp))
         return await MainActor.run {
-            guard self.wipeGeneration == wipeGeneration else {
+            guard !Task.isCancelled, self.wipeGeneration == wipeGeneration else {
                 return .retry
             }
             if let expiresAtSeconds,
