@@ -337,31 +337,6 @@ final class NostrTransport: Transport, @unchecked Sendable {
         }
     }
 
-    func sendPrivateMessage(
-        _ content: String,
-        to peerID: PeerID,
-        recipientNickname: String,
-        messageID: String,
-        expiresAtSeconds: UInt64
-    ) {
-        Task { @MainActor in
-            do {
-                _ = try sendPrivateMessageAndReturnTransport(
-                    content,
-                    to: peerID,
-                    recipientNickname: recipientNickname,
-                    messageID: messageID,
-                    expiresAtSeconds: expiresAtSeconds
-                )
-            } catch {
-                SecureLogger.error(
-                    "NostrTransport: failed to send disappearing PM: \(error)",
-                    category: .session
-                )
-            }
-        }
-    }
-
     @MainActor
     func sendPrivateMessageAndReturnTransport(
         _ content: String,

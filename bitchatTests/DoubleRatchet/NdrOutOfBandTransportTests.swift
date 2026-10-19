@@ -17,15 +17,10 @@ final class FakeRelayManager: NostrRelayManaging {
         let handler: (NostrEvent) -> Void
     }
 
-    struct PendingPublish {
-        let eventID: String
-        let completion: (Bool) -> Void
-    }
-
     private(set) var subscriptions: [Subscription] = []
     private(set) var unsubscribedIDs: [String] = []
     private(set) var sentEvents: [NostrEvent] = []
-    private(set) var pendingPublishes: [PendingPublish] = []
+    private(set) var pendingPublishes: [(Bool) -> Void] = []
     private var activeSubscriptionIDs = Set<String>()
     var automaticallyCompletePublishes = true
     var publishAccepted = true
@@ -70,26 +65,13 @@ final class FakeRelayManager: NostrRelayManaging {
         if automaticallyCompletePublishes {
             completion(publishAccepted)
         } else {
-            pendingPublishes.append(
-                PendingPublish(eventID: event.id, completion: completion)
-            )
+            pendingPublishes.append(completion)
         }
     }
 
     func completeNextPublish(accepted: Bool) {
         guard !pendingPublishes.isEmpty else { return }
-        pendingPublishes.removeFirst().completion(accepted)
-    }
-
-    func deliver(_ event: NostrEvent, to subscriptionID: String) {
-        guard activeSubscriptionIDs.contains(subscriptionID),
-              let subscription = subscriptions.last(where: {
-                  $0.id == subscriptionID
-              })
-        else {
-            return
-        }
-        subscription.handler(event)
+        pendingPublishes.removeFirst()(accepted)
     }
 
     @discardableResult
