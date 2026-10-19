@@ -430,8 +430,7 @@ final class FavoritesPersistenceService: ObservableObject {
             ) == normalizedPeer
                 || journal.targetRelationship.peerNostrPublicKey.flatMap(
                     Self.normalizedNostrPublicKey
-                ) == normalizedPeer
-            {
+                ) == normalizedPeer {
                 return false
             }
         }
@@ -534,8 +533,7 @@ final class FavoritesPersistenceService: ObservableObject {
         matchesNoisePublicKey noisePublicKey: Data
     ) -> Bool {
         if let fullKey = Data(hexString: peerID.id),
-           fullKey == noisePublicKey
-        {
+           fullKey == noisePublicKey {
             return true
         }
         return peerID.toShort()

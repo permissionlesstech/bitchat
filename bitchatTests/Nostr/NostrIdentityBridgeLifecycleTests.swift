@@ -136,8 +136,7 @@ struct NostrIdentityBridgeLifecycleTests {
 
 private final class BlockingIdentityLifecycleKeychain:
     KeychainManagerProtocol,
-    @unchecked Sendable
-{
+    @unchecked Sendable {
     private let lock = NSLock()
     private let firstSaveEntered = DispatchSemaphore(value: 0)
     private let firstSaveRelease = DispatchSemaphore(value: 0)

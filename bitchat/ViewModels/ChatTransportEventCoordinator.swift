@@ -377,8 +377,7 @@ extension ChatViewModel: ChatTransportEventContext {
                 }
                 self.ndrService.scheduleHostTransientRetry(
                     after: retryAttempt
-                ) {
-                    [weak self] in
+                ) { [weak self] in
                     self?.sendNdrInvite(
                         invite,
                         to: peerID,
@@ -427,8 +426,7 @@ extension ChatViewModel: ChatTransportEventContext {
                 guard !succeeded, let self else { return }
                 self.ndrService.scheduleHostTransientRetry(
                     after: retryAttempt
-                ) {
-                    [weak self] in
+                ) { [weak self] in
                     guard let self else { return }
                     guard self.isCurrentDoubleRatchetBinding(
                             peerID: peerID,
@@ -437,8 +435,7 @@ extension ChatViewModel: ChatTransportEventContext {
                           )
                     else {
                         if self.ndrOutOfBandGenerationByPeer[peerID]
-                            == expectedTransportState.sessionGeneration
-                        {
+                            == expectedTransportState.sessionGeneration {
                             self.ndrOutOfBandGenerationByPeer
                                 .removeValue(forKey: peerID)
                         }
@@ -504,8 +501,7 @@ extension ChatViewModel: ChatTransportEventContext {
 
         if let previousPeerPubkeyHex =
             ndrPeerPubkeyByNoiseKey[noisePublicKey],
-           previousPeerPubkeyHex != peerPubkeyHex
-        {
+           previousPeerPubkeyHex != peerPubkeyHex {
             guard ndrService.retirePeer(previousPeerPubkeyHex) else {
                 return false
             }
@@ -626,8 +622,7 @@ extension ChatViewModel: ChatTransportEventContext {
                 oldPeerPubkeyHex,
                 processPendingActions: false,
                 allowDisabledMaintenance: true
-           )
-        {
+           ) {
             return false
         }
         let reboundPeerIDs = ndrOutOfBandGenerationByPeer.keys.filter {

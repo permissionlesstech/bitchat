@@ -185,8 +185,7 @@ final class NostrRelayManagerTests: XCTestCase {
     }
 
     func test_ndrHandshakeWhileActivationBlockedRegistersAfterConnectivityWake()
-        throws
-    {
+        throws {
         let context = makeContext(
             permission: .authorized,
             activationAllowed: false

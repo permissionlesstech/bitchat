@@ -157,8 +157,7 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
     }
 
     func test_postSessionRebindJournalsBeforeRetireAndPreservesPin()
-        throws
-    {
+        throws {
         let keychain = MockKeychain()
         let service = FavoritesPersistenceService(keychain: keychain)
         let peerKey = Data(repeating: 0x42, count: 32)
@@ -295,8 +294,7 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
     }
 
     func test_recoveryTreatsEquivalentHexAndNpubJournalIdentityAsSame()
-        throws
-    {
+        throws {
         let keychain = MockKeychain()
         let peerKey = Data(repeating: 0x4a, count: 32)
         let oldIdentity = try NostrIdentity.generate()
@@ -370,8 +368,7 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
     }
 
     func test_equivalentHexAndNpubIdentityUpdateIsANondestructiveNoop()
-        throws
-    {
+        throws {
         let keychain = MockKeychain()
         let service = FavoritesPersistenceService(keychain: keychain)
         let peerKey = Data(repeating: 0x44, count: 32)
@@ -420,8 +417,7 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
     }
 
     func test_pendingJournalReservesTargetAcrossFavoritesAndRestart()
-        throws
-    {
+        throws {
         let keychain = MockKeychain()
         let firstNoiseKey = Data(repeating: 0x45, count: 32)
         let secondNoiseKey = Data(repeating: 0x46, count: 32)
@@ -497,8 +493,7 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
     }
 
     func test_journalClearFailureAllowsCommittedTargetButBlocksFallback()
-        throws
-    {
+        throws {
         let keychain = MockKeychain()
         let service = FavoritesPersistenceService(keychain: keychain)
         let peerKey = Data(repeating: 0x47, count: 32)
@@ -607,8 +602,7 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
     }
 
     func test_pinWriteFailureFailsClosedForBindingsAndLegacyInbound()
-        throws
-    {
+        throws {
         let keychain = MockKeychain()
         let service = FavoritesPersistenceService(keychain: keychain)
         let peerKey = Data(repeating: 0x48, count: 32)
@@ -684,8 +678,7 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
     }
 
     func test_legacyInboundPolicyRejectsPinnedAndJournalIdentities()
-        throws
-    {
+        throws {
         let keychain = MockKeychain()
         let service = FavoritesPersistenceService(keychain: keychain)
         let peerKey = Data(repeating: 0x49, count: 32)

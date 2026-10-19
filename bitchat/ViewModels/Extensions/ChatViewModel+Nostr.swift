@@ -63,8 +63,7 @@ extension ChatViewModel {
     @MainActor
     func setupNostrMessageHandling() {
         if favoritesService.canActivateDoubleRatchetRelay,
-           let currentIdentity = try? idBridge.getCurrentNostrIdentity()
-        {
+           let currentIdentity = try? idBridge.getCurrentNostrIdentity() {
             ndrService.configureIfNeeded(
                 identity: currentIdentity,
                 processPendingActions: false

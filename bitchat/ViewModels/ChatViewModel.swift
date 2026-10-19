@@ -1276,24 +1276,18 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             .installNostrIdentityRebindAuthorization(
                 owner: ndrFavoriteRebindAuthorizationOwner,
                 required: resolvedNdrService.isRolloutEnabled,
-                authorize: { [weak self]
-                    noisePublicKey,
-                    oldNostrPublicKey,
-                    newNostrPublicKey in
+                authorize: { [weak self] noisePublicKey, oldNostrPublicKey, newNostrPublicKey in
                     self?.authorizeDoubleRatchetFavoriteRebind(
                         noisePublicKey: noisePublicKey,
                         oldNostrPublicKey: oldNostrPublicKey,
                         newNostrPublicKey: newNostrPublicKey
                     ) ?? false
                 },
-                commit: { [weak self]
-                    noisePublicKey,
-                    oldNostrPublicKey,
-                    newNostrPublicKey in
+                commit: { [weak self] noisePublicKey, oldNostrPublicKey, newNostrPublicKey in
                     self?.commitDoubleRatchetFavoriteRebind(
-                    noisePublicKey: noisePublicKey,
-                    oldNostrPublicKey: oldNostrPublicKey,
-                    newNostrPublicKey: newNostrPublicKey
+                        noisePublicKey: noisePublicKey,
+                        oldNostrPublicKey: oldNostrPublicKey,
+                        newNostrPublicKey: newNostrPublicKey
                     ) ?? false
                 }
             )
