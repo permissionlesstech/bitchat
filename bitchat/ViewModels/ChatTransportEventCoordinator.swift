@@ -368,8 +368,11 @@ extension ChatViewModel: ChatTransportEventContext {
             to: peerID,
             eventJson: invite.eventJson,
             expectedTransportState: expectedTransportState,
-            completion: { [weak self] succeeded in
-                guard !succeeded, let self else { return }
+            completion: { [weak self] _ in
+                // BLE admission does not prove the peer accepted the invite.
+                // Keep the same bounded retry chain until local session state
+                // exists; every attempt revalidates the authenticated binding.
+                guard let self else { return }
                 guard self.ndrInviteAttemptTokenByPeer[peerID]
                         == inviteAttemptToken
                 else {

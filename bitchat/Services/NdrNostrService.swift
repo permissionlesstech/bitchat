@@ -376,9 +376,9 @@ final class NdrNostrService {
         return info.sendReady && info.receiveReady
     }
 
-    /// Any native session record suppresses another invite. A valid response
-    /// can create a half-ready session while its relay bootstrap is still in
-    /// flight; sending a second invite in that window creates avoidable glare.
+    /// Local native session state stops the bounded invite retry chain,
+    /// including while relay bootstrap is still in flight. This does not
+    /// acknowledge receipt of our OOB response by the remote peer.
     func hasPairwiseSession(with peerPubkeyHex: String) -> Bool {
         guard rolloutEnabled,
               let manager,

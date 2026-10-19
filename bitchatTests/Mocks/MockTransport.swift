@@ -81,6 +81,7 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting,
         PeerID: AuthenticatedPeerTransportState
     ] = [:]
     var ndrSendResults: [Bool] = []
+    private(set) var completedNdrSendCount = 0
     var persistDeletedPrivateMediaResult = true
     var deferDeletedPrivateMediaPersistence = false
     private var pendingDeletedPrivateMediaCompletions: [
@@ -170,6 +171,7 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting,
             ndrSendResults.isEmpty ? false : ndrSendResults.removeFirst()
         Task { @MainActor in
             completion(succeeded)
+            completedNdrSendCount += 1
         }
     }
 
