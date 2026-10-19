@@ -594,30 +594,30 @@ final class NdrNostrService {
 
     /// Completes the durable OOB action only after BLE accepted the encrypted
     /// packet for the exact authenticated Noise generation.
+    @discardableResult
     func completeOutOfBandAction(
         _ action: NdrOutOfBandAction,
         succeeded: Bool
-    ) {
+    ) -> Bool {
         guard isCurrent(action.manager, epoch: action.managerEpoch) else {
-            return
+            return false
         }
         inFlightActionIDs.remove(action.actionID)
-        guard succeeded else {
-            deferredActionIDs.insert(action.actionID)
-            return
-        }
-        deferredActionIDs.remove(action.actionID)
-        if !acknowledge(
+        guard succeeded, acknowledge(
             [action.actionID],
             manager: action.manager,
             epoch: action.managerEpoch
-        ) {
+        ) else {
+            // A successful radio handoff still needs retry if its durable
+            // acknowledgement failed. The identical response is idempotent.
             deferredActionIDs.insert(action.actionID)
-        } else {
-            // A bootstrap publish for this session is deliberately held until
-            // BLE has accepted the authenticated OOB response.
-            processAvailableActions()
+            return false
         }
+        deferredActionIDs.remove(action.actionID)
+        // A bootstrap publish for this session is deliberately held until
+        // BLE has accepted the authenticated OOB response.
+        processAvailableActions()
+        return true
     }
 
     /// Reclaims one failed BLE action for a bounded host retry without

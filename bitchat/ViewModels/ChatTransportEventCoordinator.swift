@@ -419,11 +419,11 @@ extension ChatViewModel: ChatTransportEventContext {
             eventJson: action.eventJson,
             expectedTransportState: expectedTransportState,
             completion: { [weak self] succeeded in
-                service.completeOutOfBandAction(
+                let completed = service.completeOutOfBandAction(
                     action,
                     succeeded: succeeded
                 )
-                guard !succeeded, let self else { return }
+                guard !completed, let self else { return }
                 self.ndrService.scheduleHostTransientRetry(
                     after: retryAttempt
                 ) { [weak self] in
