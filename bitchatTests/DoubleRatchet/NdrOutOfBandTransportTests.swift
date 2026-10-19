@@ -1303,9 +1303,12 @@ struct NdrOutOfBandTransportTests {
         _ = viewModel
     }
 
-    @Test("A failed invite retries without a reconnect")
+    @Test("Unanswered invites retry within one bounded authenticated attempt", arguments: [false, true], [false, true])
     @MainActor
-    func failedInviteRetriesWithCurrentAuthenticatedBinding() async throws {
+    func unansweredInviteRetriesWithCurrentAuthenticatedBinding(
+        firstHandoffSucceeded: Bool,
+        receivesResponse: Bool
+    ) async throws {
         let relay = FakeRelayManager()
         let retryScheduler = FakeNdrRetryScheduler()
         let storage = try makeTempDir(label: "invite-host-retry")
@@ -1336,7 +1339,7 @@ struct NdrOutOfBandTransportTests {
             removeFavorite(in: favoritesService, noiseKey: noiseKey)
         }
         transport.authenticatedPeerTransportStates[peerID] = binding
-        transport.ndrSendResults = [false, true]
+        transport.ndrSendResults = [firstHandoffSucceeded, true, true, true, true]
 
         viewModel.bootstrapDoubleRatchetIfNeeded(for: peerID)
         #expect(transport.sentNdrEvents.count == 1)
@@ -1359,13 +1362,59 @@ struct NdrOutOfBandTransportTests {
         viewModel.bootstrapDoubleRatchetIfNeeded(for: peerID)
         #expect(
             transport.sentNdrEvents.count == 2,
-            "a handed-off invite stays deduplicated until the binding changes"
+            "repeated triggers must not create another retry chain"
         )
         #expect(
             transport.sentNdrEvents.allSatisfy {
                 $0.expectedTransportState == binding
             }
         )
+        let nextRetryScheduled = await TestHelpers.waitUntil(
+            { !retryScheduler.scheduled.isEmpty },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(nextRetryScheduled)
+
+        if receivesResponse {
+            let localIdentity = try #require(try viewModel.idBridge.getCurrentNostrIdentity())
+            let remoteService = try makeService(label: "invite-retry-response")
+            remoteService.configureIfNeeded(identity: remote)
+            let invite = try #require(transport.sentNdrEvents.first?.eventJson)
+            let response = try #require(remoteService.processOutOfBandEventJson(
+                invite,
+                expectedPeerPubkeyHex: localIdentity.publicKeyHex,
+                persistEstablishedBinding: { true }
+            ).first)
+            viewModel.handleNdrEventPayload(from: peerID, payload: Data(response.eventJson.utf8))
+            #expect(service.hasPairwiseSession(with: remote.publicKeyHex))
+            retryScheduler.runNext()
+            #expect(transport.sentNdrEvents.count == 2, "local native session state stops invite retries")
+            #expect(retryScheduler.scheduled.isEmpty)
+        } else {
+            for expectedSendCount in 3...5 {
+                retryScheduler.runNext()
+                #expect(transport.sentNdrEvents.count == expectedSendCount)
+                if expectedSendCount < 5 {
+                    let scheduled = await TestHelpers.waitUntil(
+                        { !retryScheduler.scheduled.isEmpty },
+                        timeout: TestConstants.settleTimeout
+                    )
+                    #expect(scheduled)
+                }
+            }
+            let allCompletionsFinished = await TestHelpers.waitUntil(
+                { transport.completedNdrSendCount == 5 },
+                timeout: TestConstants.settleTimeout
+            )
+            #expect(allCompletionsFinished)
+            #expect(retryScheduler.requestedDelays == [0.25, 0.5, 1, 2])
+            viewModel.bootstrapDoubleRatchetIfNeeded(for: peerID)
+            viewModel.bootstrapDoubleRatchetIfNeeded(for: peerID)
+            #expect(transport.sentNdrEvents.count == 5, "the same binding cannot renew an exhausted retry budget")
+            #expect(retryScheduler.scheduled.isEmpty)
+        }
+        #expect(Set(transport.sentNdrEvents.map(\.eventJson)).count == 1,
+                "retries must retransmit the identical native invite")
     }
 
     @Test("A successful BLE handoff retries a failed durable OOB acknowledgement")
