@@ -18,6 +18,10 @@ jobs:
         with:
           submodules: true
 
+      - name: Select validated Xcode
+        # Matches the toolchain used by the upstream app/iOS green run.
+        run: sudo xcodes select "$(cat .xcode-version)"
+
       - name: Install pinned Rust toolchain and Apple targets
         run: |
           rust_version="$(tr -d '[:space:]' < localPackages/NdrFfi/RUST_TOOLCHAIN)"
@@ -78,6 +82,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+
+      - name: Select validated Xcode
+        # Matches the toolchain used by the upstream app/iOS green run.
+        run: sudo xcodes select "$(cat .xcode-version)"
 
       - name: Download source-built NdrFfi
         if: matrix.name == 'app' || matrix.name == 'NdrFfi'
@@ -199,6 +207,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
+      - name: Select validated Xcode
+        # Matches the toolchain used by the upstream app/iOS green run.
+        run: sudo xcodes select "$(cat .xcode-version)"
+
       - name: Download source-built NdrFfi
         uses: actions/download-artifact@v5
         with:
@@ -251,6 +263,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+
+      - name: Select validated Xcode
+        # Matches the toolchain used by the upstream app/iOS green run.
+        run: sudo xcodes select "$(cat .xcode-version)"
 
       - name: Download source-built NdrFfi
         uses: actions/download-artifact@v5

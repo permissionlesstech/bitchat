@@ -23,7 +23,7 @@ cannot change the output.
 
 Prerequisites:
 
-- Xcode and command line tools
+- Xcode and command line tools; CI selects the tested version in `.xcode-version`
 - Rust toolchain version from `RUST_TOOLCHAIN`, with cargo
 - Rust targets:
   - `aarch64-apple-darwin`
