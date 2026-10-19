@@ -1786,9 +1786,9 @@ struct NdrOutOfBandTransportTests {
         #expect(deliveredCount == 128)
     }
 
-    @Test("The FFI remains the durable delivery queue until explicit ack")
+    @Test("Transient delivery and ack failures retry without a relay event", arguments: [false, true])
     @MainActor
-    func decryptedDeliveryRetriesUntilConsumerAcknowledges() throws {
+    func decryptedDeliveryRetriesUntilConsumerAcknowledges(failAcknowledgement: Bool) throws {
         let alice = try NostrIdentity.generate()
         let bob = try NostrIdentity.generate()
         let aliceRelay = FakeRelayManager()
@@ -1797,9 +1797,14 @@ struct NdrOutOfBandTransportTests {
             relay: aliceRelay
         )
         let bobRelay = FakeRelayManager()
-        let bobService = try makeService(
-            label: "delivery-bob",
-            relay: bobRelay
+        let bobStorage = try makeTempDir(label: "delivery-bob")
+        defer { try? FileManager.default.removeItem(at: bobStorage) }
+        let retryScheduler = FakeNdrRetryScheduler()
+        let bobService = NdrNostrService(
+            relayManager: bobRelay,
+            rolloutEnabled: true,
+            storageDirectoryProvider: { bobStorage },
+            retryScheduler: retryScheduler.schedule
         )
         aliceService.configureIfNeeded(identity: alice)
         bobService.configureIfNeeded(identity: bob)
@@ -1826,15 +1831,40 @@ struct NdrOutOfBandTransportTests {
 
         bobService.processInboundRelayEvent(outer)
         var deliveries: [NdrDecryptedMessage] = []
+        var firstCompletion: NdrDeliveryCompletion?
         bobService.onDecryptedMessage = { message, completion in
             deliveries.append(message)
-            completion(deliveries.count == 1 ? .retry : .consumed)
+            if deliveries.count == 1 {
+                firstCompletion = completion
+            } else {
+                completion(.consumed)
+            }
         }
         #expect(deliveries.count == 1)
+        let completeFirst = try #require(firstCompletion)
+        if failAcknowledgement {
+            // A file in place of this synthetic account's directory makes
+            // the native durable ack fail without deleting its pending state.
+            let stateDirectory = bobStorage
+                .appendingPathComponent("pairwise-v1")
+                .appendingPathComponent(bob.publicKeyHex)
+            let backup = bobStorage.appendingPathComponent("saved-state", isDirectory: true)
+            try FileManager.default.moveItem(at: stateDirectory, to: backup)
+            defer {
+                try? FileManager.default.removeItem(at: stateDirectory)
+                try? FileManager.default.moveItem(at: backup, to: stateDirectory)
+            }
+            try Data("temporarily unavailable".utf8).write(to: stateDirectory)
+            completeFirst(.consumed)
+        } else {
+            completeFirst(.retry)
+        }
 
-        bobService.retryPendingDeliveries()
+        #expect(retryScheduler.scheduled.map(\.delay) == [0.25])
+        retryScheduler.runNext()
         #expect(deliveries.count == 2)
         #expect(deliveries.allSatisfy { $0.event.content == "bitchat1:durable" })
+        #expect(retryScheduler.scheduled.isEmpty)
 
         bobService.retryPendingDeliveries()
         bobService.processInboundRelayEvent(outer)

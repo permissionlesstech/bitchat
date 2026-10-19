@@ -266,13 +266,11 @@ final class FavoritesPersistenceService: ObservableObject {
         } else {
             updated.removeValue(forKey: noiseKey)
         }
+        // Bootstrap must never observe a binding that would vanish on restart.
+        guard persistFavorites(updated) else { return false }
+        favorites = updated
         if assignment.requiresVerifiedCommit {
-            guard persistFavorites(updated) else { return false }
-            favorites = updated
             finishPendingNostrIdentityRebind()
-        } else {
-            favorites = updated
-            saveFavorites()
         }
         return true
     }

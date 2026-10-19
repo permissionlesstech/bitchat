@@ -5,6 +5,7 @@ on:
     branches:
       - main
   pull_request:
+  workflow_dispatch:
 
 jobs:
   ndr-ffi-apple:
@@ -45,13 +46,18 @@ jobs:
       - name: Build Apple FFI from source
         run: ./localPackages/NdrFfi/build-apple.sh
 
+      - name: Archive generated Apple package
+        # Preserve framework symlinks and executable permissions across jobs.
+        run: |
+          COPYFILE_DISABLE=1 tar -cf "$RUNNER_TEMP/ndr-ffi-apple.tar" \
+            -C localPackages/NdrFfi \
+            Frameworks/NdrFfi.xcframework Sources/NdrFfi/NdrFfi.swift
+
       - name: Upload generated XCFramework
         uses: actions/upload-artifact@v4
         with:
           name: ndr-ffi-xcframework
-          path: |
-            localPackages/NdrFfi/Frameworks/NdrFfi.xcframework
-            localPackages/NdrFfi/Sources/NdrFfi/NdrFfi.swift
+          path: ${{ runner.temp }}/ndr-ffi-apple.tar
           if-no-files-found: error
           retention-days: 1
 
@@ -92,7 +98,11 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           name: ndr-ffi-xcframework
-          path: localPackages/NdrFfi
+          path: ${{ runner.temp }}/ndr-ffi
+
+      - name: Restore source-built NdrFfi
+        if: matrix.name == 'app' || matrix.name == 'NdrFfi'
+        run: tar -xf "$RUNNER_TEMP/ndr-ffi/ndr-ffi-apple.tar" -C localPackages/NdrFfi
 
       # Use the Xcode-bundled Swift toolchain: it always matches the SDK on
       # the runner image. A standalone swift.org toolchain (setup-swift) broke
@@ -215,7 +225,10 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           name: ndr-ffi-xcframework
-          path: localPackages/NdrFfi
+          path: ${{ runner.temp }}/ndr-ffi
+
+      - name: Restore source-built NdrFfi
+        run: tar -xf "$RUNNER_TEMP/ndr-ffi/ndr-ffi-apple.tar" -C localPackages/NdrFfi
 
       - name: Check clean recipe safety
         run: bash scripts/check-just-clean-safety.sh
@@ -272,7 +285,10 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           name: ndr-ffi-xcframework
-          path: localPackages/NdrFfi
+          path: ${{ runner.temp }}/ndr-ffi
+
+      - name: Restore source-built NdrFfi
+        run: tar -xf "$RUNNER_TEMP/ndr-ffi/ndr-ffi-apple.tar" -C localPackages/NdrFfi
 
       # Some runner images list only placeholder destinations (rows carrying
       # "error:" or "unavailable") or ship the selected Xcode without a
