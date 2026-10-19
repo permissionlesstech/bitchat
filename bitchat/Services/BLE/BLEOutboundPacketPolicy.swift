@@ -2,7 +2,11 @@ import BitFoundation
 import Foundation
 
 enum BLEOutboundPacketPolicy {
-    private static let fragmentFrameOverhead = 13 + 8 + 8 + 13
+    private static let fragmentFrameOverhead =
+        BinaryProtocol.v1HeaderSize
+        + BinaryProtocol.senderIDSize
+        + BinaryProtocol.recipientIDSize
+        + 13
 
     static func messageID(for packet: BitchatPacket) -> String {
         BLEIngressLinkRegistry.messageID(for: packet)

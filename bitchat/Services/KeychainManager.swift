@@ -97,6 +97,7 @@ final class KeychainManager: KeychainManagerProtocol {
     /// migrations and panic deletion cannot silently miss them.
     private static let additionalApplicationOwnedServices = [
         "chat.bitchat.nostr",
+        "chat.bitchat.ndr.session-markers",
         "chat.bitchat.favorites",
         "chat.bitchat.outbox",
         "com.bitchat.passwords",
@@ -874,14 +875,25 @@ final class KeychainManager: KeychainManagerProtocol {
             kSecAttrSynchronizable as String: false
         ]) { _, new in new }
 
-        // Delete by the item's primary key only. Value/accessibility fields
-        // are add attributes, not valid selectors for replacing an existing
-        // item; including them can leave the old item in place and make the
-        // subsequent add fail as a duplicate.
-        let deleteStatus = SecItemDelete(primaryKeyQuery as CFDictionary)
-        guard deleteStatus == errSecSuccess || deleteStatus == errSecItemNotFound else {
+        // Update in place so a failed replacement never destroys the last
+        // durable value. Rebind journals rely on the old favorites snapshot
+        // remaining readable when a write is rejected (locked device,
+        // entitlement failure, storage pressure, and similar errors).
+        let updateAttributes: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String:
+                accessible ?? Self.itemAccessibility
+        ]
+        let updateStatus = SecItemUpdate(
+            primaryKeyQuery as CFDictionary,
+            updateAttributes as CFDictionary
+        )
+        if updateStatus == errSecSuccess {
+            return
+        }
+        guard updateStatus == errSecItemNotFound else {
             SecureLogger.error(
-                NSError(domain: "Keychain", code: Int(deleteStatus)),
+                NSError(domain: "Keychain", code: Int(updateStatus)),
                 context: "Unable to replace custom-service keychain item",
                 category: .keychain
             )
