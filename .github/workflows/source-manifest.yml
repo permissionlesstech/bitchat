@@ -45,7 +45,7 @@ jobs:
           set -euo pipefail
           ref_name="${{ github.event.inputs.ref || github.ref_name }}"
           commit="$(git rev-parse HEAD)"
-          tree="$(git rev-parse HEAD^{tree})"
+          tree="$(git rev-parse 'HEAD^{tree}')"
 
           # Hash every regular tracked file in a stable order. Gitlinks name a
           # directory rather than a hashable file, so record and verify their
@@ -68,7 +68,7 @@ jobs:
             | while IFS= read -r -d '' entry; do
                 metadata="${entry%%$'\t'*}"
                 path="${entry#*$'\t'}"
-                read -r mode object stage <<< "$metadata"
+                read -r mode object _stage <<< "$metadata"
                 if [ "$mode" = "160000" ]; then
                   printf '%s\t%s\n' "$path" "$object"
                 fi
@@ -96,7 +96,7 @@ jobs:
             echo "# or, for a tarball, diff this manifest's path list against find(1)."
             echo "# Full instructions: docs/VERIFYING-A-BUILD.md"
             echo "# The git tree hash above is the single value covering all tracked content:"
-            echo "#   git rev-parse HEAD^{tree}"
+            echo "#   git rev-parse 'HEAD^{tree}'"
             echo "#"
           } > SOURCE-MANIFEST.txt
           cat files.sha256 >> SOURCE-MANIFEST.txt
