@@ -2376,6 +2376,46 @@ struct NdrOutOfBandTransportTests {
         )
     }
 
+    @Test("Unreadable session markers cannot create fresh state or confirm a wipe")
+    @MainActor
+    func unreadableKeychainMarkersFailClosed() throws {
+        let identity = try NostrIdentity.generate()
+        for readError in [KeychainReadResult.accessDenied, .deviceLocked, .authenticationFailed, .otherError(-1)] {
+            let keychain = MockKeychain()
+            let markerStore = KeychainNdrSessionMarkerStore(keychain: keychain)
+            #expect(try !markerStore.contains(identityPubkeyHex: identity.publicKeyHex))
+            keychain.simulatedGenericReadError = readError
+            #expect(throws: NdrSessionStateError.establishedSessionMarkerReadFailed) {
+                try markerStore.contains(identityPubkeyHex: identity.publicKeyHex)
+            }
+            #expect(throws: NdrSessionStateError.establishedSessionMarkerReadFailed) {
+                try markerStore.mark(identityPubkeyHex: identity.publicKeyHex)
+            }
+            #expect(throws: NdrSessionStateError.establishedSessionMarkerClearFailed) {
+                try markerStore.clear()
+            }
+
+            let storage = try makeTempDir(label: "marker-unreadable")
+            defer { try? FileManager.default.removeItem(at: storage) }
+            let service = NdrNostrService(
+                relayManager: FakeRelayManager(),
+                rolloutEnabled: true,
+                storageDirectoryProvider: { storage },
+                sessionMarkerStore: markerStore
+            )
+            #expect(!service.configureIfNeeded(identity: identity))
+            #expect(!service.isConfigured)
+            #expect(service.send("blocked", to: String(repeating: "a", count: 64)) == .failed)
+            #expect(!FileManager.default.fileExists(atPath: storage.appendingPathComponent("pairwise-v1").path))
+
+            keychain.simulatedGenericReadError = nil
+            try markerStore.mark(identityPubkeyHex: identity.publicKeyHex)
+            #expect(try markerStore.contains(identityPubkeyHex: identity.publicKeyHex))
+            try markerStore.clear()
+            #expect(try !markerStore.contains(identityPubkeyHex: identity.publicKeyHex))
+        }
+    }
+
     @Test("An established marker rejects missing pairwise state on restart")
     @MainActor
     func establishedMarkerFailsClosedWhenStateDisappears() throws {
