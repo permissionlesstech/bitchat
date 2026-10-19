@@ -3,9 +3,10 @@
 `NdrFfi` is built from source using:
 
 - Upstream repository: `https://github.com/irislib/nostr-double-ratchet`
-- Upstream base: `master` at `f20c387ba6eb8327dcb351be32350de0ad111637`
-- Pinned source commit: `f20c387ba6eb8327dcb351be32350de0ad111637`
-- NDR Rust release: `0.0.167`; locked `nostr` dependency: `0.44.8`
+- Upstream base: `master` at `6177add831597f2e66f34ade3717c6201852cbdf`
+- Pinned source commit: `6177add831597f2e66f34ade3717c6201852cbdf`
+- Pairwise/FFI Rust release: `0.0.168`; core NDR: `0.0.170`;
+  locked `nostr` dependency: `0.44.8`
 - Crate: `ndr-pairwise-ffi` (library `ndr_ffi`)
 - Runtime: durable single-identity pairwise sessions only; no AppKeys,
   linked-device, sibling-sync, or group runtime
@@ -18,7 +19,9 @@
 - The pinned source commit provides durable pairwise state/action ordering,
   targeted peer retirement, and portable exclusive storage locking.
 - This update includes invite identity binding and the NIP-44 resource
-  exhaustion fix from the locked `nostr` dependency.
+  exhaustion fix from the locked `nostr` dependency. Authenticated invite-response
+  bindings stay pinned while their sessions live, even after the bounded
+  general replay window rotates. The wire format and FFI interface are unchanged.
 
 Generated/build outputs:
 
