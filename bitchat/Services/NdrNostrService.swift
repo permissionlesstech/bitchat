@@ -41,6 +41,7 @@ enum NdrStorageDirectoryError: Error, Equatable {
 enum NdrSessionStateError: Error, Equatable {
     case missingEstablishedState
     case invalidEstablishedSessionMarker
+    case establishedSessionMarkerReadFailed
     case establishedSessionMarkerWriteFailed
     case establishedSessionMarkerClearFailed
 }
@@ -70,7 +71,7 @@ final class InMemoryNdrSessionMarkerStore: NdrSessionMarkerStoring {
 }
 
 @MainActor
-private final class KeychainNdrSessionMarkerStore:
+final class KeychainNdrSessionMarkerStore:
     NdrSessionMarkerStoring {
     private static let service = "chat.bitchat.ndr.session-markers"
     private static let key = "established-identities"
@@ -102,18 +103,27 @@ private final class KeychainNdrSessionMarkerStore:
 
     func clear() throws {
         keychain.delete(key: Self.key, service: Self.service)
-        guard keychain.load(key: Self.key, service: Self.service) == nil else {
+        guard case .itemNotFound = keychain.loadWithResult(
+            key: Self.key,
+            service: Self.service
+        ) else {
             throw NdrSessionStateError
                 .establishedSessionMarkerClearFailed
         }
     }
 
     private func identities() throws -> Set<String> {
-        guard let data = keychain.load(
+        let data: Data
+        switch keychain.loadWithResult(
             key: Self.key,
             service: Self.service
-        ) else {
+        ) {
+        case .success(let stored):
+            data = stored
+        case .itemNotFound:
             return []
+        case .accessDenied, .deviceLocked, .authenticationFailed, .otherError:
+            throw NdrSessionStateError.establishedSessionMarkerReadFailed
         }
         guard let values = try? JSONDecoder().decode(
             [String].self,
