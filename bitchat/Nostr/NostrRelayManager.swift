@@ -71,6 +71,7 @@ struct NostrRelayManagerDependencies {
     var torIsForeground: () -> Bool
     var awaitTorReady: (@escaping (Bool) -> Void) -> Void
     var makeSession: () -> NostrRelaySessionProtocol
+    var verifyEventSignature: @Sendable (NostrEvent) -> Bool
     var scheduleAfter: @Sendable (TimeInterval, @escaping @Sendable () -> Void) -> Void
     var now: () -> Date
     /// Uniform random value in [0, 1) used to jitter reconnect backoff.
@@ -112,6 +113,7 @@ private extension NostrRelayManagerDependencies {
                 }
             },
             makeSession: { URLSessionAdapter(base: TorURLSession.shared.session) },
+            verifyEventSignature: { $0.isValidSignature() },
             scheduleAfter: { delay, action in
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: action)
             },
@@ -198,7 +200,10 @@ final class NostrRelayManager: ObservableObject {
     private var hasMutualFavorites: Bool = false
     private var hasLocationPermission: Bool = false
     private var connections: [String: NostrRelayConnectionProtocol] = [:]
-    private var subscriptions: [String: Set<String>] = [:] // relay URL -> active subscription IDs
+    // Relay URL -> subscription ID -> logical request generation currently
+    // installed on that socket. A same-ID REQ with a newer generation
+    // atomically replaces its filter under NIP-01.
+    private var subscriptions: [String: [String: UInt64]] = [:]
     // Not-yet-flushed REQs per relay, bounded by a per-relay cap (oldest by
     // insertion order evicted) and an age sweep on connect attempts. Dicts are
     // unordered, so each entry carries an insertion sequence and queue time.
@@ -210,6 +215,12 @@ final class NostrRelayManager: ObservableObject {
     private var pendingSubscriptions: [String: [String: PendingSubscription]] = [:] // relay URL -> (subscription id -> pending REQ)
     private var pendingSubscriptionSequence: UInt64 = 0
     private var messageHandlers: [String: (NostrEvent) -> Void] = [:]
+    // An EVENT is admitted before off-main signature verification and
+    // delivered later. The generation binds those two phases to the same
+    // logical subscription so unsubscribe/re-subscribe cannot retarget stale
+    // work to a replacement handler or poison its dedup state.
+    private var subscriptionGenerations: [String: UInt64] = [:]
+    private var nextSubscriptionGeneration: UInt64 = 0
     private struct InboundEventKey: Hashable {
         let subscriptionID: String
         let eventID: String
@@ -221,9 +232,6 @@ final class NostrRelayManager: ObservableObject {
     private var duplicateInboundEventDropCount = 0
     private var duplicateInboundEventDropCountBySubscription: [String: Int] = [:]
     private var inboundEventLogCount = 0
-    // Coalesce duplicate subscribe requests for the same id within a short window.
-    private let subscribeCoalesceInterval: TimeInterval = 1.0
-    private var subscribeCoalesce: [String: Date] = [:]
     private var pendingTorConnectionURLs = Set<String>()
     private var awaitingTorForConnections = false
     private var torReadyWaitAttempts = 0
@@ -391,6 +399,7 @@ final class NostrRelayManager: ObservableObject {
     ///    verification means a forged-signature copy can never poison the
     ///    dedup cache and suppress the genuine event.
     private func ensureRelayInboundPipeline(for relayUrl: String) {
+        let verifyEventSignature = dependencies.verifyEventSignature
         let started = inboundRouter.startPipeline(for: relayUrl) { [weak self] stream in
             Task.detached(priority: .userInitiated) {
                 for await frame in stream {
@@ -398,21 +407,24 @@ final class NostrRelayManager: ObservableObject {
                     guard let self else { return }
                     switch parsed {
                     case .event(let subId, let event):
-                        guard await self.precheckInboundEvent(
+                        guard let generation = await self.precheckInboundEvent(
                             subscriptionID: subId,
                             eventID: event.id,
                             relayUrl: relayUrl
-                        ) else {
-                            continue
-                        }
-                        guard event.isValidSignature() else {
+                        ) else { continue }
+                        guard verifyEventSignature(event) else {
                             SecureLogger.warning(
                                 "⚠️ Dropped invalid Nostr event id=\(event.id.prefix(16))… sub=\(subId) relay=\(relayUrl)",
                                 category: .session
                             )
                             continue
                         }
-                        await self.deliverVerifiedInboundEvent(subscriptionID: subId, event: event, from: relayUrl)
+                        await self.deliverVerifiedInboundEvent(
+                            subscriptionID: subId,
+                            subscriptionGeneration: generation,
+                            event: event,
+                            from: relayUrl
+                        )
                     case .eose, .ok, .notice:
                         await self.handleParsedMessage(parsed, from: relayUrl)
                     }
@@ -488,8 +500,8 @@ final class NostrRelayManager: ObservableObject {
         subscriptions.removeAll()
         pendingSubscriptions.removeAll()
         messageHandlers.removeAll()
+        subscriptionGenerations.removeAll()
         subscriptionRequestState.removeAll()
-        subscribeCoalesce.removeAll()
         eoseTrackers.removeAll()
         pendingEOSECallbacks.removeAll()
         pendingTorConnectionURLs.removeAll()
@@ -735,23 +747,19 @@ final class NostrRelayManager: ObservableObject {
         return connection
     }
     
-    /// Subscribe to events matching a filter. If `relayUrls` provided, targets only those relays.
+    /// Subscribe to events matching a filter. If `relayUrls` provided, targets
+    /// only those relays. Returns true only after the replayable subscription
+    /// intent has been registered, even when every target is still offline.
+    @discardableResult
     func subscribe(
         filter: NostrFilter,
         id: String = UUID().uuidString,
         relayUrls: [String]? = nil,
         handler: @escaping (NostrEvent) -> Void,
         onEOSE: (() -> Void)? = nil
-    ) {
+    ) -> Bool {
         // Global network policy gate
-        guard dependencies.activationAllowed() else { return }
-        // Coalesce rapid duplicate subscribe requests even while Tor readiness is pending.
-        let now = dependencies.now()
-        if let last = subscribeCoalesce[id], now.timeIntervalSince(last) < subscribeCoalesceInterval {
-            return
-        }
-        subscribeCoalesce[id] = now
-        messageHandlers[id] = handler
+        guard dependencies.activationAllowed() else { return false }
         
         let req = NostrRequest.subscribe(id: id, filters: [filter])
         
@@ -759,7 +767,7 @@ final class NostrRelayManager: ObservableObject {
             let message = try encoder.encode(req)
             guard let messageString = String(data: message, encoding: .utf8) else { 
                 SecureLogger.error("❌ Failed to encode subscription request", category: .session)
-                return 
+                return false
             }
             
             // SecureLogger.debug("📋 Subscription filter JSON: \(messageString.prefix(200))...", category: .session)
@@ -767,10 +775,37 @@ final class NostrRelayManager: ObservableObject {
             // Target specific relays if provided; else default. Filter permanently failed relays.
             let baseUrls = relayUrls ?? defaultRelays
             let urls = allowedRelayList(from: baseUrls).filter { !isPermanentlyFailed($0) }
-            let requestState = SubscriptionRequestState(messageString: messageString, relayURLs: Set(urls))
-            if subscriptionRequestState[id] == requestState, subscriptionStateExists(id: id, requestState: requestState) {
-                return
+            guard !urls.isEmpty else {
+                onEOSE?()
+                return false
             }
+            let requestState = SubscriptionRequestState(messageString: messageString, relayURLs: Set(urls))
+            let previousRequestState = subscriptionRequestState[id]
+            if subscriptionGenerations[id] == nil
+                || previousRequestState != requestState
+            {
+                nextSubscriptionGeneration &+= 1
+                subscriptionGenerations[id] = nextSubscriptionGeneration
+                removeRecentInboundEvents(forSubscriptionID: id)
+                duplicateInboundEventDropCountBySubscription.removeValue(
+                    forKey: id
+                )
+            }
+            if let previousRequestState {
+                let removedRelayURLs = previousRequestState.relayURLs
+                    .subtracting(requestState.relayURLs)
+                closeSubscription(
+                    id: id,
+                    on: removedRelayURLs
+                )
+            }
+            messageHandlers[id] = handler
+            if previousRequestState == requestState,
+               subscriptionStateExists(id: id, requestState: requestState)
+            {
+                return true
+            }
+
             subscriptionRequestState[id] = requestState
 
             // Always queue subscriptions; sending happens when a relay reports connected
@@ -801,8 +836,13 @@ final class NostrRelayManager: ObservableObject {
                     flushPendingSubscriptions(for: url)
                 }
             }
+            // `subscriptionRequestState` is the canonical replay intent.
+            // Pending REQs are bounded/expiring accelerators and may be
+            // evicted; reconnect rehydrates them from this exact state.
+            return subscriptionRequestState[id] == requestState
         } catch {
             SecureLogger.error("❌ Failed to encode subscription request: \(error)", category: .session)
+            return false
         }
     }
 
@@ -870,30 +910,45 @@ final class NostrRelayManager: ObservableObject {
     
     /// Unsubscribe from a subscription
     func unsubscribe(id: String) {
+        var relayURLs = subscriptionRequestState[id]?.relayURLs ?? []
+        for (relayURL, active) in subscriptions where active[id] != nil {
+            relayURLs.insert(relayURL)
+        }
+        for (relayURL, pending) in pendingSubscriptions
+        where pending[id] != nil {
+            relayURLs.insert(relayURL)
+        }
+
         messageHandlers.removeValue(forKey: id)
+        subscriptionGenerations.removeValue(forKey: id)
         removeRecentInboundEvents(forSubscriptionID: id)
         duplicateInboundEventDropCountBySubscription.removeValue(forKey: id)
-        // Allow immediate re-subscription by clearing coalescer timestamp
-        subscribeCoalesce.removeValue(forKey: id)
         subscriptionRequestState.removeValue(forKey: id)
         pendingEOSECallbacks.removeValue(forKey: id)
         eoseTrackers.removeValue(forKey: id)
-        for url in Array(pendingSubscriptions.keys) {
-            pendingSubscriptions[url]?.removeValue(forKey: id)
+        closeSubscription(id: id, on: relayURLs)
+    }
+
+    private func closeSubscription(
+        id: String,
+        on relayURLs: Set<String>
+    ) {
+        guard !relayURLs.isEmpty else { return }
+        for relayURL in relayURLs {
+            subscriptions[relayURL]?.removeValue(forKey: id)
+            pendingSubscriptions[relayURL]?.removeValue(forKey: id)
         }
-        
+
         let req = NostrRequest.close(id: id)
         let message = try? encoder.encode(req)
-        
         guard let messageData = message,
               let messageString = String(data: messageData, encoding: .utf8) else { return }
-        
-        // Send unsubscribe to all relays
-        for (relayUrl, connection) in connections {
-            if subscriptions[relayUrl]?.contains(id) == true {
-                subscriptions[relayUrl]?.remove(id)
+
+        for relayURL in relayURLs {
+            if let connection = connections[relayURL] {
                 connection.send(.string(messageString)) { _ in
-                    // Local state is cleared before sending so callers can re-subscribe immediately.
+                    // Local state is cleared first so a later same-ID REQ can
+                    // register immediately and stale callbacks remain inert.
                 }
             }
         }
@@ -1008,10 +1063,14 @@ final class NostrRelayManager: ObservableObject {
     }
 
     private func subscriptionStateExists(id: String, requestState: SubscriptionRequestState) -> Bool {
-        guard !requestState.relayURLs.isEmpty else { return true }
+        guard !requestState.relayURLs.isEmpty,
+              let generation = subscriptionGenerations[id]
+        else {
+            return requestState.relayURLs.isEmpty
+        }
         return requestState.relayURLs.allSatisfy { url in
             pendingSubscriptions[url]?[id]?.messageString == requestState.messageString ||
-                subscriptions[url]?.contains(id) == true
+                subscriptions[url]?[id] == generation
         }
     }
 
@@ -1211,12 +1270,32 @@ final class NostrRelayManager: ObservableObject {
     /// active subscription targeting this relay must be re-sent.
     private func flushPendingSubscriptions(for relayUrl: String) {
         guard let connection = connections[relayUrl] else { return }
-        var toSend = (pendingSubscriptions[relayUrl] ?? [:]).mapValues(\.messageString)
-        for (id, state) in subscriptionRequestState where state.relayURLs.contains(relayUrl) && toSend[id] == nil {
-            toSend[id] = state.messageString
+        var toSend: [
+            String: (messageString: String, generation: UInt64)
+        ] = [:]
+        for (id, pending) in pendingSubscriptions[relayUrl] ?? [:] {
+            guard let state = subscriptionRequestState[id],
+                  state.relayURLs.contains(relayUrl),
+                  state.messageString == pending.messageString,
+                  let generation = subscriptionGenerations[id]
+            else {
+                pendingSubscriptions[relayUrl]?.removeValue(forKey: id)
+                continue
+            }
+            toSend[id] = (pending.messageString, generation)
         }
-        for (id, messageString) in toSend {
-            if self.subscriptions[relayUrl]?.contains(id) == true {
+        for (id, state) in subscriptionRequestState
+        where state.relayURLs.contains(relayUrl)
+        {
+            guard let generation = subscriptionGenerations[id] else {
+                continue
+            }
+            toSend[id] = (state.messageString, generation)
+        }
+        for (id, request) in toSend {
+            let messageString = request.messageString
+            let generation = request.generation
+            if subscriptions[relayUrl]?[id] == generation {
                 // Already subscribed on this relay (e.g. a tracker promoted
                 // after an earlier flush): its EOSE is coming, count it.
                 markEOSESubscribed(id: id, relayUrl: relayUrl)
@@ -1236,12 +1315,26 @@ final class NostrRelayManager: ObservableObject {
                         // Keep the pending entry; the next (re)connect retries it.
                         SecureLogger.error("❌ Failed to send pending subscription to \(relayUrl): \(error)", category: .session)
                     } else {
-                        // A stale completion from a socket that has since been
-                        // replaced must not mark the subscription active, or
-                        // the next connection would skip replaying it.
-                        guard let connection, self.connections[relayUrl] === connection else { return }
-                        self.subscriptions[relayUrl, default: []].insert(id)
-                        self.pendingSubscriptions[relayUrl]?.removeValue(forKey: id)
+                        // Old sockets and old same-ID filters can complete
+                        // after a replacement has already become canonical.
+                        guard let connection,
+                              self.connections[relayUrl] === connection,
+                              self.subscriptionGenerations[id] == generation,
+                              let desired =
+                                self.subscriptionRequestState[id],
+                              desired.relayURLs.contains(relayUrl),
+                              desired.messageString == messageString
+                        else {
+                            return
+                        }
+                        self.subscriptions[relayUrl, default: [:]][id] =
+                            generation
+                        if self.pendingSubscriptions[relayUrl]?[id]?
+                            .messageString == messageString
+                        {
+                            self.pendingSubscriptions[relayUrl]?
+                                .removeValue(forKey: id)
+                        }
                     }
                 }
             }
@@ -1286,24 +1379,49 @@ final class NostrRelayManager: ObservableObject {
     /// after the signature verifies (`deliverVerifiedInboundEvent`), so a
     /// forged-signature copy can never poison the dedup cache and suppress
     /// the genuine event.
-    private func precheckInboundEvent(subscriptionID: String, eventID: String, relayUrl: String) -> Bool {
+    private func precheckInboundEvent(
+        subscriptionID: String,
+        eventID: String,
+        relayUrl: String
+    ) -> UInt64? {
         if let index = relays.firstIndex(where: { $0.url == relayUrl }) {
             relays[index].messagesReceived += 1
         }
-        guard !eventID.isEmpty else { return true }
+        guard messageHandlers[subscriptionID] != nil,
+              let generation = subscriptionGenerations[subscriptionID]
+        else {
+            // Relays are untrusted and can invent subscription IDs. Do not
+            // spend signature work or mutate dedup state for unsolicited
+            // events.
+            return nil
+        }
+        guard !eventID.isEmpty else { return generation }
         let key = InboundEventKey(subscriptionID: subscriptionID, eventID: eventID)
         if recentInboundEventKeys.contains(key) {
             recordDuplicateInboundEventDrop(subscriptionID: subscriptionID)
-            return false
+            return nil
         }
-        return true
+        return generation
     }
 
     /// Second main-actor hop, after off-main signature verification:
     /// authoritative check-and-record (the serial pipeline means the same
     /// event is never in flight twice, but the record must stay atomic with
     /// delivery) and handler dispatch.
-    private func deliverVerifiedInboundEvent(subscriptionID subId: String, event: NostrEvent, from relayUrl: String) {
+    private func deliverVerifiedInboundEvent(
+        subscriptionID subId: String,
+        subscriptionGeneration: UInt64,
+        event: NostrEvent,
+        from relayUrl: String
+    ) {
+        guard subscriptionGenerations[subId] == subscriptionGeneration,
+              let handler = messageHandlers[subId]
+        else {
+            // The event was admitted by a subscription that has since been
+            // retired. A replacement reusing the same wire ID is a different
+            // lifecycle and must neither receive nor dedup against this event.
+            return
+        }
         guard shouldDeliverInboundEvent(subscriptionID: subId, eventID: event.id) else {
             return
         }
@@ -1314,11 +1432,7 @@ final class NostrRelayManager: ObservableObject {
                 SecureLogger.debug("📥 Event #\(inboundEventLogCount) kind=\(event.kind) id=\(event.id.prefix(16))… relay=\(relayUrl)", category: .session)
             }
         }
-        if let handler = self.messageHandlers[subId] {
-            handler(event)
-        } else {
-            SecureLogger.warning("⚠️ No handler for subscription \(subId)", category: .session)
-        }
+        handler(event)
     }
 
     // Handle parsed non-EVENT messages on MainActor (state updates and handlers)
@@ -1344,10 +1458,20 @@ final class NostrRelayManager: ObservableObject {
                 }
             }
         case .ok(let eventId, let success, let reason):
-            resolveConfirmedSend(eventID: eventId, relayURL: relayUrl, accepted: success)
-            if success {
+            let durablyAccepted =
+                success
+                || (!success && reason.hasPrefix("duplicate:"))
+            resolveConfirmedSend(
+                eventID: eventId,
+                relayURL: relayUrl,
+                accepted: durablyAccepted
+            )
+            if durablyAccepted {
                 _ = Self.pendingGiftWrapIDs.remove(eventId)
-                SecureLogger.debug("✅ Accepted id=\(eventId.prefix(16))… relay=\(relayUrl)", category: .session)
+                SecureLogger.debug(
+                    "✅ Accepted id=\(eventId.prefix(16))… relay=\(relayUrl)",
+                    category: .session
+                )
             } else {
                 let isGiftWrap = Self.pendingGiftWrapIDs.remove(eventId) != nil
                 if isGiftWrap {
@@ -1822,7 +1946,7 @@ enum NostrRequest: Encodable {
     }
 }
 
-struct NostrFilter: Encodable {
+struct NostrFilter: Codable {
     var ids: [String]?
     var authors: [String]?
     var kinds: [Int]?
@@ -1831,7 +1955,7 @@ struct NostrFilter: Encodable {
     var limit: Int?
     
     // Tag filters - stored internally but encoded specially
-    fileprivate var tagFilters: [String: [String]]?
+    var tagFilters: [String: [String]]?
     
     init() {
         // Default initializer
@@ -1840,6 +1964,29 @@ struct NostrFilter: Encodable {
     // Custom encoding to handle tag filters properly
     enum CodingKeys: String, CodingKey {
         case ids, authors, kinds, since, until, limit
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: DynamicCodingKey.self)
+
+        self.ids = try container.decodeIfPresent([String].self, forKey: DynamicCodingKey(stringValue: "ids"))
+        self.authors = try container.decodeIfPresent([String].self, forKey: DynamicCodingKey(stringValue: "authors"))
+        self.kinds = try container.decodeIfPresent([Int].self, forKey: DynamicCodingKey(stringValue: "kinds"))
+        self.since = try container.decodeIfPresent(Int.self, forKey: DynamicCodingKey(stringValue: "since"))
+        self.until = try container.decodeIfPresent(Int.self, forKey: DynamicCodingKey(stringValue: "until"))
+        self.limit = try container.decodeIfPresent(Int.self, forKey: DynamicCodingKey(stringValue: "limit"))
+
+        // Decode tag filters (#p, #d, etc) into internal storage without the leading '#'.
+        var decodedTagFilters: [String: [String]] = [:]
+        for key in container.allKeys {
+            let name = key.stringValue
+            guard name.hasPrefix("#") else { continue }
+            let tag = String(name.dropFirst())
+            if let values = try container.decodeIfPresent([String].self, forKey: key) {
+                decodedTagFilters[tag] = values
+            }
+        }
+        self.tagFilters = decodedTagFilters.isEmpty ? nil : decodedTagFilters
     }
     
     func encode(to encoder: Encoder) throws {

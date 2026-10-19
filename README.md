@@ -105,6 +105,32 @@ For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.m
 
 ## Setup
 
+Initialize the pinned Rust source and build its generated Apple framework once
+before opening the project or running `swift test` directly:
+
+```bash
+git submodule update --init --checkout vendor/nostr-double-ratchet
+rustup toolchain install "$(cat localPackages/NdrFfi/RUST_TOOLCHAIN)" --profile minimal
+rustup target add --toolchain "$(cat localPackages/NdrFfi/RUST_TOOLCHAIN)" \
+  aarch64-apple-darwin \
+  x86_64-apple-darwin \
+  aarch64-apple-ios \
+  aarch64-apple-ios-sim \
+  x86_64-apple-ios
+./localPackages/NdrFfi/build-apple.sh
+```
+
+The generated Swift bindings and XCFramework are ignored; every checkout builds them from the exact
+`nostr-double-ratchet` source revision and locked Rust dependency graph recorded
+in the repository. `just build`, `just run`, and `just test` generate only the macOS slices;
+`just test-ios` generates the iOS slices. The direct script defaults to all
+platforms, or accepts `--platform macos` / `--platform ios`. Each invocation
+replaces the generated framework with the requested platform set.
+
+The feature stays disabled unless `BITCHAT_ENABLE_NDR` is explicitly added to
+Swift's compilation conditions. See [the integration contract](localPackages/NdrFfi/README.md#integration-contract)
+for the cross-client wire format and rollout gates.
+
 ### Option 1: Using Xcode
 
 ```bash

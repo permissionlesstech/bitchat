@@ -94,6 +94,8 @@ protocol ChatPrivateConversationContext: AnyObject {
     func sendGeohashPrivateMessage(_ content: String, toRecipientHex recipientHex: String, from identity: NostrIdentity, messageID: String)
     func sendGeohashDeliveryAck(for messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity)
     func sendGeohashReadReceipt(_ messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity)
+    func sendAccountNostrDeliveryAck(for messageID: String, to peerID: PeerID)
+    func sendAccountNostrReadReceipt(for messageID: String, to peerID: PeerID)
 
     // MARK: System messages
     func addMeshOnlySystemMessage(_ content: String)
@@ -201,6 +203,19 @@ extension ChatViewModel: ChatPrivateConversationContext {
         makeGeohashNostrTransport().sendReadReceiptGeohash(messageID, toRecipientHex: recipientHex, from: identity)
     }
 
+    func sendAccountNostrDeliveryAck(for messageID: String, to peerID: PeerID) {
+        makeNostrTransport().sendDeliveryAck(for: messageID, to: peerID)
+    }
+
+    func sendAccountNostrReadReceipt(for messageID: String, to peerID: PeerID) {
+        let receipt = ReadReceipt(
+            originalMessageID: messageID,
+            readerID: myPeerID,
+            readerNickname: nickname
+        )
+        makeNostrTransport().sendReadReceipt(receipt, to: peerID)
+    }
+
     func addSystemMessage(_ content: String) {
         addSystemMessage(content, timestamp: Date())
     }
@@ -224,6 +239,12 @@ extension ChatViewModel: ChatPrivateConversationContext {
 
     func notifyPrivateMessage(from senderName: String, message: String, peerID: PeerID) {
         NotificationService.shared.sendPrivateMessageNotification(from: senderName, message: message, peerID: peerID)
+    }
+
+    private func makeNostrTransport() -> NostrTransport {
+        let transport = NostrTransport(keychain: keychain, idBridge: idBridge)
+        transport.senderPeerID = meshService.myPeerID
+        return transport
     }
 
     /// Deliberately no `senderPeerID`: geohash envelopes (and the acks for
@@ -487,7 +508,8 @@ final class ChatPrivateConversationCoordinator {
         senderPubkey: String,
         convKey: PeerID,
         id: NostrIdentity,
-        messageTimestamp: Date
+        messageTimestamp: Date,
+        source: NostrPrivateMessageSource = .legacy1059
     ) {
         guard let pm = PrivateMessagePacket.decode(from: payload.data) else { return }
         let messageId = pm.messageID
@@ -506,7 +528,13 @@ final class ChatPrivateConversationCoordinator {
         // Ack only once the block and dedup checks pass. Outbox retries of a
         // message we've already acked are dropped by the dedup guard, and
         // markGeoDeliveryAckSent dedups the actual sends by message ID.
-        sendDeliveryAckIfNeeded(to: messageId, senderPubKey: senderPubkey, from: id)
+        sendDeliveryAckIfNeeded(
+            to: messageId,
+            senderPubKey: senderPubkey,
+            conversationPeerID: convKey,
+            from: id,
+            source: source
+        )
 
         // Prefer the favorite's stored nickname when the sender resolved to a
         // known noise key; the Nostr display name is a geohash-scoped
@@ -559,7 +587,13 @@ final class ChatPrivateConversationCoordinator {
         }
 
         if isViewing {
-            sendReadReceiptIfNeeded(to: messageId, senderPubKey: senderPubkey, from: id)
+            sendReadReceiptIfNeeded(
+                to: messageId,
+                senderPubKey: senderPubkey,
+                conversationPeerID: convKey,
+                from: id,
+                source: source
+            )
         }
 
         if !isViewing && shouldMarkUnread {
@@ -637,14 +671,50 @@ final class ChatPrivateConversationCoordinator {
         }
     }
 
-    func sendDeliveryAckIfNeeded(to messageId: String, senderPubKey: String, from id: NostrIdentity) {
+    func sendDeliveryAckIfNeeded(
+        to messageId: String,
+        senderPubKey: String,
+        conversationPeerID: PeerID,
+        from id: NostrIdentity,
+        source: NostrPrivateMessageSource
+    ) {
         guard context.markGeoDeliveryAckSent(messageId) else { return }
-        context.sendGeohashDeliveryAck(for: messageId, toRecipientHex: senderPubKey, from: id)
+        switch source {
+        case .ndr:
+            context.sendAccountNostrDeliveryAck(
+                for: messageId,
+                to: conversationPeerID
+            )
+        case .legacy1059:
+            context.sendGeohashDeliveryAck(
+                for: messageId,
+                toRecipientHex: senderPubKey,
+                from: id
+            )
+        }
     }
 
-    func sendReadReceiptIfNeeded(to messageId: String, senderPubKey: String, from id: NostrIdentity) {
+    func sendReadReceiptIfNeeded(
+        to messageId: String,
+        senderPubKey: String,
+        conversationPeerID: PeerID,
+        from id: NostrIdentity,
+        source: NostrPrivateMessageSource
+    ) {
         guard context.markReadReceiptSent(messageId) else { return }
-        context.sendGeohashReadReceipt(messageId, toRecipientHex: senderPubKey, from: id)
+        switch source {
+        case .ndr:
+            context.sendAccountNostrReadReceipt(
+                for: messageId,
+                to: conversationPeerID
+            )
+        case .legacy1059:
+            context.sendGeohashReadReceipt(
+                messageId,
+                toRecipientHex: senderPubKey,
+                from: id
+            )
+        }
     }
 
     func handlePrivateMessage(_ message: BitchatMessage) {

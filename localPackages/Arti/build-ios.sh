@@ -17,6 +17,8 @@ export PATH="$HOME/.cargo/bin:$PATH"
 RUST_TOOLCHAIN="${RUST_TOOLCHAIN:-1.96.0}"
 RUSTC_VERSION="${RUSTC_VERSION:-1.96.0}"
 CBINDGEN_VERSION="${CBINDGEN_VERSION:-0.29.4}"
+CBINDGEN_BIN="${CBINDGEN_BIN:-cbindgen}"
+ARTI_BASE_CFLAGS="${CFLAGS:-}"
 export RUSTC="$(rustup which --toolchain "$RUST_TOOLCHAIN" rustc)"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -77,13 +79,17 @@ check_prerequisites() {
     done
 
     # Install cbindgen if needed
-    if ! command -v cbindgen &> /dev/null; then
+    if ! command -v "$CBINDGEN_BIN" &> /dev/null; then
+        if [[ "$CBINDGEN_BIN" != "cbindgen" ]]; then
+            log_error "Configured CBINDGEN_BIN executable was not found."
+            exit 1
+        fi
         log_info "Installing cbindgen $CBINDGEN_VERSION..."
         rustup run "$RUST_TOOLCHAIN" cargo install cbindgen --version "$CBINDGEN_VERSION" --locked
     fi
 
-    if [[ "$(cbindgen --version)" != "cbindgen $CBINDGEN_VERSION" ]]; then
-        log_error "Expected cbindgen $CBINDGEN_VERSION; found $(cbindgen --version)."
+    if [[ "$("$CBINDGEN_BIN" --version)" != "cbindgen $CBINDGEN_VERSION" ]]; then
+        log_error "Expected cbindgen $CBINDGEN_VERSION; found $("$CBINDGEN_BIN" --version)."
         exit 1
     fi
 
@@ -96,6 +102,10 @@ setup_rustflags() {
 
     # Base flags for size optimization
     export RUSTFLAGS="-C opt-level=z -C lto=fat -C codegen-units=1 -C panic=abort -C strip=symbols"
+    # Panic locations can retain source paths even after symbols are stripped.
+    export RUSTFLAGS="$RUSTFLAGS --remap-path-prefix=$HOME=build-home --remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}/registry/src=cargo-registry --remap-path-prefix=$SCRIPT_DIR=arti-bitchat"
+    # Native dependencies can also embed their source paths through __FILE__.
+    export CFLAGS="$ARTI_BASE_CFLAGS -ffile-prefix-map=$HOME=build-home -ffile-prefix-map=${CARGO_HOME:-$HOME/.cargo}/registry/src=cargo-registry -ffile-prefix-map=$SCRIPT_DIR=arti-bitchat"
 
     # Set deployment targets to suppress linker warnings about version mismatches
     case "$target" in
@@ -123,7 +133,7 @@ build_target() {
     setup_rustflags "$target"
 
     # Build release
-    rustup run "$RUST_TOOLCHAIN" cargo build --release --target "$target" -p "$CRATE_NAME"
+    rustup run "$RUST_TOOLCHAIN" cargo build --locked --release --target "$target" -p "$CRATE_NAME"
 
     # Check output
     local lib_path="target/$target/release/$LIB_NAME"
@@ -305,7 +315,7 @@ parse_deps = false
 EOF
     fi
 
-    cbindgen --config "$CRATE_NAME/cbindgen.toml" \
+    "$CBINDGEN_BIN" --config "$CRATE_NAME/cbindgen.toml" \
              --crate "$CRATE_NAME" \
              --output "$header_path"
 

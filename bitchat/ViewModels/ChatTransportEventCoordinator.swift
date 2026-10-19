@@ -84,6 +84,15 @@ protocol ChatTransportEventContext: AnyObject {
     func handleGroupInvitePayload(from peerID: PeerID, payload: Data)
     func handleGroupKeyUpdatePayload(from peerID: PeerID, payload: Data)
     func handleVouchPayload(from peerID: PeerID, payload: Data)
+
+    // MARK: Double-ratchet bootstrap
+    func bootstrapDoubleRatchetIfNeeded(for peerID: PeerID)
+    func handleNdrEventPayload(from peerID: PeerID, payload: Data)
+}
+
+extension ChatTransportEventContext {
+    func bootstrapDoubleRatchetIfNeeded(for _: PeerID) {}
+    func handleNdrEventPayload(from _: PeerID, payload _: Data) {}
 }
 
 extension ChatViewModel: ChatTransportEventContext {
@@ -165,6 +174,494 @@ extension ChatViewModel: ChatTransportEventContext {
 
     func handleVouchPayload(from peerID: PeerID, payload: Data) {
         vouchCoordinator.handleVouchPayload(from: peerID, payload: payload)
+    }
+
+    private var ndrTransport: MeshDoubleRatchetTransporting? {
+        meshService as? MeshDoubleRatchetTransporting
+    }
+
+    func bootstrapDoubleRatchetIfNeeded(for peerID: PeerID) {
+        guard ndrService.isRolloutEnabled,
+              let ndrTransport,
+              let authenticated =
+                ndrTransport.authenticatedPeerTransportState(peerID),
+              authenticated.capabilities.contains(.doubleRatchet),
+              let relationship = favoritesService.getFavoriteStatus(
+                for: authenticated.noisePublicKey
+              ),
+              relationship.isMutual,
+              let peerNostrKey = relationship.peerNostrPublicKey,
+              let peerPubkeyHex = Self.ndrNostrPubkeyHex(from: peerNostrKey),
+              favoritesService.canUseNdrBinding(
+                peerNoisePublicKey: authenticated.noisePublicKey,
+                peerNostrPublicKey: peerNostrKey
+              ),
+              let currentIdentity = try? idBridge.getCurrentNostrIdentity()
+        else {
+            return
+        }
+
+        ndrService.configureIfNeeded(
+            identity: currentIdentity,
+            processPendingActions: false
+        )
+        guard prepareDoubleRatchetPeerBinding(
+            peerID: peerID,
+            noisePublicKey: authenticated.noisePublicKey,
+            peerPubkeyHex: peerPubkeyHex,
+            currentIdentityPubkeyHex: currentIdentity.publicKeyHex
+        ) else {
+            return
+        }
+        if ndrService.hasPairwiseSession(with: peerPubkeyHex) {
+            guard favoritesService.markNdrRequired(
+                for: authenticated.noisePublicKey
+            ) else {
+                return
+            }
+            ndrService.configureIfNeeded(identity: currentIdentity)
+        }
+        let shouldReleaseDeferredOutOfBand =
+            ndrOutOfBandGenerationByPeer[peerID]
+                != authenticated.sessionGeneration
+        ndrOutOfBandGenerationByPeer[peerID] =
+            authenticated.sessionGeneration
+        sendNdrOutOfBandActions(
+            ndrService.pendingOutOfBandActions(
+                forAuthenticatedPeerPubkeyHex: peerPubkeyHex,
+                releaseDeferred: shouldReleaseDeferredOutOfBand
+            ),
+            to: peerID,
+            peerPubkeyHex: peerPubkeyHex,
+            expectedTransportState: authenticated
+        )
+        if ndrService.hasPairwiseSession(with: peerPubkeyHex) {
+            ndrInviteAttemptTokenByPeer.removeValue(forKey: peerID)
+            return
+        }
+        guard let invite = ndrService.currentInviteAction() else { return }
+        let inviteAttemptToken = [
+            authenticated.sessionGeneration.uuidString,
+            peerPubkeyHex,
+            invite.eventID
+        ].joined(separator: "|")
+        guard ndrInviteAttemptTokenByPeer[peerID] != inviteAttemptToken else {
+            return
+        }
+        ndrInviteAttemptTokenByPeer[peerID] = inviteAttemptToken
+
+        SecureLogger.debug(
+            "NDR: OOB invite -> \(peerID.id.prefix(8))… peer=\(peerPubkeyHex.prefix(8))…",
+            category: .session
+        )
+        sendNdrInvite(
+            invite,
+            to: peerID,
+            peerPubkeyHex: peerPubkeyHex,
+            expectedTransportState: authenticated,
+            inviteAttemptToken: inviteAttemptToken
+        )
+    }
+
+    func handleNdrEventPayload(from peerID: PeerID, payload: Data) {
+        guard ndrService.isRolloutEnabled,
+              let ndrTransport,
+              let eventJson = String(data: payload, encoding: .utf8),
+              !eventJson.isEmpty,
+              let authenticated =
+                ndrTransport.authenticatedPeerTransportState(peerID),
+              authenticated.capabilities.contains(.doubleRatchet),
+              let relationship = favoritesService.getFavoriteStatus(
+                for: authenticated.noisePublicKey
+              ),
+              relationship.isMutual,
+              let peerNostrKey = relationship.peerNostrPublicKey,
+              let peerPubkeyHex = Self.ndrNostrPubkeyHex(from: peerNostrKey),
+              favoritesService.canUseNdrBinding(
+                peerNoisePublicKey: authenticated.noisePublicKey,
+                peerNostrPublicKey: peerNostrKey
+              ),
+              let currentIdentity = try? idBridge.getCurrentNostrIdentity()
+        else {
+            return
+        }
+
+        let isExpectedBindingCurrent: () -> Bool = { [weak self] in
+            self?.isCurrentDoubleRatchetBinding(
+                peerID: peerID,
+                expectedTransportState: authenticated,
+                expectedPeerPubkeyHex: peerPubkeyHex
+            ) == true
+        }
+        ndrService.configureIfNeeded(
+            identity: currentIdentity,
+            processPendingActions: false
+        )
+        guard prepareDoubleRatchetPeerBinding(
+            peerID: peerID,
+            noisePublicKey: authenticated.noisePublicKey,
+            peerPubkeyHex: peerPubkeyHex,
+            currentIdentityPubkeyHex: currentIdentity.publicKeyHex
+        ) else {
+            return
+        }
+        let actions = ndrService.processOutOfBandEventJson(
+            eventJson,
+            expectedPeerPubkeyHex: peerPubkeyHex,
+            authorization: isExpectedBindingCurrent,
+            persistEstablishedBinding: { [weak self] in
+                self?.favoritesService.markNdrRequired(
+                    for: authenticated.noisePublicKey
+                ) == true
+            }
+        )
+        sendNdrOutOfBandActions(
+            actions,
+            to: peerID,
+            peerPubkeyHex: peerPubkeyHex,
+            expectedTransportState: authenticated
+        )
+    }
+
+    private func sendNdrOutOfBandActions(
+        _ actions: [NdrOutOfBandAction],
+        to peerID: PeerID,
+        peerPubkeyHex: String,
+        expectedTransportState: AuthenticatedPeerTransportState
+    ) {
+        for action in actions {
+            sendNdrOutOfBandAction(
+                action,
+                to: peerID,
+                peerPubkeyHex: peerPubkeyHex,
+                expectedTransportState: expectedTransportState,
+                retryAttempt: 0
+            )
+        }
+    }
+
+    private func sendNdrInvite(
+        _ invite: NdrInviteAction,
+        to peerID: PeerID,
+        peerPubkeyHex: String,
+        expectedTransportState: AuthenticatedPeerTransportState,
+        inviteAttemptToken: String,
+        retryAttempt: Int = 0
+    ) {
+        guard let ndrTransport,
+              ndrInviteAttemptTokenByPeer[peerID] == inviteAttemptToken,
+              !ndrService.hasPairwiseSession(with: peerPubkeyHex),
+              ndrService.isCurrentInviteAction(invite),
+              isCurrentDoubleRatchetBinding(
+                peerID: peerID,
+                expectedTransportState: expectedTransportState,
+                expectedPeerPubkeyHex: peerPubkeyHex
+              )
+        else {
+            if ndrInviteAttemptTokenByPeer[peerID] == inviteAttemptToken {
+                ndrInviteAttemptTokenByPeer.removeValue(forKey: peerID)
+            }
+            return
+        }
+
+        ndrTransport.sendNdrEvent(
+            to: peerID,
+            eventJson: invite.eventJson,
+            expectedTransportState: expectedTransportState,
+            completion: { [weak self] succeeded in
+                guard !succeeded, let self else { return }
+                guard self.ndrInviteAttemptTokenByPeer[peerID]
+                        == inviteAttemptToken
+                else {
+                    return
+                }
+                self.ndrService.scheduleHostTransientRetry(
+                    after: retryAttempt
+                ) {
+                    [weak self] in
+                    self?.sendNdrInvite(
+                        invite,
+                        to: peerID,
+                        peerPubkeyHex: peerPubkeyHex,
+                        expectedTransportState: expectedTransportState,
+                        inviteAttemptToken: inviteAttemptToken,
+                        retryAttempt: retryAttempt + 1
+                    )
+                }
+            }
+        )
+    }
+
+    private func sendNdrOutOfBandAction(
+        _ action: NdrOutOfBandAction,
+        to peerID: PeerID,
+        peerPubkeyHex: String,
+        expectedTransportState: AuthenticatedPeerTransportState,
+        retryAttempt: Int
+    ) {
+        guard let ndrTransport,
+              action.peerPubkeyHex == peerPubkeyHex,
+              isCurrentDoubleRatchetBinding(
+                peerID: peerID,
+                expectedTransportState: expectedTransportState,
+                expectedPeerPubkeyHex: peerPubkeyHex
+              )
+        else {
+            ndrService.completeOutOfBandAction(
+                action,
+                succeeded: false
+            )
+            return
+        }
+
+        let service = ndrService
+        ndrTransport.sendNdrEvent(
+            to: peerID,
+            eventJson: action.eventJson,
+            expectedTransportState: expectedTransportState,
+            completion: { [weak self] succeeded in
+                service.completeOutOfBandAction(
+                    action,
+                    succeeded: succeeded
+                )
+                guard !succeeded, let self else { return }
+                self.ndrService.scheduleHostTransientRetry(
+                    after: retryAttempt
+                ) {
+                    [weak self] in
+                    guard let self else { return }
+                    guard self.isCurrentDoubleRatchetBinding(
+                            peerID: peerID,
+                            expectedTransportState: expectedTransportState,
+                            expectedPeerPubkeyHex: peerPubkeyHex
+                          )
+                    else {
+                        if self.ndrOutOfBandGenerationByPeer[peerID]
+                            == expectedTransportState.sessionGeneration
+                        {
+                            self.ndrOutOfBandGenerationByPeer
+                                .removeValue(forKey: peerID)
+                        }
+                        return
+                    }
+                    guard
+                          service.prepareOutOfBandActionForRetry(action)
+                    else {
+                        return
+                    }
+                    self.sendNdrOutOfBandAction(
+                        action,
+                        to: peerID,
+                        peerPubkeyHex: peerPubkeyHex,
+                        expectedTransportState: expectedTransportState,
+                        retryAttempt: retryAttempt + 1
+                    )
+                }
+            }
+        )
+    }
+
+    private func isCurrentDoubleRatchetBinding(
+        peerID: PeerID,
+        expectedTransportState: AuthenticatedPeerTransportState,
+        expectedPeerPubkeyHex: String
+    ) -> Bool {
+        guard let ndrTransport,
+              ndrTransport.authenticatedPeerTransportState(peerID)
+                == expectedTransportState,
+              expectedTransportState.capabilities.contains(.doubleRatchet),
+              let relationship = favoritesService.getFavoriteStatus(
+                for: expectedTransportState.noisePublicKey
+              ),
+              relationship.isMutual,
+              let peerNostrKey = relationship.peerNostrPublicKey,
+              Self.ndrNostrPubkeyHex(from: peerNostrKey)
+                == expectedPeerPubkeyHex,
+              favoritesService.canUseNdrBinding(
+                peerNoisePublicKey:
+                    expectedTransportState.noisePublicKey,
+                peerNostrPublicKey: peerNostrKey
+              )
+        else {
+            return false
+        }
+        return true
+    }
+
+    private func prepareDoubleRatchetPeerBinding(
+        peerID: PeerID,
+        noisePublicKey: Data,
+        peerPubkeyHex: String,
+        currentIdentityPubkeyHex: String
+    ) -> Bool {
+        let identityPubkeyHex = currentIdentityPubkeyHex.lowercased()
+        if ndrBindingIdentityPubkeyHex != identityPubkeyHex {
+            ndrInviteAttemptTokenByPeer.removeAll()
+            ndrOutOfBandGenerationByPeer.removeAll()
+            ndrPeerPubkeyByNoiseKey.removeAll()
+            ndrBindingIdentityPubkeyHex = identityPubkeyHex
+        }
+
+        if let previousPeerPubkeyHex =
+            ndrPeerPubkeyByNoiseKey[noisePublicKey],
+           previousPeerPubkeyHex != peerPubkeyHex
+        {
+            guard ndrService.retirePeer(previousPeerPubkeyHex) else {
+                return false
+            }
+            ndrInviteAttemptTokenByPeer.removeValue(forKey: peerID)
+            ndrOutOfBandGenerationByPeer.removeValue(forKey: peerID)
+        }
+        ndrPeerPubkeyByNoiseKey[noisePublicKey] = peerPubkeyHex
+        return true
+    }
+
+    func authorizeDoubleRatchetFavoriteRebind(
+        noisePublicKey: Data,
+        oldNostrPublicKey: String?,
+        newNostrPublicKey: String
+    ) -> Bool {
+        guard let newPeerPubkeyHex =
+                Self.ndrNostrPubkeyHex(from: newNostrPublicKey)
+        else {
+            // A malformed destination cannot be collision-checked.
+            return false
+        }
+        let oldPeerPubkeyHex: String?
+        if let oldNostrPublicKey {
+            guard let normalized =
+                    Self.ndrNostrPubkeyHex(from: oldNostrPublicKey)
+            else {
+                // A malformed existing binding cannot be safely retired.
+                return false
+            }
+            oldPeerPubkeyHex = normalized
+        } else {
+            oldPeerPubkeyHex = nil
+        }
+        guard oldPeerPubkeyHex != newPeerPubkeyHex else { return true }
+        let otherFavoritePubkeys =
+            favoritesService.peerNostrPublicKeys(
+                excludingNoisePublicKey: noisePublicKey
+            )
+            .compactMap { Self.ndrNostrPubkeyHex(from: $0) }
+        guard !otherFavoritePubkeys.contains(newPeerPubkeyHex) else {
+            // A Nostr identity may have only one stable Noise binding. Without
+            // this, two radio identities could both authorize the same ratchet.
+            return false
+        }
+        guard let oldPeerPubkeyHex else {
+            // Initial and nil-to-value assignments have nothing to retire.
+            return true
+        }
+        guard ndrService.isRolloutEnabled else {
+            // FavoritesPersistenceService still journals and commits a
+            // previously pinned binding while rollout is dark. There is no
+            // new session to discover or pin on this path.
+            return true
+        }
+        guard let currentIdentity =
+                try? idBridge.getCurrentNostrIdentity()
+        else {
+            return false
+        }
+
+        ndrService.configureIfNeeded(
+            identity: currentIdentity,
+            processPendingActions: false
+        )
+        guard ndrService.isConfigured else {
+            return false
+        }
+        if ndrService.hasPairwiseSession(with: oldPeerPubkeyHex) {
+            return favoritesService.markNdrRequired(
+                for: noisePublicKey
+            )
+        }
+        return true
+    }
+
+    func commitDoubleRatchetFavoriteRebind(
+        noisePublicKey: Data,
+        oldNostrPublicKey: String,
+        newNostrPublicKey: String
+    ) -> Bool {
+        guard let oldPeerPubkeyHex =
+                Self.ndrNostrPubkeyHex(from: oldNostrPublicKey),
+              let newPeerPubkeyHex =
+                Self.ndrNostrPubkeyHex(from: newNostrPublicKey),
+              let currentIdentity =
+                try? idBridge.getCurrentNostrIdentity()
+        else {
+            return false
+        }
+        // Representation-only changes (hex ↔ npub or case) carry no
+        // retirement intent. Returning success also recovers journals written
+        // by an older build before equivalent keys were normalized.
+        guard oldPeerPubkeyHex != newPeerPubkeyHex else {
+            return true
+        }
+        let otherFavoritePubkeys =
+            favoritesService.peerNostrPublicKeys(
+                excludingNoisePublicKey: noisePublicKey
+            )
+            .compactMap { Self.ndrNostrPubkeyHex(from: $0) }
+        guard !otherFavoritePubkeys.contains(newPeerPubkeyHex) else {
+            return false
+        }
+
+        // Configuration and retirement are intentionally action-silent here:
+        // the durable rebind journal exists, but the target favorite has not
+        // been committed yet. Relay work resumes through the normal setup/send
+        // path only after FavoritesPersistenceService verifies that commit.
+        guard ndrService.configureIfNeeded(
+            identity: currentIdentity,
+            processPendingActions: false,
+            allowDisabledMaintenance: true
+        ) else {
+            return false
+        }
+        if !otherFavoritePubkeys.contains(oldPeerPubkeyHex),
+           !ndrService.retirePeer(
+                oldPeerPubkeyHex,
+                processPendingActions: false,
+                allowDisabledMaintenance: true
+           )
+        {
+            return false
+        }
+        let reboundPeerIDs = ndrOutOfBandGenerationByPeer.keys.filter {
+            ndrTransport?.authenticatedPeerTransportState($0)?
+                .noisePublicKey == noisePublicKey
+        }
+        for peerID in reboundPeerIDs {
+            ndrInviteAttemptTokenByPeer.removeValue(forKey: peerID)
+            ndrOutOfBandGenerationByPeer.removeValue(forKey: peerID)
+        }
+        ndrPeerPubkeyByNoiseKey[noisePublicKey] = newPeerPubkeyHex
+        ndrBindingIdentityPubkeyHex =
+            currentIdentity.publicKeyHex.lowercased()
+        return true
+    }
+
+    static func ndrNostrPubkeyHex(from npubOrHex: String) -> String? {
+        let lowered = npubOrHex.lowercased()
+        if lowered.hasPrefix("npub") {
+            guard let (hrp, data) = try? Bech32.decode(lowered),
+                  hrp == "npub",
+                  data.count == 32
+            else {
+                return nil
+            }
+            return data.hexEncodedString()
+        }
+
+        guard lowered.count == 64,
+              lowered.allSatisfy(\.isHexDigit)
+        else {
+            return nil
+        }
+        return lowered
     }
 }
 
@@ -281,6 +778,7 @@ final class ChatTransportEventCoordinator {
 
         context.flushRouterOutbox(for: peerID)
         context.retryCourierDeposits(via: peerID)
+        context.bootstrapDoubleRatchetIfNeeded(for: peerID)
     }
 
     func didDisconnectFromPeer(_ peerID: PeerID) {
@@ -501,6 +999,9 @@ private extension ChatTransportEventCoordinator {
 
         case .vouch:
             context.handleVouchPayload(from: peerID, payload: payload)
+
+        case .ndrEvent:
+            context.handleNdrEventPayload(from: peerID, payload: payload)
 
         case .voiceFrame:
             context.handleVoiceFramePayload(from: peerID, payload: payload, timestamp: timestamp)

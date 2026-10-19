@@ -19,6 +19,7 @@ let package = Package(
         .package(path: "localPackages/Arti"),
         .package(path: "localPackages/BitFoundation"),
         .package(path: "localPackages/BitLogger"),
+        .package(path: "localPackages/NdrFfi"),
         .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1", exact: "0.21.1")
     ],
     targets: [
@@ -28,7 +29,8 @@ let package = Package(
                 .product(name: "P256K", package: "swift-secp256k1"),
                 .product(name: "BitFoundation", package: "BitFoundation"),
                 .product(name: "BitLogger", package: "BitLogger"),
-                .product(name: "Tor", package: "Arti")
+                .product(name: "Tor", package: "Arti"),
+                .product(name: "NdrFfi", package: "NdrFfi")
             ],
             path: "bitchat",
             exclude: [
@@ -48,7 +50,8 @@ let package = Package(
             name: "bitchatTests",
             dependencies: [
                 "bitchat",
-                .product(name: "BitFoundation", package: "BitFoundation")
+                .product(name: "BitFoundation", package: "BitFoundation"),
+                .product(name: "NdrFfi", package: "NdrFfi")
             ],
             path: "bitchatTests",
             exclude: [

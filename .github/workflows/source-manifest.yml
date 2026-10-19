@@ -37,6 +37,7 @@ jobs:
           ref: ${{ github.event.inputs.ref || github.ref }}
           # Full history so the commit the tag names can be recorded exactly.
           fetch-depth: 0
+          submodules: recursive
 
       - name: Build manifest
         id: build
@@ -46,12 +47,33 @@ jobs:
           commit="$(git rev-parse HEAD)"
           tree="$(git rev-parse HEAD^{tree})"
 
-          # Hash every tracked file, in a stable order, with NUL separation so
-          # paths containing spaces or newlines cannot shift the columns.
-          git ls-files -z \
+          # Hash every regular tracked file in a stable order. Gitlinks name a
+          # directory rather than a hashable file, so record and verify their
+          # exact commits separately.
+          git ls-files -s -z \
+            | while IFS= read -r -d '' entry; do
+                metadata="${entry%%$'\t'*}"
+                path="${entry#*$'\t'}"
+                mode="${metadata%% *}"
+                if [ "$mode" != "160000" ]; then
+                  printf '%s\0' "$path"
+                fi
+              done \
             | sort -z \
             | xargs -0 sha256sum \
             > files.sha256
+
+          : > gitlinks.tsv
+          git ls-files -s -z \
+            | while IFS= read -r -d '' entry; do
+                metadata="${entry%%$'\t'*}"
+                path="${entry#*$'\t'}"
+                read -r mode object stage <<< "$metadata"
+                if [ "$mode" = "160000" ]; then
+                  printf '%s\t%s\n' "$path" "$object"
+                fi
+              done \
+            | sort > gitlinks.tsv
 
           {
             echo "# bitchat source manifest"
@@ -60,9 +82,13 @@ jobs:
             echo "# commit: ${commit}"
             echo "# tree:   ${tree}"
             echo "# files:  $(wc -l < files.sha256 | tr -d ' ')"
+            while IFS=$'\t' read -r path object; do
+              [ -n "$path" ] && echo "# gitlink: ${path} ${object}"
+            done < gitlinks.tsv
             echo "#"
             echo "# Verify a checkout of this ref with:"
             echo "#   shasum -a 256 -c files.sha256"
+            echo "#   git submodule status --recursive"
             echo "# Hash checking alone ignores files this manifest does not list, and"
             echo "# the Xcode project compiles any source file present in the tree. So"
             echo "# also confirm nothing extra is present:"
@@ -85,6 +111,11 @@ jobs:
           # is worse than none, so fail loudly rather than publishing it.
           grep -v '^#' SOURCE-MANIFEST.txt > check.sha256
           sha256sum -c check.sha256 > /dev/null
+          while IFS=$'\t' read -r path expected; do
+            [ -z "$path" ] && continue
+            test "$(git rev-parse ":${path}")" = "$expected"
+            test "$(git -C "$path" rev-parse HEAD)" = "$expected"
+          done < gitlinks.tsv
           echo "manifest validates against this checkout"
 
       - name: Attest the manifest

@@ -14,6 +14,7 @@ default:
     @echo "  just build              Build the macOS app without signing"
     @echo "  just test               Run the SwiftPM test suite"
     @echo "  just test-ios           Run tests on the iPhone 17 simulator"
+    @echo "  just ndr-ffi            Build NdrFfi from the pinned Rust source"
     @echo "  just clean              Remove repo-local build artifacts only"
     @echo "  just nuke               Also remove nested package build caches"
     @echo "  just check              Validate the development environment"
@@ -30,7 +31,11 @@ check: check-clean-safety
     @xcodebuild -version
     @echo "✅ Development environment ready (a signing identity is not required for just build)"
 
-build: check
+ndr-ffi platform="all":
+    @command -v cargo >/dev/null 2>&1 || (echo "❌ cargo not found. Install Rust with rustup." && exit 1)
+    @./localPackages/NdrFfi/build-apple.sh --platform "{{platform}}"
+
+build: check (ndr-ffi "macos")
     @echo "Building BitChat for macOS..."
     @xcodebuild -project "{{project}}" -scheme "{{macos_scheme}}" -configuration Debug -derivedDataPath "{{derived_data}}" CODE_SIGNING_ALLOWED=NO build
 
@@ -40,10 +45,10 @@ run: build
 # Backward-compatible alias for the old quick-run recipe.
 dev-run: run
 
-test:
+test: (ndr-ffi "macos")
     @swift test
 
-test-ios: check
+test-ios: check (ndr-ffi "ios")
     @xcodebuild -project "{{project}}" -scheme "{{ios_scheme}}" -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' -derivedDataPath "{{derived_data}}" test
 
 # Artifact-only cleanup. In particular, this recipe never invokes Git and
