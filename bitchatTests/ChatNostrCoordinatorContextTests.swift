@@ -229,6 +229,9 @@ private final class MockChatNostrContext: ChatNostrContext {
     // Favorites & notifications
     var favoriteRelationshipsByNoiseKey: [Data: FavoritesPersistenceService.FavoriteRelationship] = [:]
     var acceptsLegacyNostrDM = true
+    var onLegacyPolicyRead: (() -> Void)?
+    var allowsNdrBinding = true
+    var onNdrBindingRead: (() -> Void)?
     private(set) var geohashActivityNotifications: [(geohash: String, bodyPreview: String)] = []
 
     func favoriteRelationship(forNoiseKey noiseKey: Data) -> FavoritesPersistenceService.FavoriteRelationship? {
@@ -240,7 +243,13 @@ private final class MockChatNostrContext: ChatNostrContext {
     }
 
     func canAcceptLegacyNostrDM(from _: String) -> Bool {
-        acceptsLegacyNostrDM
+        defer { onLegacyPolicyRead?() }
+        return acceptsLegacyNostrDM
+    }
+
+    func canUseNdrBinding(peerNoisePublicKey _: Data, peerNostrPublicKey _: String) -> Bool {
+        defer { onNdrBindingRead?() }
+        return allowsNdrBinding
     }
 
     func notifyGeohashActivity(geohash: String, bodyPreview: String) {
@@ -465,8 +474,8 @@ struct ChatNostrCoordinatorContextTests {
         #expect(context.recordedNostrEventIDs == [giftWrap.id])
     }
 
-    @Test @MainActor
-    func processNostrMessage_rejectsLegacyDowngradeBeforeDelivery()
+    @Test(arguments: [false, true]) @MainActor
+    func processNostrMessage_rejectsLegacyDowngradeBeforeDelivery(pinDuringDecode: Bool)
         async throws
     {
         let context = MockChatNostrContext()
@@ -474,12 +483,14 @@ struct ChatNostrCoordinatorContextTests {
         let recipient = try NostrIdentity.generate()
         let sender = try NostrIdentity.generate()
         context.nostrIdentity = recipient
-        context.acceptsLegacyNostrDM = false
+        context.acceptsLegacyNostrDM = pinDuringDecode
+        if pinDuringDecode {
+            context.onLegacyPolicyRead = { [weak context] in context?.acceptsLegacyNostrDM = false }
+        }
         let embedded = try #require(
             NostrEmbeddedBitChat.encodePMForNostrNoRecipient(
                 content: "must not downgrade",
-                messageID: "legacy-blocked",
-                senderPeerID: PeerID(str: "aabbccddeeff0011")
+                messageID: "legacy-blocked"
             )
         )
         let blockedGiftWrap = try NostrProtocol.createPrivateMessage(
@@ -492,7 +503,9 @@ struct ChatNostrCoordinatorContextTests {
 
         #expect(context.handledPrivateMessages.isEmpty)
         #expect(context.recordedNostrEventIDs == [blockedGiftWrap.id])
+        #expect(context.nostrKeyMapping.isEmpty)
 
+        context.onLegacyPolicyRead = nil
         context.acceptsLegacyNostrDM = true
         let acceptedGiftWrap = try NostrProtocol.createPrivateMessage(
             content: embedded,
@@ -757,12 +770,10 @@ struct GeoPresenceTrackerTests {
                 favoritedAt: Date(timeIntervalSince1970: 0),
                 lastUpdated: Date(timeIntervalSince1970: 0)
             )
-        let senderPeerID = PeerID(str: "0011223344556677")
         let embedded = try #require(
             NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(
                 type: .delivered,
-                messageID: "expired-ndr",
-                senderPeerID: senderPeerID
+                messageID: "expired-ndr"
             )
         )
         let unsigned = NostrEvent(
@@ -807,8 +818,8 @@ struct GeoPresenceTrackerTests {
         #expect(context.recordedNostrEventIDs == [rumor.id])
     }
 
-    @Test @MainActor
-    func ndrDelivery_marksPrivateMessageAsPairwiseOnly() async throws {
+    @Test(arguments: [false, true]) @MainActor
+    func ndrDelivery_marksPrivateMessageAsPairwiseOnly(rebindDuringDecode: Bool) async throws {
         let context = MockChatNostrContext()
         let recipient = try NostrIdentity.generate()
         let sender = try NostrIdentity.generate()
@@ -845,6 +856,9 @@ struct GeoPresenceTrackerTests {
             presence: GeoPresenceTracker(context: context)
         )
         var disposition: NdrDeliveryDisposition?
+        if rebindDuringDecode {
+            context.onNdrBindingRead = { [weak context] in context?.allowsNdrBinding = false }
+        }
 
         pipeline.handleNdrDecryptedMessage(
             NdrDecryptedMessage(
@@ -861,6 +875,13 @@ struct GeoPresenceTrackerTests {
         )
 
         #expect(completed)
+        if rebindDuringDecode {
+            #expect(disposition == .retry)
+            #expect(context.handledPrivateMessages.isEmpty)
+            #expect(context.nostrKeyMapping.isEmpty)
+            #expect(context.recordedNostrEventIDs.isEmpty)
+            return
+        }
         #expect(disposition == .consumed)
         #expect(context.handledPrivateMessages.count == 1)
         #expect(context.handledPrivateMessages.first?.convKey == PeerID(hexData: noiseKey))
