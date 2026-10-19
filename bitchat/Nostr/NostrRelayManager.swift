@@ -817,9 +817,7 @@ final class NostrRelayManager: ObservableObject {
             }
             // Initialize EOSE tracking if requested
             if let onEOSE = onEOSE {
-                if urls.isEmpty {
-                    onEOSE()
-                } else if shouldWaitForTorBeforeConnecting {
+                if shouldWaitForTorBeforeConnecting {
                     parkEOSECallbackUntilTorReady(id: id, callback: onEOSE)
                 } else {
                     startEOSETracking(id: id, relayURLs: Set(urls), callback: onEOSE)
@@ -1268,30 +1266,14 @@ final class NostrRelayManager: ObservableObject {
     /// active subscription targeting this relay must be re-sent.
     private func flushPendingSubscriptions(for relayUrl: String) {
         guard let connection = connections[relayUrl] else { return }
-        var toSend: [
-            String: (messageString: String, generation: UInt64)
-        ] = [:]
-        for (id, pending) in pendingSubscriptions[relayUrl] ?? [:] {
-            guard let state = subscriptionRequestState[id],
-                  state.relayURLs.contains(relayUrl),
-                  state.messageString == pending.messageString,
-                  let generation = subscriptionGenerations[id]
-            else {
-                pendingSubscriptions[relayUrl]?.removeValue(forKey: id)
-                continue
-            }
-            toSend[id] = (pending.messageString, generation)
-        }
+        // Desired requests already include pending and active subscriptions.
+        // Replaying this one source also covers pending-cache eviction.
         for (id, state) in subscriptionRequestState
         where state.relayURLs.contains(relayUrl) {
             guard let generation = subscriptionGenerations[id] else {
                 continue
             }
-            toSend[id] = (state.messageString, generation)
-        }
-        for (id, request) in toSend {
-            let messageString = request.messageString
-            let generation = request.generation
+            let messageString = state.messageString
             if subscriptions[relayUrl]?[id] == generation {
                 // Already subscribed on this relay (e.g. a tracker promoted
                 // after an earlier flush): its EOSE is coming, count it.
