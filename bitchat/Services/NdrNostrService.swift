@@ -135,7 +135,6 @@ private final class KeychainNdrSessionMarkerStore:
 struct NdrDecryptedMessage {
     let event: NostrEvent
     let senderPubkeyHex: String
-    let outerEventID: String
     let expiresAtSeconds: UInt64?
 }
 
@@ -1223,7 +1222,6 @@ final class NdrNostrService {
         return NdrDecryptedMessage(
             event: inner,
             senderPubkeyHex: sender,
-            outerEventID: outerID,
             expiresAtSeconds: action.expiresAtSeconds
         )
     }

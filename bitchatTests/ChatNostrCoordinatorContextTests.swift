@@ -920,7 +920,6 @@ struct GeoPresenceTrackerTests {
             NdrDecryptedMessage(
                 event: rumor,
                 senderPubkeyHex: sender.publicKeyHex,
-                outerEventID: String(repeating: "a", count: 64),
                 expiresAtSeconds: 100
             ),
             completion: { disposition = $0 }
@@ -988,7 +987,6 @@ struct GeoPresenceTrackerTests {
             NdrDecryptedMessage(
                 event: rumor,
                 senderPubkeyHex: sender.publicKeyHex,
-                outerEventID: String(repeating: "c", count: 64),
                 expiresAtSeconds: nil
             ),
             completion: { disposition = $0 }

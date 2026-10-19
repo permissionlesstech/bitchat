@@ -191,6 +191,7 @@ private final class BlockingIdentityLifecycleKeychain:
         data = Data()
     }
 
+    // periphery:ignore - Required KeychainManagerProtocol witness.
     func secureClear(_ string: inout String) {
         string = ""
     }
