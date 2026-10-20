@@ -376,9 +376,8 @@ final class NdrNostrService {
         return info.sendReady && info.receiveReady
     }
 
-    /// Local native session state stops the bounded invite retry chain,
-    /// including while relay bootstrap is still in flight. This does not
-    /// acknowledge receipt of our OOB response by the remote peer.
+    /// Local native session state does not acknowledge receipt of our OOB
+    /// response by the remote peer and must not cancel an invite retry chain.
     func hasPairwiseSession(with peerPubkeyHex: String) -> Bool {
         guard rolloutEnabled,
               let manager,

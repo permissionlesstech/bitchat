@@ -235,14 +235,11 @@ extension ChatViewModel: ChatTransportEventContext {
             peerPubkeyHex: peerPubkeyHex,
             expectedTransportState: authenticated
         )
-        if ndrService.hasPairwiseSession(with: peerPubkeyHex) {
-            ndrInviteAttemptTokenByPeer.removeValue(forKey: peerID)
-            return
-        }
-        guard DoubleRatchetFeature.shouldInitiate(
-            localPubkeyHex: currentIdentity.publicKeyHex,
-            peerPubkeyHex: peerPubkeyHex
-        ), let invite = ndrService.currentInviteAction() else { return }
+        // A crossed invite creates a local session before the peer receives our
+        // response. Let any existing bounded retry chain finish so native
+        // arbitration can converge even when that response was lost.
+        if ndrService.hasPairwiseSession(with: peerPubkeyHex) { return }
+        guard let invite = ndrService.currentInviteAction() else { return }
         let inviteAttemptToken = [
             authenticated.sessionGeneration.uuidString,
             peerPubkeyHex,
@@ -353,7 +350,6 @@ extension ChatViewModel: ChatTransportEventContext {
     ) {
         guard let ndrTransport,
               ndrInviteAttemptTokenByPeer[peerID] == inviteAttemptToken,
-              !ndrService.hasPairwiseSession(with: peerPubkeyHex),
               ndrService.isCurrentInviteAction(invite),
               isCurrentDoubleRatchetBinding(
                 peerID: peerID,
@@ -373,8 +369,8 @@ extension ChatViewModel: ChatTransportEventContext {
             expectedTransportState: expectedTransportState,
             completion: { [weak self] _ in
                 // BLE admission does not prove the peer accepted the invite.
-                // Keep the same bounded retry chain until local session state
-                // exists; every attempt revalidates the authenticated binding.
+                // Finish the same bounded retry chain even if a crossed invite
+                // created a local session; every attempt revalidates the binding.
                 guard let self else { return }
                 guard self.ndrInviteAttemptTokenByPeer[peerID]
                         == inviteAttemptToken

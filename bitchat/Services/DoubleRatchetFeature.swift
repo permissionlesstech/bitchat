@@ -10,13 +10,4 @@ enum DoubleRatchetFeature {
     #else
     static let isEnabled = true
     #endif
-
-    /// Both clients elect the lower authenticated Nostr key as the initiator.
-    @MainActor
-    static func shouldInitiate(localPubkeyHex: String, peerPubkeyHex: String) -> Bool {
-        guard let local = ChatViewModel.ndrNostrPubkeyHex(from: localPubkeyHex),
-              let peer = ChatViewModel.ndrNostrPubkeyHex(from: peerPubkeyHex)
-        else { return false }
-        return local < peer
-    }
 }
