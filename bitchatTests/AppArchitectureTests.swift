@@ -602,6 +602,51 @@ struct AppArchitectureTests {
         #expect(peerListModel.recentChatRows.map(\.peerID) == [offlinePeerID])
     }
 
+    @Test("PeerListModel scopes GeoDM peers to the active geohash channel")
+    @MainActor
+    func peerListModelScopesGeoDMToActiveChannel() async {
+        let viewModel = makeArchitectureViewModel()
+        let locationManager = makeArchitectureLocationManager()
+        let locationChannelsModel = LocationChannelsModel(manager: locationManager)
+        let peerListModel = PeerListModel(
+            chatViewModel: viewModel,
+            conversations: viewModel.conversations,
+            locationChannelsModel: locationChannelsModel
+        )
+
+        let pubkeyA = String(repeating: "11", count: 32)
+        let peerA = PeerID(nostr_: pubkeyA)
+        let pubkeyB = String(repeating: "22", count: 32)
+        let peerB = PeerID(nostr_: pubkeyB)
+
+        // On .mesh channel, GeoDMs are never considered active channel participants
+        #expect(!peerListModel.isGeoDMPeerInActiveChannel(peerA))
+        #expect(!peerListModel.isGeoDMPeerInActiveChannel(peerB))
+
+        let geohashA = "u4pruy"
+        let geohashB = "dr5ru"
+        viewModel.participantTracker.recordParticipant(pubkeyHex: pubkeyA, geohash: geohashA)
+        viewModel.participantTracker.recordParticipant(pubkeyHex: pubkeyB, geohash: geohashB)
+
+        // Switch active channel to geohashA
+        viewModel.conversations.setActiveChannel(.location(GeohashChannel(level: .city, geohash: geohashA)))
+
+        #expect(peerListModel.isGeoDMPeerInActiveChannel(peerA))
+        #expect(!peerListModel.isGeoDMPeerInActiveChannel(peerB))
+
+        // Switch active channel to geohashB
+        viewModel.conversations.setActiveChannel(.location(GeohashChannel(level: .city, geohash: geohashB)))
+
+        #expect(!peerListModel.isGeoDMPeerInActiveChannel(peerA))
+        #expect(peerListModel.isGeoDMPeerInActiveChannel(peerB))
+
+        // Switch back to mesh
+        viewModel.conversations.setActiveChannel(.mesh)
+
+        #expect(!peerListModel.isGeoDMPeerInActiveChannel(peerA))
+        #expect(!peerListModel.isGeoDMPeerInActiveChannel(peerB))
+    }
+
     @Test("PrivateConversationModel resolves canonical header state for the selected DM")
     @MainActor
     func privateConversationModelResolvesSelectedHeaderState() async {
