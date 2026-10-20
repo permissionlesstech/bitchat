@@ -173,19 +173,6 @@ struct NdrOutOfBandTransportTests {
         #expect(!requestedStorage)
     }
 
-    @Test("Authenticated identities elect exactly one initiator")
-    @MainActor
-    func bootstrapElectsOneInitiator() {
-        let lower = String(repeating: "79", count: 32)
-        let higher = String(repeating: "c6", count: 32)
-        #expect(DoubleRatchetFeature.shouldInitiate(localPubkeyHex: lower, peerPubkeyHex: higher))
-        #expect(!DoubleRatchetFeature.shouldInitiate(localPubkeyHex: higher, peerPubkeyHex: lower))
-        #expect(!DoubleRatchetFeature.shouldInitiate(localPubkeyHex: lower, peerPubkeyHex: lower))
-        #expect(DoubleRatchetFeature.shouldInitiate(localPubkeyHex: lower, peerPubkeyHex: higher.uppercased()))
-        #expect(!DoubleRatchetFeature.shouldInitiate(localPubkeyHex: "", peerPubkeyHex: higher))
-        #expect(!DoubleRatchetFeature.shouldInitiate(localPubkeyHex: lower, peerPubkeyHex: String(repeating: "g", count: 64)))
-    }
-
     @Test("A failed runtime open stays fail-closed until identity change")
     @MainActor
     func configurationFailureRequiresExplicitRecoveryBoundary() throws {
@@ -572,9 +559,9 @@ struct NdrOutOfBandTransportTests {
         #expect(aliceService.currentInviteEventJson() != nil)
     }
 
-    @Test("A favorite Nostr rebind retires the old peer for either bootstrap role", arguments: [false, true])
+    @Test("A favorite Nostr rebind retires the old peer regardless of key order", arguments: [false, true])
     @MainActor
-    func favoriteIdentityRebindRetiresOldPeerBeforeBootstrap(localInitiates: Bool) throws {
+    func favoriteIdentityRebindRetiresOldPeerBeforeBootstrap(localKeySortsFirst: Bool) throws {
         let relay = FakeRelayManager()
         let storage = try makeTempDir(label: "favorite-rebind-local")
         let service = NdrNostrService(
@@ -583,12 +570,12 @@ struct NdrOutOfBandTransportTests {
             storageDirectoryProvider: { storage }
         )
         let local = try NostrIdentity(
-            privateKeyData: Data(repeating: 0, count: 31) + Data([localInitiates ? 1 : 2])
+            privateKeyData: Data(repeating: 0, count: 31) + Data([localKeySortsFirst ? 1 : 2])
         )
         let newPeer = try NostrIdentity(
-            privateKeyData: Data(repeating: 0, count: 31) + Data([localInitiates ? 2 : 1])
+            privateKeyData: Data(repeating: 0, count: 31) + Data([localKeySortsFirst ? 2 : 1])
         )
-        #expect((local.publicKeyHex < newPeer.publicKeyHex) == localInitiates)
+        #expect((local.publicKeyHex < newPeer.publicKeyHex) == localKeySortsFirst)
         let (viewModel, transport, favoritesService) = makeViewModel(
             ndrService: service, nostrKeychain: try identityKeychain(local)
         )
@@ -648,7 +635,7 @@ struct NdrOutOfBandTransportTests {
         )
         #expect(!service.hasPairwiseSession(with: oldPeer.publicKeyHex))
         #expect(favoritesService.isNdrRequired(for: noiseKey))
-        #expect(transport.sentNdrEvents.count == (localInitiates ? 1 : 0))
+        #expect(transport.sentNdrEvents.count == 1)
     }
 
     @Test("A failed durable favorite commit stays journaled after native retirement")
@@ -1321,110 +1308,96 @@ struct NdrOutOfBandTransportTests {
         _ = viewModel
     }
 
-    @Test("One initiator recovers a lost response without competing sessions")
+    @Test("Crossed invitations recover lost responses and converge", arguments: [false, true])
     @MainActor
-    func simultaneousBootstrapRecoversLostResponse() async throws {
-        let lower = try NostrIdentity(privateKeyData: Data(repeating: 0, count: 31) + Data([1]))
-        let higher = try NostrIdentity(privateKeyData: Data(repeating: 0, count: 31) + Data([2]))
-        #expect(lower.publicKeyHex < higher.publicKeyHex)
-        let lowerRelay = FakeRelayManager()
-        let higherRelay = FakeRelayManager()
-        let scheduler = FakeNdrRetryScheduler()
-        let lowerStorage = try makeTempDir(label: "single-initiator")
-        let lowerService = NdrNostrService(
-            relayManager: lowerRelay,
-            rolloutEnabled: true,
-            storageDirectoryProvider: { lowerStorage },
-            retryScheduler: scheduler.schedule
-        )
-        let higherService = try makeService(label: "single-acceptor", relay: higherRelay)
-        let (lowerVM, lowerTransport, lowerFavorites) = makeViewModel(
-            ndrService: lowerService, nostrKeychain: try identityKeychain(lower)
-        )
-        let (higherVM, higherTransport, higherFavorites) = makeViewModel(
-            ndrService: higherService, nostrKeychain: try identityKeychain(higher)
-        )
-        let lowerNoise = Data(repeating: 0x11, count: 32)
-        let higherNoise = Data(repeating: 0x22, count: 32)
-        let lowerPeer = PeerID(publicKey: lowerNoise)
-        let higherPeer = PeerID(publicKey: higherNoise)
-        installMutualFavorite(in: lowerFavorites, noiseKey: higherNoise, nostrIdentity: higher)
-        installMutualFavorite(in: higherFavorites, noiseKey: lowerNoise, nostrIdentity: lower)
-        lowerTransport.authenticatedPeerTransportStates[higherPeer] = AuthenticatedPeerTransportState(
-            capabilities: [.doubleRatchet], sessionGeneration: UUID(), noisePublicKey: higherNoise
-        )
-        higherTransport.authenticatedPeerTransportStates[lowerPeer] = AuthenticatedPeerTransportState(
-            capabilities: [.doubleRatchet], sessionGeneration: UUID(), noisePublicKey: lowerNoise
-        )
-        lowerTransport.ndrSendResults = Array(repeating: true, count: 8)
-        higherTransport.ndrSendResults = Array(repeating: true, count: 8)
-
-        lowerVM.bootstrapDoubleRatchetIfNeeded(for: higherPeer)
-        higherVM.bootstrapDoubleRatchetIfNeeded(for: lowerPeer)
-        #expect(lowerTransport.sentNdrEvents.count == 1)
-        #expect(higherTransport.sentNdrEvents.isEmpty, "Both bootstrap triggers must elect one initiator")
-        let invite = try #require(lowerTransport.sentNdrEvents.first?.eventJson)
-        higherVM.handleNdrEventPayload(from: lowerPeer, payload: Data(invite.utf8))
-        let response = try #require(higherTransport.sentNdrEvents.last?.eventJson)
-        #expect(try extractNostrKind(json: response) == 1059)
-        let firstResponseFinished = await TestHelpers.waitUntil(
-            { higherTransport.completedNdrSendCount == higherTransport.sentNdrEvents.count
-                && !scheduler.scheduled.isEmpty },
-            timeout: TestConstants.settleTimeout
-        )
-        #expect(firstResponseFinished)
-        // BLE accepted the response, but the peer never received it. Its
-        // repeated invite must recover the same session and response bytes.
-        #expect(!lowerService.hasPairwiseSession(with: higher.publicKeyHex))
-        #expect(higherService.hasPairwiseSession(with: lower.publicKeyHex))
-        higherVM.bootstrapDoubleRatchetIfNeeded(for: lowerPeer)
-        scheduler.runNext()
-        #expect(lowerTransport.sentNdrEvents.count == 2)
-        #expect(lowerTransport.sentNdrEvents.last?.eventJson == invite)
-        higherVM.handleNdrEventPayload(from: lowerPeer, payload: Data(invite.utf8))
-        #expect(higherTransport.sentNdrEvents.last?.eventJson == response)
-        lowerVM.handleNdrEventPayload(from: higherPeer, payload: Data(response.utf8))
-        let secondResponseFinished = await TestHelpers.waitUntil(
-            { higherTransport.completedNdrSendCount == higherTransport.sentNdrEvents.count },
-            timeout: TestConstants.settleTimeout
-        )
-        #expect(secondResponseFinished)
-        for event in higherRelay.sentEvents where event.kind == 1060 {
-            lowerService.processInboundRelayEvent(event)
+    func simultaneousBootstrapRecoversLostResponse(reverseRetryOrder: Bool) async throws {
+        let identities = [try NostrIdentity.generate(), try NostrIdentity.generate()]
+        let relays = [FakeRelayManager(), FakeRelayManager()]
+        let schedulers = [FakeNdrRetryScheduler(), FakeNdrRetryScheduler()]
+        let storage = [try makeTempDir(label: "crossed-first"), try makeTempDir(label: "crossed-second")]
+        defer { for directory in storage { try? FileManager.default.removeItem(at: directory) } }
+        let services = (0..<2).map { index in
+            NdrNostrService(
+                relayManager: relays[index], rolloutEnabled: true,
+                storageDirectoryProvider: { storage[index] },
+                retryScheduler: schedulers[index].schedule
+            )
         }
-        #expect(lowerService.hasActiveSession(with: higher.publicKeyHex))
-        #expect(higherService.hasActiveSession(with: lower.publicKeyHex))
-
-        var lowerMessages: [String] = []
-        var higherMessages: [String] = []
-        lowerService.onDecryptedMessage = { message, complete in
-            lowerMessages.append(message.event.content)
-            complete(.consumed)
+        let hosts = try (0..<2).map { index in
+            makeViewModel(ndrService: services[index], nostrKeychain: try identityKeychain(identities[index]))
         }
-        higherService.onDecryptedMessage = { message, complete in
-            higherMessages.append(message.event.content)
-            complete(.consumed)
+        let noiseKeys = [Data(repeating: 0x11, count: 32), Data(repeating: 0x22, count: 32)]
+        let peers = noiseKeys.map { PeerID(publicKey: $0) }
+        defer {
+            for index in 0..<2 { removeFavorite(in: hosts[index].2, noiseKey: noiseKeys[1 - index]) }
         }
-        lowerRelay.resetSentEvents()
-        higherRelay.resetSentEvents()
-        guard case .sent = lowerService.send("single-initiator-forward", to: higher.publicKeyHex) else {
-            Issue.record("Initiator could not send after response recovery")
-            return
+        for index in 0..<2 {
+            let remote = 1 - index
+            installMutualFavorite(in: hosts[index].2, noiseKey: noiseKeys[remote], nostrIdentity: identities[remote])
+            hosts[index].1.authenticatedPeerTransportStates[peers[remote]] = AuthenticatedPeerTransportState(
+                capabilities: [.doubleRatchet], sessionGeneration: UUID(), noisePublicKey: noiseKeys[remote]
+            )
+            hosts[index].1.ndrSendResults = Array(repeating: true, count: 16)
+            hosts[index].0.bootstrapDoubleRatchetIfNeeded(for: peers[remote])
+            #expect(hosts[index].1.sentNdrEvents.count == 1, "Either identity can initiate independently")
         }
-        for event in lowerRelay.sentEvents where event.kind == 1060 {
-            higherService.processInboundRelayEvent(event)
-            higherService.processInboundRelayEvent(event)
+        let invites = try hosts.map { try #require($0.1.sentNdrEvents.first?.eventJson) }
+        for index in 0..<2 {
+            hosts[index].0.handleNdrEventPayload(from: peers[1 - index], payload: Data(invites[1 - index].utf8))
         }
-        guard case .sent = higherService.send("single-initiator-reply", to: lower.publicKeyHex) else {
-            Issue.record("Acceptor could not reply after response recovery")
-            return
+        let responses = try hosts.map { try #require($0.1.sentNdrEvents.last?.eventJson) }
+        for index in 0..<2 {
+            #expect(try extractNostrKind(json: responses[index]) == 1059)
+            let completed = await TestHelpers.waitUntil(
+                { hosts[index].1.completedNdrSendCount == 2 && !schedulers[index].scheduled.isEmpty },
+                timeout: TestConstants.settleTimeout
+            )
+            #expect(completed)
+            #expect(services[index].hasPairwiseSession(with: identities[1 - index].publicKeyHex))
+            // Both responses were admitted by BLE but lost. Both local acceptor
+            // sessions exist; a repeated bootstrap notification must not cancel retries.
+            hosts[index].0.bootstrapDoubleRatchetIfNeeded(for: peers[1 - index])
         }
-        for event in higherRelay.sentEvents where event.kind == 1060 {
-            lowerService.processInboundRelayEvent(event)
-            lowerService.processInboundRelayEvent(event)
+        for index in reverseRetryOrder ? [1, 0] : [0, 1] {
+            schedulers[index].runNext()
+            #expect(hosts[index].1.sentNdrEvents.count == 3, "Local session existence cannot stop recovery")
+            #expect(hosts[index].1.sentNdrEvents.last?.eventJson == invites[index])
+            hosts[1 - index].0.handleNdrEventPayload(from: peers[index], payload: Data(invites[index].utf8))
+            #expect(hosts[1 - index].1.sentNdrEvents.last?.eventJson == responses[1 - index],
+                    "Repeating an invite replays the exact native response")
         }
-        #expect(higherMessages == ["single-initiator-forward"])
-        #expect(lowerMessages == ["single-initiator-reply"])
+        for index in 0..<2 {
+            hosts[index].0.handleNdrEventPayload(from: peers[1 - index], payload: Data(responses[1 - index].utf8))
+        }
+        // Deliver both bootstraps; native arbitration discards the losing session.
+        for index in 0..<2 {
+            for event in relays[index].sentEvents where event.kind == 1060 {
+                services[1 - index].processInboundRelayEvent(event)
+            }
+        }
+        var messages = [[String](), [String]()]
+        for index in 0..<2 {
+            #expect(services[index].hasActiveSession(with: identities[1 - index].publicKeyHex))
+            services[index].onDecryptedMessage = { message, complete in
+                messages[index].append(message.event.content)
+                complete(.consumed)
+            }
+        }
+        for index in 0..<2 {
+            relays[index].resetSentEvents()
+            guard case .sent = services[index].send("crossed-invite-\(index)", to: identities[1 - index].publicKeyHex) else {
+                Issue.record("Peer could not send after crossed-invite recovery")
+                return
+            }
+            let envelopes = relays[index].sentEvents.filter { $0.kind == 1060 }
+            #expect(envelopes.count == 1, "Only the converged session sends a ciphertext")
+            for event in envelopes {
+                services[1 - index].processInboundRelayEvent(event)
+                services[1 - index].processInboundRelayEvent(event)
+            }
+        }
+        #expect(messages[0] == ["crossed-invite-1"])
+        #expect(messages[1] == ["crossed-invite-0"])
     }
 
     @Test("Unanswered invites retry within one bounded authenticated attempt", arguments: [false, true], [false, true])
@@ -1513,32 +1486,29 @@ struct NdrOutOfBandTransportTests {
             ).first)
             viewModel.handleNdrEventPayload(from: peerID, payload: Data(response.eventJson.utf8))
             #expect(service.hasPairwiseSession(with: remote.publicKeyHex))
-            retryScheduler.runNext()
-            #expect(transport.sentNdrEvents.count == 2, "local native session state stops invite retries")
-            #expect(retryScheduler.scheduled.isEmpty)
-        } else {
-            for expectedSendCount in 3...5 {
-                retryScheduler.runNext()
-                #expect(transport.sentNdrEvents.count == expectedSendCount)
-                if expectedSendCount < 5 {
-                    let scheduled = await TestHelpers.waitUntil(
-                        { !retryScheduler.scheduled.isEmpty },
-                        timeout: TestConstants.settleTimeout
-                    )
-                    #expect(scheduled)
-                }
-            }
-            let allCompletionsFinished = await TestHelpers.waitUntil(
-                { transport.completedNdrSendCount == 5 },
-                timeout: TestConstants.settleTimeout
-            )
-            #expect(allCompletionsFinished)
-            #expect(retryScheduler.requestedDelays == [0.25, 0.5, 1, 2])
             viewModel.bootstrapDoubleRatchetIfNeeded(for: peerID)
-            viewModel.bootstrapDoubleRatchetIfNeeded(for: peerID)
-            #expect(transport.sentNdrEvents.count == 5, "the same binding cannot renew an exhausted retry budget")
-            #expect(retryScheduler.scheduled.isEmpty)
         }
+        for expectedSendCount in 3...5 {
+            retryScheduler.runNext()
+            #expect(transport.sentNdrEvents.count == expectedSendCount)
+            if expectedSendCount < 5 {
+                let scheduled = await TestHelpers.waitUntil(
+                    { !retryScheduler.scheduled.isEmpty },
+                    timeout: TestConstants.settleTimeout
+                )
+                #expect(scheduled)
+            }
+        }
+        let allCompletionsFinished = await TestHelpers.waitUntil(
+            { transport.completedNdrSendCount == 5 },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(allCompletionsFinished)
+        #expect(retryScheduler.requestedDelays == [0.25, 0.5, 1, 2])
+        viewModel.bootstrapDoubleRatchetIfNeeded(for: peerID)
+        viewModel.bootstrapDoubleRatchetIfNeeded(for: peerID)
+        #expect(transport.sentNdrEvents.count == 5, "the same binding cannot renew an exhausted retry budget")
+        #expect(retryScheduler.scheduled.isEmpty)
         #expect(Set(transport.sentNdrEvents.map(\.eventJson)).count == 1,
                 "retries must retransmit the identical native invite")
     }
