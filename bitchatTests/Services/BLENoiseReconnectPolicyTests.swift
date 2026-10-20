@@ -114,6 +114,6 @@ struct BLENoiseReconnectPolicyTests {
         #expect(
             PeerCapabilities.localSupported.contains(.privateMediaReceipts)
         )
-        #expect(!PeerCapabilities.localSupported.contains(.doubleRatchet))
+        #expect(PeerCapabilities.localSupported.contains(.doubleRatchet) == DoubleRatchetFeature.isEnabled)
     }
 }
