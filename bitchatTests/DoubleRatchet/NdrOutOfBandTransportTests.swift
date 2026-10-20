@@ -1045,7 +1045,8 @@ struct NdrOutOfBandTransportTests {
             accessible: nil
         )
         let favoritesService = FavoritesPersistenceService(
-            keychain: MockKeychain()
+            keychain: MockKeychain(),
+            ndrRolloutEnabled: false
         )
         let firstNoiseKey = Data((65..<97).map(UInt8.init))
         let secondNoiseKey = Data((97..<129).map(UInt8.init))
@@ -1259,7 +1260,8 @@ struct NdrOutOfBandTransportTests {
     func favoriteRebindRejectsMalformedOldOrNewIdentity() throws {
         let service = try makeService(label: "favorite-malformed-rebind")
         let favoritesService = FavoritesPersistenceService(
-            keychain: MockKeychain()
+            keychain: MockKeychain(),
+            ndrRolloutEnabled: false
         )
         let malformedOldNoiseKey = Data(repeating: 0xc1, count: 32)
         // Model malformed legacy data loaded before assignment authorization.
@@ -2380,7 +2382,8 @@ struct NdrOutOfBandTransportTests {
             accessible: nil
         )
         let favoritesService = FavoritesPersistenceService(
-            keychain: MockKeychain()
+            keychain: MockKeychain(),
+            ndrRolloutEnabled: false
         )
         let noiseKey = Data(repeating: 0xd4, count: 32)
         installMutualFavorite(

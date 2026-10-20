@@ -43,12 +43,12 @@ final class FavoritesPersistenceService: ObservableObject {
     }
 
     private let keychain: KeychainManagerProtocol
+    private let ndrRolloutEnabled: Bool
     
     @Published private(set) var favorites: [Data: FavoriteRelationship] = [:] // Noise pubkey -> relationship
     @Published private(set) var mutualFavorites: Set<Data> = []
     private var nostrIdentityRebindAuthorizationOwner: UUID?
-    private var nostrIdentityRebindAuthorizationRequired =
-        DoubleRatchetFeature.isEnabled
+    private var nostrIdentityRebindAuthorizationRequired: Bool
     private var authorizeNostrIdentityRebind:
         ((Data, String?, String) -> Bool)?
     private var commitNostrIdentityRebind:
@@ -60,8 +60,13 @@ final class FavoritesPersistenceService: ObservableObject {
     
     static let shared = FavoritesPersistenceService()
 
-    init(keychain: KeychainManagerProtocol = KeychainManager.makeDefault()) {
+    init(
+        keychain: KeychainManagerProtocol = KeychainManager.makeDefault(),
+        ndrRolloutEnabled: Bool = DoubleRatchetFeature.isEnabled
+    ) {
         self.keychain = keychain
+        self.ndrRolloutEnabled = ndrRolloutEnabled
+        self.nostrIdentityRebindAuthorizationRequired = ndrRolloutEnabled
         loadNdrRequiredNoiseKeys()
         loadPendingNostrIdentityRebind()
         loadFavorites()
@@ -84,7 +89,7 @@ final class FavoritesPersistenceService: ObservableObject {
     ) {
         nostrIdentityRebindAuthorizationOwner = owner
         nostrIdentityRebindAuthorizationRequired =
-            required || DoubleRatchetFeature.isEnabled
+            required || ndrRolloutEnabled
         authorizeNostrIdentityRebind = authorize
         commitNostrIdentityRebind = commit
         recoverPendingNostrIdentityRebindIfPossible()
@@ -98,7 +103,7 @@ final class FavoritesPersistenceService: ObservableObject {
         authorizeNostrIdentityRebind = nil
         commitNostrIdentityRebind = nil
         nostrIdentityRebindAuthorizationRequired =
-            DoubleRatchetFeature.isEnabled
+            ndrRolloutEnabled
     }
     
     /// Add or update a favorite
