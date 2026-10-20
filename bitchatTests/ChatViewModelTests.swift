@@ -19,7 +19,8 @@ private func makeTestableViewModel(
     keychain injectedKeychain: MockKeychain? = nil,
     panicMediaWipe: (() throws -> Void)? = nil,
     panicRecoveryOperations: PanicRecoveryOperations? = nil,
-    panicNetworkLifecycle: PanicNetworkLifecycle = .noop
+    panicNetworkLifecycle: PanicNetworkLifecycle = .noop,
+    panicNotificationRemoval: @escaping @MainActor () -> Void = {}
 ) -> (viewModel: ChatViewModel, transport: MockTransport) {
     let keychain = injectedKeychain ?? MockKeychain()
     let keychainHelper = MockKeychainHelper()
@@ -34,7 +35,8 @@ private func makeTestableViewModel(
         transport: transport,
         panicMediaWipe: panicMediaWipe,
         panicRecoveryOperations: panicRecoveryOperations,
-        panicNetworkLifecycle: panicNetworkLifecycle
+        panicNetworkLifecycle: panicNetworkLifecycle,
+        panicNotificationRemoval: panicNotificationRemoval
     )
 
     return (viewModel, transport)
@@ -2146,6 +2148,35 @@ struct ChatViewModelPanicTests {
     }
 
     @Test @MainActor
+    func panicClearAllData_removesNotifications() {
+        var removals = 0
+        let (viewModel, _) = makeTestableViewModel(panicNotificationRemoval: { removals += 1 })
+
+        let completed = viewModel.panicClearAllData()
+
+        #expect(completed)
+        #expect(removals == 1)
+    }
+
+    /// An alert's content is on screen whether or not the wipe committed, so
+    /// a failed transaction must not leave Notification Center untouched.
+    @Test @MainActor
+    func panicClearAllData_removesNotificationsEvenWhenTheWipeDoesNotCommit() {
+        let keychain = MockKeychain()
+        keychain.simulatedDeleteAllResult = false
+        var removals = 0
+        let (viewModel, _) = makeTestableViewModel(
+            keychain: keychain,
+            panicNotificationRemoval: { removals += 1 }
+        )
+
+        let completed = viewModel.panicClearAllData()
+
+        #expect(!completed)
+        #expect(removals == 1)
+    }
+
+    @Test @MainActor
     func pendingPanicRecoveryCompletesBeforeTransportBootstrap() {
         var events: [String] = []
         let operations = PanicRecoveryOperations(
@@ -2178,6 +2209,7 @@ struct ChatViewModelPanicTests {
     func failedStartupRecoveryLeavesTransportAndNetworkBlocked() {
         enum WipeFailure: Error { case failed }
         var completedMarker = false
+        var removals = 0
         let operations = PanicRecoveryOperations(
             isPending: { true },
             begin: {
@@ -2191,10 +2223,13 @@ struct ChatViewModelPanicTests {
         )
 
         let (viewModel, transport) = makeTestableViewModel(
-            panicRecoveryOperations: operations
+            panicRecoveryOperations: operations,
+            panicNotificationRemoval: { removals += 1 }
         )
 
         #expect(!completedMarker)
+        // Startup replay reaches the removal too, even when the wipe throws.
+        #expect(removals == 1)
         #expect(transport.emergencyDisconnectCallCount == 1)
         #expect(transport.startServicesCallCount == 0)
         #expect(!viewModel.networkActivationAllowed)

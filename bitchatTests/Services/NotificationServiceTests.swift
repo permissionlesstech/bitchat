@@ -77,6 +77,34 @@ final class NotificationServiceTests: XCTestCase {
         XCTAssertEqual(request?.content.userInfo["senderName"] as? String, "Alice")
     }
 
+    func test_removeAllDeliveredNotifications_removesThemFromTheCenter() {
+        let remover = RecordingNotificationRemover()
+        let service = NotificationService(
+            isRunningTestsProvider: { false },
+            authorizer: RecordingNotificationAuthorizer(),
+            requestDeliverer: RecordingNotificationRequestDeliverer(),
+            remover: remover
+        )
+
+        service.removeAllDeliveredNotifications()
+
+        XCTAssertEqual(remover.removalCount, 1)
+    }
+
+    func test_removeAllDeliveredNotifications_skipsWhenRunningTests() {
+        let remover = RecordingNotificationRemover()
+        let service = NotificationService(
+            isRunningTestsProvider: { true },
+            authorizer: RecordingNotificationAuthorizer(),
+            requestDeliverer: RecordingNotificationRequestDeliverer(),
+            remover: remover
+        )
+
+        service.removeAllDeliveredNotifications()
+
+        XCTAssertEqual(remover.removalCount, 0)
+    }
+
     /// Previews hidden: the default. The routing payload has to survive
     /// redaction, or tapping the alert would not open the conversation.
     func test_sendPrivateMessageNotification_withPreviewsHidden_keepsRoutingButDropsContent() {
@@ -137,6 +165,14 @@ private final class RecordingNotificationRequestDeliverer: NotificationRequestDe
 
     func add(_ request: UNNotificationRequest) {
         requests.append(request)
+    }
+}
+
+private final class RecordingNotificationRemover: NotificationRemoving {
+    private(set) var removalCount = 0
+
+    func removeAllDeliveredNotifications() {
+        removalCount += 1
     }
 }
 

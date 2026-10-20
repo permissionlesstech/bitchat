@@ -30,6 +30,10 @@ protocol NotificationCategoryRegistering {
     func setCategories(_ categories: Set<UNNotificationCategory>)
 }
 
+protocol NotificationRemoving {
+    func removeAllDeliveredNotifications()
+}
+
 private final class NotificationCenterAuthorizerAdapter: NotificationAuthorizing {
     private let center: UNUserNotificationCenter
 
@@ -71,6 +75,18 @@ private final class NotificationCenterCategoryRegistrarAdapter: NotificationCate
     }
 }
 
+private final class NotificationCenterRemoverAdapter: NotificationRemoving {
+    private let center: UNUserNotificationCenter
+
+    init(center: UNUserNotificationCenter) {
+        self.center = center
+    }
+
+    func removeAllDeliveredNotifications() {
+        center.removeAllDeliveredNotifications()
+    }
+}
+
 private struct NoopNotificationAuthorizer: NotificationAuthorizing {
     func requestAuthorization(
         options: UNAuthorizationOptions,
@@ -86,6 +102,10 @@ private struct NoopNotificationRequestDeliverer: NotificationRequestDelivering {
 
 private struct NoopNotificationCategoryRegistrar: NotificationCategoryRegistering {
     func setCategories(_ categories: Set<UNNotificationCategory>) {}
+}
+
+private struct NoopNotificationRemover: NotificationRemoving {
+    func removeAllDeliveredNotifications() {}
 }
 
 final class NotificationService {
@@ -128,6 +148,7 @@ final class NotificationService {
     private let authorizer: NotificationAuthorizing
     private let requestDeliverer: NotificationRequestDelivering
     private let categoryRegistrar: NotificationCategoryRegistering
+    private let remover: NotificationRemoving
 
     /// Returns true if running in test environment (XCTest, Swift Testing, or CI)
     private var isRunningTests: Bool {
@@ -148,11 +169,13 @@ final class NotificationService {
             self.authorizer = NoopNotificationAuthorizer()
             self.requestDeliverer = NoopNotificationRequestDeliverer()
             self.categoryRegistrar = NoopNotificationCategoryRegistrar()
+            self.remover = NoopNotificationRemover()
         } else {
             let center = UNUserNotificationCenter.current()
             self.authorizer = NotificationCenterAuthorizerAdapter(center: center)
             self.requestDeliverer = NotificationCenterRequestDelivererAdapter(center: center)
             self.categoryRegistrar = NotificationCenterCategoryRegistrarAdapter(center: center)
+            self.remover = NotificationCenterRemoverAdapter(center: center)
         }
     }
 
@@ -161,12 +184,14 @@ final class NotificationService {
         authorizer: NotificationAuthorizing,
         requestDeliverer: NotificationRequestDelivering,
         categoryRegistrar: NotificationCategoryRegistering = NoopNotificationCategoryRegistrar(),
+        remover: NotificationRemoving = NoopNotificationRemover(),
         hidePreviewsProvider: @escaping () -> Bool = { NotificationPrivacySettings.hideMessagePreviews }
     ) {
         self.isRunningTestsProvider = isRunningTestsProvider
         self.authorizer = authorizer
         self.requestDeliverer = requestDeliverer
         self.categoryRegistrar = categoryRegistrar
+        self.remover = remover
         self.hidePreviewsProvider = hidePreviewsProvider
     }
 
@@ -228,6 +253,16 @@ final class NotificationService {
         requestDeliverer.add(request)
     }
     
+    /// Removes bitchat's delivered notifications from Notification Center.
+    /// Panic wipe calls this: a delivered alert keeps its title and body (with
+    /// previews on, the sender and the message) after the data behind it is
+    /// gone. Removal, not erasure — the system's own record of what it showed
+    /// is outside the app's reach.
+    func removeAllDeliveredNotifications() {
+        guard !isRunningTests else { return }
+        remover.removeAllDeliveredNotifications()
+    }
+
     func sendMentionNotification(from sender: String, message: String) {
         let title = hidePreviews ? Redacted.mentionTitle : "🫵 you were mentioned by \(sender)"
         let body = hidePreviews ? Redacted.body : message
