@@ -42,11 +42,10 @@ struct ForwardMessageSheet: View {
 
     private var filteredRecentChatRows: [RecentChatRow] {
         peerListModel.recentChatRows.filter { row in
-            if case .location = peerListModel.activeChannel {
-                return true
-            } else {
-                return !row.peerID.isGeoDM
+            if row.peerID.isGeoDM {
+                return peerListModel.isGeoDMPeerInActiveChannel(row.peerID)
             }
+            return true
         }
     }
 

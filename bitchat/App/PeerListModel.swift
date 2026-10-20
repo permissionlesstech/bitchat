@@ -67,6 +67,19 @@ final class PeerListModel: ObservableObject {
 
     var activeChannel: ChannelID { conversations.activeChannel }
 
+    /// Returns true if a GeoDM peer is a participant in the current active geohash channel.
+    func isGeoDMPeerInActiveChannel(_ peerID: PeerID) -> Bool {
+        guard case .location(let channel) = activeChannel else { return false }
+        let fullPubkey = chatViewModel.fullNostrHex(forSenderPeerID: peerID) ?? peerID.bare
+        return chatViewModel.participantTracker.isParticipant(fullPubkey, in: channel.geohash)
+            || (locationPresenceStore.currentGeohash == channel.geohash.lowercased()
+                && locationPresenceStore.geoNicknames.keys.contains { key in
+                    let lower = key.lowercased()
+                    let target = fullPubkey.lowercased()
+                    return lower == target || lower.hasPrefix(target) || target.hasPrefix(lower)
+                })
+    }
+
     private let chatViewModel: ChatViewModel
     private let conversations: ConversationStore
     private let locationChannelsModel: LocationChannelsModel

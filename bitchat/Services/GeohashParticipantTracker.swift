@@ -110,6 +110,14 @@ final class GeohashParticipantTracker: ObservableObject {
         return map.values.filter { $0 >= cutoff }.count
     }
 
+    /// Returns true if the pubkey was recorded as a participant in the given geohash.
+    func isParticipant(_ pubkeyHex: String, in geohash: String) -> Bool {
+        let key = pubkeyHex.lowercased()
+        guard let map = participants[geohash] ?? participants[geohash.lowercased()] else { return false }
+        if map[key] != nil { return true }
+        return map.keys.contains { $0.hasPrefix(key) || key.hasPrefix($0) }
+    }
+
     /// Get the visible people list for the active geohash (read-only query)
     func getVisiblePeople() -> [GeoPerson] {
         guard let gh = activeGeohash, let context = context else { return [] }

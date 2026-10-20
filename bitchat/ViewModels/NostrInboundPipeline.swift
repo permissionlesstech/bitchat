@@ -385,6 +385,7 @@ final class NostrInboundPipeline {
 
             let convKey = PeerID(nostr_: senderPubkey)
             context.registerNostrKeyMapping(senderPubkey, for: convKey)
+            context.recordGeoParticipant(pubkeyHex: senderPubkey)
 
             switch payload.type {
             case .privateMessage:
