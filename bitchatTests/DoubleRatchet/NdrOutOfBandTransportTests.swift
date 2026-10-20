@@ -1303,6 +1303,110 @@ struct NdrOutOfBandTransportTests {
         _ = viewModel
     }
 
+    @Test("One initiator recovers a lost response without competing sessions")
+    @MainActor
+    func simultaneousBootstrapRecoversLostResponse() async throws {
+        let lower = try NostrIdentity(privateKeyData: Data(repeating: 0, count: 31) + Data([1]))
+        let higher = try NostrIdentity(privateKeyData: Data(repeating: 0, count: 31) + Data([2]))
+        #expect(lower.publicKeyHex < higher.publicKeyHex)
+        let lowerRelay = FakeRelayManager()
+        let higherRelay = FakeRelayManager()
+        let scheduler = FakeNdrRetryScheduler()
+        let lowerStorage = try makeTempDir(label: "single-initiator")
+        let lowerService = NdrNostrService(
+            relayManager: lowerRelay,
+            rolloutEnabled: true,
+            storageDirectoryProvider: { lowerStorage },
+            retryScheduler: scheduler.schedule
+        )
+        let higherService = try makeService(label: "single-acceptor", relay: higherRelay)
+        let (lowerVM, lowerTransport, lowerFavorites) = makeViewModel(
+            ndrService: lowerService, nostrKeychain: try identityKeychain(lower)
+        )
+        let (higherVM, higherTransport, higherFavorites) = makeViewModel(
+            ndrService: higherService, nostrKeychain: try identityKeychain(higher)
+        )
+        let lowerNoise = Data(repeating: 0x11, count: 32)
+        let higherNoise = Data(repeating: 0x22, count: 32)
+        let lowerPeer = PeerID(publicKey: lowerNoise)
+        let higherPeer = PeerID(publicKey: higherNoise)
+        installMutualFavorite(in: lowerFavorites, noiseKey: higherNoise, nostrIdentity: higher)
+        installMutualFavorite(in: higherFavorites, noiseKey: lowerNoise, nostrIdentity: lower)
+        lowerTransport.authenticatedPeerTransportStates[higherPeer] = AuthenticatedPeerTransportState(
+            capabilities: [.doubleRatchet], sessionGeneration: UUID(), noisePublicKey: higherNoise
+        )
+        higherTransport.authenticatedPeerTransportStates[lowerPeer] = AuthenticatedPeerTransportState(
+            capabilities: [.doubleRatchet], sessionGeneration: UUID(), noisePublicKey: lowerNoise
+        )
+
+        lowerVM.bootstrapDoubleRatchetIfNeeded(for: higherPeer)
+        higherVM.bootstrapDoubleRatchetIfNeeded(for: lowerPeer)
+        #expect(lowerTransport.sentNdrEvents.count == 1)
+        #expect(higherTransport.sentNdrEvents.isEmpty, "Both bootstrap triggers must elect one initiator")
+        let invite = try #require(lowerTransport.sentNdrEvents.first?.eventJson)
+        higherVM.handleNdrEventPayload(from: lowerPeer, payload: Data(invite.utf8))
+        let response = try #require(higherTransport.sentNdrEvents.last?.eventJson)
+        #expect(try extractNostrKind(json: response) == 1059)
+        let firstResponseFinished = await TestHelpers.waitUntil(
+            { higherTransport.completedNdrSendCount == higherTransport.sentNdrEvents.count
+                && !scheduler.scheduled.isEmpty },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(firstResponseFinished)
+        // BLE accepted the response, but the peer never received it. Its
+        // repeated invite must recover the same session and response bytes.
+        #expect(!lowerService.hasPairwiseSession(with: higher.publicKeyHex))
+        #expect(higherService.hasPairwiseSession(with: lower.publicKeyHex))
+        higherVM.bootstrapDoubleRatchetIfNeeded(for: lowerPeer)
+        scheduler.runNext()
+        #expect(lowerTransport.sentNdrEvents.count == 2)
+        #expect(lowerTransport.sentNdrEvents.last?.eventJson == invite)
+        higherVM.handleNdrEventPayload(from: lowerPeer, payload: Data(invite.utf8))
+        #expect(higherTransport.sentNdrEvents.last?.eventJson == response)
+        lowerVM.handleNdrEventPayload(from: higherPeer, payload: Data(response.utf8))
+        let secondResponseFinished = await TestHelpers.waitUntil(
+            { higherTransport.completedNdrSendCount == higherTransport.sentNdrEvents.count },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(secondResponseFinished)
+        for event in higherRelay.sentEvents where event.kind == 1060 {
+            lowerService.processInboundRelayEvent(event)
+        }
+        #expect(lowerService.hasActiveSession(with: higher.publicKeyHex))
+        #expect(higherService.hasActiveSession(with: lower.publicKeyHex))
+
+        var lowerMessages: [String] = []
+        var higherMessages: [String] = []
+        lowerService.onDecryptedMessage = { message, complete in
+            lowerMessages.append(message.event.content)
+            complete(.consumed)
+        }
+        higherService.onDecryptedMessage = { message, complete in
+            higherMessages.append(message.event.content)
+            complete(.consumed)
+        }
+        lowerRelay.resetSentEvents()
+        higherRelay.resetSentEvents()
+        guard case .sent = lowerService.send("single-initiator-forward", to: higher.publicKeyHex) else {
+            Issue.record("Initiator could not send after response recovery")
+            return
+        }
+        for event in lowerRelay.sentEvents where event.kind == 1060 {
+            higherService.processInboundRelayEvent(event)
+            higherService.processInboundRelayEvent(event)
+        }
+        guard case .sent = higherService.send("single-initiator-reply", to: lower.publicKeyHex) else {
+            Issue.record("Acceptor could not reply after response recovery")
+            return
+        }
+        for event in higherRelay.sentEvents where event.kind == 1060 {
+            lowerService.processInboundRelayEvent(event)
+            lowerService.processInboundRelayEvent(event)
+        }
+        #expect(higherMessages == ["single-initiator-forward"])
+        #expect(lowerMessages == ["single-initiator-reply"])
+    }
+
     @Test("Unanswered invites retry within one bounded authenticated attempt", arguments: [false, true], [false, true])
     @MainActor
     func unansweredInviteRetriesWithCurrentAuthenticatedBinding(
@@ -1318,9 +1422,11 @@ struct NdrOutOfBandTransportTests {
             storageDirectoryProvider: { storage },
             retryScheduler: retryScheduler.schedule
         )
-        let (viewModel, transport, favoritesService) =
-            makeViewModel(ndrService: service)
-        let remote = try NostrIdentity.generate()
+        let local = try NostrIdentity(privateKeyData: Data(repeating: 0, count: 31) + Data([1]))
+        let remote = try NostrIdentity(privateKeyData: Data(repeating: 0, count: 31) + Data([2]))
+        let (viewModel, transport, favoritesService) = makeViewModel(
+            ndrService: service, nostrKeychain: try identityKeychain(local)
+        )
         let noiseKey = try #require(
             Data(hexString: remote.publicKeyHex)
         )
@@ -3007,6 +3113,15 @@ struct NdrOutOfBandTransportTests {
             sessionMarkerStore:
                 sessionMarkerStore ?? InMemoryNdrSessionMarkerStore()
         )
+    }
+
+    private func identityKeychain(_ identity: NostrIdentity) throws -> MockKeychain {
+        let keychain = MockKeychain()
+        keychain.save(
+            key: "nostr-current-identity", data: try JSONEncoder().encode(identity),
+            service: "chat.bitchat.nostr", accessible: nil
+        )
+        return keychain
     }
 
     @MainActor
