@@ -86,10 +86,17 @@ swift test --filter NostrTransportTests
 
 ## Integration contract
 
-This is an opt-in, single-device pairwise transport for favorite contacts.
-`DoubleRatchetFeature` remains disabled in ordinary builds; the experimental
-build condition is `BITCHAT_ENABLE_NDR`. iOS and Android must use the same native
-source revision and pass shared vectors before either enables rollout.
+This is a single-device pairwise transport enabled for compatible mutual
+favorites. Peers without the authenticated capability retain the existing relay
+envelope. `BITCHAT_DISABLE_NDR` explicitly disables new NDR operation while
+preserving durable downgrade barriers. Android and Apple pin the same native
+source revision and wire contract.
+
+The lexicographically lower normalized Nostr public key initiates bootstrap.
+Both peers use this rule so simultaneous triggers cannot create competing
+sessions when responses are lost. An unanswered inviter retries its identical
+invite within the existing finite budget; the receiver replays the same native
+response and bootstrap envelope without creating another session.
 
 - Bootstrap invites (kind 30078) and responses (kind 1059) travel only inside
   the existing authenticated BLE Noise session. Admission checks bind the peer
