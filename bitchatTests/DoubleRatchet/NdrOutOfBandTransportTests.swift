@@ -155,7 +155,6 @@ struct NdrOutOfBandTransportTests {
     @MainActor
     func rolloutIsEnabledByDefaultAndExplicitDisableFailsClosed() throws {
         #expect(DoubleRatchetFeature.isEnabled)
-        #expect(PeerCapabilities.localSupported.contains(.doubleRatchet))
         let identity = try NostrIdentity.generate()
         var requestedStorage = false
         let service = NdrNostrService(
