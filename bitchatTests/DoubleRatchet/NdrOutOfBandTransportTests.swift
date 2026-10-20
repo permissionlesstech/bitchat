@@ -1359,14 +1359,22 @@ struct NdrOutOfBandTransportTests {
             hosts[index].0.bootstrapDoubleRatchetIfNeeded(for: peers[1 - index])
         }
         for index in reverseRetryOrder ? [1, 0] : [0, 1] {
+            let previousSendCount = hosts[index].1.sentNdrEvents.count
             schedulers[index].runNext()
-            #expect(hosts[index].1.sentNdrEvents.count == 3, "Local session existence cannot stop recovery")
-            #expect(hosts[index].1.sentNdrEvents.last?.eventJson == invites[index])
-            hosts[1 - index].0.handleNdrEventPayload(from: peers[index], payload: Data(invites[index].utf8))
+            #expect(hosts[index].1.sentNdrEvents.count == previousSendCount + 1,
+                    "Local session existence cannot stop recovery")
+            let retriedInvite = try #require(hosts[index].1.sentNdrEvents.last?.eventJson)
+            try #require(retriedInvite == invites[index])
+            hosts[1 - index].0.handleNdrEventPayload(from: peers[index], payload: Data(retriedInvite.utf8))
             #expect(hosts[1 - index].1.sentNdrEvents.last?.eventJson == responses[1 - index],
                     "Repeating an invite replays the exact native response")
         }
         for index in 0..<2 {
+            let completed = await TestHelpers.waitUntil(
+                { hosts[index].1.completedNdrSendCount == hosts[index].1.sentNdrEvents.count },
+                timeout: TestConstants.settleTimeout
+            )
+            #expect(completed, "Response admission releases its ordered relay bootstrap")
             hosts[index].0.handleNdrEventPayload(from: peers[1 - index], payload: Data(responses[1 - index].utf8))
         }
         // Deliver both bootstraps; native arbitration discards the losing session.
