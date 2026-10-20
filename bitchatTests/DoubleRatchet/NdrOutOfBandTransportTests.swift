@@ -572,9 +572,9 @@ struct NdrOutOfBandTransportTests {
         #expect(aliceService.currentInviteEventJson() != nil)
     }
 
-    @Test("A favorite Nostr rebind retires only the old pairwise peer")
+    @Test("A favorite Nostr rebind retires the old peer for either bootstrap role", arguments: [false, true])
     @MainActor
-    func favoriteIdentityRebindRetiresOldPeerBeforeNewInvite() throws {
+    func favoriteIdentityRebindRetiresOldPeerBeforeBootstrap(localInitiates: Bool) throws {
         let relay = FakeRelayManager()
         let storage = try makeTempDir(label: "favorite-rebind-local")
         let service = NdrNostrService(
@@ -582,13 +582,17 @@ struct NdrOutOfBandTransportTests {
             rolloutEnabled: true,
             storageDirectoryProvider: { storage }
         )
-        let (viewModel, transport, favoritesService) =
-            makeViewModel(ndrService: service)
-        let local = try #require(
-            try viewModel.idBridge.getCurrentNostrIdentity()
+        let local = try NostrIdentity(
+            privateKeyData: Data(repeating: 0, count: 31) + Data([localInitiates ? 1 : 2])
+        )
+        let newPeer = try NostrIdentity(
+            privateKeyData: Data(repeating: 0, count: 31) + Data([localInitiates ? 2 : 1])
+        )
+        #expect((local.publicKeyHex < newPeer.publicKeyHex) == localInitiates)
+        let (viewModel, transport, favoritesService) = makeViewModel(
+            ndrService: service, nostrKeychain: try identityKeychain(local)
         )
         let oldPeer = try NostrIdentity.generate()
-        let newPeer = try NostrIdentity.generate()
         let oldPeerRelay = FakeRelayManager()
         let oldPeerService = try makeService(
             label: "favorite-rebind-old-peer",
@@ -644,7 +648,7 @@ struct NdrOutOfBandTransportTests {
         )
         #expect(!service.hasPairwiseSession(with: oldPeer.publicKeyHex))
         #expect(favoritesService.isNdrRequired(for: noiseKey))
-        #expect(transport.sentNdrEvents.count == 1)
+        #expect(transport.sentNdrEvents.count == (localInitiates ? 1 : 0))
     }
 
     @Test("A failed durable favorite commit stays journaled after native retirement")
