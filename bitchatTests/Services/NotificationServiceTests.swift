@@ -74,7 +74,6 @@ final class NotificationServiceTests: XCTestCase {
         XCTAssertEqual(request?.content.title, "🔒 DM from Alice")
         XCTAssertEqual(request?.content.body, "hi")
         XCTAssertEqual(request?.content.userInfo["peerID"] as? String, peerID.id)
-        XCTAssertEqual(request?.content.userInfo["senderName"] as? String, "Alice")
     }
 
     func test_removeAllDeliveredNotifications_removesThemFromTheCenter() {
@@ -124,6 +123,9 @@ final class NotificationServiceTests: XCTestCase {
         XCTAssertFalse(request?.content.body.contains("hi") ?? true)
         XCTAssertFalse(request?.content.title.isEmpty ?? true)
         XCTAssertEqual(request?.content.userInfo["peerID"] as? String, peerID.id)
+        // Routing reads only the peer ID. With previews hidden the title
+        // omits the sender, so userInfo must not carry it either.
+        XCTAssertEqual(request?.content.userInfo.count, 1)
     }
 
     func test_wrapperNotifications_setExpectedIdentifiersAndDeepLinks() {

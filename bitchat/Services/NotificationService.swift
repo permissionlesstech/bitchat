@@ -277,7 +277,7 @@ final class NotificationService {
         let identifier = "private-\(UUID().uuidString)"
         // Routing payload, not display copy: `userInfo` never reaches the lock
         // screen, and the conversation to open still has to be identifiable.
-        let userInfo = ["peerID": peerID.id, "senderName": sender]
+        let userInfo = ["peerID": peerID.id]
 
         sendLocalNotification(title: title, body: body, identifier: identifier, userInfo: userInfo)
     }
