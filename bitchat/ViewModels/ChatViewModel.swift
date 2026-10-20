@@ -445,11 +445,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     // Single-writer: mutate only via `setPublicBatching(_:)` below.
     @Published private(set) var isBatchingPublic: Bool = false
 
-    // Backing store for `sentReadReceipts` persistence. `.standard` in
-    // production; injectable so tests can use a scratch suite that does not
-    // leak state between runs.
-    let readReceiptsDefaults: UserDefaults
-
     /// Default read-receipt persistence store. Production uses `.standard`.
     /// Under test, every instance gets its own scratch suite: a per-process
     /// shared suite let one test's persisted receipts leak into another
@@ -469,20 +464,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     /// UserDefaults-backed setting.
     var sendsReadReceipts: () -> Bool = { ReadReceiptSettings.sendReadReceipts }
 
-    // Track sent read receipts to avoid duplicates (persisted across launches)
-    // Note: Persistence happens automatically in didSet, no lifecycle observers needed
-    var sentReadReceipts: Set<String> = [] {  // messageID set
-        didSet {
-            // Only persist if there are changes
-            guard oldValue != sentReadReceipts else { return }
-
-            // Persist whenever it changes (no manual synchronize/verify re-read)
-            if let data = try? JSONEncoder().encode(Array(sentReadReceipts)) {
-                readReceiptsDefaults.set(data, forKey: "sentReadReceipts")
-            } else {
-                SecureLogger.error("❌ Failed to encode read receipts for persistence", category: .session)
-            }
-        }
+    /// Read receipts sent or deliberately withheld (persisted across
+    /// launches). A read-only view of `PrivateChatManager`'s set, the only
+    /// copy, so the lifecycle pass here and the manager's chat-open scans
+    /// dedup against the same ids. Mutate via the intent ops below.
+    @MainActor
+    var sentReadReceipts: Set<String> {
+        privateChatManager.sentReadReceipts
     }
 
     // Track which GeoDM messages we've already sent a delivery ACK for (by messageID)
@@ -534,7 +522,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     @MainActor
     @discardableResult
     func markReadReceiptSent(_ messageID: String) -> Bool {
-        sentReadReceipts.insert(messageID).inserted
+        privateChatManager.markReadReceiptSent(messageID)
     }
 
     /// Records that a GeoDM delivery ACK is being sent for `messageID`.
@@ -549,28 +537,21 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     /// re-sent after the peer reconnects.
     @MainActor
     func unmarkReadReceiptsSent(_ ids: [String]) {
-        sentReadReceipts.subtract(ids)
+        privateChatManager.unmarkReadReceiptsSent(ids)
     }
 
     /// Marks read receipts as sent for own messages already delivered/read in
-    /// `peerID`'s chat, syncing the chat manager's tracking with the persisted
-    /// set. (Wraps the manager's `inout` sync so the raw set never leaks.)
+    /// `peerID`'s chat.
     @MainActor
     func syncReadReceiptsForSentMessages(for peerID: PeerID) {
-        privateChatManager.syncReadReceiptsForSentMessages(
-            peerID: peerID,
-            nickname: nickname,
-            externalReceipts: &sentReadReceipts
-        )
+        privateChatManager.syncReadReceiptsForSentMessages(peerID: peerID, nickname: nickname)
     }
 
     /// Drops every recorded read receipt whose message ID is no longer valid.
     /// Returns the number of receipts removed.
     @MainActor
     func pruneSentReadReceipts(keeping validMessageIDs: Set<String>) -> Int {
-        let oldCount = sentReadReceipts.count
-        sentReadReceipts = sentReadReceipts.intersection(validMessageIDs)
-        return oldCount - sentReadReceipts.count
+        privateChatManager.pruneReadReceiptsSent(keeping: validMessageIDs)
     }
 
     /// Publishes the public-timeline batching state (UI animation suppression).
@@ -1211,8 +1192,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         self.deduplicationService = services.deduplicationService
         self.publicMessagePipeline = services.publicMessagePipeline
         let readReceiptsDefaults = readReceiptsDefaults ?? Self.defaultReadReceiptsDefaults()
-        self.readReceiptsDefaults = readReceiptsDefaults
-        self.sentReadReceipts = ChatViewModelBootstrapper.loadPersistedReadReceipts(userDefaults: readReceiptsDefaults)
+        // The manager owns the receipt set; seed it before wiring
+        // persistence so the restore isn't written straight back.
+        services.privateChatManager.restoreReadReceipts(
+            ChatViewModelBootstrapper.loadPersistedReadReceipts(userDefaults: readReceiptsDefaults)
+        )
+        services.privateChatManager.onSentReadReceiptsChange = { receipts in
+            ChatViewModelBootstrapper.persistReadReceipts(receipts, userDefaults: readReceiptsDefaults)
+        }
 
         // Republish on every store change so SwiftUI observers of the
         // view model refresh. This replaces the UI-update role of the old
@@ -1692,7 +1679,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         nostrKeyMapping.removeAll()
 
         // Clear read receipt tracking
-        sentReadReceipts.removeAll()
+        privateChatManager.clearReadReceiptsSent()
         deduplicationService.clearAll()
 
         // IMPORTANT: Clear Nostr-related state

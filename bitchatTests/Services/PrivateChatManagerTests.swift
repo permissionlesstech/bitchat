@@ -303,10 +303,8 @@ struct PrivateChatManagerTests {
             store.append(message, to: .directPeer(peerID))
         }
 
-        var externalReceipts = Set<String>()
-        manager.syncReadReceiptsForSentMessages(peerID: peerID, nickname: "Me", externalReceipts: &externalReceipts)
+        manager.syncReadReceiptsForSentMessages(peerID: peerID, nickname: "Me")
 
-        #expect(externalReceipts == Set(["sent-read", "sent-delivered"]))
         #expect(manager.sentReadReceipts == Set(["sent-read", "sent-delivered"]))
     }
 

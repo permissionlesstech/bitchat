@@ -28,7 +28,19 @@ final class PrivateChatManager: ObservableObject {
     @Published private(set) var selectedPeer: PeerID? = nil
     private var selectedPeerMirrorCancellable: AnyCancellable? = nil
 
-    var sentReadReceipts: Set<String> = []  // Made accessible for ChatViewModel
+    /// Every read receipt sent or deliberately withheld, persisted across
+    /// launches. The only copy: this manager's chat-open scans and
+    /// ChatViewModel's lifecycle pass both dedup against it, so they cannot
+    /// disagree about an id. Mutate through the mark/unmark/clear API below.
+    private(set) var sentReadReceipts: Set<String> = [] {
+        didSet {
+            guard oldValue != sentReadReceipts else { return }
+            onSentReadReceiptsChange?(sentReadReceipts)
+        }
+    }
+
+    /// Persists the set on every change; wired by ChatViewModel's init.
+    var onSentReadReceiptsChange: ((Set<String>) -> Void)?
 
     weak var meshService: Transport?
     // Route acks/receipts via MessageRouter (chooses mesh or Nostr)
@@ -198,14 +210,14 @@ final class PrivateChatManager: ObservableObject {
         return hasUnreadMessages
     }
 
-    /// Syncs the read receipt tracking between manager and view model for sent messages
+    /// Marks read receipts as handled for own messages already delivered/read
+    /// in `peerID`'s chat.
     @MainActor
-    func syncReadReceiptsForSentMessages(peerID: PeerID, nickname: String, externalReceipts: inout Set<String>) {
+    func syncReadReceiptsForSentMessages(peerID: PeerID, nickname: String) {
         for message in messages(for: peerID) {
             if message.sender == nickname {
                 switch message.deliveryStatus {
                 case .read, .delivered:
-                    externalReceipts.insert(message.id)
                     sentReadReceipts.insert(message.id)
                 case .notSentYet, .failed, .partiallyDelivered, .sending, .sent, .carried:
                     break
@@ -252,23 +264,50 @@ final class PrivateChatManager: ObservableObject {
     /// suites through the shared UserDefaults-backed setting.
     var sendsReadReceipts: () -> Bool = { ReadReceiptSettings.sendReadReceipts }
 
-    /// Records a withheld receipt in the owner's persisted set too: the
-    /// lifecycle read pass dedups against ChatViewModel.sentReadReceipts,
-    /// not this manager's set, so claiming only locally would let a receipt
-    /// for a message read while the setting was OFF fire after re-enabling.
-    var markReceiptHandled: ((String) -> Void)?
+    // MARK: - Read-receipt set
+
+    /// Seeds the set from persistence at launch. Without this the chat-open
+    /// scans began every launch empty: a DM fetched again inside the 24 h
+    /// relay lookback had its receipt sent a second time — or, if it was read
+    /// while receipts were off, sent once they were turned back on.
+    func restoreReadReceipts(_ ids: Set<String>) {
+        sentReadReceipts.formUnion(ids)
+    }
+
+    /// Claims a receipt as sent or withheld. Returns `false` when it was
+    /// already claimed — the caller must skip sending.
+    @discardableResult
+    func markReadReceiptSent(_ messageID: String) -> Bool {
+        sentReadReceipts.insert(messageID).inserted
+    }
+
+    /// Releases claims so the receipts can be sent again (the peer
+    /// reconnected, or the route failed).
+    func unmarkReadReceiptsSent(_ ids: [String]) {
+        sentReadReceipts.subtract(ids)
+    }
+
+    /// Drops all tracking (panic wipe).
+    func clearReadReceiptsSent() {
+        sentReadReceipts.removeAll()
+    }
+
+    /// Drops claims for messages no longer held. Returns how many went.
+    func pruneReadReceiptsSent(keeping validMessageIDs: Set<String>) -> Int {
+        let oldCount = sentReadReceipts.count
+        sentReadReceipts.formIntersection(validMessageIDs)
+        return oldCount - sentReadReceipts.count
+    }
 
     private func sendReadReceipt(for message: BitchatMessage) {
         guard !sentReadReceipts.contains(message.id),
               let senderPeerID = message.senderPeerID else {
             return
         }
-        // Withheld receipts are still claimed as sent — in BOTH tracking
-        // sets: re-enabling the setting must never fire a retroactive burst
-        // disclosing past reads, from this manager or the lifecycle pass.
+        // Withheld receipts are still claimed as sent: re-enabling the
+        // setting must never fire a retroactive burst disclosing past reads.
         guard sendsReadReceipts() else {
-            sentReadReceipts.insert(message.id)
-            markReceiptHandled?(message.id)
+            markReadReceiptSent(message.id)
             return
         }
 
@@ -283,20 +322,21 @@ final class PrivateChatManager: ObservableObject {
         if let router = messageRouter {
             SecureLogger.debug("PrivateChatManager: sending READ ack for \(message.id.prefix(8))… to \(senderPeerID.id.prefix(8))… via router", category: .session)
             let messageID = message.id
-            // Claim the receipt synchronously so a second read scan in the
-            // same runloop pass (chat open triggers two) can't route a
-            // duplicate; release the claim on a failed route (no reachable
-            // transport) so a later read scan retries instead of permanently
-            // losing the receipt.
-            sentReadReceipts.insert(messageID)
+            // Claim the receipt synchronously, before the routing task runs,
+            // so the other read scans of the same chat open (this manager's
+            // second pass and ChatViewModel's lifecycle pass, which share
+            // this set) can't route a duplicate. Release it on a failed route
+            // (no reachable transport) so a later scan retries instead of
+            // losing the receipt for good.
+            markReadReceiptSent(messageID)
             Task { @MainActor [weak self] in
                 if !router.sendReadReceipt(receipt, to: senderPeerID) {
-                    self?.sentReadReceipts.remove(messageID)
+                    self?.unmarkReadReceiptsSent([messageID])
                 }
             }
         } else {
             // Fallback: preserve previous behavior (best-effort mesh send).
-            sentReadReceipts.insert(message.id)
+            markReadReceiptSent(message.id)
             meshService?.sendReadReceipt(receipt, to: senderPeerID)
         }
     }
