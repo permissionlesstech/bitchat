@@ -151,11 +151,11 @@ struct NdrOutOfBandTransportTests {
         #expect(NoisePayloadType.decoded(rawValue: 0x12) == .vouch)
     }
 
-    @Test("Double-ratchet rollout remains dark until coordination completes")
+    @Test("Double-ratchet is negotiated by default and an explicit disable fails closed")
     @MainActor
-    func rolloutGateIsDisabledByDefaultAndFailsClosed() throws {
-        #expect(!DoubleRatchetFeature.isEnabled)
-        #expect(!PeerCapabilities.localSupported.contains(.doubleRatchet))
+    func rolloutIsEnabledByDefaultAndExplicitDisableFailsClosed() throws {
+        #expect(DoubleRatchetFeature.isEnabled)
+        #expect(PeerCapabilities.localSupported.contains(.doubleRatchet))
         let identity = try NostrIdentity.generate()
         var requestedStorage = false
         let service = NdrNostrService(
@@ -172,6 +172,19 @@ struct NdrOutOfBandTransportTests {
         #expect(!service.isConfigured)
         #expect(service.currentInviteEventJson() == nil)
         #expect(!requestedStorage)
+    }
+
+    @Test("Authenticated identities elect exactly one initiator")
+    @MainActor
+    func bootstrapElectsOneInitiator() {
+        let lower = String(repeating: "79", count: 32)
+        let higher = String(repeating: "c6", count: 32)
+        #expect(DoubleRatchetFeature.shouldInitiate(localPubkeyHex: lower, peerPubkeyHex: higher))
+        #expect(!DoubleRatchetFeature.shouldInitiate(localPubkeyHex: higher, peerPubkeyHex: lower))
+        #expect(!DoubleRatchetFeature.shouldInitiate(localPubkeyHex: lower, peerPubkeyHex: lower))
+        #expect(DoubleRatchetFeature.shouldInitiate(localPubkeyHex: lower, peerPubkeyHex: higher.uppercased()))
+        #expect(!DoubleRatchetFeature.shouldInitiate(localPubkeyHex: "", peerPubkeyHex: higher))
+        #expect(!DoubleRatchetFeature.shouldInitiate(localPubkeyHex: lower, peerPubkeyHex: String(repeating: "g", count: 64)))
     }
 
     @Test("A failed runtime open stays fail-closed until identity change")
@@ -1338,6 +1351,8 @@ struct NdrOutOfBandTransportTests {
         higherTransport.authenticatedPeerTransportStates[lowerPeer] = AuthenticatedPeerTransportState(
             capabilities: [.doubleRatchet], sessionGeneration: UUID(), noisePublicKey: lowerNoise
         )
+        lowerTransport.ndrSendResults = Array(repeating: true, count: 8)
+        higherTransport.ndrSendResults = Array(repeating: true, count: 8)
 
         lowerVM.bootstrapDoubleRatchetIfNeeded(for: higherPeer)
         higherVM.bootstrapDoubleRatchetIfNeeded(for: lowerPeer)
