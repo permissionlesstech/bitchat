@@ -92,11 +92,11 @@ envelope. `BITCHAT_DISABLE_NDR` explicitly disables new NDR operation while
 preserving durable downgrade barriers. Android and Apple pin the same native
 source revision and wire contract.
 
-The lexicographically lower normalized Nostr public key initiates bootstrap.
-Both peers use this rule so simultaneous triggers cannot create competing
-sessions when responses are lost. An unanswered inviter retries its identical
-invite within the existing finite budget; the receiver replays the same native
-response and bootstrap envelope without creating another session.
+Either peer can initiate bootstrap; the native runtime converges crossed
+invitations onto one session. Each started invite finishes its existing finite
+retry budget while its authenticated binding remains current. A local session
+does not prove the remote peer received our response. Repeating the identical
+invite replays the cached native response and bootstrap envelope.
 
 - Bootstrap invites (kind 30078) and responses (kind 1059) travel only inside
   the existing authenticated BLE Noise session. Admission checks bind the peer
