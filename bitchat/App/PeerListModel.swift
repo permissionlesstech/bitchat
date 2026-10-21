@@ -17,6 +17,8 @@ struct MeshPeerRow: Identifiable, Equatable {
     /// Vouched-for by someone I verified, without an explicit verification of
     /// mine — rendered as the unfilled seal (verified gets the filled one).
     let showsVouchedBadge: Bool
+    /// The peer has an authenticated direct Wi-Fi LAN link.
+    var isLANConnected: Bool = false
 
     var id: String { peerID.id }
 }
@@ -228,6 +230,11 @@ final class PeerListModel: ObservableObject {
 
     private func refresh() {
         let myPeerID = chatViewModel.meshService.myPeerID
+        let lanConnectedIDs: Set<PeerID> = {
+            guard let lan = chatViewModel.additionalTransports
+                .compactMap({ $0 as? LANTransport }).first else { return [] }
+            return Set(lan.currentPeerSnapshots().filter(\.isConnected).map(\.peerID))
+        }()
         let meshRows = allPeers.map { peer in
             let isMe = peer.peerID == myPeerID
             let fingerprint = isMe ? nil : chatViewModel.getFingerprint(for: peer.peerID)
@@ -249,7 +256,8 @@ final class PeerListModel: ObservableObject {
                 isMutualFavorite: peer.isMutualFavorite,
                 encryptionStatus: chatViewModel.getEncryptionStatus(for: peer.peerID),
                 showsVerifiedBadgeWhenOffline: verifiedBadge,
-                showsVouchedBadge: vouchedBadge
+                showsVouchedBadge: vouchedBadge,
+                isLANConnected: lanConnectedIDs.contains(peer.peerID)
             )
         }
 
@@ -276,7 +284,7 @@ final class PeerListModel: ObservableObject {
         self.recentChatRows = recentChatRows
         renderID = (
             meshRows.map {
-                "\($0.id)-\($0.displayName)-\($0.isConnected)-\($0.isReachable)-\($0.hasUnread)-\($0.isFavorite)-\($0.isBlocked)"
+                "\($0.id)-\($0.displayName)-\($0.isConnected)-\($0.isReachable)-\($0.isLANConnected)-\($0.hasUnread)-\($0.isFavorite)-\($0.isBlocked)"
             } +
             geohashPeople.map {
                 "geo:\($0.id)-\($0.isTeleported)-\($0.isBlocked)-\($0.displayName)"

@@ -11,6 +11,9 @@ struct ChatViewModelServiceBundle {
     let autocompleteService: AutocompleteService
     let deduplicationService: MessageDeduplicationService
     let publicMessagePipeline: PublicMessagePipeline
+    /// Transports that run next to the BLE mesh. The Wi-Fi LAN transport is
+    /// inert while its feature flag is off.
+    let additionalTransports: [Transport]
 
     @MainActor
     init(
@@ -23,15 +26,24 @@ struct ChatViewModelServiceBundle {
     ) {
         let commandProcessor = CommandProcessor(identityManager: identityManager)
         let privateChatManager = PrivateChatManager(meshService: meshService)
+        // The Wi-Fi LAN transport shares the Noise identity from the keychain,
+        // so a peer keeps one peer ID and one fingerprint across transports.
+        // It stays completely inert while its feature flag is off.
+        let lanTransport = LANTransport(keychain: keychain, nickname: meshService.myNickname)
+        let additionalTransports: [Transport] = [lanTransport]
         let unifiedPeerService = UnifiedPeerService(
             meshService: meshService,
+            additionalTransports: additionalTransports,
             idBridge: idBridge,
             identityManager: identityManager
         )
         let nostrTransport = NostrTransport(keychain: keychain, idBridge: idBridge)
         nostrTransport.senderPeerID = meshService.myPeerID
         let messageRouter = MessageRouter(
-            transports: [meshService, nostrTransport],
+            // The LAN transport comes first: it is only used for peers that
+            // are directly reachable over the local network, everything else
+            // keeps the existing BLE-then-Nostr order.
+            transports: additionalTransports + [meshService, nostrTransport],
             outboxStore: outboxStore,
             metrics: sfMetrics
         )
@@ -41,6 +53,7 @@ struct ChatViewModelServiceBundle {
         self.privateChatManager = privateChatManager
         self.unifiedPeerService = unifiedPeerService
         self.autocompleteService = AutocompleteService()
+        self.additionalTransports = additionalTransports
         // Persist processed gift-wrap event IDs: NIP-59 randomizes their
         // timestamps, so the 24h-lookback DM subscriptions redeliver the same
         // events on every launch and only a cross-launch record stops the
@@ -71,9 +84,12 @@ final class ChatViewModelBootstrapper {
         bindFeatureObjectChanges()
         loadPersistedViewState()
         configureTransport()
+        // Install session callbacks before starting the transports: a LAN
+        // handshake can complete quickly on a local link, and an authentication
+        // callback installed after start would miss it.
+        configureNoiseCallbacks()
         startRuntimeServices()
         bindPeerService()
-        configureNoiseCallbacks()
         bindTransferProgress()
         configureGeoChannels()
         configureGateway()
@@ -177,6 +193,11 @@ private extension ChatViewModelBootstrapper {
     func configureTransport() {
         viewModel.meshService.delegate = viewModel
         viewModel.meshService.eventDelegate = viewModel
+        // The extra transports (Wi-Fi LAN) deliver the same typed events.
+        for transport in viewModel.additionalTransports {
+            transport.delegate = viewModel
+            transport.eventDelegate = viewModel
+        }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiStartupInitialDelaySeconds) { [weak viewModel] in
             guard let viewModel else { return }
@@ -184,10 +205,16 @@ private extension ChatViewModelBootstrapper {
         }
 
         viewModel.meshService.setNickname(viewModel.nickname)
+        for transport in viewModel.additionalTransports {
+            transport.setNickname(viewModel.nickname)
+        }
     }
 
     func startRuntimeServices() {
         viewModel.meshService.startServices()
+        for transport in viewModel.additionalTransports {
+            transport.startServices()
+        }
 
         viewModel.publicMessagePipeline.delegate = viewModel.publicConversationCoordinator
 

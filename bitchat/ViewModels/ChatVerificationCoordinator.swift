@@ -111,10 +111,12 @@ extension ChatViewModel: ChatVerificationContext {
         onPeerAuthenticated: @escaping (PeerID, String) -> Void,
         onHandshakeRequired: @escaping (PeerID) -> Void
     ) {
-        meshService.installNoiseSessionCallbacks(
-            onPeerAuthenticated: onPeerAuthenticated,
-            onHandshakeRequired: onHandshakeRequired
-        )
+        for transport in [meshService] + additionalTransports {
+            transport.installNoiseSessionCallbacks(
+                onPeerAuthenticated: onPeerAuthenticated,
+                onHandshakeRequired: onHandshakeRequired
+            )
+        }
     }
 
     func noiseStaticPublicKeyData() -> Data {

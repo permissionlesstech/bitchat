@@ -17,8 +17,13 @@ struct AppInfoView: View {
     /// Wipes all local data. Nil (previews, missing wiring) hides the danger
     /// zone entirely.
     var onPanicWipe: (@MainActor () -> Void)?
+    /// Optional Wi-Fi LAN transport. Nil in previews and in builds that do
+    /// not wire the additional transport.
+    var lanTransport: LANTransport? = nil
 
     @State private var showTopology = false
+    @State private var lanEnabled = LANTransportSettings().isEnabled
+    @State private var lanPermission: LANPermissionState = .unknown
     @State private var liveVoiceEnabled = PTTSettings.liveVoiceEnabled
     @State private var locationNotesEnabled = LocationNotesSettings.enabled
     @State private var hideMessagePreviews = NotificationPrivacySettings.hideMessagePreviews
@@ -89,6 +94,15 @@ struct AppInfoView: View {
             // switching it off.
             static let torSubtitle = String(localized: "app_info.settings.tor.subtitle", defaultValue: "sends internet traffic through tor, so relay operators see tor's address instead of yours. covers location channels and private messages delivered over the internet. recommended: on.", comment: "Subtitle for the tor routing toggle in settings, explaining what it covers")
             static let torOffWarning = String(localized: "app_info.settings.tor.off_warning", defaultValue: "tor is off: every relay you connect to can see your IP address, including relays carrying your private messages.", comment: "Warning shown under the tor toggle while tor is switched off, stating that relay operators can see the device IP address")
+
+            static let lanTitle = String(localized: "app_info.settings.lan.title", defaultValue: "wi-fi direct", comment: "Title of the optional Wi-Fi LAN transport toggle in settings")
+            static let lanSubtitle = String(localized: "app_info.settings.lan.subtitle", defaultValue: "talk to bitchat devices on the same wi-fi without the internet or a relay. requires the local network permission. off by default.", comment: "Subtitle explaining the opt-in Wi-Fi LAN transport")
+            static let lanReady = String(localized: "app_info.settings.lan.ready", defaultValue: "local network access granted — nearby wi-fi peers can appear here.", comment: "Status shown when the local network permission is granted")
+            static let lanWaiting = String(localized: "app_info.settings.lan.waiting", defaultValue: "waiting for the local network permission prompt…", comment: "Status shown while the local network permission state is not known yet")
+            static let lanDenied = String(localized: "app_info.settings.lan.denied", defaultValue: "local network access denied — wi-fi direct is off. mesh and internet still work.", comment: "Status shown when the local network permission was denied")
+            static let lanUnavailable = String(localized: "app_info.settings.lan.unavailable", defaultValue: "wi-fi direct isn't available right now — check that wi-fi is on. mesh and internet still work.", comment: "Status shown when local networking is unavailable")
+            static let lanOpenSettings = String(localized: "app_info.settings.lan.open_settings", defaultValue: "open settings", comment: "Button opening the system settings to change the local network permission")
+            static let lanRetry = String(localized: "app_info.settings.lan.retry", defaultValue: "try again", comment: "Button that retries starting the Wi-Fi LAN transport")
 
             static let relaysTitle = String(localized: "app_info.settings.relays.title", defaultValue: "private message relays", comment: "Title of the relay list editor in settings")
             static let relaysSubtitle = String(localized: "app_info.settings.relays.subtitle", defaultValue: "when the mesh can't reach someone, private messages travel through these relays. the built-in ones are well-known addresses that a network filter can block, so you can add your own — including .onion addresses.", comment: "Subtitle explaining what the relay list is for and why someone would add a relay")
@@ -521,6 +535,28 @@ struct AppInfoView: View {
                             .foregroundColor(palette.accent)
                     }
                 }
+
+                // Optional direct Wi-Fi transport. The first enable starts
+                // Bonjour, which is what makes iOS/macOS show the Local
+                // Network prompt; a denial leaves BLE/Nostr untouched.
+                settingsCard {
+                    settingToggle(
+                        title: Text(verbatim: Strings.Settings.lanTitle),
+                        subtitle: Text(verbatim: Strings.Settings.lanSubtitle),
+                        isOn: Binding(
+                            get: { lanEnabled },
+                            set: { newValue in
+                                LANTransportSettings().isEnabled = newValue
+                                lanTransport?.setEnabled(newValue)
+                                lanEnabled = lanTransport?.isEnabled ?? newValue
+                                if lanEnabled { lanPermission = .unknown }
+                            }
+                        )
+                    )
+                    if lanEnabled {
+                        lanStatusView
+                    }
+                }
             }
 
             // Privacy: what a locked, seized, or borrowed phone gives away
@@ -577,6 +613,56 @@ struct AppInfoView: View {
             }
         }
         .padding()
+        .onAppear {
+            lanEnabled = lanTransport?.isEnabled ?? LANTransportSettings().isEnabled
+            lanPermission = lanTransport?.currentPermissionState ?? .unknown
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .lanPermissionStateDidChange)) { note in
+            if let raw = note.userInfo?["state"] as? String,
+               let state = LANPermissionState(rawValue: raw) {
+                lanPermission = state
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var lanStatusView: some View {
+        switch lanPermission {
+        case .granted:
+            Text(verbatim: Strings.Settings.lanReady)
+                .bitchatFont(size: 11)
+                .foregroundColor(secondaryTextColor)
+                .fixedSize(horizontal: false, vertical: true)
+        case .unknown:
+            Text(verbatim: Strings.Settings.lanWaiting)
+                .bitchatFont(size: 11)
+                .foregroundColor(secondaryTextColor)
+                .fixedSize(horizontal: false, vertical: true)
+        case .denied, .unavailable:
+            Text(verbatim: lanPermission == .denied ? Strings.Settings.lanDenied : Strings.Settings.lanUnavailable)
+                .bitchatFont(size: 11)
+                .foregroundColor(palette.alertRed)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                Button {
+                    SystemSettings.localNetwork.open()
+                } label: {
+                    Text(verbatim: Strings.Settings.lanOpenSettings)
+                        .bitchatFont(size: 12)
+                        .foregroundColor(palette.accent)
+                }
+                .buttonStyle(.plain)
+                Button {
+                    lanPermission = .unknown
+                    lanTransport?.retryPermission()
+                } label: {
+                    Text(verbatim: Strings.Settings.lanRetry)
+                        .bitchatFont(size: 12)
+                        .foregroundColor(palette.accent)
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     private func selectLanguage(_ code: String?) {

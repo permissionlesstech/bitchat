@@ -17,12 +17,21 @@ enum ConnectivityIssue: Equatable {
     case bluetoothDenied
     case bluetoothUnsupported
     case torBlocked
+    /// Wi-Fi direct is enabled but the Local Network permission was denied.
+    case lanPermissionDenied
+    /// Wi-Fi direct is enabled but local networking is unavailable.
+    case lanUnavailable
 
     /// Pure resolution so the banner's priority logic is testable without a
     /// view. `.unknown`/`.resetting` deliberately resolve to nil — the radio
     /// is still starting and a flash of "bluetooth is off" at launch would
     /// be the same false signal this banner exists to prevent.
-    static func resolve(bluetoothState: CBManagerState, torBlocked: Bool) -> ConnectivityIssue? {
+    static func resolve(
+        bluetoothState: CBManagerState,
+        torBlocked: Bool,
+        lanEnabled: Bool = false,
+        lanPermission: LANPermissionState? = nil
+    ) -> ConnectivityIssue? {
         switch bluetoothState {
         case .poweredOff: return .bluetoothOff
         case .unauthorized: return .bluetoothDenied
@@ -30,7 +39,13 @@ enum ConnectivityIssue: Equatable {
         case .poweredOn, .unknown, .resetting: break
         @unknown default: break
         }
-        return torBlocked ? .torBlocked : nil
+        if torBlocked { return .torBlocked }
+        guard lanEnabled, let lanPermission else { return nil }
+        switch lanPermission {
+        case .denied: return .lanPermissionDenied
+        case .unavailable: return .lanUnavailable
+        case .unknown, .granted: return nil
+        }
     }
 }
 
@@ -70,6 +85,18 @@ struct ConnectivityStatusBanner: View {
                 defaultValue: "tor can't connect — internet features are paused. mesh still works.",
                 comment: "Persistent banner while Tor bootstrap has stalled, likely because the network blocks it"
             )
+        case .lanPermissionDenied:
+            return String(
+                localized: "content.banner.lan_denied",
+                defaultValue: "local network access denied — wi-fi direct is off. mesh and internet still work.",
+                comment: "Persistent banner while the optional Wi-Fi LAN transport is enabled but its permission was denied"
+            )
+        case .lanUnavailable:
+            return String(
+                localized: "content.banner.lan_unavailable",
+                defaultValue: "wi-fi direct isn't available — check that wi-fi is on. mesh and internet still work.",
+                comment: "Persistent banner while the optional Wi-Fi LAN transport cannot use local networking"
+            )
         }
     }
 
@@ -82,6 +109,7 @@ struct ConnectivityStatusBanner: View {
         case .bluetoothOff: return .bluetoothPower
         case .bluetoothDenied: return .bluetooth
         case .bluetoothUnsupported, .torBlocked: return nil
+        case .lanPermissionDenied, .lanUnavailable: return .localNetwork
         }
     }
 
@@ -98,9 +126,18 @@ struct ConnectivityStatusBanner: View {
         }
     }
 
+    private var bannerIcon: String {
+        switch issue {
+        case .torBlocked, .lanUnavailable: return "network.slash"
+        case .lanPermissionDenied: return "wifi.slash"
+        case .bluetoothOff, .bluetoothDenied, .bluetoothUnsupported:
+            return "antenna.radiowaves.left.and.right.slash"
+        }
+    }
+
     private var label: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Image(systemName: issue == .torBlocked ? "network.slash" : "antenna.radiowaves.left.and.right.slash")
+            Image(systemName: bannerIcon)
                 .bitchatFont(size: 11, weight: .semibold)
             Text(message)
                 .bitchatFont(size: 11)

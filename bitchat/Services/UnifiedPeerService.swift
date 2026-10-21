@@ -28,6 +28,10 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     private var peerIndex: [PeerID: BitchatPeer] = [:]
     private var fingerprintCache: [PeerID: String] = [:]
     private let meshService: Transport
+    /// Transports that run next to the BLE mesh (for example the Wi-Fi LAN
+    /// transport). Their peers are merged into the same list by peer ID, so a
+    /// peer reachable over several transports still shows up once.
+    private let additionalTransports: [Transport]
     private let idBridge: NostrIdentityBridge
     private let identityManager: SecureIdentityStateManagerProtocol
     weak var messageRouter: MessageRouter?
@@ -38,10 +42,12 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     
     init(
         meshService: Transport,
+        additionalTransports: [Transport] = [],
         idBridge: NostrIdentityBridge,
         identityManager: SecureIdentityStateManagerProtocol
     ) {
         self.meshService = meshService
+        self.additionalTransports = additionalTransports
         self.idBridge = idBridge
         self.identityManager = identityManager
         
@@ -59,6 +65,10 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     private func setupSubscriptions() {
         // Subscribe to mesh peer updates via delegate (preferred over publishers)
         meshService.peerEventsDelegate = self
+        // The extra transports publish their own peer snapshots.
+        for transport in additionalTransports {
+            transport.peerEventsDelegate = self
+        }
         
         // Also listen for favorite change notifications
         NotificationCenter.default.publisher(for: .favoriteStatusChanged)
@@ -77,7 +87,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     // MARK: - Core Update Logic
     
     private func updatePeers() {
-        let meshPeers = meshService.currentPeerSnapshots()
+        let meshPeers = mergedPeerSnapshots()
         // If we have no direct links at all, peers should not be marked reachable
         // "Reachable" means mesh-attached via at least one live link.
         let hasAnyConnected = meshPeers.contains { $0.isConnected }
@@ -174,6 +184,46 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     
     // MARK: - Peer Building Helpers
     
+    /// Merge the peer snapshots of every transport by peer ID.
+    ///
+    /// A peer reachable over several transports (BLE and Wi-Fi, for example)
+    /// keeps a single row: the connected snapshot wins, otherwise the most
+    /// recently seen one, and the Noise key is carried over from whichever
+    /// transport knows it (so the fingerprint stays the same).
+    private func mergedPeerSnapshots() -> [TransportPeerSnapshot] {
+        var merged: [PeerID: TransportPeerSnapshot] = [:]
+        for transport in [meshService] + additionalTransports {
+            for snapshot in transport.currentPeerSnapshots() {
+                guard let existing = merged[snapshot.peerID] else {
+                    merged[snapshot.peerID] = snapshot
+                    continue
+                }
+                merged[snapshot.peerID] = Self.merge(existing: existing, incoming: snapshot)
+            }
+        }
+        return Array(merged.values)
+    }
+
+    private static func merge(
+        existing: TransportPeerSnapshot,
+        incoming: TransportPeerSnapshot
+    ) -> TransportPeerSnapshot {
+        if existing.isConnected != incoming.isConnected {
+            return existing.isConnected ? existing : incoming
+        }
+        if existing.noisePublicKey == nil, incoming.noisePublicKey != nil {
+            return TransportPeerSnapshot(
+                peerID: incoming.peerID,
+                nickname: incoming.nickname.isEmpty ? existing.nickname : incoming.nickname,
+                isConnected: existing.isConnected,
+                noisePublicKey: incoming.noisePublicKey,
+                lastSeen: max(existing.lastSeen, incoming.lastSeen),
+                isVerified: existing.isVerified || incoming.isVerified
+            )
+        }
+        return existing.lastSeen >= incoming.lastSeen ? existing : incoming
+    }
+
     private func buildPeerFromMesh(
         peerInfo: TransportPeerSnapshot,
         favorites: [Data: FavoritesPersistenceService.FavoriteRelationship],

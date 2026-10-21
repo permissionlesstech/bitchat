@@ -190,7 +190,9 @@ struct ContentPeopleSheetView: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 if let issue = ConnectivityIssue.resolve(
                     bluetoothState: appChromeModel.bluetoothState,
-                    torBlocked: appChromeModel.torBlocked
+                    torBlocked: appChromeModel.torBlocked,
+                    lanEnabled: appChromeModel.lanTransport?.isEnabled ?? false,
+                    lanPermission: appChromeModel.lanTransport?.currentPermissionState
                 ) {
                     ConnectivityStatusBanner(issue: issue)
                 }

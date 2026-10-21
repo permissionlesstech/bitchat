@@ -21,6 +21,62 @@ struct ConnectivityIssueTests {
         #expect(ConnectivityIssue.resolve(bluetoothState: .poweredOn, torBlocked: false) == nil)
     }
 
+    @Test("A denied or unavailable local network permission is surfaced only when Wi-Fi direct is on")
+    func resolveSurfacesLANPermission() {
+        #expect(
+            ConnectivityIssue.resolve(
+                bluetoothState: .poweredOn,
+                torBlocked: false,
+                lanEnabled: true,
+                lanPermission: .denied
+            ) == .lanPermissionDenied
+        )
+        #expect(
+            ConnectivityIssue.resolve(
+                bluetoothState: .poweredOn,
+                torBlocked: false,
+                lanEnabled: true,
+                lanPermission: .unavailable
+            ) == .lanUnavailable
+        )
+        #expect(
+            ConnectivityIssue.resolve(
+                bluetoothState: .poweredOn,
+                torBlocked: false,
+                lanEnabled: false,
+                lanPermission: .denied
+            ) == nil
+        )
+        #expect(
+            ConnectivityIssue.resolve(
+                bluetoothState: .poweredOn,
+                torBlocked: false,
+                lanEnabled: true,
+                lanPermission: .granted
+            ) == nil
+        )
+    }
+
+    @Test("Bluetooth and tor keep their priority over an optional Wi-Fi issue")
+    func resolveKeepsExistingPriority() {
+        #expect(
+            ConnectivityIssue.resolve(
+                bluetoothState: .poweredOff,
+                torBlocked: true,
+                lanEnabled: true,
+                lanPermission: .denied
+            ) == .bluetoothOff
+        )
+        #expect(
+            ConnectivityIssue.resolve(
+                bluetoothState: .poweredOn,
+                torBlocked: true,
+                lanEnabled: true,
+                lanPermission: .denied
+            ) == .torBlocked
+        )
+    }
+
     @Test("A starting radio must not flash a false 'bluetooth is off' banner")
     func resolveStaysQuietWhileRadioIsStarting() {
         #expect(ConnectivityIssue.resolve(bluetoothState: .unknown, torBlocked: false) == nil)

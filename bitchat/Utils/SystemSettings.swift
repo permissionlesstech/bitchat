@@ -20,6 +20,8 @@ enum SystemSettings {
     case bluetoothPower
     case location
     case microphone
+    /// Local Network privacy permission (Wi-Fi direct transport).
+    case localNetwork
 
     #if os(macOS)
     private static let baseURL = "x-apple.systempreferences:com.apple.preference.security"
@@ -30,6 +32,7 @@ enum SystemSettings {
         case .bluetoothPower: "x-apple.systempreferences:com.apple.BluetoothSettings"
         case .location: "\(Self.baseURL)?Privacy_LocationServices"
         case .microphone: "\(Self.baseURL)?Privacy_Microphone"
+        case .localNetwork: "\(Self.baseURL)?Privacy_LocalNetwork"
         }
     }
     #endif

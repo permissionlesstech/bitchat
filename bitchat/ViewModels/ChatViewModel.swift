@@ -187,6 +187,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             // Update mesh service nickname if it's initialized
             if !isPanicResetting, !meshService.myPeerID.isEmpty {
                 meshService.setNickname(nickname)
+                for transport in additionalTransports {
+                    transport.setNickname(nickname)
+                }
             }
         }
     }
@@ -316,6 +319,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     // MARK: - Services and Storage
 
     let meshService: Transport
+    /// Transports that run next to the BLE mesh (for example the Wi-Fi LAN
+    /// transport). They share the unified peer list and the message router.
+    let additionalTransports: [Transport]
     let idBridge: NostrIdentityBridge
     let identityManager: SecureIdentityStateManagerProtocol
     /// Single source of truth for conversation message state and selection
@@ -1198,6 +1204,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         self.locationPresenceStore = locationPresenceStore
         self.locationManager = locationManager
         self.meshService = transport
+        self.additionalTransports = services.additionalTransports
         self.commandProcessor = services.commandProcessor
         self.messageRouter = services.messageRouter
         self.privateChatManager = services.privateChatManager
@@ -1574,6 +1581,18 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             panicTransport.suspendForPanicReset()
         } else {
             meshService.emergencyDisconnectAll()
+        }
+        // The LAN transport owns an in-memory copy of the old Noise identity
+        // and can hold live local-network links. Tear it down before the
+        // keychain wipe; it is intentionally not restarted under the new
+        // identity in v1 (a fresh launch or a manual toggle is required).
+        for transport in additionalTransports {
+            if let lan = transport as? LANTransport {
+                lan.invalidateAfterPanic()
+            } else {
+                transport.emergencyDisconnectAll()
+                transport.stopServices()
+            }
         }
 
         // Invalidate detached media preparation and close live capture file

@@ -21,6 +21,7 @@ struct MeshPeerList: View {
         static let connected = String(localized: "content.accessibility.connected_mesh", comment: "Accessibility label for mesh-connected peer indicator")
         static let reachable = String(localized: "content.accessibility.reachable_mesh", comment: "Accessibility label for mesh-reachable peer indicator")
         static let nostr = String(localized: "content.accessibility.available_nostr", comment: "Accessibility label for Nostr-available peer indicator")
+        static let lan = String(localized: "mesh_peers.state.wifi_direct", defaultValue: "wifi direct", comment: "Badge and accessibility label for a peer connected over the local Wi-Fi transport")
         static let offline = String(localized: "mesh_peers.state.offline", comment: "State label for a peer that is not currently reachable")
         static let favorite = String(localized: "mesh_peers.state.favorite", comment: "State label for a favorited peer")
         static let unread = String(localized: "mesh_peers.state.unread", comment: "State label for a peer with unread private messages")
@@ -107,6 +108,16 @@ struct MeshPeerList: View {
                                     .bitchatFont(size: 14)
                                     .foregroundColor(suffixColor)
                             }
+                        }
+
+                        // A peer can be reachable over both BLE and Wi-Fi;
+                        // the Wi-Fi glyph is an extra badge, not a replacement
+                        // for the leading transport glyph.
+                        if peer.isLANConnected {
+                            Image(systemName: "wifi")
+                                .font(.bitchatSystem(size: 10))
+                                .foregroundColor(baseColor)
+                                .help(Strings.lan)
                         }
 
                         if peer.isBlocked {
@@ -257,6 +268,7 @@ struct MeshPeerList: View {
                 parts.append(Strings.offline)
             }
         }
+        if peer.isLANConnected { parts.append(Strings.lan) }
         if peer.showsVouchedBadge { parts.append(Strings.vouched) }
         if peer.isFavorite { parts.append(Strings.favorite) }
         if peer.hasUnread { parts.append(Strings.unread) }
