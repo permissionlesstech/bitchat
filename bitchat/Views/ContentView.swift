@@ -377,7 +377,8 @@ struct ContentView: View {
         .sheet(isPresented: $appChromeModel.isAppInfoPresented) {
             AppInfoView(
                 topologyProvider: { appChromeModel.meshTopologyDisplayModel() },
-                onPanicWipe: { appChromeModel.panicClearAllData() }
+                onPanicWipe: { appChromeModel.panicClearAllData() },
+                lanTransport: appChromeModel.lanTransport
             )
             .environmentObject(locationChannelsModel)
         }
@@ -546,7 +547,9 @@ struct ContentView: View {
 
             if let issue = ConnectivityIssue.resolve(
                 bluetoothState: appChromeModel.bluetoothState,
-                torBlocked: appChromeModel.torBlocked
+                torBlocked: appChromeModel.torBlocked,
+                lanEnabled: appChromeModel.lanTransport?.isEnabled ?? false,
+                lanPermission: appChromeModel.lanTransport?.currentPermissionState
             ) {
                 ConnectivityStatusBanner(issue: issue)
             }

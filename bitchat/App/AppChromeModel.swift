@@ -54,6 +54,11 @@ final class AppChromeModel: ObservableObject {
         isLocationChannelsSheetPresented || isAppInfoPresented
     }
 
+    /// The optional Wi-Fi LAN transport, when the runtime created one.
+    var lanTransport: LANTransport? {
+        chatViewModel.additionalTransports.compactMap { $0 as? LANTransport }.first
+    }
+
     func setNickname(_ nickname: String) {
         self.nickname = nickname
         if chatViewModel.nickname != nickname {

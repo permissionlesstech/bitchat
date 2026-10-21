@@ -145,22 +145,45 @@ extension ChatViewModel: ChatPeerIdentityContext {
     }
 
     func noiseSessionState(for peerID: PeerID) -> LazyHandshakeState {
-        meshService.getNoiseSessionState(for: peerID)
+        var result: LazyHandshakeState = .none
+        for transport in additionalTransports + [meshService] {
+            switch transport.getNoiseSessionState(for: peerID) {
+            case .established:
+                return .established
+            case .handshaking, .handshakeQueued:
+                result = .handshaking
+            case .failed:
+                break
+            case .none:
+                break
+            }
+        }
+        return result
     }
 
     func triggerHandshake(with peerID: PeerID) {
-        meshService.triggerHandshake(with: peerID)
+        if let transport = (additionalTransports + [meshService]).first(where: {
+            $0.isPeerConnected(peerID) || $0.isPeerReachable(peerID)
+        }) {
+            transport.triggerHandshake(with: peerID)
+        } else {
+            meshService.triggerHandshake(with: peerID)
+        }
     }
 
     func hasEstablishedNoiseSession(with peerID: PeerID) -> Bool {
-        if case .established = meshService.getNoiseSessionState(for: peerID) { return true }
-        return false
+        ([meshService] + additionalTransports).contains {
+            if case .established = $0.getNoiseSessionState(for: peerID) { return true }
+            return false
+        }
     }
 
     func hasNoiseSession(with peerID: PeerID) -> Bool {
-        switch meshService.getNoiseSessionState(for: peerID) {
-        case .established, .handshaking: return true
-        case .none, .handshakeQueued, .failed: return false
+        ([meshService] + additionalTransports).contains {
+            switch $0.getNoiseSessionState(for: peerID) {
+            case .established, .handshaking: return true
+            case .none, .handshakeQueued, .failed: return false
+            }
         }
     }
 

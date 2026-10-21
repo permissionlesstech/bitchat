@@ -43,6 +43,12 @@
 	<string>bitchat uses the camera to scan QR codes to verify peers.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>bitchat uses your location to compute optional geohash channels, bridge cells, and nearby place labels. Exact coordinates are not included in bitchat messages.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>bitchat uses your local network to find other bitchat users on the same Wi-Fi and exchange end-to-end encrypted messages directly, without an internet connection.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_bitchat._tcp</string>
+	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>bitchat uses the microphone while you record voice notes or hold live push-to-talk, then sends that audio to your selected mesh conversation.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

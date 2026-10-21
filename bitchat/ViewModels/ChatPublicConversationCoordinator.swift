@@ -136,6 +136,12 @@ extension ChatViewModel: ChatPublicConversationContext {
 
     func sendMeshMessage(_ content: String, mentions: [String], messageID: String, timestamp: Date) {
         meshService.sendMessage(content, mentions: mentions, messageID: messageID, timestamp: timestamp)
+        // The same signed public packet also goes over every direct Wi-Fi
+        // link. A peer reachable over both transports deduplicates by packet
+        // identity on receive, exactly like the BLE mesh path.
+        for transport in additionalTransports {
+            transport.sendMessage(content, mentions: mentions, messageID: messageID, timestamp: timestamp)
+        }
     }
 
     func allowPublicMessage(senderKey: String, contentKey: String, powBits: Int) -> Bool {

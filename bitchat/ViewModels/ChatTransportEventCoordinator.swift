@@ -111,7 +111,15 @@ extension ChatViewModel: ChatTransportEventContext {
     }
 
     func noiseSessionPublicKeyData(for peerID: PeerID) -> Data? {
-        meshService.noiseSessionPublicKeyData(for: peerID)
+        if let key = meshService.noiseSessionPublicKeyData(for: peerID) {
+            return key
+        }
+        for transport in additionalTransports {
+            if let key = transport.noiseSessionPublicKeyData(for: peerID) {
+                return key
+            }
+        }
+        return nil
     }
 
     func flushRouterOutbox(for peerID: PeerID) {
@@ -123,7 +131,16 @@ extension ChatViewModel: ChatTransportEventContext {
     }
 
     func sendMeshDeliveryAck(for messageID: String, to peerID: PeerID) {
-        meshService.sendDeliveryAck(for: messageID, to: peerID)
+        // Prefer a direct LAN link when it is the transport that carried the
+        // message; fall back to BLE exactly as before.
+        let candidates = additionalTransports + [meshService]
+        if let transport = candidates.first(where: {
+            $0.isPeerConnected(peerID) && $0.canDeliverSecurely(to: peerID)
+        }) {
+            transport.sendDeliveryAck(for: messageID, to: peerID)
+        } else {
+            meshService.sendDeliveryAck(for: messageID, to: peerID)
+        }
     }
 
     @discardableResult
