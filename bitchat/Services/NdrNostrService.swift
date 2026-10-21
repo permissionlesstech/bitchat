@@ -408,16 +408,15 @@ final class NdrNostrService {
             return false
         }
 
-        let retiredActionIDs = Set(
-            (try? manager.pendingActions())?
-                .filter { $0.peerPubkeyHex == peer }
-                .map(\.actionId)
-                ?? []
-        )
         do {
+            let pendingBefore = Set(try manager.pendingActions().map(\.actionId))
             guard try manager.retirePeer(peerPubkeyHex: peer) else {
                 return true
             }
+            // Relay actions omit the peer key at the FFI boundary. Cancel the
+            // actions native retirement actually removed, preserving other peers.
+            let pendingAfter = Set(try manager.pendingActions().map(\.actionId))
+            let retiredActionIDs = pendingBefore.subtracting(pendingAfter)
             for actionID in retiredActionIDs {
                 if let eventID = inFlightPublishEventIDs.removeValue(forKey: actionID) {
                     relayManager.cancelPrivateEvent(eventID)
