@@ -21,6 +21,7 @@ final class FakeRelayManager: NostrRelayManaging {
     private(set) var unsubscribedIDs: [String] = []
     private(set) var sentEvents: [NostrEvent] = []
     private(set) var pendingPublishes: [(Bool) -> Void] = []
+    private(set) var cancelledPublishIDs: [String] = []
     private var activeSubscriptionIDs = Set<String>()
     var automaticallyCompletePublishes = true
     var publishAccepted = true
@@ -74,7 +75,9 @@ final class FakeRelayManager: NostrRelayManaging {
         pendingPublishes.removeFirst()(accepted)
     }
 
-    func cancelPrivateEvent(_ eventID: String) {}
+    func cancelPrivateEvent(_ eventID: String) {
+        cancelledPublishIDs.append(eventID)
+    }
 
     @discardableResult
     func deliverMatching(_ event: NostrEvent) -> Bool {
@@ -554,7 +557,15 @@ struct NdrOutOfBandTransportTests {
 
         #expect(aliceService.hasActiveSession(with: bob.publicKeyHex))
         #expect(aliceService.hasActiveSession(with: carol.publicKeyHex))
+        aliceRelay.automaticallyCompletePublishes = false
+        guard case .sent = aliceService.send("bitchat1:retired-send", to: bob.publicKeyHex) else {
+            Issue.record("Expected pending Bob publish")
+            return
+        }
+        let pendingEventID = try #require(aliceRelay.sentEvents.last?.id)
         #expect(aliceService.retirePeer(bob.publicKeyHex))
+        #expect(aliceRelay.cancelledPublishIDs == [pendingEventID])
+        aliceRelay.completeNextPublish(accepted: false)
         #expect(!aliceService.hasPairwiseSession(with: bob.publicKeyHex))
         #expect(aliceService.hasActiveSession(with: carol.publicKeyHex))
         #expect(aliceService.retirePeer(bob.publicKeyHex))
