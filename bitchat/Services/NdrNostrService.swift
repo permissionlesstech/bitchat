@@ -419,6 +419,9 @@ final class NdrNostrService {
                 return true
             }
             for actionID in retiredActionIDs {
+                if let eventID = inFlightPublishEventIDs.removeValue(forKey: actionID) {
+                    relayManager.cancelPrivateEvent(eventID)
+                }
                 inFlightActionIDs.remove(actionID)
                 deferredActionIDs.remove(actionID)
                 transientRetryAttempts.removeValue(forKey: actionID)
@@ -804,7 +807,8 @@ final class NdrNostrService {
                     to: nil,
                     completion: { [weak self, manager] accepted in
                         guard let self,
-                              self.isCurrent(manager, epoch: epoch)
+                              self.isCurrent(manager, epoch: epoch),
+                              self.inFlightPublishEventIDs[action.actionId] == event.id
                         else {
                             return
                         }
