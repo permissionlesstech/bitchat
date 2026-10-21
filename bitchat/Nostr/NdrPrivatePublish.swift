@@ -22,8 +22,9 @@ final class NdrPrivatePublish {
         event: NostrEvent, urls: [String],
         makeSession: () -> NostrRelaySessionProtocol
     ) {
-        guard let data = try? JSONEncoder().encode(NostrRequest.event(event)) else { finish(false); return }
-        let frame = String(decoding: data, as: UTF8.self)
+        guard let data = try? JSONEncoder().encode(NostrRequest.event(event)),
+              let frame = String(data: data, encoding: .utf8)
+        else { finish(false); return }
         for raw in urls {
             guard let url = URL(string: raw), url.user == nil, url.password == nil else { continue }
             let session = makeSession()

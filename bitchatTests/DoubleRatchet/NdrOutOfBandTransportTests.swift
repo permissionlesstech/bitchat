@@ -1455,7 +1455,7 @@ struct NdrOutOfBandTransportTests {
                 #expect(!event.tags.contains { $0.first == "p" })
             }
             for subscription in relay.subscriptions {
-                let wire = String(decoding: try JSONEncoder().encode(subscription.filter), as: UTF8.self)
+                let wire = try #require(String(data: JSONEncoder().encode(subscription.filter), encoding: .utf8))
                 #expect(publicIdentifiers.allSatisfy { !wire.contains($0) })
                 #expect(subscription.filter.kinds == [1060])
             }
