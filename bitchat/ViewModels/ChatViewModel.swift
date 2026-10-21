@@ -331,6 +331,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     let keychain: KeychainManagerProtocol
     private let panicRecoveryOperations: PanicRecoveryOperations
     private let panicNetworkLifecycle: PanicNetworkLifecycle
+    private let panicNotificationRemoval: @MainActor () -> Void
     private var isPanicResetting = false
     /// Private group membership: keys in the keychain, metadata on disk.
     let groupStore: GroupStore
@@ -1172,7 +1173,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         sfMetrics: StoreAndForwardMetrics? = nil,
         panicMediaWipe: (() throws -> Void)? = nil,
         panicRecoveryOperations: PanicRecoveryOperations? = nil,
-        panicNetworkLifecycle: PanicNetworkLifecycle = .noop
+        panicNetworkLifecycle: PanicNetworkLifecycle = .noop,
+        panicNotificationRemoval: @escaping @MainActor () -> Void = {
+            NotificationService.shared.removeAllDeliveredNotifications()
+        }
     ) {
         let conversations = conversations ?? ConversationStore()
         let peerIdentityStore = peerIdentityStore ?? PeerIdentityStore()
@@ -1190,6 +1194,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         self.panicRecoveryOperations = panicRecoveryOperations
             ?? .ephemeral(wipeMedia: panicMediaWipe ?? {})
         self.panicNetworkLifecycle = panicNetworkLifecycle
+        self.panicNotificationRemoval = panicNotificationRemoval
         self.groupStore = GroupStore(keychain: keychain)
         self.idBridge = idBridge
         self.identityManager = identityManager
@@ -1750,6 +1755,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             Self.clearAppSwitcherSnapshots()
         }
         #endif
+
+        // A delivered alert outlives the data behind it: with previews on,
+        // Notification Center still shows who wrote and what. Remove them
+        // whether or not the transaction committed, as with the snapshots.
+        panicNotificationRemoval()
 
         guard panicCompleted else { return false }
 

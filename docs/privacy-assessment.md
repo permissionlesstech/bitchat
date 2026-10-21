@@ -96,7 +96,7 @@ Residual risk: Nostr relay retention and logging are outside project control. Pu
 
 The realistic compromise for many of the people this app is built for is not interception but a phone taken and, often, unlocked under coercion.
 
-- Notification content is rendered by the system on the lock screen, so it is readable without unlocking. Message previews are therefore hidden by default: alerts state that a direct message, mention, or location-channel activity arrived, and withhold the message body, the sender's nickname, and the geohash until the app is opened. `userInfo` still carries the routing peer ID and deep link, neither of which the system displays. The preference is `notifications.hideMessagePreviews`; turning it off restores full previews.
+- Notification content is rendered by the system on the lock screen, so it is readable without unlocking. Message previews are therefore hidden by default: alerts state that a direct message, mention, or location-channel activity arrived, and withhold the message body, the sender's nickname, and the geohash until the app is opened. `userInfo` still carries the routing peer ID and deep link, neither of which the system displays. The preference is `notifications.hideMessagePreviews`; turning it off restores full previews. Panic wipe removes bitchat's notifications from Notification Center. That is removal, not erasure: the system can keep its own record of notifications it has shown, out of the app's reach, so with previews on their text can outlive the wipe.
 - The window is covered on `willResignActive`, so the snapshot iOS stores for the app switcher shows a placeholder rather than an open conversation. The cover is opaque rather than blurred, and is added synchronously because the capture follows shortly after that notification. Panic wipe separately deletes snapshots already on disk.
 - Clearing a mesh timeline erases the on-disk gossip archive behind it, so cleared public history is deleted rather than hidden. The echo watermark still suppresses pre-clear messages this device hears again from peers.
 - Managed media is bounded by age as well as size, so a received photo does not outlive its conversation indefinitely.
@@ -109,7 +109,7 @@ Not addressed, and deliberately out of scope here:
 
 ## Panic Wipe Coverage
 
-The panic action clears identity/session state, preferences, location state, groups, prekeys, outbox mail, courier mail, bridge dedup state, gossip archive, board data, managed media, hand-added relays, and active subscriptions/transports. Managed media deletion completes synchronously, after active media work has been invalidated. Keychain secrets use device-only accessibility, and an install marker detects and clears app keys that survive uninstall before a later reinstall can use them. New persistent stores must add an explicit wipe hook and a regression test.
+The panic action clears identity/session state, preferences, location state, groups, prekeys, outbox mail, courier mail, bridge dedup state, gossip archive, board data, managed media, hand-added relays, bitchat's notifications in Notification Center (removal only; see Locked and Seized Devices), and active subscriptions/transports. Managed media deletion completes synchronously, after active media work has been invalidated. Keychain secrets use device-only accessibility, and an install marker detects and clears app keys that survive uninstall before a later reinstall can use them. New persistent stores must add an explicit wipe hook and a regression test.
 
 ## Release Review Checklist
 
