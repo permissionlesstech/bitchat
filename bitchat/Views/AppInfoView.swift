@@ -263,40 +263,22 @@ struct AppInfoView: View {
                     resolvedDescription: String(localized: "app_info.sensitive.public_channels.body", defaultValue: "anyone can join any mesh or geohash channel, and channel messages are signed but not encrypted — readable verbatim by any nearby radio or relay. treat every public channel as monitored. keep sensitive talk in verified private messages, never in channels.", comment: "Guide entry body explaining public channels are unencrypted and joinable by anyone")
                 ),
                 AppInfoFeatureInfo(
-                    id: "sensitive.teleport",
-                    icon: "person.fill.questionmark",
-                    resolvedTitle: String(localized: "app_info.sensitive.teleport.title", defaultValue: "a geohash is not an identity", comment: "Guide entry title: a geohash channel does not reveal who or where someone is"),
-                    resolvedDescription: String(localized: "app_info.sensitive.teleport.body", defaultValue: "being in a channel doesn't prove where anyone is — anyone can teleport into any geohash from anywhere, so a watcher looks identical to a neighbor and you cannot \"detect\" a monitor. teleporting doesn't silence you either: while location access is on, your device keeps subscribing to your real cells at every level down to block (~150m), and relays see those subscriptions before you ever post.", comment: "Guide entry body correcting the belief that a geohash identifies or locates a person; states that background presence covers every level down to block (~150m) while location access is granted")
-                ),
-                AppInfoFeatureInfo(
                     id: "sensitive.precision",
                     icon: "mappin.and.ellipse",
-                    resolvedTitle: String(localized: "app_info.sensitive.precision.title", defaultValue: "pick a coarse geohash", comment: "Guide entry title: prefer low-precision geohash channels when location is sensitive"),
-                    resolvedDescription: String(localized: "app_info.sensitive.precision.body", defaultValue: "every message you post pins you to that channel's cell: block is ~150m, building ~38m, and custom teleport goes finer still. automatic presence doesn't stop at city level either — with location access on, your device subscribes to your real cells at every level except building, block (~150m) included, before you post. prefer city or coarser when your location is sensitive, or keep location access off.", comment: "Guide entry body explaining geohash precision and location disclosure; background presence covers every authorized level except building, including block (~150m)")
+                    resolvedTitle: String(localized: "app_info.sensitive.precision.title", defaultValue: "your location shows before you post", comment: "Guide entry title: location activity is visible before anyone posts"),
+                    resolvedDescription: String(localized: "app_info.sensitive.precision.body", defaultValue: "with location access on, while bitchat is open it asks relays about the areas around you and tells the channels for the area you're really in that you're nearby — even if you never post, and whatever channel you're viewing. turning location access off stops both. not everyone reading a channel shows up in it, so you can't count who's watching. every post also pins you to that channel's area, so when your location is sensitive, post only in wide-area channels.", comment: "Guide entry body: with location access on and the app open, bitchat samples nearby areas from relays and announces presence to the channels for the real area; turning location access off stops both; every post pins the poster to that channel's area")
                 ),
                 AppInfoFeatureInfo(
                     id: "sensitive.verify",
                     icon: "checkmark.shield",
                     resolvedTitle: String(localized: "app_info.sensitive.verify.title", defaultValue: "verify before you trust", comment: "Guide entry title: verify a contact's identity out of band before trusting them"),
-                    resolvedDescription: String(localized: "app_info.sensitive.verify.body", defaultValue: "mesh dms are end-to-end encrypted, but the lock icon means encrypted, not identified. the green \"verified\" check is only as strong as your out-of-band step — \"mark as verified\" compares nothing on its own, so match the full fingerprint or scan the qr with the real person. it binds a key, not a human.", comment: "Guide entry body explaining fingerprint verification and that the lock only means encrypted")
-                ),
-                AppInfoFeatureInfo(
-                    id: "sensitive.transport",
-                    icon: "arrow.triangle.branch",
-                    resolvedTitle: String(localized: "app_info.sensitive.transport.title", defaultValue: "verified on mesh isn't verified online", comment: "Guide entry title: verification only covers the Bluetooth mesh, not internet delivery"),
-                    resolvedDescription: String(localized: "app_info.sensitive.transport.body", defaultValue: "the verified badge comes from the bluetooth/noise session only. internet (nostr) dms use a separate key with no fingerprint, so a peer you verified over bluetooth isn't covered when messages fall back to the internet. relays also see the recipient's nostr key in the clear.", comment: "Guide entry body explaining verification does not extend to internet-routed messages")
-                ),
-                AppInfoFeatureInfo(
-                    id: "sensitive.tor",
-                    icon: "network",
-                    resolvedTitle: String(localized: "app_info.sensitive.tor.title", defaultValue: "tor hides your ip, not your words", comment: "Guide entry title: Tor masks the IP address but does not encrypt content"),
-                    resolvedDescription: String(localized: "app_info.sensitive.tor.body", defaultValue: "tor routing is on by default and fails closed — it routes nostr relay traffic through tor to mask your ip from relays, and queues messages rather than leaking when tor isn't ready. it doesn't encrypt channel content, hide your nostr key from relays, or touch the bluetooth mesh, and an observer can still see you're using tor. leave it on; turning it off hands relays your real ip.", comment: "Guide entry body explaining what Tor routing does and does not protect")
+                    resolvedDescription: String(localized: "app_info.sensitive.verify.body", defaultValue: "private messages are end-to-end encrypted, but encrypted isn't identified. marking someone verified by hand checks nothing — compare the full fingerprint, or scan the qr code, with the real person. it binds a key, not a human.", comment: "Guide entry body explaining that encrypted is not identified, and how to verify a fingerprint in person")
                 ),
                 AppInfoFeatureInfo(
                     id: "sensitive.identity",
                     icon: "antenna.radiowaves.left.and.right",
                     resolvedTitle: String(localized: "app_info.sensitive.identity.title", defaultValue: "minimize what you leak", comment: "Guide entry title: reduce identifying information broadcast over Bluetooth"),
-                    resolvedDescription: String(localized: "app_info.sensitive.identity.body", defaultValue: "with bluetooth on you broadcast a fixed bitchat service id (you're visibly running bitchat) plus a signed announce carrying your nickname and long-term keys in the clear. even encrypted dms expose both peer ids — who talks to whom. your id is stable across restarts until a wipe, so never use a real name or known handle as your nickname.", comment: "Guide entry body explaining what identifying information Bluetooth broadcasts reveal")
+                    resolvedDescription: String(localized: "app_info.sensitive.identity.body", defaultValue: "with bluetooth on, anyone nearby can tell you're running bitchat — that can't be hidden. encryption hides what you say, not who you talk to. never use a real name or a handle people know as your nickname.", comment: "Guide entry body explaining what identifying information Bluetooth broadcasts reveal")
                 ),
                 AppInfoFeatureInfo(
                     id: "sensitive.elicitation",
@@ -308,13 +290,13 @@ struct AppInfoView: View {
                     id: "sensitive.blocking",
                     icon: "nosign",
                     resolvedTitle: String(localized: "app_info.sensitive.blocking.title", defaultValue: "block is a local filter, not a shield", comment: "Guide entry title: blocking only hides messages locally"),
-                    resolvedDescription: String(localized: "app_info.sensitive.blocking.body", defaultValue: "there's no mute — only block. blocking drops a peer's messages on your device after they arrive and decrypt; it doesn't stop them transmitting, doesn't stop your phone relaying their traffic to others, and doesn't notify them. it's per-identity, so a fresh keypair walks right past it.", comment: "Guide entry body explaining the limits of blocking")
+                    resolvedDescription: String(localized: "app_info.sensitive.blocking.body", defaultValue: "blocking drops a peer's messages on your device after they arrive and decrypt; it doesn't stop them transmitting, and doesn't notify them. it's per-identity, so a fresh keypair walks right past it.", comment: "Guide entry body explaining the limits of blocking")
                 ),
                 AppInfoFeatureInfo(
                     id: "sensitive.panic",
                     icon: "flame",
                     resolvedTitle: String(localized: "app_info.sensitive.panic.title", defaultValue: "panic wipe is local and irreversible", comment: "Guide entry title: the panic wipe erases local data and cannot be undone"),
-                    resolvedDescription: String(localized: "app_info.sensitive.panic.body", defaultValue: "triple-tap the bitchat/ logo, then confirm — settings has the same button. it erases messages, media, keys, identity, favorites, blocks, and location on this device before it returns; a system message means it worked, a red \"wipe incomplete\" banner means quit and reopen to retry. it can't recall anything already sent, doesn't shred forensically, and leaves any icloud/finder backups untouched.", comment: "Guide entry body explaining what the panic wipe does and its limits")
+                    resolvedDescription: String(localized: "app_info.sensitive.panic.body", defaultValue: "settings has a panic wipe button. it deletes bitchat's messages, media, keys, and identity from this device. if it reports it didn't finish, quit and reopen bitchat to complete it. it can't recall anything already sent, doesn't shred forensically, and leaves any icloud or finder backups untouched.", comment: "Guide entry body explaining what the panic wipe does and its limits")
                 ),
                 AppInfoFeatureInfo(
                     id: "sensitive.help",
