@@ -14,6 +14,11 @@ protocol NostrRelayConnectionProtocol: AnyObject {
 
 protocol NostrRelaySessionProtocol {
     func webSocketTask(with url: URL) -> NostrRelayConnectionProtocol
+    func invalidate()
+}
+
+extension NostrRelaySessionProtocol {
+    func invalidate() {}
 }
 
 private final class URLSessionWebSocketTaskAdapter: NostrRelayConnectionProtocol {
@@ -46,6 +51,8 @@ private final class URLSessionWebSocketTaskAdapter: NostrRelayConnectionProtocol
 
 private struct URLSessionAdapter: NostrRelaySessionProtocol {
     let base: URLSession
+
+    func invalidate() { base.invalidateAndCancel() }
 
     func webSocketTask(with url: URL) -> NostrRelayConnectionProtocol {
         let task = base.webSocketTask(with: url)
@@ -89,6 +96,9 @@ struct NostrRelayManagerDependencies {
     /// for someone who denied location and has no mutual favorites.
     var isInLocationChannel: () -> Bool = { false }
     var selectedChannelPublisher: AnyPublisher<ChannelID, Never> = Empty().eraseToAnyPublisher()
+    var makePrivateSession: () -> NostrRelaySessionProtocol = {
+        URLSessionAdapter(base: TorURLSession.shared.privatePublishSession())
+    }
 }
 
 private extension NostrRelayManagerDependencies {
@@ -200,6 +210,7 @@ final class NostrRelayManager: ObservableObject {
     private var hasMutualFavorites: Bool = false
     private var hasLocationPermission: Bool = false
     private var connections: [String: NostrRelayConnectionProtocol] = [:]
+    private var privatePublishes: [String: NdrPrivatePublish] = [:]
     // Relay URL -> subscription ID -> logical request generation currently
     // installed on that socket. A same-ID REQ with a newer generation
     // atomically replaces its filter under NIP-01.
@@ -457,6 +468,7 @@ final class NostrRelayManager: ObservableObject {
     /// Disconnect from all relays
     func disconnect() {
         connectionGeneration &+= 1
+        cancelPrivatePublishes()
         for (_, task) in connections {
             task.cancel(with: .goingAway, reason: nil)
         }
@@ -491,6 +503,7 @@ final class NostrRelayManager: ObservableObject {
     /// can capture pre-wipe Nostr private keys.
     func resetForPanicWipe() {
         connectionGeneration &+= 1
+        cancelPrivatePublishes()
         for (_, task) in connections {
             task.cancel(with: .goingAway, reason: nil)
         }
@@ -651,6 +664,37 @@ final class NostrRelayManager: ObservableObject {
                 }
             }
         }
+    }
+
+    func sendPrivateEvent(
+        _ event: NostrEvent, to relayUrls: [String]? = nil,
+        completion: @escaping (Bool) -> Void
+    ) {
+        guard dependencies.activationAllowed(),
+              !(shouldUseTor && dependencies.torEnforced() &&
+                (!dependencies.torIsReady() || !dependencies.torIsForeground())),
+              privatePublishes[event.id] == nil
+        else { completion(false); return }
+        let urls = allowedRelayList(from: relayUrls ?? defaultRelays)
+        let attempt = NdrPrivatePublish(eventID: event.id) { [weak self] accepted in
+            self?.privatePublishes.removeValue(forKey: event.id)
+            completion(accepted)
+        }
+        privatePublishes[event.id] = attempt
+        dependencies.scheduleAfter(TransportConfig.nostrConfirmedSendAckTimeoutSeconds) { [weak attempt] in
+            Task { @MainActor in attempt?.cancel() }
+        }
+        attempt.start(event: event, urls: urls, makeSession: dependencies.makePrivateSession)
+    }
+
+    func cancelPrivateEvent(_ eventID: String) {
+        privatePublishes[eventID]?.cancel()
+    }
+
+    private func cancelPrivatePublishes() {
+        let attempts = Array(privatePublishes.values)
+        privatePublishes.removeAll()
+        attempts.forEach { $0.cancel() }
     }
 
     private func resolveConfirmedSend(

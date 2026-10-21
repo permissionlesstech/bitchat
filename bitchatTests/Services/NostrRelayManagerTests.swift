@@ -1,10 +1,78 @@
 import Combine
 import XCTest
+import Tor
 @testable import bitchat
 
 @MainActor
 final class NostrRelayManagerTests: XCTestCase {
     private let expectedDefaultRelayCount = 4
+
+    func test_privatePublish_usesFreshSendOnlyScopesAndRejectsAuthentication() async throws {
+        let url = "wss://private-carrier.example"
+        let context = makeContext(permission: .denied, favorites: [Data(repeating: 1, count: 32)])
+        context.manager.subscribe(filter: makeFilter(), id: "receiving", relayUrls: [url], handler: { _ in })
+        let ready = await waitUntil { context.sessionFactory.latestConnection(for: url)?.sentStrings.isEmpty == false }
+        XCTAssertTrue(ready)
+        let receiving = try XCTUnwrap(context.sessionFactory.latestConnection(for: url))
+        let event = try makeSignedEvent(content: "synthetic-private-envelope")
+        for rejection in ["[\"AUTH\",\"challenge\"]", "[\"OK\",\"\(event.id)\",false,\"auth-required: login\"]"] {
+            var result: Bool?
+            context.manager.sendPrivateEvent(event, to: [url]) { result = $0 }
+            let sender = try XCTUnwrap(context.sessionFactory.latestConnection(for: url))
+            XCTAssertFalse(sender === receiving)
+            XCTAssertEqual(sender.sentStrings.count, 1)
+            XCTAssertTrue(sender.sentStrings[0].hasPrefix("[\"EVENT\","))
+            try sender.emitRawString(rejection)
+            let rejected = await waitUntil { result == false }
+            XCTAssertTrue(rejected)
+            XCTAssertEqual(sender.sentStrings.count, 1, "No AUTH, REQ or fallback on the private socket")
+            XCTAssertGreaterThan(sender.cancelCallCount, 0)
+        }
+        var accepted: Bool?
+        context.manager.sendPrivateEvent(event, to: [url]) { accepted = $0 }
+        let final = try XCTUnwrap(context.sessionFactory.latestConnection(for: url))
+        try final.emitOK(eventID: event.id, success: true, reason: "")
+        let confirmed = await waitUntil { accepted == true }
+        XCTAssertTrue(confirmed)
+        XCTAssertEqual(context.sessionFactory.connectionsByURL[url]?.count, 4)
+        XCTAssertTrue(receiving.sentStrings.allSatisfy { !$0.hasPrefix("[\"EVENT\",") && !$0.hasPrefix("[\"AUTH\",") })
+        context.manager.disconnect()
+    }
+
+    func test_privatePublish_cancelsOnTimeoutAndPanicWithoutLateAcceptance() async throws {
+        let context = makeContext(permission: .denied, favorites: [Data(repeating: 1, count: 32)])
+        let event = try makeSignedEvent(content: "synthetic-cancel")
+        let url = "wss://private-cancel.example"
+        var results: [Bool] = []
+        context.manager.sendPrivateEvent(event, to: [url]) { results.append($0) }
+        let socket = try XCTUnwrap(context.sessionFactory.latestConnection(for: url))
+        context.scheduler.scheduled.last?.action()
+        let timedOut = await waitUntil { results == [false] }
+        XCTAssertTrue(timedOut)
+        context.manager.sendPrivateEvent(event, to: [url]) { results.append($0) }
+        let replacement = try XCTUnwrap(context.sessionFactory.latestConnection(for: url))
+        context.manager.resetForPanicWipe()
+        try socket.emitOK(eventID: event.id, success: true, reason: "")
+        try replacement.emitOK(eventID: event.id, success: true, reason: "")
+        XCTAssertEqual(results, [false, false])
+        XCTAssertGreaterThan(replacement.cancelCallCount, 0)
+    }
+
+    func test_privatePublish_preservesTorGateAndOmitsStoredCredentials() throws {
+        let context = makeContext(permission: .denied, userTorEnabled: true, torEnforced: true, torIsReady: false)
+        var result: Bool?
+        context.manager.sendPrivateEvent(try makeSignedEvent(content: "blocked")) { result = $0 }
+        XCTAssertEqual(result, false)
+        XCTAssertTrue(context.sessionFactory.requestedURLs.isEmpty)
+        let anonymous = TorURLSession.shared.privatePublishSession()
+        defer { anonymous.invalidateAndCancel() }
+        XCTAssertNil(anonymous.configuration.httpCookieStorage)
+        XCTAssertNil(anonymous.configuration.urlCredentialStorage)
+        XCTAssertNil(anonymous.configuration.urlCache)
+        XCTAssertFalse(anonymous.configuration.httpShouldSetCookies)
+        XCTAssertEqual(anonymous.configuration.connectionProxyDictionary as NSDictionary?,
+                       TorURLSession.shared.session.configuration.connectionProxyDictionary as NSDictionary?)
+    }
 
     func test_connect_directMode_connectsExistingDefaultRelaysWhenActivationBecomesAllowed() async {
         let context = makeContext(permission: .authorized, activationAllowed: false)
@@ -2370,7 +2438,8 @@ final class NostrRelayManagerTests: XCTestCase {
                 now: { clock.now },
                 jitterUnit: jitterUnit,
                 notificationCenter: notificationCenter,
-                customRelays: { customRelays.urls }
+                customRelays: { customRelays.urls },
+                makePrivateSession: { sessionFactory }
             )
         )
         return RelayManagerTestContext(
