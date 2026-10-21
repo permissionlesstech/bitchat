@@ -68,14 +68,20 @@ final class GroupStore: ObservableObject {
     }
 
     /// Inserts or replaces a group and its current key. Rejects rosters over
-    /// the hard cap or groups whose creator is missing from the roster.
+    /// the hard cap, groups whose creator is missing from the roster, and any
+    /// change to the creator (fingerprint or signing key) of a group already
+    /// held, so no caller can hand a known groupID to a different creator.
     @discardableResult
     func upsert(_ group: BitchatGroup, key: Data) -> Bool {
-        guard group.groupID.count == BitchatGroup.groupIDLength,
-              key.count == BitchatGroup.keyLength,
-              !group.members.isEmpty,
-              group.members.count <= BitchatGroup.maxMembers,
-              group.creator != nil else { return false }
+        guard key.count == BitchatGroup.keyLength,
+              Self.isWellFormed(group) else { return false }
+        if let existing = self.group(withID: group.groupID), !existing.hasSameCreator(as: group) {
+            SecureLogger.warning(
+                "Refusing group state: creator \(group.creatorFingerprint.prefix(8))… does not match stored creator \(existing.creatorFingerprint.prefix(8))…",
+                category: .security
+            )
+            return false
+        }
         guard keychain.saveIdentityKey(key, forKey: Self.keychainKey(for: group.groupID)) else {
             SecureLogger.error("Failed to store group key in keychain", category: .security)
             return false
@@ -90,16 +96,17 @@ final class GroupStore: ObservableObject {
     }
 
     /// Updates the roster of an existing group without changing key or epoch
-    /// (creator-side invite). Enforces the member cap.
+    /// (creator-side invite). Enforces the member cap and keeps the creator's
+    /// roster entry (fingerprint and signing key) pinned.
     @discardableResult
     func updateRoster(groupID: Data, members: [GroupMember]) -> BitchatGroup? {
-        guard let index = groups.firstIndex(where: { $0.groupID == groupID }),
-              !members.isEmpty,
-              members.count <= BitchatGroup.maxMembers,
-              members.contains(where: { $0.fingerprint == groups[index].creatorFingerprint }) else { return nil }
-        groups[index].members = members
+        guard let index = groups.firstIndex(where: { $0.groupID == groupID }) else { return nil }
+        var updated = groups[index]
+        updated.members = members
+        guard Self.isWellFormed(updated), groups[index].hasSameCreator(as: updated) else { return nil }
+        groups[index] = updated
         persist()
-        return groups[index]
+        return updated
     }
 
     /// Rotates the group key (creator-side removal/rotation): new random key,
@@ -139,6 +146,15 @@ final class GroupStore: ObservableObject {
         "groupKey-\(groupID.hexEncodedString())"
     }
 
+    /// Structural invariants every stored group satisfies: a well-sized ID,
+    /// a non-empty roster within the cap, and the creator in that roster.
+    private static func isWellFormed(_ group: BitchatGroup) -> Bool {
+        group.groupID.count == BitchatGroup.groupIDLength
+            && !group.members.isEmpty
+            && group.members.count <= BitchatGroup.maxMembers
+            && group.creator != nil
+    }
+
     private static func randomBytes(_ count: Int) -> Data? {
         var bytes = Data(count: count)
         let status = bytes.withUnsafeMutableBytes { buffer -> OSStatus in
@@ -176,8 +192,15 @@ final class GroupStore: ObservableObject {
               let stored = try? JSONDecoder().decode([BitchatGroup].self, from: data) else {
             return
         }
-        // Only groups whose key survived in the keychain are usable.
-        groups = stored.filter { key(forGroupID: $0.groupID) != nil }
+        // Only groups whose key survived in the keychain are usable. Loading
+        // bypasses `upsert`, so re-check its invariants here too, and keep one
+        // entry per groupID so a group can never carry two creators.
+        var seenGroupIDs = Set<Data>()
+        groups = stored.filter { group in
+            Self.isWellFormed(group)
+                && seenGroupIDs.insert(group.groupID).inserted
+                && key(forGroupID: group.groupID) != nil
+        }
     }
 
     private static func defaultFileURL() -> URL? {

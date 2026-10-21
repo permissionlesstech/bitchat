@@ -110,4 +110,32 @@ struct GeohashChatActivityTrackerTests {
         #expect(tracker.messageCount(for: "9q8yy") == 0)
         #expect(tracker.mostActiveConversation(among: [channel("9q8yy", .city)]) == nil)
     }
+
+    @Test
+    func staleGeohashesAreEvictedNotJustEmptied() {
+        let (tracker, advance) = makeTracker(window: 900)
+        tracker.recordChatMessage(geohash: "9q8yy", senderName: "a#1111", content: "old region", timestamp: baseDate)
+        #expect(tracker._trackedGeohashCountForTesting == 1)
+
+        // Move well past the window, then record activity in a different
+        // geohash — this should sweep the now-stale "9q8yy" entry out of
+        // memory instead of leaving an empty-but-present dictionary entry.
+        advance(baseDate.addingTimeInterval(901))
+        tracker.recordChatMessage(geohash: "9r1zz", senderName: "b#2222", content: "new region", timestamp: baseDate.addingTimeInterval(901))
+
+        #expect(tracker._trackedGeohashCountForTesting == 1)
+        #expect(tracker.messageCount(for: "9q8yy") == 0)
+        #expect(tracker.messageCount(for: "9r1zz") == 1)
+    }
+
+    @Test
+    func activeGeohashSurvivesSweepEvenWhenMomentarilyEmpty() {
+        // The geohash currently being recorded to is exempt from the sweep,
+        // so recording its own first message never evicts itself.
+        let (tracker, _) = makeTracker(window: 900)
+        tracker.recordChatMessage(geohash: "9q8yy", senderName: "a#1111", content: "hi", timestamp: baseDate)
+
+        #expect(tracker._trackedGeohashCountForTesting == 1)
+        #expect(tracker.messageCount(for: "9q8yy") == 1)
+    }
 }

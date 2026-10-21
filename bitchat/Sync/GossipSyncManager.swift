@@ -14,18 +14,27 @@ final class GossipSyncManager {
     private struct PacketStore {
         private(set) var packets: [String: BitchatPacket] = [:]
         private(set) var order: [String] = []
+        /// Sum of retained payload sizes, maintained on every insert/remove.
+        private var payloadBytes = 0
 
-        mutating func insert(idHex: String, packet: BitchatPacket, capacity: Int) {
-            guard capacity > 0 else { return }
-            if packets[idHex] != nil {
+        /// Evicts oldest-first until both the count and the byte budget hold.
+        /// The count cap alone let a few max-size packets per slot pin
+        /// hundreds of MB; the budget bounds memory whatever the sizes.
+        mutating func insert(idHex: String, packet: BitchatPacket, capacity: Int, byteBudget: Int) {
+            guard capacity > 0, packet.payload.count <= byteBudget else { return }
+            if let existing = packets[idHex] {
+                payloadBytes += packet.payload.count - existing.payload.count
                 packets[idHex] = packet
-                return
+            } else {
+                packets[idHex] = packet
+                order.append(idHex)
+                payloadBytes += packet.payload.count
             }
-            packets[idHex] = packet
-            order.append(idHex)
-            while order.count > capacity {
+            while order.count > capacity || payloadBytes > byteBudget {
                 let victim = order.removeFirst()
-                packets.removeValue(forKey: victim)
+                if let evicted = packets.removeValue(forKey: victim) {
+                    payloadBytes -= evicted.payload.count
+                }
             }
         }
 
@@ -42,6 +51,7 @@ final class GossipSyncManager {
                 guard let packet = packets[key] else { continue }
                 if shouldRemove(packet) {
                     packets.removeValue(forKey: key)
+                    payloadBytes -= packet.payload.count
                 } else {
                     nextOrder.append(key)
                 }
@@ -74,6 +84,14 @@ final class GossipSyncManager {
         var fragmentCapacity: Int = 600
         var fileTransferCapacity: Int = 200
         var groupMessageCapacity: Int = 200
+        // Payload byte budgets on top of the count caps. Each sits well above
+        // what the count cap holds in ordinary traffic (1000 chat messages,
+        // 600 fragments of ~500 B), so it only binds when packets are
+        // oversized — e.g. 200 file transfers at the 1.1 MB frame cap.
+        var messageByteBudget: Int = 8 * 1024 * 1024
+        var fragmentByteBudget: Int = 1024 * 1024
+        var fileTransferByteBudget: Int = 32 * 1024 * 1024
+        var groupMessageByteBudget: Int = 4 * 1024 * 1024
         var fragmentSyncIntervalSeconds: TimeInterval = 30.0
         var fileTransferSyncIntervalSeconds: TimeInterval = 60.0
         var messageSyncIntervalSeconds: TimeInterval = 15.0
@@ -89,6 +107,9 @@ final class GossipSyncManager {
         var prekeyBundleCapacity: Int = 200
         var prekeyBundleSyncIntervalSeconds: TimeInterval = 60.0
         var prekeyBundleMaxAgeSeconds: TimeInterval = 24 * 60 * 60
+        // Future bound for every store: matches the ingress skew so nothing
+        // the radio accepts is refused here.
+        var maxFutureSkewMs: UInt64 = TransportConfig.bleMaxTimestampSkewMs
     }
 
     private let myPeerID: PeerID
@@ -224,6 +245,13 @@ final class GossipSyncManager {
             maxAgeSeconds = config.maxMessageAgeSeconds
         }
         let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+        // Age windows only bound the past. A future-dated packet would never
+        // expire, sort ahead of everything in each GCS filter, and push the
+        // requester's since-cursor past all real history, so anything dated
+        // beyond the ingress skew is never stored, served or restored.
+        if packet.timestamp > nowMs, packet.timestamp - nowMs > config.maxFutureSkewMs {
+            return false
+        }
         let ageThresholdMs = UInt64(maxAgeSeconds * 1000)
 
         // If current time is less than threshold, accept all (handle clock issues gracefully)
@@ -263,25 +291,25 @@ final class GossipSyncManager {
             guard isBroadcastRecipient else { return }
             guard isPacketFresh(packet) else { return }
             let idHex = PacketIdUtil.computeId(packet).hexEncodedString()
-            messages.insert(idHex: idHex, packet: packet, capacity: max(1, config.seenCapacity))
+            messages.insert(idHex: idHex, packet: packet, capacity: max(1, config.seenCapacity), byteBudget: config.messageByteBudget)
             archiveDirty = true
         case .fragment:
             guard isBroadcastRecipient else { return }
             guard isPacketFresh(packet) else { return }
             let idHex = PacketIdUtil.computeId(packet).hexEncodedString()
-            fragments.insert(idHex: idHex, packet: packet, capacity: max(1, config.fragmentCapacity))
+            fragments.insert(idHex: idHex, packet: packet, capacity: max(1, config.fragmentCapacity), byteBudget: config.fragmentByteBudget)
         case .fileTransfer:
             guard isBroadcastRecipient else { return }
             guard isPacketFresh(packet) else { return }
             let idHex = PacketIdUtil.computeId(packet).hexEncodedString()
-            fileTransfers.insert(idHex: idHex, packet: packet, capacity: max(1, config.fileTransferCapacity))
+            fileTransfers.insert(idHex: idHex, packet: packet, capacity: max(1, config.fileTransferCapacity), byteBudget: config.fileTransferByteBudget)
         case .groupMessage:
             // Opaque ciphertext to non-members; carried and served like any
             // other broadcast so members get backfill from any relay.
             guard isBroadcastRecipient else { return }
             guard isPacketFresh(packet) else { return }
             let idHex = PacketIdUtil.computeId(packet).hexEncodedString()
-            groupMessages.insert(idHex: idHex, packet: packet, capacity: max(1, config.groupMessageCapacity))
+            groupMessages.insert(idHex: idHex, packet: packet, capacity: max(1, config.groupMessageCapacity), byteBudget: config.groupMessageByteBudget)
         case .prekeyBundle:
             // Callers only feed verified bundles here (own bundles at send
             // time, peers' after signature verification), so gossip never
@@ -619,20 +647,39 @@ final class GossipSyncManager {
     // MARK: - Archive (public message persistence)
 
     /// Rebuild the public message store from disk on launch, dropping
-    /// anything that aged out while the app was dead.
+    /// anything that aged out while the app was dead — or that is dated in
+    /// the future, which an older build could have archived from a sync
+    /// reply. Any drop rewrites the file so it is purged from disk too.
+    ///
+    /// Bounded like live intake: entries are stored oldest-first, so walk
+    /// them newest-first and stop once the count or byte budget is spent. An
+    /// oversized archive then costs at most one budget of decode work at
+    /// launch instead of re-inflating everything it holds.
     private func restoreArchivedMessages() {
         guard let archive else { return }
-        var restored = 0
-        for data in archive.load() {
+        let capacity = max(1, config.seenCapacity)
+        var kept: [(idHex: String, packet: BitchatPacket)] = []
+        var keptBytes = 0
+        var droppedAny = false
+        for data in archive.load().reversed() {
+            guard kept.count < capacity else { break }
             guard let packet = BitchatPacket.from(data),
                   packet.type == MessageType.message.rawValue,
-                  isPacketFresh(packet) else { continue }
-            let idHex = PacketIdUtil.computeId(packet).hexEncodedString()
-            messages.insert(idHex: idHex, packet: packet, capacity: max(1, config.seenCapacity))
-            restored += 1
+                  isPacketFresh(packet) else {
+                droppedAny = true
+                continue
+            }
+            guard keptBytes + packet.payload.count <= config.messageByteBudget else { break }
+            keptBytes += packet.payload.count
+            kept.append((PacketIdUtil.computeId(packet).hexEncodedString(), packet))
         }
-        if restored > 0 {
-            SecureLogger.debug("Restored \(restored) archived public message(s) for gossip sync", category: .sync)
+        for entry in kept.reversed() {
+            messages.insert(idHex: entry.idHex, packet: entry.packet, capacity: capacity, byteBudget: config.messageByteBudget)
+        }
+        if !kept.isEmpty {
+            SecureLogger.debug("Restored \(kept.count) archived public message(s) for gossip sync", category: .sync)
+        }
+        if !kept.isEmpty || droppedAny {
             archiveDirty = true
         }
     }

@@ -59,6 +59,16 @@ struct BitchatGroup: Codable, Equatable {
     func member(withSigningKey signingKey: Data) -> GroupMember? {
         members.first { $0.signingKey == signingKey }
     }
+
+    /// Whether `other` names the same creator — fingerprint AND signing key —
+    /// as this group. A group keeps the creator it was created with: state
+    /// for a known groupID naming anyone else is a takeover attempt, however
+    /// validly it is self-signed.
+    func hasSameCreator(as other: BitchatGroup) -> Bool {
+        guard let creator, let otherCreator = other.creator else { return false }
+        return creator.fingerprint == otherCreator.fingerprint
+            && creator.signingKey == otherCreator.signingKey
+    }
 }
 
 // MARK: - TLV helpers
@@ -192,7 +202,9 @@ enum GroupRosterCoding {
 /// key updates (0x07); receivers verify the creator signature — computed over
 /// "bitchat-group-v1" | groupID | epoch | SHA256(key) | SHA256(roster) —
 /// against the creator's signing key pinned in the roster, and require the
-/// Noise session peer to BE the creator before accepting any state.
+/// Noise session peer to BE the creator before accepting any state. Both
+/// checks are self-referential (the state names its own creator), so for a
+/// group already held the creator must also match the stored one.
 struct GroupStatePayload: Equatable {
     let groupID: Data
     let name: String

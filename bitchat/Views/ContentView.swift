@@ -98,6 +98,9 @@ struct ContentView: View {
 
     @StateObject private var voiceRecordingVM = VoiceRecordingViewModel()
     @State private var messageText = ""
+    /// Conversation the current `messageText` belongs to, so a channel switch
+    /// can save under the previous key before loading the next draft.
+    @State private var activeDraftKey: ComposerDraftStore.Key = .mesh
     @FocusState private var isTextFieldFocused: Bool
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.appTheme) private var appTheme
@@ -233,6 +236,11 @@ struct ContentView: View {
                 }
                 appChromeModel.setPanicPreparation { [weak voiceRecordingVM] in
                     voiceRecordingVM?.panicWipe()
+                    // Drop in-memory composer text before ChatViewModel resets
+                    // persisted drafts — otherwise the next inactive/background
+                    // transition would write the pre-wipe draft back.
+                    messageText = ""
+                    activeDraftKey = .mesh
                 }
                 #if os(macOS)
                 DispatchQueue.main.async {
@@ -241,6 +249,12 @@ struct ContentView: View {
                 }
                 #endif
                 sharedContentImportModel.updateDestination(sharedContentDestination)
+                activeDraftKey = ComposerDraftStore.Key.from(
+                    peerID: selectedPrivatePeerID,
+                    fingerprint: selectedPrivatePeerID.flatMap { conversationUIModel.getFingerprint(for: $0) },
+                    channel: locationChannelsModel.selectedChannel
+                )
+                messageText = ComposerDraftStore.load(activeDraftKey)
             }
             .onChange(of: colorScheme) { newValue in
                 conversationUIModel.setCurrentColorScheme(newValue)
@@ -258,9 +272,31 @@ struct ContentView: View {
                 showSidebar = true
             }
             sharedContentImportModel.updateDestination(sharedContentDestination)
+            switchComposerDraft(to: ComposerDraftStore.Key.from(
+                peerID: newValue,
+                fingerprint: newValue.flatMap { conversationUIModel.getFingerprint(for: $0) },
+                channel: locationChannelsModel.selectedChannel
+            ))
         }
-        .onChange(of: locationChannelsModel.selectedChannel) { _ in
+        .onChange(of: locationChannelsModel.selectedChannel) { newChannel in
             sharedContentImportModel.updateDestination(sharedContentDestination)
+            // Private drafts are keyed by peer; only public channel switches
+            // need a draft swap while no DM is open.
+            if selectedPrivatePeerID == nil {
+                switchComposerDraft(to: ComposerDraftStore.Key.from(
+                    peerID: nil,
+                    fingerprint: nil,
+                    channel: newChannel
+                ))
+            }
+        }
+        .onChange(of: scenePhase) { phase in
+            if phase == .background || phase == .inactive {
+                // Always save, including empty — clearing the composer must
+                // remove the in-memory draft so it does not resurrect on the
+                // next switch back into this conversation.
+                ComposerDraftStore.save(messageText, for: activeDraftKey)
+            }
         }
         .sheet(
             isPresented: Binding(
@@ -577,9 +613,17 @@ struct ContentView: View {
         guard let trimmed = messageText.trimmedOrNilIfEmpty else { return }
 
         messageText = ""
+        ComposerDraftStore.save("", for: activeDraftKey)
 
         DispatchQueue.main.async {
             self.conversationUIModel.sendMessage(trimmed)
         }
+    }
+
+    private func switchComposerDraft(to newKey: ComposerDraftStore.Key) {
+        guard newKey != activeDraftKey else { return }
+        ComposerDraftStore.save(messageText, for: activeDraftKey)
+        activeDraftKey = newKey
+        messageText = ComposerDraftStore.load(newKey)
     }
 }

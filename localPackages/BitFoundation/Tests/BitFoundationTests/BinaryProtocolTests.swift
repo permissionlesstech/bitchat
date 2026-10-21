@@ -296,9 +296,11 @@ struct BinaryProtocolTests {
     func payloadCompression() throws {
         let repeatedString = String(repeating: "This is a test message. ", count: 200)
         let largePayload = Data(repeatedString.utf8)
-        
-        let packet = TestHelpers.createTestPacket(payload: largePayload)
-        
+
+        // A public message: the helper's default type (announce) is capped at
+        // 4 KiB decompressed, below this 4.8 KB payload.
+        let packet = TestHelpers.createTestPacket(type: MessageType.message.rawValue, payload: largePayload)
+
         // Encode (should compress)
         let encodedData = try #require(BinaryProtocol.encode(packet), "Failed to encode packet with large payload")
         

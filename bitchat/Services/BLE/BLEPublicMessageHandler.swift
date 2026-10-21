@@ -40,6 +40,8 @@ struct BLEPublicMessageHandlerEnvironment {
 /// policy, sender display-name resolution, gossip tracking, payload decoding,
 /// and UI delivery.
 final class BLEPublicMessageHandler {
+    private static let maxDeliveredPayloadBytes = Int(UInt16.max)
+
     private let environment: BLEPublicMessageHandlerEnvironment
 
     init(environment: BLEPublicMessageHandlerEnvironment) {
@@ -108,6 +110,16 @@ final class BLEPublicMessageHandler {
 
         if messagePolicy.shouldTrackForSync {
             env.trackPacketSeen(packet)
+        }
+
+        // Both platforms send public messages as v1 frames, whose payload
+        // tops out at 65,535 bytes. The decode cap leaves headroom above
+        // that for relaying, but the timeline keeps messages by count and
+        // its length check counts characters (a combining-mark run is one),
+        // so nothing larger than a v1 frame is delivered.
+        guard packet.payload.count <= Self.maxDeliveredPayloadBytes else {
+            SecureLogger.warning("🚫 Dropping \(packet.payload.count)-byte public message from \(peerID.id.prefix(8))…: larger than a v1 frame", category: .security)
+            return
         }
 
         guard let content = String(data: packet.payload, encoding: .utf8) else {

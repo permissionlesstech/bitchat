@@ -341,10 +341,9 @@ struct NostrProtocolTests {
 
         // Build a DELIVERED ack embedded payload (geohash-style, no recipient peer ID)
         let messageID = "TEST-MSG-DELIVERED-1"
-        let senderPeerID = PeerID(str: "0123456789abcdef") // 8-byte hex peer ID
 
         let embedded = try #require(
-            NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .delivered, messageID: messageID, senderPeerID: senderPeerID),
+            NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .delivered, messageID: messageID),
             "Failed to embed delivered ack"
         )
 
@@ -391,9 +390,8 @@ struct NostrProtocolTests {
         let recipient = try NostrIdentity.generate()
         
         let messageID = "TEST-MSG-READ-1"
-        let senderPeerID = PeerID(str: "fedcba9876543210") // 8-byte hex peer ID
         let embedded = try #require(
-            NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .readReceipt, messageID: messageID, senderPeerID: senderPeerID),
+            NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .readReceipt, messageID: messageID),
             "Failed to embed read ack"
         )
 

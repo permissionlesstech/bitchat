@@ -226,10 +226,11 @@ extension ChatViewModel: ChatPrivateConversationContext {
         NotificationService.shared.sendPrivateMessageNotification(from: senderName, message: message, peerID: peerID)
     }
 
+    /// Deliberately no `senderPeerID`: geohash envelopes (and the acks for
+    /// inbound account DMs sent through here) must never carry the mesh
+    /// peer ID. The recipient-less encoders fill that field with random bytes.
     private func makeGeohashNostrTransport() -> NostrTransport {
-        let transport = NostrTransport(keychain: keychain, idBridge: idBridge)
-        transport.senderPeerID = meshService.myPeerID
-        return transport
+        NostrTransport(keychain: keychain, idBridge: idBridge)
     }
 }
 
@@ -491,18 +492,21 @@ final class ChatPrivateConversationCoordinator {
         guard let pm = PrivateMessagePacket.decode(from: payload.data) else { return }
         let messageId = pm.messageID
 
-        // Ack before the dedup guard: a re-sent copy means the sender may not
-        // have our DELIVERED yet, and markGeoDeliveryAckSent dedups the
-        // actual sends.
-        sendDeliveryAckIfNeeded(to: messageId, senderPubKey: senderPubkey, from: id)
+        // Block check before anything that answers the sender: a blocked
+        // sender gets no DELIVERED or READ ack back (not even a liveness
+        // signal) and doesn't consume a dedup slot.
+        if context.isNostrBlocked(pubkeyHexLowercased: senderPubkey) {
+            return
+        }
 
         guard markInboundGeoDMSeen(messageId) else { return }
 
         SecureLogger.info("GeoDM: recv PM <- sender=\(senderPubkey.prefix(8))… mid=\(messageId.prefix(8))…", category: .session)
 
-        if context.isNostrBlocked(pubkeyHexLowercased: senderPubkey) {
-            return
-        }
+        // Ack only once the block and dedup checks pass. Outbox retries of a
+        // message we've already acked are dropped by the dedup guard, and
+        // markGeoDeliveryAckSent dedups the actual sends by message ID.
+        sendDeliveryAckIfNeeded(to: messageId, senderPubKey: senderPubkey, from: id)
 
         // Prefer the favorite's stored nickname when the sender resolved to a
         // known noise key; the Nostr display name is a geohash-scoped

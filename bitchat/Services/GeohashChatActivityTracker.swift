@@ -41,6 +41,12 @@ final class GeohashChatActivityTracker: ObservableObject {
     private var lastMessages: [String: GeohashChatPreview] = [:]
     private let now: () -> Date
 
+    #if DEBUG
+    /// Number of distinct geohashes currently held in memory; exposed only
+    /// for regression tests verifying stale entries get evicted.
+    var _trackedGeohashCountForTesting: Int { messageTimes.count }
+    #endif
+
     init(
         window: TimeInterval = TransportConfig.uiGeohashChatActivityWindowSeconds,
         now: @escaping () -> Date = { Date() }
@@ -68,6 +74,15 @@ final class GeohashChatActivityTracker: ObservableObject {
         } else {
             lastMessages[gh] = GeohashChatPreview(senderName: senderName, content: content, timestamp: clamped)
         }
+
+        // A geohash's timestamp array only ever gets pruned down to empty —
+        // its dictionary entry (and the paired lastMessages entry) is never
+        // dropped, so roaming across many regions over a long session leaks
+        // one entry per distinct geohash ever observed. Sweep other geohashes
+        // here so activity that has fully aged out gets evicted instead of
+        // sitting in memory for the rest of the process's lifetime.
+        pruneStaleGeohashes(except: gh)
+
         objectWillChange.send()
     }
 
@@ -112,5 +127,16 @@ final class GeohashChatActivityTracker: ObservableObject {
     private func prune(_ times: [Date]) -> [Date] {
         let cutoff = now().addingTimeInterval(-window)
         return times.filter { $0 >= cutoff }
+    }
+
+    /// Drops any tracked geohash (other than `keep`) whose messages have all
+    /// aged out of the window, so the maps stay bounded to recently-active
+    /// geohashes instead of growing for the life of the process.
+    private func pruneStaleGeohashes(except keep: String) {
+        for gh in Array(messageTimes.keys) where gh != keep {
+            guard prune(messageTimes[gh] ?? []).isEmpty else { continue }
+            messageTimes.removeValue(forKey: gh)
+            lastMessages.removeValue(forKey: gh)
+        }
     }
 }

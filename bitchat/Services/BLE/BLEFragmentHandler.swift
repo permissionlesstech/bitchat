@@ -61,9 +61,16 @@ final class BLEFragmentHandler {
         // Decode the original packet bytes we reassembled, so flags/compression are preserved
         if var originalPacket = BinaryProtocol.decode(reassembled) {
 
-            // Reassembled packet validation
+            // Reassembled packet validation. Both platforms' fragmenters copy
+            // the inner type into every fragment, and the assembly was sized
+            // for that claim, so a packet of any other type is forged.
             let innerSender = PeerID(hexData: originalPacket.senderID)
-            if !env.isAcceptedIngressPayload(originalPacket, innerSender) {
+            if originalPacket.type != completedHeader.originalType {
+                SecureLogger.warning(
+                    "🚫 Reassembled packet id=\(completedHeader.idLogString) is type \(originalPacket.type), fragments claimed \(completedHeader.originalType)",
+                    category: .security
+                )
+            } else if !env.isAcceptedIngressPayload(originalPacket, innerSender) {
                 // Cleanup below
             } else {
                 SecureLogger.debug("✅ Reassembled packet id=\(completedHeader.idLogString) type=\(originalPacket.type) bytes=\(reassembled.count)", category: .session)

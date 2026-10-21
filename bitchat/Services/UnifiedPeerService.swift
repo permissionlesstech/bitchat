@@ -251,17 +251,21 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         return peerIndex[peerID]
     }
     
-    /// Get peer ID for nickname
+    /// Get peer ID for nickname.
+    ///
+    /// An unsuffixed name is accepted only when it identifies exactly one peer.
+    /// Colliding nicknames must be disambiguated with the people-list `#xxxx`
+    /// suffix (first four hex characters of the peer ID).
     func getPeerID(for nickname: String) -> PeerID? {
-        // Normalize both sides: the query may come from typed content and
-        // stored names may predate NFC-at-ingest (e.g. persisted favorites).
-        let target = nickname.normalizedNickname
-        for peer in peers {
-            if peer.displayName.normalizedNickname == target || peer.nickname.normalizedNickname == target {
-                return peer.peerID
+        guard let id = NicknameLookup.uniquePeerIDString(
+            for: nickname,
+            peers: peers.map { peer in
+                (id: peer.peerID.id, nickname: peer.nickname, displayName: peer.displayName)
             }
+        ) else {
+            return nil
         }
-        return nil
+        return peers.first(where: { $0.peerID.id == id })?.peerID
     }
     
     /// Check if peer is blocked

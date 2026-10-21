@@ -98,6 +98,10 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.unblockMeshPeer(peerID: peerID, displayName: displayName)
     }
 
+    func getFingerprint(for peerID: PeerID) -> String? {
+        chatViewModel.getFingerprint(for: peerID)
+    }
+
     func updateAutocomplete(for text: String, cursorPosition: Int) {
         chatViewModel.updateAutocomplete(for: text, cursorPosition: cursorPosition)
     }

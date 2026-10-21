@@ -239,6 +239,28 @@ struct BLEPublicMessageHandlerTests {
     }
 
     @Test
+    func payloadLargerThanAV1FrameIsTrackedForSyncButNotDelivered() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let recorder = Recorder()
+        recorder.peers = [remotePeerID: makePeerInfo(remotePeerID, nickname: "Alice", isVerified: true)]
+        recorder.signedName = "SignedAlice"
+        let handler = makeHandler(recorder: recorder, now: now)
+        // One character on screen, 65,537 bytes: combining marks pass any
+        // character-count check, so only a byte bound keeps them out of the
+        // count-capped timeline.
+        let combining = "a" + String(repeating: "\u{0301}", count: 32_768)
+        #expect(combining.count == 1)
+        let largest = String(repeating: "x", count: Int(UInt16.max))
+
+        handler.handle(makeMessagePacket(sender: remotePeerID, content: combining, timestamp: timestamp(now)), from: remotePeerID)
+        handler.handle(makeMessagePacket(sender: remotePeerID, content: largest, timestamp: timestamp(now)), from: remotePeerID)
+
+        // Sync tracking still follows the decode cap; only delivery is bounded.
+        #expect(recorder.trackedPackets.count == 2)
+        #expect(recorder.deliveries.map(\.content) == [largest])
+    }
+
+    @Test
     func selfSyncReplayResolvesOriginalMessageID() {
         let now = Date(timeIntervalSince1970: 1_000)
         let recorder = Recorder()

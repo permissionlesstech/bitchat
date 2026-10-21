@@ -43,6 +43,9 @@ final class MessageFormattingEngine {
 
         static let mention = SafeRegex.compile("@([\\p{L}0-9_]+(?:#[a-fA-F0-9]{4})?)")
 
+        /// Trailing partial `@nickname` at the composer cursor — autocomplete only.
+        static let mentionAutocomplete = SafeRegex.compile("@([\\p{L}0-9_]*)$")
+
         static let cashu = SafeRegex.compile("\\bcashu[AB][A-Za-z0-9._-]{40,}\\b")
 
         static let bolt11 = SafeRegex.compile("(?i)\\bln(bc|tb|bcrt)[0-9][a-z0-9]{50,}\\b")
