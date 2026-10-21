@@ -2,6 +2,11 @@ import BitFoundation
 import BitLogger
 import Foundation
 
+enum NostrPrivateMessageSource: Equatable {
+    case legacy1059
+    case ndr
+}
+
 /// The narrow surface `NostrInboundPipeline` needs from its owner.
 ///
 /// Split out of `ChatNostrContext`: member names are shared with the sibling
@@ -24,6 +29,11 @@ protocol NostrInboundPipelineContext: AnyObject {
     /// All favorite relationships, used to bridge a Nostr pubkey back to a
     /// Noise key on the inbound DM path.
     func allFavoriteRelationships() -> [FavoritesPersistenceService.FavoriteRelationship]
+    func canUseNdrBinding(
+        peerNoisePublicKey: Data,
+        peerNostrPublicKey: String
+    ) -> Bool
+    func canAcceptLegacyNostrDM(from peerNostrPublicKey: String) -> Bool
 
     // MARK: Presence & key mapping
     func setGeoNickname(_ nickname: String, forPubkey pubkeyHex: String)
@@ -46,10 +56,24 @@ protocol NostrInboundPipelineContext: AnyObject {
         senderPubkey: String,
         convKey: PeerID,
         id: NostrIdentity,
-        messageTimestamp: Date
+        messageTimestamp: Date,
+        source: NostrPrivateMessageSource
     )
     func handleDelivered(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID)
     func handleReadReceipt(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID)
+}
+
+extension NostrInboundPipelineContext {
+    func canUseNdrBinding(
+        peerNoisePublicKey _: Data,
+        peerNostrPublicKey _: String
+    ) -> Bool {
+        true
+    }
+
+    func canAcceptLegacyNostrDM(from _: String) -> Bool {
+        true
+    }
 }
 
 extension ChatViewModel: NostrInboundPipelineContext {
@@ -62,7 +86,23 @@ extension ChatViewModel: NostrInboundPipelineContext {
     }
 
     func allFavoriteRelationships() -> [FavoritesPersistenceService.FavoriteRelationship] {
-        Array(FavoritesPersistenceService.shared.favorites.values)
+        Array(favoritesService.favorites.values)
+    }
+
+    func canUseNdrBinding(
+        peerNoisePublicKey: Data,
+        peerNostrPublicKey: String
+    ) -> Bool {
+        favoritesService.canUseNdrBinding(
+            peerNoisePublicKey: peerNoisePublicKey,
+            peerNostrPublicKey: peerNostrPublicKey
+        )
+    }
+
+    func canAcceptLegacyNostrDM(from peerNostrPublicKey: String) -> Bool {
+        favoritesService.canAcceptLegacyNostrDM(
+            from: peerNostrPublicKey
+        )
     }
 
     func recordProcessedNostrEvent(_ eventID: String) {
@@ -92,6 +132,7 @@ extension ChatViewModel: NostrInboundPipelineContext {
 final class NostrInboundPipeline {
     private weak var context: (any NostrInboundPipelineContext)?
     private let presence: GeoPresenceTracker
+    private let now: @MainActor () -> Date
     private var geoEventLogCount = 0
 
     /// Monotonic panic-wipe generation for this pipeline. A panic wipe clears
@@ -110,9 +151,14 @@ final class NostrInboundPipeline {
         wipeGeneration &+= 1
     }
 
-    init(context: any NostrInboundPipelineContext, presence: GeoPresenceTracker) {
+    init(
+        context: any NostrInboundPipelineContext,
+        presence: GeoPresenceTracker,
+        now: @escaping @MainActor () -> Date = Date.init
+    ) {
         self.context = context
         self.presence = presence
+        self.now = now
     }
 
     @MainActor
@@ -394,7 +440,8 @@ final class NostrInboundPipeline {
                     senderPubkey: senderPubkey,
                     convKey: convKey,
                     id: id,
-                    messageTimestamp: messageTimestamp
+                    messageTimestamp: messageTimestamp,
+                    source: .legacy1059
                 )
             case .delivered:
                 context.handleDelivered(payload, senderPubkey: senderPubkey, convKey: convKey)
@@ -404,7 +451,9 @@ final class NostrInboundPipeline {
             // claiming to be group traffic over Nostr is ignored.
             // Live voice is mesh-only: latency and relay cost make it
             // meaningless over Nostr.
-            case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate, .vouch, .voiceFrame, .privateFile, .authenticatedPeerState:
+            case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate,
+                    .vouch, .ndrEvent, .voiceFrame, .privateFile,
+                    .authenticatedPeerState:
                 break
             }
         }
@@ -423,6 +472,51 @@ final class NostrInboundPipeline {
 
         Task.detached(priority: .userInitiated) { [weak self] in
             await self?.processNostrMessage(giftWrap)
+        }
+    }
+
+    @MainActor
+    func handleNdrDecryptedMessage(
+        _ message: NdrDecryptedMessage,
+        completion: @escaping NdrDeliveryCompletion
+    ) {
+        guard let context else {
+            completion(.retry)
+            return
+        }
+        let innerEvent = message.event
+        guard !context.hasProcessedNostrEvent(innerEvent.id) else {
+            completion(.consumed)
+            return
+        }
+
+        let wipeGeneration = self.wipeGeneration
+        guard let currentIdentity = context.currentNostrIdentity() else {
+            completion(.retry)
+            return
+        }
+        Task { [weak self] in
+            guard let self else {
+                completion(.retry)
+                return
+            }
+            let disposition = await self.processDecryptedNostrDMContent(
+                innerEvent.content,
+                senderPubkey: message.senderPubkeyHex,
+                rumorTimestamp: innerEvent.created_at,
+                currentIdentity: currentIdentity,
+                wipeGeneration: wipeGeneration,
+                expiresAtSeconds: message.expiresAtSeconds,
+                source: .ndr
+            )
+            guard !Task.isCancelled, self.wipeGeneration == wipeGeneration else {
+                completion(.retry)
+                return
+            }
+            if disposition == .consumed {
+                context.recordProcessedNostrEvent(innerEvent.id)
+            }
+            completion(disposition)
         }
     }
 
@@ -457,60 +551,138 @@ final class NostrInboundPipeline {
                 return
             }
 
-            if content.hasPrefix("verify:") {
+            let acceptsLegacyDM = await MainActor.run {
+                context.canAcceptLegacyNostrDM(
+                    from: senderPubkey
+                )
+            }
+            guard acceptsLegacyDM else {
+                SecureLogger.warning(
+                    "Rejected legacy account DM for pairwise-only binding",
+                    category: .security
+                )
                 return
             }
-
-            if content.hasPrefix("bitchat1:") {
-                let packet: BitchatPacket? = await MainActor.run {
-                    Self.decodeEmbeddedBitChatPacket(from: content)
-                }
-                guard let packet else {
-                    SecureLogger.error("Failed to decode embedded BitChat packet from Nostr DM", category: .session)
-                    return
-                }
-
-                let actualSenderNoiseKey: Data? = await MainActor.run {
-                    self.findNoiseKey(for: senderPubkey)
-                }
-                let targetPeerID = PeerID(str: actualSenderNoiseKey?.hexEncodedString()) ?? PeerID(nostr_: senderPubkey)
-
-                if packet.type == MessageType.noiseEncrypted.rawValue,
-                   let payload = NoisePayload.decode(packet.payload) {
-                    let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTimestamp))
-                    await MainActor.run {
-                        // Drop pre-wipe plaintext if a panic wipe landed
-                        // during the off-main decrypt (see above).
-                        guard self.wipeGeneration == wipeGeneration else { return }
-                        context.registerNostrKeyMapping(senderPubkey, for: targetPeerID)
-
-                        switch payload.type {
-                        case .privateMessage:
-                            context.handlePrivateMessage(
-                                payload,
-                                senderPubkey: senderPubkey,
-                                convKey: targetPeerID,
-                                id: currentIdentity,
-                                messageTimestamp: messageTimestamp
-                            )
-                        case .delivered:
-                            context.handleDelivered(payload, senderPubkey: senderPubkey, convKey: targetPeerID)
-                        case .readReceipt:
-                            context.handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: targetPeerID)
-                        // Group state travels only over mesh Noise sessions
-                        // in v1; group traffic over Nostr is ignored.
-                        // Live voice is mesh-only: latency and relay cost make it
-                        // meaningless over Nostr.
-                        case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate, .vouch, .voiceFrame, .privateFile, .authenticatedPeerState:
-                            break
-                        }
-                    }
-                }
-            } else {
-                SecureLogger.debug("Ignoring non-embedded Nostr DM content", category: .session)
-            }
+            await processDecryptedNostrDMContent(
+                content,
+                senderPubkey: senderPubkey,
+                rumorTimestamp: rumorTimestamp,
+                currentIdentity: currentIdentity,
+                wipeGeneration: wipeGeneration,
+                source: .legacy1059
+            )
         } catch {
             SecureLogger.error("Failed to decrypt Nostr message: \(error)", category: .session)
+        }
+    }
+
+    @discardableResult
+    private func processDecryptedNostrDMContent(
+        _ content: String,
+        senderPubkey: String,
+        rumorTimestamp: Int,
+        currentIdentity: NostrIdentity,
+        wipeGeneration: UInt64,
+        expiresAtSeconds: UInt64? = nil,
+        source: NostrPrivateMessageSource
+    ) async -> NdrDeliveryDisposition {
+        guard !Task.isCancelled, let context else { return .retry }
+        if content.hasPrefix("verify:") {
+            return .consumed
+        }
+
+        guard content.hasPrefix("bitchat1:") else {
+            SecureLogger.debug("Ignoring non-embedded Nostr DM content", category: .session)
+            return .consumed
+        }
+
+        let packet: BitchatPacket? = await MainActor.run {
+            Self.decodeEmbeddedBitChatPacket(from: content)
+        }
+        guard !Task.isCancelled else { return .retry }
+        guard let packet else {
+            SecureLogger.error("Failed to decode embedded BitChat packet from Nostr DM", category: .session)
+            return .consumed
+        }
+
+        let routingPubkey = senderPubkey
+        let actualSenderNoiseKey: Data? = await MainActor.run {
+            self.findNoiseKey(for: routingPubkey)
+        }
+        if source == .ndr, actualSenderNoiseKey == nil {
+            // Keep the native delivery durable until the favorite binding
+            // journal is recovered. Falling through to a virtual Nostr peer
+            // would bypass the fail-closed pairwise identity binding.
+            return .retry
+        }
+        let targetPeerID = PeerID(str: actualSenderNoiseKey?.hexEncodedString())
+            ?? PeerID(nostr_: routingPubkey)
+
+        guard packet.type == MessageType.noiseEncrypted.rawValue,
+              let payload = NoisePayload.decode(packet.payload)
+        else {
+            return .consumed
+        }
+
+        let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTimestamp))
+        return await MainActor.run {
+            guard !Task.isCancelled, self.wipeGeneration == wipeGeneration else {
+                return .retry
+            }
+            if let expiresAtSeconds,
+               self.now().timeIntervalSince1970
+                >= TimeInterval(expiresAtSeconds) {
+                // The native delivery remains durable while decoding hops
+                // actors. Recheck immediately before every app mutation so a
+                // message that expires during that work drains without ever
+                // being mapped, persisted, or notified.
+                return .consumed
+            }
+            // Decryption and decoding cross actor boundaries. A pin or
+            // identity rebind in that interval must take effect before any
+            // mapping, message or acknowledgement reaches the app.
+            switch source {
+            case .legacy1059:
+                guard context.canAcceptLegacyNostrDM(from: senderPubkey) else {
+                    return .consumed
+                }
+            case .ndr:
+                guard self.findNoiseKey(for: routingPubkey) == actualSenderNoiseKey else {
+                    return .retry
+                }
+            }
+            context.registerNostrKeyMapping(routingPubkey, for: targetPeerID)
+
+            switch payload.type {
+            case .privateMessage:
+                context.handlePrivateMessage(
+                    payload,
+                    senderPubkey: senderPubkey,
+                    convKey: targetPeerID,
+                    id: currentIdentity,
+                    messageTimestamp: messageTimestamp,
+                    source: source
+                )
+            case .delivered:
+                context.handleDelivered(
+                    payload,
+                    senderPubkey: senderPubkey,
+                    convKey: targetPeerID
+                )
+            case .readReceipt:
+                context.handleReadReceipt(
+                    payload,
+                    senderPubkey: senderPubkey,
+                    convKey: targetPeerID
+                )
+            // These payloads are mesh-only and must never be tunneled through
+            // either private-relay envelope.
+            case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate,
+                    .vouch, .ndrEvent, .voiceFrame, .privateFile,
+                    .authenticatedPeerState:
+                break
+            }
+            return .consumed
         }
     }
 
@@ -536,6 +708,13 @@ final class NostrInboundPipeline {
 
         for relationship in favorites {
             if let storedNostrKey = relationship.peerNostrPublicKey {
+                guard context.canUseNdrBinding(
+                    peerNoisePublicKey:
+                        relationship.peerNoisePublicKey,
+                    peerNostrPublicKey: storedNostrKey
+                ) else {
+                    continue
+                }
                 if storedNostrKey == npubToMatch {
                     return relationship.peerNoisePublicKey
                 }

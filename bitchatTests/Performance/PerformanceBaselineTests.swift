@@ -684,7 +684,14 @@ private final class PerfNostrContext: ChatNostrContext {
     var selectedPrivateChatPeer: PeerID?
     var nostrKeyMapping: [PeerID: String] = [:]
     func registerNostrKeyMapping(_ pubkey: String, for peerID: PeerID) { nostrKeyMapping[peerID] = pubkey }
-    func handlePrivateMessage(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID, id: NostrIdentity, messageTimestamp: Date) {}
+    func handlePrivateMessage(
+        _ payload: NoisePayload,
+        senderPubkey: String,
+        convKey: PeerID,
+        id: NostrIdentity,
+        messageTimestamp: Date,
+        source: NostrPrivateMessageSource
+    ) {}
     func handleDelivered(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID) {}
     func handleReadReceipt(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID) {}
     func startPrivateChat(with peerID: PeerID) {}

@@ -6,10 +6,37 @@ import BitFoundation
 final class FavoritesPersistenceServiceTests: XCTestCase {
     private let storageKey = "chat.bitchat.favorites"
     private let serviceKey = "chat.bitchat.favorites"
+    private let rebindJournalKey =
+        "chat.bitchat.favorites.ndr-rebind-journal"
+    private let ndrRequiredKey =
+        "chat.bitchat.favorites.ndr-required-noise-keys"
+
+    func test_enabledDefaultRequiresIdentityAuthorityBeforeAssignments() throws {
+        let keychain = MockKeychain()
+        let service = FavoritesPersistenceService(keychain: keychain)
+        let peerKey = Data(repeating: 0x61, count: 32)
+        let identity = try NostrIdentity.generate()
+        service.addFavorite(peerNoisePublicKey: peerKey, peerNostrPublicKey: identity.npub, peerNickname: "Guarded")
+        XCTAssertNil(service.getFavoriteStatus(for: peerKey))
+        XCTAssertNil(keychain.load(key: storageKey, service: serviceKey))
+
+        let owner = UUID()
+        service.installNostrIdentityRebindAuthorization(
+            owner: owner, required: true,
+            authorize: { _, _, _ in true }, commit: { _, _, _ in true }
+        )
+        service.addFavorite(peerNoisePublicKey: peerKey, peerNostrPublicKey: identity.npub, peerNickname: "Guarded")
+        XCTAssertTrue(service.isFavorite(peerKey))
+        service.removeNostrIdentityRebindAuthorization(owner: owner)
+        let replacement = try NostrIdentity.generate()
+        service.updatePeerFavoritedUs(peerNoisePublicKey: peerKey, favorited: true,
+                                      peerNostrPublicKey: replacement.npub)
+        XCTAssertEqual(service.getFavoriteStatus(for: peerKey)?.peerNostrPublicKey, identity.npub)
+    }
 
     func test_addFavorite_persistsAndPostsNotification() throws {
         let keychain = MockKeychain()
-        let service = FavoritesPersistenceService(keychain: keychain)
+        let service = FavoritesPersistenceService(keychain: keychain, ndrRolloutEnabled: false)
         let peerKey = Data((0..<32).map(UInt8.init))
         let expectation = expectation(forNotification: .favoriteStatusChanged, object: nil)
 
@@ -22,7 +49,7 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
     }
 
     func test_removeFavorite_preservesRelationshipWhenPeerStillFavoritesUs() {
-        let service = FavoritesPersistenceService(keychain: MockKeychain())
+        let service = FavoritesPersistenceService(keychain: MockKeychain(), ndrRolloutEnabled: false)
         let peerKey = Data((32..<64).map(UInt8.init))
 
         service.updatePeerFavoritedUs(peerNoisePublicKey: peerKey, favorited: true, peerNickname: "Bob")
@@ -37,7 +64,7 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
     }
 
     func test_updatePeerFavoritedUs_removesRelationshipWhenNeitherSideFavorites() {
-        let service = FavoritesPersistenceService(keychain: MockKeychain())
+        let service = FavoritesPersistenceService(keychain: MockKeychain(), ndrRolloutEnabled: false)
         let peerKey = Data((64..<96).map(UInt8.init))
 
         service.updatePeerFavoritedUs(peerNoisePublicKey: peerKey, favorited: true, peerNickname: "Carol")
@@ -50,7 +77,7 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
     }
 
     func test_updatePeerFavoritedUs_keepsStoredNicknameOverUnknownPlaceholder() {
-        let service = FavoritesPersistenceService(keychain: MockKeychain())
+        let service = FavoritesPersistenceService(keychain: MockKeychain(), ndrRolloutEnabled: false)
         let peerKey = Data((128..<160).map(UInt8.init))
 
         service.addFavorite(peerNoisePublicKey: peerKey, peerNickname: "Erin")
@@ -65,7 +92,7 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
     }
 
     func test_getFavoriteStatus_forPeerID_returnsMutualFavorite() {
-        let service = FavoritesPersistenceService(keychain: MockKeychain())
+        let service = FavoritesPersistenceService(keychain: MockKeychain(), ndrRolloutEnabled: false)
         let peerKey = Data((96..<128).map(UInt8.init))
 
         service.addFavorite(peerNoisePublicKey: peerKey, peerNostrPublicKey: "npub1dan", peerNickname: "Dan")
@@ -100,7 +127,7 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
         let encoded = try JSONEncoder().encode([older, newer])
         keychain.save(key: storageKey, data: encoded, service: serviceKey, accessible: nil)
 
-        let service = FavoritesPersistenceService(keychain: keychain)
+        let service = FavoritesPersistenceService(keychain: keychain, ndrRolloutEnabled: false)
 
         XCTAssertEqual(service.favorites.count, 1)
         XCTAssertEqual(service.getFavoriteStatus(for: peerKey)?.peerNickname, "Newer")
@@ -109,5 +136,616 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
         let cleaned = try XCTUnwrap(keychain.load(key: storageKey, service: serviceKey))
         let decoded = try JSONDecoder().decode([FavoritesPersistenceService.FavoriteRelationship].self, from: cleaned)
         XCTAssertEqual(decoded.count, 1)
+    }
+
+    func test_preNdrIdentityRebindDoesNotPinOrRetire() {
+        let keychain = MockKeychain()
+        let service = FavoritesPersistenceService(keychain: keychain, ndrRolloutEnabled: false)
+        let peerKey = Data(repeating: 0x41, count: 32)
+        let owner = UUID()
+        var commitCalled = false
+        service.addFavorite(
+            peerNoisePublicKey: peerKey,
+            peerNostrPublicKey: "old",
+            peerNickname: "Pre-NDR"
+        )
+        service.installNostrIdentityRebindAuthorization(
+            owner: owner,
+            required: true,
+            authorize: { _, _, _ in true },
+            commit: { _, _, _ in
+                commitCalled = true
+                return true
+            }
+        )
+
+        service.updatePeerFavoritedUs(
+            peerNoisePublicKey: peerKey,
+            favorited: true,
+            peerNostrPublicKey: "new"
+        )
+
+        XCTAssertEqual(
+            service.getFavoriteStatus(for: peerKey)?
+                .peerNostrPublicKey,
+            "new"
+        )
+        XCTAssertFalse(commitCalled)
+        XCTAssertFalse(service.isNdrRequired(for: peerKey))
+        XCTAssertFalse(
+            service.isNdrFallbackBlocked(
+                for: PeerID(publicKey: peerKey)
+            )
+        )
+    }
+
+    func test_postSessionRebindJournalsBeforeRetireAndPreservesPin()
+        throws {
+        let keychain = MockKeychain()
+        let service = FavoritesPersistenceService(keychain: keychain, ndrRolloutEnabled: false)
+        let peerKey = Data(repeating: 0x42, count: 32)
+        service.addFavorite(
+            peerNoisePublicKey: peerKey,
+            peerNostrPublicKey: "old",
+            peerNickname: "Pinned"
+        )
+        XCTAssertTrue(service.markNdrRequired(for: peerKey))
+        var commitCalled = false
+        service.installNostrIdentityRebindAuthorization(
+            owner: UUID(),
+            required: true,
+            authorize: { _, _, _ in true },
+            commit: { _, old, new in
+                commitCalled = true
+                XCTAssertEqual(old, "old")
+                XCTAssertEqual(new, "new")
+                XCTAssertNotNil(
+                    keychain.load(
+                        key: self.rebindJournalKey,
+                        service: self.serviceKey
+                    )
+                )
+                let stored = try? JSONDecoder().decode(
+                    [FavoritesPersistenceService.FavoriteRelationship].self,
+                    from: keychain.load(
+                        key: self.storageKey,
+                        service: self.serviceKey
+                    ) ?? Data()
+                )
+                XCTAssertEqual(
+                    stored?.first?.peerNostrPublicKey,
+                    "old"
+                )
+                return true
+            }
+        )
+
+        service.updatePeerFavoritedUs(
+            peerNoisePublicKey: peerKey,
+            favorited: true,
+            peerNostrPublicKey: "new"
+        )
+
+        XCTAssertTrue(commitCalled)
+        XCTAssertEqual(
+            service.getFavoriteStatus(for: peerKey)?
+                .peerNostrPublicKey,
+            "new"
+        )
+        XCTAssertTrue(service.isNdrRequired(for: peerKey))
+        XCTAssertNil(
+            keychain.load(
+                key: rebindJournalKey,
+                service: serviceKey
+            )
+        )
+    }
+
+    func test_failedFavoriteCommitKeepsJournalAndRecoversOnRestart() {
+        let keychain = MockKeychain()
+        let peerKey = Data(repeating: 0x43, count: 32)
+        let first = FavoritesPersistenceService(keychain: keychain, ndrRolloutEnabled: false)
+        first.addFavorite(
+            peerNoisePublicKey: peerKey,
+            peerNostrPublicKey: "old",
+            peerNickname: "Recoverable"
+        )
+        XCTAssertTrue(first.markNdrRequired(for: peerKey))
+        first.installNostrIdentityRebindAuthorization(
+            owner: UUID(),
+            required: true,
+            authorize: { _, _, _ in true },
+            commit: { _, _, _ in true }
+        )
+        keychain.simulatedGenericSaveFailureKeys.insert(storageKey)
+
+        first.updatePeerFavoritedUs(
+            peerNoisePublicKey: peerKey,
+            favorited: true,
+            peerNostrPublicKey: "new"
+        )
+
+        XCTAssertEqual(
+            first.getFavoriteStatus(for: peerKey)?
+                .peerNostrPublicKey,
+            "old"
+        )
+        XCTAssertNotNil(
+            keychain.load(
+                key: rebindJournalKey,
+                service: serviceKey
+            )
+        )
+        XCTAssertTrue(
+            first.isNdrFallbackBlocked(
+                for: PeerID(publicKey: peerKey)
+            )
+        )
+
+        let restarted = FavoritesPersistenceService(keychain: keychain, ndrRolloutEnabled: false)
+        XCTAssertFalse(
+            restarted.canUseNdrBinding(
+                for: PeerID(publicKey: peerKey)
+            )
+        )
+        XCTAssertTrue(
+            restarted.isNdrFallbackBlocked(
+                for: PeerID(publicKey: peerKey)
+            )
+        )
+
+        keychain.simulatedGenericSaveFailureKeys.remove(storageKey)
+        restarted.installNostrIdentityRebindAuthorization(
+            owner: UUID(),
+            required: true,
+            authorize: { _, _, _ in true },
+            commit: { _, _, _ in true }
+        )
+
+        XCTAssertEqual(
+            restarted.getFavoriteStatus(for: peerKey)?
+                .peerNostrPublicKey,
+            "new"
+        )
+        XCTAssertTrue(restarted.isNdrRequired(for: peerKey))
+        XCTAssertNil(
+            keychain.load(
+                key: rebindJournalKey,
+                service: serviceKey
+            )
+        )
+    }
+
+    func test_recoveryTreatsEquivalentHexAndNpubJournalIdentityAsSame()
+        throws {
+        let keychain = MockKeychain()
+        let peerKey = Data(repeating: 0x4a, count: 32)
+        let oldIdentity = try NostrIdentity.generate()
+        let targetIdentity = try NostrIdentity.generate()
+        let first = FavoritesPersistenceService(keychain: keychain, ndrRolloutEnabled: false)
+        first.addFavorite(
+            peerNoisePublicKey: peerKey,
+            peerNostrPublicKey: oldIdentity.npub,
+            peerNickname: "Equivalent recovery"
+        )
+        XCTAssertTrue(first.markNdrRequired(for: peerKey))
+        first.installNostrIdentityRebindAuthorization(
+            owner: UUID(),
+            required: true,
+            authorize: { _, _, _ in true },
+            commit: { _, _, _ in true }
+        )
+        keychain.simulatedGenericSaveFailureKeys.insert(storageKey)
+        first.updatePeerFavoritedUs(
+            peerNoisePublicKey: peerKey,
+            favorited: true,
+            peerNostrPublicKey: targetIdentity.npub
+        )
+        keychain.simulatedGenericSaveFailureKeys.remove(storageKey)
+
+        let storedData = try XCTUnwrap(
+            keychain.load(key: storageKey, service: serviceKey)
+        )
+        let storedRelationships = try JSONDecoder().decode(
+            [FavoritesPersistenceService.FavoriteRelationship].self,
+            from: storedData
+        )
+        let stored = try XCTUnwrap(storedRelationships.first)
+        let equivalentOld = FavoritesPersistenceService
+            .FavoriteRelationship(
+                peerNoisePublicKey: stored.peerNoisePublicKey,
+                peerNostrPublicKey:
+                    oldIdentity.publicKeyHex.uppercased(),
+                peerNickname: stored.peerNickname,
+                isFavorite: stored.isFavorite,
+                theyFavoritedUs: stored.theyFavoritedUs,
+                favoritedAt: stored.favoritedAt,
+                lastUpdated: stored.lastUpdated
+            )
+        keychain.save(
+            key: storageKey,
+            data: try JSONEncoder().encode([equivalentOld]),
+            service: serviceKey,
+            accessible: nil
+        )
+
+        let restarted = FavoritesPersistenceService(keychain: keychain, ndrRolloutEnabled: false)
+        restarted.installNostrIdentityRebindAuthorization(
+            owner: UUID(),
+            required: true,
+            authorize: { _, _, _ in true },
+            commit: { _, _, _ in true }
+        )
+
+        XCTAssertEqual(
+            restarted.getFavoriteStatus(for: peerKey)?
+                .peerNostrPublicKey,
+            targetIdentity.npub
+        )
+        XCTAssertNil(
+            keychain.load(
+                key: rebindJournalKey,
+                service: serviceKey
+            )
+        )
+    }
+
+    func test_equivalentHexAndNpubIdentityUpdateIsANondestructiveNoop()
+        throws {
+        let keychain = MockKeychain()
+        let service = FavoritesPersistenceService(keychain: keychain, ndrRolloutEnabled: false)
+        let peerKey = Data(repeating: 0x44, count: 32)
+        let identity = try NostrIdentity.generate()
+        let storedHex = identity.publicKeyHex.uppercased()
+        service.addFavorite(
+            peerNoisePublicKey: peerKey,
+            peerNostrPublicKey: storedHex,
+            peerNickname: "Equivalent"
+        )
+        XCTAssertTrue(service.markNdrRequired(for: peerKey))
+        var authorizeCalled = false
+        var commitCalled = false
+        service.installNostrIdentityRebindAuthorization(
+            owner: UUID(),
+            required: true,
+            authorize: { _, _, _ in
+                authorizeCalled = true
+                return true
+            },
+            commit: { _, _, _ in
+                commitCalled = true
+                return true
+            }
+        )
+
+        service.updatePeerFavoritedUs(
+            peerNoisePublicKey: peerKey,
+            favorited: true,
+            peerNostrPublicKey: identity.npub
+        )
+
+        XCTAssertEqual(
+            service.getFavoriteStatus(for: peerKey)?
+                .peerNostrPublicKey,
+            storedHex
+        )
+        XCTAssertFalse(authorizeCalled)
+        XCTAssertFalse(commitCalled)
+        XCTAssertNil(
+            keychain.load(
+                key: rebindJournalKey,
+                service: serviceKey
+            )
+        )
+    }
+
+    func test_pendingJournalReservesTargetAcrossFavoritesAndRestart()
+        throws {
+        let keychain = MockKeychain()
+        let firstNoiseKey = Data(repeating: 0x45, count: 32)
+        let secondNoiseKey = Data(repeating: 0x46, count: 32)
+        let firstOld = try NostrIdentity.generate()
+        let secondOld = try NostrIdentity.generate()
+        let target = try NostrIdentity.generate()
+        let first = FavoritesPersistenceService(keychain: keychain, ndrRolloutEnabled: false)
+        first.addFavorite(
+            peerNoisePublicKey: firstNoiseKey,
+            peerNostrPublicKey: firstOld.npub,
+            peerNickname: "First"
+        )
+        first.addFavorite(
+            peerNoisePublicKey: secondNoiseKey,
+            peerNostrPublicKey: secondOld.npub,
+            peerNickname: "Second"
+        )
+        XCTAssertTrue(first.markNdrRequired(for: firstNoiseKey))
+        first.installNostrIdentityRebindAuthorization(
+            owner: UUID(),
+            required: true,
+            authorize: { _, _, _ in true },
+            commit: { _, _, _ in true }
+        )
+        keychain.simulatedGenericSaveFailureKeys.insert(storageKey)
+        first.updatePeerFavoritedUs(
+            peerNoisePublicKey: firstNoiseKey,
+            favorited: true,
+            peerNostrPublicKey: target.npub
+        )
+        XCTAssertNotNil(
+            keychain.load(
+                key: rebindJournalKey,
+                service: serviceKey
+            )
+        )
+
+        keychain.simulatedGenericSaveFailureKeys.remove(storageKey)
+        first.updatePeerFavoritedUs(
+            peerNoisePublicKey: secondNoiseKey,
+            favorited: true,
+            peerNostrPublicKey: target.npub
+        )
+        XCTAssertEqual(
+            first.getFavoriteStatus(for: secondNoiseKey)?
+                .peerNostrPublicKey,
+            secondOld.npub
+        )
+
+        let restarted = FavoritesPersistenceService(keychain: keychain, ndrRolloutEnabled: false)
+        restarted.installNostrIdentityRebindAuthorization(
+            owner: UUID(),
+            required: true,
+            authorize: { _, _, _ in true },
+            commit: { _, _, _ in true }
+        )
+        XCTAssertEqual(
+            restarted.getFavoriteStatus(for: firstNoiseKey)?
+                .peerNostrPublicKey,
+            target.npub
+        )
+        XCTAssertEqual(
+            restarted.getFavoriteStatus(for: secondNoiseKey)?
+                .peerNostrPublicKey,
+            secondOld.npub
+        )
+        XCTAssertNil(
+            keychain.load(
+                key: rebindJournalKey,
+                service: serviceKey
+            )
+        )
+    }
+
+    func test_journalClearFailureAllowsCommittedTargetButBlocksFallback()
+        throws {
+        let keychain = MockKeychain()
+        let service = FavoritesPersistenceService(keychain: keychain, ndrRolloutEnabled: false)
+        let peerKey = Data(repeating: 0x47, count: 32)
+        let oldIdentity = try NostrIdentity.generate()
+        let targetIdentity = try NostrIdentity.generate()
+        service.addFavorite(
+            peerNoisePublicKey: peerKey,
+            peerNostrPublicKey: oldIdentity.npub,
+            peerNickname: "Clear failure"
+        )
+        XCTAssertTrue(service.markNdrRequired(for: peerKey))
+        service.installNostrIdentityRebindAuthorization(
+            owner: UUID(),
+            required: true,
+            authorize: { _, _, _ in true },
+            commit: { _, _, _ in true }
+        )
+        keychain.simulatedGenericDeleteFailureKeys.insert(
+            rebindJournalKey
+        )
+
+        service.updatePeerFavoritedUs(
+            peerNoisePublicKey: peerKey,
+            favorited: true,
+            peerNostrPublicKey: targetIdentity.npub
+        )
+
+        XCTAssertEqual(
+            service.getFavoriteStatus(for: peerKey)?
+                .peerNostrPublicKey,
+            targetIdentity.npub
+        )
+        XCTAssertNotNil(
+            keychain.load(
+                key: rebindJournalKey,
+                service: serviceKey
+            )
+        )
+        XCTAssertTrue(
+            service.canUseNdrBinding(
+                peerNoisePublicKey: peerKey,
+                peerNostrPublicKey: targetIdentity.npub
+            )
+        )
+        XCTAssertTrue(
+            service.canUseNdrBinding(
+                for: PeerID(publicKey: peerKey)
+            )
+        )
+        XCTAssertTrue(service.canActivateDoubleRatchetRelay)
+        XCTAssertTrue(
+            service.isNdrFallbackBlocked(
+                for: PeerID(publicKey: peerKey)
+            )
+        )
+    }
+
+    func test_failedInitialBindingWriteIsNotPublishedAndCanBeRetried() throws {
+        for addedLocally in [true, false] {
+            let keychain = MockKeychain()
+            let service = FavoritesPersistenceService(keychain: keychain, ndrRolloutEnabled: false)
+            let peerKey = Data(repeating: 0x50, count: 32)
+            let identity = try NostrIdentity.generate()
+            // Start with the other half of a favorite relationship, without
+            // the Nostr association needed for authenticated bootstrap.
+            if addedLocally {
+                service.updatePeerFavoritedUs(peerNoisePublicKey: peerKey, favorited: true)
+            } else {
+                service.addFavorite(peerNoisePublicKey: peerKey, peerNickname: "Pending binding")
+            }
+            let before = service.getFavoriteStatus(for: peerKey)
+            let assignIdentity = {
+                if addedLocally {
+                    service.addFavorite(
+                        peerNoisePublicKey: peerKey,
+                        peerNostrPublicKey: identity.npub,
+                        peerNickname: "Durable binding"
+                    )
+                } else {
+                    service.updatePeerFavoritedUs(
+                        peerNoisePublicKey: peerKey,
+                        favorited: true,
+                        peerNostrPublicKey: identity.npub
+                    )
+                }
+            }
+            keychain.simulatedGenericSaveFailureKeys.insert(storageKey)
+            assignIdentity()
+
+            for current in [service, FavoritesPersistenceService(keychain: keychain, ndrRolloutEnabled: false)] {
+                XCTAssertEqual(current.getFavoriteStatus(for: peerKey), before)
+                XCTAssertFalse(current.isMutualFavorite(peerKey))
+                XCTAssertNil(current.getFavoriteStatus(for: peerKey)?.peerNostrPublicKey)
+                XCTAssertFalse(current.isNdrRequired(for: peerKey))
+            }
+
+            keychain.simulatedGenericSaveFailureKeys.remove(storageKey)
+            assignIdentity()
+            XCTAssertTrue(service.isMutualFavorite(peerKey))
+            XCTAssertTrue(service.markNdrRequired(for: peerKey))
+            let restarted = FavoritesPersistenceService(keychain: keychain, ndrRolloutEnabled: false)
+            XCTAssertEqual(restarted.getFavoriteStatus(for: peerKey)?.peerNostrPublicKey, identity.npub)
+            XCTAssertTrue(restarted.isNdrRequired(for: peerKey))
+            XCTAssertFalse(restarted.canAcceptLegacyNostrDM(from: identity.publicKeyHex))
+        }
+    }
+
+    func test_pinWriteFailureFailsClosedForBindingsAndLegacyInbound()
+        throws {
+        let keychain = MockKeychain()
+        let service = FavoritesPersistenceService(keychain: keychain, ndrRolloutEnabled: false)
+        let peerKey = Data(repeating: 0x48, count: 32)
+        let identity = try NostrIdentity.generate()
+        service.addFavorite(
+            peerNoisePublicKey: peerKey,
+            peerNostrPublicKey: identity.npub,
+            peerNickname: "Pin failure"
+        )
+        keychain.simulatedGenericSaveFailureKeys.insert(ndrRequiredKey)
+
+        XCTAssertFalse(service.markNdrRequired(for: peerKey))
+        XCTAssertNil(
+            keychain.load(
+                key: ndrRequiredKey,
+                service: serviceKey
+            )
+        )
+        XCTAssertTrue(service.isNdrRequired(for: peerKey))
+        XCTAssertFalse(
+            service.canUseNdrBinding(
+                for: PeerID(publicKey: peerKey)
+            )
+        )
+        XCTAssertFalse(service.canActivateDoubleRatchetRelay)
+        XCTAssertFalse(
+            service.canAcceptLegacyNostrDM(
+                from: identity.publicKeyHex
+            )
+        )
+    }
+
+    func test_unfavoritingPinnedContactPreservesInboundDowngradeBarrier() throws {
+        for removedLocally in [true, false] {
+            let keychain = MockKeychain()
+            let service = FavoritesPersistenceService(keychain: keychain, ndrRolloutEnabled: false)
+            let peerKey = Data(repeating: 0x51, count: 32)
+            let identity = try NostrIdentity.generate()
+            if removedLocally {
+                service.addFavorite(
+                    peerNoisePublicKey: peerKey,
+                    peerNostrPublicKey: identity.npub,
+                    peerNickname: "Pinned"
+                )
+            } else {
+                service.updatePeerFavoritedUs(
+                    peerNoisePublicKey: peerKey,
+                    favorited: true,
+                    peerNickname: "Pinned",
+                    peerNostrPublicKey: identity.npub
+                )
+            }
+            XCTAssertTrue(service.markNdrRequired(for: peerKey))
+            if removedLocally {
+                service.removeFavorite(peerNoisePublicKey: peerKey)
+            } else {
+                service.updatePeerFavoritedUs(
+                    peerNoisePublicKey: peerKey,
+                    favorited: false
+                )
+            }
+
+            for current in [service, FavoritesPersistenceService(keychain: keychain, ndrRolloutEnabled: false)] {
+                XCTAssertFalse(current.isFavorite(peerKey))
+                XCTAssertFalse(current.isMutualFavorite(peerKey))
+                XCTAssertFalse(
+                    current.getFavoriteStatus(for: peerKey)?.theyFavoritedUs ?? true
+                )
+                XCTAssertTrue(current.isNdrRequired(for: peerKey))
+                XCTAssertFalse(current.canAcceptLegacyNostrDM(from: identity.publicKeyHex))
+            }
+        }
+    }
+
+    func test_legacyInboundPolicyRejectsPinnedAndJournalIdentities()
+        throws {
+        let keychain = MockKeychain()
+        let service = FavoritesPersistenceService(keychain: keychain, ndrRolloutEnabled: false)
+        let peerKey = Data(repeating: 0x49, count: 32)
+        let oldIdentity = try NostrIdentity.generate()
+        let targetIdentity = try NostrIdentity.generate()
+        let unrelatedIdentity = try NostrIdentity.generate()
+        service.addFavorite(
+            peerNoisePublicKey: peerKey,
+            peerNostrPublicKey: oldIdentity.npub,
+            peerNickname: "Inbound"
+        )
+        XCTAssertTrue(service.markNdrRequired(for: peerKey))
+        XCTAssertFalse(
+            service.canAcceptLegacyNostrDM(
+                from: oldIdentity.publicKeyHex
+            )
+        )
+        XCTAssertTrue(
+            service.canAcceptLegacyNostrDM(
+                from: unrelatedIdentity.publicKeyHex
+            )
+        )
+        service.installNostrIdentityRebindAuthorization(
+            owner: UUID(),
+            required: true,
+            authorize: { _, _, _ in true },
+            commit: { _, _, _ in true }
+        )
+        keychain.simulatedGenericSaveFailureKeys.insert(storageKey)
+        service.updatePeerFavoritedUs(
+            peerNoisePublicKey: peerKey,
+            favorited: true,
+            peerNostrPublicKey: targetIdentity.npub
+        )
+
+        XCTAssertFalse(
+            service.canAcceptLegacyNostrDM(
+                from: oldIdentity.publicKeyHex
+            )
+        )
+        XCTAssertFalse(
+            service.canAcceptLegacyNostrDM(
+                from: targetIdentity.publicKeyHex
+            )
+        )
     }
 }
