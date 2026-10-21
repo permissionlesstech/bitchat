@@ -103,8 +103,14 @@ invite replays the cached native response and bootstrap envelope.
   Noise key, capability and exact session generation; an unauthenticated
   announcement or a later connection cannot authorize a queued bootstrap.
 - Relays carry signed kind-1060 envelopes with ephemeral sender keys and no
-  recipient `p` tag. The host reinstalls subscriptions when ephemeral authors
+  recipient `p` tag, with exactly one `v=2` tag. An acceptance-specific responder
+  key excludes public invite keys from private authors and subscription filters.
+  The host reinstalls subscriptions when ephemeral authors
   rotate, even when the native subscription ID stays the same.
+- Each publish attempt uses fresh send-only sockets, separate from receiving
+  subscriptions, with no cookies, credentials, `REQ` or `AUTH`. Challenges fail
+  closed and retries open new sockets. The selected Tor route is preserved;
+  authentication-required relays remain unsupported.
 - Before a native session can be created, durable favorite and identity pins
   disable legacy fallback. Session loss, unreadable storage, identity rebind,
   a disabled rollout, and incomplete handshakes must not reopen kind-1059 DMs
@@ -117,6 +123,14 @@ invite replays the cached native response and bootstrap envelope.
   mesh peer ID. Expiration is checked again immediately before delivery.
 - The native action queue owns durable work. The host acknowledges actions
   only after the corresponding relay, BLE, or consumer operation succeeds.
+
+Privacy-v2 preserves history and downgrade pins while quarantining pre-upgrade
+sessions, queued ciphertext and subscription authors. Both peers must upgrade
+and complete a fresh authenticated Noise bootstrap. A retained session with
+neither send nor receive readiness permits rebootstrap; receive-only sessions
+still count as compatible handshakes in progress. Unversioned invites and
+messages are rejected. Old queued ciphertext is not automatically resent and
+cannot reopen legacy fallback for a pinned contact.
 
 Group messaging, AppKeys, linked devices and sibling synchronization are not
 part of this integration. Enabling it requires native/host tests, both shipping

@@ -14,11 +14,12 @@ protocol NostrRelayManaging: AnyObject {
         onEOSE: (() -> Void)?
     ) -> Bool
     func unsubscribe(id: String)
-    func sendEventImmediately(
+    func sendPrivateEvent(
         _ event: NostrEvent,
         to relayUrls: [String]?,
         completion: @escaping (Bool) -> Void
     )
+    func cancelPrivateEvent(_ eventID: String)
 }
 
 extension NostrRelayManager: NostrRelayManaging {}
@@ -214,6 +215,7 @@ final class NdrNostrService {
     private var failedConfigurationPubkeyHex: String?
     private var activeSubIDs = Set<String>()
     private var inFlightActionIDs = Set<String>()
+    private var inFlightPublishEventIDs: [String: String] = [:]
     private var deferredActionIDs = Set<String>()
     private var transientRetryAttempts: [String: Int] = [:]
     private var scheduledTransientRetryTokens: [String: UUID] = [:]
@@ -385,7 +387,10 @@ final class NdrNostrService {
         else {
             return false
         }
-        return (try? manager.sessionInfo(peerPubkeyHex: peer)) != nil
+        guard let info = try? manager.sessionInfo(peerPubkeyHex: peer) else { return false }
+        // Pre-upgrade records remain durable but cannot send or receive. They
+        // need a fresh invite; a valid receive-only bootstrap session does not.
+        return info.sendReady || info.receiveReady
     }
 
     /// Removes only the selected pairwise peer. Other peer sessions and the
@@ -793,7 +798,8 @@ final class NdrNostrService {
                     continue
                 }
                 inFlightActionIDs.insert(action.actionId)
-                relayManager.sendEventImmediately(
+                inFlightPublishEventIDs[action.actionId] = event.id
+                relayManager.sendPrivateEvent(
                     event,
                     to: nil,
                     completion: { [weak self, manager] accepted in
@@ -803,6 +809,7 @@ final class NdrNostrService {
                             return
                         }
                         self.inFlightActionIDs.remove(action.actionId)
+                        self.inFlightPublishEventIDs.removeValue(forKey: action.actionId)
                         if accepted {
                             self.deferredActionIDs.remove(action.actionId)
                             if !self.acknowledge(
@@ -1115,6 +1122,7 @@ final class NdrNostrService {
     ) {
         guard isCurrent(manager, epoch: epoch),
               event.kind == 1060,
+              Self.hasPrivateWireVersion(event),
               event.isValidSignature(),
               NostrEvent.isWithinInboundTagLimits(event.tags),
               Self.isRecipientFreeNdrEnvelope(event),
@@ -1184,6 +1192,7 @@ final class NdrNostrService {
                 from: Data(eventJson.utf8)
               ),
               event.kind == 1060,
+              hasPrivateWireVersion(event),
               event.isValidSignature(),
               NostrEvent.isWithinInboundTagLimits(event.tags),
               isRecipientFreeNdrEnvelope(event),
@@ -1200,6 +1209,10 @@ final class NdrNostrService {
 
     static func isRecipientFreeNdrEnvelope(_ event: NostrEvent) -> Bool {
         !event.tags.contains { $0.first == "p" }
+    }
+
+    private static func hasPrivateWireVersion(_ event: NostrEvent) -> Bool {
+        event.tags.filter { $0.first == "v" } == [["v", "2"]]
     }
 
     static func validatedDecryptedMessage(
@@ -1353,6 +1366,9 @@ final class NdrNostrService {
         configuredPubkeyHex: String?
     ) {
         managerEpoch &+= 1
+        let publishes = Array(inFlightPublishEventIDs.values)
+        inFlightPublishEventIDs.removeAll()
+        for eventID in publishes { relayManager.cancelPrivateEvent(eventID) }
         for id in activeSubIDs {
             relayManager.unsubscribe(id: id)
         }

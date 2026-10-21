@@ -56,7 +56,7 @@ final class FakeRelayManager: NostrRelayManaging {
         activeSubscriptionIDs.remove(id)
     }
 
-    func sendEventImmediately(
+    func sendPrivateEvent(
         _ event: NostrEvent,
         to relayUrls: [String]?,
         completion: @escaping (Bool) -> Void
@@ -73,6 +73,8 @@ final class FakeRelayManager: NostrRelayManaging {
         guard !pendingPublishes.isEmpty else { return }
         pendingPublishes.removeFirst()(accepted)
     }
+
+    func cancelPrivateEvent(_ eventID: String) {}
 
     @discardableResult
     func deliverMatching(_ event: NostrEvent) -> Bool {
@@ -1308,14 +1310,26 @@ struct NdrOutOfBandTransportTests {
         _ = viewModel
     }
 
-    @Test("Crossed invitations recover lost responses and converge", arguments: [false, true])
+    @Test("Fresh and migrated crossed invitations recover lost responses", arguments: [false, true], [false, true])
     @MainActor
-    func simultaneousBootstrapRecoversLostResponse(reverseRetryOrder: Bool) async throws {
-        let identities = [try NostrIdentity.generate(), try NostrIdentity.generate()]
+    func simultaneousBootstrapRecoversLostResponse(reverseRetryOrder: Bool, migrateLegacy: Bool) async throws {
+        let legacy = migrateLegacy ? try loadLegacyPairwiseFixture() : nil
+        let identities = try legacy?.peers.map {
+            try NostrIdentity(privateKeyData: #require(Data(hexString: $0.privateKeyHex)))
+        } ?? [NostrIdentity.generate(), NostrIdentity.generate()]
         let relays = [FakeRelayManager(), FakeRelayManager()]
         let schedulers = [FakeNdrRetryScheduler(), FakeNdrRetryScheduler()]
         let storage = [try makeTempDir(label: "crossed-first"), try makeTempDir(label: "crossed-second")]
         defer { for directory in storage { try? FileManager.default.removeItem(at: directory) } }
+        if let legacy {
+            for index in 0..<2 {
+                let directory = storage[index].appendingPathComponent("pairwise-v1")
+                    .appendingPathComponent(identities[index].publicKeyHex)
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                let bytes = try #require(Data(base64Encoded: legacy.peers[index].stateBase64))
+                try bytes.write(to: directory.appendingPathComponent(legacy.peers[index].stateFile))
+            }
+        }
         let services = (0..<2).map { index in
             NdrNostrService(
                 relayManager: relays[index], rolloutEnabled: true,
@@ -1334,6 +1348,17 @@ struct NdrOutOfBandTransportTests {
         for index in 0..<2 {
             let remote = 1 - index
             installMutualFavorite(in: hosts[index].2, noiseKey: noiseKeys[remote], nostrIdentity: identities[remote])
+            if migrateLegacy {
+                #expect(hosts[index].2.markNdrRequired(for: noiseKeys[remote]))
+                services[index].configureIfNeeded(identity: identities[index])
+                #expect(!services[index].hasPairwiseSession(with: identities[remote].publicKeyHex))
+                #expect(relays[index].sentEvents.isEmpty, "Old queued ciphertext must stay private")
+                #expect(relays[index].subscriptions.isEmpty, "Old authors must never reach relay filters")
+                guard case .failed = services[index].send("blocked-before-upgrade", to: identities[remote].publicKeyHex) else {
+                    Issue.record("Obsolete native state must fail closed before rebootstrap")
+                    return
+                }
+            }
             hosts[index].1.authenticatedPeerTransportStates[peers[remote]] = AuthenticatedPeerTransportState(
                 capabilities: [.doubleRatchet], sessionGeneration: UUID(), noisePublicKey: noiseKeys[remote]
             )
@@ -1342,6 +1367,14 @@ struct NdrOutOfBandTransportTests {
             #expect(hosts[index].1.sentNdrEvents.count == 1, "Either identity can initiate independently")
         }
         let invites = try hosts.map { try #require($0.1.sentNdrEvents.first?.eventJson) }
+        if let legacy {
+            for index in 0..<2 {
+                #expect(invites[index] != legacy.peers[index].invite)
+                hosts[index].0.handleNdrEventPayload(from: peers[1 - index], payload: Data(legacy.peers[1 - index].invite.utf8))
+                #expect(!services[index].hasPairwiseSession(with: identities[1 - index].publicKeyHex))
+                #expect(relays[index].sentEvents.isEmpty)
+            }
+        }
         for index in 0..<2 {
             hosts[index].0.handleNdrEventPayload(from: peers[1 - index], payload: Data(invites[1 - index].utf8))
         }
@@ -1386,6 +1419,7 @@ struct NdrOutOfBandTransportTests {
         var messages = [[String](), [String]()]
         for index in 0..<2 {
             #expect(services[index].hasActiveSession(with: identities[1 - index].publicKeyHex))
+            #expect(hosts[index].2.isNdrRequired(for: noiseKeys[1 - index]))
             services[index].onDecryptedMessage = { message, complete in
                 messages[index].append(message.event.content)
                 complete(.consumed)
@@ -1406,6 +1440,26 @@ struct NdrOutOfBandTransportTests {
         }
         #expect(messages[0] == ["crossed-invite-1"])
         #expect(messages[1] == ["crossed-invite-0"])
+        let inviteKeys = try invites.map { json in
+            let event = try JSONDecoder().decode(NostrEvent.self, from: Data(json.utf8))
+            return try #require(event.tags.first { $0.first == "ephemeralKey" }?.last)
+        }
+        let publicIdentifiers = inviteKeys + identities.map(\.publicKeyHex)
+        for relay in relays {
+            for event in relay.sentEvents {
+                #expect(event.kind == 1060)
+                #expect(event.tags.filter { $0.first == "v" } == [["v", "2"]])
+                let wire = try event.jsonString()
+                #expect(publicIdentifiers.allSatisfy { !wire.contains($0) })
+                #expect(!wire.contains("crossed-invite-"))
+                #expect(!event.tags.contains { $0.first == "p" })
+            }
+            for subscription in relay.subscriptions {
+                let wire = String(decoding: try JSONEncoder().encode(subscription.filter), as: UTF8.self)
+                #expect(publicIdentifiers.allSatisfy { !wire.contains($0) })
+                #expect(subscription.filter.kinds == [1060])
+            }
+        }
     }
 
     @Test("Unanswered invites retry within one bounded authenticated attempt", arguments: [false, true], [false, true])
@@ -2789,11 +2843,11 @@ struct NdrOutOfBandTransportTests {
         let recipient = try NostrIdentity.generate()
         let tagged = try signedKind1060Event(
             identity: sender,
-            tags: [["p", recipient.publicKeyHex]]
+            tags: [["v", "2"], ["p", recipient.publicKeyHex]]
         )
         let tagless = try signedKind1060Event(
             identity: sender,
-            tags: []
+            tags: [["v", "2"]]
         )
 
         #expect(
@@ -2806,6 +2860,10 @@ struct NdrOutOfBandTransportTests {
                 makePublishAction(tagless)
             )?.id == tagless.id
         )
+        for tags in [[], [["v", "1"]], [["v", "2"], ["v", "2"]], [["v", "2", "extra"]]] {
+            let obsolete = try signedKind1060Event(identity: sender, tags: tags)
+            #expect(NdrNostrService.validatedPublishAction(makePublishAction(obsolete)) == nil)
+        }
     }
 
     @Test("Two native managers handshake, send, decrypt, and restart")
@@ -3112,6 +3170,32 @@ struct NdrOutOfBandTransportTests {
             sessionMarkerStore:
                 sessionMarkerStore ?? InMemoryNdrSessionMarkerStore()
         )
+    }
+
+    private struct LegacyPairwiseFixture: Decodable {
+        struct Peer: Decodable {
+            let privateKeyHex: String
+            let invite: String
+            let stateFile: String
+            let stateBase64: String
+        }
+        let sourceRevision: String
+        let synthetic: Bool
+        let peers: [Peer]
+    }
+
+    private func loadLegacyPairwiseFixture() throws -> LegacyPairwiseFixture {
+        #if SWIFT_PACKAGE
+        let bundle = Bundle.module
+        #else
+        let bundle = Bundle(for: MockKeychain.self)
+        #endif
+        let url = try #require(bundle.url(forResource: "legacy-pairwise-state", withExtension: "json"))
+        let fixture = try JSONDecoder().decode(LegacyPairwiseFixture.self, from: Data(contentsOf: url))
+        #expect(fixture.synthetic)
+        #expect(fixture.sourceRevision == "6177add831597f2e66f34ade3717c6201852cbdf")
+        try #require(fixture.peers.count == 2)
+        return fixture
     }
 
     private func identityKeychain(_ identity: NostrIdentity) throws -> MockKeychain {

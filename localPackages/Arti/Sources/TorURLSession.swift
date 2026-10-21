@@ -20,6 +20,19 @@ public final class TorURLSession {
         useTorProxy ? torSession : defaultSession
     }
 
+    /// A new transport scope for one private publish; retain only the selected
+    /// proxy route, never cookies, credentials, caches or shared connections.
+    public func privatePublishSession() -> URLSession {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.connectionProxyDictionary = session.configuration.connectionProxyDictionary
+        cfg.httpCookieStorage = nil
+        cfg.httpShouldSetCookies = false
+        cfg.urlCredentialStorage = nil
+        cfg.urlCache = nil
+        cfg.waitsForConnectivity = true
+        return URLSession(configuration: cfg)
+    }
+
     // Recreate sessions so new clients bind to the fresh SOCKS/control ports after a Tor restart.
     public func rebuild() {
         defaultSession = TorURLSession.makeDefaultSession()
