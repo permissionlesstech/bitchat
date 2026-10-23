@@ -83,4 +83,17 @@ final class RequestSyncManager {
     var debugPendingRequestCount: Int {
         queue.sync { pendingRequests.count }
     }
+
+    #if DEBUG
+    /// Test-only. `registerRequest` enqueues a barrier for a dispatch
+    /// worker; a test that then reads through `isValidResponse` waits on
+    /// it, and with every cooperative-pool thread parked in such a wait
+    /// the barrier never runs (#1339). Inline needs no worker.
+    func _test_registerRequestNow(to peerID: PeerID) {
+        let now = self.now()
+        queue.sync(flags: .barrier) {
+            self.pendingRequests[peerID] = now
+        }
+    }
+    #endif
 }
