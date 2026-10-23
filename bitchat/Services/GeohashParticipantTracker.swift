@@ -77,10 +77,12 @@ final class GeohashParticipantTracker: ObservableObject {
         }
     }
 
-    /// Record activity from a participant in the current active geohash
-    func recordParticipant(pubkeyHex: String, seenAt: Date = Date()) {
-        guard let gh = activeGeohash else { return }
-        recordParticipant(pubkeyHex: pubkeyHex, geohash: gh, seenAt: seenAt)
+    /// Record activity from a participant in the current active geohash.
+    /// Returns `false`, recording nothing, when no geohash is active.
+    @discardableResult
+    func recordParticipant(pubkeyHex: String, seenAt: Date = Date()) -> Bool {
+        guard let gh = activeGeohash else { return false }
+        return recordParticipant(pubkeyHex: pubkeyHex, geohash: gh, seenAt: seenAt)
     }
 
     /// Record activity from a participant in a specific geohash.
@@ -88,31 +90,34 @@ final class GeohashParticipantTracker: ObservableObject {
     /// `seenAt` is when the activity happened, clamped to now: arrival time
     /// for live events, the event's own timestamp for history relays replay
     /// on subscribe. Replayed history older than the activity window must
-    /// not make its authors count as present.
+    /// not make its authors count as present. Returns whether the activity
+    /// counted, i.e. fell inside the window.
     ///
     /// Runs for every inbound geohash event, so the common case — someone
     /// already present sending a heartbeat or message — only moves their
     /// timestamp. The roster is republished only when someone becomes
     /// visible; departures are picked up by the refresh timer.
-    func recordParticipant(pubkeyHex: String, geohash: String, seenAt: Date = Date()) {
+    @discardableResult
+    func recordParticipant(pubkeyHex: String, geohash: String, seenAt: Date = Date()) -> Bool {
         let now = Date()
         let cutoff = now.addingTimeInterval(activityCutoff)
         let stamp = min(seenAt, now)
-        guard stamp >= cutoff else { return }
+        guard stamp >= cutoff else { return false }
 
         let key = pubkeyHex.lowercased()
         let previous = participants[geohash]?[key]
-        if let previous, previous >= stamp { return }
+        if let previous, previous >= stamp { return true }
         participants[geohash, default: [:]][key] = stamp
 
         let wasActive = previous.map { $0 >= cutoff } ?? false
-        guard !wasActive else { return }
+        guard !wasActive else { return true }
         // Someone newly counts as present here: participant counts for
         // this geohash changed (sampled channels included).
         objectWillChange.send()
         if activeGeohash == geohash {
             refresh()
         }
+        return true
     }
 
     /// A participant's display name may have changed (a nickname was learned

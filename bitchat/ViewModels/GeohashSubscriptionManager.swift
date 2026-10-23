@@ -47,7 +47,8 @@ protocol GeohashSubscriptionContext: AnyObject {
     func startGeoParticipantRefreshTimer()
     func stopGeoParticipantRefreshTimer()
     func setActiveParticipantGeohash(_ geohash: String?)
-    func recordGeoParticipant(pubkeyHex: String, seenAt: Date)
+    @discardableResult
+    func recordGeoParticipant(pubkeyHex: String, seenAt: Date) -> Bool
     func markGeoTeleported(_ pubkeyHexLowercased: String)
     func clearGeoTeleported(_ pubkeyHexLowercased: String)
     func clearTeleportedGeo()

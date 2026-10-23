@@ -341,6 +341,30 @@ struct GeohashParticipantTrackerTests {
         _ = cancellable
     }
 
+    /// The inbound pipeline marks a teleport tag only when the activity
+    /// carrying it counted. Activity that makes no one present must report
+    /// false, or its tag leaves a marker the roster never prunes; activity
+    /// from someone already present must report true, or their live teleport
+    /// tags would stop marking them.
+    @Test func recordParticipant_reportsWhetherTheActivityCounted() async {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        let now = Date()
+
+        // No channel open: nothing is recorded.
+        #expect(!tracker.recordParticipant(pubkeyHex: "pubkey1"))
+
+        tracker.setActiveGeohash("abc123")
+        #expect(!tracker.recordParticipant(pubkeyHex: "pubkey1", seenAt: now.addingTimeInterval(-600)))
+        // Arriving, then a heartbeat from someone already present.
+        #expect(tracker.recordParticipant(pubkeyHex: "pubkey1", seenAt: now.addingTimeInterval(-60)))
+        #expect(tracker.recordParticipant(pubkeyHex: "pubkey1"))
+        // A late copy of earlier activity that is still inside the window.
+        #expect(tracker.recordParticipant(pubkeyHex: "pubkey1", seenAt: now.addingTimeInterval(-200)))
+        #expect(tracker.participantCount(for: "abc123") == 1)
+    }
+
     @Test func recordParticipant_neverMovesActivityBackwards() async {
         let tracker = GeohashParticipantTracker()
         let context = MockParticipantContext()

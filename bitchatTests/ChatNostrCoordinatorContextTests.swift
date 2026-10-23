@@ -163,10 +163,12 @@ private final class MockChatNostrContext: ChatNostrContext {
     func startGeoParticipantRefreshTimer() { refreshTimerStartCount += 1 }
     func stopGeoParticipantRefreshTimer() { refreshTimerStopCount += 1 }
     func setActiveParticipantGeohash(_ geohash: String?) { activeParticipantGeohashes.append(geohash) }
-    func recordGeoParticipant(pubkeyHex: String, seenAt: Date) {
+    func recordGeoParticipant(pubkeyHex: String, seenAt: Date) -> Bool {
         recordedParticipants.append(pubkeyHex)
         recordedParticipantTimes.append(seenAt)
         presenceCallLog.append("record:\(pubkeyHex)")
+        // Like the tracker: activity older than the window doesn't count.
+        return seenAt >= Date().addingTimeInterval(-TransportConfig.uiRecentCutoffFiveMinutesSeconds)
     }
 
     func recordGeoParticipant(pubkeyHex: String, geohash: String, seenAt: Date) {
@@ -247,6 +249,18 @@ private func drainMainQueue() async {
     for _ in 0..<5 {
         await Task.yield()
     }
+}
+
+/// A signed geohash message carrying the teleport tag, sent at `sentAt`
+/// (the `NostrProtocol` builder always stamps now).
+private func teleportedGeohashEvent(from sender: NostrIdentity, sentAt: Date) throws -> NostrEvent {
+    try NostrEvent(
+        pubkey: sender.publicKeyHex,
+        createdAt: sentAt,
+        kind: .ephemeralEvent,
+        tags: [["g", "u4pruyd"], ["t", "teleport"]],
+        content: "from earlier"
+    ).sign(with: sender.schnorrSigningKey())
 }
 
 // MARK: - Coordinator Tests Against Mock Context
@@ -386,6 +400,31 @@ struct ChatNostrCoordinatorContextTests {
         await drainMainQueue()
 
         #expect(context.recordedParticipantTimes == [Date(timeIntervalSince1970: TimeInterval(event.created_at))])
+    }
+
+    /// A teleport tag on replayed history too old to count as presence must
+    /// not mark its author, on either inbound path: markers are pruned only
+    /// as the roster changes, so one set for someone absent would still be
+    /// there when they came back. Recent history still marks.
+    @Test @MainActor
+    func replayedTeleportTag_marksOnlyAuthorsWhoseActivityStillCounts() async throws {
+        let context = MockChatNostrContext()
+        let coordinator = ChatNostrCoordinator(context: context)
+
+        let longGone = try NostrIdentity.generate()
+        let alsoLongGone = try NostrIdentity.generate()
+        let stillHere = try NostrIdentity.generate()
+        // Ten minutes old: past the five-minute activity window.
+        let expired = try teleportedGeohashEvent(from: longGone, sentAt: Date().addingTimeInterval(-600))
+        let expiredOnResubscribe = try teleportedGeohashEvent(from: alsoLongGone, sentAt: Date().addingTimeInterval(-600))
+        let recent = try teleportedGeohashEvent(from: stillHere, sentAt: Date().addingTimeInterval(-60))
+
+        coordinator.inbound.handleNostrEvent(expired, isHistoryReplay: true)
+        coordinator.inbound.subscribeNostrEvent(expiredOnResubscribe, isHistoryReplay: true)
+        coordinator.inbound.handleNostrEvent(recent, isHistoryReplay: true)
+        await drainMainQueue()
+
+        #expect(context.teleportedKeys == [stillHere.publicKeyHex.lowercased()])
     }
 
     /// The open channel is usually also a sampled cell. Its own subscription
