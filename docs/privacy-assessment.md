@@ -75,6 +75,7 @@ Residual risk: Nostr relay retention and logging are outside project control. Pu
 - Selected/bookmarked geohashes, teleport flags, and display names persist in local preferences; a fine geohash can identify a small area.
 - Friendly place names use `CLGeocoder.reverseGeocodeLocation`. Apple may process the supplied location under its own privacy terms, so this operation is not accurately described as wholly on-device.
 - Automatic presence is limited to lower-precision geohashes; precise posts occur through user-selected channels, notes, notices, or the bridge behavior presented in the UI.
+- While the app is in the foreground with location access granted, background sampling subscribes to the device's real cells at every level except building (block, ~150 m, included); the building cell joins only after the session's nearby-notes reveal. The presence heartbeat (kind 20001, every 40–80 s) goes only to the region, province, and city cells, whatever channel is on screen. The in-app sensitive-areas guide states this without the levels, so it stays true if they change.
 
 ## Logging and Telemetry
 
@@ -119,3 +120,4 @@ The panic action clears identity/session state, preferences, location state, gro
 - Treat geohash precision, bridge-cell changes, new relay tags, and announce fields as privacy-surface changes.
 - Re-run real-device Bluetooth, background/locked-device recovery, location revocation, and audio-route checks; simulators cannot validate the physical side of those behaviors.
 - Check what a new notification discloses on a locked screen, and that the app-switcher snapshot is covered, whenever notification or scene-lifecycle code changes.
+- Re-read the in-app sensitive-areas guide (`app_info.sensitive.*`) whenever panic wipe, location sampling or presence, verification, or identity behavior changes.
