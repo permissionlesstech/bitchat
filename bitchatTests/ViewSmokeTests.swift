@@ -1135,7 +1135,6 @@ struct ViewSmokeTests {
         let geohash = GeohashChannel(level: .city, geohash: "u4pru")
         let presentations: [ContentPeopleListView.Presentation] = [
             .sheet,
-            .column(headerHeight: 44, trailingCornerReach: 55),
             .popover(onClose: {}, onShowFingerprint: { _ in })
         ]
 
@@ -1587,17 +1586,9 @@ struct ViewSmokeTests {
         #expect(shownInPopover == [peerID])
         #expect(chrome.showingFingerprintFor == nil)
 
-        // The sheet pushes the app-wide one, and the column shows it as the
-        // root's sheet, as before.
-        let presentations: [ContentPeopleListView.Presentation] = [
-            .sheet,
-            .column(headerHeight: 44, trailingCornerReach: 0)
-        ]
-        for presentation in presentations {
-            chrome.clearFingerprint()
-            ContentPeopleListView.showFingerprint(for: peerID, presentation: presentation, appChromeModel: chrome)
-            #expect(chrome.showingFingerprintFor == peerID)
-        }
+        // The sheet pushes the app-wide one, as before.
+        ContentPeopleListView.showFingerprint(for: peerID, presentation: .sheet, appChromeModel: chrome)
+        #expect(chrome.showingFingerprintFor == peerID)
         #expect(shownInPopover == [peerID])
     }
 

@@ -85,15 +85,6 @@ struct ContentPanePolicyTests {
         }
     }
 
-    /// #1792's columns until the panes land: the selection says.
-    @Test
-    func columnsScreenshotFlagFollowsTheSelectionOnlyWhenSplit() {
-        #expect(SplitLayoutScreenshotPolicy.columnsShowLocation(isSplit: true, selectedChannel: .location(geohash)) == true)
-        #expect(SplitLayoutScreenshotPolicy.columnsShowLocation(isSplit: true, selectedChannel: .mesh) == false)
-        #expect(SplitLayoutScreenshotPolicy.columnsShowLocation(isSplit: false, selectedChannel: .location(geohash)) == nil)
-        #expect(SplitLayoutScreenshotPolicy.columnsShowLocation(isSplit: false, selectedChannel: .mesh) == nil)
-    }
-
     /// The trailing composer works in the geohash on screen, or the one a
     /// DM covers, which scopes a geohash DM; the picker has no composer.
     @Test

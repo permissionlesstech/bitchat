@@ -526,10 +526,6 @@ struct ContentPeopleListView: View {
         /// leaves an open conversation.
         case sheet
         #if os(iOS)
-        /// #1792's people column beside the timeline: no close button, and
-        /// a title row as tall as the bar beside it. It goes when the split
-        /// layout's panes replace that column.
-        case column(headerHeight: CGFloat, trailingCornerReach: CGFloat)
         /// A pane's people popover in the split layout. Closing it never
         /// ends a conversation; a row tap opens the DM and closes the
         /// popover once the DM is open, and a fingerprint shows in the
@@ -545,9 +541,6 @@ struct ContentPeopleListView: View {
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var peerListModel: PeerListModel
     @Environment(\.dismiss) private var dismiss
-    #if os(iOS)
-    @Environment(\.appTheme) private var theme
-    #endif
     @ThemedPalette private var palette
 
     @Binding var showSidebar: Bool
@@ -587,7 +580,6 @@ struct ContentPeopleListView: View {
                     }
                     closeButton
                 }
-                .frame(minHeight: titleRowMinHeight)
 
                 // The mesh sheet titles its sections inline (#mesh / across
                 // the bridge / groups) — no subtitle or count up here.
@@ -599,13 +591,8 @@ struct ContentPeopleListView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, titleTopPadding)
-            .padding(.bottom, titleBottomPadding)
-            // The content sits 16pt in; themedSurface adds no inset.
-            .padding(.trailing, TopCornerClearance.padding(
-                forReach: titleTrailingCornerReach,
-                contentInset: 16
-            ))
+            .padding(.top, 16)
+            .padding(.bottom, 12)
             .themedSurface()
 
             ScrollView {
@@ -712,8 +699,6 @@ struct ContentPeopleListView: View {
                 }
             }
         #if os(iOS)
-        case .column:
-            EmptyView()
         case .popover(let onClose, _):
             // A DM open beside the popover stays open.
             SheetCloseButton(action: onClose)
@@ -727,9 +712,6 @@ struct ContentPeopleListView: View {
             peerListModel.startConversation(with: peerID)
             showSidebar = true
         #if os(iOS)
-        case .column:
-            peerListModel.startConversation(with: peerID)
-            showSidebar = true
         case .popover(let onClose, _):
             // The popover stays when no DM opened (a blocked peer's): it
             // would otherwise close on nothing.
@@ -746,8 +728,6 @@ struct ContentPeopleListView: View {
         case .sheet:
             showSidebar = true
         #if os(iOS)
-        case .column:
-            showSidebar = true
         case .popover(let onClose, _):
             onClose()
         #endif
@@ -755,8 +735,8 @@ struct ContentPeopleListView: View {
     }
 
     /// Where a fingerprint asked for from the list shows: the people sheet
-    /// pushes the app-wide one, which beside the column is the root's sheet;
-    /// a popover pushes its own, which can't outlive it (E13).
+    /// pushes the app-wide one; a popover pushes its own, which can't
+    /// outlive it (E13).
     static func showFingerprint(
         for peerID: PeerID,
         presentation: Presentation,
@@ -766,8 +746,6 @@ struct ContentPeopleListView: View {
         case .sheet:
             appChromeModel.showFingerprint(for: peerID)
         #if os(iOS)
-        case .column:
-            appChromeModel.showFingerprint(for: peerID)
         case .popover(_, let onShowFingerprint):
             onShowFingerprint(peerID)
         #endif
@@ -788,43 +766,6 @@ struct ContentPeopleListView: View {
     }
     #endif
 
-    private var titleRowMinHeight: CGFloat? {
-        #if os(iOS)
-        if case .column(let headerHeight, _) = presentation {
-            return headerHeight
-        }
-        #endif
-        return nil
-    }
-
-    private var titleTopPadding: CGFloat {
-        #if os(iOS)
-        if case .column = presentation {
-            // Level with the main header, which glass floats as a panel
-            // 4pt below the top (themedChromePanel).
-            return theme.usesGlassChrome ? 4 : 0
-        }
-        #endif
-        return 16
-    }
-
-    private var titleBottomPadding: CGFloat {
-        #if os(iOS)
-        if case .column = presentation {
-            return 0
-        }
-        #endif
-        return 12
-    }
-
-    private var titleTrailingCornerReach: CGFloat {
-        #if os(iOS)
-        if case .column(_, let trailingCornerReach) = presentation {
-            return trailingCornerReach
-        }
-        #endif
-        return 0
-    }
 }
 
 private extension ContentPeopleListView {
