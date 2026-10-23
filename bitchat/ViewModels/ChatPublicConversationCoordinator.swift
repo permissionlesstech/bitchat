@@ -26,6 +26,10 @@ protocol ChatPublicConversationContext: AnyObject {
     var myPeerID: PeerID { get }
     /// Signals that message state changed so observers refresh (e.g. `objectWillChange.send()`).
     func notifyUIChanged()
+    /// Whether a public conversation's timeline is on screen: the active
+    /// channel's, plus #mesh while the split layout pins it beside the
+    /// active channel. Arrivals for on-screen timelines are batched.
+    func isPublicConversationOnScreen(_ conversationID: ConversationID) -> Bool
 
     // MARK: Public conversation store (single-writer intents)
     /// Appends a public message in timestamp order. Returns `false` when a
@@ -87,7 +91,11 @@ protocol ChatPublicConversationContext: AnyObject {
     func cachedStablePeerID(for shortPeerID: PeerID) -> PeerID?
 
     // MARK: Content dedup & formatting
+    /// Unscoped content key: the rate limiter's content buckets.
     func normalizedContentKey(_ content: String) -> String
+    /// Content-window key for `content` in `conversationID` (scoped per
+    /// conversation; see `MessageDeduplicationService.contentKey(_:in:)`).
+    func contentKey(for content: String, in conversationID: ConversationID) -> String
     func contentTimestamp(forKey key: String) -> Date?
     func recordContentKey(_ key: String, timestamp: Date)
     /// Pre-renders the message so the formatting cache is warm before display.
@@ -142,8 +150,16 @@ extension ChatViewModel: ChatPublicConversationContext {
         publicMessagePipeline.enqueue(message, to: conversationID)
     }
 
+    func isPublicConversationOnScreen(_ conversationID: ConversationID) -> Bool {
+        conversations.isPublicConversationOnScreen(conversationID)
+    }
+
     func normalizedContentKey(_ content: String) -> String {
         deduplicationService.normalizedContentKey(content)
+    }
+
+    func contentKey(for content: String, in conversationID: ConversationID) -> String {
+        deduplicationService.contentKey(content, in: conversationID)
     }
 
     func contentTimestamp(forKey key: String) -> Date? {
@@ -369,8 +385,9 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
             timestamp: Date(),
             isRelay: false
         )
-        context.appendPublicMessage(systemMessage, to: ConversationID(channelID: context.activeChannel))
-        let contentKey = context.normalizedContentKey(systemMessage.content)
+        let conversationID = ConversationID(channelID: context.activeChannel)
+        context.appendPublicMessage(systemMessage, to: conversationID)
+        let contentKey = context.contentKey(for: systemMessage.content, in: conversationID)
         context.recordContentKey(contentKey, timestamp: systemMessage.timestamp)
     }
 
@@ -466,12 +483,13 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
         guard !finalMessage.content.trimmed.isEmpty else { return }
 
         // Resolve the destination conversation. System messages surface on
-        // the active channel (matching their old visible-only routing); geo
-        // messages require a current geohash, mesh messages always land in
-        // the mesh conversation.
+        // the active channel (matching their old visible-only routing),
+        // except a mesh or bridged peer's beside a pinned #mesh (see
+        // `systemLineDestination`); geo messages require a current geohash,
+        // mesh messages always land in the mesh conversation.
         let destination: ConversationID?
         if isSystem {
-            destination = ConversationID(channelID: context.activeChannel)
+            destination = systemLineDestination(for: finalMessage, isGeo: isGeo)
         } else if isGeo {
             destination = context.currentGeohash.map { .geohash($0.lowercased()) }
         } else {
@@ -490,17 +508,11 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
             if archivedEchoKeys.contains(key) { return }
         }
 
-        let channelMatches: Bool = {
-            switch context.activeChannel {
-            case .mesh: return !isGeo || isSystem
-            case .location: return isGeo || isSystem
-            }
-        }()
-
-        if channelMatches {
-            // Visible-channel arrivals are batched: the pipeline's ~80 ms
-            // flush commits them to the store (which dedups by ID), keeping
-            // the deliberate UI flush cadence.
+        if context.isPublicConversationOnScreen(destination) {
+            // On-screen arrivals are batched: the pipeline's ~80 ms flush
+            // commits them to the store (which dedups by ID), keeping the
+            // deliberate UI flush cadence, and content-dedups them per
+            // conversation. That covers both timelines of the split layout.
             guard !context.publicConversationContainsMessage(withID: finalMessage.id, in: destination) else { return }
             context.enqueuePublicMessage(finalMessage, to: destination)
         } else {
@@ -565,8 +577,8 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
         #endif
     }
 
-    func pipeline(_: PublicMessagePipeline, normalizeContent content: String) -> String {
-        context.normalizedContentKey(content)
+    func pipeline(_: PublicMessagePipeline, contentKeyFor content: String, in conversationID: ConversationID) -> String {
+        context.contentKey(for: content, in: conversationID)
     }
 
     func pipeline(_: PublicMessagePipeline, contentTimestampForKey key: String) -> Date? {
@@ -600,6 +612,21 @@ private extension ChatPublicConversationCoordinator {
             }
         }
         return "name:" + message.sender.lowercased()
+    }
+
+    /// Where an inbound system line lands. A peer's action line (a hug, a
+    /// slap, an old client's screenshot notice) arrives as a system line that
+    /// keeps its sender, and so does a peer whose nickname is "system". While
+    /// the split layout pins #mesh on screen beside the active channel, a mesh
+    /// or bridged sender's line lands in #mesh, where it was said, instead of
+    /// the geohash beside it. Any other system line lands on the active
+    /// channel, as before. Compact and macOS are unchanged: there #mesh is on
+    /// screen only while it is the active channel.
+    func systemLineDestination(for message: BitchatMessage, isGeo: Bool) -> ConversationID {
+        if message.senderPeerID != nil, !isGeo, context.isPublicConversationOnScreen(.mesh) {
+            return .mesh
+        }
+        return ConversationID(channelID: context.activeChannel)
     }
 
     /// Whether I wrote an inbound message (a gossip replay of my mesh text, or

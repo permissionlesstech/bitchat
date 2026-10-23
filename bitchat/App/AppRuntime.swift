@@ -18,7 +18,13 @@ final class AppRuntime: ObservableObject {
     /// (docs/CONVERSATION-STORE-DESIGN.md). Owned here; the feature models
     /// and `ChatViewModel` observe and mutate it through its intent API.
     let conversations: ConversationStore
+    /// The selected channel's timeline: the one compact timeline, and the
+    /// split layout's trailing pane.
     let publicChatModel: PublicChatModel
+    #if os(iOS)
+    /// The split layout's leading pane: #mesh, whatever is selected.
+    let meshPaneTimeline: PublicChatModel
+    #endif
     let privateInboxModel: PrivateInboxModel
     let privateConversationModel: PrivateConversationModel
     let verificationModel: VerificationModel
@@ -61,6 +67,9 @@ final class AppRuntime: ObservableObject {
             locationManager: locationManager
         )
         self.publicChatModel = PublicChatModel(conversations: conversations)
+        #if os(iOS)
+        self.meshPaneTimeline = PublicChatModel(conversations: conversations, pinnedTo: .mesh)
+        #endif
         self.privateInboxModel = PrivateInboxModel(conversations: conversations)
         self.locationChannelsModel = LocationChannelsModel(manager: locationManager)
         self.privateConversationModel = PrivateConversationModel(
@@ -178,6 +187,22 @@ final class AppRuntime: ObservableObject {
         if url.scheme == "bitchat", url.host == "share" {
             checkForSharedContent()
         }
+
+        // External #geohash links (geo-activity notification taps, shared
+        // invites) open the channel here, once. Message lists only act on the
+        // links they draw: each mounted list (two in the split layout) would
+        // open, and switch to, the channel again.
+        if let geohash = Self.geohashLinkTarget(url), chatViewModel.networkActivationAllowed {
+            locationChannelsModel.openLocationChannel(for: geohash)
+        }
+    }
+
+    /// The geohash a `bitchat://geohash/<geohash>` link names, or nil for any
+    /// other URL. `openLocationChannel(for:)` validates it.
+    nonisolated static func geohashLinkTarget(_ url: URL) -> String? {
+        guard url.scheme == "bitchat", url.host == "geohash" else { return nil }
+        let geohash = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return geohash.isEmpty ? nil : geohash
     }
 
     func handleDidBecomeActiveNotification() {

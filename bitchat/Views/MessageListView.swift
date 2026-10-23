@@ -42,9 +42,81 @@ private struct TimelineSignature: Equatable {
     }
 }
 
+/// The one timeline model a message list observes: a public channel's
+/// model, or the private inbox for a DM list.
+@MainActor
+private protocol MessageListTimelineModel: ObservableObject {
+    /// The public channel the timeline belongs to, published together with
+    /// its messages; nil for private timelines.
+    var listChannel: ChannelID? { get }
+    /// The rows to show (`privatePeer` names the private conversation).
+    func listMessages(for privatePeer: PeerID?) -> [BitchatMessage]
+}
+
+extension PublicChatModel: MessageListTimelineModel {
+    fileprivate var listChannel: ChannelID? { channel }
+
+    fileprivate func listMessages(for _: PeerID?) -> [BitchatMessage] {
+        messages
+    }
+}
+
+extension PrivateInboxModel: MessageListTimelineModel {
+    fileprivate var listChannel: ChannelID? { nil }
+
+    fileprivate func listMessages(for privatePeer: PeerID?) -> [BitchatMessage] {
+        messages(for: privatePeer)
+    }
+}
+
+/// A conversation's message list. Each list observes exactly one timeline
+/// model, the one it renders: a public list its `PublicChatModel` (the split
+/// layout's #mesh pane is handed the pinned one), a DM list the private
+/// inbox. So a message in another timeline (the open DM beside the #mesh
+/// pane, a public channel under a DM) never re-renders the list.
 struct MessageListView: View {
-    @EnvironmentObject private var publicChatModel: PublicChatModel
-    @EnvironmentObject private var privateInboxModel: PrivateInboxModel
+    let privatePeer: PeerID?
+    @Binding var isAtBottom: Bool
+    @Binding var messageText: String
+    @Binding var selectedMessageSender: String?
+    @Binding var selectedMessageSenderID: PeerID?
+    @Binding var imagePreviewURL: URL?
+    @Binding var windowCountPublic: Int
+    @Binding var windowCountPrivate: [PeerID: Int]
+    @Binding var showSidebar: Bool
+
+    var isTextFieldFocused: FocusState<Bool>.Binding
+
+    var body: some View {
+        if privatePeer == nil {
+            content(observing: PublicChatModel.self)
+        } else {
+            content(observing: PrivateInboxModel.self)
+        }
+    }
+
+    private func content<Timeline: MessageListTimelineModel>(
+        observing _: Timeline.Type
+    ) -> MessageListContent<Timeline> {
+        MessageListContent(
+            privatePeer: privatePeer,
+            isAtBottom: $isAtBottom,
+            messageText: $messageText,
+            selectedMessageSender: $selectedMessageSender,
+            selectedMessageSenderID: $selectedMessageSenderID,
+            imagePreviewURL: $imagePreviewURL,
+            windowCountPublic: $windowCountPublic,
+            windowCountPrivate: $windowCountPrivate,
+            showSidebar: $showSidebar,
+            isTextFieldFocused: isTextFieldFocused
+        )
+    }
+}
+
+/// `MessageListView` over its one timeline model.
+private struct MessageListContent<Timeline: MessageListTimelineModel>: View {
+    /// The timeline this list renders, and the only one it observes.
+    @EnvironmentObject private var timeline: Timeline
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
@@ -124,17 +196,17 @@ struct MessageListView: View {
 
         VStack(spacing: 0) {
         // Notes pinned to this place stay visible while chatting — a
-        // conversation starting must not hide what's left here.
-        if privatePeer == nil,
-           case .mesh = locationChannelsModel.selectedChannel,
-           nearbyNotes.noteCount > 0 {
+        // conversation starting must not hide what's left here. Keyed on the
+        // timeline this list shows, not the selection: the split layout's
+        // #mesh list renders beside a selected geohash.
+        if channelPolicy.showsNotesStrip(noteCount: nearbyNotes.noteCount) {
             notesHereStrip
         }
         GeometryReader { geometry in
         ScrollViewReader { proxy in
             ScrollView {
-                if messageItems.isEmpty && privatePeer == nil {
-                    publicEmptyState(fillHeight: geometry.size.height)
+                if messageItems.isEmpty, let emptyState = channelPolicy.emptyState {
+                    publicEmptyState(emptyState, fillHeight: geometry.size.height)
                 }
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(messageItems) { item in
@@ -245,7 +317,7 @@ struct MessageListView: View {
                 // Only carried history on screen: the ambient layer (radar,
                 // sightings, live hints) stays visible below it instead of
                 // vanishing the moment echoes exist.
-                if privatePeer == nil, showsAmbientFooter(messageItems: messageItems) {
+                if channelPolicy.showsAmbientFooter(below: messageItems.lazy.map(\.message)) {
                     MeshEmptyStateView(compact: true, bluetoothAvailable: bluetoothCanScan)
                         .padding(.horizontal, 12)
                         .padding(.top, 20)
@@ -257,14 +329,10 @@ struct MessageListView: View {
                     jumpToLatestPill(proxy: proxy)
                 }
             }
-            // External deep links (notifications, shared #geohash invites).
-            // Every list on screen receives them, so sender links, which only
-            // in-app text produces, are left to the list that drew them (see
-            // the openURL action below).
-            .onOpenURL { url in
-                guard url.host != "user" else { return }
-                handleOpenURL(url)
-            }
+            // No onOpenURL: every mounted list would receive each external
+            // link (two lists in the split layout, or a DM over the public
+            // timeline). AppRuntime opens external #geohash links once; the
+            // links a list draws act through the openURL action below.
             .onTapGesture(count: 3) {
                 if actionsTargetThisList {
                     showClearConfirmation = true
@@ -367,7 +435,7 @@ struct MessageListView: View {
         }
         .onAppear { updateNotesCounterHold() }
         .onDisappear { releaseNotesCounterHold() }
-        .onChange(of: locationChannelsModel.selectedChannel) { _ in updateNotesCounterHold() }
+        .onChange(of: timeline.listChannel) { _ in updateNotesCounterHold() }
         .onChange(of: privatePeer) { _ in updateNotesCounterHold() }
         .environment(\.openURL, OpenURLAction { url in
             // Intercept custom cashu: links created in attributed text
@@ -380,10 +448,9 @@ struct MessageListView: View {
                 return .systemAction
                 #endif
             }
-            // Sender and #geohash links drawn by this list act here. Handed
-            // to the system they came back through every visible list's
-            // onOpenURL, so a name tapped in the public timeline could also
-            // raise the open DM's action dialog.
+            // Sender and #geohash links drawn by this list act here, in this
+            // list only, rather than leaving the app and coming back as
+            // external links.
             if url.scheme == "bitchat", url.host == "user" || url.host == "geohash" {
                 handleOpenURL(url)
                 return .handled
@@ -393,7 +460,7 @@ struct MessageListView: View {
     }
 }
 
-private extension MessageListView {
+private extension MessageListContent {
     /// Whether the radio could be scanning at all — the empty-state radar
     /// must not sweep over a switched-off or denied radio.
     var bluetoothCanScan: Bool {
@@ -405,15 +472,22 @@ private extension MessageListView {
 
     /// Context key of the timeline shown for `privatePeer` (the DM, or the
     /// public channel); also the prefix of its row IDs. The public key comes
-    /// from the channel PublicChatModel publishes together with its messages:
-    /// the selected channel switches one render or more before the timeline
-    /// does, and keying the old messages with the new channel re-keys (and
-    /// re-appears) every row.
+    /// from the channel this list's timeline model publishes together with
+    /// its messages, never from the selection: the selected channel switches
+    /// one render or more before the timeline does (keying the old messages
+    /// with the new channel re-keys, and re-appears, every row), and the split
+    /// layout's #mesh list renders beside a selected geohash.
     func timelineContextKey(for privatePeer: PeerID?) -> String {
         if let peer = privatePeer {
             return "dm:\(peer)"
         }
-        return publicChatModel.activeChannel.contextKey
+        // A private timeline without a peer has no rows to key.
+        return timeline.listChannel?.contextKey ?? "dm:"
+    }
+
+    /// The channel decisions of the timeline this list renders.
+    var channelPolicy: MessageListChannelPolicy {
+        MessageListChannelPolicy(channel: timeline.listChannel, privatePeer: privatePeer)
     }
 
     func windowCount(for privatePeer: PeerID?) -> Int {
@@ -499,12 +573,13 @@ private extension MessageListView {
         .buttonStyle(.plain)
     }
 
-    /// The nearby-notes counter is held whenever the mesh public timeline is
-    /// showing — the strip needs a live count before it can decide to exist.
-    /// Holding is not subscribing: nothing hits the relays until an explicit
-    /// act reveals the counter (tap-to-reveal).
+    /// The nearby-notes counter is held whenever this list shows the mesh
+    /// public timeline — the strip needs a live count before it can decide to
+    /// exist. Holding is not subscribing: nothing hits the relays until an
+    /// explicit act reveals the counter (tap-to-reveal). The counter is
+    /// ref-counted, so two lists showing #mesh hold it twice.
     func updateNotesCounterHold() {
-        let shouldHold = privatePeer == nil && locationChannelsModel.selectedChannel.isMesh
+        let shouldHold = channelPolicy.holdsNotesCounter
         guard shouldHold != holdsNotesCounter else { return }
         holdsNotesCounter = shouldHold
         if shouldHold {
@@ -520,34 +595,25 @@ private extension MessageListView {
         NearbyNotesCounter.shared.deactivate()
     }
 
-    /// True when the mesh timeline holds nothing but archived echoes and
-    /// system lines — no live conversation yet, so the ambient layer still
-    /// applies.
-    private func showsAmbientFooter(messageItems: [MessageDisplayItem]) -> Bool {
-        guard case .mesh = locationChannelsModel.selectedChannel,
-              !messageItems.isEmpty else { return false }
-        return messageItems.allSatisfy { $0.message.isArchivedEcho || $0.message.sender == "system" }
-    }
-
     /// Terminal-styled narration for an empty public timeline: says which
     /// channel this is, that the app is waiting for peers, and where to go
     /// next. Rendered inside the ScrollView; disappears with the first row.
     /// The mesh case fills the visible chat height so its radar can center
     /// in the space below the text.
-    func publicEmptyState(fillHeight: CGFloat) -> some View {
+    func publicEmptyState(_ emptyState: MessageListChannelPolicy.EmptyState, fillHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            switch locationChannelsModel.selectedChannel {
+            switch emptyState {
             case .mesh:
                 MeshEmptyStateView(
                     fillHeight: max(0, fillHeight - 24),
                     bluetoothAvailable: bluetoothCanScan
                 )
-            case .location(let channel):
+            case .location(let geohash):
                 emptyStateLine(
                     String(
                         format: String(localized: "content.empty.location_intro", comment: "First line of an empty geohash timeline naming the channel"),
                         locale: .current,
-                        channel.geohash
+                        geohash
                     )
                 )
                 emptyStateLine(String(localized: "content.empty.switch_hint", comment: "Empty timeline hint pointing at the channel switcher and the help screen"))
@@ -870,10 +936,7 @@ private extension MessageListView {
     }
 
     func conversationMessages(for privatePeer: PeerID?) -> [BitchatMessage] {
-        if let privatePeer {
-            return privateInboxModel.messages(for: privatePeer)
-        }
-        return publicChatModel.messages
+        timeline.listMessages(for: privatePeer)
     }
 }
 

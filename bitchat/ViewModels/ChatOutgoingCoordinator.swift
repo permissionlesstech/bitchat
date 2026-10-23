@@ -32,7 +32,9 @@ protocol ChatOutgoingContext: AnyObject {
     func addSystemMessage(_ content: String)
 
     // MARK: Content dedup
-    func normalizedContentKey(_ content: String) -> String
+    /// Content-window key for `content` in `conversationID` (scoped per
+    /// conversation; see `MessageDeduplicationService.contentKey(_:in:)`).
+    func contentKey(for content: String, in conversationID: ConversationID) -> String
     func recordContentKey(_ key: String, timestamp: Date)
 
     // MARK: Outbound routing
@@ -58,7 +60,7 @@ extension ChatViewModel: ChatOutgoingContext {
     // `isTeleported`, `handleCommand(_:)`, `updatePrivateChatPeerIfNeeded()`,
     // `sendPrivateMessage(_:to:)`, `parseMentions(from:)`,
     // `appendPublicMessage(_:to:)`, `addSystemMessage(_:)`,
-    // `normalizedContentKey(_:)`, `recordContentKey(_:timestamp:)`,
+    // `contentKey(for:in:)`, `recordContentKey(_:timestamp:)`,
     // `sendMeshMessage(_:mentions:messageID:timestamp:)`,
     // `sendGeohash(context:)`, and `deriveNostrIdentity(forGeohash:)` are
     // shared requirements with the other contexts or satisfied by existing
@@ -215,8 +217,9 @@ private extension ChatOutgoingCoordinator {
                 mentions: mentions.isEmpty ? nil : mentions
             )
 
-            context.appendPublicMessage(message, to: ConversationID(channelID: .location(channel)))
-            let contentKey = context.normalizedContentKey(message.content)
+            let conversationID = ConversationID(channelID: .location(channel))
+            context.appendPublicMessage(message, to: conversationID)
+            let contentKey = context.contentKey(for: message.content, in: conversationID)
             context.recordContentKey(contentKey, timestamp: message.timestamp)
 
             context.recordPublicActivity(forChannelKey: "geo:\(channel.geohash)")
@@ -232,7 +235,7 @@ private extension ChatOutgoingCoordinator {
     func appendLocalEcho(_ message: BitchatMessage, to conversationID: ConversationID) {
         context.appendPublicMessage(message, to: conversationID)
 
-        let contentKey = context.normalizedContentKey(message.content)
+        let contentKey = context.contentKey(for: message.content, in: conversationID)
         context.recordContentKey(contentKey, timestamp: message.timestamp)
     }
 }

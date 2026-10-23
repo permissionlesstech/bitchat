@@ -42,6 +42,11 @@ struct BitchatApp: App {
                 .environmentObject(runtime.appChromeModel)
                 .environmentObject(runtime.boardAlertsModel)
                 .environmentObject(runtime.sharedContentImportModel)
+                #if os(iOS)
+                // A plain reference, not an environment object: the root must
+                // not re-render on every mesh message (see `meshPaneTimeline`).
+                .environment(\.meshPaneTimeline, runtime.meshPaneTimeline)
+                #endif
                 .onAppear {
                     appDelegate.runtime = runtime
                     runtime.start()

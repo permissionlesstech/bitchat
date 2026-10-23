@@ -12,8 +12,8 @@ protocol ChatLiveVoiceContext: AnyObject {
     var nickname: String { get }
     var myPeerID: PeerID { get }
     var selectedPrivateChatPeer: PeerID? { get }
-    /// Whether the public mesh timeline is what's on screen (autoplay gate
-    /// for public bursts).
+    /// Whether the public mesh timeline is on screen with no private chat
+    /// open (autoplay gate for public bursts).
     var isViewingPublicMeshTimeline: Bool { get }
     func isPeerBlocked(_ peerID: PeerID) -> Bool
     func resolveNickname(for peerID: PeerID) -> String
@@ -46,8 +46,11 @@ protocol ChatLiveVoiceContext: AnyObject {
 }
 
 extension ChatViewModel: ChatLiveVoiceContext {
+    /// #mesh counts while the split layout pins it beside a selected
+    /// geohash; an open private chat still silences public bursts, so only
+    /// one conversation ever plays live at a time.
     var isViewingPublicMeshTimeline: Bool {
-        selectedPrivateChatPeer == nil && activeChannel == .mesh
+        selectedPrivateChatPeer == nil && conversations.isPublicConversationOnScreen(.mesh)
     }
 
     func appendPublicMeshMessage(_ message: BitchatMessage) {

@@ -1044,12 +1044,19 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     /// Replaces an unauthenticated bridge alias with a later authenticated
     /// radio row. In addition to both storage layers, clear the content-window
     /// marker written by an already-flushed alias or it would suppress the
-    /// genuine row during the next public-message batch.
+    /// genuine row during the next public-message batch. The marker is scoped
+    /// to the conversation the alias landed in, which is not always #mesh: an
+    /// alias that arrived as a system line (an emote-shaped text, a sender
+    /// named "system") can land on the active channel.
     @MainActor
     func removeBridgeInjectedPublicMessage(withID messageID: String) {
         publicMessagePipeline.removeMessage(withID: messageID)
-        guard let removed = conversations.removePublicMessage(withID: messageID) else { return }
-        deduplicationService.forgetContent(removed.content, ifRecordedAt: removed.timestamp)
+        guard let removed = conversations.removePublicMessageReportingConversation(withID: messageID) else { return }
+        deduplicationService.forgetContent(
+            removed.message.content,
+            in: removed.conversationID,
+            ifRecordedAt: removed.message.timestamp
+        )
     }
 
     /// Removes every message matching `predicate` from a geohash
@@ -1594,7 +1601,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
         // Clear all messages (public timelines and private chats live in the
         // single-writer ConversationStore; the derived `messages` view and
-        // the legacy mirror empty with it)
+        // the legacy mirror empty with it). Public arrivals still waiting for
+        // the batched flush (every timeline on screen, the split layout's
+        // pinned #mesh included) go first, or that flush would commit them
+        // into the wiped store.
+        publicMessagePipeline.discardAll()
         conversations.clearAll()
         pendingGeohashSystemMessages.removeAll()
 

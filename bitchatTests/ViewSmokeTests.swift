@@ -225,6 +225,70 @@ private struct ContentPeopleColumnHarness: View {
 }
 #endif
 
+/// A public `MessageListView` with its own bindings; the timeline it shows
+/// is whatever `PublicChatModel` the environment hands it.
+@MainActor
+private struct MessageListHarness: View {
+    @State private var isAtBottom = true
+    @State private var messageText = ""
+    @State private var selectedMessageSender: String?
+    @State private var selectedMessageSenderID: PeerID?
+    @State private var imagePreviewURL: URL?
+    @State private var windowCountPublic = TransportConfig.uiWindowInitialCountPublic
+    @State private var windowCountPrivate: [PeerID: Int] = [:]
+    @State private var showSidebar = false
+    @FocusState private var isTextFieldFocused: Bool
+
+    var body: some View {
+        MessageListView(
+            privatePeer: nil,
+            isAtBottom: $isAtBottom,
+            messageText: $messageText,
+            selectedMessageSender: $selectedMessageSender,
+            selectedMessageSenderID: $selectedMessageSenderID,
+            imagePreviewURL: $imagePreviewURL,
+            windowCountPublic: $windowCountPublic,
+            windowCountPrivate: $windowCountPrivate,
+            showSidebar: $showSidebar,
+            isTextFieldFocused: $isTextFieldFocused
+        )
+    }
+}
+
+#if os(iOS)
+/// Hosts `view` in a visible window, so SwiftUI runs its appear and
+/// disappear actions (a bare hosting controller never appears). Returns the
+/// teardown that takes it off screen again.
+@MainActor
+private func present<V: View>(_ view: V) -> () -> Void {
+    let host = UIHostingController(rootView: view)
+    let frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+    let window = UIApplication.shared.connectedScenes
+        .compactMap { $0 as? UIWindowScene }
+        .first
+        .map { UIWindow(windowScene: $0) } ?? UIWindow(frame: frame)
+    window.frame = frame
+    window.rootViewController = host
+    window.isHidden = false
+    host.view.layoutIfNeeded()
+    return {
+        window.isHidden = true
+        window.rootViewController = nil
+    }
+}
+
+/// How many views hold the shared nearby-notes counter. A public list takes
+/// the hold exactly when the timeline it renders is #mesh, which makes it the
+/// list's one channel decision visible from outside. Read by reflection: the
+/// count is private state of a singleton.
+@MainActor
+private func nearbyNotesHolderCount() -> Int? {
+    Mirror(reflecting: NearbyNotesCounter.shared).children
+        .first { $0.label == "activeHolders" }?
+        .value as? Int
+}
+#endif
+
 @MainActor
 @discardableResult
 private func mount<V: View>(_ view: V) -> AnyObject {
@@ -597,6 +661,74 @@ struct ViewSmokeTests {
 
         #expect(featureModels.privateConversationModel.selectedPeerID == peerID)
         #expect(featureModels.privateConversationModel.selectedHeaderState?.headerPeerID == peerID)
+    }
+
+    /// The split layout's leading list is handed the pinned #mesh model while
+    /// a geohash is selected: it renders #mesh, never the selection, as its
+    /// one channel decision visible from outside shows (the mesh-only
+    /// nearby-notes hold). Its neighbour renders the geohash it is given.
+    /// (Both are pinned so the view model's own startup selection cannot
+    /// race the test.)
+    @Test
+    func messageList_rendersItsOwnTimelineWhileAGeohashIsSelected() async {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let store = viewModel.conversations
+        let geohash = ChannelID.location(GeohashChannel(level: .city, geohash: "u4pru"))
+        // The selection the lists must not follow.
+        featureModels.locationChannelsModel.select(geohash)
+        #expect(await TestHelpers.waitUntil(
+            { featureModels.locationChannelsModel.selectedChannel == geohash },
+            timeout: TestConstants.settleTimeout
+        ))
+
+        let meshPane = PublicChatModel(conversations: store, pinnedTo: .mesh)
+        let geohashPane = PublicChatModel(conversations: store, pinnedTo: geohash)
+        store.append(BitchatMessage(
+            id: "mesh-row",
+            sender: "dave",
+            content: "hello from the mesh pane",
+            timestamp: Date(),
+            isRelay: false,
+            senderPeerID: PeerID(str: "1122334455667788")
+        ), to: .mesh)
+        store.append(BitchatMessage(
+            id: "geo-row",
+            sender: "carol#cdcd",
+            content: "hello from the geohash pane",
+            timestamp: Date(),
+            isRelay: false,
+            senderPeerID: PeerID(nostr: String(repeating: "cd", count: 32))
+        ), to: .geohash("u4pru"))
+        #expect(meshPane.messages.map(\.id) == ["mesh-row"])
+        #expect(geohashPane.messages.map(\.id) == ["geo-row"])
+
+        let bothLists = installSmokeEnvironment(
+            VStack(spacing: 0) {
+                MessageListHarness().environmentObject(meshPane)
+                MessageListHarness().environmentObject(geohashPane)
+            },
+            featureModels: featureModels
+        )
+
+        #if os(iOS)
+        let baseline = nearbyNotesHolderCount() ?? 0
+        let dismiss = present(bothLists)
+        // Both lists appear in the same pass; only the #mesh one holds.
+        let held = await TestHelpers.waitUntil(
+            { nearbyNotesHolderCount() == baseline + 1 },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(held, "holders \(String(describing: nearbyNotesHolderCount())), baseline \(baseline)")
+        #expect(nearbyNotesHolderCount() == baseline + 1)
+        dismiss()
+        #expect(await TestHelpers.waitUntil(
+            { nearbyNotesHolderCount() == baseline },
+            timeout: TestConstants.settleTimeout
+        ))
+        #else
+        _ = mount(bothLists)
+        #endif
     }
 
     #if os(iOS)
