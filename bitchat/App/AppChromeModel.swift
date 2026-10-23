@@ -21,8 +21,16 @@ final class AppChromeModel: ObservableObject {
     /// connectivity banner. Mirrored from `ChatViewModel.torBlocked`.
     @Published private(set) var torBlocked = false
     @Published var showScreenshotPrivacyWarning = false
-    /// Triple-tapping the logo asks first; the dialog lives on the header.
+    /// Raised by the logo triple-tap when `PanicGestureSettings` says to ask
+    /// first. The dialog is hosted on ContentView so it survives whatever
+    /// happens to the header chrome. The settings-pane panic button is a
+    /// separate path: it keeps its own state and dialog inside its sheet and
+    /// calls `panicClearAllData()` directly, never through here.
     @Published var showPanicConfirmation = false
+    /// The logo was triple-tapped while the gesture is switched off. Someone
+    /// who just tried to wipe under duress must be told nothing happened —
+    /// silence reads as "it worked", which is the dangerous failure here.
+    @Published var showPanicGestureDisabledAlert = false
     /// Mirrors `ChatViewModel.panicRecoveryBlocked` for the chrome: a wipe
     /// that did not commit must be visible, not just logged — the person who
     /// triggered it needs to know data may remain on the device.
@@ -30,6 +38,10 @@ final class AppChromeModel: ObservableObject {
 
     private let chatViewModel: ChatViewModel
     private let onPanicWipe: () -> Void
+    /// Where the logo-gesture preference is read from. Injectable so tests can
+    /// drive every branch of `requestPanicWipe()` through the real path with
+    /// an isolated suite, instead of writing to the shared defaults.
+    private let panicGestureDefaults: UserDefaults
     private var cancellables = Set<AnyCancellable>()
     /// The composer owns capture state above ChatViewModel. ContentView
     /// installs this hook so both panic entry points synchronously stop it.
@@ -41,10 +53,12 @@ final class AppChromeModel: ObservableObject {
     init(
         chatViewModel: ChatViewModel,
         privateInboxModel: PrivateInboxModel,
-        onPanicWipe: @escaping () -> Void = {}
+        onPanicWipe: @escaping () -> Void = {},
+        panicGestureDefaults: UserDefaults = .standard
     ) {
         self.chatViewModel = chatViewModel
         self.onPanicWipe = onPanicWipe
+        self.panicGestureDefaults = panicGestureDefaults
         self.nickname = chatViewModel.nickname
 
         bind(privateInboxModel: privateInboxModel)
@@ -120,11 +134,22 @@ final class AppChromeModel: ObservableObject {
         prepareForPanic = preparation
     }
 
-    /// Entry point for the header triple-tap: confirm before destroying.
-    /// The Settings-pane button has always confirmed; the gesture now goes
-    /// through the same dialog so a mis-tap can't wipe the device.
+    /// Entry point for the header triple-tap. Confirm-first by default: the
+    /// Settings-pane button has always confirmed, and the gesture now asks
+    /// the same question (same strings; its own dialog, on ContentView) so a
+    /// mis-tap can't wipe the device. `PanicGestureSettings` can trade that
+    /// safety for speed (`.instant`) or drop the gesture entirely (`.off`) —
+    /// the decision stays here, at the one choke point, rather than at the
+    /// gesture site.
     func requestPanicWipe() {
-        showPanicConfirmation = true
+        switch PanicGestureSettings.mode(in: panicGestureDefaults) {
+        case .instant:
+            panicClearAllData()
+        case .confirm:
+            showPanicConfirmation = true
+        case .off:
+            showPanicGestureDisabledAlert = true
+        }
     }
 
     func panicClearAllData() {
