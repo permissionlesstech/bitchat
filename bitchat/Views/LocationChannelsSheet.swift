@@ -41,7 +41,11 @@ struct LocationChannelsPicker: View {
         #if os(iOS)
         /// The split layout's trailing pane: a title row as tall as the bar
         /// beside it, and clear of the display corner it reaches into.
-        case pane(headerHeight: CGFloat, trailingCornerReach: CGFloat)
+        /// `panicEpoch` is `AppChromeModel.panicEpoch`. A panic wipe closes
+        /// the sheet, and what it held goes with it; the pane stays up, so a
+        /// new epoch drops what the pane holds and asks for a fresh fix, as
+        /// the pane does when it appears.
+        case pane(headerHeight: CGFloat, trailingCornerReach: CGFloat, panicEpoch: UInt64)
         #endif
     }
 
@@ -57,12 +61,18 @@ struct LocationChannelsPicker: View {
     @Environment(\.appTheme) private var theme
     #endif
     @ThemedPalette private var palette
-    @State private var customGeohash: String = ""
-    @State private var customError: String? = nil
-    /// Geohash waiting on the fine-precision OpSec confirmation before share.
-    @State private var pendingShareGeohash: String?
-    @State private var showSharePrecisionWarning = false
-    @State private var activeSharePayload: ChannelSharePayload?
+    /// What the picker holds of its own. A panic wipe drops all of it.
+    @State private var local = LocalState()
+
+    private struct LocalState {
+        var customGeohash = ""
+        var customError: String?
+        /// Geohash waiting on the fine-precision OpSec confirmation before
+        /// share.
+        var pendingShareGeohash: String?
+        var showSharePrecisionWarning = false
+        var activeSharePayload: ChannelSharePayload?
+    }
 
     private enum Strings {
         static let title: LocalizedStringKey = "location_channels.title"
@@ -225,24 +235,29 @@ struct LocationChannelsPicker: View {
             perform(.permissionChange, permission: newValue)
         }
         .onChange(of: locationChannelsModel.availableChannels) { _ in }
+        #if os(iOS)
+        .onChange(of: panicEpoch) { _ in
+            wipe()
+        }
+        #endif
         .confirmationDialog(
             Strings.sharePrecisionTitle,
-            isPresented: $showSharePrecisionWarning,
+            isPresented: $local.showSharePrecisionWarning,
             titleVisibility: .visible
         ) {
             Button(Strings.shareAnyway) {
-                if let gh = pendingShareGeohash {
+                if let gh = local.pendingShareGeohash {
                     presentShare(forGeohash: gh)
                 }
-                pendingShareGeohash = nil
+                local.pendingShareGeohash = nil
             }
             Button("common.cancel", role: .cancel) {
-                pendingShareGeohash = nil
+                local.pendingShareGeohash = nil
             }
         } message: {
             Text(Strings.sharePrecisionMessage)
         }
-        .sheet(item: $activeSharePayload) { payload in
+        .sheet(item: $local.activeSharePayload) { payload in
             ShareActivityView(text: payload.text)
         }
     }
@@ -264,7 +279,7 @@ struct LocationChannelsPicker: View {
         case .sheet:
             row
         #if os(iOS)
-        case .pane(let headerHeight, let trailingCornerReach):
+        case .pane(let headerHeight, let trailingCornerReach, _):
             // A fixed height, not a minimum: no child here may stretch the
             // row (the bar beside it is fixed too).
             row
@@ -305,6 +320,21 @@ struct LocationChannelsPicker: View {
     private func perform(_ event: LifecycleEvent, permission: LocationChannelManager.PermissionState) {
         Self.perform(event, presentation: presentation, permission: permission, on: locationChannelsModel)
     }
+
+    #if os(iOS)
+    /// The pane's `panicEpoch`; nil for the sheet, which the wipe closes.
+    private var panicEpoch: UInt64? {
+        guard case .pane(_, _, let panicEpoch) = presentation else { return nil }
+        return panicEpoch
+    }
+
+    /// A panic wipe: nothing typed, shown or on its way here outlives it,
+    /// and the nearby cells come from a fix taken after it.
+    private func wipe() {
+        local = LocalState()
+        perform(.panicWipe, permission: locationChannelsModel.permissionState)
+    }
+    #endif
 
     /// Selects `channel` and reports the choice. In the pane, choosing the
     /// channel that is already selected only ends browsing (E7): selecting
@@ -356,15 +386,15 @@ struct LocationChannelsPicker: View {
 
     private func requestShare(forGeohash geohash: String) {
         if ChannelShare.shouldWarn(forGeohash: geohash) {
-            pendingShareGeohash = geohash
-            showSharePrecisionWarning = true
+            local.pendingShareGeohash = geohash
+            local.showSharePrecisionWarning = true
         } else {
             presentShare(forGeohash: geohash)
         }
     }
 
     private func presentShare(forGeohash geohash: String) {
-        activeSharePayload = ChannelSharePayload(text: ChannelShare.payload(forGeohash: geohash))
+        local.activeSharePayload = ChannelSharePayload(text: ChannelShare.payload(forGeohash: geohash))
     }
 
     /// Participant counts mean "active in the last five minutes": they change
@@ -489,33 +519,33 @@ struct LocationChannelsPicker: View {
                 Text(verbatim: "#")
                     .bitchatFont(size: 14)
                     .foregroundColor(palette.secondary)
-                TextField("geohash", text: $customGeohash)
+                TextField("geohash", text: $local.customGeohash)
                     #if os(iOS)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled(true)
                     .keyboardType(.asciiCapable)
                     #endif
                     .bitchatFont(size: 14)
-                    .onChange(of: customGeohash) { newValue in
+                    .onChange(of: local.customGeohash) { newValue in
                         let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
                         let filtered = newValue
                             .lowercased()
                             .replacingOccurrences(of: "#", with: "")
                             .filter { allowed.contains($0) }
                         if filtered.count > 12 {
-                            customGeohash = String(filtered.prefix(12))
+                            local.customGeohash = String(filtered.prefix(12))
                         } else if filtered != newValue {
-                            customGeohash = filtered
+                            local.customGeohash = filtered
                         }
                     }
-                let normalized = customGeohash
+                let normalized = local.customGeohash
                     .trimmed
                     .lowercased()
                     .replacingOccurrences(of: "#", with: "")
                 let isValid = validateGeohash(normalized)
                 Button(action: {
                     let gh = normalized
-                    guard isValid else { customError = Strings.invalidGeohash; return }
+                    guard isValid else { local.customError = Strings.invalidGeohash; return }
                     chooseTeleport(to: gh)
                 }) {
                     HStack(spacing: 6) {
@@ -534,7 +564,7 @@ struct LocationChannelsPicker: View {
                 .opacity(isValid ? 1.0 : 0.4)
                 .disabled(!isValid)
             }
-            if let err = customError {
+            if let err = local.customError {
                 Text(err)
                     .bitchatFont(size: 12)
                     .foregroundColor(.red)
@@ -751,6 +781,10 @@ extension LocationChannelsPicker {
         case disappear
         /// The location permission changed.
         case permissionChange
+        #if os(iOS)
+        /// A panic wipe: the pane's `panicEpoch` changed.
+        case panicWipe
+        #endif
     }
 
     enum LifecycleAction: Equatable {
@@ -765,7 +799,8 @@ extension LocationChannelsPicker {
     /// prompts for permission: that stays the tap on the enable button. The
     /// sheet keeps its continuous refresh while it is up. The pane can sit on
     /// screen for hours, so it never starts one: it asks for a single fix as
-    /// it appears and when permission arrives.
+    /// it appears, when permission arrives and after a panic wipe (whatever
+    /// it listed came from a fix taken before the wipe).
     /// - Parameter permission: The permission state as of the event (after
     ///   the change, for `.permissionChange`).
     static func lifecycleActions(
@@ -783,6 +818,11 @@ extension LocationChannelsPicker {
         case (.appear, .pane):
             return refresh
         case (.disappear, .pane):
+            return []
+        case (.panicWipe, .pane):
+            return refresh
+        case (.panicWipe, .sheet):
+            // The wipe closes the sheet; its disappearance ends the updates.
             return []
         #endif
         case (.permissionChange, _):

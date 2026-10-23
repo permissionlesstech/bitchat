@@ -37,7 +37,7 @@ struct LocationChannelsPickerTests {
     }
 
     #if os(iOS)
-    private static let pane = Picker.Presentation.pane(headerHeight: 44, trailingCornerReach: 0)
+    private static let pane = Picker.Presentation.pane(headerHeight: 44, trailingCornerReach: 0, panicEpoch: 0)
 
     @Test
     func paneOnlyEverAsksForOneFix() {
@@ -46,6 +46,18 @@ struct LocationChannelsPickerTests {
             #expect(Picker.lifecycleActions(for: .appear, presentation: Self.pane, permission: permission) == refresh)
             #expect(Picker.lifecycleActions(for: .disappear, presentation: Self.pane, permission: permission).isEmpty)
             #expect(Picker.lifecycleActions(for: .permissionChange, presentation: Self.pane, permission: permission) == refresh)
+        }
+    }
+
+    /// I4: the pane outlives a panic wipe. What it listed came from a fix
+    /// taken before the wipe, so it asks for one more, as when it appears.
+    /// The sheet never sees a wipe: the wipe closes it.
+    @Test
+    func panicWipeAsksThePaneForOneFreshFix() {
+        for permission in Self.permissions {
+            #expect(Picker.lifecycleActions(for: .panicWipe, presentation: Self.pane, permission: permission)
+                == (permission == .authorized ? [.refreshChannels] : []))
+            #expect(Picker.lifecycleActions(for: .panicWipe, presentation: .sheet, permission: permission).isEmpty)
         }
     }
     #endif
@@ -143,6 +155,32 @@ struct LocationChannelsPickerTests {
         #expect(location.requestAuthorizationCallCount == 0)
     }
 
+    @Test
+    func paneWipeAsksForOneFixAndNeverPrompts() async {
+        let fixture = await Fixture(authorizationStatus: .authorizedAlways)
+        defer { fixture.tearDown() }
+        let location = fixture.location
+
+        Picker.perform(.appear, presentation: Self.pane, permission: fixture.model.permissionState, on: fixture.model)
+        Picker.perform(.panicWipe, presentation: Self.pane, permission: fixture.model.permissionState, on: fixture.model)
+        #expect(location.requestLocationCallCount == 2)
+
+        #expect(location.startUpdatingLocationCallCount == 0)
+        #expect(location.stopUpdatingLocationCallCount == 0)
+        #expect(location.requestAuthorizationCallCount == 0)
+    }
+
+    /// Every panic wipe moves the epoch the inline picker resets on.
+    @Test
+    func everyPanicWipeMovesTheEpoch() {
+        let chrome = makeChromeModel()
+        let before = chrome.panicEpoch
+
+        chrome.panicClearAllData()
+
+        #expect(chrome.panicEpoch == before &+ 1)
+    }
+
     /// E7: choosing the selected channel again only ends browsing, so the
     /// choice is matched by cell, whatever level it arrives with.
     @Test
@@ -157,6 +195,29 @@ struct LocationChannelsPickerTests {
     }
     #endif
 }
+
+#if os(iOS)
+/// An `AppChromeModel` over a view model with its own location manager, so a
+/// panic wipe doesn't reach the process-wide location state.
+@MainActor
+private func makeChromeModel() -> AppChromeModel {
+    let keychain = MockKeychain()
+    let suiteName = "LocationChannelsPickerTests.chrome.\(UUID().uuidString)"
+    let storage = UserDefaults(suiteName: suiteName) ?? .standard
+    storage.removePersistentDomain(forName: suiteName)
+    let viewModel = ChatViewModel(
+        keychain: keychain,
+        idBridge: NostrIdentityBridge(keychain: MockKeychainHelper()),
+        identityManager: MockIdentityManager(keychain),
+        transport: MockTransport(),
+        locationManager: LocationChannelManager(storage: storage)
+    )
+    return AppChromeModel(
+        chatViewModel: viewModel,
+        privateInboxModel: PrivateInboxModel(conversations: ConversationStore())
+    )
+}
+#endif
 
 /// A `LocationChannelsModel` over a real `LocationStateManager` whose
 /// CoreLocation seam is the shared mock.

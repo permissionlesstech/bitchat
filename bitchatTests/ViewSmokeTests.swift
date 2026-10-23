@@ -252,18 +252,19 @@ private struct ContentHeaderHarness: View {
 }
 
 #if os(iOS)
-/// A `LocationChannelsModel` whose CoreLocation seam reports `status`,
-/// settled once the permission has reached the model.
+/// A `LocationChannelsModel` whose CoreLocation seam (`location`) reports
+/// `status`, settled once the permission has reached the model.
 @MainActor
 private func makeSmokeLocationChannelsModel(
     authorizationStatus: CLAuthorizationStatus
-) async -> LocationChannelsModel {
+) async -> (model: LocationChannelsModel, location: MockLocationStateManaging) {
     let suiteName = "ViewSmokeTests.\(UUID().uuidString)"
     let storage = UserDefaults(suiteName: suiteName) ?? .standard
     storage.removePersistentDomain(forName: suiteName)
+    let location = MockLocationStateManaging(authorizationStatus: authorizationStatus)
     let manager = LocationStateManager(
         storage: storage,
-        locationManager: MockLocationStateManaging(authorizationStatus: authorizationStatus),
+        locationManager: location,
         geocoder: MockLocationStateGeocoder(),
         shouldInitializeCoreLocation: true
     )
@@ -274,11 +275,12 @@ private func makeSmokeLocationChannelsModel(
             timeout: TestConstants.settleTimeout
         )
     }
-    return model
+    return (model, location)
 }
 
 /// Hosts a view in a visible window of the test host's scene, so it appears
-/// and updates as it would on screen: `onAppear` and `onChange` run.
+/// and updates as it would on screen: `onAppear` and `onChange` run, and
+/// UIKit-backed controls exist to read.
 @MainActor
 private final class WindowHost {
     let window: UIWindow
@@ -294,10 +296,43 @@ private final class WindowHost {
         window.layoutIfNeeded()
     }
 
+    /// The first text field in the hosted hierarchy.
+    var textField: UITextField? {
+        Self.firstTextField(in: window)
+    }
+
     func close() {
         window.resignKey()
         window.isHidden = true
         window.rootViewController = nil
+    }
+
+    private static func firstTextField(in view: UIView) -> UITextField? {
+        if let field = view as? UITextField { return field }
+        for subview in view.subviews {
+            if let field = firstTextField(in: subview) { return field }
+        }
+        return nil
+    }
+}
+
+/// Stands in for `AppChromeModel.panicEpoch`.
+@MainActor
+private final class SmokePanicEpoch: ObservableObject {
+    @Published var value: UInt64 = 0
+}
+
+/// The idle inline picker, its epoch driven by the test.
+@MainActor
+private struct LocationChannelsPaneHarness: View {
+    @ObservedObject var panicEpoch: SmokePanicEpoch
+
+    var body: some View {
+        LocationChannelsPicker(
+            presentation: .pane(headerHeight: 44, trailingCornerReach: 0, panicEpoch: panicEpoch.value),
+            onChoose: {},
+            onClose: nil
+        )
     }
 }
 
@@ -785,10 +820,10 @@ struct ViewSmokeTests {
     func locationChannelsPane_rendersEachPermissionAndBrowsing() async {
         let (viewModel, _, _) = makeSmokeViewModel()
         let featureModels = makeSmokeFeatureModels(for: viewModel)
-        let pane = LocationChannelsPicker.Presentation.pane(headerHeight: 44, trailingCornerReach: 55)
+        let pane = LocationChannelsPicker.Presentation.pane(headerHeight: 44, trailingCornerReach: 55, panicEpoch: 0)
 
         for status in [CLAuthorizationStatus.notDetermined, .denied, .authorizedAlways] {
-            let model = await makeSmokeLocationChannelsModel(authorizationStatus: status)
+            let (model, _) = await makeSmokeLocationChannelsModel(authorizationStatus: status)
             // Idle: no close control, no #mesh row.
             _ = mount(installSmokeEnvironment(
                 LocationChannelsPicker(presentation: pane, onChoose: {}, onClose: nil)
@@ -808,6 +843,55 @@ struct ViewSmokeTests {
             ))
             #expect(model.selectedChannel.isLocation)
         }
+    }
+
+    /// I4: a panic wipe closes the sheet, which takes what it held with it.
+    /// The inline picker stays up, so the wipe has to empty it: a teleport
+    /// typed but not taken names a place.
+    @Test
+    func locationChannelsPane_panicWipeDropsWhatWasTyped() async throws {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let (model, location) = await makeSmokeLocationChannelsModel(authorizationStatus: .authorizedAlways)
+        let panicEpoch = SmokePanicEpoch()
+        let host = WindowHost(
+            installSmokeEnvironment(
+                LocationChannelsPaneHarness(panicEpoch: panicEpoch).environmentObject(model),
+                featureModels: featureModels
+            ),
+            size: CGSize(width: 400, height: 800)
+        )
+        defer { host.close() }
+
+        // It appeared: one fix, nothing more.
+        let appeared = await TestHelpers.waitUntil(
+            { location.requestLocationCallCount == 1 },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(appeared)
+        let field = try #require(host.textField)
+
+        // The field's own filter rewriting the typed text proves the
+        // picker's state took it.
+        field.becomeFirstResponder()
+        field.insertText("#9Q8YYK")
+        let typed = await TestHelpers.waitUntil(
+            { host.textField?.text == "9q8yyk" },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(typed)
+
+        panicEpoch.value &+= 1
+
+        let emptied = await TestHelpers.waitUntil(
+            { host.textField?.text?.isEmpty == true },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(emptied)
+        // The nearby cells now come from a fix taken after the wipe.
+        #expect(location.requestLocationCallCount == 2)
+        #expect(location.startUpdatingLocationCallCount == 0)
+        #expect(location.requestAuthorizationCallCount == 0)
     }
 
     /// E10, until the panes land: the flag follows #1792's columns as the
