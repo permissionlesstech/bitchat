@@ -362,6 +362,10 @@ final class ChatMessageFormatter {
         return result
     }
 
+    /// Prefix of the header's formatted-text cache variants. No full-text
+    /// variant starts with it, so the two caches can't collide.
+    static let headerCacheNamespace = "hdr:"
+
     func formatMessageHeader(_ message: BitchatMessage, colorScheme: ColorScheme, theme: AppTheme = .matrix) -> AttributedString {
         let design = theme.bodyFontDesign
         let isSelf: Bool = {
@@ -378,14 +382,23 @@ final class ChatMessageFormatter {
         }()
 
         let isDark = colorScheme == .dark
-        let baseColor: Color = isSelf ? .orange : peerColor(for: message, isDark: isDark)
         let isVerifiedSender = !isSelf && isVerifiedSender(of: message)
+        // Same key ingredients as the full-text cache, in a namespace of its
+        // own so a header and a full text never answer each other's lookups.
+        let cacheVariant = Self.headerCacheNamespace + theme.formatCacheVariant + (isVerifiedSender ? "-vf" : "")
+        if let cachedHeader = message.getCachedFormattedText(isDark: isDark, isSelf: isSelf, variant: cacheVariant) {
+            return cachedHeader
+        }
+
+        let baseColor: Color = isSelf ? .orange : peerColor(for: message, isDark: isDark)
 
         if message.sender == "system" {
             var style = AttributeContainer()
             style.foregroundColor = baseColor
             style.font = .bitchatSystem(size: 14, weight: .medium, design: design)
-            return AttributedString(message.sender).mergingAttributes(style)
+            let header = AttributedString(message.sender).mergingAttributes(style)
+            message.setCachedFormattedText(header, isDark: isDark, isSelf: isSelf, variant: cacheVariant)
+            return header
         }
 
         var result = AttributedString()
@@ -409,6 +422,7 @@ final class ChatMessageFormatter {
             appendVerifiedSeal(to: &result, baseColor: baseColor, design: design)
         }
         result.append(AttributedString("> ").mergingAttributes(senderStyle))
+        message.setCachedFormattedText(result, isDark: isDark, isSelf: isSelf, variant: cacheVariant)
         return result
     }
 
