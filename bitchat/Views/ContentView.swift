@@ -25,17 +25,19 @@ struct ContentRootModalPresentationState {
     var isVoiceAlertPresented = false
     var isScreenshotPrivacyAlertPresented = false
     var isMediaPickerPresented = false
-    /// The legacy private-media dialog presents from the root whenever the
-    /// people UI is inline rather than a sheet.
+    /// The legacy private-media dialog presents from the root's tree
+    /// whenever the people UI isn't a sheet.
     var isLegacyMediaConsentPresented = false
     /// A pane's people popover (the split layout). The root presents it, so
     /// nothing else can present from the root while it is up.
     var isPeoplePopoverPresented = false
 
-    /// Only the people column puts the legacy-consent dialog in the root's
-    /// tree. In compact the people sheet hosts it and already defers the
-    /// root while up; a request left pending once the sheet closed has no
-    /// presenter, and waiting on it would swallow the root alerts.
+    /// Only the split layout puts the legacy-consent dialog in the root's
+    /// tree: its trailing pane hosts it whatever it shows, so a pending
+    /// request always has a presenter there. In compact the people sheet
+    /// hosts it and already defers the root while up; a request left
+    /// pending once the sheet closed has no presenter, and waiting on it
+    /// would swallow the root alerts.
     static func legacyConsentDefersRoot(isSplitLayout: Bool, hasPendingRequest: Bool) -> Bool {
         isSplitLayout && hasPendingRequest
     }
@@ -100,8 +102,9 @@ enum PeopleSheetDismissal: Equatable {
 }
 
 /// Whether the people/DM UI is up as a modal sheet, and what a dismissal of
-/// that sheet means. On a split layout the same UI is an inline column, so
-/// the sheet's getter turns false while the conversation stays open.
+/// that sheet means. On the split layout the DM is the trailing pane and the
+/// people lists are the panes' popovers, so the sheet's getter turns false
+/// while the conversation stays open.
 enum PeopleSheetPresentationPolicy {
     static func isPresented(
         isSplitLayout: Bool,
@@ -112,7 +115,7 @@ enum PeopleSheetPresentationPolicy {
     }
 
     /// A getter that already reads false means SwiftUI is catching up with
-    /// our own state (the split layout moved the DM into its column), not a
+    /// our own state (the split layout moved the DM into its pane), not a
     /// person leaving: ending the conversation there would close the DM on
     /// every unfold. Scene/background and alert-presentation reconciliation
     /// (Bluetooth-off, recording errors) are not requests to leave the
@@ -204,11 +207,11 @@ struct ContentView: View {
     @StateObject private var composers = ComposerSessions()
     /// The composer with the keyboard.
     @FocusState private var focusedComposer: ComposerSlot?
-    /// The channel the public timeline renders, mirrored from its model's
+    /// The channel the selection's timeline renders (the single column, and
+    /// the split layout's trailing pane), mirrored from its model's
     /// `$channel` without observing its messages; nil until the first value
-    /// lands. The primary composer sends there: a composer's target comes
-    /// from what its timeline shows, never from the location selection,
-    /// which runs ahead of the timeline.
+    /// lands. Composers and panes follow it, never the location selection,
+    /// which runs a hop ahead of the timeline.
     @State private var publicTimelineChannel: ChannelID?
     /// A composer's camera or library press, with the conversation the pick
     /// goes to. The picker is up while it is set.
@@ -229,20 +232,31 @@ struct ContentView: View {
     /// Display corners are named by physical side, while the padding that
     /// clears them follows the layout direction (TopCornerClearance).
     @Environment(\.layoutDirection) private var layoutDirection
+    /// The split layout's leading #mesh timeline, a plain reference: only
+    /// the leading pane's list observes it. Without one (previews, test
+    /// harnesses) the single column stays.
+    @Environment(\.meshPaneTimeline) private var meshPaneTimeline
     /// The live layout mode. Presentation bindings read this, never the size
     /// class: SwiftUI runs a departing sheet's setter after the layout has
     /// flipped, and environment values captured in that closure are stale.
     @State private var isSplitLayout = false
-    /// The people column's QR sheet presents through the root, so its state
-    /// lives here where the root alerts can defer to it.
-    @State private var showColumnVerifySheet = false
+    /// The split layout's own state: the last-touched pane, browsing, the
+    /// people popover, and what a fold set aside.
+    @State private var panes = SplitPaneState()
+    /// The panes' frames in window coordinates, where the touch observer
+    /// reports touches.
+    @State private var leadingPaneFrame: CGRect = .zero
+    @State private var trailingPaneFrame: CGRect = .zero
+    /// The leading #mesh list's own scroll state: never the trailing list's.
+    @State private var isAtBottomMeshPane = true
+    @State private var windowCountMeshPane = TransportConfig.uiWindowInitialCountPublic
     /// Set when unfolding moves a focused DM composer out of the sheet: the
     /// conversation whose composer the sheet's dismissal hands focus to.
     @State private var refocusConversationAfterLayoutChange: ConversationID?
-    /// Set when unfolding moves an open DM out of the sheet. The column's list
+    /// Set when unfolding moves an open DM out of the sheet. The pane's list
     /// lands on the latest message, but the departing sheet's list reports
     /// its last row leaving afterwards, which raised a stale jump-to-latest
-    /// pill in the column.
+    /// pill in the pane.
     @State private var repinConversationAfterLayoutChange = false
     #endif
     @ScaledMetric(relativeTo: .body) private var headerHeight: CGFloat = 44
@@ -257,26 +271,43 @@ struct ContentView: View {
         privateConversationModel.selectedPeerID
     }
 
-    /// The channel the public timeline renders.
+    /// The channel the selection's timeline renders: the single column's,
+    /// and the split layout's trailing pane's.
     private var timelineChannel: ChannelID {
         publicTimelineChannel
             ?? modelReferences?.publicChatModel.channel
             ?? locationChannelsModel.selectedChannel
     }
 
-    /// Where each composer sends: the public channel the timeline shows,
-    /// and the open DM in the sheet (or #1792's column).
+    /// Where each composer sends. Single column: the public channel the
+    /// timeline shows, and the open DM in the sheet. Split: #mesh, and the
+    /// trailing pane's geohash or the DM covering it.
     private var composerTargets: ComposerTargets {
-        .single(
-            activeChannel: timelineChannel,
-            privatePeer: selectedPrivatePeerID
-        )
+        #if os(iOS)
+        if isSplitLayout {
+            return .split(
+                trailingChannel: trailingContent.composerGeohash(timelineChannel: timelineChannel),
+                privatePeer: selectedPrivatePeerID
+            )
+        }
+        // A fold's selection names the channel the single column is about
+        // to show; until it lands, the composer already sends there.
+        return .single(activeChannel: panes.foldChannel ?? timelineChannel, privatePeer: selectedPrivatePeerID)
+        #else
+        return .single(activeChannel: timelineChannel, privatePeer: selectedPrivatePeerID)
+        #endif
     }
 
-    /// The composer shared content goes into (E11): the DM's while one is
-    /// open, else the public timeline's.
+    /// The composer shared content goes into (E11): in the single column the
+    /// DM's while one is open, else the public timeline's; split, the
+    /// last-touched pane's while it has a conversation, else #mesh's.
     private var shareImportSlot: ComposerSlot {
-        composerTargets.shareImportSlot(preferring: .secondary)
+        #if os(iOS)
+        if isSplitLayout {
+            return composerTargets.shareImportSlot(preferring: panes.focus == .leading ? .primary : .secondary)
+        }
+        #endif
+        return composerTargets.shareImportSlot(preferring: .secondary)
     }
 
     /// The share review names the conversation of the composer it fills.
@@ -291,7 +322,8 @@ struct ContentView: View {
 
     private var usesGlassLayout: Bool { appTheme.usesGlassChrome }
 
-    /// People list or DM as a column beside the timeline instead of a sheet.
+    /// The DM as the trailing pane and the people lists as popovers, instead
+    /// of the sheet.
     private var isSplitLayoutActive: Bool {
         #if os(iOS)
         return isSplitLayout
@@ -308,26 +340,30 @@ struct ContentView: View {
         )
     }
 
+    /// A pane's people popover is up (the split layout).
+    private var isPeoplePopoverPresented: Bool {
+        #if os(iOS)
+        return panes.popover != nil
+        #else
+        return false
+        #endif
+    }
+
     private func rootModalPresentationState(
         includingVoiceAlert: Bool
     ) -> ContentRootModalPresentationState {
-        #if os(iOS)
-        let isVerificationSheetPresented = showVerifySheet || showColumnVerifySheet
-        #else
-        let isVerificationSheetPresented = showVerifySheet
-        #endif
-
-        return ContentRootModalPresentationState(
+        ContentRootModalPresentationState(
             appChromeModel: appChromeModel,
             isPeopleSheetPresented: isPeopleSheetPresented,
             isImagePreviewPresented: imagePreviewURL != nil,
-            isVerificationSheetPresented: isVerificationSheetPresented,
+            isVerificationSheetPresented: showVerifySheet,
             isVoiceAlertPresented: includingVoiceAlert && voiceRecordingVM.showAlert,
             isMediaPickerPresented: mediaPickRequest != nil,
             isLegacyMediaConsentPresented: ContentRootModalPresentationState.legacyConsentDefersRoot(
                 isSplitLayout: isSplitLayoutActive,
                 hasPendingRequest: conversationUIModel.legacyPrivateMediaConsentRequest != nil
-            )
+            ),
+            isPeoplePopoverPresented: isPeoplePopoverPresented
         )
     }
 
@@ -403,24 +439,6 @@ struct ContentView: View {
         )
     }
 
-    /// The header's people button. On the split layout the list is on screen
-    /// unless a DM covers it, so the button leaves the DM instead of toggling
-    /// a sheet that can't present there.
-    private var headerPeopleBinding: Binding<Bool> {
-        Binding(
-            get: { showSidebar },
-            set: { newValue in
-                if isSplitLayoutActive {
-                    if selectedPrivatePeerID != nil {
-                        privateConversationModel.endConversation()
-                    }
-                } else {
-                    showSidebar = newValue
-                }
-            }
-        )
-    }
-
     var body: some View {
         adaptiveContent
             .onAppear {
@@ -439,6 +457,11 @@ struct ContentView: View {
                         fingerprint: { conversationUIModel.getFingerprint(for: $0) }
                     )
                     mediaPickRequest = nil
+                    #if os(iOS)
+                    // Nothing parked, focused, browsed or popped over outlives
+                    // the wipe either (I4).
+                    panes.panic(timelineChannel: timelineChannel)
+                    #endif
                 }
                 #if os(macOS)
                 DispatchQueue.main.async {
@@ -478,6 +501,10 @@ struct ContentView: View {
             retargetComposers(to: targets)
             sharedContentImportModel.updateDestination(sharedContentDestination)
         }
+        // The split layout's share goes to the last-touched pane's composer.
+        .onChange(of: shareImportSlot) { _ in
+            sharedContentImportModel.updateDestination(sharedContentDestination)
+        }
         // A share names the composer it would fill: when it arrives, and
         // whenever the runtime looks again (the share link, becoming
         // active) and relabels the same share from the selection, which
@@ -487,27 +514,38 @@ struct ContentView: View {
             sharedContentImportModel.updateDestination(sharedContentDestination)
         }
         .onChange(of: selectedPrivatePeerID) { newValue in
-            // The split layout shows the DM in its column; a stale sidebar
+            // The split layout shows the DM in its pane; a stale sidebar
             // flag would pop the people sheet after the next fold.
             if newValue != nil, !isSplitLayoutActive {
                 showSidebar = true
             }
-            #if os(iOS)
-            // The column swaps its list, and the QR sheet the list presents,
-            // for the DM without a dismissal reaching this flag. Left set, it
-            // would hold back the root alerts and bring the QR sheet back
-            // with the list.
-            if newValue != nil {
-                showColumnVerifySheet = false
-            }
-            #endif
         }
         #if os(iOS)
-        .onChange(of: locationChannelsModel.selectedChannel) { newChannel in
-            appChromeModel.splitLayoutShowsLocation = SplitLayoutScreenshotPolicy.columnsShowLocation(
+        // As it happens, not at the next render: a touch or a fold right
+        // after a DM opens must already see it, and the fold's own ending
+        // of the DM must already have been recorded when its report comes.
+        .onReceive(privateConversationModel.$selectedPeerID) { peer in
+            panes.conversationChanged(to: peer, isSplit: isSplitLayout)
+        }
+        .onChange(of: locationChannelsModel.selectedChannel) { _ in
+            guard !isSplitLayout else { return }
+            // The selection as it is now: a change reported a render late
+            // must not count as a later one.
+            panes.compactSelectionChanged(to: locationChannelsModel.selectedChannel)
+        }
+        // The previous render's content, through the capture list.
+        .onChange(of: trailingContent) { [trailingContent] newContent in
+            panes.trailingContentChanged(from: trailingContent, to: newContent)
+            // Screenshot routing follows what the trailing pane shows,
+            // asynchronous selections included (E10).
+            appChromeModel.splitLayoutShowsLocation = SplitLayoutScreenshotPolicy.panesShowLocation(
                 isSplit: isSplitLayout,
-                selectedChannel: newChannel
+                trailing: newContent
             )
+        }
+        .onChange(of: focusedComposer) { slot in
+            guard isSplitLayout, let slot else { return }
+            panes.composerFocused(slot)
         }
         #endif
         .onChange(of: scenePhase) { phase in
@@ -576,8 +614,14 @@ struct ContentView: View {
             )
             .environmentObject(locationChannelsModel)
         }
+        // A popover's fingerprint is its own; while one is up the root
+        // shows none (E13).
         .sheet(isPresented: Binding(
-            get: { appChromeModel.showingFingerprintFor != nil && !isPeopleSheetPresented },
+            get: {
+                appChromeModel.showingFingerprintFor != nil
+                    && !isPeopleSheetPresented
+                    && !isPeoplePopoverPresented
+            },
             set: { _ in appChromeModel.clearFingerprint() }
         )) {
             if let peerID = appChromeModel.showingFingerprintFor {
@@ -645,7 +689,8 @@ struct ContentView: View {
         .alert(
             String(localized: "share_import.review.title", comment: "Title for reviewing content received from the share extension"),
             isPresented: Binding(
-                get: { sharedContentImportModel.offer != nil },
+                // A popover the root presents holds the review back.
+                get: { sharedContentImportModel.offer != nil && !isPeoplePopoverPresented },
                 set: { _ in }
             ),
             presenting: sharedContentImportModel.offer
@@ -689,20 +734,20 @@ struct ContentView: View {
         )
     }
 
-    /// iOS: where the width allows two columns (the iPhone Duo's inner
-    /// display), the people list or open DM becomes a column beside the
-    /// timeline, split at the hinge; everywhere else the single column stays,
-    /// with people and DMs in the sheet. The column appears only once
-    /// isSplitLayout has flipped as well, so the sheet and the column never
-    /// both host the DM in one frame, and mainContent stays the first child
-    /// in both modes so the public timeline keeps its identity and scroll
-    /// position. macOS keeps mainContent alone: a GeometryReader at the root
-    /// would change how the window sizes itself to its content.
+    /// iOS: where the width allows two panes (the iPhone Duo's inner
+    /// display), #mesh leads and the trailing pane shows the open DM, the
+    /// selected geohash or the location-channel picker, split at the hinge;
+    /// everywhere else the single column stays, with people and DMs in the
+    /// sheet. The trailing pane appears only once isSplitLayout has flipped
+    /// as well, so the sheet and the pane never both host the DM in one
+    /// frame. macOS keeps the single column alone: a GeometryReader at the
+    /// root would change how the window sizes itself to its content.
     @ViewBuilder
     private var adaptiveContent: some View {
         #if os(iOS)
         GeometryReader { proxy in
-            let layout = ContentSplitLayout.resolve(
+            // The leading pane needs the pinned #mesh timeline.
+            let layout = meshPaneTimeline == nil ? nil : ContentSplitLayout.resolve(
                 isRegularWidth: horizontalSizeClass == .regular,
                 width: proxy.size.width,
                 leadingInset: proxy.safeAreaInsets.leading,
@@ -712,24 +757,34 @@ struct ContentView: View {
             let split = isSplitLayout ? layout : nil
             let corners = topCornerClearance(in: proxy)
             HStack(spacing: 0) {
-                // Split, the header ends at the fold and the column's top
-                // rows meet the trailing corner instead.
-                mainContent(
-                    headerLeadingCornerReach: corners.leading,
-                    headerTrailingCornerReach: split == nil ? corners.trailing : 0
-                )
-                .frame(width: split?.leadingWidth)
+                // The first child in both modes, so its bar, and the
+                // app-wide presentations the bar hosts, outlive a fold.
+                appChromePane(split: split, corners: corners)
+                    .frame(width: split?.leadingWidth)
+                    .background(PaneFrameReader(frame: $leadingPaneFrame))
                 if let split {
                     ContentColumnGap(width: split.gapWidth)
-                    peopleColumn(trailingCornerReach: corners.trailing)
+                    trailingPane(width: split.trailingWidth, trailingCornerReach: corners.trailing)
                         .frame(width: split.trailingWidth)
+                        .background(PaneFrameReader(frame: $trailingPaneFrame))
+                }
+            }
+            .background {
+                // Which pane was touched last (E1), from the window: it
+                // never competes with the panes' own gestures.
+                if split != nil {
+                    PaneTouchObserver { point in
+                        paneTouched(at: point)
+                    }
                 }
             }
             .onAppear {
-                isSplitLayout = layout != nil
-                appChromeModel.splitLayoutShowsLocation = SplitLayoutScreenshotPolicy.columnsShowLocation(
-                    isSplit: layout != nil,
-                    selectedChannel: locationChannelsModel.selectedChannel
+                let isSplit = layout != nil
+                isSplitLayout = isSplit
+                appChromeModel.setMeshPinnedOnScreen(isSplit)
+                appChromeModel.splitLayoutShowsLocation = SplitLayoutScreenshotPolicy.panesShowLocation(
+                    isSplit: isSplit,
+                    trailing: trailingContent
                 )
             }
             .onChange(of: layout != nil) { isSplit in
@@ -737,43 +792,61 @@ struct ContentView: View {
             }
         }
         #else
-        mainContent()
+        publicPane(
+            bar: {
+                appChromeBar(
+                    ContentHeaderView(
+                        showSidebar: $showSidebar,
+                        showVerifySheet: $showVerifySheet,
+                        isNicknameFieldFocused: $isNicknameFieldFocused,
+                        headerHeight: headerHeight,
+                        headerPeerIconSize: headerPeerIconSize,
+                        headerPeerCountFontSize: headerPeerCountFontSize
+                    )
+                )
+            },
+            timeline: {
+                followingTimelineList(composer: selectedPrivatePeerID == nil ? composers.primary : nil)
+            },
+            composer: {
+                if selectedPrivatePeerID == nil {
+                    composerView(for: .primary)
+                }
+            }
+        )
         #endif
     }
 
-    /// Matrix: classic opaque bars with dividers. Glass: full-bleed message
-    /// list scrolling underneath floating chrome panels (safe-area insets),
-    /// so the translucency gains usable space instead of losing it.
+    /// A public timeline between its bar and its composer. Matrix: classic
+    /// opaque bars with dividers. Glass: the list full-bleed, scrolling
+    /// underneath floating chrome panels (safe-area insets), so the
+    /// translucency gains usable space instead of losing it.
     @ViewBuilder
-    private func mainContent(
-        headerLeadingCornerReach: CGFloat = 0,
-        headerTrailingCornerReach: CGFloat = 0
+    private func publicPane<Bar: View, Timeline: View, Composer: View>(
+        @ViewBuilder bar: () -> Bar,
+        @ViewBuilder timeline: () -> Timeline,
+        @ViewBuilder composer: () -> Composer
     ) -> some View {
+        let barContent = bar()
+        let timelineContent = timeline()
+        let composerContent = composer()
         if usesGlassLayout {
-            publicMessageList
+            timelineContent
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    headerView(
-                        leadingCornerReach: headerLeadingCornerReach,
-                        trailingCornerReach: headerTrailingCornerReach
-                    )
+                    barContent
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if selectedPrivatePeerID == nil {
-                        composerView
-                    }
+                    composerContent
                 }
         } else {
             VStack(spacing: 0) {
-                headerView(
-                    leadingCornerReach: headerLeadingCornerReach,
-                    trailingCornerReach: headerTrailingCornerReach
-                )
+                barContent
 
                 Divider()
 
                 GeometryReader { geometry in
                     VStack(spacing: 0) {
-                        publicMessageList
+                        timelineContent
                             .background(palette.background)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
@@ -782,28 +855,18 @@ struct ContentView: View {
 
                 Divider()
 
-                if selectedPrivatePeerID == nil {
-                    composerView
-                }
+                composerContent
             }
         }
     }
 
-    private func headerView(
-        leadingCornerReach: CGFloat,
-        trailingCornerReach: CGFloat
-    ) -> some View {
+    /// The bar that carries the app chrome, with the failed-wipe and
+    /// connectivity banners and the panic dialog: the single column's, or
+    /// the split layout's leading #mesh bar. Only this bar hosts them (E9,
+    /// I5).
+    private func appChromeBar<Header: View>(_ header: Header) -> some View {
         VStack(spacing: 0) {
-            ContentHeaderView(
-                showSidebar: headerPeopleBinding,
-                showVerifySheet: $showVerifySheet,
-                isNicknameFieldFocused: $isNicknameFieldFocused,
-                headerHeight: headerHeight,
-                headerPeerIconSize: headerPeerIconSize,
-                headerPeerCountFontSize: headerPeerCountFontSize,
-                leadingCornerReach: leadingCornerReach,
-                trailingCornerReach: trailingCornerReach
-            )
+            header
 
             // Failed-wipe outranks connectivity: "your data may still be
             // here" matters more than "the radio is off".
@@ -838,12 +901,15 @@ struct ContentView: View {
         }
     }
 
-    private var publicMessageList: some View {
+    /// The selection's timeline: the single column's, and the split
+    /// layout's trailing geohash.
+    /// - Parameter composer: The composer under it, which its mentions
+    ///   type into; nil while that composer isn't on screen.
+    private func followingTimelineList(composer: ComposerSession?) -> some View {
         MessageListView(
             privateTarget: nil,
             isAtBottom: $isAtBottomPublic,
-            // Its composer is hidden while a DM is open: no mention then.
-            composer: selectedPrivatePeerID == nil ? composers.primary : nil,
+            composer: composer,
             selectedMessageSender: $selectedMessageSender,
             selectedMessageSenderID: $selectedMessageSenderID,
             imagePreviewURL: $imagePreviewURL,
@@ -852,54 +918,218 @@ struct ContentView: View {
             showSidebar: $showSidebar,
             focusedComposer: $focusedComposer
         )
+        #if os(iOS)
+        .id(PaneRole.following)
+        #endif
     }
 
-    private var composerView: some View {
+    /// The composer of `slot`: that slot's session, conversation, send and
+    /// photo button together, so no composer can type into one
+    /// conversation and record or pick for another (I1).
+    private func composerView(for slot: ComposerSlot) -> some View {
         ContentComposerView(
-            session: composers.primary,
-            target: composerTargets.primary,
+            session: composers[slot],
+            target: composerTargets[slot],
             focus: $focusedComposer,
             voiceRecordingVM: voiceRecordingVM,
-            onSend: { send(from: .primary) },
-            onPickMedia: mediaPicker(for: .primary)
+            onSend: { send(from: slot) },
+            onPickMedia: mediaPicker(for: slot)
         )
     }
 
     #if os(iOS)
-    /// The open DM or, without one, the people list.
-    @ViewBuilder
-    private func peopleColumn(trailingCornerReach: CGFloat) -> some View {
-        if selectedPrivatePeerID != nil {
-            ContentConversationColumnView(
-                showSidebar: $showSidebar,
-                selectedMessageSender: $selectedMessageSender,
-                selectedMessageSenderID: $selectedMessageSenderID,
-                imagePreviewURL: $imagePreviewURL,
-                windowCountPublic: $windowCountPublic,
-                windowCountPrivate: $windowCountPrivate,
-                isAtBottomPrivate: $isAtBottomPrivate,
-                composer: composers.secondary,
-                target: composerTargets.secondary,
-                focusedComposer: $focusedComposer,
-                voiceRecordingVM: voiceRecordingVM,
-                onPickMedia: mediaPicker(for: .secondary),
-                headerHeight: headerHeight,
-                trailingCornerReach: trailingCornerReach,
-                onSendMessage: { send(from: .secondary) }
-            )
-        } else {
-            // Keeps hosting its own QR sheet, as in the people sheet, and
-            // the consent dialog the column always had.
-            ContentPeopleListView(
-                showSidebar: $showSidebar,
-                showVerifySheet: $showColumnVerifySheet,
-                presentation: .column(
-                    headerHeight: headerHeight,
-                    trailingCornerReach: trailingCornerReach
+    /// What the split layout's trailing pane shows: the open DM, the
+    /// selected geohash, or the picker (idle, or browsing from the
+    /// trailing badge).
+    private var trailingContent: TrailingPaneContent {
+        .resolve(
+            conversation: selectedPrivatePeerID,
+            channel: timelineChannel,
+            isBrowsing: panes.isBrowsing
+        )
+    }
+
+    /// The single column, or the split layout's leading #mesh pane: its
+    /// own bar (the app chrome, a static #mesh badge, mesh people), the
+    /// pinned #mesh timeline and a composer that sends to #mesh.
+    private func appChromePane(split: ContentSplitLayout?, corners: TopCornerClearance) -> some View {
+        let isSplit = split != nil
+        return publicPane(
+            bar: {
+                appChromeBar(
+                    ContentHeaderView(
+                        showSidebar: $showSidebar,
+                        showVerifySheet: $showVerifySheet,
+                        isNicknameFieldFocused: $isNicknameFieldFocused,
+                        headerHeight: headerHeight,
+                        headerPeerIconSize: headerPeerIconSize,
+                        headerPeerCountFontSize: headerPeerCountFontSize,
+                        leadingCornerReach: corners.leading,
+                        // Split, the bar ends at the fold and the trailing
+                        // pane's top row meets the trailing corner instead.
+                        trailingCornerReach: isSplit ? 0 : corners.trailing,
+                        paneChannel: isSplit ? .mesh : nil,
+                        onPeopleTap: isSplit ? { panes.openPopover(.leading) } : nil,
+                        isBadgeStatic: isSplit,
+                        defersAlerts: isPeoplePopoverPresented
+                    )
+                    // Anchored to the whole bar, so it centres in the pane,
+                    // off the hinge.
+                    .contentPeoplePopover(
+                        isPresented: peoplePopoverBinding(.leading),
+                        channel: .mesh,
+                        paneWidth: split?.leadingWidth ?? 0,
+                        onClose: { panes.popoverClosed(.leading) }
+                    )
                 )
-            )
-            .modifier(LegacyPrivateMediaConsentDialog())
+            },
+            timeline: {
+                if isSplit, let meshPaneTimeline {
+                    meshPaneList(meshPaneTimeline)
+                } else {
+                    // Its composer is hidden while a DM is open: no
+                    // mention then.
+                    followingTimelineList(composer: selectedPrivatePeerID == nil ? composers.primary : nil)
+                }
+            },
+            composer: {
+                // The single column hides it under the DM sheet; the #mesh
+                // pane keeps it beside the trailing DM.
+                if isSplit || selectedPrivatePeerID == nil {
+                    composerView(for: .primary)
+                }
+            }
+        )
+    }
+
+    /// The leading pane's #mesh timeline, whatever is selected.
+    private func meshPaneList(_ timeline: PublicChatModel) -> some View {
+        MessageListView(
+            privateTarget: nil,
+            isAtBottom: $isAtBottomMeshPane,
+            composer: composers.primary,
+            selectedMessageSender: $selectedMessageSender,
+            selectedMessageSenderID: $selectedMessageSenderID,
+            imagePreviewURL: $imagePreviewURL,
+            windowCountPublic: $windowCountMeshPane,
+            windowCountPrivate: $windowCountPrivate,
+            showSidebar: $showSidebar,
+            focusedComposer: $focusedComposer
+        )
+        .environmentObject(timeline)
+        .id(PaneRole.mesh)
+    }
+
+    /// The trailing pane: the open DM covering the selected geohash, the
+    /// geohash with its own bar, timeline and composer, or the picker. The
+    /// picker keeps one identity between idle and browsing, so ending
+    /// browsing by choosing #mesh neither remounts it nor asks for another
+    /// location fix.
+    private func trailingPane(width: CGFloat, trailingCornerReach: CGFloat) -> some View {
+        Group {
+            switch trailingContent {
+            case .conversation:
+                ContentConversationColumnView(
+                    showSidebar: $showSidebar,
+                    selectedMessageSender: $selectedMessageSender,
+                    selectedMessageSenderID: $selectedMessageSenderID,
+                    imagePreviewURL: $imagePreviewURL,
+                    windowCountPublic: $windowCountPublic,
+                    windowCountPrivate: $windowCountPrivate,
+                    isAtBottomPrivate: $isAtBottomPrivate,
+                    composer: composers.secondary,
+                    target: composerTargets.secondary,
+                    focusedComposer: $focusedComposer,
+                    voiceRecordingVM: voiceRecordingVM,
+                    onPickMedia: mediaPicker(for: .secondary),
+                    headerHeight: headerHeight,
+                    trailingCornerReach: trailingCornerReach,
+                    onSendMessage: { send(from: .secondary) }
+                )
+            case .channel(let geohash):
+                publicPane(
+                    bar: {
+                        trailingChannelBar(geohash, paneWidth: width, trailingCornerReach: trailingCornerReach)
+                    },
+                    timeline: {
+                        followingTimelineList(composer: composers.secondary)
+                    },
+                    composer: {
+                        composerView(for: .secondary)
+                    }
+                )
+            case .picker(let returnTo):
+                LocationChannelsPicker(
+                    presentation: .pane(
+                        headerHeight: headerHeight,
+                        trailingCornerReach: trailingCornerReach,
+                        panicEpoch: appChromeModel.panicEpoch
+                    ),
+                    onChoose: {
+                        panes.choseChannel(
+                            timelineShowsSelection: locationChannelsModel.selectedChannel == timelineChannel
+                        )
+                    },
+                    onClose: returnTo == nil ? nil : { panes.endBrowsing() }
+                )
+            }
         }
+        // Whatever the pane shows: a request can still be pending after its
+        // DM closed, and the root waits on it in this layout.
+        .modifier(LegacyPrivateMediaConsentDialog())
+    }
+
+    /// The trailing geohash's bar: its badge (back to the picker, to switch
+    /// channels), bookmark, share and people. No app chrome: that is the
+    /// leading bar's.
+    private func trailingChannelBar(
+        _ geohash: GeohashChannel,
+        paneWidth: CGFloat,
+        trailingCornerReach: CGFloat
+    ) -> some View {
+        ContentHeaderView(
+            showSidebar: .constant(false),
+            showVerifySheet: .constant(false),
+            isNicknameFieldFocused: $isNicknameFieldFocused,
+            headerHeight: headerHeight,
+            headerPeerIconSize: headerPeerIconSize,
+            headerPeerCountFontSize: headerPeerCountFontSize,
+            leadingCornerReach: 0,
+            trailingCornerReach: trailingCornerReach,
+            paneChannel: .location(geohash),
+            carriesAppChrome: false,
+            onPeopleTap: { panes.openPopover(.trailing) },
+            onBadgeTap: { panes.browse() }
+        )
+        .contentPeoplePopover(
+            isPresented: peoplePopoverBinding(.trailing),
+            channel: .location(geohash),
+            paneWidth: paneWidth,
+            onClose: { panes.popoverClosed(.trailing) }
+        )
+    }
+
+    /// A pane's people popover. SwiftUI writes false when it dismisses the
+    /// popover itself (a tap outside).
+    private func peoplePopoverBinding(_ pane: ContentPane) -> Binding<Bool> {
+        Binding(
+            get: { panes.popover == pane },
+            set: { isPresented in
+                if !isPresented {
+                    panes.popoverClosed(pane)
+                }
+            }
+        )
+    }
+
+    /// A touch went down in the window. A touch on something presented
+    /// over the panes, a popover included, touches neither pane.
+    private func paneTouched(at point: CGPoint) {
+        guard isSplitLayout,
+              !hasRootModalPresentation,
+              let pane = ContentPane.containing(point, leading: leadingPaneFrame, trailing: trailingPaneFrame),
+              pane != panes.focus else { return }
+        panes.touched(pane)
     }
 
     /// How far display corners the safe area leaves uncovered reach into the
@@ -923,57 +1153,92 @@ struct ContentView: View {
     }
 
     /// Folding, unfolding, rotating or resizing across the split threshold.
-    /// The DM selection, the draft and the public scroll position are state
-    /// here and survive by construction; what the old host was presenting
-    /// cannot follow the DM to the new one, so it closes.
+    /// Folding shows the last-touched pane and parks the other; unfolding
+    /// restores it (`SplitPaneState`). The DM selection, the drafts and the
+    /// scroll positions are state here and survive by construction; what
+    /// the old host was presenting cannot follow the DM to the new one, so
+    /// it closes.
     private func handleLayoutModeChange(toSplit: Bool) {
         guard toSplit != isSplitLayout else { return }
-        let conversationMoves = selectedPrivatePeerID != nil
+        let openPeer = selectedPrivatePeerID
+        let trailing = trailingContent
         let sheetWasPresented = isPeopleSheetPresented
-        let sheetWillBePresented = !toSplit && conversationMoves
         // Focus follows the conversation whose composer had it, into
         // whichever slot shows that conversation once the layout changed.
-        let focusedConversation: ConversationID? = conversationMoves
-            ? focusedComposer.flatMap { composerTargets[$0]?.conversationID }
-            : nil
+        let focusedConversation = focusedComposer.flatMap { composerTargets[$0]?.conversationID }
 
         // First, so the departing sheet's setter reads as our own change and
-        // leaves the conversation open.
+        // leaves the conversation open, and the DM ends below only once its
+        // pane has gone.
         isSplitLayout = toSplit
-        appChromeModel.splitLayoutShowsLocation = SplitLayoutScreenshotPolicy.columnsShowLocation(
-            isSplit: toSplit,
-            selectedChannel: locationChannelsModel.selectedChannel
-        )
-        // The DM composer changes hosts: the press on its mic is torn down
-        // and would never finish the recording.
-        if conversationMoves {
-            voiceRecordingVM.cancel(owner: .secondary)
-        }
-        // Folding brings an open DM back in the sheet, the list behind it;
-        // an idle column must not pop the people sheet.
+        // Every composer changes host or goes: a hold can't follow (E12).
+        voiceRecordingVM.cancelAnyHold()
+        appChromeModel.setMeshPinnedOnScreen(toSplit)
+        let effects = toSplit
+            ? panes.unfold(
+                timelineChannel: timelineChannel,
+                openPeer: openPeer,
+                locationSheetIsUp: appChromeModel.isLocationChannelsSheetPresented,
+                canReopen: { privateConversationModel.canReopenConversation(with: $0) }
+            )
+            : panes.fold(
+                trailing: trailing,
+                timelineChannel: timelineChannel,
+                selection: locationChannelsModel.selectedChannel,
+                openPeer: openPeer
+            )
+        apply(effects)
+        // The DM as it now is, should a reopening not have opened.
+        panes.conversationChanged(to: selectedPrivatePeerID, isSplit: toSplit)
+
+        // Folding brings a kept DM back in the sheet, the list behind it;
+        // anything else must not pop the people sheet.
+        let sheetWillBePresented = !toSplit && selectedPrivatePeerID != nil
         showSidebar = sheetWillBePresented
-        showColumnVerifySheet = false
         if sheetWasPresented != sheetWillBePresented {
-            // Presented by the sheet, or by the root for the column: the
+            // Presented by the sheet, or by the root beside the panes: the
             // other host can't adopt them.
             mediaPickRequest = nil
             imagePreviewURL = nil
             appChromeModel.clearFingerprint()
         }
+        appChromeModel.splitLayoutShowsLocation = SplitLayoutScreenshotPolicy.panesShowLocation(
+            isSplit: toSplit,
+            trailing: trailingContent
+        )
 
-        // Best effort: on unfolding, the departing sheet's dismissal hands
-        // focus to the column's composer; on folding, the sheet's composer
-        // mounts as it presents.
-        refocusConversationAfterLayoutChange = toSplit ? focusedConversation : nil
-        repinConversationAfterLayoutChange = toSplit && conversationMoves
-        if !toSplit, let focusedConversation {
+        // Best effort: a DM leaving the sheet takes focus to its pane's
+        // composer once the sheet has gone; anything else moves slots (a
+        // geohash between the trailing pane and the single column, a DM
+        // into the sheet as it presents) once the new layout is up.
+        let conversationLeavesSheet = toSplit && sheetWasPresented && openPeer != nil
+        refocusConversationAfterLayoutChange = conversationLeavesSheet ? focusedConversation : nil
+        repinConversationAfterLayoutChange = conversationLeavesSheet
+        if !conversationLeavesSheet, let focusedConversation {
             DispatchQueue.main.async {
                 focusedComposer = composerTargets.slot(showing: focusedConversation)
             }
         }
     }
 
-    /// Only once the departing sheet is gone is the column's composer the one
+    /// Carries out what a fold or unfold asks for, beyond the panes' own
+    /// state.
+    private func apply(_ effects: SplitPaneState.Effects) {
+        if let channel = effects.select {
+            locationChannelsModel.select(channel)
+        }
+        if effects.endsConversation {
+            privateConversationModel.endConversation()
+        }
+        if let peer = effects.reopensConversation {
+            privateConversationModel.startConversation(with: peer)
+        }
+        if effects.closesLocationSheet {
+            appChromeModel.isLocationChannelsSheetPresented = false
+        }
+    }
+
+    /// Only once the departing sheet is gone is the pane's composer the one
     /// field bound to its slot's focus, and has the sheet's list stopped
     /// reporting where it is scrolled.
     private func finishLayoutChangeAfterSheetDismissal() {
@@ -988,10 +1253,16 @@ struct ContentView: View {
     }
     #endif
 
-    /// The public timeline moved to another channel.
+    /// The selection's timeline moved to another channel.
     private func followTimeline(to channel: ChannelID) {
         guard publicTimelineChannel != channel else { return }
+        #if os(iOS)
+        let previous = timelineChannel
         publicTimelineChannel = channel
+        panes.timelineChannelChanged(from: previous, to: channel)
+        #else
+        publicTimelineChannel = channel
+        #endif
     }
 
     /// Points every composer at its conversation, and cancels a mic hold
@@ -1028,3 +1299,23 @@ struct ContentView: View {
     }
     #endif
 }
+
+#if os(iOS)
+/// Keeps `frame` at the view's frame in window coordinates, where the touch
+/// observer reports touches (the root hosting view fills the window). It
+/// changes only as the layout does.
+private struct PaneFrameReader: View {
+    @Binding var frame: CGRect
+
+    var body: some View {
+        GeometryReader { geometry in
+            let global = geometry.frame(in: .global)
+            Color.clear
+                .onAppear { frame = global }
+                .onChange(of: global) { newFrame in
+                    frame = newFrame
+                }
+        }
+    }
+}
+#endif

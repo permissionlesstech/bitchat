@@ -101,6 +101,18 @@ enum TrailingPaneContent: Hashable {
     }
 }
 
+/// Which public timeline model a pane's message list renders. Each list is
+/// keyed by it, so a mounted list never has its `PublicChatModel` swapped
+/// for another (#1790's deferred scroll closures read the previous render).
+enum PaneRole: Hashable {
+    /// The pinned #mesh timeline (`AppRuntime.meshPaneTimeline`): the
+    /// split layout's leading pane.
+    case mesh
+    /// The selection's timeline: the single column's, and the split
+    /// layout's trailing geohash.
+    case following
+}
+
 /// Screenshot routing's view of the layout: `AppChromeModel
 /// .splitLayoutShowsLocation` (E10), whether a screenshot of the split layout
 /// shows a place. Nil for the single column, where the selection and the DM

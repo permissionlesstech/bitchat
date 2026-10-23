@@ -169,6 +169,19 @@ final class PrivateConversationModel: ObservableObject {
         refreshSelectedConversation()
     }
 
+    #if os(iOS)
+    /// Whether a DM a fold set aside can open again on unfold. While folded
+    /// a group can be left (or we removed from it) and a peer blocked;
+    /// reopening those would bring back an empty group chat where every
+    /// send fails, or post a refusal instead of a conversation.
+    func canReopenConversation(with peerID: PeerID) -> Bool {
+        if peerID.isGroup {
+            return chatViewModel.groupStore.group(for: peerID) != nil
+        }
+        return !chatViewModel.isPeerBlocked(peerID)
+    }
+    #endif
+
     func toggleFavorite(peerID: PeerID) {
         chatViewModel.toggleFavorite(peerID: peerID)
         refreshSelectedConversation()

@@ -13,8 +13,13 @@ import AppKit
 import BitFoundation
 @testable import bitchat
 
+/// `locationManager` drives the view model's channel switching; pass the
+/// one the feature models select through for a selection to reach the
+/// timelines, as `AppRuntime` shares `LocationChannelManager.shared`.
 @MainActor
-private func makeSmokeViewModel() -> (viewModel: ChatViewModel, transport: MockTransport, identityManager: MockIdentityManager) {
+private func makeSmokeViewModel(
+    locationManager: LocationChannelManager = .shared
+) -> (viewModel: ChatViewModel, transport: MockTransport, identityManager: MockIdentityManager) {
     let keychain = MockKeychain()
     let keychainHelper = MockKeychainHelper()
     let idBridge = NostrIdentityBridge(keychain: keychainHelper)
@@ -25,7 +30,8 @@ private func makeSmokeViewModel() -> (viewModel: ChatViewModel, transport: MockT
         keychain: keychain,
         idBridge: idBridge,
         identityManager: identityManager,
-        transport: transport
+        transport: transport,
+        locationManager: locationManager
     )
 
     return (viewModel, transport, identityManager)
@@ -54,13 +60,15 @@ private func makeSmokeLocationManager() -> LocationChannelManager {
 }
 
 /// `sharedContentStore` backs the share-import review; without one no share
-/// is ever pending.
+/// is ever pending. `locationManager` backs the location model; by default
+/// a fresh one of its own.
 @MainActor
 private func makeSmokeFeatureModels(
     for viewModel: ChatViewModel,
-    sharedContentStore: SharedContentStore? = nil
+    sharedContentStore: SharedContentStore? = nil,
+    locationManager: LocationChannelManager? = nil
 ) -> SmokeFeatureModels {
-    let locationManager = makeSmokeLocationManager()
+    let locationManager = locationManager ?? makeSmokeLocationManager()
     let conversations = viewModel.conversations
     let publicChatModel = PublicChatModel(conversations: conversations)
     let locationChannelsModel = LocationChannelsModel(manager: locationManager)
@@ -400,6 +408,37 @@ private final class WindowHost {
         Self.firstTextField(in: window)
     }
 
+    /// The prompts of the text fields whose centre lies in `frame` (window
+    /// coordinates): which composers, or which picker, a region shows.
+    func placeholders(in frame: CGRect) -> [String] {
+        Self.textFields(in: window).compactMap { field in
+            let center = field.convert(CGPoint(x: field.bounds.midX, y: field.bounds.midY), to: window)
+            guard frame.contains(center) else { return nil }
+            return field.attributedPlaceholder?.string ?? field.placeholder
+        }
+    }
+
+    /// A touch going down at `point` (window coordinates), as the split
+    /// layout's window-level touch observer reports it. False without one.
+    func touchDown(at point: CGPoint) -> Bool {
+        guard let observer = Self.first(PaneTouchObserverView.self, in: window) else { return false }
+        observer.recognizer.onTouchDown?(point)
+        return true
+    }
+
+    private static func textFields(in view: UIView) -> [UITextField] {
+        if let field = view as? UITextField { return [field] }
+        return view.subviews.flatMap { textFields(in: $0) }
+    }
+
+    private static func first<T: UIView>(_ type: T.Type, in view: UIView) -> T? {
+        if let match = view as? T { return match }
+        for subview in view.subviews {
+            if let match = first(type, in: subview) { return match }
+        }
+        return nil
+    }
+
     func close() {
         window.resignKey()
         window.isHidden = true
@@ -441,13 +480,146 @@ private final class SmokeSizeClass: ObservableObject {
     @Published var value: UserInterfaceSizeClass = .regular
 }
 
+/// ContentView in a window wide enough for the split layout: two 480pt
+/// panes either side of a 40pt gap at the window's centre. The view model
+/// switches channels on the same location manager the location model
+/// selects through, as the app's do, so a selection reaches the timelines;
+/// its CoreLocation is a mock that counts every request. Bob is a connected
+/// mesh peer.
+@MainActor
+private final class SplitContentHost {
+    let geohash = GeohashChannel(level: .city, geohash: "u4pru")
+    let bob = PeerID(str: "b0b0b0b0b0b0b0b0")
+    let viewModel: ChatViewModel
+    let models: SmokeFeatureModels
+    let location: MockLocationStateManaging
+    let sizeClass: SmokeSizeClass
+    private let meshPaneTimeline: PublicChatModel
+    private let host: WindowHost
+
+    private static let size = CGSize(width: 1000, height: 800)
+    private static let leadingRegion = CGRect(x: 0, y: 0, width: 480, height: 800)
+    private static let trailingRegion = CGRect(x: 520, y: 0, width: 480, height: 800)
+
+    private init(
+        viewModel: ChatViewModel,
+        models: SmokeFeatureModels,
+        location: MockLocationStateManaging,
+        sizeClass: SmokeSizeClass
+    ) {
+        self.viewModel = viewModel
+        self.models = models
+        self.location = location
+        self.sizeClass = sizeClass
+        meshPaneTimeline = PublicChatModel(conversations: viewModel.conversations, pinnedTo: .mesh)
+        host = WindowHost(
+            installSmokeEnvironment(
+                ContentViewSizeClassHarness(sizeClass: sizeClass, meshPaneTimeline: meshPaneTimeline),
+                featureModels: models
+            ),
+            size: Self.size
+        )
+    }
+
+    /// - Parameter compact: Start folded (the single column).
+    static func make(
+        compact: Bool = false,
+        sharedContentStore: SharedContentStore? = nil
+    ) async -> SplitContentHost {
+        let suiteName = "ViewSmokeTests.split.\(UUID().uuidString)"
+        let storage = UserDefaults(suiteName: suiteName) ?? .standard
+        storage.removePersistentDomain(forName: suiteName)
+        let location = MockLocationStateManaging(authorizationStatus: .authorizedWhenInUse)
+        let manager = LocationStateManager(
+            storage: storage,
+            locationManager: location,
+            geocoder: MockLocationStateGeocoder(),
+            shouldInitializeCoreLocation: true
+        )
+        let (viewModel, transport, _) = makeSmokeViewModel(locationManager: manager)
+        let models = makeSmokeFeatureModels(
+            for: viewModel,
+            sharedContentStore: sharedContentStore,
+            locationManager: manager
+        )
+        _ = await TestHelpers.waitUntil(
+            { models.locationChannelsModel.permissionState == .authorized },
+            timeout: TestConstants.settleTimeout
+        )
+        let sizeClass = SmokeSizeClass()
+        sizeClass.value = compact ? .compact : .regular
+        let split = SplitContentHost(viewModel: viewModel, models: models, location: location, sizeClass: sizeClass)
+        transport.updatePeerSnapshots([
+            makeSnapshot(peerID: split.bob, nickname: "Bob", noiseByte: 0xB0)
+        ])
+        _ = await TestHelpers.waitUntil(
+            { models.peerListModel.meshRows.contains { $0.peerID == split.bob } },
+            timeout: TestConstants.settleTimeout
+        )
+        _ = await split.settle { split.chrome.splitLayoutShowsLocation != nil || compact }
+        return split
+    }
+
+    var chrome: AppChromeModel { models.appChromeModel }
+    var channels: LocationChannelsModel { models.locationChannelsModel }
+    var openPeer: PeerID? { models.privateConversationModel.selectedPeerID }
+    /// The channel the selection's timeline renders.
+    var timelineChannel: ChannelID { models.publicChatModel.channel }
+    var isMeshPinned: Bool { viewModel.conversations.isMeshPinnedOnScreen }
+    /// The window presents something over the panes (the share review).
+    var isPresenting: Bool { host.window.rootViewController?.presentedViewController != nil }
+    /// The prompts of the text fields in each pane: its composer's names
+    /// its conversation; the picker's teleport field reads "geohash".
+    var leadingPrompts: [String] { host.placeholders(in: Self.leadingRegion) }
+    var trailingPrompts: [String] { host.placeholders(in: Self.trailingRegion) }
+
+    func settle(_ condition: @escaping () -> Bool) async -> Bool {
+        await TestHelpers.waitUntil(condition, timeout: TestConstants.settleTimeout)
+    }
+
+    /// Selects `channel` and waits until the timeline renders it.
+    func select(_ channel: ChannelID) async -> Bool {
+        channels.select(channel)
+        return await settle { self.timelineChannel == channel }
+    }
+
+    func open(_ peer: PeerID) async -> Bool {
+        models.privateConversationModel.startConversation(with: peer)
+        return await settle { self.openPeer == peer }
+    }
+
+    /// A touch going down in the middle of `pane`.
+    func touch(_ pane: ContentPane) -> Bool {
+        let region = pane == .leading ? Self.leadingRegion : Self.trailingRegion
+        return host.touchDown(at: CGPoint(x: region.midX, y: region.midY))
+    }
+
+    func fold() async -> Bool {
+        sizeClass.value = .compact
+        return await settle { self.chrome.splitLayoutShowsLocation == nil }
+    }
+
+    func unfold() async -> Bool {
+        sizeClass.value = .regular
+        return await settle { self.chrome.splitLayoutShowsLocation != nil }
+    }
+
+    func close() {
+        host.close()
+    }
+}
+
+/// ContentView with a test-driven width class and, for the split layout,
+/// the pinned #mesh timeline the app scene hands it (`meshPaneTimeline`).
 @MainActor
 private struct ContentViewSizeClassHarness: View {
     @ObservedObject var sizeClass: SmokeSizeClass
+    var meshPaneTimeline: PublicChatModel?
 
     var body: some View {
         ContentView()
             .environment(\.horizontalSizeClass, sizeClass.value)
+            .environment(\.meshPaneTimeline, meshPaneTimeline)
     }
 }
 #endif
@@ -1101,61 +1273,249 @@ struct ViewSmokeTests {
         #expect(location.requestAuthorizationCallCount == 0)
     }
 
-    /// E10, until the panes land: the flag follows #1792's columns as the
-    /// layout appears, as the selection changes and as the layout changes.
+    // MARK: - The split layout
+
+    /// #mesh leads, pinned on screen, beside the idle picker; the trailing
+    /// pane then shows the selected geohash with its own composer, and a DM
+    /// covering it until it ends. Each pane's composer names its own
+    /// conversation, and the screenshot flag follows what the trailing pane
+    /// shows as each selection lands (E10).
     @Test
-    func contentView_keepsTheColumnsScreenshotFlagCurrent() async {
-        let (viewModel, _, _) = makeSmokeViewModel()
-        let featureModels = makeSmokeFeatureModels(for: viewModel)
-        let chrome = featureModels.appChromeModel
-        let channels = featureModels.locationChannelsModel
-        let geohash = GeohashChannel(level: .city, geohash: "u4pru")
-        let sizeClass = SmokeSizeClass()
-        // Wide enough for two columns either side of the window's centre.
-        let host = WindowHost(
-            installSmokeEnvironment(ContentViewSizeClassHarness(sizeClass: sizeClass), featureModels: featureModels),
-            size: CGSize(width: 1000, height: 800)
+    func contentView_splitShowsEachTrailingPane() async {
+        let split = await SplitContentHost.make()
+        defer { split.close() }
+
+        let idle = await split.settle {
+            split.isMeshPinned
+                && split.chrome.splitLayoutShowsLocation == true
+                && split.leadingPrompts.contains { $0.contains("#mesh") }
+                && split.trailingPrompts == ["geohash"]
+        }
+        #expect(idle, "idle picker beside #mesh: \(split.leadingPrompts) | \(split.trailingPrompts)")
+
+        #expect(await split.select(.location(split.geohash)))
+        let channel = await split.settle {
+            split.trailingPrompts.contains { $0.contains("#\(split.geohash.geohash)") }
+                && split.chrome.splitLayoutShowsLocation == true
+        }
+        #expect(channel, "geohash pane: \(split.trailingPrompts)")
+
+        #expect(await split.open(split.bob))
+        let conversation = await split.settle {
+            split.trailingPrompts.contains { $0.contains("Bob") }
+                && split.chrome.splitLayoutShowsLocation == false
+        }
+        #expect(conversation, "DM pane: \(split.trailingPrompts)")
+        // #mesh keeps its composer beside the DM.
+        #expect(split.leadingPrompts.contains { $0.contains("#mesh") })
+
+        split.models.privateConversationModel.endConversation()
+        let back = await split.settle {
+            split.trailingPrompts.contains { $0.contains("#\(split.geohash.geohash)") }
+                && split.chrome.splitLayoutShowsLocation == true
+        }
+        #expect(back, "geohash again: \(split.trailingPrompts)")
+        // The picker never prompted, nor kept location running (I3).
+        #expect(split.location.requestAuthorizationCallCount == 0)
+        #expect(split.location.startUpdatingLocationCallCount == 0)
+    }
+
+    /// E3, then E4: folding from #mesh parks the geohash and the mesh DM
+    /// (#mesh selected, the DM ended, #mesh unpinned); unfolding brings both
+    /// back, the DM over the geohash.
+    @Test
+    func contentView_foldFromMeshParksTheGeohashAndDMUntilUnfold() async {
+        let split = await SplitContentHost.make()
+        defer { split.close() }
+        #expect(await split.select(.location(split.geohash)))
+        #expect(await split.open(split.bob))
+        #expect(split.touch(.leading))
+
+        #expect(await split.fold())
+        let parked = await split.settle {
+            split.timelineChannel == .mesh
+                && split.channels.selectedChannel == .mesh
+                && split.openPeer == nil
+        }
+        #expect(parked)
+        #expect(!split.isMeshPinned)
+
+        #expect(await split.unfold())
+        let restored = await split.settle {
+            split.timelineChannel == .location(split.geohash)
+                && split.openPeer == split.bob
+                && split.chrome.splitLayoutShowsLocation == false
+        }
+        #expect(restored)
+        #expect(split.isMeshPinned)
+    }
+
+    /// E2: folding from the trailing pane keeps the geohash and the DM
+    /// (into the sheet); nothing is selected away or ended.
+    @Test
+    func contentView_foldFromTheTrailingPaneKeepsEverything() async {
+        let split = await SplitContentHost.make()
+        defer { split.close() }
+        #expect(await split.select(.location(split.geohash)))
+        // Opening the DM gives the trailing pane the focus.
+        #expect(await split.open(split.bob))
+
+        #expect(await split.fold())
+        let moved = await TestHelpers.waitUntil(
+            { split.channels.selectedChannel != .location(split.geohash) || split.openPeer != split.bob },
+            timeout: TestConstants.negativeWaitWindow
         )
+        #expect(!moved)
+    }
+
+    /// E3's exception: a geohash DM needs its geohash live, so even a fold
+    /// from #mesh keeps both.
+    @Test
+    func contentView_foldKeepsAGeohashDMWithItsGeohash() async {
+        let split = await SplitContentHost.make()
+        defer { split.close() }
+        let geoDM = PeerID(nostr_: String(repeating: "ef", count: 32))
+        #expect(await split.select(.location(split.geohash)))
+        #expect(await split.open(geoDM))
+        #expect(split.touch(.leading))
+
+        #expect(await split.fold())
+        let moved = await TestHelpers.waitUntil(
+            { split.channels.selectedChannel != .location(split.geohash) || split.openPeer != geoDM },
+            timeout: TestConstants.negativeWaitWindow
+        )
+        #expect(!moved)
+    }
+
+    /// E5: choosing a location channel while folded drops what was parked,
+    /// so the unfold shows that channel and reopens nothing.
+    @Test
+    func contentView_compactLocationChoiceDropsWhatWasParked() async {
+        let split = await SplitContentHost.make()
+        defer { split.close() }
+        let other = GeohashChannel(level: .neighborhood, geohash: "9q8yyk")
+        #expect(await split.select(.location(split.geohash)))
+        #expect(await split.open(split.bob))
+        #expect(split.touch(.leading))
+        #expect(await split.fold())
+        #expect(await split.settle { split.timelineChannel == .mesh && split.openPeer == nil })
+
+        #expect(await split.select(.location(other)))
+        #expect(await split.unfold())
+        let shown = await split.settle {
+            split.trailingPrompts.contains { $0.contains("#\(other.geohash)") }
+        }
+        #expect(shown, "\(split.trailingPrompts)")
+        let restored = await TestHelpers.waitUntil(
+            { split.channels.selectedChannel != .location(other) || split.openPeer != nil },
+            timeout: TestConstants.negativeWaitWindow
+        )
+        #expect(!restored)
+    }
+
+    /// I4/E6: a panic wipe while folded leaves nothing for the unfold to
+    /// rejoin or reopen: the trailing pane comes back as the idle picker.
+    @Test
+    func contentView_panicWhileFoldedLeavesNothingToRestore() async {
+        let split = await SplitContentHost.make()
+        defer { split.close() }
+        #expect(await split.select(.location(split.geohash)))
+        #expect(await split.open(split.bob))
+        #expect(split.touch(.leading))
+        #expect(await split.fold())
+        #expect(await split.settle { split.timelineChannel == .mesh && split.openPeer == nil })
+
+        split.chrome.panicClearAllData()
+
+        #expect(await split.unfold())
+        let idle = await split.settle { split.trailingPrompts == ["geohash"] }
+        #expect(idle, "\(split.trailingPrompts)")
+        let restored = await TestHelpers.waitUntil(
+            { split.channels.selectedChannel != .mesh || split.openPeer != nil },
+            timeout: TestConstants.negativeWaitWindow
+        )
+        #expect(!restored)
+    }
+
+    /// I4: a wipe in the split layout takes the trailing geohash with it:
+    /// the pane goes back to the idle picker once #mesh lands.
+    @Test
+    func contentView_panicReturnsTheTrailingPaneToThePicker() async {
+        let split = await SplitContentHost.make()
+        defer { split.close() }
+        #expect(await split.select(.location(split.geohash)))
+        #expect(await split.settle { split.trailingPrompts.contains { $0.contains("#\(split.geohash.geohash)") } })
+
+        split.chrome.panicClearAllData()
+
+        let idle = await split.settle {
+            split.timelineChannel == .mesh
+                && split.trailingPrompts == ["geohash"]
+                && split.chrome.splitLayoutShowsLocation == true
+        }
+        #expect(idle, "\(split.trailingPrompts)")
+    }
+
+    /// E8: the location sheet up at unfold closes, and the trailing pane
+    /// shows the picker in its place, browsing from the selected geohash
+    /// rather than showing it.
+    @Test
+    func contentView_unfoldTurnsTheLocationSheetIntoThePicker() async {
+        let split = await SplitContentHost.make(compact: true)
+        defer { split.close() }
+        #expect(await split.select(.location(split.geohash)))
+        split.chrome.isLocationChannelsSheetPresented = true
+
+        #expect(await split.unfold())
+        let browsing = await split.settle {
+            !split.chrome.isLocationChannelsSheetPresented
+                && split.trailingPrompts == ["geohash"]
+                && split.chrome.splitLayoutShowsLocation == true
+        }
+        #expect(browsing, "\(split.trailingPrompts)")
+        #expect(split.channels.selectedChannel == .location(split.geohash))
+    }
+
+    /// E1 and E11: shared content goes to the last-touched pane's composer,
+    /// and the review names that pane's conversation; a pane without a
+    /// composer (the picker) leaves it to #mesh's. Each share is reviewed
+    /// in an alert, over the panes, so each pane is touched before its share
+    /// arrives.
+    @Test
+    func contentView_shareGoesToTheLastTouchedPane() async throws {
+        let suite = "ViewSmokeTests.split.share.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = SharedContentStore(defaults: defaults)
+        let split = await SplitContentHost.make(sharedContentStore: store)
+        let shares = split.models.sharedContentImportModel
         defer {
-            host.close()
-            channels.select(.mesh)
+            shares.discardAll()
+            split.close()
+        }
+        let geohash = SharedContentDestination.geohash(split.geohash.geohash)
+        /// A share arriving under the runtime's `label`, which the root
+        /// relabels for the composer it fills; then reviewed away.
+        func share(labelled label: SharedContentDestination, settlesOn expected: SharedContentDestination) async -> Bool {
+            let now = Date()
+            try? store.stage(.text("shared from another app", createdAt: now), now: now)
+            shares.refresh(destination: label, now: now)
+            let settled = await split.settle { shares.offer?.destination == expected }
+            shares.discardAll()
+            _ = await split.settle { !split.isPresenting }
+            return settled
         }
 
-        // Split on #mesh: the column sits beside a timeline with no place.
-        let splitOnMesh = await TestHelpers.waitUntil(
-            { chrome.splitLayoutShowsLocation == false },
-            timeout: TestConstants.settleTimeout
-        )
-        #expect(splitOnMesh)
+        // The picker has no composer: #mesh takes it, whichever pane.
+        #expect(split.touch(.trailing))
+        #expect(await share(labelled: geohash, settlesOn: .mesh))
 
-        channels.select(.location(geohash))
-        let splitOnGeohash = await TestHelpers.waitUntil(
-            { chrome.splitLayoutShowsLocation == true },
-            timeout: TestConstants.settleTimeout
-        )
-        #expect(splitOnGeohash)
+        #expect(await split.select(.location(split.geohash)))
+        #expect(split.touch(.trailing))
+        #expect(await share(labelled: .mesh, settlesOn: geohash))
 
-        // Folded: the single column, where the selection decides.
-        sizeClass.value = .compact
-        let folded = await TestHelpers.waitUntil(
-            { chrome.splitLayoutShowsLocation == nil },
-            timeout: TestConstants.settleTimeout
-        )
-        #expect(folded)
-
-        sizeClass.value = .regular
-        let unfolded = await TestHelpers.waitUntil(
-            { chrome.splitLayoutShowsLocation == true },
-            timeout: TestConstants.settleTimeout
-        )
-        #expect(unfolded)
-
-        channels.select(.mesh)
-        let backOnMesh = await TestHelpers.waitUntil(
-            { chrome.splitLayoutShowsLocation == false },
-            timeout: TestConstants.settleTimeout
-        )
-        #expect(backOnMesh)
+        #expect(split.touch(.leading))
+        #expect(await share(labelled: geohash, settlesOn: .mesh))
     }
 
     /// E11: the share review names the composer the share would fill. The

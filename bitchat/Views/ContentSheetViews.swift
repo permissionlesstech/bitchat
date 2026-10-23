@@ -260,11 +260,12 @@ struct ContentPeopleSheetView: View {
 }
 
 #if os(iOS)
-/// The open DM as a column beside the public timeline (regular width, e.g.
-/// the iPhone Duo's inner display). It lives in ContentView's own tree, so it
+/// The open DM as the split layout's trailing pane (regular width, e.g. the
+/// iPhone Duo's inner display). It lives in ContentView's own tree, so it
 /// inherits every environment object and presents through the root: none of
 /// the sheet's NavigationStack, close buttons, banner mirror, alert copies or
-/// backdrop come along.
+/// backdrop come along. The pane around it hosts the legacy-media consent
+/// dialog, whatever the pane shows.
 struct ContentConversationColumnView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
 
@@ -282,7 +283,7 @@ struct ContentConversationColumnView: View {
     let target: ConversationTarget?
     var focusedComposer: FocusState<ComposerSlot?>.Binding
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
-    /// The photo button; the root presents the picker for the column.
+    /// The photo button; the root presents the picker for the pane.
     let onPickMedia: (UIImagePickerController.SourceType) -> Void
 
     let headerHeight: CGFloat
@@ -295,7 +296,7 @@ struct ContentConversationColumnView: View {
     var body: some View {
         Group {
             // Without a conversation the DM's list would show the public
-            // timeline; the column only outlives its DM for a frame.
+            // timeline; the pane only outlives its DM for a frame.
             if privateConversationModel.selectedPeerID != nil {
                 ContentPrivateChatSheetView(
                     showSidebar: $showSidebar,
@@ -317,7 +318,6 @@ struct ContentConversationColumnView: View {
                 )
             }
         }
-        .modifier(LegacyPrivateMediaConsentDialog())
     }
 }
 
@@ -448,8 +448,9 @@ extension View {
 #endif
 
 /// Consent before one private-media send to a legacy client goes out in a
-/// clear signed envelope. Applied by the view that shows the DM, so a
-/// pending request always has a presenter; dismissing it denies the send.
+/// clear signed envelope. Applied by the people sheet and by the split
+/// layout's trailing pane, whatever either shows, so a pending request
+/// always has a presenter; dismissing it denies the send.
 struct LegacyPrivateMediaConsentDialog: ViewModifier {
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
 
@@ -861,9 +862,10 @@ private struct ContentPrivateChatSheetView: View {
     let onPickMedia: () -> Void
     #endif
 
-    /// Shown in the people column rather than the sheet: the back chevron
-    /// and swipe-to-leave return to the list there, so there is no close
-    /// button, and the header lines up with the main header beside it.
+    /// Shown in the split layout's trailing pane rather than the sheet: the
+    /// back chevron and swipe-to-leave bring the pane's channel or picker
+    /// back, so there is no close button, and the header lines up with the
+    /// #mesh bar beside it.
     var isInline = false
     var trailingCornerReach: CGFloat = 0
 
@@ -991,8 +993,8 @@ private struct ContentPrivateChatSheetView: View {
             )
         }
         .background {
-            // Inline, the root backdrop already spans both columns; a second
-            // glass gradient would restart its glows at the column edge.
+            // Inline, the root backdrop already spans both panes; a second
+            // glass gradient would restart its glows at the pane's edge.
             if !isInline {
                 ThemedRootBackground()
             }

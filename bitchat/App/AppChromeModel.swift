@@ -127,6 +127,14 @@ final class AppChromeModel: ObservableObject {
         showScreenshotPrivacyWarning = true
     }
 
+    #if os(iOS)
+    /// Whether the split layout's leading pane keeps #mesh on screen beside
+    /// the selection: arrivals there batch like the selected timeline's.
+    func setMeshPinnedOnScreen(_ pinned: Bool) {
+        chatViewModel.conversations.setMeshPinnedOnScreen(pinned)
+    }
+    #endif
+
     func setPanicPreparation(_ preparation: (@MainActor () -> Void)?) {
         prepareForPanic = preparation
     }
