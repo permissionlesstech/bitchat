@@ -458,8 +458,10 @@ private final class WindowHost {
 
     func close() {
         // A field left first responder outlives its window and keeps the
-        // keyboard: no later test window becomes key.
+        // keyboard, and a sheet left up outlives its presenter: either way
+        // later test windows stop catching up with their views.
         window.endEditing(true)
+        window.rootViewController?.dismiss(animated: false)
         window.resignKey()
         window.isHidden = true
         window.rootViewController = nil
