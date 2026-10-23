@@ -32,6 +32,8 @@ protocol ChatLifecycleContext: AnyObject {
     /// Returns `false` when one was already recorded — the caller must skip sending.
     @discardableResult
     func markReadReceiptSent(_ messageID: String) -> Bool
+    /// Records a DM as read across launches (ReadDMRecord).
+    func recordDMRead(_ messageID: String)
     /// The owner-level read pass (chat manager + receipts); used for the
     /// delayed re-run after the app becomes active.
     func markPrivateMessagesAsRead(from peerID: PeerID)
@@ -182,6 +184,7 @@ final class ChatLifecycleCoordinator {
            let identity = try? context.deriveNostrIdentity(forGeohash: channel.geohash) {
             let messages = context.privateMessages(for: peerID)
             for message in messages where message.senderPeerID == peerID && !message.isRelay {
+                context.recordDMRead(message.id)
                 guard !context.sentReadReceipts.contains(message.id) else { continue }
 
                 SecureLogger.debug(
@@ -221,6 +224,7 @@ final class ChatLifecycleCoordinator {
                 continue
             }
 
+            context.recordDMRead(message.id)
             guard !context.sentReadReceipts.contains(message.id) else { continue }
 
             let receipt = ReadReceipt(
