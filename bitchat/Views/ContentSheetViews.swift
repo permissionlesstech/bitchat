@@ -259,6 +259,18 @@ struct ContentPeopleSheetView: View {
         .frame(minWidth: 420, minHeight: 520)
         #endif
         #if os(iOS)
+        .sheet(isPresented: Binding(
+            get: { imagePreviewURL != nil && (showSidebar || privateConversationModel.selectedPeerID != nil) },
+            set: { presenting in
+                if !presenting {
+                    imagePreviewURL = nil
+                }
+            }
+        )) {
+            if let url = imagePreviewURL {
+                ImagePreviewView(url: url)
+            }
+        }
         .fullScreenCover(isPresented: Binding(
             get: { showImagePicker && (showSidebar || privateConversationModel.selectedPeerID != nil) },
             set: { newValue in
