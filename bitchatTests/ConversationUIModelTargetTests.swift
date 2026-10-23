@@ -120,6 +120,25 @@ struct ConversationUIModelTargetTests {
     }
 
     @Test @MainActor
+    func autocompleteIsTheComposersOwn() async {
+        let (ui, viewModel, transport) = makeTargetUIModel()
+        transport.simulateConnect(alice, nickname: "alice")
+        let resolved = await TestHelpers.waitUntil({
+            viewModel.getPeerIDForNickname("alice", in: .mesh) == alice
+        }, timeout: TestConstants.settleTimeout)
+        #expect(resolved)
+        viewModel.activeChannel = .location(geohash)
+
+        let state = ui.autocomplete(for: "hi @al", cursorPosition: 6, in: .mesh)
+        #expect(state.suggestions == ["@alice"])
+        #expect(!ui.showAutocomplete)
+
+        var text = "hi @al"
+        _ = ui.complete("@alice", in: &text, state: state)
+        #expect(text == "hi @alice")
+    }
+
+    @Test @MainActor
     func voiceAndPhotosUseTheTargetsConversation() async throws {
         let (ui, viewModel, transport) = makeTargetUIModel()
         viewModel.selectedPrivateChatPeer = alice

@@ -1867,6 +1867,24 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         composerCoordinator.completeNickname(nickname, in: &text)
     }
 
+    /// Mention suggestions for `text` in `target`'s composer, as a value
+    /// that composer keeps; nothing shared changes.
+    @MainActor
+    func autocomplete(
+        for text: String,
+        cursorPosition: Int,
+        in target: ConversationTarget
+    ) -> ComposerAutocompleteState {
+        composerCoordinator.autocomplete(for: text, cursorPosition: cursorPosition, in: target)
+    }
+
+    /// Applies a picked suggestion to the composer text `state` was made
+    /// for; returns the cursor position after it.
+    @MainActor
+    func complete(_ suggestion: String, in text: inout String, state: ComposerAutocompleteState) -> Int {
+        composerCoordinator.complete(suggestion, in: &text, state: state)
+    }
+
     // MARK: - Message Formatting
 
     @MainActor

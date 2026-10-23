@@ -148,6 +148,22 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.updateAutocomplete(for: text, cursorPosition: cursorPosition)
     }
 
+    /// Mention suggestions for `text` in `target`'s composer. The composer
+    /// keeps the returned state; nothing shared changes.
+    func autocomplete(
+        for text: String,
+        cursorPosition: Int,
+        in target: ConversationTarget
+    ) -> ComposerAutocompleteState {
+        chatViewModel.autocomplete(for: text, cursorPosition: cursorPosition, in: target)
+    }
+
+    /// Applies a picked suggestion to the text `state` was computed for and
+    /// returns the cursor position after it.
+    func complete(_ suggestion: String, in text: inout String, state: ComposerAutocompleteState) -> Int {
+        chatViewModel.complete(suggestion, in: &text, state: state)
+    }
+
     func completeNickname(_ nickname: String, in text: inout String) -> Int {
         chatViewModel.completeNickname(nickname, in: &text)
     }
