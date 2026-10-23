@@ -272,6 +272,54 @@ struct GeohashParticipantTrackerTests {
         #expect(tracker.visiblePeople.count == 1)
     }
 
+    // MARK: - Membership Revision Tests
+
+    @Test func membershipRevision_bumpsWhenSomeoneJoins() async {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        tracker.setActiveGeohash("abc123")
+        let before = tracker.visibleMembershipRevision
+
+        tracker.recordParticipant(pubkeyHex: "pubkey1")
+
+        #expect(tracker.visibleMembershipRevision != before)
+    }
+
+    @Test func membershipRevision_staysPutOnRepeatActivity() async {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        tracker.setActiveGeohash("abc123")
+        tracker.recordParticipant(pubkeyHex: "pubkey1")
+        tracker.recordParticipant(pubkeyHex: "pubkey2")
+        let before = tracker.visibleMembershipRevision
+
+        // Heartbeats from people already present only move timestamps.
+        tracker.recordParticipant(pubkeyHex: "pubkey1")
+        tracker.recordParticipant(pubkeyHex: "pubkey2")
+        tracker.refresh()
+
+        #expect(tracker.visibleMembershipRevision == before)
+    }
+
+    @Test func membershipRevision_bumpsWhenSomeoneLeaves() async {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        tracker.setActiveGeohash("abc123")
+        tracker.recordParticipant(pubkeyHex: "pubkey1")
+        tracker.recordParticipant(pubkeyHex: "pubkey2")
+        let afterJoins = tracker.visibleMembershipRevision
+
+        tracker.removeParticipant(pubkeyHex: "pubkey1")
+        #expect(tracker.visibleMembershipRevision != afterJoins)
+
+        let afterRemoval = tracker.visibleMembershipRevision
+        tracker.setActiveGeohash(nil)
+        #expect(tracker.visibleMembershipRevision != afterRemoval)
+    }
+
     // MARK: - GeoPerson Tests
 
     @Test func geoPerson_identifiable() async {

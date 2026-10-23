@@ -43,6 +43,12 @@ final class GeohashParticipantTracker: ObservableObject {
     /// Currently visible people for the active geohash
     @Published private(set) var visiblePeople: [GeoPerson] = []
 
+    /// Bumps whenever the set of ids in `visiblePeople` changes, so derived
+    /// per-roster state (the sender color palette) is rebuilt only when
+    /// membership changes — not on every activity timestamp update.
+    private(set) var visibleMembershipRevision: UInt64 = 0
+    private var visibleMemberIDs: Set<String> = []
+
     /// The currently active geohash (if any)
     private var activeGeohash: String?
 
@@ -65,7 +71,7 @@ final class GeohashParticipantTracker: ObservableObject {
     func setActiveGeohash(_ geohash: String?) {
         activeGeohash = geohash
         if geohash == nil {
-            visiblePeople = []
+            publishVisiblePeople([])
         } else {
             refresh()
         }
@@ -127,7 +133,16 @@ final class GeohashParticipantTracker: ObservableObject {
 
     /// Refresh the visible people list
     func refresh() {
-        visiblePeople = getVisiblePeople()
+        publishVisiblePeople(getVisiblePeople())
+    }
+
+    private func publishVisiblePeople(_ people: [GeoPerson]) {
+        let ids = Set(people.map(\.id))
+        if ids != visibleMemberIDs {
+            visibleMemberIDs = ids
+            visibleMembershipRevision &+= 1
+        }
+        visiblePeople = people
     }
 
     /// Start the periodic refresh timer
@@ -149,14 +164,14 @@ final class GeohashParticipantTracker: ObservableObject {
     /// Clear all participant data
     func clear() {
         participants.removeAll()
-        visiblePeople = []
+        publishVisiblePeople([])
     }
 
     /// Clear participant data for a specific geohash
     func clear(geohash: String) {
         participants.removeValue(forKey: geohash)
         if activeGeohash == geohash {
-            visiblePeople = []
+            publishVisiblePeople([])
         }
     }
 }

@@ -1,11 +1,20 @@
 import SwiftUI
 
-struct GeohashPeopleList: View {
+struct GeohashPeopleList: View, Equatable {
     @EnvironmentObject private var peerListModel: PeerListModel
     @ThemedPalette private var palette
     let onTapPerson: () -> Void
     @Environment(\.colorScheme) var colorScheme
     @State private var orderedIDs: [String] = []
+
+    /// The only input is the tap action, which always reveals the DM pane
+    /// and can't be compared. Treating it as equal lets SwiftUI skip this
+    /// list when the presenting view re-renders for models the list doesn't
+    /// read (pipeline flushes, mesh peers, chrome); roster changes still
+    /// arrive through the observed PeerListModel.
+    static func == (lhs: GeohashPeopleList, rhs: GeohashPeopleList) -> Bool {
+        true
+    }
 
     private enum Strings {
         static let noneNearby: LocalizedStringKey = "geohash_people.none_nearby"
@@ -34,21 +43,17 @@ struct GeohashPeopleList: View {
         } else {
             let people = peerListModel.geohashPeople
             let currentIDs = people.map(\.id)
+            let personByID = Dictionary(people.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            let displayed = PeopleListOrdering.stableOrder(previous: orderedIDs, current: currentIDs)
+                .compactMap { personByID[$0] }
+            // People physically here first, then those who teleported in.
+            let rows = displayed.filter { !$0.isTeleported } + displayed.filter(\.isTeleported)
+            let firstID = rows.first?.id
 
-            let displayIDs = orderedIDs.filter { currentIDs.contains($0) } + currentIDs.filter { !orderedIDs.contains($0) }
-            let nonTele = displayIDs.filter { id in
-                !(people.first(where: { $0.id == id })?.isTeleported ?? false)
-            }
-            let tele = displayIDs.filter { id in
-                people.first(where: { $0.id == id })?.isTeleported ?? false
-            }
-            let finalOrder: [String] = nonTele + tele
-            let firstID = finalOrder.first
-            let personByID = Dictionary(uniqueKeysWithValues: people.map { ($0.id, $0) })
-
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(finalOrder.filter { personByID[$0] != nil }, id: \.self) { pid in
-                    let person = personByID[pid]!
+            // Lazy: a busy room has hundreds of rows, each with a context
+            // menu and accessibility actions; only the visible ones are built.
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(rows) { person in
                     HStack(spacing: 4) {
                         let icon = person.isTeleported ? "face.dashed" : "mappin.and.ellipse"
                         let assignedColor = peerListModel.colorForGeohashPerson(id: person.id, isDark: colorScheme == .dark)
@@ -144,12 +149,10 @@ struct GeohashPeopleList: View {
             }
             // Seed and update order outside result builder
             .onAppear {
-                orderedIDs = currentIDs
+                orderedIDs = PeopleListOrdering.stableOrder(previous: [], current: currentIDs)
             }
             .onChange(of: currentIDs) { ids in
-                var newOrder = orderedIDs
-                newOrder.removeAll { !ids.contains($0) }
-                for id in ids where !newOrder.contains(id) { newOrder.append(id) }
+                let newOrder = PeopleListOrdering.stableOrder(previous: orderedIDs, current: ids)
                 if newOrder != orderedIDs { orderedIDs = newOrder }
             }
         }

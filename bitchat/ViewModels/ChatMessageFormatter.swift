@@ -9,6 +9,16 @@ final class ChatMessageFormatter {
     private unowned let viewModel: ChatViewModel
     private let meshPalette = MinimalDistancePalette(config: .mesh)
     private let nostrPalette = MinimalDistancePalette(config: .nostr)
+    /// What the Nostr palette was last built from. Colors are looked up once
+    /// per people-sheet row and per formatted geochat message, so the palette
+    /// is rebuilt only when the roster's membership (or our own excluded
+    /// key) changes rather than recomputing the roster on every lookup.
+    private var nostrPaletteKey: NostrPaletteKey?
+
+    private struct NostrPaletteKey: Equatable {
+        let membershipRevision: UInt64
+        let excludedHex: String?
+    }
 
     init(viewModel: ChatViewModel) {
         self.viewModel = viewModel
@@ -511,20 +521,31 @@ private extension ChatMessageFormatter {
             return .orange
         }
 
-        nostrPalette.ensurePalette(for: currentNostrPaletteSeeds(excluding: myHex))
+        ensureNostrPalette(excluding: myHex)
         if let color = nostrPalette.color(for: pubkeyHexLowercased, isDark: isDark) {
             return color
         }
         return Color(peerSeed: "nostr:" + pubkeyHexLowercased, isDark: isDark)
     }
 
-    func currentNostrPaletteSeeds(excluding myHex: String?) -> [String: String] {
+    /// Seeds the palette from the tracker's published roster, and only when
+    /// its membership changed. Rebuilding it from a fresh roster scan per
+    /// lookup made every people-sheet render O(N²) in the participant count.
+    func ensureNostrPalette(excluding myHex: String?) {
+        let tracker = viewModel.participantTracker
+        let key = NostrPaletteKey(
+            membershipRevision: tracker.visibleMembershipRevision,
+            excludedHex: myHex
+        )
+        guard key != nostrPaletteKey else { return }
+        nostrPaletteKey = key
+
         var seeds: [String: String] = [:]
         let excluded = myHex ?? ""
-        for person in viewModel.visibleGeohashPeople() where person.id != excluded {
+        for person in tracker.visiblePeople where person.id != excluded {
             seeds[person.id] = "nostr:" + person.id
         }
-        return seeds
+        nostrPalette.ensurePalette(for: seeds)
     }
 
     func currentGeohashIdentityHex() -> String? {

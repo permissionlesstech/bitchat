@@ -249,14 +249,17 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
         )
     }
 
+    /// Runs once per participant on every roster rebuild, so keep it to one
+    /// lowercase copy: `publicKeyHex` is already lowercase.
     func displayNameForNostrPubkey(_ pubkeyHex: String) -> String {
         let suffix = String(pubkeyHex.suffix(4))
+        let key = pubkeyHex.lowercased()
         if let geohash = context.currentGeohash,
            let myGeoIdentity = try? context.deriveNostrIdentity(forGeohash: geohash),
-           myGeoIdentity.publicKeyHex.lowercased() == pubkeyHex.lowercased() {
+           myGeoIdentity.publicKeyHex == key {
             return context.nickname + "#" + suffix
         }
-        if let nick = context.geoNicknames[pubkeyHex.lowercased()], !nick.isEmpty {
+        if let nick = context.geoNicknames[key], !nick.isEmpty {
             return nick + "#" + suffix
         }
         return "anon#\(suffix)"
