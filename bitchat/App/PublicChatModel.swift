@@ -88,3 +88,23 @@ final class PublicChatModel: ObservableObject {
             }
     }
 }
+
+#if os(iOS)
+/// The split layout's leading #mesh timeline, handed down as a plain
+/// reference. Reading it never subscribes the reader to the model, so the
+/// root view can pass it to the leading pane without re-rendering on every
+/// mesh message; only the pane that injects it as its `PublicChatModel`
+/// environment object observes it.
+private struct MeshPaneTimelineKey: EnvironmentKey {
+    static let defaultValue: PublicChatModel? = nil
+}
+
+extension EnvironmentValues {
+    /// `AppRuntime.meshPaneTimeline`; nil outside the app scene (previews,
+    /// test harnesses).
+    var meshPaneTimeline: PublicChatModel? {
+        get { self[MeshPaneTimelineKey.self] }
+        set { self[MeshPaneTimelineKey.self] = newValue }
+    }
+}
+#endif

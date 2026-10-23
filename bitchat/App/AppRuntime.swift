@@ -18,7 +18,13 @@ final class AppRuntime: ObservableObject {
     /// (docs/CONVERSATION-STORE-DESIGN.md). Owned here; the feature models
     /// and `ChatViewModel` observe and mutate it through its intent API.
     let conversations: ConversationStore
+    /// The selected channel's timeline: the one compact timeline, and the
+    /// split layout's trailing pane.
     let publicChatModel: PublicChatModel
+    #if os(iOS)
+    /// The split layout's leading pane: #mesh, whatever is selected.
+    let meshPaneTimeline: PublicChatModel
+    #endif
     let privateInboxModel: PrivateInboxModel
     let privateConversationModel: PrivateConversationModel
     let verificationModel: VerificationModel
@@ -61,6 +67,9 @@ final class AppRuntime: ObservableObject {
             locationManager: locationManager
         )
         self.publicChatModel = PublicChatModel(conversations: conversations)
+        #if os(iOS)
+        self.meshPaneTimeline = PublicChatModel(conversations: conversations, pinnedTo: .mesh)
+        #endif
         self.privateInboxModel = PrivateInboxModel(conversations: conversations)
         self.locationChannelsModel = LocationChannelsModel(manager: locationManager)
         self.privateConversationModel = PrivateConversationModel(
