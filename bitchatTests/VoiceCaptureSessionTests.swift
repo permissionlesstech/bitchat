@@ -194,6 +194,13 @@ struct VoiceCaptureSessionTests {
         return false
     }
 
+    private func makeVoiceNoteFile() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("voice-note-\(UUID().uuidString).m4a")
+        try Data([0x01]).write(to: url)
+        return url
+    }
+
     @Test func staleCaptureCallbackCannotInvalidateNewGeneration() {
         let generations = PTTCaptureGeneration()
         let old = generations.begin()
@@ -534,6 +541,120 @@ struct VoiceCaptureSessionTests {
         #expect(script.provided == 2)
     }
 
+    // MARK: A released note is delivered
+
+    /// The next press can land in a classic note's finalize padding and
+    /// stand down. The released note was bound to its conversation at the
+    /// release, so it is still delivered, and the newer press keeps its
+    /// retry.
+    @Test func aNoteReleasedBeforeTheNextPressIsStillDelivered() async throws {
+        var clock = Date(timeIntervalSince1970: 1_000_000)
+        let oldSession = GatedVoiceCaptureSession()
+        let deferredSession = GatedVoiceCaptureSession(
+            startError: VoiceRecorder.RecorderError.recordingInProgress
+        )
+        let script = SessionScript([oldSession, deferredSession])
+        let viewModel = VoiceRecordingViewModel(now: { clock })
+        viewModel.sessionProvider = { script.next() }
+        let url = try makeVoiceNoteFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        var delivered: [URL] = []
+
+        viewModel.pressChanged(shouldShow: true)
+        await waitUntil { self.isRecording(viewModel.state) }
+        clock = clock.addingTimeInterval(3)
+        viewModel.pressEnded { delivered.append($0) }
+        await waitUntil { oldSession.finishStarted }
+
+        viewModel.pressChanged(shouldShow: true)
+        await waitUntil { deferredSession.cancelCount == 1 && viewModel.isStartDeferred }
+
+        oldSession.resolveFinish(with: url)
+        await waitUntil { delivered == [url] }
+        #expect(FileManager.default.fileExists(atPath: url.path))
+        #expect(viewModel.state == .idle)
+        #expect(viewModel.isStartDeferred)
+    }
+
+    /// A tap in that padding starts and ends a hold before it records. The
+    /// released note survives that too.
+    @Test func aTapDuringFinalizeKeepsTheReleasedNote() async throws {
+        var clock = Date(timeIntervalSince1970: 1_000_000)
+        let oldSession = GatedVoiceCaptureSession()
+        let tapSession = GatedVoiceCaptureSession()
+        let script = SessionScript([oldSession, tapSession])
+        let viewModel = VoiceRecordingViewModel(now: { clock })
+        viewModel.sessionProvider = { script.next() }
+        let url = try makeVoiceNoteFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        var delivered: [URL] = []
+
+        viewModel.pressChanged(shouldShow: true)
+        await waitUntil { self.isRecording(viewModel.state) }
+        clock = clock.addingTimeInterval(3)
+        viewModel.pressEnded { delivered.append($0) }
+        await waitUntil { oldSession.finishStarted }
+
+        // Down and up again before the tap's hold is past its permission
+        // check.
+        viewModel.pressChanged(shouldShow: true)
+        viewModel.pressEnded { _ in Issue.record("A tap records nothing to deliver") }
+        await waitUntil { tapSession.cancelCount == 1 }
+
+        oldSession.resolveFinish(with: url)
+        await waitUntil { delivered == [url] }
+        #expect(script.provided == 2)
+        #expect(viewModel.state == .idle)
+    }
+
+    /// A note too short to keep doesn't alert over a newer press: that
+    /// press owns the state now, and an alert would block its retry.
+    @Test func aStaleTooShortNoteRaisesNoAlertOverANewerPress() async throws {
+        // A clock that never moves makes every note too short.
+        let clock = Date(timeIntervalSince1970: 1_000_000)
+        let oldSession = GatedVoiceCaptureSession()
+        let deferredSession = GatedVoiceCaptureSession(
+            startError: VoiceRecorder.RecorderError.recordingInProgress
+        )
+        let script = SessionScript([oldSession, deferredSession])
+        let viewModel = VoiceRecordingViewModel(now: { clock })
+        viewModel.sessionProvider = { script.next() }
+        let url = try makeVoiceNoteFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        viewModel.pressChanged(shouldShow: true)
+        await waitUntil { self.isRecording(viewModel.state) }
+        viewModel.pressEnded { _ in Issue.record("A note this short isn't delivered") }
+        await waitUntil { oldSession.finishStarted }
+
+        viewModel.pressChanged(shouldShow: true)
+        await waitUntil { deferredSession.cancelCount == 1 && viewModel.isStartDeferred }
+
+        oldSession.resolveFinish(with: url)
+        await waitUntil { !FileManager.default.fileExists(atPath: url.path) }
+        #expect(viewModel.state == .idle)
+        #expect(viewModel.isStartDeferred)
+    }
+
+    /// With nothing after it, a note too short to keep still says so.
+    @Test func aTooShortNoteOnItsOwnStillAlerts() async throws {
+        let clock = Date(timeIntervalSince1970: 1_000_000)
+        let session = GatedVoiceCaptureSession()
+        let viewModel = VoiceRecordingViewModel(now: { clock })
+        viewModel.sessionProvider = { session }
+        let url = try makeVoiceNoteFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        viewModel.pressChanged(shouldShow: true)
+        await waitUntil { self.isRecording(viewModel.state) }
+        viewModel.pressEnded { _ in Issue.record("A note this short isn't delivered") }
+        await waitUntil { session.finishStarted }
+        session.resolveFinish(with: url)
+
+        await waitUntil { viewModel.showAlert }
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+    }
+
     @Test func panicSynchronouslyCancelsActiveCaptureAndResetsUI() async {
         let session = GatedVoiceCaptureSession()
         let viewModel = VoiceRecordingViewModel()
@@ -551,7 +672,8 @@ struct VoiceCaptureSessionTests {
 
     @Test func panicInvalidatesARecordingAlreadyFinalizing() async throws {
         let session = GatedVoiceCaptureSession()
-        let viewModel = VoiceRecordingViewModel()
+        var clock = Date(timeIntervalSince1970: 1_000_000)
+        let viewModel = VoiceRecordingViewModel(now: { clock })
         viewModel.sessionProvider = { session }
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("voice-panic-\(UUID().uuidString).m4a")
@@ -560,6 +682,9 @@ struct VoiceCaptureSessionTests {
 
         viewModel.start(shouldShow: true)
         await waitUntil { self.isRecording(viewModel.state) }
+        // Long enough to keep, so only the panic stands between this note
+        // and its delivery.
+        clock = clock.addingTimeInterval(3)
         viewModel.finish { _ in delivered = true }
         await waitUntil { session.finishStarted }
 

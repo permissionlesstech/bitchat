@@ -86,6 +86,16 @@ final class VoiceRecordingViewModel: ObservableObject {
     /// older hold may still deliver its file, but it must never mutate the UI
     /// state of a newer hold.
     private var holdGeneration: UInt64 = 0
+    /// Bumped only by a panic. A note released before one must never be
+    /// delivered after it; a newer hold is no reason to drop it.
+    private var panicEpoch: UInt64 = 0
+    /// Times a hold for the minimum-length check; tests inject one so a
+    /// valid note doesn't take a second of real time.
+    private let now: () -> Date
+
+    init(now: @escaping () -> Date = Date.init) {
+        self.now = now
+    }
 
     func formattedDuration(for date: Date) -> String {
         let clamped = max(0, state.duration(for: date))
@@ -168,7 +178,7 @@ final class VoiceRecordingViewModel: ObservableObject {
                     await session.cancel()
                     return
                 }
-                state = .recording(startDate: Date())
+                state = .recording(startDate: now())
                 isLiveStreaming = session.isLive
             } catch VoiceRecorder.RecorderError.recordingInProgress {
                 // The previous classic hold may still be in its intentional
@@ -209,7 +219,7 @@ final class VoiceRecordingViewModel: ObservableObject {
                             return
                         }
                         SecureLogger.warning("PTT: live capture failed — fell back to classic voice note", category: .session)
-                        state = .recording(startDate: Date())
+                        state = .recording(startDate: now())
                         isLiveStreaming = false
                         return
                     } catch {
@@ -239,6 +249,7 @@ final class VoiceRecordingViewModel: ObservableObject {
         isStartDeferred = false
         let session = activeSession
         let generation = holdGeneration
+        let epoch = panicEpoch
         activeSession = nil
 
         guard case .recording(let startDate) = previousState, let completion, let session else {
@@ -251,11 +262,14 @@ final class VoiceRecordingViewModel: ObservableObject {
         }
 
         Task {
-            let finalDuration = Date().timeIntervalSince(startDate)
+            let finalDuration = now().timeIntervalSince(startDate)
             if let url = await session.finish() {
-                // Panic and a newer hold both invalidate this completion.
-                // Never route an old recording using a post-panic target.
-                guard generation == holdGeneration else {
+                // Only a panic withholds a released note: nothing recorded
+                // before one may leave after it. A newer hold, even a tap
+                // during this finalize padding, is no reason to. The
+                // completion was made at the release and carries its
+                // destination, so dropping the note would only lose it.
+                guard epoch == panicEpoch else {
                     try? FileManager.default.removeItem(at: url)
                     return
                 }
@@ -263,7 +277,10 @@ final class VoiceRecordingViewModel: ObservableObject {
                     at: url,
                     duration: finalDuration
                 ) else {
-                    guard state == .idle else { return }
+                    // The alert is this hold's to raise. Over a newer press
+                    // it would also block that press's retry, since start()
+                    // needs idle.
+                    guard generation == holdGeneration, state == .idle else { return }
                     state = .error(
                         message: finalDuration < VoiceRecorder.minRecordingDuration
                         ? String(localized: "voice.error.too_short", defaultValue: "recording is too short.", comment: "Alert message when a voice note is released too quickly to save")
@@ -293,6 +310,7 @@ final class VoiceRecordingViewModel: ObservableObject {
     /// next movement must not open the microphone again after the wipe.
     func panicWipe() {
         holdGeneration &+= 1
+        panicEpoch &+= 1
         let session = activeSession
         activeSession = nil
         state = .idle
