@@ -75,11 +75,13 @@ extension PrivateInboxModel: MessageListTimelineModel {
 /// inbox. So a message in another timeline (the open DM beside the #mesh
 /// pane, a public channel under a DM) never re-renders the list.
 ///
-/// A mention types into the list's own composer.
+/// Its actions act in its own conversation and type into its own composer
+/// (`MessageListActions`), never the selection's.
 struct MessageListView: View {
-    /// The DM this list shows, as its owner targets it (with the DM's
-    /// scope); nil for a public list, which shows the timeline of the
-    /// `PublicChatModel` it is handed.
+    /// The DM this list shows, as the target its actions act in (its owner
+    /// knows the DM's scope); nil for a public list, which shows the
+    /// timeline of the `PublicChatModel` it is handed and acts in that
+    /// model's channel.
     let privateTarget: ConversationTarget?
     @Binding var isAtBottom: Bool
     /// The composer under this list, which a mention types into; held, not
@@ -113,6 +115,7 @@ struct MessageListView: View {
     ) -> MessageListContent<Timeline> {
         MessageListContent(
             privatePeer: privatePeer,
+            privateTarget: privateTarget,
             isAtBottom: $isAtBottom,
             composer: composer,
             selectedMessageSender: $selectedMessageSender,
@@ -140,6 +143,7 @@ private struct MessageListContent<Timeline: MessageListTimelineModel>: View {
     @Environment(\.appTheme) private var theme
 
     let privatePeer: PeerID?
+    let privateTarget: ConversationTarget?
     @Binding var isAtBottom: Bool
     let composer: ComposerSession?
     @Binding var selectedMessageSender: String?
@@ -275,9 +279,9 @@ private struct MessageListContent<Timeline: MessageListTimelineModel>: View {
                                     // mentioning the only other participant is noise, and "DM"
                                     // would just reopen the conversation that is already open.
                                     if privatePeer == nil {
-                                        if let composer {
+                                        if let actions, actions.canMention {
                                             Button("content.actions.mention") {
-                                                insertMention(message.sender, into: composer)
+                                                actions.mention(message.sender)
                                             }
                                         }
                                         if let peerID = message.senderPeerID {
@@ -289,12 +293,12 @@ private struct MessageListContent<Timeline: MessageListTimelineModel>: View {
                                             }
                                         }
                                     }
-                                    if actionsTargetThisList {
+                                    if let actions {
                                         Button("content.actions.hug") {
-                                            conversationUIModel.sendHug(to: message.sender)
+                                            actions.hug(message.sender)
                                         }
                                         Button("content.actions.slap") {
-                                            conversationUIModel.sendSlap(to: message.sender)
+                                            actions.slap(message.sender)
                                         }
                                     }
                                 }
@@ -307,14 +311,14 @@ private struct MessageListContent<Timeline: MessageListTimelineModel>: View {
                                     pb.setString(message.content, forType: .string)
                                     #endif
                                 }
-                                if isResendableFailedMessage(message) {
+                                if let actions, isResendableFailedMessage(message) {
                                     Button("content.actions.resend") {
-                                        conversationUIModel.resendFailedPrivateMessage(message)
+                                        actions.resend(message)
                                     }
                                 }
-                                if showsUserActions {
+                                if let actions, showsUserActions {
                                     Button("content.actions.block", role: .destructive) {
-                                        conversationUIModel.block(peerID: message.senderPeerID, displayName: message.sender)
+                                        actions.block(peerID: message.senderPeerID, displayName: message.sender)
                                     }
                                 }
                             }
@@ -347,7 +351,7 @@ private struct MessageListContent<Timeline: MessageListTimelineModel>: View {
             // timeline). AppRuntime opens external #geohash links once; the
             // links a list draws act through the openURL action below.
             .onTapGesture(count: 3) {
-                if actionsTargetThisList {
+                if actions != nil {
                     showClearConfirmation = true
                 }
             }
@@ -357,7 +361,7 @@ private struct MessageListContent<Timeline: MessageListTimelineModel>: View {
                 titleVisibility: .visible
             ) {
                 Button("content.clear.confirm_action", role: .destructive) {
-                    conversationUIModel.clearCurrentConversation()
+                    actions?.clear()
                 }
                 Button("common.cancel", role: .cancel) {}
             }
@@ -388,10 +392,10 @@ private struct MessageListContent<Timeline: MessageListTimelineModel>: View {
                 isPresented: $showMessageActions,
                 titleVisibility: .visible
             ) {
-                if let composer {
+                if let actions, actions.canMention {
                     Button("content.actions.mention") {
                         if let sender = selectedMessageSender {
-                            insertMention(sender, into: composer)
+                            actions.mention(sender)
                         }
                     }
                 }
@@ -405,22 +409,22 @@ private struct MessageListContent<Timeline: MessageListTimelineModel>: View {
                     }
                 }
 
-                if actionsTargetThisList {
+                if let actions {
                     Button("content.actions.hug") {
                         if let sender = selectedMessageSender {
-                            conversationUIModel.sendHug(to: sender)
+                            actions.hug(sender)
                         }
                     }
 
                     Button("content.actions.slap") {
                         if let sender = selectedMessageSender {
-                            conversationUIModel.sendSlap(to: sender)
+                            actions.slap(sender)
                         }
                     }
-                }
 
-                Button("content.actions.block", role: .destructive) {
-                    conversationUIModel.block(peerID: selectedMessageSenderID, displayName: selectedMessageSender)
+                    Button("content.actions.block", role: .destructive) {
+                        actions.block(peerID: selectedMessageSenderID, displayName: selectedMessageSender)
+                    }
                 }
 
                 Button("common.cancel", role: .cancel) {}
@@ -547,19 +551,21 @@ private extension MessageListContent {
         return MessageListScrollPolicy.isRow(rowID, inContext: landedContextKey)
     }
 
-    /// /clear and hug/slap act on the selected conversation (through the
-    /// command processor), not on the list they were triggered from. On the
-    /// split layout the public timeline sits beside an open DM, so it must
-    /// not offer them while one is open.
-    var actionsTargetThisList: Bool {
-        privatePeer != nil || privateConversationModel.selectedPeerID == nil
-    }
-
-    /// Appends an @mention to the list's own composer (never overwrites
-    /// what is already typed) and gives it the keyboard.
-    func insertMention(_ sender: String, into composer: ComposerSession) {
-        composer.insertMention(sender)
-        focusedComposer.wrappedValue = composer.slot
+    /// The list's actions: in its own conversation (its DM, or its own
+    /// timeline's channel) and into its own composer. Nil only for a list
+    /// with neither, which offers none.
+    var actions: MessageListActions? {
+        guard let target = MessageListActions.target(
+            privateTarget: privateTarget,
+            timelineChannel: timeline.listChannel
+        ) else { return nil }
+        let focusedComposer = focusedComposer
+        return MessageListActions(
+            target: target,
+            composer: composer,
+            focusComposer: { focusedComposer.wrappedValue = $0 },
+            performer: conversationUIModel
+        )
     }
 
     /// Tappable strip above the mesh timeline while notes are pinned at this
