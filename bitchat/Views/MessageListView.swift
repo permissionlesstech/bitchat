@@ -329,14 +329,10 @@ private struct MessageListContent<Timeline: MessageListTimelineModel>: View {
                     jumpToLatestPill(proxy: proxy)
                 }
             }
-            // External deep links (notifications, shared #geohash invites).
-            // Every list on screen receives them, so sender links, which only
-            // in-app text produces, are left to the list that drew them (see
-            // the openURL action below).
-            .onOpenURL { url in
-                guard url.host != "user" else { return }
-                handleOpenURL(url)
-            }
+            // No onOpenURL: every mounted list would receive each external
+            // link (two lists in the split layout, or a DM over the public
+            // timeline). AppRuntime opens external #geohash links once; the
+            // links a list draws act through the openURL action below.
             .onTapGesture(count: 3) {
                 if actionsTargetThisList {
                     showClearConfirmation = true
@@ -452,10 +448,9 @@ private struct MessageListContent<Timeline: MessageListTimelineModel>: View {
                 return .systemAction
                 #endif
             }
-            // Sender and #geohash links drawn by this list act here. Handed
-            // to the system they came back through every visible list's
-            // onOpenURL, so a name tapped in the public timeline could also
-            // raise the open DM's action dialog.
+            // Sender and #geohash links drawn by this list act here, in this
+            // list only, rather than leaving the app and coming back as
+            // external links.
             if url.scheme == "bitchat", url.host == "user" || url.host == "geohash" {
                 handleOpenURL(url)
                 return .handled

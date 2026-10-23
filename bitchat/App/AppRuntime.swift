@@ -187,6 +187,22 @@ final class AppRuntime: ObservableObject {
         if url.scheme == "bitchat", url.host == "share" {
             checkForSharedContent()
         }
+
+        // External #geohash links (geo-activity notification taps, shared
+        // invites) open the channel here, once. Message lists only act on the
+        // links they draw: each mounted list (two in the split layout) would
+        // open, and switch to, the channel again.
+        if let geohash = Self.geohashLinkTarget(url), chatViewModel.networkActivationAllowed {
+            locationChannelsModel.openLocationChannel(for: geohash)
+        }
+    }
+
+    /// The geohash a `bitchat://geohash/<geohash>` link names, or nil for any
+    /// other URL. `openLocationChannel(for:)` validates it.
+    nonisolated static func geohashLinkTarget(_ url: URL) -> String? {
+        guard url.scheme == "bitchat", url.host == "geohash" else { return nil }
+        let geohash = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return geohash.isEmpty ? nil : geohash
     }
 
     func handleDidBecomeActiveNotification() {
