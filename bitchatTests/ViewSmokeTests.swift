@@ -185,9 +185,8 @@ private struct ContentPeopleSheetHarness: View {
 
 #if os(iOS)
 @MainActor
-private struct ContentPeopleColumnHarness: View {
+private struct ContentConversationColumnHarness: View {
     @State private var showSidebar = false
-    @State private var showVerifySheet = false
     @State private var messageText = ""
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: PeerID?
@@ -202,9 +201,8 @@ private struct ContentPeopleColumnHarness: View {
     @State private var imagePickerSourceType: UIImagePickerController.SourceType = .photoLibrary
 
     var body: some View {
-        ContentPeopleColumnView(
+        ContentConversationColumnView(
             showSidebar: $showSidebar,
-            showVerifySheet: $showVerifySheet,
             messageText: $messageText,
             selectedMessageSender: $selectedMessageSender,
             selectedMessageSenderID: $selectedMessageSenderID,
@@ -601,7 +599,7 @@ struct ViewSmokeTests {
 
     #if os(iOS)
     @Test
-    func peopleColumn_rendersListAndConversation() async {
+    func conversationColumn_rendersTheConversation() async {
         let (viewModel, transport, _) = makeSmokeViewModel()
         let featureModels = makeSmokeFeatureModels(for: viewModel)
         let peerID = PeerID(str: "6162636465666768")
@@ -613,12 +611,12 @@ struct ViewSmokeTests {
 
         // Unlike the sheet, the column gets no re-injected models: it must
         // mount on exactly the environment ContentView's own tree provides.
-        _ = mount(installSmokeEnvironment(ContentPeopleColumnHarness(), featureModels: featureModels))
+        _ = mount(installSmokeEnvironment(ContentConversationColumnHarness(), featureModels: featureModels))
 
         featureModels.privateConversationModel.startConversation(with: peerID)
         #expect(featureModels.privateConversationModel.selectedPeerID == peerID)
 
-        _ = mount(installSmokeEnvironment(ContentPeopleColumnHarness(), featureModels: featureModels))
+        _ = mount(installSmokeEnvironment(ContentConversationColumnHarness(), featureModels: featureModels))
     }
     #endif
 

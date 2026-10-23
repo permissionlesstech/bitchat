@@ -827,26 +827,41 @@ struct ContentView: View {
     }
 
     #if os(iOS)
+    /// The open DM or, without one, the people list.
+    @ViewBuilder
     private func peopleColumn(trailingCornerReach: CGFloat) -> some View {
-        ContentPeopleColumnView(
-            showSidebar: $showSidebar,
-            showVerifySheet: $showColumnVerifySheet,
-            messageText: $messageText,
-            selectedMessageSender: $selectedMessageSender,
-            selectedMessageSenderID: $selectedMessageSenderID,
-            imagePreviewURL: $imagePreviewURL,
-            windowCountPublic: $windowCountPublic,
-            windowCountPrivate: $windowCountPrivate,
-            isAtBottomPrivate: $isAtBottomPrivate,
-            isTextFieldFocused: $isTextFieldFocused,
-            voiceRecordingVM: voiceRecordingVM,
-            autocompleteDebounceTimer: $autocompleteDebounceTimer,
-            showImagePicker: $showImagePicker,
-            imagePickerSourceType: $imagePickerSourceType,
-            headerHeight: headerHeight,
-            trailingCornerReach: trailingCornerReach,
-            onSendMessage: sendMessage
-        )
+        if selectedPrivatePeerID != nil {
+            ContentConversationColumnView(
+                showSidebar: $showSidebar,
+                messageText: $messageText,
+                selectedMessageSender: $selectedMessageSender,
+                selectedMessageSenderID: $selectedMessageSenderID,
+                imagePreviewURL: $imagePreviewURL,
+                windowCountPublic: $windowCountPublic,
+                windowCountPrivate: $windowCountPrivate,
+                isAtBottomPrivate: $isAtBottomPrivate,
+                isTextFieldFocused: $isTextFieldFocused,
+                voiceRecordingVM: voiceRecordingVM,
+                autocompleteDebounceTimer: $autocompleteDebounceTimer,
+                showImagePicker: $showImagePicker,
+                imagePickerSourceType: $imagePickerSourceType,
+                headerHeight: headerHeight,
+                trailingCornerReach: trailingCornerReach,
+                onSendMessage: sendMessage
+            )
+        } else {
+            // Keeps hosting its own QR sheet, as in the people sheet, and
+            // the consent dialog the column always had.
+            ContentPeopleListView(
+                showSidebar: $showSidebar,
+                showVerifySheet: $showColumnVerifySheet,
+                presentation: .column(
+                    headerHeight: headerHeight,
+                    trailingCornerReach: trailingCornerReach
+                )
+            )
+            .modifier(LegacyPrivateMediaConsentDialog())
+        }
     }
 
     /// How far display corners the safe area leaves uncovered reach into the
