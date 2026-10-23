@@ -421,6 +421,12 @@ struct ContentView: View {
             switchComposerDraft(to: draftKey)
         }
         .onChange(of: locationChannelsModel.selectedChannel) { newChannel in
+            #if os(iOS)
+            appChromeModel.splitLayoutShowsLocation = SplitLayoutScreenshotPolicy.columnsShowLocation(
+                isSplit: isSplitLayout,
+                selectedChannel: newChannel
+            )
+            #endif
             sharedContentImportModel.updateDestination(sharedContentDestination)
             // Private drafts are keyed by peer; only public channel switches
             // need a draft swap while no DM is open.
@@ -680,7 +686,10 @@ struct ContentView: View {
             }
             .onAppear {
                 isSplitLayout = layout != nil
-                appChromeModel.isPublicTimelineBesideConversation = layout != nil
+                appChromeModel.splitLayoutShowsLocation = SplitLayoutScreenshotPolicy.columnsShowLocation(
+                    isSplit: layout != nil,
+                    selectedChannel: locationChannelsModel.selectedChannel
+                )
             }
             .onChange(of: layout != nil) { isSplit in
                 handleLayoutModeChange(toSplit: isSplit)
@@ -827,26 +836,41 @@ struct ContentView: View {
     }
 
     #if os(iOS)
+    /// The open DM or, without one, the people list.
+    @ViewBuilder
     private func peopleColumn(trailingCornerReach: CGFloat) -> some View {
-        ContentPeopleColumnView(
-            showSidebar: $showSidebar,
-            showVerifySheet: $showColumnVerifySheet,
-            messageText: $messageText,
-            selectedMessageSender: $selectedMessageSender,
-            selectedMessageSenderID: $selectedMessageSenderID,
-            imagePreviewURL: $imagePreviewURL,
-            windowCountPublic: $windowCountPublic,
-            windowCountPrivate: $windowCountPrivate,
-            isAtBottomPrivate: $isAtBottomPrivate,
-            isTextFieldFocused: $isTextFieldFocused,
-            voiceRecordingVM: voiceRecordingVM,
-            autocompleteDebounceTimer: $autocompleteDebounceTimer,
-            showImagePicker: $showImagePicker,
-            imagePickerSourceType: $imagePickerSourceType,
-            headerHeight: headerHeight,
-            trailingCornerReach: trailingCornerReach,
-            onSendMessage: sendMessage
-        )
+        if selectedPrivatePeerID != nil {
+            ContentConversationColumnView(
+                showSidebar: $showSidebar,
+                messageText: $messageText,
+                selectedMessageSender: $selectedMessageSender,
+                selectedMessageSenderID: $selectedMessageSenderID,
+                imagePreviewURL: $imagePreviewURL,
+                windowCountPublic: $windowCountPublic,
+                windowCountPrivate: $windowCountPrivate,
+                isAtBottomPrivate: $isAtBottomPrivate,
+                isTextFieldFocused: $isTextFieldFocused,
+                voiceRecordingVM: voiceRecordingVM,
+                autocompleteDebounceTimer: $autocompleteDebounceTimer,
+                showImagePicker: $showImagePicker,
+                imagePickerSourceType: $imagePickerSourceType,
+                headerHeight: headerHeight,
+                trailingCornerReach: trailingCornerReach,
+                onSendMessage: sendMessage
+            )
+        } else {
+            // Keeps hosting its own QR sheet, as in the people sheet, and
+            // the consent dialog the column always had.
+            ContentPeopleListView(
+                showSidebar: $showSidebar,
+                showVerifySheet: $showColumnVerifySheet,
+                presentation: .column(
+                    headerHeight: headerHeight,
+                    trailingCornerReach: trailingCornerReach
+                )
+            )
+            .modifier(LegacyPrivateMediaConsentDialog())
+        }
     }
 
     /// How far display corners the safe area leaves uncovered reach into the
@@ -883,7 +907,10 @@ struct ContentView: View {
         // First, so the departing sheet's setter reads as our own change and
         // leaves the conversation open.
         isSplitLayout = toSplit
-        appChromeModel.isPublicTimelineBesideConversation = toSplit
+        appChromeModel.splitLayoutShowsLocation = SplitLayoutScreenshotPolicy.columnsShowLocation(
+            isSplit: toSplit,
+            selectedChannel: locationChannelsModel.selectedChannel
+        )
         // The DM composer changes hosts: the press on its mic is torn down
         // and would never finish the recording.
         if conversationMoves, voiceRecordingVM.isHoldInFlight {

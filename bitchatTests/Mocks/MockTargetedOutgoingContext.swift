@@ -75,7 +75,7 @@ final class MockTargetedOutgoingContext: ChatOutgoingContext {
     }
 
     // Content dedup
-    func normalizedContentKey(_ content: String) -> String { "key:\(content)" }
+    func contentKey(for content: String, in conversationID: ConversationID) -> String { "key:\(conversationID)|\(content)" }
     func recordContentKey(_ key: String, timestamp: Date) {}
 
     // Outbound routing

@@ -347,8 +347,8 @@ final class NearbyNotesCounterTests: XCTestCase {
         }
         return LocationStateManager(
             storage: storage,
-            locationManager: MockLocationManager(authorizationStatus: .denied),
-            geocoder: MockLocationGeocoder(),
+            locationManager: MockLocationStateManaging(authorizationStatus: .denied),
+            geocoder: MockLocationStateGeocoder(),
             shouldInitializeCoreLocation: false
         )
     }
@@ -365,8 +365,8 @@ final class NearbyNotesCounterTests: XCTestCase {
 
         let manager = LocationStateManager(
             storage: storage,
-            locationManager: MockLocationManager(authorizationStatus: .authorizedAlways),
-            geocoder: MockLocationGeocoder(),
+            locationManager: MockLocationStateManaging(authorizationStatus: .authorizedAlways),
+            geocoder: MockLocationStateGeocoder(),
             shouldInitializeCoreLocation: true
         )
         let authorized = await waitUntil { manager.permissionState == .authorized }
@@ -445,32 +445,5 @@ private final class SubscriptionRecorder {
             deriveIdentity: { _ in try NostrIdentity.generate() },
             now: { Date() }
         )
-    }
-}
-
-private final class MockLocationManager: LocationStateManaging {
-    weak var delegate: CLLocationManagerDelegate?
-    var desiredAccuracy: CLLocationAccuracy = 0
-    var distanceFilter: CLLocationDistance = 0
-    var authorizationStatus: CLAuthorizationStatus
-
-    init(authorizationStatus: CLAuthorizationStatus) {
-        self.authorizationStatus = authorizationStatus
-    }
-
-    func requestWhenInUseAuthorization() {}
-    func requestLocation() {}
-    func startUpdatingLocation() {}
-    func stopUpdatingLocation() {}
-}
-
-private final class MockLocationGeocoder: LocationStateGeocoding {
-    func cancelGeocode() {}
-
-    func reverseGeocodeLocation(
-        _ location: CLLocation,
-        completionHandler: @escaping ([CLPlacemark]?, Error?) -> Void
-    ) {
-        completionHandler(nil, nil)
     }
 }

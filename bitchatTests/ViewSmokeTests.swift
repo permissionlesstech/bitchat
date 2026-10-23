@@ -5,6 +5,7 @@ import SwiftUI
 import CoreGraphics
 import AVFoundation
 #if os(iOS)
+import CoreLocation
 import UIKit
 #else
 import AppKit
@@ -185,9 +186,8 @@ private struct ContentPeopleSheetHarness: View {
 
 #if os(iOS)
 @MainActor
-private struct ContentPeopleColumnHarness: View {
+private struct ContentConversationColumnHarness: View {
     @State private var showSidebar = false
-    @State private var showVerifySheet = false
     @State private var messageText = ""
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: PeerID?
@@ -202,9 +202,8 @@ private struct ContentPeopleColumnHarness: View {
     @State private var imagePickerSourceType: UIImagePickerController.SourceType = .photoLibrary
 
     var body: some View {
-        ContentPeopleColumnView(
+        ContentConversationColumnView(
             showSidebar: $showSidebar,
-            showVerifySheet: $showVerifySheet,
             messageText: $messageText,
             selectedMessageSender: $selectedMessageSender,
             selectedMessageSenderID: $selectedMessageSenderID,
@@ -255,6 +254,33 @@ private struct MessageListHarness: View {
     }
 }
 
+/// The header bar as each layout configures it.
+@MainActor
+private struct ContentHeaderHarness: View {
+    var paneChannel: ChannelID?
+    var carriesAppChrome = true
+    var isBadgeStatic = false
+    var handlesPaneTaps = false
+    @FocusState private var isNicknameFieldFocused: Bool
+
+    var body: some View {
+        ContentHeaderView(
+            showSidebar: .constant(false),
+            showVerifySheet: .constant(false),
+            isNicknameFieldFocused: $isNicknameFieldFocused,
+            headerHeight: 44,
+            headerPeerIconSize: 11,
+            headerPeerCountFontSize: 12,
+            trailingCornerReach: 55,
+            paneChannel: paneChannel,
+            carriesAppChrome: carriesAppChrome,
+            onPeopleTap: handlesPaneTaps ? {} : nil,
+            onBadgeTap: handlesPaneTaps ? {} : nil,
+            isBadgeStatic: isBadgeStatic
+        )
+    }
+}
+
 #if os(iOS)
 /// Hosts `view` in a visible window, so SwiftUI runs its appear and
 /// disappear actions (a bare hosting controller never appears). Returns the
@@ -286,6 +312,106 @@ private func nearbyNotesHolderCount() -> Int? {
     Mirror(reflecting: NearbyNotesCounter.shared).children
         .first { $0.label == "activeHolders" }?
         .value as? Int
+}
+
+/// A `LocationChannelsModel` whose CoreLocation seam (`location`) reports
+/// `status`, settled once the permission has reached the model.
+@MainActor
+private func makeSmokeLocationChannelsModel(
+    authorizationStatus: CLAuthorizationStatus
+) async -> (model: LocationChannelsModel, location: MockLocationStateManaging) {
+    let suiteName = "ViewSmokeTests.\(UUID().uuidString)"
+    let storage = UserDefaults(suiteName: suiteName) ?? .standard
+    storage.removePersistentDomain(forName: suiteName)
+    let location = MockLocationStateManaging(authorizationStatus: authorizationStatus)
+    let manager = LocationStateManager(
+        storage: storage,
+        locationManager: location,
+        geocoder: MockLocationStateGeocoder(),
+        shouldInitializeCoreLocation: true
+    )
+    let model = LocationChannelsModel(manager: manager)
+    if authorizationStatus != .notDetermined {
+        _ = await TestHelpers.waitUntil(
+            { model.permissionState != .notDetermined },
+            timeout: TestConstants.settleTimeout
+        )
+    }
+    return (model, location)
+}
+
+/// Hosts a view in a visible window of the test host's scene, so it appears
+/// and updates as it would on screen: `onAppear` and `onChange` run, and
+/// UIKit-backed controls exist to read.
+@MainActor
+private final class WindowHost {
+    let window: UIWindow
+
+    init<V: View>(_ view: V, size: CGSize) {
+        let scene = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first
+        window = scene.map { UIWindow(windowScene: $0) } ?? UIWindow()
+        window.frame = CGRect(origin: .zero, size: size)
+        window.rootViewController = UIHostingController(rootView: view)
+        window.makeKeyAndVisible()
+        window.layoutIfNeeded()
+    }
+
+    /// The first text field in the hosted hierarchy.
+    var textField: UITextField? {
+        Self.firstTextField(in: window)
+    }
+
+    func close() {
+        window.resignKey()
+        window.isHidden = true
+        window.rootViewController = nil
+    }
+
+    private static func firstTextField(in view: UIView) -> UITextField? {
+        if let field = view as? UITextField { return field }
+        for subview in view.subviews {
+            if let field = firstTextField(in: subview) { return field }
+        }
+        return nil
+    }
+}
+
+/// Stands in for `AppChromeModel.panicEpoch`.
+@MainActor
+private final class SmokePanicEpoch: ObservableObject {
+    @Published var value: UInt64 = 0
+}
+
+/// The idle inline picker, its epoch driven by the test.
+@MainActor
+private struct LocationChannelsPaneHarness: View {
+    @ObservedObject var panicEpoch: SmokePanicEpoch
+
+    var body: some View {
+        LocationChannelsPicker(
+            presentation: .pane(headerHeight: 44, trailingCornerReach: 0, panicEpoch: panicEpoch.value),
+            onChoose: {},
+            onClose: nil
+        )
+    }
+}
+
+/// Stands in for the device's width class, which decides the split layout.
+@MainActor
+private final class SmokeSizeClass: ObservableObject {
+    @Published var value: UserInterfaceSizeClass = .regular
+}
+
+@MainActor
+private struct ContentViewSizeClassHarness: View {
+    @ObservedObject var sizeClass: SmokeSizeClass
+
+    var body: some View {
+        ContentView()
+            .environment(\.horizontalSizeClass, sizeClass.value)
+    }
 }
 #endif
 
@@ -733,7 +859,7 @@ struct ViewSmokeTests {
 
     #if os(iOS)
     @Test
-    func peopleColumn_rendersListAndConversation() async {
+    func conversationColumn_rendersTheConversation() async {
         let (viewModel, transport, _) = makeSmokeViewModel()
         let featureModels = makeSmokeFeatureModels(for: viewModel)
         let peerID = PeerID(str: "6162636465666768")
@@ -745,14 +871,312 @@ struct ViewSmokeTests {
 
         // Unlike the sheet, the column gets no re-injected models: it must
         // mount on exactly the environment ContentView's own tree provides.
-        _ = mount(installSmokeEnvironment(ContentPeopleColumnHarness(), featureModels: featureModels))
+        _ = mount(installSmokeEnvironment(ContentConversationColumnHarness(), featureModels: featureModels))
 
         featureModels.privateConversationModel.startConversation(with: peerID)
         #expect(featureModels.privateConversationModel.selectedPeerID == peerID)
 
-        _ = mount(installSmokeEnvironment(ContentPeopleColumnHarness(), featureModels: featureModels))
+        _ = mount(installSmokeEnvironment(ContentConversationColumnHarness(), featureModels: featureModels))
+    }
+
+    @Test
+    func peopleList_rendersEachPresentationForEitherChannel() async {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let geohash = GeohashChannel(level: .city, geohash: "u4pru")
+        let presentations: [ContentPeopleListView.Presentation] = [
+            .sheet,
+            .column(headerHeight: 44, trailingCornerReach: 55),
+            .popover(onClose: {}, onShowFingerprint: { _ in })
+        ]
+
+        featureModels.locationChannelsModel.select(.location(geohash))
+        defer { featureModels.locationChannelsModel.select(.mesh) }
+        let selected = await TestHelpers.waitUntil(
+            { featureModels.locationChannelsModel.selectedChannel.isLocation },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(selected)
+        for presentation in presentations {
+            // #mesh's people while a geohash is selected, and the geohash's.
+            for channel in [ChannelID?.none, .mesh, .location(geohash)] {
+                _ = mount(installSmokeEnvironment(
+                    ContentPeopleListView(
+                        showSidebar: .constant(false),
+                        showVerifySheet: .constant(false),
+                        presentation: presentation,
+                        channel: channel
+                    ),
+                    featureModels: featureModels
+                ))
+            }
+        }
+    }
+
+    @Test
+    func peoplePopover_rendersMeshAndGeohashPeople() {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let geohash = GeohashChannel(level: .city, geohash: "u4pru")
+        var closes = 0
+
+        _ = mount(installSmokeEnvironment(
+            ContentPeoplePopoverView(channel: .mesh, paneWidth: 455.5, onClose: { closes += 1 }),
+            featureModels: featureModels
+        ))
+        _ = mount(installSmokeEnvironment(
+            ContentPeoplePopoverView(channel: .location(geohash), paneWidth: 371.5, onClose: { closes += 1 }),
+            featureModels: featureModels
+        ))
+        // The presenter, closed: only the models the people tree reads.
+        _ = mount(installSmokeEnvironment(
+            Color.clear.contentPeoplePopover(
+                isPresented: .constant(false),
+                channel: .mesh,
+                paneWidth: 455.5,
+                onClose: {}
+            ),
+            featureModels: featureModels
+        ))
+
+        // At most a phone sheet's width, and 16pt clear of either pane edge.
+        #expect(ContentPeoplePopoverView.idealWidth(forPaneWidth: 455.5) == 360)
+        #expect(ContentPeoplePopoverView.idealWidth(forPaneWidth: 371.5) == 339.5)
+        #expect(ContentPeoplePopoverView.idealWidth(forPaneWidth: 20) == 0)
+        #expect(closes == 0)
+    }
+
+    @Test
+    func locationChannelsPane_rendersEachPermissionAndBrowsing() async {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let pane = LocationChannelsPicker.Presentation.pane(headerHeight: 44, trailingCornerReach: 55, panicEpoch: 0)
+
+        for status in [CLAuthorizationStatus.notDetermined, .denied, .authorizedAlways] {
+            let (model, _) = await makeSmokeLocationChannelsModel(authorizationStatus: status)
+            // Idle: no close control, no #mesh row.
+            _ = mount(installSmokeEnvironment(
+                LocationChannelsPicker(presentation: pane, onChoose: {}, onClose: nil)
+                    .environmentObject(model),
+                featureModels: featureModels
+            ))
+            // Browsing away from a geohash: close, and the #mesh row back.
+            model.select(.location(GeohashChannel(level: .city, geohash: "u4pru")))
+            _ = await TestHelpers.waitUntil(
+                { model.selectedChannel.isLocation },
+                timeout: TestConstants.settleTimeout
+            )
+            _ = mount(installSmokeEnvironment(
+                LocationChannelsPicker(presentation: pane, onChoose: {}, onClose: {})
+                    .environmentObject(model),
+                featureModels: featureModels
+            ))
+            #expect(model.selectedChannel.isLocation)
+        }
+    }
+
+    /// I4: a panic wipe closes the sheet, which takes what it held with it.
+    /// The inline picker stays up, so the wipe has to empty it: a teleport
+    /// typed but not taken names a place.
+    @Test
+    func locationChannelsPane_panicWipeDropsWhatWasTyped() async throws {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let (model, location) = await makeSmokeLocationChannelsModel(authorizationStatus: .authorizedAlways)
+        let panicEpoch = SmokePanicEpoch()
+        let host = WindowHost(
+            installSmokeEnvironment(
+                LocationChannelsPaneHarness(panicEpoch: panicEpoch).environmentObject(model),
+                featureModels: featureModels
+            ),
+            size: CGSize(width: 400, height: 800)
+        )
+        defer { host.close() }
+
+        // It appeared: one fix, nothing more.
+        let appeared = await TestHelpers.waitUntil(
+            { location.requestLocationCallCount == 1 },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(appeared)
+        let field = try #require(host.textField)
+
+        // The field's own filter rewriting the typed text proves the
+        // picker's state took it.
+        field.becomeFirstResponder()
+        field.insertText("#9Q8YYK")
+        let typed = await TestHelpers.waitUntil(
+            { host.textField?.text == "9q8yyk" },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(typed)
+
+        panicEpoch.value &+= 1
+
+        let emptied = await TestHelpers.waitUntil(
+            { host.textField?.text?.isEmpty == true },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(emptied)
+        // The nearby cells now come from a fix taken after the wipe.
+        #expect(location.requestLocationCallCount == 2)
+        #expect(location.startUpdatingLocationCallCount == 0)
+        #expect(location.requestAuthorizationCallCount == 0)
+    }
+
+    /// E10, until the panes land: the flag follows #1792's columns as the
+    /// layout appears, as the selection changes and as the layout changes.
+    @Test
+    func contentView_keepsTheColumnsScreenshotFlagCurrent() async {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let chrome = featureModels.appChromeModel
+        let channels = featureModels.locationChannelsModel
+        let geohash = GeohashChannel(level: .city, geohash: "u4pru")
+        let sizeClass = SmokeSizeClass()
+        // Wide enough for two columns either side of the window's centre.
+        let host = WindowHost(
+            installSmokeEnvironment(ContentViewSizeClassHarness(sizeClass: sizeClass), featureModels: featureModels),
+            size: CGSize(width: 1000, height: 800)
+        )
+        defer {
+            host.close()
+            channels.select(.mesh)
+        }
+
+        // Split on #mesh: the column sits beside a timeline with no place.
+        let splitOnMesh = await TestHelpers.waitUntil(
+            { chrome.splitLayoutShowsLocation == false },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(splitOnMesh)
+
+        channels.select(.location(geohash))
+        let splitOnGeohash = await TestHelpers.waitUntil(
+            { chrome.splitLayoutShowsLocation == true },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(splitOnGeohash)
+
+        // Folded: the single column, where the selection decides.
+        sizeClass.value = .compact
+        let folded = await TestHelpers.waitUntil(
+            { chrome.splitLayoutShowsLocation == nil },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(folded)
+
+        sizeClass.value = .regular
+        let unfolded = await TestHelpers.waitUntil(
+            { chrome.splitLayoutShowsLocation == true },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(unfolded)
+
+        channels.select(.mesh)
+        let backOnMesh = await TestHelpers.waitUntil(
+            { chrome.splitLayoutShowsLocation == false },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(backOnMesh)
+    }
+
+    /// E13: a fingerprint asked for in a popover is the popover's own, so it
+    /// can't come back as the root's fingerprint sheet once the popover goes.
+    @Test
+    func peopleList_popoverKeepsItsFingerprintToItself() {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let chrome = featureModels.appChromeModel
+        let peerID = PeerID(str: "7172737475767778")
+        var shownInPopover: [PeerID] = []
+
+        ContentPeopleListView.showFingerprint(
+            for: peerID,
+            presentation: .popover(onClose: {}, onShowFingerprint: { shownInPopover.append($0) }),
+            appChromeModel: chrome
+        )
+        #expect(shownInPopover == [peerID])
+        #expect(chrome.showingFingerprintFor == nil)
+
+        // The sheet pushes the app-wide one, and the column shows it as the
+        // root's sheet, as before.
+        let presentations: [ContentPeopleListView.Presentation] = [
+            .sheet,
+            .column(headerHeight: 44, trailingCornerReach: 0)
+        ]
+        for presentation in presentations {
+            chrome.clearFingerprint()
+            ContentPeopleListView.showFingerprint(for: peerID, presentation: presentation, appChromeModel: chrome)
+            #expect(chrome.showingFingerprintFor == peerID)
+        }
+        #expect(shownInPopover == [peerID])
+    }
+
+    /// A popover row closes the popover once its DM is open, and only then:
+    /// a blocked peer's DM doesn't open, so the popover stays.
+    @Test
+    func peopleList_popoverClosesOnlyOnceTheDMIsOpen() async {
+        let (viewModel, transport, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let conversations = featureModels.privateConversationModel
+        let blocked = PeerID(str: "8182838485868788")
+        let reachable = PeerID(str: "9192939495969798")
+        transport.updatePeerSnapshots([
+            makeSnapshot(peerID: blocked, nickname: "Mallory", noiseByte: 0x81),
+            makeSnapshot(peerID: reachable, nickname: "Carol", noiseByte: 0x91)
+        ])
+        let known = await TestHelpers.waitUntil(
+            { featureModels.peerListModel.meshRows.contains { $0.peerID == blocked } },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(known)
+        featureModels.conversationUIModel.block(peerID: blocked, displayName: "Mallory")
+        #expect(viewModel.isPeerBlocked(blocked))
+
+        #expect(!ContentPeopleListView.openConversationFromPopover(with: blocked, in: conversations))
+        #expect(conversations.selectedPeerID == nil)
+
+        #expect(ContentPeopleListView.openConversationFromPopover(with: reachable, in: conversations))
+        #expect(conversations.selectedPeerID == reachable)
+    }
+
+    @Test
+    func paneTouchObserver_mounts() {
+        _ = mount(PaneTouchObserver { _ in })
+        _ = mount(Color.clear.background(PaneTouchObserver { _ in }))
     }
     #endif
+
+    @Test
+    func contentHeader_rendersTheSingleColumnAndBothPaneBars() async {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let geohash = GeohashChannel(level: .city, geohash: "u4pru")
+        let configurations = [
+            // The single column (compact iOS, macOS): today's bar.
+            ContentHeaderHarness(),
+            // Split, leading: #mesh as a label, the app chrome, mesh people.
+            ContentHeaderHarness(paneChannel: .mesh, isBadgeStatic: true, handlesPaneTaps: true),
+            // Split, trailing: the geohash's badge, bookmark and people only.
+            ContentHeaderHarness(paneChannel: .location(geohash), carriesAppChrome: false, handlesPaneTaps: true)
+        ]
+
+        for configuration in configurations {
+            _ = mount(installSmokeEnvironment(configuration, featureModels: featureModels))
+        }
+        // With the geohash selected, as the split layout runs it.
+        featureModels.locationChannelsModel.select(.location(geohash))
+        defer { featureModels.locationChannelsModel.select(.mesh) }
+        _ = await TestHelpers.waitUntil(
+            { featureModels.locationChannelsModel.selectedChannel.isLocation },
+            timeout: TestConstants.settleTimeout
+        )
+        for configuration in configurations {
+            _ = mount(installSmokeEnvironment(configuration, featureModels: featureModels))
+        }
+        #expect(featureModels.locationChannelsModel.selectedChannel == .location(geohash))
+    }
 
     @Test("Root Bluetooth alert waits for location and notices sheets")
     func rootBluetoothAlertGuard_includesHeaderSheets() {
