@@ -101,6 +101,27 @@ struct ChatViewModelTargetTests {
         #expect(!viewModel.publicMessages(for: .mesh).contains { $0.content == "started private chat with Alice" })
     }
 
+    /// `/group leave` sent from a group chat that was closed before the
+    /// command ran (by hand, or a fold) leaves the group and closes nothing,
+    /// so its line must not reopen the chat. Same for a group whose creator
+    /// removed us meanwhile, and for a deferred result. (The group here is
+    /// one the store doesn't have, as after the leave: a real one would be
+    /// persisted into the shared Application Support tree.)
+    @Test @MainActor
+    func outputForAGroupChatThatIsGoneLandsInItsChannel() {
+        let (viewModel, _) = makeTargetTestViewModel()
+        let goneGroup = PeerID(groupID: Data(repeating: 0x42, count: 16))
+        let origin = ConversationTarget(channel: .mesh, privatePeer: goneGroup)
+
+        viewModel.handleCommand("/group leave", from: origin)
+        // A deferred result (an async /ping) for that chat.
+        viewModel.addCommandOutput("pong", to: origin)
+
+        #expect(viewModel.conversations.conversationsByID[.directPeer(goneGroup)] == nil)
+        #expect(viewModel.publicMessages(for: .mesh).suffix(2).map(\.content)
+            == [String(localized: "system.group.not_in_group"), "pong"])
+    }
+
     @Test @MainActor
     func clearInMeshScopeLeavesTheSelectedGeohashAlone() async {
         let (viewModel, _) = makeTargetTestViewModel()

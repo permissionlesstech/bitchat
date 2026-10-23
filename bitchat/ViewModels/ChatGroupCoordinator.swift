@@ -309,9 +309,11 @@ final class ChatGroupCoordinator {
         guard let group = group(in: scope) else {
             return .error(message: String(localized: "system.group.not_in_group", comment: "Error when a group command requires an open group chat"))
         }
-        // Close the chat window first so the confirmation message doesn't
-        // resurrect the conversation we're about to remove. Only this
-        // group's: another open chat isn't the one being left.
+        // Close the group's chat if it is open, since the group is going.
+        // Only this group's: another open chat isn't the one being left.
+        // (The confirmation can't bring the chat back, open or not: output
+        // for a group that is gone lands in its channel, see
+        // `ChatViewModel.addCommandOutput(_:to:)`.)
         if context.selectedPrivateChatPeer == group.peerID {
             context.endPrivateChat()
         }

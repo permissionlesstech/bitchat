@@ -2107,7 +2107,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     /// exceptions. A command that opened a chat (`/msg`, `/group create`)
     /// prints in the chat it opened, where the person now is. One that
     /// closed its own chat (`/group leave`) prints in that chat's scope,
-    /// since the chat is gone and a line there would bring it back.
+    /// since the chat is gone and a line there would bring it back. (So
+    /// does one whose group chat is gone however it closed; see
+    /// `addCommandOutput(_:to:)`.)
     nonisolated static func commandOutputTarget(
         origin: ConversationTarget,
         openBefore: PeerID?,
@@ -2127,8 +2129,18 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     /// chat switch in the meantime can't misroute it. A DM result lands in
     /// that chat's history even if it is no longer open (or was cleared — it
     /// then reappears as the first message when the chat is reopened).
+    ///
+    /// A group chat whose group is gone is the exception: a line there would
+    /// bring back a chat nobody can send in, so it lands in the chat's
+    /// channel instead. That is `/group leave` run after its chat was closed
+    /// (by hand, or a fold) while the command was on its way, or a group
+    /// whose creator removed us meanwhile.
     @MainActor
     func addCommandOutput(_ content: String, to target: ConversationTarget) {
+        if let peerID = target.privatePeer, peerID.isGroup, groupStore.group(for: peerID) == nil {
+            addSystemMessage(content, to: .publicChannel(target.channel))
+            return
+        }
         addSystemMessage(content, to: target)
     }
 
