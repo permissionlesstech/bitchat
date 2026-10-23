@@ -94,6 +94,34 @@ struct ContentPanePolicyTests {
         #expect(SplitLayoutScreenshotPolicy.columnsShowLocation(isSplit: false, selectedChannel: .mesh) == nil)
     }
 
+    /// The trailing composer works in the geohash on screen, or the one a
+    /// DM covers, which scopes a geohash DM; the picker has no composer.
+    @Test
+    func trailingComposerWorksInTheGeohashOnScreenOrUnderTheDM() {
+        #expect(TrailingPaneContent.channel(geohash).composerGeohash(timelineChannel: .location(geohash)) == geohash)
+        #expect(TrailingPaneContent.conversation(geoDM).composerGeohash(timelineChannel: .location(geohash)) == geohash)
+        #expect(TrailingPaneContent.conversation(meshPeer).composerGeohash(timelineChannel: .location(geohash)) == geohash)
+        #expect(TrailingPaneContent.conversation(geoDM).composerGeohash(timelineChannel: .mesh) == nil)
+        #expect(TrailingPaneContent.picker(returnTo: geohash).composerGeohash(timelineChannel: .location(geohash)) == nil)
+        #expect(TrailingPaneContent.picker(returnTo: nil).composerGeohash(timelineChannel: .mesh) == nil)
+
+        // As the split layout's composer targets: the picker leaves the
+        // trailing composer without a conversation; a geohash DM signs
+        // with the geohash it covers, a mesh DM lives on #mesh.
+        func targets(_ content: TrailingPaneContent, _ timeline: ChannelID, _ peer: PeerID?) -> ComposerTargets {
+            .split(trailingChannel: content.composerGeohash(timelineChannel: timeline), privatePeer: peer)
+        }
+        #expect(targets(.picker(returnTo: geohash), .location(geohash), nil).secondary == nil)
+        #expect(targets(.channel(geohash), .location(geohash), nil).secondary == .publicChannel(.location(geohash)))
+        #expect(targets(.conversation(geoDM), .location(geohash), geoDM).secondary
+            == ConversationTarget(channel: .location(geohash), privatePeer: geoDM))
+        #expect(targets(.conversation(meshPeer), .location(geohash), meshPeer).secondary
+            == ConversationTarget(channel: .mesh, privatePeer: meshPeer))
+        for content in [TrailingPaneContent.picker(returnTo: nil), .channel(geohash), .conversation(meshPeer)] {
+            #expect(targets(content, .location(geohash), nil).primary == .mesh)
+        }
+    }
+
     /// E13: only the channel has a bar to anchor the trailing popover.
     @Test
     func onlyTheChannelHostsAChannelBar() {

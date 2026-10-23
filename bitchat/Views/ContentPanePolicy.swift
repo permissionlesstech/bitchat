@@ -81,6 +81,24 @@ enum TrailingPaneContent: Hashable {
         if case .channel = self { return true }
         return false
     }
+
+    /// The geohash the trailing composer works in
+    /// (`ComposerTargets.split`): the channel on screen, or the one a DM
+    /// covers, which scopes a geohash DM. Nil for the picker, which has no
+    /// composer, and for a DM over the idle picker.
+    /// - Parameter timelineChannel: The channel the trailing timeline
+    ///   renders, which an open DM covers.
+    func composerGeohash(timelineChannel: ChannelID) -> GeohashChannel? {
+        switch self {
+        case .channel(let geohash):
+            return geohash
+        case .conversation:
+            guard case .location(let geohash) = timelineChannel else { return nil }
+            return geohash
+        case .picker:
+            return nil
+        }
+    }
 }
 
 /// Screenshot routing's view of the layout: `AppChromeModel
@@ -269,6 +287,240 @@ enum PeoplePopoverPolicy {
             // #mesh's bar never leaves the split layout; the trailing bar
             // comes and goes with the trailing content.
             return open == .trailing && from != to ? nil : open
+        }
+    }
+}
+
+/// The split layout's own state, and how each event moves it: the
+/// last-touched pane (E1), browsing (E7), the people popovers (E13), what a
+/// fold parks (E2-E6, E8) and what a panic wipes (I4). Pure: `ContentView`
+/// keeps one, hands it every event, and carries out the effects an event
+/// returns. It never reads the selection or the open DM itself; each event
+/// brings what it needs.
+struct SplitPaneState: Equatable {
+    /// The last-touched pane: the one a fold keeps on screen.
+    private(set) var focus: ContentPane = .leading
+    /// The trailing pane shows the picker over the selected geohash: the
+    /// person tapped the trailing #geohash badge to switch channels.
+    private(set) var isBrowsing = false
+    /// The pane whose people popover is up.
+    private(set) var popover: ContentPane?
+    /// What a fold from #mesh set aside for the next unfold. In memory
+    /// only, and wiped by panic (E6).
+    private(set) var parked = PaneFoldPolicy.Parked.none
+    /// The channel a fold selected for the single column, until the
+    /// timeline lands on it: the single column's composer sends there
+    /// meanwhile, so the fold never routes it through the channel it
+    /// leaves.
+    private(set) var foldChannel: ChannelID?
+    /// The open DM as last reported. A report repeating it changes
+    /// nothing, so the DM a fold ends or an unfold reopens, already
+    /// recorded here, doesn't count again when its own report comes in.
+    private(set) var conversation: PeerID?
+
+    /// What `ContentView` does for an event, besides the state change.
+    struct Effects: Equatable {
+        /// Select this channel.
+        var select: ChannelID?
+        /// End the open DM.
+        var endsConversation = false
+        /// Open the DM with this peer.
+        var reopensConversation: PeerID?
+        /// Close the location channels sheet.
+        var closesLocationSheet = false
+    }
+
+    // MARK: Layout changes
+
+    /// The device folds (E2, E3): the single column shows the last-touched
+    /// pane, and a fold from #mesh parks the trailing pane. Browsing ends
+    /// and the popovers close.
+    /// - Parameters:
+    ///   - trailing: What the trailing pane showed.
+    ///   - timelineChannel: The channel the trailing timeline rendered.
+    ///   - selection: The selected channel, which can be a hop ahead of the
+    ///     timeline. Selecting it again would resubscribe it.
+    ///   - openPeer: The open DM, if any.
+    mutating func fold(
+        trailing: TrailingPaneContent,
+        timelineChannel: ChannelID,
+        selection: ChannelID,
+        openPeer: PeerID?
+    ) -> Effects {
+        let fold = PaneFoldPolicy.fold(
+            focus: focus,
+            trailing: trailing,
+            selectedChannel: timelineChannel,
+            openPeer: openPeer
+        )
+        parked = fold.parked
+        isBrowsing = false
+        popover = PeoplePopoverPolicy.pane(popover, after: .layoutChange)
+        foldChannel = fold.channel == timelineChannel ? nil : fold.channel
+        if fold.endsConversation {
+            conversation = nil
+        }
+        return Effects(
+            select: fold.channel == selection ? nil : fold.channel,
+            endsConversation: fold.endsConversation
+        )
+    }
+
+    /// The device unfolds (E4, E8): the parked geohash returns, or the
+    /// single column's moves to the trailing pane; a DM open in the sheet
+    /// moves across, or else the parked one reopens. What was parked is
+    /// consumed either way.
+    /// - Parameters:
+    ///   - timelineChannel: The channel the single column's timeline
+    ///     rendered.
+    ///   - openPeer: The DM open in the sheet, if any.
+    ///   - locationSheetIsUp: The location channels sheet is up. It closes,
+    ///     and the trailing pane shows the picker in its place: browsing
+    ///     if a geohash is selected, idle if not (E8).
+    ///   - canReopen: Whether a parked DM can open again: not a group left
+    ///     (or removed from) while folded, nor a peer blocked meanwhile.
+    mutating func unfold(
+        timelineChannel: ChannelID,
+        openPeer: PeerID?,
+        locationSheetIsUp: Bool,
+        canReopen: (PeerID) -> Bool
+    ) -> Effects {
+        let compactChannel = foldChannel ?? timelineChannel
+        let unfold = PaneFoldPolicy.unfold(
+            compactChannel: compactChannel,
+            openPeer: openPeer,
+            parked: parked
+        )
+        // Always selected, even if it reads as the selection already: a
+        // fold's #mesh selection may still be on its way.
+        var effects = Effects(select: unfold.reselect.map(ChannelID.location))
+        if let peer = unfold.reopenConversation, canReopen(peer) {
+            // The unfold's own: it doesn't take the focus (E4).
+            effects.reopensConversation = peer
+            conversation = peer
+        }
+        focus = unfold.focus
+        parked = .none
+        foldChannel = nil
+        popover = PeoplePopoverPolicy.pane(popover, after: .layoutChange)
+        isBrowsing = false
+        if locationSheetIsUp {
+            effects.closesLocationSheet = true
+            isBrowsing = unfold.reselect != nil || compactChannel.isLocation
+            focus = .trailing
+        }
+        return effects
+    }
+
+    // MARK: Selection and conversations
+
+    /// The open DM is now `peer` (nil: none). Split: a DM opening takes
+    /// the focus (E1), closes the popovers (E13) and ends browsing.
+    /// Folded: opening any DM drops the parked one (E5). Report it as it
+    /// happens, so a touch or a fold that follows sees it.
+    mutating func conversationChanged(to peer: PeerID?, isSplit: Bool) {
+        guard peer != conversation else { return }
+        conversation = peer
+        guard isSplit else {
+            parked = PaneFoldPolicy.parked(parked, afterCompactConversationChange: peer)
+            return
+        }
+        guard peer != nil else { return }
+        focus = .trailing
+        popover = PeoplePopoverPolicy.pane(popover, after: .conversationOpened)
+        isBrowsing = false
+    }
+
+    /// The selection changed while folded (E5): a location channel drops
+    /// everything parked; #mesh, the fold's own selection included, keeps
+    /// it.
+    mutating func compactSelectionChanged(to channel: ChannelID) {
+        parked = PaneFoldPolicy.parked(parked, afterCompactSelection: channel)
+    }
+
+    /// The selection landed in the timeline. Leaving a geohash ends
+    /// browsing whatever moved it (a choice in the picker, a link, a panic
+    /// wipe), so the picker never stays up for a geohash that is gone, and
+    /// a choice never brings the old geohash back while it lands. A fold's
+    /// channel has landed, or been overtaken.
+    mutating func timelineChannelChanged(from old: ChannelID, to new: ChannelID) {
+        guard old != new else { return }
+        if old.isLocation {
+            isBrowsing = false
+        }
+        foldChannel = nil
+    }
+
+    /// What the trailing pane shows changed: its bar may have gone with it
+    /// (E13).
+    mutating func trailingContentChanged(from old: TrailingPaneContent, to new: TrailingPaneContent) {
+        popover = PeoplePopoverPolicy.pane(popover, after: .trailingContentChange(from: old, to: new))
+    }
+
+    // MARK: Touches and controls
+
+    /// A touch went down in `pane` (E1).
+    mutating func touched(_ pane: ContentPane) {
+        focus = pane
+    }
+
+    /// A composer took the keyboard: its pane is the last touched (E1).
+    mutating func composerFocused(_ slot: ComposerSlot) {
+        focus = slot == .primary ? .leading : .trailing
+    }
+
+    /// The trailing #geohash badge: the picker, to switch channels.
+    mutating func browse() {
+        isBrowsing = true
+        focus = .trailing
+    }
+
+    /// A channel was chosen in the inline picker (E1, E7). Browsing ends
+    /// now if the timeline already shows the selection (the selected
+    /// geohash chosen again, or a choice from the idle picker, which
+    /// isn't browsing); otherwise the timeline's move to the choice ends
+    /// it, so the geohash being left never comes back meanwhile.
+    mutating func choseChannel(timelineShowsSelection: Bool) {
+        focus = .trailing
+        if timelineShowsSelection {
+            isBrowsing = false
+        }
+    }
+
+    /// The picker's close control: back to the geohash.
+    mutating func endBrowsing() {
+        isBrowsing = false
+    }
+
+    mutating func openPopover(_ pane: ContentPane) {
+        popover = pane
+        focus = pane
+    }
+
+    /// The popover closed itself (its close button, a row's DM, a tap
+    /// outside).
+    mutating func popoverClosed(_ pane: ContentPane) {
+        if popover == pane {
+            popover = nil
+        }
+    }
+
+    // MARK: Panic
+
+    /// Panic (I4): nothing parked survives, the focus goes back to #mesh
+    /// and the popovers close. Browsing over a geohash ends as the wipe's
+    /// own #mesh selection lands (`timelineChannelChanged`), so the picker
+    /// never gives way to the wiped geohash meanwhile; without a geohash
+    /// it ends now.
+    /// - Parameter timelineChannel: The channel the trailing timeline
+    ///   renders.
+    mutating func panic(timelineChannel: ChannelID) {
+        focus = .leading
+        popover = PeoplePopoverPolicy.pane(popover, after: .panic)
+        parked = .none
+        foldChannel = nil
+        if !timelineChannel.isLocation {
+            isBrowsing = false
         }
     }
 }

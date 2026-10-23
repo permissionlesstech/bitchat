@@ -1,0 +1,541 @@
+//
+// SplitPaneStateTests.swift
+// bitchatTests
+//
+// The split layout's own state as ContentView drives it: the last-touched
+// pane (E1), browsing (E7), the people popovers (E13), what a fold parks and
+// an unfold restores (E2-E6, E8), and what a panic wipes (I4). Each event
+// runs as ContentView hands it over, the asynchronous echoes of the fold's
+// own selection and ended DM included.
+//
+// This is free and unencumbered software released into the public domain.
+// For more information, see <https://unlicense.org>
+//
+
+#if os(iOS)
+import BitFoundation
+import Testing
+@testable import bitchat
+
+struct SplitPaneStateTests {
+    private let geohash = GeohashChannel(level: .city, geohash: "u4pru")
+    private let otherGeohash = GeohashChannel(level: .neighborhood, geohash: "9q8yyk")
+    private let meshPeer = PeerID(str: "0102030405060708")
+    private let otherMeshPeer = PeerID(str: "1112131415161718")
+    private let group = PeerID(str: "group_" + String(repeating: "ab", count: 16))
+    private let geoDM = PeerID(nostr_: String(repeating: "ef", count: 32))
+
+    /// The world around the panes: what is selected, what the trailing
+    /// timeline renders, and the open DM. Effects land as they do in the
+    /// app: the selection first, the timeline a hop later, a DM at once.
+    private struct World {
+        var state = SplitPaneState()
+        var isSplit = true
+        var selection: ChannelID = .mesh
+        var timeline: ChannelID = .mesh
+        var openPeer: PeerID?
+        var isLocationSheetUp = false
+        var canReopen: (PeerID) -> Bool = { _ in true }
+
+        var trailing: TrailingPaneContent {
+            .resolve(conversation: openPeer, channel: timeline, isBrowsing: state.isBrowsing)
+        }
+
+        /// A selection that lands in the timeline, as `select` does.
+        mutating func land(_ channel: ChannelID) {
+            selection = channel
+            if !isSplit {
+                state.compactSelectionChanged(to: channel)
+            }
+            let old = timeline
+            timeline = channel
+            state.timelineChannelChanged(from: old, to: channel)
+        }
+
+        mutating func open(_ peer: PeerID?) {
+            openPeer = peer
+            state.conversationChanged(to: peer, isSplit: isSplit)
+        }
+
+        /// Folds and lets the fold's own selection and DM end land.
+        @discardableResult
+        mutating func fold() -> SplitPaneState.Effects {
+            let effects = state.fold(
+                trailing: trailing,
+                timelineChannel: timeline,
+                selection: selection,
+                openPeer: openPeer
+            )
+            isSplit = false
+            if effects.endsConversation {
+                open(nil)
+            }
+            if let channel = effects.select {
+                land(channel)
+            }
+            return effects
+        }
+
+        /// Unfolds and lets the reselection and the reopened DM land.
+        @discardableResult
+        mutating func unfold() -> SplitPaneState.Effects {
+            let effects = state.unfold(
+                timelineChannel: timeline,
+                openPeer: openPeer,
+                locationSheetIsUp: isLocationSheetUp,
+                canReopen: canReopen
+            )
+            isSplit = true
+            if effects.closesLocationSheet {
+                isLocationSheetUp = false
+            }
+            if let channel = effects.select {
+                land(channel)
+            }
+            if let peer = effects.reopensConversation {
+                open(peer)
+            }
+            return effects
+        }
+    }
+
+    // MARK: - Fold (E2, E3)
+
+    /// E3: #mesh; the geohash is parked and selected away, the mesh DM
+    /// parked and ended.
+    @Test
+    func aFoldFromMeshParksTheGeohashAndTheMeshDM() {
+        var world = World()
+        world.land(.location(geohash))
+        world.open(meshPeer)
+        world.state.touched(.leading)
+
+        let effects = world.state.fold(
+            trailing: world.trailing,
+            timelineChannel: world.timeline,
+            selection: world.selection,
+            openPeer: world.openPeer
+        )
+
+        #expect(effects == .init(select: .mesh, endsConversation: true))
+        #expect(world.state.parked == .init(channel: geohash, conversation: meshPeer))
+        // The single column's composer sends to #mesh while that lands.
+        #expect(world.state.foldChannel == .mesh)
+    }
+
+    /// E2: the geohash and the DM stay, the DM as the sheet; nothing parked.
+    @Test
+    func aFoldFromTheTrailingPaneKeepsEverything() {
+        var world = World()
+        world.land(.location(geohash))
+        world.open(meshPeer)
+        #expect(world.state.focus == .trailing)
+
+        let effects = world.fold()
+
+        #expect(effects == .init())
+        #expect(world.state.parked == .none)
+        #expect(world.state.foldChannel == nil)
+        #expect(world.selection == .location(geohash))
+        #expect(world.openPeer == meshPeer)
+    }
+
+    /// E3's exception: a geohash DM needs its geohash live.
+    @Test
+    func aGeohashDMFoldsWithItsGeohashFromMesh() {
+        var world = World()
+        world.land(.location(geohash))
+        world.open(geoDM)
+        world.state.touched(.leading)
+
+        #expect(world.fold() == .init())
+        #expect(world.state.parked == .none)
+        #expect(world.selection == .location(geohash))
+        #expect(world.openPeer == geoDM)
+    }
+
+    /// The fold selects only what isn't selected: selecting again would
+    /// resubscribe. A selection still landing counts as made.
+    @Test
+    func aFoldSelectsOnlyWhatIsNotSelected() {
+        var state = SplitPaneState()
+        state.touched(.leading)
+        // #mesh is already selected; the timeline still shows the geohash.
+        let effects = state.fold(
+            trailing: .channel(geohash),
+            timelineChannel: .location(geohash),
+            selection: .mesh,
+            openPeer: nil
+        )
+        #expect(effects.select == nil)
+        #expect(state.foldChannel == .mesh)
+        #expect(state.parked == .init(channel: geohash))
+
+        // Its landing hands the single column back to the timeline.
+        state.timelineChannelChanged(from: .location(geohash), to: .mesh)
+        #expect(state.foldChannel == nil)
+    }
+
+    @Test
+    func aFoldEndsBrowsingAndClosesThePopovers() {
+        for pane in [ContentPane.leading, .trailing] {
+            var world = World()
+            world.land(.location(geohash))
+            world.state.browse()
+            world.state.openPopover(pane)
+            world.fold()
+            #expect(world.state.popover == nil)
+            #expect(!world.state.isBrowsing)
+        }
+    }
+
+    // MARK: - Unfold (E4, E8)
+
+    /// The fold's echoes keep what is parked; the unfold brings back the
+    /// geohash and the DM, focused on #mesh, which the single column
+    /// showed. The reopening doesn't move the focus.
+    @Test
+    func anUnfoldRestoresTheParkedGeohashAndDM() {
+        var world = World()
+        world.land(.location(geohash))
+        world.open(meshPeer)
+        world.state.touched(.leading)
+        world.fold()
+        #expect(world.selection == .mesh)
+        #expect(world.openPeer == nil)
+        #expect(world.state.parked == .init(channel: geohash, conversation: meshPeer))
+
+        let effects = world.unfold()
+
+        #expect(effects == .init(select: .location(geohash), reopensConversation: meshPeer))
+        #expect(world.selection == .location(geohash))
+        #expect(world.openPeer == meshPeer)
+        #expect(world.state.focus == .leading)
+        #expect(world.state.parked == .none)
+        #expect(world.state.conversation == meshPeer)
+        #expect(world.trailing == .conversation(meshPeer))
+    }
+
+    /// A group left, or a peer blocked, while folded doesn't come back.
+    @Test
+    func anUnfoldReopensOnlyWhatCanReopen() {
+        var world = World()
+        world.open(group)
+        world.state.touched(.leading)
+        world.fold()
+        world.canReopen = { _ in false }
+
+        let effects = world.unfold()
+
+        #expect(effects.reopensConversation == nil)
+        #expect(world.openPeer == nil)
+        #expect(world.state.parked == .none)
+        #expect(world.state.conversation == nil)
+    }
+
+    /// The single column's geohash moves to the trailing pane, focused;
+    /// nothing parked survives (E4).
+    @Test
+    func anUnfoldMovesTheCompactGeohashAcross() {
+        var world = World()
+        world.isSplit = false
+        world.land(.location(otherGeohash))
+
+        #expect(world.unfold() == .init())
+        #expect(world.state.focus == .trailing)
+        #expect(world.trailing == .channel(otherGeohash))
+    }
+
+    /// E8: the location sheet closes into the trailing picker: browsing
+    /// when a geohash comes back or stays, idle otherwise.
+    @Test
+    func anUnfoldTurnsTheLocationSheetIntoThePicker() {
+        // The single column's geohash: browsing from it.
+        var onGeohash = World()
+        onGeohash.isSplit = false
+        onGeohash.land(.location(geohash))
+        onGeohash.isLocationSheetUp = true
+        #expect(onGeohash.unfold().closesLocationSheet)
+        #expect(!onGeohash.isLocationSheetUp)
+        #expect(onGeohash.trailing == .picker(returnTo: geohash))
+        #expect(onGeohash.state.focus == .trailing)
+
+        // A parked geohash comes back: browsing, once it lands, from it.
+        var parked = World()
+        parked.land(.location(geohash))
+        parked.state.touched(.leading)
+        parked.fold()
+        parked.isLocationSheetUp = true
+        parked.unfold()
+        #expect(parked.trailing == .picker(returnTo: geohash))
+        #expect(parked.state.focus == .trailing)
+
+        // Nothing to browse from: the idle picker.
+        var idle = World()
+        idle.isSplit = false
+        idle.isLocationSheetUp = true
+        idle.unfold()
+        #expect(!idle.state.isBrowsing)
+        #expect(idle.trailing == .picker(returnTo: nil))
+    }
+
+    // MARK: - While folded (E5)
+
+    @Test
+    func aCompactLocationSelectionDropsWhatIsParked() {
+        var world = World()
+        world.land(.location(geohash))
+        world.open(meshPeer)
+        world.state.touched(.leading)
+        world.fold()
+
+        world.land(.location(otherGeohash))
+        #expect(world.state.parked == .none)
+
+        #expect(world.unfold() == .init())
+        #expect(world.selection == .location(otherGeohash))
+        #expect(world.openPeer == nil)
+    }
+
+    @Test
+    func aDMOpenedWhileFoldedDropsTheParkedOne() {
+        var world = World()
+        world.land(.location(geohash))
+        world.open(meshPeer)
+        world.state.touched(.leading)
+        world.fold()
+
+        world.open(otherMeshPeer)
+        #expect(world.state.parked == .init(channel: geohash))
+
+        let effects = world.unfold()
+        #expect(effects == .init(select: .location(geohash)))
+        #expect(world.openPeer == otherMeshPeer)
+        // The DM moved across; it has the focus.
+        #expect(world.state.focus == .trailing)
+    }
+
+    /// Fold and unfold over every focus, selection, browsing state and kind
+    /// of DM: the panes come back as they were (browsing aside, E2), with
+    /// the focus on the pane the single column showed.
+    @Test
+    func everyFoldAndUnfoldRestoresThePanes() {
+        let peers: [PeerID?] = [nil, meshPeer, group, geoDM]
+        for focus in [ContentPane.leading, .trailing] {
+            for selected in [ChannelID.mesh, .location(geohash)] {
+                for isBrowsing in [false, true] {
+                    for openPeer in peers {
+                        var world = World()
+                        world.land(selected)
+                        world.open(openPeer)
+                        if isBrowsing {
+                            world.state.browse()
+                        }
+                        world.state.touched(focus)
+                        world.fold()
+                        let compactShowedMesh = world.timeline == .mesh && world.openPeer == nil
+                        world.unfold()
+
+                        let label = "focus \(focus), selected \(selected), browsing \(isBrowsing), DM \(String(describing: openPeer))"
+                        #expect(world.selection == selected, "\(label)")
+                        #expect(world.openPeer == openPeer, "\(label)")
+                        #expect(!world.state.isBrowsing, "\(label)")
+                        #expect(world.state.parked == .none, "\(label)")
+                        #expect(world.state.focus == (compactShowedMesh ? .leading : .trailing), "\(label)")
+                    }
+                }
+            }
+        }
+    }
+
+    /// Reports come once per change: a repeat of the open DM changes
+    /// nothing, and neither does the report of the DM a fold ended.
+    @Test
+    func aRepeatedDMReportChangesNothing() {
+        var world = World()
+        world.land(.location(geohash))
+        world.open(meshPeer)
+        world.state.touched(.leading)
+        world.state.openPopover(.leading)
+        world.open(meshPeer)
+        #expect(world.state.focus == .leading)
+        #expect(world.state.popover == .leading)
+
+        world.fold()
+        #expect(world.state.parked.conversation == meshPeer)
+        world.open(nil)
+        #expect(world.state.parked.conversation == meshPeer)
+    }
+
+    // MARK: - Focus (E1)
+
+    @Test
+    func touchesComposersAndChoicesMoveTheFocus() {
+        var state = SplitPaneState()
+        #expect(state.focus == .leading)
+        state.touched(.trailing)
+        #expect(state.focus == .trailing)
+        state.composerFocused(.primary)
+        #expect(state.focus == .leading)
+        state.composerFocused(.secondary)
+        #expect(state.focus == .trailing)
+        state.touched(.leading)
+        state.choseChannel(timelineShowsSelection: false)
+        #expect(state.focus == .trailing)
+        state.openPopover(.leading)
+        #expect(state.focus == .leading)
+    }
+
+    /// Any DM opening in the split layout takes the trailing pane's focus,
+    /// closes the popovers and ends browsing.
+    @Test
+    func aDMOpeningTakesTheFocusAndClosesThePopovers() {
+        for pane in [ContentPane.leading, .trailing] {
+            var world = World()
+            world.land(.location(geohash))
+            world.state.browse()
+            world.state.openPopover(pane)
+            world.state.touched(.leading)
+            world.open(meshPeer)
+            #expect(world.state.focus == .trailing)
+            #expect(world.state.popover == nil)
+            #expect(!world.state.isBrowsing)
+        }
+        // A DM closing changes neither.
+        var world = World()
+        world.open(meshPeer)
+        world.state.touched(.leading)
+        world.state.openPopover(.leading)
+        world.open(nil)
+        #expect(world.state.focus == .leading)
+        #expect(world.state.popover == .leading)
+    }
+
+    // MARK: - Browsing (E7)
+
+    /// A choice ends browsing when the timeline shows it: at once for the
+    /// selected geohash chosen again, otherwise as it lands, so the
+    /// geohash being left never comes back meanwhile.
+    @Test
+    func browsingEndsWhenTheChoiceIsOnScreen() {
+        var world = World()
+        world.land(.location(geohash))
+        world.state.browse()
+        #expect(world.trailing == .picker(returnTo: geohash))
+
+        // The selected geohash again: no selection, browsing ends.
+        world.state.choseChannel(timelineShowsSelection: true)
+        #expect(world.trailing == .channel(geohash))
+
+        // Another geohash: the selection moves first, the timeline after.
+        world.state.browse()
+        world.selection = .location(otherGeohash)
+        world.state.choseChannel(timelineShowsSelection: world.selection == world.timeline)
+        #expect(world.trailing == .picker(returnTo: geohash))
+        world.land(.location(otherGeohash))
+        #expect(world.trailing == .channel(otherGeohash))
+
+        // #mesh leaves the location channel: the idle picker, the same
+        // picker throughout.
+        world.state.browse()
+        world.land(.mesh)
+        #expect(world.trailing == .picker(returnTo: nil))
+        #expect(!world.state.isBrowsing)
+    }
+
+    @Test
+    func theCloseControlEndsBrowsing() {
+        var world = World()
+        world.land(.location(geohash))
+        world.state.browse()
+        world.state.endBrowsing()
+        #expect(world.trailing == .channel(geohash))
+    }
+
+    // MARK: - Popovers (E13)
+
+    @Test
+    func popoversCloseWhenTheirBarGoesOrTheyCloseThemselves() {
+        var state = SplitPaneState()
+        state.openPopover(.trailing)
+        state.trailingContentChanged(from: .channel(geohash), to: .conversation(meshPeer))
+        #expect(state.popover == nil)
+
+        state.openPopover(.leading)
+        state.trailingContentChanged(from: .channel(geohash), to: .picker(returnTo: geohash))
+        #expect(state.popover == .leading)
+        // Another pane's close leaves it.
+        state.popoverClosed(.trailing)
+        #expect(state.popover == .leading)
+        state.popoverClosed(.leading)
+        #expect(state.popover == nil)
+    }
+
+    @Test
+    func popoversCloseOnUnfold() {
+        var world = World()
+        world.isSplit = false
+        world.state.openPopover(.leading)
+        world.unfold()
+        #expect(world.state.popover == nil)
+    }
+
+    // MARK: - Panic (I4)
+
+    /// Nothing the split layout held survives: focus, popover, browsing.
+    /// Browsing over a geohash ends as the wipe's #mesh lands, so the
+    /// picker never gives way to the wiped geohash.
+    @Test
+    func aPanicWipesTheSplitLayoutsState() {
+        var world = World()
+        world.land(.location(geohash))
+        world.state.browse()
+        world.state.openPopover(.trailing)
+
+        world.state.panic(timelineChannel: world.timeline)
+
+        #expect(world.state.focus == .leading)
+        #expect(world.state.popover == nil)
+        #expect(world.trailing == .picker(returnTo: geohash))
+        world.land(.mesh)
+        #expect(!world.state.isBrowsing)
+        #expect(world.trailing == .picker(returnTo: nil))
+        #expect(world.state == SplitPaneState())
+    }
+
+    /// I4/E6: a wipe while folded leaves nothing to rejoin on unfold.
+    @Test
+    func aPanicWhileFoldedLeavesNothingToRestore() {
+        var world = World()
+        world.land(.location(geohash))
+        world.open(meshPeer)
+        world.state.touched(.leading)
+        world.fold()
+        #expect(world.state.parked != .none)
+
+        world.state.panic(timelineChannel: world.timeline)
+
+        #expect(world.state == SplitPaneState())
+        #expect(world.unfold() == .init())
+        #expect(world.selection == .mesh)
+        #expect(world.openPeer == nil)
+    }
+
+    /// A fold's selection still on its way when the wipe comes: the single
+    /// column's composer follows the timeline again.
+    @Test
+    func aPanicDropsAFoldsPendingChannel() {
+        var state = SplitPaneState()
+        _ = state.fold(
+            trailing: .channel(geohash),
+            timelineChannel: .location(geohash),
+            selection: .location(geohash),
+            openPeer: nil
+        )
+        #expect(state.foldChannel == .mesh)
+        state.panic(timelineChannel: .location(geohash))
+        #expect(state.foldChannel == nil)
+        #expect(state.parked == .none)
+    }
+}
+#endif
