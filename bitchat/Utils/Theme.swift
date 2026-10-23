@@ -197,10 +197,13 @@ struct ThemedRootBackground: View {
             }
             .ignoresSafeArea()
         } else {
-            // Fills under the safe area like the glass backdrop. Otherwise
-            // sheets show the system background beneath the home indicator,
-            // and iPhone Duo's outer display shows it in its trailing
-            // status-bar column.
+            // Full-bleed like the gradient above. Passed to .background(_:)
+            // as a view, a backdrop stops at the safe area (a bare Color
+            // passed as a ShapeStyle would not). In a sheet, the sheet's own
+            // background (#1C1C1E in dark mode) then shows through the
+            // home-indicator inset and under the navigation bar, and iPhone
+            // Duo's outer display shows the system background in its
+            // trailing status-bar column.
             palette.background
                 .ignoresSafeArea()
         }
