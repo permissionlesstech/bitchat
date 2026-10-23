@@ -5,10 +5,57 @@ import UIKit
 #else
 import AppKit
 #endif
+/// The location channels sheet: the picker below in a navigation view, with
+/// the sheet backdrop. Choosing a channel or closing dismisses it.
 struct LocationChannelsSheet: View {
     @Binding var isPresented: Bool
+
+    var body: some View {
+        NavigationView {
+            LocationChannelsPicker(
+                presentation: .sheet,
+                onChoose: { isPresented = false },
+                onClose: { isPresented = false }
+            )
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarHidden(true)
+            #else
+            .navigationTitle("")
+            #endif
+        }
+        #if os(macOS)
+        .frame(minWidth: 420, minHeight: 520)
+        #endif
+        .themedSheetBackground()
+    }
+}
+
+/// The location channels: #mesh, the nearby cells, teleport, quick join and
+/// bookmarks, with the permission prompt. In the sheet, or inline as the
+/// split layout's trailing pane.
+struct LocationChannelsPicker: View {
+    enum Presentation: Equatable {
+        /// The location channels sheet (LocationChannelsSheet).
+        case sheet
+        #if os(iOS)
+        /// The split layout's trailing pane: a title row as tall as the bar
+        /// beside it, and clear of the display corner it reaches into.
+        case pane(headerHeight: CGFloat, trailingCornerReach: CGFloat)
+        #endif
+    }
+
+    let presentation: Presentation
+    /// A channel was chosen (the sheet: dismiss).
+    let onChoose: () -> Void
+    /// The close control's action; nil hides it (the idle pane).
+    let onClose: (() -> Void)?
+
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var peerListModel: PeerListModel
+    #if os(iOS)
+    @Environment(\.appTheme) private var theme
+    #endif
     @ThemedPalette private var palette
     @State private var customGeohash: String = ""
     @State private var customError: String? = nil
@@ -117,87 +164,65 @@ struct LocationChannelsSheet: View {
     }
 
     var body: some View {
-        NavigationView {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 12) {
-                    Text(Strings.title)
-                        .bitchatFont(size: 18)
-                    Spacer()
-                    closeButton
-                }
-                Text(Strings.description)
-                    .bitchatFont(size: 12)
-                    .foregroundColor(palette.secondary)
+        VStack(alignment: .leading, spacing: 12) {
+            titleRow
+            Text(Strings.description)
+                .bitchatFont(size: 12)
+                .foregroundColor(palette.secondary)
 
-                // The description's tor claim is only true while tor is on;
-                // when it's off, say what that exposes right where the person
-                // is about to join a channel, not just in settings.
-                if !locationChannelsModel.userTorEnabled {
-                    Text(verbatim: Strings.torOffWarning)
-                        .bitchatFont(size: 11)
-                        .foregroundColor(palette.alertRed)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+            // The description's tor claim is only true while tor is on;
+            // when it's off, say what that exposes right where the person
+            // is about to join a channel, not just in settings.
+            if !locationChannelsModel.userTorEnabled {
+                Text(verbatim: Strings.torOffWarning)
+                    .bitchatFont(size: 11)
+                    .foregroundColor(palette.alertRed)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
-                Group {
-                    switch locationChannelsModel.permissionState {
-                    case .notDetermined:
-                        Button(action: { locationChannelsModel.enableLocationChannels() }) {
-                            Text(Strings.requestPermissions)
-                                .bitchatFont(size: 12)
-                                .foregroundColor(standardGreen)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 6)
-                                .background(standardGreen.opacity(0.12))
-                                .cornerRadius(6)
-                        }
-                        .buttonStyle(.plain)
-                    case .denied, .restricted:
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(Strings.permissionDenied)
-                                .bitchatFont(size: 12)
-                                .foregroundColor(palette.secondary)
-                            Button(Strings.openSettings, action: SystemSettings.location.open)
-                            .buttonStyle(.plain)
-                        }
-                    case .authorized:
-                        EmptyView()
+            Group {
+                switch locationChannelsModel.permissionState {
+                case .notDetermined:
+                    // The only way the picker asks for location permission:
+                    // never on its own, in any presentation.
+                    Button(action: { locationChannelsModel.enableLocationChannels() }) {
+                        Text(Strings.requestPermissions)
+                            .bitchatFont(size: 12)
+                            .foregroundColor(standardGreen)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .background(standardGreen.opacity(0.12))
+                            .cornerRadius(6)
                     }
+                    .buttonStyle(.plain)
+                case .denied, .restricted:
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(Strings.permissionDenied)
+                            .bitchatFont(size: 12)
+                            .foregroundColor(palette.secondary)
+                        Button(Strings.openSettings, action: SystemSettings.location.open)
+                        .buttonStyle(.plain)
+                    }
+                case .authorized:
+                    EmptyView()
                 }
+            }
 
-                channelList
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .themedSurface()
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationBarHidden(true)
-            #else
-            .navigationTitle("")
-            #endif
+            channelList
+            Spacer()
         }
-        #if os(macOS)
-        .frame(minWidth: 420, minHeight: 520)
-        #endif
-        .themedSheetBackground()
+        .padding(.horizontal, 16)
+        .padding(.top, topPadding)
+        .padding(.bottom, bottomPadding)
+        .themedSurface()
         .onAppear {
-            // Refresh channels when opening
-            if locationChannelsModel.permissionState == .authorized {
-                locationChannelsModel.refreshChannels()
-            }
-            // Begin periodic refresh while sheet is open
-            locationChannelsModel.beginLiveRefresh()
-            // Geohash sampling is now managed by ChatViewModel globally
+            perform(.appear, permission: locationChannelsModel.permissionState)
         }
         .onDisappear {
-            locationChannelsModel.endLiveRefresh()
+            perform(.disappear, permission: locationChannelsModel.permissionState)
         }
         .onChange(of: locationChannelsModel.permissionState) { newValue in
-            if newValue == .authorized {
-                locationChannelsModel.refreshChannels()
-            }
+            perform(.permissionChange, permission: newValue)
         }
         .onChange(of: locationChannelsModel.availableChannels) { _ in }
         .confirmationDialog(
@@ -222,6 +247,113 @@ struct LocationChannelsSheet: View {
         }
     }
 
+    /// The title and, where there is somewhere to return to, the close
+    /// control. In the pane it is exactly as tall as the bar beside it, and
+    /// holds its content clear of the display corner.
+    @ViewBuilder
+    private var titleRow: some View {
+        let row = HStack(spacing: 12) {
+            Text(Strings.title)
+                .bitchatFont(size: 18)
+            Spacer()
+            if let onClose {
+                SheetCloseButton(action: onClose)
+            }
+        }
+        switch presentation {
+        case .sheet:
+            row
+        #if os(iOS)
+        case .pane(let headerHeight, let trailingCornerReach):
+            // A fixed height, not a minimum: no child here may stretch the
+            // row (the bar beside it is fixed too).
+            row
+                .frame(height: headerHeight)
+                // The content sits 16pt in (the horizontal padding).
+                .padding(.trailing, TopCornerClearance.padding(
+                    forReach: trailingCornerReach,
+                    contentInset: 16
+                ))
+        #endif
+        }
+    }
+
+    private var topPadding: CGFloat {
+        switch presentation {
+        case .sheet:
+            return 12
+        #if os(iOS)
+        case .pane:
+            // Level with the bar beside it, which glass floats as a panel
+            // 4pt below the top (themedChromePanel).
+            return theme.usesGlassChrome ? 4 : 0
+        #endif
+        }
+    }
+
+    private var bottomPadding: CGFloat {
+        switch presentation {
+        case .sheet:
+            return 12
+        #if os(iOS)
+        case .pane:
+            return 0
+        #endif
+        }
+    }
+
+    private func perform(_ event: LifecycleEvent, permission: LocationChannelManager.PermissionState) {
+        Self.perform(event, presentation: presentation, permission: permission, on: locationChannelsModel)
+    }
+
+    /// Selects `channel` and reports the choice. In the pane, choosing the
+    /// channel that is already selected only ends browsing (E7): selecting
+    /// it again would resubscribe for nothing.
+    /// - Parameter prepare: Runs right before a selection (teleport marks).
+    private func choose(_ channel: ChannelID, prepare: () -> Void = {}) {
+        if choosesSelection(channel.nostrGeohashTag) {
+            onChoose()
+            return
+        }
+        prepare()
+        locationChannelsModel.select(channel)
+        onChoose()
+    }
+
+    /// Teleports to `geohash` and reports the choice; in the pane, the
+    /// selected channel only ends browsing, as in `choose(_:prepare:)`.
+    private func chooseTeleport(to geohash: String) {
+        if !choosesSelection(geohash) {
+            locationChannelsModel.teleport(to: geohash)
+        }
+        onChoose()
+    }
+
+    /// In the pane, whether a choice is the channel already selected.
+    private func choosesSelection(_ geohash: String?) -> Bool {
+        switch presentation {
+        case .sheet:
+            return false
+        #if os(iOS)
+        case .pane:
+            return Self.isSelected(geohash: geohash, in: locationChannelsModel.selectedChannel)
+        #endif
+        }
+    }
+
+    /// The #mesh row: hidden in the idle pane, where #mesh is the pane
+    /// beside it and no location channel is selected to leave (E7).
+    private var showsMeshRow: Bool {
+        switch presentation {
+        case .sheet:
+            return true
+        #if os(iOS)
+        case .pane:
+            return locationChannelsModel.selectedChannel.isLocation
+        #endif
+        }
+    }
+
     private func requestShare(forGeohash geohash: String) {
         if ChannelShare.shouldWarn(forGeohash: geohash) {
             pendingShareGeohash = geohash
@@ -235,14 +367,10 @@ struct LocationChannelsSheet: View {
         activeSharePayload = ChannelSharePayload(text: ChannelShare.payload(forGeohash: geohash))
     }
 
-    private var closeButton: some View {
-        SheetCloseButton { isPresented = false }
-    }
-
     /// Participant counts mean "active in the last five minutes": they change
     /// as people arrive and as quiet ones age out, neither of which publishes
-    /// anything this sheet observes, so re-read them every few seconds while
-    /// the sheet is open.
+    /// anything this picker observes, so re-read them every few seconds while
+    /// it is on screen.
     private var channelList: some View {
         TimelineView(.periodic(from: .now, by: 5)) { _ in
             channelListContent
@@ -252,11 +380,12 @@ struct LocationChannelsSheet: View {
     private var channelListContent: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                channelRow(title: Strings.meshTitle(peerListModel.reachableMeshPeerCount), subtitlePrefix: Strings.subtitlePrefix(geohash: "bluetooth", coverage: bluetoothRangeString()), isSelected: isMeshSelected, titleColor: standardBlue, titleBold: peerListModel.reachableMeshPeerCount > 0) {
-                    locationChannelsModel.select(ChannelID.mesh)
-                    isPresented = false
+                if showsMeshRow {
+                    channelRow(title: Strings.meshTitle(peerListModel.reachableMeshPeerCount), subtitlePrefix: Strings.subtitlePrefix(geohash: "bluetooth", coverage: bluetoothRangeString()), isSelected: isMeshSelected, titleColor: standardBlue, titleBold: peerListModel.reachableMeshPeerCount > 0) {
+                        choose(ChannelID.mesh)
+                    }
+                    .padding(.vertical, 6)
                 }
-                .padding(.vertical, 6)
 
                 let nearby = locationChannelsModel.availableChannels.filter { $0.level != .building }
                 if !nearby.isEmpty {
@@ -288,9 +417,9 @@ struct LocationChannelsSheet: View {
                             shareGeohash: channel.geohash,
                             onShare: { requestShare(forGeohash: channel.geohash) }
                         ) {
-                            locationChannelsModel.markTeleported(for: channel.geohash, false)
-                            locationChannelsModel.select(ChannelID.location(channel))
-                            isPresented = false
+                            choose(ChannelID.location(channel)) {
+                                locationChannelsModel.markTeleported(for: channel.geohash, false)
+                            }
                         }
                         .contextMenu {
                             Button {
@@ -387,8 +516,7 @@ struct LocationChannelsSheet: View {
                 Button(action: {
                     let gh = normalized
                     guard isValid else { customError = Strings.invalidGeohash; return }
-                    locationChannelsModel.teleport(to: gh)
-                    isPresented = false
+                    chooseTeleport(to: gh)
                 }) {
                     HStack(spacing: 6) {
                         Text(Strings.teleport)
@@ -427,8 +555,7 @@ struct LocationChannelsSheet: View {
                     .foregroundColor(palette.secondary)
 
                 Button(action: {
-                    locationChannelsModel.teleport(to: suggestion.geohash)
-                    isPresented = false
+                    chooseTeleport(to: suggestion.geohash)
                 }) {
                     HStack {
                         Text(verbatim: "\(suggestion.flag) \(suggestion.localizedName)")
@@ -486,14 +613,14 @@ struct LocationChannelsSheet: View {
                         shareGeohash: gh,
                         onShare: { requestShare(forGeohash: gh) }
                     ) {
-                        let inRegional = locationChannelsModel.availableChannels.contains { $0.geohash == gh }
-                        if !inRegional && !locationChannelsModel.availableChannels.isEmpty {
-                            locationChannelsModel.markTeleported(for: gh, true)
-                        } else {
-                            locationChannelsModel.markTeleported(for: gh, false)
+                        choose(ChannelID.location(channel)) {
+                            let inRegional = locationChannelsModel.availableChannels.contains { $0.geohash == gh }
+                            if !inRegional && !locationChannelsModel.availableChannels.isEmpty {
+                                locationChannelsModel.markTeleported(for: gh, true)
+                            } else {
+                                locationChannelsModel.markTeleported(for: gh, false)
+                            }
                         }
-                        locationChannelsModel.select(ChannelID.location(channel))
-                        isPresented = false
                     }
                     .contextMenu {
                         Button {
@@ -616,16 +743,98 @@ struct LocationChannelsSheet: View {
     }
 }
 
+// MARK: - Lifecycle
+
+extension LocationChannelsPicker {
+    enum LifecycleEvent: Equatable {
+        case appear
+        case disappear
+        /// The location permission changed.
+        case permissionChange
+    }
+
+    enum LifecycleAction: Equatable {
+        /// One location fix, if authorized (`refreshChannels`).
+        case refreshChannels
+        /// Continuous high-accuracy updates until `endLiveRefresh`.
+        case beginLiveRefresh
+        case endLiveRefresh
+    }
+
+    /// What the picker asks of location as it comes and goes. None of it
+    /// prompts for permission: that stays the tap on the enable button. The
+    /// sheet keeps its continuous refresh while it is up. The pane can sit on
+    /// screen for hours, so it never starts one: it asks for a single fix as
+    /// it appears and when permission arrives.
+    /// - Parameter permission: The permission state as of the event (after
+    ///   the change, for `.permissionChange`).
+    static func lifecycleActions(
+        for event: LifecycleEvent,
+        presentation: Presentation,
+        permission: LocationChannelManager.PermissionState
+    ) -> [LifecycleAction] {
+        let refresh: [LifecycleAction] = permission == .authorized ? [.refreshChannels] : []
+        switch (event, presentation) {
+        case (.appear, .sheet):
+            return refresh + [.beginLiveRefresh]
+        case (.disappear, .sheet):
+            return [.endLiveRefresh]
+        #if os(iOS)
+        case (.appear, .pane):
+            return refresh
+        case (.disappear, .pane):
+            return []
+        #endif
+        case (.permissionChange, _):
+            return refresh
+        }
+    }
+
+    /// Runs `lifecycleActions(for:presentation:permission:)` on `model`.
+    @MainActor
+    static func perform(
+        _ event: LifecycleEvent,
+        presentation: Presentation,
+        permission: LocationChannelManager.PermissionState,
+        on model: LocationChannelsModel
+    ) {
+        for action in lifecycleActions(for: event, presentation: presentation, permission: permission) {
+            switch action {
+            case .refreshChannels:
+                model.refreshChannels()
+            case .beginLiveRefresh:
+                model.beginLiveRefresh()
+            case .endLiveRefresh:
+                model.endLiveRefresh()
+            }
+        }
+    }
+
+    #if os(iOS)
+    /// Whether choosing `geohash` (nil: #mesh) picks the channel already
+    /// selected. Compared by geohash: the same cell can arrive with
+    /// different levels (a bookmark, a teleport, a nearby row).
+    static func isSelected(geohash: String?, in selected: ChannelID) -> Bool {
+        switch selected {
+        case .mesh:
+            return geohash == nil
+        case .location(let channel):
+            return geohash?.lowercased() == channel.geohash.lowercased()
+        }
+    }
+    #endif
+}
+
 // MARK: - Standardized Colors
 // (The tor and internet-gateway toggles moved to AppInfoView's Settings pane;
 // IRCToggleStyle now lives in Views/Components.)
-extension LocationChannelsSheet {
+extension LocationChannelsPicker {
     private var standardGreen: Color { palette.primary }
     private var standardBlue: Color { palette.accentBlue }
 }
 
 // MARK: - Coverage helpers
-extension LocationChannelsSheet {
+extension LocationChannelsPicker {
     private func coverageString(forPrecision len: Int) -> String {
         // Approximate max cell dimension at equator for a given geohash length.
         // Values sourced from common geohash dimension tables.
