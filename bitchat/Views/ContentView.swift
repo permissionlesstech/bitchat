@@ -422,7 +422,13 @@ struct ContentView: View {
         }
         #endif
         .sheet(isPresented: Binding(
-            get: { imagePreviewURL != nil },
+            get: {
+                #if os(iOS)
+                return imagePreviewURL != nil && !showSidebar && selectedPrivatePeerID == nil
+                #else
+                return imagePreviewURL != nil
+                #endif
+            },
             set: { presenting in
                 if !presenting {
                     imagePreviewURL = nil
