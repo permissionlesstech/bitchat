@@ -43,6 +43,27 @@ struct ContentSplitLayoutTests {
         #expect(layout.leadingWidth + layout.gapWidth + layout.trailingWidth == innerWidth)
     }
 
+    /// The fallback gap is the fold's margins, so the columns don't move
+    /// once the region arrives.
+    @Test
+    func fallbackMatchesTheReportedRegion() throws {
+        let fallback = try #require(ContentSplitLayout.resolve(
+            isRegularWidth: true,
+            width: innerWidth,
+            leadingInset: 0,
+            trailingInset: statusColumn,
+            division: nil
+        ))
+
+        #expect(fallback == ContentSplitLayout.resolve(
+            isRegularWidth: true,
+            width: innerWidth,
+            leadingInset: 0,
+            trailingInset: statusColumn,
+            division: CGRect(x: 455.5, y: 0, width: 40, height: 669)
+        ))
+    }
+
     /// Right-to-left puts the status column on the leading edge.
     @Test
     func leadingStatusColumnMovesTheHingeLeading() throws {

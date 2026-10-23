@@ -17,8 +17,11 @@ struct ContentSplitLayout: Equatable {
     /// The people and DM views were built for ~375pt sheets; narrower than
     /// this, either column gets cramped.
     static let minimumColumnWidth: CGFloat = 340
-    /// Hairline gap used when the system reports no fold region.
-    static let fallbackGapWidth: CGFloat = 1
+    /// Gap used while the system reports no fold region: the fold's margins
+    /// as the Duo reports them, 20pt either side of the hinge, so the
+    /// columns don't move when the region arrives and controls stay off the
+    /// crease meanwhile.
+    static let fallbackGapWidth: CGFloat = 40
 
     let leadingWidth: CGFloat
     let gapWidth: CGFloat
