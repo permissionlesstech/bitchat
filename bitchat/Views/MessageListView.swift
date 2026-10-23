@@ -127,16 +127,14 @@ struct MessageListView: View {
         // conversation starting must not hide what's left here. Keyed on the
         // timeline this list shows, not the selection: the split layout's
         // #mesh list renders beside a selected geohash.
-        if privatePeer == nil,
-           publicChatModel.channel.isMesh,
-           nearbyNotes.noteCount > 0 {
+        if channelPolicy.showsNotesStrip(noteCount: nearbyNotes.noteCount) {
             notesHereStrip
         }
         GeometryReader { geometry in
         ScrollViewReader { proxy in
             ScrollView {
-                if messageItems.isEmpty && privatePeer == nil {
-                    publicEmptyState(fillHeight: geometry.size.height)
+                if messageItems.isEmpty, let emptyState = channelPolicy.emptyState {
+                    publicEmptyState(emptyState, fillHeight: geometry.size.height)
                 }
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(messageItems) { item in
@@ -247,7 +245,7 @@ struct MessageListView: View {
                 // Only carried history on screen: the ambient layer (radar,
                 // sightings, live hints) stays visible below it instead of
                 // vanishing the moment echoes exist.
-                if privatePeer == nil, showsAmbientFooter(messageItems: messageItems) {
+                if channelPolicy.showsAmbientFooter(below: messageItems.lazy.map(\.message)) {
                     MeshEmptyStateView(compact: true, bluetoothAvailable: bluetoothCanScan)
                         .padding(.horizontal, 12)
                         .padding(.top, 20)
@@ -419,6 +417,11 @@ private extension MessageListView {
         return publicChatModel.channel.contextKey
     }
 
+    /// The channel decisions of the timeline this list renders.
+    var channelPolicy: MessageListChannelPolicy {
+        MessageListChannelPolicy(channel: publicChatModel.channel, privatePeer: privatePeer)
+    }
+
     func windowCount(for privatePeer: PeerID?) -> Int {
         if let peer = privatePeer {
             return windowCountPrivate[peer] ?? TransportConfig.uiWindowInitialCountPrivate
@@ -508,7 +511,7 @@ private extension MessageListView {
     /// explicit act reveals the counter (tap-to-reveal). The counter is
     /// ref-counted, so two lists showing #mesh hold it twice.
     func updateNotesCounterHold() {
-        let shouldHold = privatePeer == nil && publicChatModel.channel.isMesh
+        let shouldHold = channelPolicy.holdsNotesCounter
         guard shouldHold != holdsNotesCounter else { return }
         holdsNotesCounter = shouldHold
         if shouldHold {
@@ -524,34 +527,25 @@ private extension MessageListView {
         NearbyNotesCounter.shared.deactivate()
     }
 
-    /// True when the mesh timeline holds nothing but archived echoes and
-    /// system lines — no live conversation yet, so the ambient layer still
-    /// applies.
-    private func showsAmbientFooter(messageItems: [MessageDisplayItem]) -> Bool {
-        guard publicChatModel.channel.isMesh,
-              !messageItems.isEmpty else { return false }
-        return messageItems.allSatisfy { $0.message.isArchivedEcho || $0.message.sender == "system" }
-    }
-
     /// Terminal-styled narration for an empty public timeline: says which
     /// channel this is, that the app is waiting for peers, and where to go
     /// next. Rendered inside the ScrollView; disappears with the first row.
     /// The mesh case fills the visible chat height so its radar can center
     /// in the space below the text.
-    func publicEmptyState(fillHeight: CGFloat) -> some View {
+    func publicEmptyState(_ emptyState: MessageListChannelPolicy.EmptyState, fillHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            switch publicChatModel.channel {
+            switch emptyState {
             case .mesh:
                 MeshEmptyStateView(
                     fillHeight: max(0, fillHeight - 24),
                     bluetoothAvailable: bluetoothCanScan
                 )
-            case .location(let channel):
+            case .location(let geohash):
                 emptyStateLine(
                     String(
                         format: String(localized: "content.empty.location_intro", comment: "First line of an empty geohash timeline naming the channel"),
                         locale: .current,
-                        channel.geohash
+                        geohash
                     )
                 )
                 emptyStateLine(String(localized: "content.empty.switch_hint", comment: "Empty timeline hint pointing at the channel switcher and the help screen"))
