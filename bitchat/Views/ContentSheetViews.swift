@@ -100,6 +100,20 @@ struct ContentPeopleSheetView: View {
         )
     }
 
+    private var imagePreviewBinding: Binding<Bool> {
+        Binding(
+            get: {
+                imagePreviewURL != nil
+                    && (showSidebar || privateConversationModel.selectedPeerID != nil)
+            },
+            set: { isPresented in
+                if !isPresented {
+                    imagePreviewURL = nil
+                }
+            }
+        )
+    }
+
     /// Voice recording happens inside this sheet, so its error alert must
     /// present from here as well: the root copy defers whenever this sheet
     /// is up, exactly like the Bluetooth alert above. Presenting from the
@@ -222,6 +236,21 @@ struct ContentPeopleSheetView: View {
             MacImagePickerView { url in
                 showMacImagePicker = false
                 conversationUIModel.processSelectedImage(from: url)
+            }
+        }
+        #endif
+        // Image taps in the DM: the root presenter defers to this sheet, which
+        // it cannot present over.
+        #if os(iOS)
+        .fullScreenCover(isPresented: imagePreviewBinding) {
+            if let url = imagePreviewURL {
+                ImagePreviewView(url: url)
+            }
+        }
+        #else
+        .sheet(isPresented: imagePreviewBinding) {
+            if let url = imagePreviewURL {
+                ImagePreviewView(url: url)
             }
         }
         #endif

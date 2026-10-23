@@ -263,6 +263,17 @@ struct ContentView: View {
         )
     }
 
+    private var rootImagePreviewBinding: Binding<Bool> {
+        Binding(
+            get: { imagePreviewURL != nil && !isPeopleSheetPresented },
+            set: { presenting in
+                if !presenting {
+                    imagePreviewURL = nil
+                }
+            }
+        )
+    }
+
     var body: some View {
         mainContent
             .onAppear {
@@ -459,18 +470,23 @@ struct ContentView: View {
             }
         }
         #endif
-        .sheet(isPresented: Binding(
-            get: { imagePreviewURL != nil },
-            set: { presenting in
-                if !presenting {
-                    imagePreviewURL = nil
-                }
-            }
-        )) {
+        // Previews opened from a DM in the people sheet present from inside
+        // it: a second root presentation would wait until the sheet closed.
+        #if os(iOS)
+        // The viewer is a black full-bleed canvas with its own close button;
+        // as a sheet it was a card, and a small one on wide displays.
+        .fullScreenCover(isPresented: rootImagePreviewBinding) {
             if let url = imagePreviewURL {
                 ImagePreviewView(url: url)
             }
         }
+        #else
+        .sheet(isPresented: rootImagePreviewBinding) {
+            if let url = imagePreviewURL {
+                ImagePreviewView(url: url)
+            }
+        }
+        #endif
         .alert(Text(String(localized: "voice.error.title", defaultValue: "recording error", comment: "Title of the voice recording error alert")), isPresented: rootVoiceAlertBinding, actions: {
             Button("common.ok", role: .cancel) {}
             if voiceRecordingVM.state == .permissionDenied {
