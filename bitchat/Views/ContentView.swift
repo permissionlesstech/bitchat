@@ -138,6 +138,49 @@ struct FocusEffectDisabledModifier: ViewModifier {
     }
 }
 
+/// The models the root hands on to its sheets without observing them (I6):
+/// each publishes on every message or roster change, and a root observing
+/// them would re-render itself, and with it both panes of the split layout,
+/// on every one. The views that render them observe them. Set by the app
+/// scene; nil where nobody sets it (previews, most test harnesses), and the
+/// sheets then inherit the models instead.
+struct ContentModelReferences {
+    /// The selection's public timeline: the single column's, and the split
+    /// layout's trailing pane's.
+    let publicChatModel: PublicChatModel
+    let privateInboxModel: PrivateInboxModel
+    let peerListModel: PeerListModel
+
+    /// Hands the models to a presentation, which can drop inherited
+    /// environment objects on some iOS versions (#1558).
+    struct Reinjection: ViewModifier {
+        let references: ContentModelReferences?
+
+        func body(content: Content) -> some View {
+            if let references {
+                content
+                    .environmentObject(references.publicChatModel)
+                    .environmentObject(references.privateInboxModel)
+                    .environmentObject(references.peerListModel)
+            } else {
+                content
+            }
+        }
+    }
+}
+
+private struct ContentModelReferencesKey: EnvironmentKey {
+    static let defaultValue: ContentModelReferences? = nil
+}
+
+extension EnvironmentValues {
+    /// The models `ContentView` passes on without observing them.
+    var contentModelReferences: ContentModelReferences? {
+        get { self[ContentModelReferencesKey.self] }
+        set { self[ContentModelReferencesKey.self] = newValue }
+    }
+}
+
 struct ContentView: View {
     @EnvironmentObject private var appChromeModel: AppChromeModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
@@ -145,9 +188,9 @@ struct ContentView: View {
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var sharedContentImportModel: SharedContentImportModel
-    @EnvironmentObject private var peerListModel: PeerListModel
-    @EnvironmentObject private var publicChatModel: PublicChatModel
-    @EnvironmentObject private var privateInboxModel: PrivateInboxModel
+    /// The selection's timeline, the private inbox and the people lists:
+    /// plain references, never observed here (I6).
+    @Environment(\.contentModelReferences) private var modelReferences
 
     @StateObject private var voiceRecordingVM = VoiceRecordingViewModel()
     /// Every composer's text, suggestions and target, one session per slot.
@@ -208,11 +251,18 @@ struct ContentView: View {
         privateConversationModel.selectedPeerID
     }
 
+    /// The channel the public timeline renders.
+    private var timelineChannel: ChannelID {
+        publicTimelineChannel
+            ?? modelReferences?.publicChatModel.channel
+            ?? locationChannelsModel.selectedChannel
+    }
+
     /// Where each composer sends: the public channel the timeline shows,
     /// and the open DM in the sheet (or #1792's column).
     private var composerTargets: ComposerTargets {
         .single(
-            activeChannel: publicTimelineChannel ?? publicChatModel.channel,
+            activeChannel: timelineChannel,
             privatePeer: selectedPrivatePeerID
         )
     }
@@ -405,9 +455,12 @@ struct ContentView: View {
         .frame(minWidth: 600, minHeight: 400)
         #endif
         // The timeline's channel, not its messages: one update per switch.
-        .onReceive(publicChatModel.$channel) { channel in
-            if publicTimelineChannel != channel {
-                publicTimelineChannel = channel
+        // Received in a leaf, so nothing of the timeline is observed here.
+        .background {
+            if let timeline = modelReferences?.publicChatModel {
+                Color.clear.onReceive(timeline.$channel) { channel in
+                    followTimeline(to: channel)
+                }
             }
         }
         // Every composer follows its conversation in one step (the draft
@@ -508,9 +561,7 @@ struct ContentView: View {
             .environmentObject(verificationModel)
             .environmentObject(conversationUIModel)
             .environmentObject(locationChannelsModel)
-            .environmentObject(peerListModel)
-            .environmentObject(publicChatModel)
-            .environmentObject(privateInboxModel)
+            .modifier(ContentModelReferences.Reinjection(references: modelReferences))
         }
         .sheet(isPresented: $appChromeModel.isAppInfoPresented) {
             AppInfoView(
@@ -930,6 +981,12 @@ struct ContentView: View {
         }
     }
     #endif
+
+    /// The public timeline moved to another channel.
+    private func followTimeline(to channel: ChannelID) {
+        guard publicTimelineChannel != channel else { return }
+        publicTimelineChannel = channel
+    }
 
     /// Points every composer at its conversation, and cancels a mic hold
     /// whose composer now shows another one.

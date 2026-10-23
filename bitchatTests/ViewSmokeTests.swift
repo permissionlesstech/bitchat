@@ -127,6 +127,12 @@ private func installSmokeEnvironment<V: View>(
         .environmentObject(featureModels.peerListModel)
         .environmentObject(featureModels.boardAlertsModel)
         .environmentObject(featureModels.sharedContentImportModel)
+        // As the app scene hands them to ContentView: plain references.
+        .environment(\.contentModelReferences, ContentModelReferences(
+            publicChatModel: featureModels.publicChatModel,
+            privateInboxModel: featureModels.privateInboxModel,
+            peerListModel: featureModels.peerListModel
+        ))
 }
 
 @MainActor
