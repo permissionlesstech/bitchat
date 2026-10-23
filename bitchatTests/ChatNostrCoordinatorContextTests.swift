@@ -152,7 +152,10 @@ private final class MockChatNostrContext: ChatNostrContext {
     private(set) var refreshTimerStopCount = 0
     private(set) var activeParticipantGeohashes: [String?] = []
     private(set) var recordedParticipants: [String] = []
+    private(set) var recordedParticipantTimes: [Date] = []
     private(set) var recordedSampledParticipants: [(pubkeyHex: String, geohash: String)] = []
+    /// "nickname:<pubkey>" / "record:<pubkey>" in call order.
+    private(set) var presenceCallLog: [String] = []
     private(set) var clearTeleportedGeoCount = 0
     private(set) var clearGeoNicknamesCount = 0
     var visiblePeople: [GeoPerson] = []
@@ -160,9 +163,13 @@ private final class MockChatNostrContext: ChatNostrContext {
     func startGeoParticipantRefreshTimer() { refreshTimerStartCount += 1 }
     func stopGeoParticipantRefreshTimer() { refreshTimerStopCount += 1 }
     func setActiveParticipantGeohash(_ geohash: String?) { activeParticipantGeohashes.append(geohash) }
-    func recordGeoParticipant(pubkeyHex: String) { recordedParticipants.append(pubkeyHex) }
+    func recordGeoParticipant(pubkeyHex: String, seenAt: Date) {
+        recordedParticipants.append(pubkeyHex)
+        recordedParticipantTimes.append(seenAt)
+        presenceCallLog.append("record:\(pubkeyHex)")
+    }
 
-    func recordGeoParticipant(pubkeyHex: String, geohash: String) {
+    func recordGeoParticipant(pubkeyHex: String, geohash: String, seenAt: Date) {
         recordedSampledParticipants.append((pubkeyHex, geohash))
     }
 
@@ -170,7 +177,10 @@ private final class MockChatNostrContext: ChatNostrContext {
         recordedSampledParticipants.filter { $0.geohash == geohash }.count
     }
 
-    func setGeoNickname(_ nickname: String, forPubkey pubkeyHex: String) { geoNicknames[pubkeyHex.lowercased()] = nickname }
+    func setGeoNickname(_ nickname: String, forPubkey pubkeyHex: String) {
+        geoNicknames[pubkeyHex.lowercased()] = nickname
+        presenceCallLog.append("nickname:\(pubkeyHex)")
+    }
     func markGeoTeleported(_ pubkeyHexLowercased: String) { teleportedKeys.insert(pubkeyHexLowercased) }
     func clearGeoTeleported(_ pubkeyHexLowercased: String) { teleportedKeys.remove(pubkeyHexLowercased) }
 
@@ -332,6 +342,79 @@ struct ChatNostrCoordinatorContextTests {
         #expect(context.recordedNostrEventIDs == [event.id])
         #expect(context.recordedParticipants.isEmpty)
         #expect(context.handledPublicMessages.isEmpty)
+    }
+
+    /// A newcomer's nickname is known before they're recorded, so they enter
+    /// the roster under their name. Live events count as activity when they
+    /// arrive (keeping senders with skewed clocks visible).
+    @Test @MainActor
+    func handleNostrEvent_learnsTheNicknameBeforeRecordingTheSender() async throws {
+        let context = MockChatNostrContext()
+        let coordinator = ChatNostrCoordinator(context: context)
+
+        let sender = try NostrIdentity.generate()
+        let event = try NostrProtocol.createEphemeralGeohashEvent(
+            content: "hello",
+            geohash: "u4pruyd",
+            senderIdentity: sender,
+            nickname: "alice"
+        )
+
+        let beforeArrival = Date()
+        coordinator.inbound.handleNostrEvent(event)
+        await drainMainQueue()
+
+        #expect(context.presenceCallLog == ["nickname:\(event.pubkey)", "record:\(event.pubkey)"])
+        #expect(context.recordedParticipantTimes.first.map { $0 >= beforeArrival } == true)
+    }
+
+    /// Stored history relays replay before EOSE counts as activity at the
+    /// time it happened, so joining doesn't mark an hour of authors present.
+    @Test @MainActor
+    func handleNostrEvent_stampsReplayedHistoryWithTheEventTime() async throws {
+        let context = MockChatNostrContext()
+        let coordinator = ChatNostrCoordinator(context: context)
+
+        let sender = try NostrIdentity.generate()
+        let event = try NostrProtocol.createEphemeralGeohashEvent(
+            content: "from earlier",
+            geohash: "u4pruyd",
+            senderIdentity: sender
+        )
+
+        coordinator.inbound.handleNostrEvent(event, isHistoryReplay: true)
+        await drainMainQueue()
+
+        #expect(context.recordedParticipantTimes == [Date(timeIntervalSince1970: TimeInterval(event.created_at))])
+    }
+
+    /// The open channel is usually also a sampled cell. Its own subscription
+    /// records senders, so the sampled copy must not record them again
+    /// (that ran the roster bookkeeping twice per event); other sampled
+    /// cells still count.
+    @Test @MainActor
+    func presenceSampling_skipsTheOpenChannelButCountsOtherCells() async throws {
+        let context = MockChatNostrContext()
+        let coordinator = ChatNostrCoordinator(context: context)
+        context.activeChannel = .location(GeohashChannel(level: .neighborhood, geohash: "u4pruy"))
+
+        let sender = try NostrIdentity.generate()
+        let inOpenChannel = try NostrProtocol.createEphemeralGeohashEvent(
+            content: "here",
+            geohash: "u4pruy",
+            senderIdentity: sender
+        )
+        let elsewhere = try NostrProtocol.createEphemeralGeohashEvent(
+            content: "there",
+            geohash: "u4pruz",
+            senderIdentity: sender
+        )
+
+        coordinator.presence.subscribeNostrEvent(inOpenChannel, gh: "u4pruy")
+        coordinator.presence.subscribeNostrEvent(elsewhere, gh: "u4pruz")
+        await drainMainQueue()
+
+        #expect(context.recordedSampledParticipants.map(\.geohash) == ["u4pruz"])
     }
 
     @Test @MainActor

@@ -157,13 +157,17 @@ private extension ChatViewModelBootstrapper {
             }
             .store(in: &viewModel.cancellables)
 
+        // Prune against the roster as it is when this runs, not the delivered
+        // snapshot: events handled since it was published may have added
+        // people whose nicknames were just learned.
         viewModel.participantTracker.$visiblePeople
             .receive(on: DispatchQueue.main)
-            .sink { [weak viewModel] people in
-                Task { @MainActor [weak viewModel] in
-                    let visible = Set(people.map { $0.id })
-                    viewModel?.locationPresenceStore.retainTeleportedGeo(keeping: visible)
-                    viewModel?.locationPresenceStore.retainGeoNicknames(keeping: visible)
+            .sink { [weak viewModel] _ in
+                MainActor.assumeIsolated {
+                    guard let viewModel else { return }
+                    let visible = Set(viewModel.participantTracker.visiblePeople.map(\.id))
+                    viewModel.locationPresenceStore.retainTeleportedGeo(keeping: visible)
+                    viewModel.locationPresenceStore.retainGeoNicknames(keeping: visible)
                 }
             }
             .store(in: &viewModel.cancellables)

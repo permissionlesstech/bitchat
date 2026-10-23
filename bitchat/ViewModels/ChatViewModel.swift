@@ -1685,6 +1685,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         _ = clearGeoSamplingSubs()
         cachedGeohashIdentity = nil
         nostrKeyMapping.removeAll()
+        // Every pubkey seen in any geohash this session, with when.
+        participantTracker.clear()
 
         // Clear read receipt tracking
         sentReadReceipts.removeAll()

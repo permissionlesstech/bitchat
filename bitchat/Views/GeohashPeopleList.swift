@@ -149,7 +149,14 @@ struct GeohashPeopleList: View, Equatable {
             }
             // Seed and update order outside result builder
             .onAppear {
-                orderedIDs = PeopleListOrdering.stableOrder(previous: [], current: currentIDs)
+                // The roster republishes only when membership or names
+                // change, so its recency order can be stale. Rebuild once so
+                // the sheet opens with the most recently active people first.
+                peerListModel.refreshNow()
+                orderedIDs = PeopleListOrdering.stableOrder(
+                    previous: [],
+                    current: peerListModel.geohashPeople.map(\.id)
+                )
             }
             .onChange(of: currentIDs) { ids in
                 let newOrder = PeopleListOrdering.stableOrder(previous: orderedIDs, current: ids)
