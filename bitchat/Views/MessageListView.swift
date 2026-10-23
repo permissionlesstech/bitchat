@@ -413,7 +413,7 @@ private extension MessageListView {
         if let peer = privatePeer {
             return "dm:\(peer)"
         }
-        return publicChatModel.activeChannel.contextKey
+        return publicChatModel.channel.contextKey
     }
 
     func windowCount(for privatePeer: PeerID?) -> Int {
