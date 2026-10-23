@@ -128,17 +128,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
     typealias GeoOutgoingContext = (channel: GeohashChannel, event: NostrEvent, identity: NostrIdentity, teleported: Bool)
 
+    /// Whether the selection takes photos and voice: `allowsMedia` of the
+    /// selection's target, one table for every composer.
     @MainActor
     var canSendMediaInCurrentContext: Bool {
-        if let peer = selectedPrivateChatPeer {
-            // Media transfer is not wired for groups in v1 (sendFilePrivate
-            // rejects the virtual group_ recipient), so keep the affordance off.
-            return !(peer.isGeoDM || peer.isGeoChat || peer.isGroup)
-        }
-        switch activeChannel {
-        case .mesh: return true
-        case .location: return false
-        }
+        selectionTarget.allowsMedia
     }
 
     var publicRateLimiter = MessageRateLimiter(

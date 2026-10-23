@@ -118,4 +118,59 @@ struct ConversationUIModelTargetTests {
         #expect(!viewModel.privateMessages(for: bob).contains { $0.id == failed.id })
         #expect(viewModel.privateMessages(for: alice).isEmpty)
     }
+
+    @Test @MainActor
+    func voiceAndPhotosUseTheTargetsConversation() async throws {
+        let (ui, viewModel, transport) = makeTargetUIModel()
+        viewModel.selectedPrivateChatPeer = alice
+
+        #expect(!ui.makeVoiceCaptureSession(for: .publicChannel(.location(geohash))).isLive)
+
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("ui-voice-\(UUID().uuidString).m4a")
+        try Data("voice payload".utf8).write(to: url, options: .atomic)
+        defer { try? FileManager.default.removeItem(at: url) }
+        ui.makeVoiceNoteSender(for: .mesh)(url)
+        let sentVoice = await TestHelpers.waitUntil({ transport.sentBroadcastFiles.count == 1 }, timeout: TestConstants.settleTimeout)
+        #expect(sentVoice)
+
+        let imageURL = FileManager.default.temporaryDirectory.appendingPathComponent("ui-image-\(UUID().uuidString).png")
+        try makeUITargetImageData().write(to: imageURL, options: .atomic)
+        defer { try? FileManager.default.removeItem(at: imageURL) }
+        #if os(iOS)
+        ui.processSelectedImage(UIImage(contentsOfFile: imageURL.path), to: .mesh)
+        #else
+        ui.processSelectedImage(from: imageURL, to: .mesh)
+        #endif
+        let sentImage = await TestHelpers.waitUntil({ transport.sentBroadcastFiles.count == 2 }, timeout: TestConstants.settleTimeout)
+        #expect(sentImage)
+        #expect(transport.sentPrivateFiles.isEmpty)
+        #expect(viewModel.privateMessages(for: alice).isEmpty)
+    }
+}
+
+private func makeUITargetImageData() throws -> Data {
+    #if os(iOS)
+    let image = UIGraphicsImageRenderer(size: CGSize(width: 48, height: 48)).image { context in
+        UIColor.systemOrange.setFill()
+        context.fill(CGRect(x: 0, y: 0, width: 48, height: 48))
+    }
+    guard let data = image.pngData() else { throw UITargetImageError.encodingFailed }
+    return data
+    #else
+    let image = NSImage(size: CGSize(width: 48, height: 48))
+    image.lockFocus()
+    NSColor.systemOrange.setFill()
+    NSBezierPath(rect: CGRect(x: 0, y: 0, width: 48, height: 48)).fill()
+    image.unlockFocus()
+    guard let tiff = image.tiffRepresentation,
+          let bitmap = NSBitmapImageRep(data: tiff),
+          let data = bitmap.representation(using: .png, properties: [:]) else {
+        throw UITargetImageError.encodingFailed
+    }
+    return data
+    #endif
+}
+
+private enum UITargetImageError: Error {
+    case encodingFailed
 }

@@ -258,6 +258,12 @@ final class ConversationUIModel: ObservableObject {
     func processSelectedImage(_ image: UIImage?) {
         chatViewModel.processThenSendImage(image)
     }
+
+    /// Sends a photo picked from `target`'s composer to that conversation.
+    /// Capture the target when the camera or library button is tapped.
+    func processSelectedImage(_ image: UIImage?, to target: ConversationTarget) {
+        chatViewModel.processThenSendImage(image, to: target)
+    }
     #endif
 
     func processSelectedImage(from url: URL?) {
@@ -266,11 +272,25 @@ final class ConversationUIModel: ObservableObject {
         #endif
     }
 
+    #if os(macOS)
+    /// Sends a photo file picked from `target`'s composer to that
+    /// conversation. Capture the target when the photo button is clicked.
+    func processSelectedImage(from url: URL?, to target: ConversationTarget) {
+        chatViewModel.processThenSendImage(from: url, to: target)
+    }
+    #endif
+
     /// Make this at the mic's release and pass it as the recorder's
     /// completion: the voice note goes to the conversation on screen then,
     /// even if the person leaves it before the file is finalized.
     func makeVoiceNoteSender() -> (URL) -> Void {
         chatViewModel.makeVoiceNoteSender()
+    }
+
+    /// The release completion for `target`'s composer: the note goes to that
+    /// conversation, whatever is selected once the file is finalized.
+    func makeVoiceNoteSender(for target: ConversationTarget) -> (URL) -> Void {
+        chatViewModel.makeVoiceNoteSender(for: target)
     }
 
     func resolveLegacyPrivateMediaConsent(requestID: UUID, approved: Bool) {
@@ -284,6 +304,13 @@ final class ConversationUIModel: ObservableObject {
     /// peer can hear it now, classic voice note otherwise.
     func makeVoiceCaptureSession() -> VoiceCaptureSession {
         chatViewModel.makeVoiceCaptureSession()
+    }
+
+    /// Capture backend for a hold in `target`'s composer: live to that DM's
+    /// peer or to #mesh when they can hear it now, a classic note otherwise.
+    /// Never live to any conversation but the composer's own.
+    func makeVoiceCaptureSession(for target: ConversationTarget) -> VoiceCaptureSession {
+        chatViewModel.makeVoiceCaptureSession(for: target)
     }
 
     /// Whether this message is a live voice burst still streaming in.
@@ -361,19 +388,13 @@ final class ConversationUIModel: ObservableObject {
     }
 
     private func refreshComputedState() {
-        let canSendMedia: Bool
-        if let selectedPeerID = privateConversationModel.selectedPeerID {
-            // Media transfer is not wired for groups in v1; keep it off so the
-            // composer can't strand a media placeholder that never sends.
-            canSendMedia = !(selectedPeerID.isGeoDM || selectedPeerID.isGeoChat || selectedPeerID.isGroup)
-        } else {
-            switch activeChannel {
-            case .mesh:
-                canSendMedia = true
-            case .location:
-                canSendMedia = false
-            }
-        }
+        // One table for every composer: the selection's target allows media
+        // exactly where a composer's own target would. (Media transfer is not
+        // wired for groups in v1, so a group never takes it.)
+        let canSendMedia = ConversationTarget(
+            channel: activeChannel,
+            privatePeer: privateConversationModel.selectedPeerID
+        ).allowsMedia
         // Every write republishes to every message row, and most triggers
         // (each peer, favorite or status refresh of the selection) leave the
         // value as it was.
