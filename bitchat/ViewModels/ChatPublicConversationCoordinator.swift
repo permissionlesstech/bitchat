@@ -24,10 +24,6 @@ protocol ChatPublicConversationContext: AnyObject {
     var currentGeohash: String? { get }
     var nickname: String { get }
     var myPeerID: PeerID { get }
-    /// Publishes the public-timeline batching state (UI animation suppression).
-    /// (Single mutation path for the owner's `isBatchingPublic`; this
-    /// coordinator never reads it.)
-    func setPublicBatching(_ isBatching: Bool)
     /// Signals that message state changed so observers refresh (e.g. `objectWillChange.send()`).
     func notifyUIChanged()
 
@@ -587,10 +583,6 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
 
     func pipelinePrewarmMessage(_: PublicMessagePipeline, message: BitchatMessage) {
         context.prewarmMessageFormatting(message)
-    }
-
-    func pipelineSetBatchingState(_: PublicMessagePipeline, isBatching: Bool) {
-        context.setPublicBatching(isBatching)
     }
 }
 

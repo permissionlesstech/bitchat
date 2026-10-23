@@ -30,12 +30,7 @@ private final class MockChatPublicConversationContext: ChatPublicConversationCon
     var currentGeohash: String?
     var nickname = "me"
     var myPeerID = PeerID(str: "0011223344556677")
-    private(set) var isBatchingPublic = false
     private(set) var notifyUIChangedCount = 0
-
-    func setPublicBatching(_ isBatching: Bool) {
-        isBatchingPublic = isBatching
-    }
 
     func notifyUIChanged() {
         notifyUIChangedCount += 1
@@ -541,9 +536,6 @@ struct ChatPublicConversationCoordinatorContextTests {
 
         coordinator.pipelinePrewarmMessage(pipeline, message: message)
         #expect(context.prewarmedMessageIDs == ["pipeline-msg"])
-
-        coordinator.pipelineSetBatchingState(pipeline, isBatching: true)
-        #expect(context.isBatchingPublic)
     }
 
     @Test @MainActor

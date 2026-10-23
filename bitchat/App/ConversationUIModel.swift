@@ -11,7 +11,6 @@ final class ConversationUIModel: ObservableObject {
     @Published private(set) var autocompleteSuggestions: [String] = []
     @Published private(set) var selectedAutocompleteIndex = 0
     @Published private(set) var currentNickname: String
-    @Published private(set) var isBatchingPublic = false
     @Published private(set) var canSendMediaInCurrentContext = true
     @Published private(set) var legacyPrivateMediaConsentRequest: LegacyPrivateMediaConsentRequest?
     /// Who is talking live in the public mesh channel right now (floor
@@ -34,7 +33,6 @@ final class ConversationUIModel: ObservableObject {
         self.conversations = conversations
         self.activeChannel = conversations.activeChannel
         self.currentNickname = chatViewModel.nickname
-        self.isBatchingPublic = chatViewModel.isBatchingPublic
         self.showAutocomplete = chatViewModel.showAutocomplete
         self.autocompleteSuggestions = chatViewModel.autocompleteSuggestions
         self.selectedAutocompleteIndex = chatViewModel.selectedAutocompleteIndex
@@ -239,10 +237,6 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.$selectedAutocompleteIndex
             .receive(on: DispatchQueue.main)
             .assign(to: &$selectedAutocompleteIndex)
-
-        chatViewModel.$isBatchingPublic
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$isBatchingPublic)
 
         chatViewModel.$activePublicVoiceTalker
             .receive(on: DispatchQueue.main)

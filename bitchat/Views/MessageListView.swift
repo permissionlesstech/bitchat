@@ -170,7 +170,6 @@ struct MessageListView: View {
                             .background(message.isArchivedEcho ? palette.secondary.opacity(0.08) : Color.clear)
                     }
                 }
-                .transaction { tx in if conversationUIModel.isBatchingPublic { tx.disablesAnimations = true } }
                 .padding(.vertical, 2)
 
                 // Only carried history on screen: the ambient layer (radar,

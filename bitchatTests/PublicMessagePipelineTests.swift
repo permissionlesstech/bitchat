@@ -21,7 +21,6 @@ private final class TestPipelineDelegate: PublicMessagePipelineDelegate {
     /// Message IDs the commit rejects (simulates the store's ID dedup).
     var rejectedMessageIDs: Set<String> = []
     private(set) var recordedContentKeys: [String] = []
-    private(set) var batchingStates: [Bool] = []
 
     func messages(in conversationID: ConversationID) -> [BitchatMessage] {
         committed.filter { $0.conversationID == conversationID }.map(\.message)
@@ -47,10 +46,6 @@ private final class TestPipelineDelegate: PublicMessagePipelineDelegate {
     }
 
     func pipelinePrewarmMessage(_: PublicMessagePipeline, message: BitchatMessage) {}
-
-    func pipelineSetBatchingState(_: PublicMessagePipeline, isBatching: Bool) {
-        batchingStates.append(isBatching)
-    }
 }
 
 @MainActor
@@ -80,8 +75,6 @@ struct PublicMessagePipelineTests {
         pipeline.flushIfNeeded()
 
         #expect(delegate.messages(in: .mesh).map { $0.id } == ["b", "a"])
-        // Batching state wrapped the flush.
-        #expect(delegate.batchingStates == [true, false])
     }
 
     @Test @MainActor
