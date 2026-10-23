@@ -18,6 +18,7 @@ struct BLEInboundWriteBuffer {
         case decoded(packet: BitchatPacket, metadata: BLEInboundWriteAppendMetadata)
         case waiting(metadata: BLEInboundWriteAppendMetadata)
         case oversized(metadata: BLEInboundWriteAppendMetadata)
+        case invalid(metadata: BLEInboundWriteAppendMetadata)
     }
 
     private var buffersByCentralID: [String: Data] = [:]
@@ -34,10 +35,40 @@ struct BLEInboundWriteBuffer {
         var combined = buffersByCentralID[centralID] ?? Data()
         var appendedBytes = 0
         var offsets: [Int] = []
+        // New chunks must not overlap bytes already buffered for this central.
+        var lastEnd = combined.count
 
         for chunk in chunks where !chunk.data.isEmpty {
             offsets.append(chunk.offset)
+
+            // `.withoutResponse` writes always land at offset 0, so an
+            // offset-0 chunk arriving on a non-empty buffer is a fresh frame
+            // replacing stale partial bytes, not an overlap.
+            if chunk.offset == 0, !combined.isEmpty {
+                combined.removeAll()
+                lastEnd = 0
+            }
+
+            // Reject malformed writes before touching the buffer. The ATT
+            // offset field is UInt16, so a negative offset cannot arrive
+            // over the air; the `offset < 0` guard is defense-in-depth for
+            // this Int-based API, where it would trap
+            // `Data.replaceSubrange`. The reachable hardening is the
+            // overlap check: non-monotonic or overlapping offsets would
+            // silently rewrite already-buffered bytes of a pending frame.
+            guard chunk.offset >= 0, chunk.offset >= lastEnd else {
+                let metadata = BLEInboundWriteAppendMetadata(
+                    accumulatedBytes: combined.count,
+                    appendedBytes: appendedBytes,
+                    offsets: offsets,
+                    packetType: combined.count >= 2 ? combined[1] : nil
+                )
+                buffersByCentralID.removeValue(forKey: centralID)
+                return .invalid(metadata: metadata)
+            }
+
             let end = chunk.offset + chunk.data.count
+            lastEnd = end
 
             if combined.count < end {
                 combined.append(Data(repeating: 0, count: end - combined.count))
