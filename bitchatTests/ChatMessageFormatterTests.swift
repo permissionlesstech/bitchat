@@ -73,11 +73,17 @@ struct ChatMessageFormatterTests {
 
     private func makeViewModel() -> ChatViewModel {
         let keychain = MockKeychain()
+        // A private location manager: the shared one is switched by other
+        // suites running in parallel, and a switch resets the roster.
+        let locationSuite = "ChatMessageFormatterTests.\(UUID().uuidString)"
+        let locationStorage = UserDefaults(suiteName: locationSuite) ?? .standard
+        locationStorage.removePersistentDomain(forName: locationSuite)
         return ChatViewModel(
             keychain: keychain,
             idBridge: NostrIdentityBridge(keychain: MockKeychainHelper()),
             identityManager: MockIdentityManager(keychain),
-            transport: MockTransport()
+            transport: MockTransport(),
+            locationManager: LocationChannelManager(storage: locationStorage)
         )
     }
 
