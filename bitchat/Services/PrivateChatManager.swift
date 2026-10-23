@@ -142,12 +142,20 @@ final class PrivateChatManager: ObservableObject {
 
         // 2. Consolidate from temporary Nostr peer IDs (nostr_* prefixed)
         let normalizedNickname = peerNickname.lowercased()
+        let myPeerID = meshService.myPeerID
         var tempPeerIDsToConsolidate: [PeerID] = []
 
         for (storedPeerID, messages) in privateChats {
             if storedPeerID.isGeoDM && storedPeerID != peerID {
+                // Only the peer's own rows say who a thread is with. Mine
+                // carry my plain nickname (sendGeohashDM), so next to a mesh
+                // peer who shares it they would match as well: my thread with
+                // a geohash stranger would fold into the namesake's chat, a
+                // reply typed there would reach the namesake, and the
+                // stranger's next reply would open a fresh thread.
+                let containsMyRows = messages.contains { $0.senderPeerID == myPeerID }
                 let nicknamesMatch = messages.allSatisfy { $0.sender.lowercased() == normalizedNickname }
-                if nicknamesMatch && !messages.isEmpty {
+                if !containsMyRows && nicknamesMatch && !messages.isEmpty {
                     tempPeerIDsToConsolidate.append(storedPeerID)
                 }
             }
@@ -174,7 +182,9 @@ final class PrivateChatManager: ObservableObject {
                         isPrivate: message.isPrivate,
                         recipientNickname: message.recipientNickname,
                         // As in the stable-key branch above: my own rows keep
-                        // my ID, only the peer's rows move to `peerID`.
+                        // my ID, only the peer's rows move to `peerID`. (Threads
+                        // holding my rows are skipped above; this stays as a
+                        // second guard.)
                         senderPeerID: message.senderPeerID == meshService.myPeerID ? meshService.myPeerID : peerID,
                         mentions: message.mentions,
                         deliveryStatus: message.deliveryStatus
