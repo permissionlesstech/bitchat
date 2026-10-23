@@ -123,7 +123,6 @@ struct ContentPeopleSheetView: View {
     }
 
     var body: some View {
-        let legacyConsentRequest = conversationUIModel.legacyPrivateMediaConsentRequest
         NavigationStack {
             Group {
                 if privateConversationModel.selectedPeerID != nil {
@@ -198,63 +197,7 @@ struct ContentPeopleSheetView: View {
         }
         .themedSheetBackground()
         .foregroundColor(palette.primary)
-        .confirmationDialog(
-            String(
-                localized: "content.private_media.legacy_warning.title",
-                defaultValue: "Send without end-to-end encryption?",
-                comment: "Title warning before sending private media to an older client in a clear signed envelope"
-            ),
-            isPresented: Binding(
-                get: { legacyConsentRequest != nil },
-                set: { isPresented in
-                    if !isPresented, let requestID = legacyConsentRequest?.id {
-                        conversationUIModel.resolveLegacyPrivateMediaConsent(
-                            requestID: requestID,
-                            approved: false
-                        )
-                    }
-                }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button(
-                String(
-                    localized: "content.private_media.legacy_warning.send",
-                    defaultValue: "send visible file",
-                    comment: "Destructive confirmation action for one legacy clear private-media send"
-                ),
-                role: .destructive
-            ) {
-                if let requestID = legacyConsentRequest?.id {
-                    conversationUIModel.resolveLegacyPrivateMediaConsent(
-                        requestID: requestID,
-                        approved: true
-                    )
-                }
-            }
-            Button("common.cancel", role: .cancel) {
-                if let requestID = legacyConsentRequest?.id {
-                    conversationUIModel.resolveLegacyPrivateMediaConsent(
-                        requestID: requestID,
-                        approved: false
-                    )
-                }
-            }
-        } message: {
-            if let request = legacyConsentRequest {
-                Text(
-                    String(
-                        format: String(
-                            localized: "content.private_media.legacy_warning.message",
-                            defaultValue: "%@'s client does not advertise encrypted private media. This file will be signed but not end-to-end encrypted, so mesh relays can see it. Send this file anyway?",
-                            comment: "Warning explaining the confidentiality loss for one legacy private-media send; parameter is the peer name"
-                        ),
-                        locale: .current,
-                        request.peerName
-                    )
-                )
-            }
-        }
+        .modifier(LegacyPrivateMediaConsentDialog())
         #if os(macOS)
         .frame(minWidth: 420, minHeight: 520)
         #endif
@@ -306,6 +249,75 @@ struct ContentPeopleSheetView: View {
         } message: {
             Text(appChromeModel.bluetoothAlertMessage)
         }
+    }
+}
+
+/// Consent before one private-media send to a legacy client goes out in a
+/// clear signed envelope. Applied by the view that shows the DM, so a
+/// pending request always has a presenter; dismissing it denies the send.
+private struct LegacyPrivateMediaConsentDialog: ViewModifier {
+    @EnvironmentObject private var conversationUIModel: ConversationUIModel
+
+    func body(content: Content) -> some View {
+        let legacyConsentRequest = conversationUIModel.legacyPrivateMediaConsentRequest
+        content
+            .confirmationDialog(
+                String(
+                    localized: "content.private_media.legacy_warning.title",
+                    defaultValue: "Send without end-to-end encryption?",
+                    comment: "Title warning before sending private media to an older client in a clear signed envelope"
+                ),
+                isPresented: Binding(
+                    get: { legacyConsentRequest != nil },
+                    set: { isPresented in
+                        if !isPresented, let requestID = legacyConsentRequest?.id {
+                            conversationUIModel.resolveLegacyPrivateMediaConsent(
+                                requestID: requestID,
+                                approved: false
+                            )
+                        }
+                    }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button(
+                    String(
+                        localized: "content.private_media.legacy_warning.send",
+                        defaultValue: "send visible file",
+                        comment: "Destructive confirmation action for one legacy clear private-media send"
+                    ),
+                    role: .destructive
+                ) {
+                    if let requestID = legacyConsentRequest?.id {
+                        conversationUIModel.resolveLegacyPrivateMediaConsent(
+                            requestID: requestID,
+                            approved: true
+                        )
+                    }
+                }
+                Button("common.cancel", role: .cancel) {
+                    if let requestID = legacyConsentRequest?.id {
+                        conversationUIModel.resolveLegacyPrivateMediaConsent(
+                            requestID: requestID,
+                            approved: false
+                        )
+                    }
+                }
+            } message: {
+                if let request = legacyConsentRequest {
+                    Text(
+                        String(
+                            format: String(
+                                localized: "content.private_media.legacy_warning.message",
+                                defaultValue: "%@'s client does not advertise encrypted private media. This file will be signed but not end-to-end encrypted, so mesh relays can see it. Send this file anyway?",
+                                comment: "Warning explaining the confidentiality loss for one legacy private-media send; parameter is the peer name"
+                            ),
+                            locale: .current,
+                            request.peerName
+                        )
+                    )
+                }
+            }
     }
 }
 

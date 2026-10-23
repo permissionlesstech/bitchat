@@ -25,6 +25,9 @@ struct ContentRootModalPresentationState {
     var isVoiceAlertPresented = false
     var isScreenshotPrivacyAlertPresented = false
     var isMediaPickerPresented = false
+    /// The legacy private-media dialog presents from the root whenever the
+    /// people UI is inline rather than a sheet.
+    var isLegacyMediaConsentPresented = false
 
     var hasPresentation: Bool {
         isPeopleSheetPresented
@@ -37,6 +40,7 @@ struct ContentRootModalPresentationState {
             || isVoiceAlertPresented
             || isScreenshotPrivacyAlertPresented
             || isMediaPickerPresented
+            || isLegacyMediaConsentPresented
     }
 }
 
@@ -48,7 +52,8 @@ extension ContentRootModalPresentationState {
         isImagePreviewPresented: Bool = false,
         isVerificationSheetPresented: Bool = false,
         isVoiceAlertPresented: Bool = false,
-        isMediaPickerPresented: Bool = false
+        isMediaPickerPresented: Bool = false,
+        isLegacyMediaConsentPresented: Bool = false
     ) {
         self.init(
             isPeopleSheetPresented: isPeopleSheetPresented,
@@ -64,8 +69,34 @@ extension ContentRootModalPresentationState {
             isVoiceAlertPresented: isVoiceAlertPresented,
             isScreenshotPrivacyAlertPresented:
                 appChromeModel.showScreenshotPrivacyWarning,
-            isMediaPickerPresented: isMediaPickerPresented
+            isMediaPickerPresented: isMediaPickerPresented,
+            isLegacyMediaConsentPresented: isLegacyMediaConsentPresented
         )
+    }
+}
+
+/// Whether the people/DM UI is up as a modal sheet, and what a dismissal of
+/// that sheet means. On a split layout the same UI is an inline column, so
+/// the sheet's getter turns false while the conversation stays open.
+enum PeopleSheetPresentationPolicy {
+    static func isPresented(
+        isSplitLayout: Bool,
+        showSidebar: Bool,
+        hasSelectedConversation: Bool
+    ) -> Bool {
+        !isSplitLayout && (showSidebar || hasSelectedConversation)
+    }
+
+    /// Consulted only for a dismissal SwiftUI reports while the sheet is
+    /// still logically presented. Scene/background and alert-presentation
+    /// reconciliation (Bluetooth-off, recording errors) are not requests to
+    /// leave the conversation: keeping the DM selected lets the sheet come
+    /// back when the app returns from Settings.
+    static func shouldEndConversationOnDismiss(
+        sceneIsActive: Bool,
+        alertPending: Bool
+    ) -> Bool {
+        sceneIsActive && !alertPending
     }
 }
 
@@ -143,7 +174,11 @@ struct ContentView: View {
     private var usesGlassLayout: Bool { appTheme.usesGlassChrome }
 
     private var isPeopleSheetPresented: Bool {
-        showSidebar || selectedPrivatePeerID != nil
+        PeopleSheetPresentationPolicy.isPresented(
+            isSplitLayout: false,
+            showSidebar: showSidebar,
+            hasSelectedConversation: selectedPrivatePeerID != nil
+        )
     }
 
     private func rootModalPresentationState(
@@ -161,7 +196,9 @@ struct ContentView: View {
             isImagePreviewPresented: imagePreviewURL != nil,
             isVerificationSheetPresented: showVerifySheet,
             isVoiceAlertPresented: includingVoiceAlert && voiceRecordingVM.showAlert,
-            isMediaPickerPresented: isMediaPickerPresented
+            isMediaPickerPresented: isMediaPickerPresented,
+            isLegacyMediaConsentPresented:
+                conversationUIModel.legacyPrivateMediaConsentRequest != nil
         )
     }
 
@@ -302,18 +339,19 @@ struct ContentView: View {
             isPresented: Binding(
                 get: { isPeopleSheetPresented },
                 set: { isPresented in
-                    if !isPresented {
-                        showSidebar = false
-                        // Scene/background and alert-presentation
-                        // reconciliation (Bluetooth-off, recording errors)
-                        // are not user requests to leave the conversation.
-                        // Keep the selected DM so the sheet remains live
-                        // when the app returns from Settings.
-                        if scenePhase == .active,
-                           !appChromeModel.showBluetoothAlert,
-                           !voiceRecordingVM.showAlert {
-                            privateConversationModel.endConversation()
-                        }
+                    // A getter that already reads false means SwiftUI is
+                    // catching up with our own state (the split layout
+                    // moved the DM into its column), not a person leaving:
+                    // ending the conversation there would close the DM on
+                    // every unfold.
+                    guard !isPresented, isPeopleSheetPresented else { return }
+                    showSidebar = false
+                    if PeopleSheetPresentationPolicy.shouldEndConversationOnDismiss(
+                        sceneIsActive: scenePhase == .active,
+                        alertPending: appChromeModel.showBluetoothAlert
+                            || voiceRecordingVM.showAlert
+                    ) {
+                        privateConversationModel.endConversation()
                     }
                 }
             )
@@ -382,7 +420,7 @@ struct ContentView: View {
             .environmentObject(locationChannelsModel)
         }
         .sheet(isPresented: Binding(
-            get: { appChromeModel.showingFingerprintFor != nil && !showSidebar && selectedPrivatePeerID == nil },
+            get: { appChromeModel.showingFingerprintFor != nil && !isPeopleSheetPresented },
             set: { _ in appChromeModel.clearFingerprint() }
         )) {
             if let peerID = appChromeModel.showingFingerprintFor {
@@ -392,7 +430,7 @@ struct ContentView: View {
         }
         #if os(iOS)
         .fullScreenCover(isPresented: Binding(
-            get: { showImagePicker && !showSidebar && selectedPrivatePeerID == nil },
+            get: { showImagePicker && !isPeopleSheetPresented },
             set: { newValue in
                 if !newValue {
                     showImagePicker = false
@@ -408,7 +446,7 @@ struct ContentView: View {
         #endif
         #if os(macOS)
         .sheet(isPresented: Binding(
-            get: { showMacImagePicker && !showSidebar && selectedPrivatePeerID == nil },
+            get: { showMacImagePicker && !isPeopleSheetPresented },
             set: { newValue in
                 if !newValue {
                     showMacImagePicker = false

@@ -572,6 +572,15 @@ struct ViewSmokeTests {
         )
     }
 
+    @Test("Root alerts wait for the legacy media consent dialog")
+    func rootAlertGuards_includeLegacyMediaConsent() {
+        #expect(
+            ContentRootModalPresentationState(
+                isLegacyMediaConsentPresented: true
+            ).hasPresentation
+        )
+    }
+
     @Test("People-sheet Bluetooth alert waits for local verification sheet")
     func peopleSheetBluetoothAlertGuard_includesVerificationSheet() {
         #expect(!ContentPeopleSheetModalPresentationState().hasPresentation)
