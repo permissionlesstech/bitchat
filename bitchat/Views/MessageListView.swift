@@ -124,9 +124,11 @@ struct MessageListView: View {
 
         VStack(spacing: 0) {
         // Notes pinned to this place stay visible while chatting — a
-        // conversation starting must not hide what's left here.
+        // conversation starting must not hide what's left here. Keyed on the
+        // timeline this list shows, not the selection: the split layout's
+        // #mesh list renders beside a selected geohash.
         if privatePeer == nil,
-           case .mesh = locationChannelsModel.selectedChannel,
+           publicChatModel.channel.isMesh,
            nearbyNotes.noteCount > 0 {
             notesHereStrip
         }
@@ -367,7 +369,7 @@ struct MessageListView: View {
         }
         .onAppear { updateNotesCounterHold() }
         .onDisappear { releaseNotesCounterHold() }
-        .onChange(of: locationChannelsModel.selectedChannel) { _ in updateNotesCounterHold() }
+        .onChange(of: publicChatModel.channel) { _ in updateNotesCounterHold() }
         .onChange(of: privatePeer) { _ in updateNotesCounterHold() }
         .environment(\.openURL, OpenURLAction { url in
             // Intercept custom cashu: links created in attributed text
@@ -405,10 +407,11 @@ private extension MessageListView {
 
     /// Context key of the timeline shown for `privatePeer` (the DM, or the
     /// public channel); also the prefix of its row IDs. The public key comes
-    /// from the channel PublicChatModel publishes together with its messages:
-    /// the selected channel switches one render or more before the timeline
-    /// does, and keying the old messages with the new channel re-keys (and
-    /// re-appears) every row.
+    /// from the channel this list's PublicChatModel publishes together with
+    /// its messages, never from the selection: the selected channel switches
+    /// one render or more before the timeline does (keying the old messages
+    /// with the new channel re-keys, and re-appears, every row), and the split
+    /// layout's #mesh list renders beside a selected geohash.
     func timelineContextKey(for privatePeer: PeerID?) -> String {
         if let peer = privatePeer {
             return "dm:\(peer)"
@@ -499,12 +502,13 @@ private extension MessageListView {
         .buttonStyle(.plain)
     }
 
-    /// The nearby-notes counter is held whenever the mesh public timeline is
-    /// showing — the strip needs a live count before it can decide to exist.
-    /// Holding is not subscribing: nothing hits the relays until an explicit
-    /// act reveals the counter (tap-to-reveal).
+    /// The nearby-notes counter is held whenever this list shows the mesh
+    /// public timeline — the strip needs a live count before it can decide to
+    /// exist. Holding is not subscribing: nothing hits the relays until an
+    /// explicit act reveals the counter (tap-to-reveal). The counter is
+    /// ref-counted, so two lists showing #mesh hold it twice.
     func updateNotesCounterHold() {
-        let shouldHold = privatePeer == nil && locationChannelsModel.selectedChannel.isMesh
+        let shouldHold = privatePeer == nil && publicChatModel.channel.isMesh
         guard shouldHold != holdsNotesCounter else { return }
         holdsNotesCounter = shouldHold
         if shouldHold {
@@ -524,7 +528,7 @@ private extension MessageListView {
     /// system lines — no live conversation yet, so the ambient layer still
     /// applies.
     private func showsAmbientFooter(messageItems: [MessageDisplayItem]) -> Bool {
-        guard case .mesh = locationChannelsModel.selectedChannel,
+        guard publicChatModel.channel.isMesh,
               !messageItems.isEmpty else { return false }
         return messageItems.allSatisfy { $0.message.isArchivedEcho || $0.message.sender == "system" }
     }
@@ -536,7 +540,7 @@ private extension MessageListView {
     /// in the space below the text.
     func publicEmptyState(fillHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            switch locationChannelsModel.selectedChannel {
+            switch publicChatModel.channel {
             case .mesh:
                 MeshEmptyStateView(
                     fillHeight: max(0, fillHeight - 24),
