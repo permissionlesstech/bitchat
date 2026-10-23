@@ -73,9 +73,9 @@ struct MessageListView: View {
     /// Marks are per context: channel switches swap the timeline wholesale,
     /// so a difference only means "new messages" within one context.
     @State private var timelineMark: MessageListScrollPolicy.TimelineMark?
-    /// Row whose appearance last put the list at the bottom. Its leaving
-    /// means the reader scrolled up, even while a newer row that landed
-    /// below it has not appeared yet.
+    /// Row whose appearance last put the list at the bottom, cleared when it
+    /// leaves the screen. Its leaving means the reader scrolled up, even while
+    /// a newer row that landed below it has not appeared yet.
     @State private var bottomRowID: String?
     /// Set while an expansion's position-restoring scroll is still queued.
     @State private var isRestoringExpansion = false
@@ -159,6 +159,7 @@ struct MessageListView: View {
                             .onDisappear {
                                 if item.id == lastRowID || item.id == bottomRowID {
                                     isAtBottom = false
+                                    bottomRowID = nil
                                     // Leaving the bottom drops a follow-scroll
                                     // still waiting on the throttle: it would
                                     // yank the reader back down.
@@ -648,7 +649,10 @@ private extension MessageListView {
             proxy.scrollTo(target, anchor: .bottom)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            if let secondTarget = self.newestRowID(for: privatePeer) {
+            // Retry only a scroll that has not landed. Once the newest row is
+            // on screen the retry would be a no-op, and a no-op scrollTo stays
+            // queued until the next layout pass: the reader's next drag.
+            if let secondTarget = self.newestRowID(for: privatePeer), secondTarget != bottomRowID {
                 proxy.scrollTo(secondTarget, anchor: .bottom)
             }
         }
