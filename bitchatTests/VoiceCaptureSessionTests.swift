@@ -158,6 +158,23 @@ private final class GatedStartVoiceCaptureSession: VoiceCaptureSession {
     func panicCancelSynchronously() {}
 }
 
+/// Hands out the given sessions in order, then fresh ones, counting every
+/// hold that asked for one.
+@MainActor
+private final class SessionScript {
+    private var queued: [VoiceCaptureSession]
+    private(set) var provided = 0
+
+    init(_ sessions: [VoiceCaptureSession]) {
+        queued = sessions
+    }
+
+    func next() -> VoiceCaptureSession {
+        provided += 1
+        return queued.isEmpty ? GatedVoiceCaptureSession() : queued.removeFirst()
+    }
+}
+
 @MainActor
 struct VoiceCaptureSessionTests {
     private func waitUntil(
@@ -298,7 +315,7 @@ struct VoiceCaptureSessionTests {
     }
 
     /// A start that stands down while the previous classic note finalizes
-    /// belongs to a press still held: the composer lets that press try
+    /// belongs to a press still held: `pressChanged` lets that press try
     /// again, and until it does, ending the press must still end the hold.
     @Test func deferredStartStaysInFlightUntilCancelled() async {
         let oldSession = GatedVoiceCaptureSession()
@@ -347,6 +364,174 @@ struct VoiceCaptureSessionTests {
         #expect(viewModel.state == .idle)
         #expect(!viewModel.isStartDeferred)
         #expect(!viewModel.isHoldInFlight)
+    }
+
+    // MARK: One press, one hold
+
+    /// The drag reports every movement of a press. Only the first starts a
+    /// hold, whatever phase that hold is in when the next one arrives.
+    @Test func aPressStartsOneHoldHoweverOftenItMoves() async {
+        let session = GatedVoiceCaptureSession()
+        let script = SessionScript([session])
+        let viewModel = VoiceRecordingViewModel()
+        viewModel.sessionProvider = { script.next() }
+
+        viewModel.pressChanged(shouldShow: true)
+        viewModel.pressChanged(shouldShow: true)
+        await waitUntil { self.isRecording(viewModel.state) }
+        viewModel.pressChanged(shouldShow: true)
+        viewModel.pressChanged(shouldShow: true)
+
+        #expect(script.provided == 1)
+        #expect(session.cancelCount == 0)
+        #expect(isRecording(viewModel.state))
+    }
+
+    /// Something else ended the hold under a finger still down: a
+    /// conversation or layout change, or the HUD's cancel. Moving that
+    /// finger must not start another hold, aimed at whatever is selected
+    /// now.
+    @Test func aHoldEndedUnderTheFingerIsNotRestartedByIt() async {
+        let session = GatedVoiceCaptureSession()
+        let script = SessionScript([session])
+        let viewModel = VoiceRecordingViewModel()
+        viewModel.sessionProvider = { script.next() }
+
+        viewModel.pressChanged(shouldShow: true)
+        await waitUntil { self.isRecording(viewModel.state) }
+        viewModel.cancel()
+        await waitUntil { session.cancelCount == 1 }
+
+        viewModel.pressChanged(shouldShow: true)
+        viewModel.pressChanged(shouldShow: true)
+
+        #expect(script.provided == 1)
+        #expect(viewModel.state == .idle)
+        #expect(!viewModel.isHoldInFlight)
+    }
+
+    /// A panic ends the hold the same way. The finger still down must not
+    /// open the microphone again once the wipe has run.
+    @Test func aPanicEndsTheHoldButNotThePress() async {
+        let session = GatedVoiceCaptureSession()
+        let script = SessionScript([session])
+        let viewModel = VoiceRecordingViewModel()
+        viewModel.sessionProvider = { script.next() }
+
+        viewModel.pressChanged(shouldShow: true)
+        await waitUntil { self.isRecording(viewModel.state) }
+        viewModel.panicWipe()
+        viewModel.pressChanged(shouldShow: true)
+
+        #expect(script.provided == 1)
+        #expect(session.panicCancelCount == 1)
+        #expect(viewModel.state == .idle)
+    }
+
+    /// The exception: a start that stood down while the previous classic
+    /// note finalizes lets the same press try again.
+    @Test func aDeferredStartLetsTheSamePressRetry() async {
+        let oldSession = GatedVoiceCaptureSession()
+        let deferredSession = GatedVoiceCaptureSession(
+            startError: VoiceRecorder.RecorderError.recordingInProgress
+        )
+        let retrySession = GatedVoiceCaptureSession()
+        let script = SessionScript([oldSession, deferredSession, retrySession])
+        let viewModel = VoiceRecordingViewModel()
+        viewModel.sessionProvider = { script.next() }
+
+        viewModel.pressChanged(shouldShow: true)
+        await waitUntil { self.isRecording(viewModel.state) }
+        viewModel.pressEnded(completion: { _ in })
+        await waitUntil { oldSession.finishStarted }
+
+        // The next press lands while the previous note finalizes.
+        viewModel.pressChanged(shouldShow: true)
+        await waitUntil { deferredSession.cancelCount == 1 && viewModel.isStartDeferred }
+
+        viewModel.pressChanged(shouldShow: true)
+        await waitUntil { self.isRecording(viewModel.state) }
+        #expect(script.provided == 3)
+        oldSession.resolveFinish(with: nil)
+    }
+
+    /// The mic can go away mid-press (#mesh to a geohash channel), taking
+    /// the drag's end and the press reset with it. That ends the hold, and
+    /// the next press, a fresh touch-down on a mic, starts one again.
+    @Test func removingTheMicEndsItsPressAndRearmsTheNext() async {
+        let first = GatedVoiceCaptureSession()
+        let second = GatedVoiceCaptureSession()
+        let script = SessionScript([first, second])
+        let viewModel = VoiceRecordingViewModel()
+        viewModel.sessionProvider = { script.next() }
+
+        viewModel.pressChanged(shouldShow: true)
+        await waitUntil { self.isRecording(viewModel.state) }
+        viewModel.controlRemoved()
+        #expect(viewModel.state == .idle)
+        await waitUntil { first.cancelCount == 1 }
+
+        viewModel.pressChanged(shouldShow: true)
+        await waitUntil { self.isRecording(viewModel.state) }
+        #expect(script.provided == 2)
+    }
+
+    /// A VoiceOver toggle starts a hold with no press behind it. The mic
+    /// going away must end that hold too, or a live stream would carry on
+    /// behind a composer that can't stop it.
+    @Test func removingTheMicEndsAToggleStartedHold() async {
+        let session = GatedVoiceCaptureSession()
+        let viewModel = VoiceRecordingViewModel()
+        viewModel.sessionProvider = { session }
+
+        viewModel.start(shouldShow: true)
+        await waitUntil { self.isRecording(viewModel.state) }
+        viewModel.controlRemoved()
+
+        #expect(viewModel.state == .idle)
+        #expect(!viewModel.isHoldInFlight)
+        await waitUntil { session.cancelCount == 1 }
+    }
+
+    /// Lifting ends the press, so the next touch-down starts a hold.
+    @Test func liftingThePressRearmsTheNext() async {
+        let first = GatedVoiceCaptureSession()
+        let second = GatedVoiceCaptureSession()
+        let script = SessionScript([first, second])
+        let viewModel = VoiceRecordingViewModel()
+        viewModel.sessionProvider = { script.next() }
+
+        viewModel.pressChanged(shouldShow: true)
+        await waitUntil { self.isRecording(viewModel.state) }
+        viewModel.pressEnded(completion: { _ in })
+        await waitUntil { first.finishStarted }
+
+        viewModel.pressChanged(shouldShow: true)
+        await waitUntil { self.isRecording(viewModel.state) }
+        #expect(script.provided == 2)
+        first.resolveFinish(with: nil)
+    }
+
+    /// A touch the system cancels never reaches the drag's end. The press
+    /// reset still ends the press, and the composer cancels the hold it
+    /// left in flight, so the next touch-down starts a hold.
+    @Test func aCancelledTouchRearmsTheNextPress() async {
+        let first = GatedVoiceCaptureSession()
+        let second = GatedVoiceCaptureSession()
+        let script = SessionScript([first, second])
+        let viewModel = VoiceRecordingViewModel()
+        viewModel.sessionProvider = { script.next() }
+
+        viewModel.pressChanged(shouldShow: true)
+        await waitUntil { self.isRecording(viewModel.state) }
+        viewModel.pressReleased()
+        // What the composer does a hop later, the hold still in flight.
+        viewModel.cancel()
+        await waitUntil { first.cancelCount == 1 }
+
+        viewModel.pressChanged(shouldShow: true)
+        await waitUntil { self.isRecording(viewModel.state) }
+        #expect(script.provided == 2)
     }
 
     @Test func panicSynchronouslyCancelsActiveCaptureAndResetsUI() async {

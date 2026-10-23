@@ -70,9 +70,13 @@ final class VoiceRecordingViewModel: ObservableObject {
     }
 
     /// The latest start stood down because the recorder was still
-    /// finalizing the previous classic note. The composer lets that press
+    /// finalizing the previous classic note. `pressChanged` lets that press
     /// start again, unlike one whose hold was ended or cancelled.
     private(set) var isStartDeferred = false
+
+    /// Set once the current mic press has started its hold. Cleared only
+    /// when that press is over: lifted, cancelled, or its mic gone.
+    private var pressStartedHold = false
 
     /// Supplies the capture backend per press. `ChatViewModel` swaps in a
     /// live push-to-talk session when the current DM peer can hear it now.
@@ -90,6 +94,48 @@ final class VoiceRecordingViewModel: ObservableObject {
         let seconds = (totalMilliseconds % 60_000) / 1_000
         let centiseconds = (totalMilliseconds % 1_000) / 10
         return String(format: "%02d:%02d.%02d", minutes, seconds, centiseconds)
+    }
+
+    // MARK: - The mic press
+    //
+    // The composer's press-and-hold forwards its events here, so one press
+    // starting at most one hold is decided in one place. The VoiceOver
+    // toggle has no press and calls start/finish directly.
+
+    /// The press moved, its touch-down included. One press, one hold: when
+    /// something ends the hold under a finger still down (a conversation or
+    /// layout change, the HUD's cancel, a panic), the next movement must not
+    /// start another aimed at whatever is selected now. A start that only
+    /// stood down while the previous note finalizes may try again.
+    func pressChanged(shouldShow: Bool) {
+        guard !pressStartedHold || isStartDeferred else { return }
+        pressStartedHold = true
+        start(shouldShow: shouldShow)
+    }
+
+    /// The finger lifted. Make `completion` at the release, so the note goes
+    /// where it was recorded even if the person leaves before the file is
+    /// finalized.
+    func pressEnded(completion: ((URL) -> Void)?) {
+        pressStartedHold = false
+        finish(completion: completion)
+    }
+
+    /// The press is over, lifted or cancelled. A cancelled touch never
+    /// reaches `pressEnded`, so the composer still ends a hold it leaves in
+    /// flight.
+    func pressReleased() {
+        pressStartedHold = false
+    }
+
+    /// The mic left the screen. A hold must not outlive its control, and the
+    /// end of the press and the toggle that would end it went away with it.
+    /// The finger still down can't move a removed control, so the next press
+    /// needs a fresh touch-down and may start a hold again.
+    func controlRemoved() {
+        pressStartedHold = false
+        guard isHoldInFlight else { return }
+        cancel()
     }
 
     func start(shouldShow: Bool) {
@@ -243,6 +289,8 @@ final class VoiceRecordingViewModel: ObservableObject {
 
     /// Invalidates in-flight permission/start/finalize callbacks and tears
     /// down an active microphone before the panic transaction continues.
+    /// A press still down stays latched: the panic ended its hold, and its
+    /// next movement must not open the microphone again after the wipe.
     func panicWipe() {
         holdGeneration &+= 1
         let session = activeSession

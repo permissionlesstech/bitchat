@@ -21,9 +21,6 @@ struct ContentComposerView: View {
     /// The mic press itself. A drag gesture never reports a cancelled touch
     /// through onEnded, but this resets either way.
     @GestureState private var isMicPressed = false
-    /// Set once the current press has started its hold; cleared when the
-    /// press ends.
-    @State private var micPressStartedHold = false
 
     let onSendMessage: () -> Void
 
@@ -360,29 +357,21 @@ private extension ContentComposerView {
                                 isPressed = true
                             }
                             .onChanged { _ in
-                                // One press, one hold. When something ends
-                                // the hold under a finger still down (a
-                                // conversation or layout change, the HUD's
-                                // cancel), the next movement must not start
-                                // another aimed at whatever is selected now.
-                                // A start that only stood down while the
-                                // previous note finalizes may try again.
-                                guard !micPressStartedHold || voiceRecordingVM.isStartDeferred else { return }
-                                micPressStartedHold = true
-                                voiceRecordingVM.start(shouldShow: conversationUIModel.canSendMediaInCurrentContext)
+                                // Every movement lands here; the model
+                                // starts at most one hold per press.
+                                voiceRecordingVM.pressChanged(shouldShow: conversationUIModel.canSendMediaInCurrentContext)
                             }
                             .onEnded { _ in
-                                micPressStartedHold = false
                                 // The sender is made now, so the note goes
                                 // where it was recorded even if the person
                                 // leaves before the file is finalized.
-                                voiceRecordingVM.finish(completion: conversationUIModel.makeVoiceNoteSender())
+                                voiceRecordingVM.pressEnded(completion: conversationUIModel.makeVoiceNoteSender())
                             }
                     )
             )
             .onChange(of: isMicPressed) { isPressed in
                 guard !isPressed else { return }
-                micPressStartedHold = false
+                voiceRecordingVM.pressReleased()
                 // A lift already ran finish() in onEnded, which leaves the
                 // recorder idle synchronously. Still in flight a hop later
                 // means the touch was cancelled instead (a fold, a call, a
@@ -394,14 +383,11 @@ private extension ContentComposerView {
                 }
             }
             .onDisappear {
-                // A hold must not outlive its control. Text only hides the
-                // mic, so it goes away only with its composer or once media
-                // isn't allowed here (#mesh to a geohash channel, say). A
-                // VoiceOver toggle or a second finger can get there with a
-                // hold live, and the drag's end, the press reset and the
-                // toggle that would end it all go away with this view.
-                guard voiceRecordingVM.isHoldInFlight else { return }
-                voiceRecordingVM.cancel()
+                // Text only hides the mic, so it goes away only with its
+                // composer or once media isn't allowed here (#mesh to a
+                // geohash channel, say). A VoiceOver toggle or a second
+                // finger can get there with a hold live.
+                voiceRecordingVM.controlRemoved()
             }
             .accessibilityLabel(
                 String(localized: "content.accessibility.record_voice_note", comment: "Accessibility label for the voice note button")
