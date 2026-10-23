@@ -125,6 +125,39 @@ private final class PermissionPromptVoiceCaptureSession: VoiceCaptureSession {
     func panicCancelSynchronously() {}
 }
 
+/// Keeps start() pending until the test fails it, like a capture stack
+/// still spinning up.
+@MainActor
+private final class GatedStartVoiceCaptureSession: VoiceCaptureSession {
+    let isLive = false
+    private(set) var cancelCount = 0
+    private var startContinuation: CheckedContinuation<Void, Error>?
+
+    var isStarting: Bool { startContinuation != nil }
+
+    func requestPermission() async -> Bool { true }
+
+    func start() async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            startContinuation = continuation
+        }
+    }
+
+    func failStart(with error: Error) {
+        let continuation = startContinuation
+        startContinuation = nil
+        continuation?.resume(throwing: error)
+    }
+
+    func finish() async -> URL? { nil }
+
+    func cancel() async {
+        cancelCount += 1
+    }
+
+    func panicCancelSynchronously() {}
+}
+
 @MainActor
 struct VoiceCaptureSessionTests {
     private func waitUntil(
@@ -262,6 +295,58 @@ struct VoiceCaptureSessionTests {
         }
         #expect(session.startCount == 0)
         #expect(viewModel.state == .idle)
+    }
+
+    /// A start that stands down while the previous classic note finalizes
+    /// belongs to a press still held: the composer lets that press try
+    /// again, and until it does, ending the press must still end the hold.
+    @Test func deferredStartStaysInFlightUntilCancelled() async {
+        let oldSession = GatedVoiceCaptureSession()
+        let deferredSession = GatedVoiceCaptureSession(
+            startError: VoiceRecorder.RecorderError.recordingInProgress
+        )
+        var sessions: [GatedVoiceCaptureSession] = [oldSession, deferredSession]
+        let viewModel = VoiceRecordingViewModel()
+        viewModel.sessionProvider = { sessions.removeFirst() }
+
+        viewModel.start(shouldShow: true)
+        await waitUntil { self.isRecording(viewModel.state) }
+        viewModel.finish(completion: { _ in })
+        await waitUntil { oldSession.finishStarted }
+        #expect(!viewModel.isStartDeferred)
+
+        viewModel.start(shouldShow: true)
+        await waitUntil { deferredSession.cancelCount == 1 && viewModel.state == .idle }
+        #expect(viewModel.isStartDeferred)
+        #expect(viewModel.isHoldInFlight)
+
+        viewModel.cancel()
+        #expect(!viewModel.isStartDeferred)
+        #expect(!viewModel.isHoldInFlight)
+        oldSession.resolveFinish(with: nil)
+    }
+
+    /// Only the recorder standing down marks a start deferred. A hold
+    /// cancelled while it spins up stays ended, even when its start then
+    /// fails the same way, so the finger still down can't restart it.
+    @Test func holdCancelledWhileStartingIsNotDeferred() async {
+        let session = GatedStartVoiceCaptureSession()
+        let viewModel = VoiceRecordingViewModel()
+        viewModel.sessionProvider = { session }
+
+        viewModel.start(shouldShow: true)
+        await waitUntil { session.isStarting }
+        #expect(viewModel.state == .preparing)
+
+        viewModel.cancel()
+        session.failStart(with: VoiceRecorder.RecorderError.recordingInProgress)
+        // Once by the cancel, once by the failed start just before it
+        // decides whether to stand down.
+        await waitUntil { session.cancelCount == 2 }
+
+        #expect(viewModel.state == .idle)
+        #expect(!viewModel.isStartDeferred)
+        #expect(!viewModel.isHoldInFlight)
     }
 
     @Test func panicSynchronouslyCancelsActiveCaptureAndResetsUI() async {

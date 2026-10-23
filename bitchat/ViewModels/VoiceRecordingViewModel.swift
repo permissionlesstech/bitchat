@@ -60,12 +60,19 @@ final class VoiceRecordingViewModel: ObservableObject {
     @Published private(set) var isLiveStreaming = false
 
     /// A press between start() and finish()/cancel(): waiting on the
-    /// microphone permission prompt, spinning up, or recording. Wider than
-    /// `state.isActive` because a hold abandoned at the permission prompt
-    /// would otherwise start recording once access is granted.
+    /// microphone permission prompt, spinning up, recording, or standing by
+    /// for the previous note to finalize. Wider than `state.isActive`
+    /// because a hold abandoned at the permission prompt would otherwise
+    /// start recording once access is granted, and one standing by would
+    /// start again from the finger still down.
     var isHoldInFlight: Bool {
-        state.isActive || state == .requestingPermission
+        state.isActive || state == .requestingPermission || isStartDeferred
     }
+
+    /// The latest start stood down because the recorder was still
+    /// finalizing the previous classic note. The composer lets that press
+    /// start again, unlike one whose hold was ended or cancelled.
+    private(set) var isStartDeferred = false
 
     /// Supplies the capture backend per press. `ChatViewModel` swaps in a
     /// live push-to-talk session when the current DM peer can hear it now.
@@ -87,6 +94,7 @@ final class VoiceRecordingViewModel: ObservableObject {
 
     func start(shouldShow: Bool) {
         guard shouldShow, state == .idle else { return }
+        isStartDeferred = false
         holdGeneration &+= 1
         let generation = holdGeneration
         let session = sessionProvider()
@@ -129,6 +137,7 @@ final class VoiceRecordingViewModel: ObservableObject {
                       activeSession === session
                 else { return }
                 activeSession = nil
+                isStartDeferred = true
                 state = .idle
             } catch {
                 SecureLogger.error("Voice recording failed to start: \(error)", category: .session)
@@ -181,6 +190,7 @@ final class VoiceRecordingViewModel: ObservableObject {
 
         state = .idle
         isLiveStreaming = false
+        isStartDeferred = false
         let session = activeSession
         let generation = holdGeneration
         activeSession = nil
@@ -239,6 +249,7 @@ final class VoiceRecordingViewModel: ObservableObject {
         activeSession = nil
         state = .idle
         isLiveStreaming = false
+        isStartDeferred = false
         session?.panicCancelSynchronously()
     }
 
