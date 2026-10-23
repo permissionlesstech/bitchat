@@ -422,7 +422,10 @@ struct ContentView: View {
         }
         .onChange(of: locationChannelsModel.selectedChannel) { newChannel in
             #if os(iOS)
-            appChromeModel.splitLayoutShowsLocation = splitLayoutShowsLocation(isSplit: isSplitLayout)
+            appChromeModel.splitLayoutShowsLocation = SplitLayoutScreenshotPolicy.columnsShowLocation(
+                isSplit: isSplitLayout,
+                selectedChannel: newChannel
+            )
             #endif
             sharedContentImportModel.updateDestination(sharedContentDestination)
             // Private drafts are keyed by peer; only public channel switches
@@ -683,7 +686,10 @@ struct ContentView: View {
             }
             .onAppear {
                 isSplitLayout = layout != nil
-                appChromeModel.splitLayoutShowsLocation = splitLayoutShowsLocation(isSplit: layout != nil)
+                appChromeModel.splitLayoutShowsLocation = SplitLayoutScreenshotPolicy.columnsShowLocation(
+                    isSplit: layout != nil,
+                    selectedChannel: locationChannelsModel.selectedChannel
+                )
             }
             .onChange(of: layout != nil) { isSplit in
                 handleLayoutModeChange(toSplit: isSplit)
@@ -867,15 +873,6 @@ struct ContentView: View {
         }
     }
 
-    /// Screenshot routing's view of the layout (`AppChromeModel
-    /// .splitLayoutShowsLocation`); nil for the single column. The split
-    /// layout keeps the selected channel's timeline beside the people
-    /// column (the list or a DM), so the selection says whether the image
-    /// shows a place.
-    private func splitLayoutShowsLocation(isSplit: Bool) -> Bool? {
-        isSplit ? locationChannelsModel.selectedChannel.isLocation : nil
-    }
-
     /// How far display corners the safe area leaves uncovered reach into the
     /// top bars; each bar subtracts its own content inset. Zero below iOS
     /// 26, which can't report corners, and on iPhones whose status bar
@@ -910,7 +907,10 @@ struct ContentView: View {
         // First, so the departing sheet's setter reads as our own change and
         // leaves the conversation open.
         isSplitLayout = toSplit
-        appChromeModel.splitLayoutShowsLocation = splitLayoutShowsLocation(isSplit: toSplit)
+        appChromeModel.splitLayoutShowsLocation = SplitLayoutScreenshotPolicy.columnsShowLocation(
+            isSplit: toSplit,
+            selectedChannel: locationChannelsModel.selectedChannel
+        )
         // The DM composer changes hosts: the press on its mic is torn down
         // and would never finish the recording.
         if conversationMoves, voiceRecordingVM.isHoldInFlight {

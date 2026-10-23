@@ -83,6 +83,26 @@ enum TrailingPaneContent: Hashable {
     }
 }
 
+/// Screenshot routing's view of the layout: `AppChromeModel
+/// .splitLayoutShowsLocation` (E10), whether a screenshot of the split layout
+/// shows a place. Nil for the single column, where the selection and the DM
+/// sheet decide.
+enum SplitLayoutScreenshotPolicy {
+    /// #1792's two columns, until the panes replace them: the selected
+    /// channel's timeline leads, beside the people list or a DM, so the
+    /// selection alone says whether a place is on screen.
+    static func columnsShowLocation(isSplit: Bool, selectedChannel: ChannelID) -> Bool? {
+        isSplit ? selectedChannel.isLocation : nil
+    }
+
+    /// The panes: #mesh leads and shows no place, so the trailing pane
+    /// decides. Re-read on every change of what it shows, the landing of an
+    /// asynchronous selection included.
+    static func panesShowLocation(isSplit: Bool, trailing: TrailingPaneContent) -> Bool? {
+        isSplit ? trailing.showsLocation : nil
+    }
+}
+
 /// Fold and unfold between the split layout and the single column (E2-E5).
 /// Folding shows the last-touched pane; unfolding restores the other one
 /// from what the fold set aside.

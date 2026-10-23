@@ -496,26 +496,62 @@ struct ScreenshotCaptureRoutingTests {
         }
     }
 
-    /// #1792's mapping until the panes land: the column beside the timeline
-    /// showed the list or a DM, so the selected channel was the place.
-    @Test("The interim mapping reproduces #1792's split table")
-    func interimMappingReproducesTheColumnTable() {
-        for dm in [false, true] {
-            for location in [false, true] {
-                let column1792: AppRuntime.ScreenshotCaptureResponse = {
-                    if location {
-                        return dm ? .warnLocallyAndForwardToChat : .warnLocally
+    #if os(iOS)
+    /// Until the panes land, ContentView maps #1792's columns onto the flag
+    /// (`SplitLayoutScreenshotPolicy.columnsShowLocation`). Through the new
+    /// table, that mapping must answer exactly as #1792 did, for every input
+    /// and either layout. ViewSmokeTests pins that ContentView keeps the
+    /// flag current.
+    @Test("The columns mapping reproduces #1792's table")
+    func columnsMappingReproducesTheColumnTable() {
+        let geohash = GeohashChannel(level: .city, geohash: "u4pru")
+        for sheet in [false, true] {
+            for appInfo in [false, true] {
+                for dm in [false, true] {
+                    for selected in [ChannelID.mesh, .location(geohash)] {
+                        for isSplit in [false, true] {
+                            let response = AppRuntime.resolveScreenshotResponse(
+                                isLocationChannelsSheetPresented: sheet,
+                                isAppInfoPresented: appInfo,
+                                hasPrivateChatOpen: dm,
+                                isLocationChannelActive: selected.isLocation,
+                                splitLayoutShowsLocation: SplitLayoutScreenshotPolicy.columnsShowLocation(
+                                    isSplit: isSplit,
+                                    selectedChannel: selected
+                                )
+                            )
+                            #expect(
+                                response == Self.response1792(
+                                    isLocationChannelsSheetPresented: sheet,
+                                    isAppInfoPresented: appInfo,
+                                    hasPrivateChatOpen: dm,
+                                    isLocationChannelActive: selected.isLocation,
+                                    isPublicTimelineBesideConversation: isSplit
+                                ),
+                                "sheet \(sheet), appInfo \(appInfo), dm \(dm), location \(selected.isLocation), split \(isSplit)"
+                            )
+                        }
                     }
-                    return .forwardToChat
-                }()
-                #expect(AppRuntime.resolveScreenshotResponse(
-                    isLocationChannelsSheetPresented: false,
-                    isAppInfoPresented: false,
-                    hasPrivateChatOpen: dm,
-                    isLocationChannelActive: location,
-                    splitLayoutShowsLocation: location
-                ) == column1792)
+                }
             }
         }
     }
+
+    /// #1792's `resolveScreenshotResponse`, verbatim.
+    private static func response1792(
+        isLocationChannelsSheetPresented: Bool,
+        isAppInfoPresented: Bool,
+        hasPrivateChatOpen: Bool,
+        isLocationChannelActive: Bool,
+        isPublicTimelineBesideConversation: Bool
+    ) -> AppRuntime.ScreenshotCaptureResponse {
+        if isLocationChannelsSheetPresented { return .warnLocally }
+        if isAppInfoPresented { return .ignore }
+        if isLocationChannelActive {
+            if !hasPrivateChatOpen { return .warnLocally }
+            if isPublicTimelineBesideConversation { return .warnLocallyAndForwardToChat }
+        }
+        return .forwardToChat
+    }
+    #endif
 }

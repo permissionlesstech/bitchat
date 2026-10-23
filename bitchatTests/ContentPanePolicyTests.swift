@@ -67,6 +67,33 @@ struct ContentPanePolicyTests {
         #expect(!TrailingPaneContent.conversation(geoDM).showsLocation)
     }
 
+    /// E10: split, the trailing pane decides the screenshot flag (#mesh
+    /// beside it shows no place); the single column leaves it unset.
+    @Test
+    func screenshotFlagFollowsTheTrailingPaneOnlyWhenSplit() {
+        let contents: [TrailingPaneContent] = [
+            .channel(geohash),
+            .picker(returnTo: nil),
+            .picker(returnTo: geohash),
+            .conversation(meshPeer),
+            .conversation(geoDM)
+        ]
+        for trailing in contents {
+            #expect(SplitLayoutScreenshotPolicy.panesShowLocation(isSplit: true, trailing: trailing)
+                == trailing.showsLocation)
+            #expect(SplitLayoutScreenshotPolicy.panesShowLocation(isSplit: false, trailing: trailing) == nil)
+        }
+    }
+
+    /// #1792's columns until the panes land: the selection says.
+    @Test
+    func columnsScreenshotFlagFollowsTheSelectionOnlyWhenSplit() {
+        #expect(SplitLayoutScreenshotPolicy.columnsShowLocation(isSplit: true, selectedChannel: .location(geohash)) == true)
+        #expect(SplitLayoutScreenshotPolicy.columnsShowLocation(isSplit: true, selectedChannel: .mesh) == false)
+        #expect(SplitLayoutScreenshotPolicy.columnsShowLocation(isSplit: false, selectedChannel: .location(geohash)) == nil)
+        #expect(SplitLayoutScreenshotPolicy.columnsShowLocation(isSplit: false, selectedChannel: .mesh) == nil)
+    }
+
     /// E13: only the channel has a bar to anchor the trailing popover.
     @Test
     func onlyTheChannelHostsAChannelBar() {

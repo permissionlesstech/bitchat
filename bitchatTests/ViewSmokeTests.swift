@@ -276,6 +276,46 @@ private func makeSmokeLocationChannelsModel(
     }
     return model
 }
+
+/// Hosts a view in a visible window of the test host's scene, so it appears
+/// and updates as it would on screen: `onAppear` and `onChange` run.
+@MainActor
+private final class WindowHost {
+    let window: UIWindow
+
+    init<V: View>(_ view: V, size: CGSize) {
+        let scene = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first
+        window = scene.map { UIWindow(windowScene: $0) } ?? UIWindow()
+        window.frame = CGRect(origin: .zero, size: size)
+        window.rootViewController = UIHostingController(rootView: view)
+        window.makeKeyAndVisible()
+        window.layoutIfNeeded()
+    }
+
+    func close() {
+        window.resignKey()
+        window.isHidden = true
+        window.rootViewController = nil
+    }
+}
+
+/// Stands in for the device's width class, which decides the split layout.
+@MainActor
+private final class SmokeSizeClass: ObservableObject {
+    @Published var value: UserInterfaceSizeClass = .regular
+}
+
+@MainActor
+private struct ContentViewSizeClassHarness: View {
+    @ObservedObject var sizeClass: SmokeSizeClass
+
+    var body: some View {
+        ContentView()
+            .environment(\.horizontalSizeClass, sizeClass.value)
+    }
+}
 #endif
 
 @MainActor
@@ -768,6 +808,63 @@ struct ViewSmokeTests {
             ))
             #expect(model.selectedChannel.isLocation)
         }
+    }
+
+    /// E10, until the panes land: the flag follows #1792's columns as the
+    /// layout appears, as the selection changes and as the layout changes.
+    @Test
+    func contentView_keepsTheColumnsScreenshotFlagCurrent() async {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let chrome = featureModels.appChromeModel
+        let channels = featureModels.locationChannelsModel
+        let geohash = GeohashChannel(level: .city, geohash: "u4pru")
+        let sizeClass = SmokeSizeClass()
+        // Wide enough for two columns either side of the window's centre.
+        let host = WindowHost(
+            installSmokeEnvironment(ContentViewSizeClassHarness(sizeClass: sizeClass), featureModels: featureModels),
+            size: CGSize(width: 1000, height: 800)
+        )
+        defer {
+            host.close()
+            channels.select(.mesh)
+        }
+
+        // Split on #mesh: the column sits beside a timeline with no place.
+        let splitOnMesh = await TestHelpers.waitUntil(
+            { chrome.splitLayoutShowsLocation == false },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(splitOnMesh)
+
+        channels.select(.location(geohash))
+        let splitOnGeohash = await TestHelpers.waitUntil(
+            { chrome.splitLayoutShowsLocation == true },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(splitOnGeohash)
+
+        // Folded: the single column, where the selection decides.
+        sizeClass.value = .compact
+        let folded = await TestHelpers.waitUntil(
+            { chrome.splitLayoutShowsLocation == nil },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(folded)
+
+        sizeClass.value = .regular
+        let unfolded = await TestHelpers.waitUntil(
+            { chrome.splitLayoutShowsLocation == true },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(unfolded)
+
+        channels.select(.mesh)
+        let backOnMesh = await TestHelpers.waitUntil(
+            { chrome.splitLayoutShowsLocation == false },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(backOnMesh)
     }
 
     @Test
