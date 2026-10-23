@@ -259,6 +259,41 @@ struct PrivateChatManagerTests {
     }
 
     @Test @MainActor
+    func consolidateMessages_keepsMyOwnTemporaryGeoDMRowsMine() async {
+        // My geo DMs carry my plain nickname (sendGeohashDM), so a thread of
+        // only my rows matches a mesh peer who shares that nickname. Folding
+        // it in must keep my peer ID on my rows: stamped with theirs, my rows
+        // would render as theirs and get READ receipts sent for them.
+        let transport = MockTransport()
+        transport.myPeerID = PeerID(str: "a1b2c3d4e5f60718")
+        let (manager, store) = Self.makeManager(transport: transport)
+        let namesakePeerID = PeerID(str: "0011223344556677")
+        let tempPeerID = PeerID(nostr_: String(repeating: "42", count: 32))
+
+        store.append(
+            BitchatMessage(
+                id: "my-geo-dm",
+                sender: "alice",
+                content: "hi from the geohash",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "alice",
+                senderPeerID: transport.myPeerID,
+                deliveryStatus: .sent
+            ),
+            to: .directPeer(tempPeerID)
+        )
+
+        _ = manager.consolidateMessages(for: namesakePeerID, peerNickname: "alice", persistedReadReceipts: [])
+        #expect(manager.privateChats[namesakePeerID]?.count == 1)
+        #expect(manager.privateChats[namesakePeerID]?.first?.senderPeerID == transport.myPeerID)
+
+        manager.markAsRead(from: namesakePeerID)
+        #expect(transport.sentReadReceipts.isEmpty)
+    }
+
+    @Test @MainActor
     func syncReadReceiptsForSentMessages_onlyCopiesDeliveredAndRead() async {
         let transport = MockTransport()
         let (manager, store) = Self.makeManager(transport: transport)
@@ -304,7 +339,7 @@ struct PrivateChatManagerTests {
         }
 
         var externalReceipts = Set<String>()
-        manager.syncReadReceiptsForSentMessages(peerID: peerID, nickname: "Me", externalReceipts: &externalReceipts)
+        manager.syncReadReceiptsForSentMessages(peerID: peerID, externalReceipts: &externalReceipts)
 
         #expect(externalReceipts == Set(["sent-read", "sent-delivered"]))
         #expect(manager.sentReadReceipts == Set(["sent-read", "sent-delivered"]))

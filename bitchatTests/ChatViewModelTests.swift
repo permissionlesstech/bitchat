@@ -1068,6 +1068,46 @@ struct ChatViewModelPrivateChatTests {
         // At minimum, it should not crash
         #expect(Bool(true)) // If we get here without crash, the test passes
     }
+
+    @Test @MainActor
+    func syncReadReceiptsForSentMessages_judgesMineBySenderIDNotNickname() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        viewModel.nickname = "alice"
+        let peerID = PeerID(str: "0011223344556677")
+        viewModel.seedPrivateChat([
+            // A namesake's file, delivered to me (BLEFileTransferHandler.incomingMessage):
+            // it still needs my READ receipt.
+            BitchatMessage(
+                id: "namesake-delivered",
+                sender: "alice",
+                content: "[image] theirs.jpg",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "alice",
+                senderPeerID: peerID,
+                deliveryStatus: .delivered(to: "alice", at: Date())
+            ),
+            // My own message from before a rename, already read.
+            BitchatMessage(
+                id: "mine-before-rename",
+                sender: "al",
+                content: "hi",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "bob",
+                senderPeerID: transport.myPeerID,
+                deliveryStatus: .read(by: "bob", at: Date())
+            )
+        ], for: peerID)
+
+        viewModel.syncReadReceiptsForSentMessages(for: peerID)
+
+        #expect(!viewModel.hasSentReadReceipt("namesake-delivered"))
+        #expect(!viewModel.privateChatManager.sentReadReceipts.contains("namesake-delivered"))
+        #expect(viewModel.hasSentReadReceipt("mine-before-rename"))
+    }
 }
 
 // MARK: - Private Chat Selection Tests

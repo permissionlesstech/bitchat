@@ -554,7 +554,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     func syncReadReceiptsForSentMessages(for peerID: PeerID) {
         privateChatManager.syncReadReceiptsForSentMessages(
             peerID: peerID,
-            nickname: nickname,
             externalReceipts: &sentReadReceipts
         )
     }
