@@ -98,6 +98,22 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
     
     func setVerified(fingerprint: String, verified: Bool) {}
 
+    var trustedNicknames: [String: String] = [:]
+
+    var claimedNicknames: [String: String] = [:]
+
+    func trustedNickname(fingerprint: String) -> String? { trustedNicknames[fingerprint] }
+
+    func trustedNicknameMismatch(fingerprint: String) -> Bool {
+        guard let pinned = trustedNicknames[fingerprint], !pinned.isEmpty,
+              let claimed = claimedNicknames[fingerprint], !claimed.isEmpty else { return false }
+        // Folded like the real one. A mock that compared raw strings would
+        // call a recase a rename, so a view test could pass here and fail in
+        // production — and which fold applies is the whole subject of this
+        // change, so it is the last thing a double should get wrong.
+        return pinned.nicknameBindingKey != claimed.nicknameBindingKey
+    }
+
     func isVerified(fingerprint: String) -> Bool {
         true
     }

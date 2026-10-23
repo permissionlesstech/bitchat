@@ -321,6 +321,11 @@ private final class TestIdentityManager: SecureIdentityStateManagerProtocol {
         verified
     }
 
+    // No name binding is exercised here: these tests drive peer-list assembly,
+    // not trust display.
+    func trustedNickname(fingerprint: String) -> String? { nil }
+    func trustedNicknameMismatch(fingerprint: String) -> Bool { false }
+
     // MARK: Vouching (unused by these tests)
 
     @discardableResult

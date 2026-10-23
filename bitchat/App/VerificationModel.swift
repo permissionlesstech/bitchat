@@ -16,6 +16,15 @@ struct FingerprintPresentationState: Equatable {
     let voucherCount: Int
     /// Display names of the (verified) vouchers, where known.
     let voucherNames: [String]
+    /// The nickname this key was announcing when it was verified or first
+    /// vouched, if anything was bound. Non-nil and different from the name on
+    /// screen is what `nameChangedSinceVerification` reports.
+    let verifiedAsNickname: String?
+    /// The key is trusted, but it now announces a different name than when
+    /// that trust was established. The sheet is the one place this should be
+    /// explained rather than collapsed into a glyph, so it is surfaced here
+    /// instead of silently suppressing the badge.
+    let nameChangedSinceVerification: Bool
 
     /// Vouched for by ≥1 peer the user verified (and not explicitly verified).
     var isVouched: Bool { voucherCount > 0 }
@@ -136,6 +145,13 @@ final class VerificationModel: ObservableObject {
         let isVerified = theirFingerprint.map { peerIdentityStore.isVerified($0) } ?? false
         let localPetname = theirFingerprint
             .flatMap { chatViewModel.identityManager.getSocialIdentity(for: $0)?.localPetname }
+        // A vouched seal is bound to the name it was earned under, exactly like
+        // the verified one. Missing baseline means nothing was bound, so this
+        // fails open like every other site.
+        let nameBound = theirFingerprint
+            .map { !chatViewModel.identityManager.trustedNicknameMismatch(fingerprint: $0) } ?? true
+        let verifiedAsNickname = theirFingerprint
+            .flatMap { chatViewModel.identityManager.trustedNickname(fingerprint: $0) }
 
         // Vouch state is recomputed on read: only vouchers still in the
         // verified set count, so removing a verification silently retires the
@@ -146,11 +162,30 @@ final class VerificationModel: ObservableObject {
         } else {
             vouchers = []
         }
+        // Each voucher is named by the name YOU VERIFIED IT UNDER, not by
+        // whatever it announces now.
+        //
+        // This list is a trust attribution — "people you verified vouch for
+        // this peer" — so it has the same problem as a seal, one level out. Use
+        // the live name and a voucher that renamed is attributed under its new
+        // one: Eve gets verified as "ravi", vouches for Mallory, renames to
+        // "medic", and Mallory's sheet reads "vouched by medic". The vouch is
+        // real and the key is trusted; the NAME beside it was never verified,
+        // which is the whole subject of this change.
+        //
+        // Order: a petname first, because it is your own label and nothing on
+        // the network can influence it; then the pinned baseline; then the
+        // claimed nickname, for vouchers recorded before baselines existed —
+        // the same fail-open as everywhere else here.
         let voucherNames = vouchers.compactMap { record -> String? in
             guard let social = chatViewModel.identityManager.getSocialIdentity(for: record.voucherFingerprint) else {
                 return nil
             }
             if let petname = social.localPetname, !petname.isEmpty { return petname }
+            if let pinned = chatViewModel.identityManager.trustedNickname(
+                    fingerprint: record.voucherFingerprint), !pinned.isEmpty {
+                return pinned
+            }
             return social.claimedNickname.isEmpty ? nil : social.claimedNickname
         }
 
@@ -161,8 +196,12 @@ final class VerificationModel: ObservableObject {
             myFingerprint: chatViewModel.getMyFingerprint(),
             isVerified: isVerified,
             localPetname: localPetname,
-            voucherCount: vouchers.count,
-            voucherNames: voucherNames
+            // Suppressed together: a voucher list beside a name nobody
+            // vouched for is the same claim as the seal itself.
+            voucherCount: nameBound ? vouchers.count : 0,
+            voucherNames: nameBound ? voucherNames : [],
+            verifiedAsNickname: verifiedAsNickname,
+            nameChangedSinceVerification: !nameBound
         )
     }
 
