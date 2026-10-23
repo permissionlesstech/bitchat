@@ -166,9 +166,17 @@ extension ChatViewModel: ChatPublicConversationContext {
 @MainActor
 final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
     private unowned let context: any ChatPublicConversationContext
+    /// Erases the media we sent (see `wipeOutgoingMediaDirectories()`).
+    /// Injected so tests can see when a clear would erase it: the real wipe
+    /// never runs under tests.
+    private let wipeOutgoingMedia: () -> Void
 
-    init(context: any ChatPublicConversationContext) {
+    init(
+        context: any ChatPublicConversationContext,
+        wipeOutgoingMedia: @escaping () -> Void = ChatPublicConversationCoordinator.wipeOutgoingMediaDirectories
+    ) {
         self.context = context
+        self.wipeOutgoingMedia = wipeOutgoingMedia
     }
 
     func visibleGeohashPeople() -> [GeoPerson] {
@@ -295,17 +303,32 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
     func clearPublicTimeline(_ channel: ChannelID) {
         context.clearPublicConversation(ConversationID(channelID: channel))
 
+        // Everything else a clear erases belongs to #mesh. A geohash
+        // timeline is Nostr-backed: it has no mesh archive, and it never
+        // holds media we sent (media only posts to #mesh and mesh DMs). So
+        // clearing one must not reach for either: wiping the media would
+        // only delete the files #mesh and DMs still show, or a voice note
+        // being recorded in another composer.
+        guard case .mesh = channel else { return }
+
         // Clearing the mesh timeline also dismisses its archived echoes for
         // good: the watermark stops the next launch from re-seeding them, the
         // archive on disk is erased so the cleared history is actually gone
         // rather than merely hidden, and the dedup keys go so a cleared
         // message arriving live shows again.
-        if case .mesh = channel {
-            MeshEchoSettings.clearedThrough = Date()
-            archivedEchoKeys.removeAll()
-            context.purgeArchivedPublicMessages()
-        }
+        MeshEchoSettings.clearedThrough = Date()
+        archivedEchoKeys.removeAll()
+        context.purgeArchivedPublicMessages()
 
+        // And the media we sent is erased, this session's and any earlier
+        // one's. (It is one store for #mesh and mesh DMs alike, so a DM's
+        // own photos and voice notes go with it, as they always have.)
+        wipeOutgoingMedia()
+    }
+
+    /// Empties the directories that hold the photos, voice notes and files
+    /// we sent. Detached; a no-op under tests.
+    nonisolated static func wipeOutgoingMediaDirectories() {
         // The SPM test process shares the real Application Support tree, so this
         // detached deletion can land mid-test under parallel scheduling and flake
         // a file-dependent test. Tests never need the on-disk media cleared.
