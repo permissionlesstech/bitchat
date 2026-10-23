@@ -345,7 +345,6 @@ struct ContentConversationColumnView: View {
 /// the people sheet's list for that pane's channel, with its own navigation
 /// for the fingerprint. Present it with `contentPeoplePopover(...)`.
 struct ContentPeoplePopoverView: View {
-    @EnvironmentObject private var appChromeModel: AppChromeModel
     @EnvironmentObject private var verificationModel: VerificationModel
 
     /// The pane's channel: #mesh, or the live geohash.
@@ -356,6 +355,12 @@ struct ContentPeoplePopoverView: View {
     let onClose: () -> Void
 
     @State private var showVerifySheet = false
+    /// The fingerprint pushed here. It is the popover's own, never the
+    /// root's (`AppChromeModel.showingFingerprintFor`), so it goes with the
+    /// popover however that closes (a fold, a panic, a DM opening) and can't
+    /// come back as the root's fingerprint sheet while the popover is still
+    /// on its way out (E13).
+    @State private var fingerprintPeerID: PeerID?
 
     /// As wide as the people sheet on a phone, but 16pt clear of the pane's
     /// edges on either side, so it never reaches across the hinge.
@@ -368,30 +373,28 @@ struct ContentPeoplePopoverView: View {
             ContentPeopleListView(
                 showSidebar: .constant(false),
                 showVerifySheet: $showVerifySheet,
-                presentation: .popover(onClose: onClose),
+                presentation: .popover(
+                    onClose: onClose,
+                    onShowFingerprint: { fingerprintPeerID = $0 }
+                ),
                 channel: channel
             )
             .navigationDestination(isPresented: Binding(
-                get: { appChromeModel.showingFingerprintFor != nil },
+                get: { fingerprintPeerID != nil },
                 set: { isPresented in
                     if !isPresented {
-                        appChromeModel.clearFingerprint()
+                        fingerprintPeerID = nil
                     }
                 }
             )) {
-                if let peerID = appChromeModel.showingFingerprintFor {
-                    FingerprintView(peerID: peerID)
+                if let fingerprintPeerID {
+                    FingerprintView(peerID: fingerprintPeerID)
                         .environmentObject(verificationModel)
                 }
             }
         }
         .frame(idealWidth: Self.idealWidth(forPaneWidth: paneWidth), idealHeight: 480)
         .modifier(PeoplePopoverPresentationStyle())
-        // A fingerprint pushed here must not come back as the root's
-        // fingerprint sheet once the popover is gone.
-        .onDisappear {
-            appChromeModel.clearFingerprint()
-        }
     }
 }
 
@@ -547,8 +550,9 @@ struct ContentPeopleListView: View {
         /// layout's panes replace that column.
         case column(headerHeight: CGFloat, trailingCornerReach: CGFloat)
         /// A pane's people popover in the split layout. Closing it never
-        /// ends a conversation; a row tap opens the DM, then closes it.
-        case popover(onClose: () -> Void)
+        /// ends a conversation; a row tap opens the DM, then closes it, and
+        /// a fingerprint shows in the popover's own navigation.
+        case popover(onClose: () -> Void, onShowFingerprint: (PeerID) -> Void)
         #endif
     }
 
@@ -659,7 +663,11 @@ struct ContentPeopleListView: View {
                                 peerListModel.toggleFavorite(peerID: peerID)
                             },
                             onShowFingerprint: { peerID in
-                                appChromeModel.showFingerprint(for: peerID)
+                                Self.showFingerprint(
+                                    for: peerID,
+                                    presentation: presentation,
+                                    appChromeModel: appChromeModel
+                                )
                             },
                             onToggleBlock: { peer in
                                 if peer.isBlocked {
@@ -724,7 +732,7 @@ struct ContentPeopleListView: View {
         #if os(iOS)
         case .column:
             EmptyView()
-        case .popover(let onClose):
+        case .popover(let onClose, _):
             // A DM open beside the popover stays open.
             SheetCloseButton(action: onClose)
         #endif
@@ -744,8 +752,28 @@ struct ContentPeopleListView: View {
         #if os(iOS)
         case .column:
             showSidebar = true
-        case .popover(let onClose):
+        case .popover(let onClose, _):
             onClose()
+        #endif
+        }
+    }
+
+    /// Where a fingerprint asked for from the list shows: the people sheet
+    /// pushes the app-wide one, which beside the column is the root's sheet;
+    /// a popover pushes its own, which can't outlive it (E13).
+    static func showFingerprint(
+        for peerID: PeerID,
+        presentation: Presentation,
+        appChromeModel: AppChromeModel
+    ) {
+        switch presentation {
+        case .sheet:
+            appChromeModel.showFingerprint(for: peerID)
+        #if os(iOS)
+        case .column:
+            appChromeModel.showFingerprint(for: peerID)
+        case .popover(_, let onShowFingerprint):
+            onShowFingerprint(peerID)
         #endif
         }
     }

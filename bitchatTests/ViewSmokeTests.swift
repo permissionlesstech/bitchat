@@ -722,7 +722,7 @@ struct ViewSmokeTests {
         let presentations: [ContentPeopleListView.Presentation] = [
             .sheet,
             .column(headerHeight: 44, trailingCornerReach: 55),
-            .popover(onClose: {})
+            .popover(onClose: {}, onShowFingerprint: { _ in })
         ]
 
         featureModels.locationChannelsModel.select(.location(geohash))
@@ -865,6 +865,38 @@ struct ViewSmokeTests {
             timeout: TestConstants.settleTimeout
         )
         #expect(backOnMesh)
+    }
+
+    /// E13: a fingerprint asked for in a popover is the popover's own, so it
+    /// can't come back as the root's fingerprint sheet once the popover goes.
+    @Test
+    func peopleList_popoverKeepsItsFingerprintToItself() {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let chrome = featureModels.appChromeModel
+        let peerID = PeerID(str: "7172737475767778")
+        var shownInPopover: [PeerID] = []
+
+        ContentPeopleListView.showFingerprint(
+            for: peerID,
+            presentation: .popover(onClose: {}, onShowFingerprint: { shownInPopover.append($0) }),
+            appChromeModel: chrome
+        )
+        #expect(shownInPopover == [peerID])
+        #expect(chrome.showingFingerprintFor == nil)
+
+        // The sheet pushes the app-wide one, and the column shows it as the
+        // root's sheet, as before.
+        let presentations: [ContentPeopleListView.Presentation] = [
+            .sheet,
+            .column(headerHeight: 44, trailingCornerReach: 0)
+        ]
+        for presentation in presentations {
+            chrome.clearFingerprint()
+            ContentPeopleListView.showFingerprint(for: peerID, presentation: presentation, appChromeModel: chrome)
+            #expect(chrome.showingFingerprintFor == peerID)
+        }
+        #expect(shownInPopover == [peerID])
     }
 
     @Test
