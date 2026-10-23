@@ -176,6 +176,11 @@ extension BLEService: CBPeripheralManagerDelegate {
         // bleQueue: physical retirement now.
         pendingNotifications.removeTarget { $0.identifier.uuidString == centralID }
         linkStateStore.removeSubscribedCentral(central)
+        // iOS centrals send writes as write-without-response frames. An entry in
+        // pendingWriteBuffers that remains in .waiting is from a frame that failed to
+        // decode. Running this on unsubscription prevents stale residual bytes from
+        // persisting into a future session for this subscribed central.
+        pendingWriteBuffers.removeValue(forCentralID: centralID)
 
         // Ensure we're still advertising for other devices to find us
         if !isPanicSuspended, peripheral.isAdvertising == false {
