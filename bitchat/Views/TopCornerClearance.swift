@@ -20,13 +20,21 @@ struct TopCornerClearance: Equatable {
 
 extension TopCornerClearance {
     /// - Parameters:
-    ///   - topLeft: `GeometryProxy.containerCornerInsets.topLeading`. Display
-    ///     corners are named by physical side, so this is the top-left one in
-    ///     right-to-left too.
-    ///   - topRight: `containerCornerInsets.topTrailing`, the top-right one.
-    ///   - safeArea: Safe-area insets. Unlike the corners, their leading and
-    ///     trailing follow the layout direction, as does the padding.
+    ///   - topLeft: `GeometryProxy.containerCornerInsets.topLeading`, read as
+    ///     the top-left corner.
+    ///   - topRight: `containerCornerInsets.topTrailing`, read as the top-right.
+    ///   - safeArea: Safe-area insets. Their leading and trailing follow the
+    ///     layout direction, as does the padding.
     ///   - isRightToLeft: The layout direction.
+    ///
+    /// Left-to-right, the corners come back by physical side. Right-to-left
+    /// they don't add up: on the iPhone Duo simulator (iOS 27.1) the status
+    /// column takes the top-leading slot and the bare 55pt corner goes
+    /// unreported, and reading them in a left-to-right subtree instead
+    /// mirrors the outer display's 8pt and 59pt corners. Because only square
+    /// corners count, a misplaced status column can never pad a bar; right
+    /// to left the bars keep their own insets, which hold the people
+    /// column's controls clear of the inner display's corner.
     init(
         topLeft: CGSize,
         topRight: CGSize,
