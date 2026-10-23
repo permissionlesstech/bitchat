@@ -193,8 +193,11 @@ final class ConversationUIModel: ObservableObject {
         #endif
     }
 
-    func sendVoiceNote(at url: URL) {
-        chatViewModel.sendVoiceNote(at: url)
+    /// Make this at the mic's release and pass it as the recorder's
+    /// completion: the voice note goes to the conversation on screen then,
+    /// even if the person leaves it before the file is finalized.
+    func makeVoiceNoteSender() -> (URL) -> Void {
+        chatViewModel.makeVoiceNoteSender()
     }
 
     func resolveLegacyPrivateMediaConsent(requestID: UUID, approved: Bool) {

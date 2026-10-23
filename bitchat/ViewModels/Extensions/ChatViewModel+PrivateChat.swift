@@ -60,6 +60,14 @@ extension ChatViewModel {
         mediaTransferCoordinator.sendVoiceNote(at: url)
     }
 
+    /// The mic release's completion: the voice note goes to the conversation
+    /// on screen at the release, not to whatever is selected once the
+    /// recorder hands over the file.
+    @MainActor
+    func makeVoiceNoteSender() -> (URL) -> Void {
+        mediaTransferCoordinator.makeVoiceNoteSender()
+    }
+
     /// Where a live burst would stream right now, or nil when the hold would
     /// fall back to a classic voice note.
     private enum LiveVoiceTarget {
@@ -94,7 +102,8 @@ extension ChatViewModel {
     /// is mesh-reachable with an established Noise session, or the public
     /// mesh channel — otherwise the classic record-then-send voice note.
     /// Either way the release delivers a normal voice note through
-    /// `sendVoiceNote(at:)`, which live receivers absorb into the live bubble.
+    /// `makeVoiceNoteSender()`, which live receivers absorb into the live
+    /// bubble.
     @MainActor
     func makeVoiceCaptureSession() -> VoiceCaptureSession {
         // Live voice rides the mesh only; frames are useful now or never,

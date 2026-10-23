@@ -360,7 +360,10 @@ private extension ContentComposerView {
                                 voiceRecordingVM.start(shouldShow: conversationUIModel.canSendMediaInCurrentContext)
                             }
                             .onEnded { _ in
-                                voiceRecordingVM.finish(completion: conversationUIModel.sendVoiceNote)
+                                // The sender is made now, so the note goes
+                                // where it was recorded even if the person
+                                // leaves before the file is finalized.
+                                voiceRecordingVM.finish(completion: conversationUIModel.makeVoiceNoteSender())
                             }
                     )
             )
@@ -398,7 +401,7 @@ private extension ContentComposerView {
             // give it a start/stop toggle as the default action.
             .accessibilityAction {
                 if voiceRecordingVM.state.isActive {
-                    voiceRecordingVM.finish(completion: conversationUIModel.sendVoiceNote)
+                    voiceRecordingVM.finish(completion: conversationUIModel.makeVoiceNoteSender())
                 } else {
                     voiceRecordingVM.start(shouldShow: conversationUIModel.canSendMediaInCurrentContext)
                 }
