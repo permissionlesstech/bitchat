@@ -52,6 +52,7 @@ private final class MockChatComposerContext: ChatComposerContext {
     var nickname = "me"
     var myPeerID = PeerID(str: "0011223344556677")
     var activeChannel: ChannelID = .mesh
+    var selectedPrivateChatPeer: PeerID?
     var meshNickname = "me"
     var meshNicknamesByPeerID: [PeerID: String] = [:]
     var blockedMeshNicknames: Set<String> = []

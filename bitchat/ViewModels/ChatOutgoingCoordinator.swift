@@ -14,14 +14,26 @@ protocol ChatOutgoingContext: AnyObject {
     // MARK: Identity & channel state
     var nickname: String { get }
     var myPeerID: PeerID { get }
+    /// The selected channel. A send never takes its destination from it:
+    /// only the selection shim does, and a geohash target must still be
+    /// this channel to go out (see `ChannelID.isLive(whileSelected:)`).
     var activeChannel: ChannelID { get }
+    /// The open DM. A send reads it only to re-resolve that conversation's
+    /// routing ID, and the selection shim to build its target.
     var selectedPrivateChatPeer: PeerID? { get }
-    var isTeleported: Bool { get }
+    /// The teleport tag a message sent to this geohash carries.
+    func isTeleported(geohash: String) -> Bool
 
     // MARK: Commands & private messages
-    func handleCommand(_ command: String)
+    /// Runs a command typed into `origin`; its output lands there too
+    /// (or in a chat the command opened).
+    func handleCommand(_ command: String, from origin: ConversationTarget)
     func updatePrivateChatPeerIfNeeded()
-    func sendPrivateMessage(_ content: String, to peerID: PeerID)
+    /// Whether two peer IDs name one direct conversation: equal, or the
+    /// same person across a peer-ID handoff.
+    func isSameDirectConversation(_ lhs: PeerID, _ rhs: PeerID) -> Bool
+    /// `scope` is the DM's channel, whose identity signs a geohash DM.
+    func sendPrivateMessage(_ content: String, to peerID: PeerID, scope: ChannelID)
 
     // MARK: Public timeline (local echo)
     func parseMentions(from content: String) -> [String]
@@ -29,7 +41,9 @@ protocol ChatOutgoingContext: AnyObject {
     /// (immediate: the local echo must render without batching).
     @discardableResult
     func appendPublicMessage(_ message: BitchatMessage, to conversationID: ConversationID) -> Bool
-    func addSystemMessage(_ content: String)
+    /// A local line in the target's conversation: a failure or notice about
+    /// a send lands where the send was aimed, never on whatever is selected.
+    func addSystemMessage(_ content: String, to target: ConversationTarget)
 
     // MARK: Content dedup
     /// Content-window key for `content` in `conversationID` (scoped per
@@ -57,9 +71,9 @@ protocol ChatOutgoingContext: AnyObject {
 
 extension ChatViewModel: ChatOutgoingContext {
     // `nickname`, `myPeerID`, `activeChannel`, `selectedPrivateChatPeer`,
-    // `isTeleported`, `handleCommand(_:)`, `updatePrivateChatPeerIfNeeded()`,
-    // `sendPrivateMessage(_:to:)`, `parseMentions(from:)`,
-    // `appendPublicMessage(_:to:)`, `addSystemMessage(_:)`,
+    // `handleCommand(_:from:)`, `updatePrivateChatPeerIfNeeded()`,
+    // `sendPrivateMessage(_:to:scope:)`, `parseMentions(from:)`,
+    // `appendPublicMessage(_:to:)`, `addSystemMessage(_:to:)`,
     // `contentKey(for:in:)`, `recordContentKey(_:timestamp:)`,
     // `sendMeshMessage(_:mentions:messageID:timestamp:)`,
     // `sendGeohash(context:)`, and `deriveNostrIdentity(forGeohash:)` are
@@ -69,6 +83,27 @@ extension ChatViewModel: ChatOutgoingContext {
 
     func recordPublicActivity(forChannelKey key: String) {
         lastPublicActivityAt[key] = Date()
+    }
+
+    /// The selection's flag is exact for the selected geohash, the only one
+    /// a public send goes out to. Any other geohash gets the rule the
+    /// selection itself applies: reached from outside this device's
+    /// regional channels means teleported.
+    func isTeleported(geohash: String) -> Bool {
+        if case .location(let selected) = locationManager.selectedChannel,
+           selected.geohash.lowercased() == geohash.lowercased() {
+            return isTeleported
+        }
+        return isGeohashOutsideRegionalChannels(geohash)
+    }
+
+    /// Compared the way drafts and held mics are: by the draft key, so the
+    /// short mesh ID and the Noise key's 64-hex ID of one person match.
+    func isSameDirectConversation(_ lhs: PeerID, _ rhs: PeerID) -> Bool {
+        if lhs == rhs { return true }
+        let lhsKey = ComposerDraftStore.Key.from(peerID: lhs, fingerprint: getFingerprint(for: lhs), channel: .mesh)
+        let rhsKey = ComposerDraftStore.Key.from(peerID: rhs, fingerprint: getFingerprint(for: rhs), channel: .mesh)
+        return lhsKey == rhsKey
     }
 
     func bridgeOutgoingPublicMessage(_ content: String, senderPeerID: PeerID, timestamp: Date) {
@@ -96,28 +131,38 @@ final class ChatOutgoingCoordinator {
         geohashMiningTask?.cancel()
     }
 
+    /// Sends to whatever is selected now: the single-composer form, kept
+    /// for callers that have no target of their own.
     func sendMessage(_ content: String) {
+        sendMessage(content, to: ConversationTarget(
+            channel: context.activeChannel,
+            privatePeer: context.selectedPrivateChatPeer
+        ))
+    }
+
+    /// Sends to `target`, captured when the person committed to the send.
+    /// The selection never picks the destination: a command runs in the
+    /// target, a DM goes to the target's peer, a public message to the
+    /// target's channel, and anything said about the send lands there too.
+    func sendMessage(_ content: String, to target: ConversationTarget) {
         guard let trimmed = content.trimmedOrNilIfEmpty else { return }
 
         if content.hasPrefix("/") {
             Task { @MainActor [weak context = self.context] in
-                context?.handleCommand(content)
+                context?.handleCommand(content, from: target)
             }
             return
         }
 
-        if context.selectedPrivateChatPeer != nil {
-            context.updatePrivateChatPeerIfNeeded()
-
-            if let selectedPeer = context.selectedPrivateChatPeer {
-                context.sendPrivateMessage(content, to: selectedPeer)
-            }
+        if let boundPeer = target.privatePeer {
+            guard let peerID = routingPeer(for: boundPeer) else { return }
+            context.sendPrivateMessage(content, to: peerID, scope: target.channel)
             return
         }
 
         let mentions = context.parseMentions(from: content)
 
-        switch context.activeChannel {
+        switch target.channel {
         case .mesh:
             sendMeshPublicMessage(originalContent: content, trimmed: trimmed, mentions: mentions)
         case .location(let channel):
@@ -134,6 +179,20 @@ final class ChatOutgoingCoordinator {
 }
 
 private extension ChatOutgoingCoordinator {
+    /// The peer ID a DM to `boundPeer` is sent under. The open DM is
+    /// re-resolved first, as the single composer always did: a reconnect
+    /// can hand that conversation a new routing ID. A target bound to any
+    /// other conversation goes out as bound. Nil means the open DM closed
+    /// while it was re-resolved, and nothing is sent.
+    func routingPeer(for boundPeer: PeerID) -> PeerID? {
+        guard let openPeer = context.selectedPrivateChatPeer,
+              openPeer == boundPeer || context.isSameDirectConversation(openPeer, boundPeer) else {
+            return boundPeer
+        }
+        context.updatePrivateChatPeerIfNeeded()
+        return context.selectedPrivateChatPeer
+    }
+
     func sendMeshPublicMessage(originalContent: String, trimmed: String, mentions: [String]) {
         let message = BitchatMessage(
             sender: context.nickname,
@@ -161,20 +220,34 @@ private extension ChatOutgoingCoordinator {
     /// at the default target is well under 100 ms and hard-capped at
     /// `NostrPoW.miningTimeCap`, so sending is never meaningfully delayed.
     func sendGeohashPublicMessage(_ trimmed: String, mentions: [String], channel: GeohashChannel) {
+        let target = ConversationTarget.publicChannel(.location(channel))
+        // Only the selected geohash is live. A target naming another one is
+        // stale (the selection moved between the tap and the send), and the
+        // message must not go out to a channel the person has left.
+        guard target.channel.isLive(whileSelected: context.activeChannel) else {
+            SecureLogger.info("Geo: not sending to \(channel.geohash), which is no longer the selected channel", category: .session)
+            context.addSystemMessage(
+                String(localized: "system.location.not_in_channel", comment: "System message when attempting to send without being in a location channel"),
+                to: target
+            )
+            return
+        }
+
         let identity: NostrIdentity
         do {
             identity = try context.deriveNostrIdentity(forGeohash: channel.geohash)
         } catch {
             SecureLogger.error("❌ Failed to prepare geohash message: \(error)", category: .session)
             context.addSystemMessage(
-                String(localized: "system.location.send_failed", comment: "System message when a location channel send fails")
+                String(localized: "system.location.send_failed", comment: "System message when a location channel send fails"),
+                to: target
             )
             return
         }
 
         let displaySender = context.nickname + "#" + String(identity.publicKeyHex.suffix(4))
         let senderPeerID = PeerID(nostr: identity.publicKeyHex)
-        let teleported = context.isTeleported
+        let teleported = context.isTeleported(geohash: channel.geohash)
         let nickname = context.nickname
 
         // Serialize geohash sends: each send awaits the previous send's task
@@ -201,7 +274,8 @@ private extension ChatOutgoingCoordinator {
             } catch {
                 SecureLogger.error("❌ Failed to prepare geohash message: \(error)", category: .session)
                 context?.addSystemMessage(
-                    String(localized: "system.location.send_failed", comment: "System message when a location channel send fails")
+                    String(localized: "system.location.send_failed", comment: "System message when a location channel send fails"),
+                    to: target
                 )
                 return
             }

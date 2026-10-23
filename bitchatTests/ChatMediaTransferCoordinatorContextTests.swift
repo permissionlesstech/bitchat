@@ -87,7 +87,7 @@ private final class MockChatMediaTransferContext: ChatMediaTransferContext {
         removedMessages.append((messageID, false))
     }
 
-    func addSystemMessage(_ content: String) { systemMessages.append(content) }
+    func addSystemMessage(_ content: String, to target: ConversationTarget) { systemMessages.append(content) }
     private(set) var mediaDeletionRefusals: [String] = []
     func notifyMediaDeletionRefused(messageID: String) {
         mediaDeletionRefusals.append(messageID)

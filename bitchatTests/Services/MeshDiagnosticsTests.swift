@@ -147,7 +147,7 @@ struct MeshDiagnosticsTests {
         context.selectedPrivateChatPeer = nil
 
         await waitForCommandOutput(context)
-        #expect(context.commandOutputDestinations == [.privateChat(bob)])
+        #expect(context.commandOutputDestinations == [ConversationTarget(channel: .mesh, privatePeer: bob)])
     }
 
     @MainActor
@@ -164,7 +164,7 @@ struct MeshDiagnosticsTests {
         context.selectedPrivateChatPeer = alice
 
         await waitForCommandOutput(context)
-        #expect(context.commandOutputDestinations == [.meshTimeline])
+        #expect(context.commandOutputDestinations == [.mesh])
     }
 
     // MARK: - /trace
@@ -263,39 +263,32 @@ private final class DiagnosticsMockContext: CommandContextProvider {
 
     var nicknameToPeerID: [String: PeerID] = [:]
     private(set) var commandOutputs: [String] = []
-    private(set) var commandOutputDestinations: [CommandOutputDestination] = []
+    private(set) var commandOutputDestinations: [ConversationTarget] = []
 
-    func getPeerIDForNickname(_ nickname: String) -> PeerID? {
+    func getPeerIDForNickname(_ nickname: String, in scope: ChannelID) -> PeerID? {
         nicknameToPeerID[nickname]
     }
 
-    func getVisibleGeoParticipants() -> [CommandGeoParticipant] { [] }
-    func nostrPubkeyForDisplayName(_ displayName: String) -> String? { nil }
+    func getVisibleGeoParticipants(in scope: ChannelID) -> [CommandGeoParticipant] { [] }
+    func nostrPubkeyForDisplayName(_ displayName: String, in scope: ChannelID) -> String? { nil }
     func geohashBlockListDidChange() {}
     func startPrivateChat(with peerID: PeerID) {}
-    func sendPrivateMessage(_ content: String, to peerID: PeerID) {}
-    func clearCurrentPublicTimeline() {}
+    func sendPrivateMessage(_ content: String, to peerID: PeerID, scope: ChannelID) {}
+    func clearPublicTimeline(_ channel: ChannelID) {}
     func clearPrivateChat(_ peerID: PeerID) {}
-    func sendPublicRaw(_ content: String) {}
-    func sendPublicMessage(_ content: String) {}
+    func sendPublicRaw(_ content: String, to channel: ChannelID) -> Bool { true }
+    func sendPublicMessage(_ content: String, to channel: ChannelID) -> Bool { true }
     func groupCreate(named name: String) -> CommandResult { .handled }
-    func groupInvite(nickname: String) -> CommandResult { .handled }
-    func groupRemove(nickname: String) -> CommandResult { .handled }
-    func groupLeave() -> CommandResult { .handled }
+    func groupInvite(nickname: String, in scope: ConversationTarget) -> CommandResult { .handled }
+    func groupRemove(nickname: String, in scope: ConversationTarget) -> CommandResult { .handled }
+    func groupLeave(in scope: ConversationTarget) -> CommandResult { .handled }
     func groupList() -> CommandResult { .handled }
     func addLocalPrivateSystemMessage(_ content: String, to peerID: PeerID) {}
-    func addPublicSystemMessage(_ content: String) {}
+    func addPublicSystemMessage(_ content: String, to channel: ChannelID) {}
     func toggleFavorite(peerID: PeerID) {}
 
-    func currentCommandDestination() -> CommandOutputDestination {
-        if let peerID = selectedPrivateChatPeer {
-            return .privateChat(peerID)
-        }
-        return .meshTimeline
-    }
-
-    func addCommandOutput(_ content: String, to destination: CommandOutputDestination) {
+    func addCommandOutput(_ content: String, to target: ConversationTarget) {
         commandOutputs.append(content)
-        commandOutputDestinations.append(destination)
+        commandOutputDestinations.append(target)
     }
 }

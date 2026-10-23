@@ -582,6 +582,45 @@ struct ChatPublicConversationCoordinatorContextTests {
         #expect(context.archivePurgeCount == 0)
     }
 
+    /// A geohash timeline never holds media we sent, so clearing one must
+    /// not erase the outgoing media: those files are #mesh's and the DMs',
+    /// which may be on screen in the other pane, and a voice note may be
+    /// recording into them. Whether or not the geohash is the selected one.
+    @Test @MainActor
+    func clearPublicTimeline_onGeohash_leavesOutgoingMediaAlone() async {
+        let context = MockChatPublicConversationContext()
+        var wipes = 0
+        let coordinator = ChatPublicConversationCoordinator(context: context, wipeOutgoingMedia: { wipes += 1 })
+        let geohash = ChannelID.location(GeohashChannel(level: .city, geohash: "u4pruy"))
+
+        context.activeChannel = geohash
+        coordinator.clearCurrentPublicTimeline()
+        context.activeChannel = .mesh
+        coordinator.clearPublicTimeline(geohash)
+
+        #expect(context.clearedConversations == [.geohash("u4pruy"), .geohash("u4pruy")])
+        #expect(wipes == 0)
+        #expect(context.archivePurgeCount == 0)
+    }
+
+    /// Clearing #mesh still erases the media we sent, also while a geohash
+    /// is the selected channel (#mesh's own pane beside it).
+    @Test @MainActor
+    func clearPublicTimeline_onMesh_erasesOutgoingMedia() async {
+        let savedClearedThrough = MeshEchoSettings.clearedThrough
+        defer { MeshEchoSettings.clearedThrough = savedClearedThrough }
+        let context = MockChatPublicConversationContext()
+        var wipes = 0
+        let coordinator = ChatPublicConversationCoordinator(context: context, wipeOutgoingMedia: { wipes += 1 })
+        context.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pruy"))
+
+        coordinator.clearPublicTimeline(.mesh)
+
+        #expect(context.clearedConversations == [.mesh])
+        #expect(context.archivePurgeCount == 1)
+        #expect(wipes == 1)
+    }
+
     @Test @MainActor
     func blockGeohashUser_purgesMessagesMappingsAndPrivateChats() async {
         let context = MockChatPublicConversationContext()

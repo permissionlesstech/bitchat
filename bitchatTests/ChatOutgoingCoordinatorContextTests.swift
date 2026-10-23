@@ -35,7 +35,9 @@ private final class MockChatOutgoingContext: ChatOutgoingContext {
     private(set) var updatePrivateChatPeerIfNeededCount = 0
     private(set) var sentPrivateMessages: [(content: String, peerID: PeerID)] = []
 
-    func handleCommand(_ command: String) { handledCommands.append(command) }
+    func handleCommand(_ command: String, from origin: ConversationTarget) { handledCommands.append(command) }
+    func isTeleported(geohash: String) -> Bool { isTeleported }
+    func isSameDirectConversation(_ lhs: PeerID, _ rhs: PeerID) -> Bool { lhs == rhs }
 
     func updatePrivateChatPeerIfNeeded() {
         updatePrivateChatPeerIfNeededCount += 1
@@ -44,7 +46,7 @@ private final class MockChatOutgoingContext: ChatOutgoingContext {
         }
     }
 
-    func sendPrivateMessage(_ content: String, to peerID: PeerID) {
+    func sendPrivateMessage(_ content: String, to peerID: PeerID, scope: ChannelID) {
         sentPrivateMessages.append((content, peerID))
     }
 
@@ -62,7 +64,7 @@ private final class MockChatOutgoingContext: ChatOutgoingContext {
         return true
     }
 
-    func addSystemMessage(_ content: String) { systemMessages.append(content) }
+    func addSystemMessage(_ content: String, to target: ConversationTarget) { systemMessages.append(content) }
 
     // Content dedup
     private(set) var recordedContentKeys: [(key: String, timestamp: Date)] = []

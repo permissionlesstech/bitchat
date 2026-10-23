@@ -69,6 +69,8 @@ private struct PrivateMediaReconnectRetryCandidate {
 @MainActor
 protocol ChatMediaTransferContext: AnyObject {
     // MARK: Composition state
+    /// The selection: read only to build `currentMediaDestination`, the
+    /// selection shim, and to tell which public identity speaks for it.
     var canSendMediaInCurrentContext: Bool { get }
     var selectedPrivateChatPeer: PeerID? { get }
     var nickname: String { get }
@@ -90,7 +92,9 @@ protocol ChatMediaTransferContext: AnyObject {
     /// broad compatibility cleanup path.
     func removeUntombstonedMediaMessage(withID messageID: String)
     func removeOutgoingMediaMessage(withID messageID: String)
-    func addSystemMessage(_ content: String)
+    /// A local line in `target`'s conversation: why a send bound there
+    /// didn't go out lands where it was aimed.
+    func addSystemMessage(_ content: String, to target: ConversationTarget)
     /// Surfaces a refused explicit media deletion in the affected chat so a
     /// wedged delete never looks like success.
     func notifyMediaDeletionRefused(messageID: String)
@@ -147,7 +151,7 @@ extension ChatViewModel: ChatMediaTransferContext {
     // `myPeerID`, `activeChannel`, `nicknameForPeer(_:)`,
     // `currentPublicSender()`,
     // `appendPublicMessage(_:to:)`, `removeMessage(withID:cleanupFile:)`,
-    // `addSystemMessage(_:)`, `notifyUIChanged()`,
+    // `addSystemMessage(_:to:)`, `notifyUIChanged()`,
     // `updateMessageDeliveryStatus(_:status:)`, `contentKey(for:in:)`,
     // and `recordContentKey(_:timestamp:)` are shared requirements with the
     // other contexts or satisfied by existing `ChatViewModel` members. The
@@ -564,9 +568,32 @@ final class ChatMediaTransferCoordinator {
         /// Mesh DMs and #mesh take media; geohash channels, geohash DMs
         /// and groups don't.
         let allowsMedia: Bool
+
+        init(privatePeer: PeerID?, publicChannel: ChannelID, allowsMedia: Bool) {
+            self.privatePeer = privatePeer
+            self.publicChannel = publicChannel
+            self.allowsMedia = allowsMedia
+        }
+
+        /// The composer's own conversation, whatever is selected.
+        init(target: ConversationTarget) {
+            self.init(
+                privatePeer: target.privatePeer,
+                publicChannel: target.channel,
+                allowsMedia: target.allowsMedia
+            )
+        }
+
+        /// Where a line about this send goes when it can't go out: the
+        /// public timeline it was bound to (a DM's own scope), never one
+        /// selected since.
+        var failureTarget: ConversationTarget {
+            .publicChannel(publicChannel)
+        }
     }
 
-    /// The conversation on screen now, for a send committed now.
+    /// The conversation on screen now, for a send committed now: the
+    /// selection shim for callers with no target of their own.
     var currentMediaDestination: MediaDestination {
         MediaDestination(
             privatePeer: context.selectedPrivateChatPeer,
@@ -579,7 +606,16 @@ final class ChatMediaTransferCoordinator {
     /// the voice note to the conversation on screen then, not to whatever
     /// is selected once the recorder hands over the file.
     func makeVoiceNoteSender() -> (URL) -> Void {
-        let destination = currentMediaDestination
+        makeVoiceNoteSender(to: currentMediaDestination)
+    }
+
+    /// The completion for a release in `target`'s composer: the note goes
+    /// to that conversation, whatever is selected by the time it is ready.
+    func makeVoiceNoteSender(for target: ConversationTarget) -> (URL) -> Void {
+        makeVoiceNoteSender(to: MediaDestination(target: target))
+    }
+
+    private func makeVoiceNoteSender(to destination: MediaDestination) -> (URL) -> Void {
         return { [weak self] url in
             guard let self else {
                 try? FileManager.default.removeItem(at: url)
@@ -593,7 +629,10 @@ final class ChatMediaTransferCoordinator {
         guard destination.allowsMedia else {
             SecureLogger.info("Voice note blocked outside mesh/private context", category: .session)
             try? FileManager.default.removeItem(at: url)
-            context.addSystemMessage(String(localized: "Voice notes are only available in mesh chats.", comment: "System message when a voice note is attempted outside mesh chats"))
+            context.addSystemMessage(
+                String(localized: "Voice notes are only available in mesh chats.", comment: "System message when a voice note is attempted outside mesh chats"),
+                to: destination.failureTarget
+            )
             return
         }
 
@@ -671,10 +710,18 @@ final class ChatMediaTransferCoordinator {
 
     #if os(iOS)
     func processThenSendImage(_ image: UIImage?) {
-        guard let image else { return }
         // Bound at the pick: processing takes long enough for the person to
         // leave the conversation the photo was meant for.
-        let destination = currentMediaDestination
+        processThenSendImage(image, to: currentMediaDestination)
+    }
+
+    /// Sends a photo picked for `target`'s composer to that conversation.
+    func processThenSendImage(_ image: UIImage?, to target: ConversationTarget) {
+        processThenSendImage(image, to: MediaDestination(target: target))
+    }
+
+    private func processThenSendImage(_ image: UIImage?, to destination: MediaDestination) {
+        guard let image else { return }
         let generation = imagePreparationBarrier.currentGeneration
         let barrier = imagePreparationBarrier
         Task.detached(priority: .userInitiated) { [weak self, barrier] in
@@ -705,10 +752,18 @@ final class ChatMediaTransferCoordinator {
     }
     #elseif os(macOS)
     func processThenSendImage(from url: URL?) {
-        guard let url else { return }
         // Bound at the pick: processing takes long enough for the person to
         // leave the conversation the photo was meant for.
-        let destination = currentMediaDestination
+        processThenSendImage(from: url, to: currentMediaDestination)
+    }
+
+    /// Sends a photo picked for `target`'s composer to that conversation.
+    func processThenSendImage(from url: URL?, to target: ConversationTarget) {
+        processThenSendImage(from: url, to: MediaDestination(target: target))
+    }
+
+    private func processThenSendImage(from url: URL?, to destination: MediaDestination) {
+        guard let url else { return }
         let generation = imagePreparationBarrier.currentGeneration
         let barrier = imagePreparationBarrier
         Task.detached(priority: .userInitiated) { [weak self, barrier] in
@@ -747,19 +802,23 @@ final class ChatMediaTransferCoordinator {
         guard destination.allowsMedia else {
             SecureLogger.info("Image send blocked outside mesh/private context", category: .session)
             cleanup?()
-            context.addSystemMessage(String(localized: "Images are only available in mesh chats.", comment: "System message when an image send is attempted outside mesh chats"))
+            context.addSystemMessage(
+                String(localized: "Images are only available in mesh chats.", comment: "System message when an image send is attempted outside mesh chats"),
+                to: destination.failureTarget
+            )
             return
         }
 
         let targetPeer = destination.privatePeer
         let publicChannel = destination.publicChannel
+        let failureTarget = destination.failureTarget
         let generation = imagePreparationBarrier.currentGeneration
 
         do {
             try ImageUtils.validateImageSource(at: sourceURL)
         } catch {
             SecureLogger.error("Image send preparation failed: \(error)", category: .session)
-            context.addSystemMessage("Failed to prepare image for sending.")
+            context.addSystemMessage("Failed to prepare image for sending.", to: failureTarget)
             return
         }
 
@@ -819,7 +878,7 @@ final class ChatMediaTransferCoordinator {
                           barrier.isCurrent(generation) else {
                         return
                     }
-                    self.context.addSystemMessage("Image is too large to send.")
+                    self.context.addSystemMessage("Image is too large to send.", to: failureTarget)
                 }
             } catch {
                 SecureLogger.error("Image send preparation failed: \(error)", category: .session)
@@ -828,7 +887,7 @@ final class ChatMediaTransferCoordinator {
                           barrier.isCurrent(generation) else {
                         return
                     }
-                    self.context.addSystemMessage("Failed to prepare image for sending.")
+                    self.context.addSystemMessage("Failed to prepare image for sending.", to: failureTarget)
                 }
             }
         }
