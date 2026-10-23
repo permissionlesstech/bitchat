@@ -228,6 +228,9 @@ struct CameraScannerView: UIViewRepresentable {
             onUnavailable: onUnavailable
         )
         context.coordinator.setActive(isActive)
+        view.onEnterWindow = { [weak coordinator = context.coordinator] in
+            coordinator?.refreshPreviewRotation()
+        }
         return view
     }
 
@@ -235,16 +238,27 @@ struct CameraScannerView: UIViewRepresentable {
         context.coordinator.setActive(isActive)
     }
 
+    static func dismantleUIView(_ uiView: PreviewView, coordinator: CameraScannerCoordinator) {
+        uiView.onEnterWindow = nil
+        coordinator.stopPreviewRotationUpdates()
+    }
+
     func makeCoordinator() -> CameraScannerCoordinator { CameraScannerCoordinator() }
 
     final class PreviewView: UIView {
         override static var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
         var videoPreviewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
+        var onEnterWindow: (() -> Void)?
         override init(frame: CGRect) {
             super.init(frame: frame)
             videoPreviewLayer.videoGravity = .resizeAspectFill
         }
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if window != nil { onEnterWindow?() }
+        }
     }
 }
 #elseif os(macOS)
@@ -301,6 +315,12 @@ final class CameraScannerCoordinator: NSObject, AVCaptureMetadataOutputObjectsDe
     private var desiredActive = false
     private var didConfigureSession = false
     private weak var previewLayer: AVCaptureVideoPreviewLayer?
+    #if os(iOS)
+    /// An `AVCaptureDevice.RotationCoordinator` (iOS 17+), stored untyped
+    /// because a stored property can't carry an availability floor.
+    private var rotationCoordinator: AnyObject?
+    private var rotationObservation: NSKeyValueObservation?
+    #endif
 
     func setup(
         previewLayer: AVCaptureVideoPreviewLayer,
@@ -348,7 +368,11 @@ final class CameraScannerCoordinator: NSObject, AVCaptureMetadataOutputObjectsDe
         guard !didConfigureSession else { return true }
         session.beginConfiguration()
         session.sessionPreset = .high
-        guard let device = AVCaptureDevice.default(for: .video),
+        // Ask for the back wide-angle camera by name: which camera
+        // `default(for:)` picks is undocumented.
+        let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+            ?? AVCaptureDevice.default(for: .video)
+        guard let device = camera,
               let input = try? AVCaptureDeviceInput(device: device),
               session.canAddInput(input) else {
             session.commitConfiguration()
@@ -367,9 +391,58 @@ final class CameraScannerCoordinator: NSObject, AVCaptureMetadataOutputObjectsDe
         }
         session.commitConfiguration()
         previewLayer?.session = session
+        #if os(iOS)
+        if #available(iOS 17.0, *) {
+            startPreviewRotationUpdates(for: device)
+        }
+        #endif
         didConfigureSession = true
         return true
     }
+
+    #if os(iOS)
+    /// Keeps the camera preview upright. The portrait lock doesn't hold on
+    /// iPhone Duo's inner display, so the interface can stand at any angle
+    /// to the camera there; the coordinator works out the correction.
+    @available(iOS 17.0, *)
+    private func startPreviewRotationUpdates(for device: AVCaptureDevice) {
+        stopPreviewRotationUpdates()
+        guard let previewLayer else { return }
+        let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: previewLayer)
+        rotationCoordinator = coordinator
+        // Updates arrive on the main queue.
+        rotationObservation = coordinator.observe(
+            \.videoRotationAngleForHorizonLevelPreview,
+            options: [.initial, .new]
+        ) { [weak self] _, change in
+            guard let angle = change.newValue else { return }
+            self?.applyPreviewRotation(angle)
+        }
+    }
+
+    /// Called once the preview is in a window. The coordinator reports 0°
+    /// while its layer is off screen, so start a fresh one that can see the
+    /// window; its initial update applies the real angle.
+    func refreshPreviewRotation() {
+        guard #available(iOS 17.0, *),
+              let device = (rotationCoordinator as? AVCaptureDevice.RotationCoordinator)?.device else { return }
+        startPreviewRotationUpdates(for: device)
+    }
+
+    func stopPreviewRotationUpdates() {
+        rotationObservation?.invalidate()
+        rotationObservation = nil
+        rotationCoordinator = nil
+    }
+
+    @available(iOS 17.0, *)
+    private func applyPreviewRotation(_ angle: CGFloat) {
+        // The setter throws on an angle the connection doesn't support.
+        guard let connection = previewLayer?.connection,
+              connection.isVideoRotationAngleSupported(angle) else { return }
+        connection.videoRotationAngle = angle
+    }
+    #endif
 
     private func reportUnavailable() {
         DispatchQueue.main.async {
