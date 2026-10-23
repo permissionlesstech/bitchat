@@ -14,8 +14,8 @@ final class LocationStateManagerTests: XCTestCase {
 
         let manager = LocationStateManager(
             storage: storage,
-            locationManager: MockLocationManager(authorizationStatus: .denied),
-            geocoder: MockLocationGeocoder(),
+            locationManager: MockLocationStateManaging(authorizationStatus: .denied),
+            geocoder: MockLocationStateGeocoder(),
             shouldInitializeCoreLocation: true
         )
 
@@ -28,11 +28,11 @@ final class LocationStateManagerTests: XCTestCase {
     }
 
     func test_enableLocationChannels_requestsAuthorizationWhenStatusIsUndetermined() {
-        let locationManager = MockLocationManager(authorizationStatus: .notDetermined)
+        let locationManager = MockLocationStateManaging(authorizationStatus: .notDetermined)
         let manager = LocationStateManager(
             storage: makeStorage(),
             locationManager: locationManager,
-            geocoder: MockLocationGeocoder(),
+            geocoder: MockLocationStateGeocoder(),
             shouldInitializeCoreLocation: true
         )
 
@@ -43,11 +43,11 @@ final class LocationStateManagerTests: XCTestCase {
     }
 
     func test_enableLocationChannels_requestsOneShotLocationWhenAuthorized() async {
-        let locationManager = MockLocationManager(authorizationStatus: .authorizedAlways)
+        let locationManager = MockLocationStateManaging(authorizationStatus: .authorizedAlways)
         let manager = LocationStateManager(
             storage: makeStorage(),
             locationManager: locationManager,
-            geocoder: MockLocationGeocoder(),
+            geocoder: MockLocationStateGeocoder(),
             shouldInitializeCoreLocation: true
         )
 
@@ -61,11 +61,11 @@ final class LocationStateManagerTests: XCTestCase {
     }
 
     func test_beginAndEndLiveRefresh_adjustLocationManagerMode() async {
-        let locationManager = MockLocationManager(authorizationStatus: .authorizedAlways)
+        let locationManager = MockLocationStateManaging(authorizationStatus: .authorizedAlways)
         let manager = LocationStateManager(
             storage: makeStorage(),
             locationManager: locationManager,
-            geocoder: MockLocationGeocoder(),
+            geocoder: MockLocationStateGeocoder(),
             shouldInitializeCoreLocation: true
         )
 
@@ -88,11 +88,11 @@ final class LocationStateManagerTests: XCTestCase {
 
     func test_permissionRevocation_endsLiveRefreshWithoutDiscardingExplicitState() async {
         let storage = makeStorage()
-        let locationManager = MockLocationManager(authorizationStatus: .authorizedAlways)
+        let locationManager = MockLocationStateManaging(authorizationStatus: .authorizedAlways)
         let manager = LocationStateManager(
             storage: storage,
             locationManager: locationManager,
-            geocoder: MockLocationGeocoder(),
+            geocoder: MockLocationStateGeocoder(),
             shouldInitializeCoreLocation: true
         )
         let authorized = await waitUntil { manager.permissionState == .authorized }
@@ -127,7 +127,7 @@ final class LocationStateManagerTests: XCTestCase {
     }
 
     func test_didUpdateLocations_computesChannelsAndReverseGeocodesFriendlyNames() async {
-        let geocoder = MockLocationGeocoder()
+        let geocoder = MockLocationStateGeocoder()
         geocoder.enqueue(
             placemarks: [
                 makePlacemark(
@@ -141,7 +141,7 @@ final class LocationStateManagerTests: XCTestCase {
         )
         let manager = LocationStateManager(
             storage: makeStorage(),
-            locationManager: MockLocationManager(authorizationStatus: .authorizedAlways),
+            locationManager: MockLocationStateManaging(authorizationStatus: .authorizedAlways),
             geocoder: geocoder,
             shouldInitializeCoreLocation: true
         )
@@ -170,8 +170,8 @@ final class LocationStateManagerTests: XCTestCase {
         let storage = makeStorage()
         let manager = LocationStateManager(
             storage: storage,
-            locationManager: MockLocationManager(authorizationStatus: .authorizedAlways),
-            geocoder: MockLocationGeocoder(),
+            locationManager: MockLocationStateManaging(authorizationStatus: .authorizedAlways),
+            geocoder: MockLocationStateGeocoder(),
             shouldInitializeCoreLocation: true
         )
         let coordinate = CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194)
@@ -196,8 +196,8 @@ final class LocationStateManagerTests: XCTestCase {
 
         let reloaded = LocationStateManager(
             storage: storage,
-            locationManager: MockLocationManager(authorizationStatus: .denied),
-            geocoder: MockLocationGeocoder(),
+            locationManager: MockLocationStateManaging(authorizationStatus: .denied),
+            geocoder: MockLocationStateGeocoder(),
             shouldInitializeCoreLocation: true
         )
 
@@ -219,8 +219,8 @@ final class LocationStateManagerTests: XCTestCase {
 
         let migrated = LocationStateManager(
             storage: storage,
-            locationManager: MockLocationManager(authorizationStatus: .denied),
-            geocoder: MockLocationGeocoder(),
+            locationManager: MockLocationStateManaging(authorizationStatus: .denied),
+            geocoder: MockLocationStateGeocoder(),
             shouldInitializeCoreLocation: false
         )
 
@@ -245,8 +245,8 @@ final class LocationStateManagerTests: XCTestCase {
 
         let reloaded = LocationStateManager(
             storage: storage,
-            locationManager: MockLocationManager(authorizationStatus: .denied),
-            geocoder: MockLocationGeocoder(),
+            locationManager: MockLocationStateManaging(authorizationStatus: .denied),
+            geocoder: MockLocationStateGeocoder(),
             shouldInitializeCoreLocation: false
         )
 
@@ -255,7 +255,7 @@ final class LocationStateManagerTests: XCTestCase {
     }
 
     func test_addBookmark_lowPrecisionPrefersCountryOverAdministrativeAreas() async {
-        let geocoder = MockLocationGeocoder()
+        let geocoder = MockLocationStateGeocoder()
         geocoder.enqueue(placemarks: [makePlacemark(country: "United States", administrativeArea: "California")])
         geocoder.enqueue(placemarks: [makePlacemark(country: "United States", administrativeArea: "Nevada")])
         geocoder.enqueue(placemarks: [makePlacemark(country: "United States", administrativeArea: "California")])
@@ -263,7 +263,7 @@ final class LocationStateManagerTests: XCTestCase {
         geocoder.enqueue(placemarks: [makePlacemark(country: "United States", administrativeArea: "Nevada")])
         let manager = LocationStateManager(
             storage: makeStorage(),
-            locationManager: MockLocationManager(authorizationStatus: .denied),
+            locationManager: MockLocationStateManaging(authorizationStatus: .denied),
             geocoder: geocoder,
             shouldInitializeCoreLocation: false
         )
@@ -277,7 +277,7 @@ final class LocationStateManagerTests: XCTestCase {
     }
 
     func test_addBookmark_lowPrecisionFallsBackToDistinctAdministrativeAreas() async {
-        let geocoder = MockLocationGeocoder()
+        let geocoder = MockLocationStateGeocoder()
         geocoder.enqueue(placemarks: [makePlacemark(administrativeArea: "California")])
         geocoder.enqueue(placemarks: [makePlacemark(administrativeArea: "Nevada")])
         geocoder.enqueue(placemarks: [makePlacemark(administrativeArea: "California")])
@@ -285,7 +285,7 @@ final class LocationStateManagerTests: XCTestCase {
         geocoder.enqueue(placemarks: [makePlacemark(administrativeArea: "Nevada")])
         let manager = LocationStateManager(
             storage: makeStorage(),
-            locationManager: MockLocationManager(authorizationStatus: .denied),
+            locationManager: MockLocationStateManaging(authorizationStatus: .denied),
             geocoder: geocoder,
             shouldInitializeCoreLocation: false
         )
@@ -298,11 +298,11 @@ final class LocationStateManagerTests: XCTestCase {
     }
 
     func test_addBookmark_higherPrecisionStillPrefersAdministrativeArea() async {
-        let geocoder = MockLocationGeocoder()
+        let geocoder = MockLocationStateGeocoder()
         geocoder.enqueue(placemarks: [makePlacemark(country: "United States", administrativeArea: "California")])
         let manager = LocationStateManager(
             storage: makeStorage(),
-            locationManager: MockLocationManager(authorizationStatus: .denied),
+            locationManager: MockLocationStateManaging(authorizationStatus: .denied),
             geocoder: geocoder,
             shouldInitializeCoreLocation: false
         )
@@ -366,64 +366,5 @@ final class LocationStateManagerTests: XCTestCase {
             try? await Task.sleep(nanoseconds: 10_000_000)
         }
         return condition()
-    }
-}
-
-private final class MockLocationManager: LocationStateManaging {
-    weak var delegate: CLLocationManagerDelegate?
-    var desiredAccuracy: CLLocationAccuracy = 0
-    var distanceFilter: CLLocationDistance = 0
-    var authorizationStatus: CLAuthorizationStatus
-    private(set) var requestAuthorizationCallCount = 0
-    private(set) var requestLocationCallCount = 0
-    private(set) var startUpdatingLocationCallCount = 0
-    private(set) var stopUpdatingLocationCallCount = 0
-
-    init(authorizationStatus: CLAuthorizationStatus) {
-        self.authorizationStatus = authorizationStatus
-    }
-
-    func requestWhenInUseAuthorization() {
-        requestAuthorizationCallCount += 1
-    }
-
-    func requestLocation() {
-        requestLocationCallCount += 1
-    }
-
-    func startUpdatingLocation() {
-        startUpdatingLocationCallCount += 1
-    }
-
-    func stopUpdatingLocation() {
-        stopUpdatingLocationCallCount += 1
-    }
-}
-
-private final class MockLocationGeocoder: LocationStateGeocoding {
-    private struct Response {
-        let placemarks: [CLPlacemark]?
-        let error: Error?
-    }
-
-    private(set) var cancelCallCount = 0
-    private(set) var reverseRequests: [CLLocation] = []
-    private var responses: [Response] = []
-
-    func enqueue(placemarks: [CLPlacemark]?, error: Error? = nil) {
-        responses.append(Response(placemarks: placemarks, error: error))
-    }
-
-    func cancelGeocode() {
-        cancelCallCount += 1
-    }
-
-    func reverseGeocodeLocation(
-        _ location: CLLocation,
-        completionHandler: @escaping ([CLPlacemark]?, Error?) -> Void
-    ) {
-        reverseRequests.append(location)
-        let response = responses.isEmpty ? Response(placemarks: nil, error: nil) : responses.removeFirst()
-        completionHandler(response.placemarks, response.error)
     }
 }
