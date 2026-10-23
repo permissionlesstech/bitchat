@@ -38,7 +38,10 @@ struct PaneTouchObserver: UIViewRepresentable {
 }
 
 /// Keeps the observer's recognizer on whichever window this view is in. The
-/// view itself takes no touches and has nothing to say to VoiceOver.
+/// view itself takes no touches and has nothing to say to VoiceOver. A touch
+/// on something the window presents over its content (a sheet, a popover,
+/// an alert or dialog, a full-screen cover) is a touch on that, not on the
+/// content, so it isn't reported.
 final class PaneTouchObserverView: UIView {
     var onTouchDown: ((CGPoint) -> Void)?
 
@@ -59,8 +62,15 @@ final class PaneTouchObserverView: UIView {
         isAccessibilityElement = false
         accessibilityElementsHidden = true
         recognizer.onTouchDown = { [weak self] point in
-            self?.onTouchDown?(point)
+            guard let self, !self.isWindowPresenting else { return }
+            self.onTouchDown?(point)
         }
+    }
+
+    /// The window's root presents something over the content. Every
+    /// presentation from the content's tree goes through the root.
+    private var isWindowPresenting: Bool {
+        window?.rootViewController?.presentedViewController != nil
     }
 
     override func didMoveToWindow() {

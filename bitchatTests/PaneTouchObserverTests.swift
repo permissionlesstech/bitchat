@@ -73,5 +73,45 @@ struct PaneTouchObserverTests {
 
         #expect(reported == [CGPoint(x: 12, y: 34)])
     }
+
+    /// A touch on a sheet, popover or alert over the panes touches neither
+    /// pane; once it has gone, touches count again.
+    @Test
+    func touchDownsOnAPresentationAreNotReported() async {
+        let scene = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first
+        let window = scene.map { UIWindow(windowScene: $0) } ?? UIWindow()
+        window.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        let root = UIViewController()
+        window.rootViewController = root
+        window.makeKeyAndVisible()
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+        }
+        let observer = PaneTouchObserverView()
+        root.view.addSubview(observer)
+        var reported: [CGPoint] = []
+        observer.onTouchDown = { reported.append($0) }
+
+        root.present(UIViewController(), animated: false)
+        let presented = await TestHelpers.waitUntil(
+            { root.presentedViewController != nil },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(presented)
+        observer.recognizer.onTouchDown?(CGPoint(x: 12, y: 34))
+        #expect(reported.isEmpty)
+
+        root.dismiss(animated: false)
+        let dismissed = await TestHelpers.waitUntil(
+            { root.presentedViewController == nil },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(dismissed)
+        observer.recognizer.onTouchDown?(CGPoint(x: 56, y: 78))
+        #expect(reported == [CGPoint(x: 56, y: 78)])
+    }
 }
 #endif
