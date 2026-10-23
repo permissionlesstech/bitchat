@@ -343,4 +343,127 @@ struct ConversationUIModelTests {
         #expect(uiModel.isSentByCurrentUser(row("\(viewModel.nickname)#\(newHex.suffix(4))", PeerID(nostr: newHex))))
         #expect(!uiModel.isSentByCurrentUser(beforeWipe))
     }
+
+    // MARK: - Rows from the real send paths
+
+    // With no nickname fallback, a send path that forgets to stamp the sender
+    // ID turns my own row into a stranger's. Each test below sends the way the
+    // composer does, through the view model, and asks the UI model about the
+    // row that send produced.
+
+    @MainActor
+    private static func publicRow(_ content: String, in channel: ChannelID, of viewModel: ChatViewModel) -> BitchatMessage? {
+        viewModel.conversations.conversationsByID[ConversationID(channelID: channel)]?.messages.first { $0.content == content }
+    }
+
+    @MainActor
+    private static func privateRow(_ content: String, with peerID: PeerID, of viewModel: ChatViewModel) -> BitchatMessage? {
+        viewModel.privateChats[peerID]?.first { $0.content == content }
+    }
+
+    /// A voice note to send. Any bytes do: the voice-note path checks only
+    /// the file's size.
+    private static func makeVoiceNote() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("voice-\(UUID().uuidString).m4a")
+        try Data("voice payload".utf8).write(to: url, options: .atomic)
+        return url
+    }
+
+    @Test @MainActor
+    func myMeshPublicSendIsMine() throws {
+        let (viewModel, transport) = makeChatViewModel(nickname: "alice")
+        let uiModel = makeUIModel(for: viewModel)
+
+        viewModel.sendMessage("hello mesh")
+
+        #expect(transport.sentMessages.map(\.content) == ["hello mesh"])
+        let sent = try #require(Self.publicRow("hello mesh", in: .mesh, of: viewModel))
+        #expect(uiModel.isSentByCurrentUser(sent))
+    }
+
+    @Test @MainActor
+    func myMeshDMIsMine() throws {
+        let (viewModel, transport) = makeChatViewModel(nickname: "alice")
+        let uiModel = makeUIModel(for: viewModel)
+        transport.connectedPeers.insert(Self.peerID)
+        transport.peerNicknames[Self.peerID] = "bob"
+
+        viewModel.startPrivateChat(with: Self.peerID)
+        viewModel.sendMessage("hi bob")
+
+        #expect(transport.sentPrivateMessages.map(\.content) == ["hi bob"])
+        let sent = try #require(Self.privateRow("hi bob", with: Self.peerID, of: viewModel))
+        #expect(uiModel.isSentByCurrentUser(sent))
+    }
+
+    @Test @MainActor
+    func myGeoDMIsMine() async throws {
+        let (viewModel, _) = makeChatViewModel(nickname: "alice")
+        let uiModel = makeUIModel(for: viewModel)
+        #expect(await Self.switchAndSettle(to: Self.locationChannel, in: viewModel, uiModel: uiModel))
+        let stranger = try NostrIdentity.generate()
+        let conversation = PeerID(nostr_: stranger.publicKeyHex)
+        viewModel.registerNostrKeyMapping(stranger.publicKeyHex, for: conversation)
+
+        viewModel.startPrivateChat(with: conversation)
+        viewModel.sendMessage("hi stranger")
+
+        let sent = try #require(Self.privateRow("hi stranger", with: conversation, of: viewModel))
+        // Handed to the Nostr transport, not failed on the way there.
+        #expect(sent.deliveryStatus == .sent)
+        #expect(uiModel.isSentByCurrentUser(sent))
+    }
+
+    @Test @MainActor
+    func myGeochatPublicSendIsMine() async throws {
+        let (viewModel, _) = makeChatViewModel(nickname: "alice")
+        let uiModel = makeUIModel(for: viewModel)
+        #expect(await Self.switchAndSettle(to: Self.locationChannel, in: viewModel, uiModel: uiModel))
+        let myHex = try Self.myGeoHex(viewModel)
+
+        viewModel.sendMessage("hello geohash")
+
+        // The echo lands once its NIP-13 nonce is mined off the main actor.
+        #expect(await TestHelpers.waitUntil(
+            { Self.publicRow("hello geohash", in: Self.locationChannel, of: viewModel) != nil },
+            timeout: TestConstants.settleTimeout
+        ))
+        let sent = try #require(Self.publicRow("hello geohash", in: Self.locationChannel, of: viewModel))
+        #expect(sent.senderPeerID == PeerID(nostr: myHex))
+        #expect(uiModel.isSentByCurrentUser(sent))
+    }
+
+    @Test @MainActor
+    func myVoiceNoteOnMeshIsMine() async throws {
+        let (viewModel, transport) = makeChatViewModel(nickname: "alice")
+        let uiModel = makeUIModel(for: viewModel)
+        let note = try Self.makeVoiceNote()
+        defer { try? FileManager.default.removeItem(at: note) }
+
+        viewModel.sendVoiceNote(at: note)
+
+        // The row is enqueued at once; wait out the detached preparation so
+        // the send has finished before the test does.
+        #expect(await TestHelpers.waitUntil({ transport.sentBroadcastFiles.count == 1 }, timeout: TestConstants.settleTimeout))
+        let sent = try #require(Self.publicRow("[voice] \(note.lastPathComponent)", in: .mesh, of: viewModel))
+        #expect(uiModel.isSentByCurrentUser(sent))
+    }
+
+    @Test @MainActor
+    func myVoiceNoteInADMIsMine() async throws {
+        let (viewModel, transport) = makeChatViewModel(nickname: "alice")
+        let uiModel = makeUIModel(for: viewModel)
+        transport.connectedPeers.insert(Self.peerID)
+        transport.peerNicknames[Self.peerID] = "bob"
+        let note = try Self.makeVoiceNote()
+        defer { try? FileManager.default.removeItem(at: note) }
+
+        viewModel.startPrivateChat(with: Self.peerID)
+        viewModel.sendVoiceNote(at: note)
+
+        #expect(await TestHelpers.waitUntil({ transport.sentPrivateFiles.count == 1 }, timeout: TestConstants.settleTimeout))
+        let sent = try #require(Self.privateRow("[voice] \(note.lastPathComponent)", with: Self.peerID, of: viewModel))
+        #expect(uiModel.isSentByCurrentUser(sent))
+    }
 }
