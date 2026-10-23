@@ -221,6 +221,14 @@ struct MessageListView: View {
             .onChange(of: privatePeer) { _ in
                 scrollToBottom(on: proxy)
             }
+            .onChange(of: geometry.size.width) { _ in
+                // Rows reflow at a new width (fold, unfold, the people column
+                // appearing), so the same offset lands in older history.
+                guard isAtBottom else { return }
+                DispatchQueue.main.async {
+                    scrollToBottom(on: proxy)
+                }
+            }
             .onChange(of: publicChatModel.messages.count) { _ in
                 onMessagesChange(proxy: proxy)
             }
