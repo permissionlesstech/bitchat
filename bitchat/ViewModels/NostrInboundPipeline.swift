@@ -29,7 +29,10 @@ protocol NostrInboundPipelineContext: AnyObject {
     func setGeoNickname(_ nickname: String, forPubkey pubkeyHex: String)
     /// Records the Nostr pubkey behind a (possibly virtual) peer ID.
     func registerNostrKeyMapping(_ pubkey: String, for peerID: PeerID)
-    func recordGeoParticipant(pubkeyHex: String)
+    /// `seenAt` is the event's own timestamp, so replayed history doesn't
+    /// count its authors as present. Returns whether the activity counted.
+    @discardableResult
+    func recordGeoParticipant(pubkeyHex: String, seenAt: Date) -> Bool
 
     // MARK: Inbound public messages
     /// `powBits` is the validated NIP-13 difficulty of the source event
@@ -70,11 +73,14 @@ extension ChatViewModel: NostrInboundPipelineContext {
     }
 
     func setGeoNickname(_ nickname: String, forPubkey pubkeyHex: String) {
-        locationPresenceStore.setNickname(nickname, for: pubkeyHex)
+        if locationPresenceStore.setNickname(nickname, for: pubkeyHex) {
+            participantTracker.noteDisplayNameChanged(pubkeyHex: pubkeyHex)
+        }
     }
 
-    func recordGeoParticipant(pubkeyHex: String) {
-        participantTracker.recordParticipant(pubkeyHex: pubkeyHex)
+    @discardableResult
+    func recordGeoParticipant(pubkeyHex: String, seenAt: Date) -> Bool {
+        participantTracker.recordParticipant(pubkeyHex: pubkeyHex, seenAt: seenAt)
     }
 }
 
@@ -115,8 +121,12 @@ final class NostrInboundPipeline {
         self.presence = presence
     }
 
+    /// `isHistoryReplay` marks events relays return from storage before EOSE.
+    /// Those count as activity at the time they happened, so an hour of
+    /// replayed history doesn't make its authors look present; live events
+    /// count when they arrive, which keeps senders with skewed clocks visible.
     @MainActor
-    func subscribeNostrEvent(_ event: NostrEvent) {
+    func subscribeNostrEvent(_ event: NostrEvent, isHistoryReplay: Bool = false) {
         guard let context else { return }
         // Cheap rejects (kind, dedup lookup) — duplicates dominate real
         // traffic. The signature was already verified (exactly once, off the
@@ -146,13 +156,21 @@ final class NostrInboundPipeline {
 
         context.registerNostrKeyMapping(event.pubkey, for: PeerID(nostr_: event.pubkey))
         context.registerNostrKeyMapping(event.pubkey, for: PeerID(nostr: event.pubkey))
-        context.recordGeoParticipant(pubkeyHex: event.pubkey)
+        let countsAsPresence = context.recordGeoParticipant(
+            pubkeyHex: event.pubkey,
+            seenAt: isHistoryReplay ? Date(timeIntervalSince1970: TimeInterval(event.created_at)) : Date()
+        )
 
         if event.kind == NostrProtocol.EventKind.geohashPresence.rawValue {
             return
         }
 
-        if GeoPresenceTracker.hasTeleportTag(event) {
+        // Teleport markers describe people present now and are pruned only
+        // when the roster changes, so a tag on history too old to count must
+        // not mark its absent author: the marker could still be there when
+        // they came back. A teleported sender tags every message, so their
+        // recent ones still mark them.
+        if countsAsPresence, GeoPresenceTracker.hasTeleportTag(event) {
             let key = event.pubkey.lowercased()
             let isSelf: Bool = {
                 if let gh = context.currentGeohash,
@@ -193,8 +211,9 @@ final class NostrInboundPipeline {
         }
     }
 
+    /// See `subscribeNostrEvent(_:isHistoryReplay:)` for `isHistoryReplay`.
     @MainActor
-    func handleNostrEvent(_ event: NostrEvent) {
+    func handleNostrEvent(_ event: NostrEvent, isHistoryReplay: Bool = false) {
         guard let context else { return }
         // Cheap rejects (kind, dedup lookup) — the signature was already
         // verified (exactly once, off the main actor) by NostrRelayManager.
@@ -231,25 +250,27 @@ final class NostrInboundPipeline {
             return false
         }()
 
-        if hasTeleportTag, !isSelf {
-            presence.scheduleMarkPeerTeleported(event.pubkey.lowercased(), logged: true)
+        let eventTime = Date(timeIntervalSince1970: TimeInterval(event.created_at))
+        let seenAt = isHistoryReplay ? eventTime : Date()
+        if isSelf, Date().timeIntervalSince(eventTime) < 15 {
+            context.recordGeoParticipant(pubkeyHex: event.pubkey, seenAt: seenAt)
+            return
         }
 
-        context.recordGeoParticipant(pubkeyHex: event.pubkey)
-
-        if isSelf {
-            let eventTime = Date(timeIntervalSince1970: TimeInterval(event.created_at))
-            if Date().timeIntervalSince(eventTime) < 15 {
-                return
-            }
-        }
-
+        // Learn the nickname before recording the sender, so a newcomer
+        // enters the roster under their name rather than anon#xxxx.
         if let nickTag = event.tags.first(where: { $0.first == "n" }), nickTag.count >= 2 {
             context.setGeoNickname(nickTag[1].trimmed, forPubkey: event.pubkey)
         }
 
         context.registerNostrKeyMapping(event.pubkey, for: PeerID(nostr_: event.pubkey))
         context.registerNostrKeyMapping(event.pubkey, for: PeerID(nostr: event.pubkey))
+        let countsAsPresence = context.recordGeoParticipant(pubkeyHex: event.pubkey, seenAt: seenAt)
+
+        // Only activity that counts marks teleport; see subscribeNostrEvent.
+        if hasTeleportTag, !isSelf, countsAsPresence {
+            presence.scheduleMarkPeerTeleported(event.pubkey.lowercased(), logged: true)
+        }
 
         if event.kind == NostrProtocol.EventKind.geohashPresence.rawValue {
             return

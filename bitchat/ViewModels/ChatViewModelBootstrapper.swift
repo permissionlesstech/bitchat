@@ -157,13 +157,19 @@ private extension ChatViewModelBootstrapper {
             }
             .store(in: &viewModel.cancellables)
 
+        // Teleport markers describe people present now, so they follow the
+        // roster (pruned against it as it is when this runs, not the
+        // delivered snapshot). Nicknames don't: they name the authors of
+        // messages on screen, including replayed history from people no
+        // longer present, so they stay for the channel (cleared on switch,
+        // bounded by the store's capacity).
         viewModel.participantTracker.$visiblePeople
             .receive(on: DispatchQueue.main)
-            .sink { [weak viewModel] people in
-                Task { @MainActor [weak viewModel] in
-                    let visible = Set(people.map { $0.id })
-                    viewModel?.locationPresenceStore.retainTeleportedGeo(keeping: visible)
-                    viewModel?.locationPresenceStore.retainGeoNicknames(keeping: visible)
+            .sink { [weak viewModel] _ in
+                MainActor.assumeIsolated {
+                    guard let viewModel else { return }
+                    let visible = Set(viewModel.participantTracker.visiblePeople.map(\.id))
+                    viewModel.locationPresenceStore.retainTeleportedGeo(keeping: visible)
                 }
             }
             .store(in: &viewModel.cancellables)

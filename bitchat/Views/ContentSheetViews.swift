@@ -506,6 +506,9 @@ private struct ContentPeopleListView: View {
                                 showSidebar = true
                             }
                         )
+                        // Skip re-rendering the roster when this view
+                        // refreshes for models the list doesn't read.
+                        .equatable()
                         // Direct conversations survive channel switches; the
                         // geoDM someone opened from another cell must stay
                         // reachable here too.
@@ -569,7 +572,11 @@ private struct ContentPeopleListView: View {
                 // the ScrollView centers it — headers and empty states
                 // floated mid-screen on iPhone.
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .id(peerListModel.renderID)
+                // Keyed by channel only. Rows are keyed by person, so roster
+                // updates diff in place; a key derived from the rows rebuilds
+                // the whole list on every heartbeat and resets its stable
+                // ordering.
+                .id(ConversationID(channelID: locationChannelsModel.selectedChannel))
             }
         }
         .sheet(isPresented: $showVerifySheet) {

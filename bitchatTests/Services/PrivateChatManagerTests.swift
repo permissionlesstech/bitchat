@@ -259,6 +259,147 @@ struct PrivateChatManagerTests {
     }
 
     @Test @MainActor
+    func consolidateMessages_leavesMyGeoDMThreadOutOfANamesakesChat() async {
+        // My geo DMs carry my plain nickname (sendGeohashDM), so a thread of
+        // my rows matches any mesh peer who shares that nickname, though my
+        // rows say nothing about who the thread is with. Folded into the
+        // namesake's chat, my thread with a geohash stranger would send a
+        // reply typed there to the namesake.
+        let transport = MockTransport()
+        transport.myPeerID = PeerID(str: "a1b2c3d4e5f60718")
+        let (manager, store) = Self.makeManager(transport: transport)
+        let namesakePeerID = PeerID(str: "0011223344556677")
+        let tempPeerID = PeerID(nostr_: String(repeating: "42", count: 32))
+
+        store.append(
+            BitchatMessage(
+                id: "my-geo-dm",
+                sender: "alice",
+                content: "hi from the geohash",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "alice",
+                senderPeerID: transport.myPeerID,
+                deliveryStatus: .delivered(to: "alice", at: Date())
+            ),
+            to: .directPeer(tempPeerID)
+        )
+
+        _ = manager.consolidateMessages(for: namesakePeerID, peerNickname: "alice", persistedReadReceipts: [])
+
+        // The thread stays where it is, my row still mine...
+        #expect(manager.privateChats[tempPeerID]?.map(\.id) == ["my-geo-dm"])
+        #expect(manager.privateChats[tempPeerID]?.first?.senderPeerID == transport.myPeerID)
+        // ...and no thread with the namesake appears.
+        #expect(manager.privateChats[namesakePeerID] == nil)
+
+        // Opening the namesake's chat finds no sent rows of mine to sync
+        // receipts for, and sends none.
+        var externalReceipts = Set<String>()
+        manager.syncReadReceiptsForSentMessages(peerID: namesakePeerID, externalReceipts: &externalReceipts)
+        #expect(externalReceipts.isEmpty)
+        #expect(manager.sentReadReceipts.isEmpty)
+        manager.markAsRead(from: namesakePeerID)
+        #expect(transport.sentReadReceipts.isEmpty)
+    }
+
+    @Test @MainActor
+    func consolidateMessages_stillMovesThePeersOwnGeoDMThreadBesideMine() async {
+        // Skipping my thread is per thread: the peer's own thread, with the
+        // same nickname, still folds into their chat.
+        let transport = MockTransport()
+        transport.myPeerID = PeerID(str: "a1b2c3d4e5f60718")
+        let (manager, store) = Self.makeManager(transport: transport)
+        let peerID = PeerID(str: "0011223344556677")
+        let myThread = PeerID(nostr_: String(repeating: "42", count: 32))
+        let theirThread = PeerID(nostr_: String(repeating: "43", count: 32))
+
+        store.append(
+            BitchatMessage(
+                id: "my-geo-dm",
+                sender: "alice",
+                content: "hi from the geohash",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "alice",
+                senderPeerID: transport.myPeerID,
+                deliveryStatus: .sent
+            ),
+            to: .directPeer(myThread)
+        )
+        store.append(
+            BitchatMessage(
+                id: "their-geo-dm",
+                sender: "alice",
+                content: "hi from them",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "alice",
+                senderPeerID: theirThread
+            ),
+            to: .directPeer(theirThread)
+        )
+        store.markUnread(.directPeer(theirThread))
+
+        let hadUnread = manager.consolidateMessages(for: peerID, peerNickname: "alice", persistedReadReceipts: [])
+
+        #expect(hadUnread)
+        #expect(manager.privateChats[theirThread] == nil)
+        #expect(manager.privateChats[peerID]?.map(\.id) == ["their-geo-dm"])
+        #expect(manager.privateChats[peerID]?.first?.senderPeerID == peerID)
+        #expect(manager.unreadMessages.contains(peerID))
+        #expect(manager.privateChats[myThread]?.map(\.id) == ["my-geo-dm"])
+    }
+
+    @Test @MainActor
+    func consolidateMessages_leavesAThreadWithMyRepliesOutOfANamesakesChat() async {
+        // One row of mine is enough, not a thread of only mine: their rows
+        // and my replies all read "alice", so the nickname check alone would
+        // fold the thread, my replies with it.
+        let transport = MockTransport()
+        transport.myPeerID = PeerID(str: "a1b2c3d4e5f60718")
+        let (manager, store) = Self.makeManager(transport: transport)
+        let namesakePeerID = PeerID(str: "0011223344556677")
+        let thread = PeerID(nostr_: String(repeating: "44", count: 32))
+
+        store.append(
+            BitchatMessage(
+                id: "their-geo-dm",
+                sender: "alice",
+                content: "hi from them",
+                timestamp: Date().addingTimeInterval(-60),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "alice",
+                senderPeerID: thread
+            ),
+            to: .directPeer(thread)
+        )
+        store.append(
+            BitchatMessage(
+                id: "my-reply",
+                sender: "alice",
+                content: "hi back",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "alice",
+                senderPeerID: transport.myPeerID,
+                deliveryStatus: .sent
+            ),
+            to: .directPeer(thread)
+        )
+
+        _ = manager.consolidateMessages(for: namesakePeerID, peerNickname: "alice", persistedReadReceipts: [])
+
+        #expect(manager.privateChats[thread]?.map(\.id) == ["their-geo-dm", "my-reply"])
+        #expect(manager.privateChats[namesakePeerID] == nil)
+    }
+
+    @Test @MainActor
     func syncReadReceiptsForSentMessages_onlyCopiesDeliveredAndRead() async {
         let transport = MockTransport()
         let (manager, store) = Self.makeManager(transport: transport)
@@ -304,7 +445,7 @@ struct PrivateChatManagerTests {
         }
 
         var externalReceipts = Set<String>()
-        manager.syncReadReceiptsForSentMessages(peerID: peerID, nickname: "Me", externalReceipts: &externalReceipts)
+        manager.syncReadReceiptsForSentMessages(peerID: peerID, externalReceipts: &externalReceipts)
 
         #expect(externalReceipts == Set(["sent-read", "sent-delivered"]))
         #expect(manager.sentReadReceipts == Set(["sent-read", "sent-delivered"]))

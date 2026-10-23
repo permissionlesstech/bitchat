@@ -9,6 +9,20 @@ final class ChatMessageFormatter {
     private unowned let viewModel: ChatViewModel
     private let meshPalette = MinimalDistancePalette(config: .mesh)
     private let nostrPalette = MinimalDistancePalette(config: .nostr)
+    /// What the Nostr palette was last built from. Colors are looked up once
+    /// per people-sheet row and per formatted geochat message, so the palette
+    /// is rebuilt only when the roster's membership (or our own excluded
+    /// key) changes rather than recomputing the roster on every lookup.
+    private var nostrPaletteKey: NostrPaletteKey?
+
+    private struct NostrPaletteKey: Equatable {
+        // periphery:ignore - read only via the synthesized Equatable
+        // conformance (the rebuild check), which the indexer cannot
+        // attribute.
+        let membershipRevision: UInt64
+        // periphery:ignore - see `membershipRevision`.
+        let excludedHex: String?
+    }
 
     init(viewModel: ChatViewModel) {
         self.viewModel = viewModel
@@ -348,6 +362,10 @@ final class ChatMessageFormatter {
         return result
     }
 
+    /// Prefix of the header's formatted-text cache variants. No full-text
+    /// variant starts with it, so the two caches can't collide.
+    static let headerCacheNamespace = "hdr:"
+
     func formatMessageHeader(_ message: BitchatMessage, colorScheme: ColorScheme, theme: AppTheme = .matrix) -> AttributedString {
         let design = theme.bodyFontDesign
         let isSelf: Bool = {
@@ -364,14 +382,23 @@ final class ChatMessageFormatter {
         }()
 
         let isDark = colorScheme == .dark
-        let baseColor: Color = isSelf ? .orange : peerColor(for: message, isDark: isDark)
         let isVerifiedSender = !isSelf && isVerifiedSender(of: message)
+        // Same key ingredients as the full-text cache, in a namespace of its
+        // own so a header and a full text never answer each other's lookups.
+        let cacheVariant = Self.headerCacheNamespace + theme.formatCacheVariant + (isVerifiedSender ? "-vf" : "")
+        if let cachedHeader = message.getCachedFormattedText(isDark: isDark, isSelf: isSelf, variant: cacheVariant) {
+            return cachedHeader
+        }
+
+        let baseColor: Color = isSelf ? .orange : peerColor(for: message, isDark: isDark)
 
         if message.sender == "system" {
             var style = AttributeContainer()
             style.foregroundColor = baseColor
             style.font = .bitchatSystem(size: 14, weight: .medium, design: design)
-            return AttributedString(message.sender).mergingAttributes(style)
+            let header = AttributedString(message.sender).mergingAttributes(style)
+            message.setCachedFormattedText(header, isDark: isDark, isSelf: isSelf, variant: cacheVariant)
+            return header
         }
 
         var result = AttributedString()
@@ -395,6 +422,7 @@ final class ChatMessageFormatter {
             appendVerifiedSeal(to: &result, baseColor: baseColor, design: design)
         }
         result.append(AttributedString("> ").mergingAttributes(senderStyle))
+        message.setCachedFormattedText(result, isDark: isDark, isSelf: isSelf, variant: cacheVariant)
         return result
     }
 
@@ -511,20 +539,31 @@ private extension ChatMessageFormatter {
             return .orange
         }
 
-        nostrPalette.ensurePalette(for: currentNostrPaletteSeeds(excluding: myHex))
+        ensureNostrPalette(excluding: myHex)
         if let color = nostrPalette.color(for: pubkeyHexLowercased, isDark: isDark) {
             return color
         }
         return Color(peerSeed: "nostr:" + pubkeyHexLowercased, isDark: isDark)
     }
 
-    func currentNostrPaletteSeeds(excluding myHex: String?) -> [String: String] {
+    /// Seeds the palette from the tracker's published roster, and only when
+    /// its membership changed. Rebuilding it from a fresh roster scan per
+    /// lookup made every people-sheet render O(N²) in the participant count.
+    func ensureNostrPalette(excluding myHex: String?) {
+        let tracker = viewModel.participantTracker
+        let key = NostrPaletteKey(
+            membershipRevision: tracker.visibleMembershipRevision,
+            excludedHex: myHex
+        )
+        guard key != nostrPaletteKey else { return }
+        nostrPaletteKey = key
+
         var seeds: [String: String] = [:]
         let excluded = myHex ?? ""
-        for person in viewModel.visibleGeohashPeople() where person.id != excluded {
+        for person in tracker.visiblePeople where person.id != excluded {
             seeds[person.id] = "nostr:" + person.id
         }
-        return seeds
+        nostrPalette.ensurePalette(for: seeds)
     }
 
     func currentGeohashIdentityHex() -> String? {

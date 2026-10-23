@@ -47,7 +47,8 @@ protocol GeohashSubscriptionContext: AnyObject {
     func startGeoParticipantRefreshTimer()
     func stopGeoParticipantRefreshTimer()
     func setActiveParticipantGeohash(_ geohash: String?)
-    func recordGeoParticipant(pubkeyHex: String)
+    @discardableResult
+    func recordGeoParticipant(pubkeyHex: String, seenAt: Date) -> Bool
     func markGeoTeleported(_ pubkeyHexLowercased: String)
     func clearGeoTeleported(_ pubkeyHexLowercased: String)
     func clearTeleportedGeo()
@@ -118,6 +119,12 @@ final class GeohashSubscriptionManager {
     /// Geohashes already told "sent via mesh gateway" this session, so the
     /// notice appears once per channel instead of once per message.
     private var gatewayNoticeGeohashes = Set<String>()
+    /// The geochat subscription whose stored history relays may still be
+    /// replaying; cleared when its EOSE callback runs. Best effort: the relay
+    /// manager also runs that callback on its fallback timeout (e.g. while
+    /// Tor is still bootstrapping), and history arriving after it counts as
+    /// live activity. See `NostrInboundPipeline`'s `isHistoryReplay`.
+    private var replayingGeoSubscriptionID: String?
 
     init(context: any GeohashSubscriptionContext, inbound: NostrInboundPipeline, presence: GeoPresenceTracker) {
         self.context = context
@@ -145,14 +152,20 @@ final class GeohashSubscriptionManager {
             toGeohash: channel.geohash,
             count: TransportConfig.nostrGeoRelayCount
         )
-        NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays) { [weak self] event in
+        replayingGeoSubscriptionID = subID
+        NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays, handler: { [weak self] event in
             Task { @MainActor [weak self] in
-                self?.inbound.subscribeNostrEvent(event)
+                guard let self else { return }
+                self.inbound.subscribeNostrEvent(event, isHistoryReplay: self.replayingGeoSubscriptionID == subID)
                 // Gateway downlink: rebroadcast relay events for the viewed
                 // channel onto the mesh (no-op unless gateway mode is on).
                 GatewayService.shared.rebroadcastRelayEvent(event, geohash: channel.geohash)
             }
-        }
+        }, onEOSE: { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.endHistoryReplay(for: subID)
+            }
+        })
 
         if let dmSub = context.geoDmSubscriptionID {
             NostrRelayManager.shared.unsubscribe(id: dmSub)
@@ -219,7 +232,7 @@ final class GeohashSubscriptionManager {
         context.setActiveParticipantGeohash(channel.geohash)
 
         if let identity = try? context.deriveNostrIdentity(forGeohash: channel.geohash) {
-            context.recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
+            context.recordGeoParticipant(pubkeyHex: identity.publicKeyHex, seenAt: Date())
             let key = identity.publicKeyHex.lowercased()
             if context.isTeleported && context.isGeohashOutsideRegionalChannels(channel.geohash) {
                 context.markGeoTeleported(key)
@@ -238,14 +251,20 @@ final class GeohashSubscriptionManager {
         let ts = Date().addingTimeInterval(-TransportConfig.nostrGeohashInitialLookbackSeconds)
         let filter = NostrFilter.geohashEphemeral(channel.geohash, since: ts, limit: TransportConfig.nostrGeohashInitialLimit)
         let subRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: channel.geohash, count: 5)
-        NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays) { [weak self] event in
+        replayingGeoSubscriptionID = subID
+        NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays, handler: { [weak self] event in
             Task { @MainActor [weak self] in
-                self?.inbound.handleNostrEvent(event)
+                guard let self else { return }
+                self.inbound.handleNostrEvent(event, isHistoryReplay: self.replayingGeoSubscriptionID == subID)
                 // Gateway downlink: rebroadcast relay events for the viewed
                 // channel onto the mesh (no-op unless gateway mode is on).
                 GatewayService.shared.rebroadcastRelayEvent(event, geohash: channel.geohash)
             }
-        }
+        }, onEOSE: { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.endHistoryReplay(for: subID)
+            }
+        })
 
         subscribeToGeoChat(channel)
     }
@@ -306,7 +325,7 @@ final class GeohashSubscriptionManager {
             )
         }
 
-        context.recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
+        context.recordGeoParticipant(pubkeyHex: identity.publicKeyHex, seenAt: Date())
         context.registerNostrKeyMapping(identity.publicKeyHex, for: PeerID(nostr: identity.publicKeyHex))
         SecureLogger.debug(
             "GeoTeleport: sent geo message pub=\(identity.publicKeyHex.prefix(8))… teleported=\(geoContext.teleported)",
@@ -323,6 +342,12 @@ final class GeohashSubscriptionManager {
         }
 
         context.recordProcessedNostrEvent(event.id)
+    }
+
+    @MainActor
+    private func endHistoryReplay(for subscriptionID: String) {
+        guard replayingGeoSubscriptionID == subscriptionID else { return }
+        replayingGeoSubscriptionID = nil
     }
 
     @MainActor

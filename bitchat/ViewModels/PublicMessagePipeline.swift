@@ -22,7 +22,6 @@ protocol PublicMessagePipelineDelegate: AnyObject {
     @discardableResult
     func pipeline(_: PublicMessagePipeline, commit message: BitchatMessage, to conversationID: ConversationID) -> Bool
     func pipelinePrewarmMessage(_: PublicMessagePipeline, message: BitchatMessage)
-    func pipelineSetBatchingState(_: PublicMessagePipeline, isBatching: Bool)
 }
 
 @MainActor
@@ -100,8 +99,6 @@ private extension PublicMessagePipeline {
             return
         }
 
-        delegate.pipelineSetBatchingState(self, isBatching: true)
-
         // Content-window dedup against recorded keys and within the batch;
         // ID dedup happens in the store at commit time.
         var pending: [(message: BitchatMessage, conversationID: ConversationID, contentKey: String)] = []
@@ -122,10 +119,7 @@ private extension PublicMessagePipeline {
         }
 
         buffer.removeAll(keepingCapacity: true)
-        guard !pending.isEmpty else {
-            delegate.pipelineSetBatchingState(self, isBatching: false)
-            return
-        }
+        guard !pending.isEmpty else { return }
 
         pending.sort { $0.message.timestamp < $1.message.timestamp }
 
@@ -139,8 +133,6 @@ private extension PublicMessagePipeline {
         for item in pending {
             delegate.pipelinePrewarmMessage(self, message: item.message)
         }
-
-        delegate.pipelineSetBatchingState(self, isBatching: false)
 
         if !buffer.isEmpty {
             scheduleFlush()

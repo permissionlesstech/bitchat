@@ -34,6 +34,16 @@
     "store.steadyStateAppend_before": 2315,
     "store.steadyStateAppend": 53976
   },
+  "_reference_local_numbers_2026_10": {
+    "geochat.peopleListColors_before": 112,
+    "geochat.peopleListColors": 406134,
+    "geochat.participantHeartbeat_before": 110,
+    "geochat.participantHeartbeat": 1581264,
+    "geochat.formatMessage_before": 107,
+    "geochat.formatMessage": 18006,
+    "hex.encodePublicKey_before": 64366,
+    "hex.encodePublicKey": 1194627
+  },
   "floors": {
     "nostrInbound.fresh": 450,
     "nostrInbound.duplicate": 250000,
@@ -46,7 +56,11 @@
     "pipeline.publicIngest": 2400,
     "store.append": 48000,
     "store.steadyStateAppend": 10000,
-    "store.audit": 70
+    "store.audit": 70,
+    "geochat.peopleListColors": 40000,
+    "geochat.participantHeartbeat": 150000,
+    "geochat.formatMessage": 2500,
+    "hex.encodePublicKey": 250000
   },
   "_slowest_observed_ci_numbers_2026_06": {
     "nostrInbound.fresh": 918,
@@ -60,5 +74,11 @@
     "pipeline.publicIngest": 5006,
     "store.append": 97423,
     "store.audit": 140
+  },
+  "_slowest_observed_ci_numbers_2026_10": {
+    "geochat.peopleListColors": 212895,
+    "geochat.participantHeartbeat": 717459,
+    "geochat.formatMessage": 5176,
+    "hex.encodePublicKey": 655398
   }
 }
