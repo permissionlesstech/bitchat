@@ -19,7 +19,8 @@ private func makeTestableViewModel(
     keychain injectedKeychain: MockKeychain? = nil,
     panicMediaWipe: (() throws -> Void)? = nil,
     panicRecoveryOperations: PanicRecoveryOperations? = nil,
-    panicNetworkLifecycle: PanicNetworkLifecycle = .noop
+    panicNetworkLifecycle: PanicNetworkLifecycle = .noop,
+    locationManager: LocationChannelManager = .shared
 ) -> (viewModel: ChatViewModel, transport: MockTransport) {
     let keychain = injectedKeychain ?? MockKeychain()
     let keychainHelper = MockKeychainHelper()
@@ -32,6 +33,7 @@ private func makeTestableViewModel(
         idBridge: idBridge,
         identityManager: identityManager,
         transport: transport,
+        locationManager: locationManager,
         panicMediaWipe: panicMediaWipe,
         panicRecoveryOperations: panicRecoveryOperations,
         panicNetworkLifecycle: panicNetworkLifecycle
@@ -2341,6 +2343,29 @@ struct ChatViewModelPanicTests {
         #expect(viewModel.currentGeohash == nil)
         #expect(viewModel.geoNicknames.isEmpty)
         #expect(viewModel.teleportedGeo.isEmpty)
+    }
+
+    @Test @MainActor
+    func panicClearAllData_wipesTheLocationStateOfItsOwnManager() throws {
+        // Where the device has been, persisted the way the location manager
+        // writes it: a teleport and a bookmark.
+        let suiteName = "ChatViewModelPanicTests.\(UUID().uuidString)"
+        let storage = try #require(UserDefaults(suiteName: suiteName))
+        defer { storage.removePersistentDomain(forName: suiteName) }
+        storage.set(try JSONEncoder().encode(["u4pruy"]), forKey: "locationChannel.teleportedSet")
+        storage.set(try JSONEncoder().encode(["u4pruy"]), forKey: "locationChannel.bookmarks")
+        let locationManager = LocationChannelManager(storage: storage)
+        #expect(locationManager.bookmarks == ["u4pruy"])
+        let (viewModel, _) = makeTestableViewModel(locationManager: locationManager)
+
+        viewModel.panicClearAllData()
+
+        // The wipe lands on the manager the view model runs on: `.shared` in
+        // the app, this test's own here, which leaves the process-wide one to
+        // the tests that select channels on it.
+        #expect(locationManager.bookmarks.isEmpty)
+        #expect(storage.object(forKey: "locationChannel.teleportedSet") == nil)
+        #expect(storage.object(forKey: "locationChannel.bookmarks") == nil)
     }
 }
 

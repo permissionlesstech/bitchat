@@ -1621,8 +1621,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
         // Wipe persisted location state (selected channel, teleport set,
         // bookmarks). For an activist-safety wipe, where the user has been is
-        // exactly the data an adversary inspecting the device wants.
-        LocationStateManager.shared.panicWipe()
+        // exactly the data an adversary inspecting the device wants. The app
+        // runs on `LocationChannelManager.shared` (AppRuntime injects it), so
+        // this wipes the process-wide state there; a test's own manager keeps
+        // the wipe from resetting the channel under every other test.
+        locationManager.panicWipe()
 
         // Reset nickname to anonymous
         nickname = "anon\(Int.random(in: 1000...9999))"
