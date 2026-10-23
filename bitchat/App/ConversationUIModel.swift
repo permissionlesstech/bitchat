@@ -27,8 +27,11 @@ final class ConversationUIModel: ObservableObject {
     /// public key it was built from. `publicKeyHex` hex-encodes on every
     /// access, too slow to repeat per row render; keying on the key itself
     /// means a geohash switch or a panic wipe (which reseeds every identity)
-    /// can never leave a stale ID behind.
-    private var ownGeoChatSender: (publicKey: Data, peerID: PeerID)?
+    /// can never leave a stale ID behind. A switch to #mesh, where no row
+    /// reads it, drops it: a panic wipe always lands there, and the retired
+    /// key must not stay in memory until a geochat row next renders.
+    /// (Read access is internal so tests can check that.)
+    private(set) var ownGeoChatSender: (publicKey: Data, peerID: PeerID)?
 
     init(
         chatViewModel: ChatViewModel,
@@ -293,6 +296,9 @@ final class ConversationUIModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] channel in
                 self?.activeChannel = channel
+                if channel == .mesh {
+                    self?.ownGeoChatSender = nil
+                }
                 self?.refreshComputedState()
             }
             .store(in: &cancellables)

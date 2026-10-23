@@ -86,10 +86,27 @@ struct ConversationUIModelTests {
     static let myPeerID = PeerID(str: "a1b2c3d4e5f60718")
     static let peerID = PeerID(str: "0f1e2d3c4b5a6978")
     static let geohash = "u4pruy"
+    static let locationChannel = ChannelID.location(GeohashChannel(level: .city, geohash: geohash))
 
     @MainActor
     private static func show(geohash: String, in viewModel: ChatViewModel) {
         viewModel.activeChannel = .location(GeohashChannel(level: .city, geohash: geohash))
+    }
+
+    /// Switches channels the way the channel picker does: through the
+    /// location manager, which the view model follows a few hops later.
+    /// Tests that await must switch this way, since the view model re-applies
+    /// the manager's selection on a later turn and would undo a direct
+    /// `activeChannel` write. Returns once the UI model has mirrored the
+    /// switch (media is off in location channels), so no channel update
+    /// queued before it can still reach the memo.
+    @MainActor
+    private static func switchAndSettle(to channel: ChannelID, in viewModel: ChatViewModel, uiModel: ConversationUIModel) async -> Bool {
+        viewModel.locationManager.select(channel)
+        let mediaAllowed = channel == .mesh
+        return await TestHelpers.waitUntil({
+            viewModel.activeChannel == channel && uiModel.canSendMediaInCurrentContext == mediaAllowed
+        }, timeout: TestConstants.settleTimeout)
     }
 
     @MainActor
@@ -291,16 +308,34 @@ struct ConversationUIModelTests {
     }
 
     @Test @MainActor
-    func panicWipeRetiresTheOldGeochatIdentity() throws {
+    func switchingToMeshDropsMyMemoizedGeochatSender() async throws {
         let (viewModel, _) = makeChatViewModel(nickname: "alice")
         let uiModel = makeUIModel(for: viewModel)
-        Self.show(geohash: Self.geohash, in: viewModel)
+        #expect(await Self.switchAndSettle(to: Self.locationChannel, in: viewModel, uiModel: uiModel))
+        let myHex = try Self.myGeoHex(viewModel)
+        #expect(uiModel.isSentByCurrentUser(row("alice#\(myHex.suffix(4))", PeerID(nostr: myHex))))
+        #expect(uiModel.ownGeoChatSender?.peerID == PeerID(nostr: myHex))
+
+        // No row on #mesh reads it, so it goes with the switch rather than
+        // whenever a geochat row next renders.
+        #expect(await Self.switchAndSettle(to: .mesh, in: viewModel, uiModel: uiModel))
+        #expect(uiModel.ownGeoChatSender == nil)
+    }
+
+    @Test @MainActor
+    func panicWipeRetiresTheOldGeochatIdentity() async throws {
+        let (viewModel, _) = makeChatViewModel(nickname: "alice")
+        let uiModel = makeUIModel(for: viewModel)
+        #expect(await Self.switchAndSettle(to: Self.locationChannel, in: viewModel, uiModel: uiModel))
         let oldHex = try Self.myGeoHex(viewModel)
         let beforeWipe = row("alice#\(oldHex.suffix(4))", PeerID(nostr: oldHex))
         #expect(uiModel.isSentByCurrentUser(beforeWipe))
+        #expect(uiModel.ownGeoChatSender != nil)
 
-        // The wipe reseeds every geohash identity and returns to the mesh.
+        // The wipe reseeds every geohash identity and returns to the mesh,
+        // which takes the retired key out of the memo too.
         viewModel.panicClearAllData()
+        #expect(await TestHelpers.waitUntil({ uiModel.ownGeoChatSender == nil }, timeout: TestConstants.settleTimeout))
         Self.show(geohash: Self.geohash, in: viewModel)
         let newHex = try Self.myGeoHex(viewModel)
         #expect(newHex != oldHex)
