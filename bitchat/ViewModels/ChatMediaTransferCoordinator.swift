@@ -721,6 +721,7 @@ final class ChatMediaTransferCoordinator {
             try ImageUtils.validateImageSource(at: sourceURL)
         } catch {
             SecureLogger.error("Image send preparation failed: \(error)", category: .session)
+            cleanup?()
             context.addSystemMessage("Failed to prepare image for sending.")
             return
         }

@@ -792,6 +792,26 @@ struct ChatMediaTransferCoordinatorContextTests {
     }
 
     @Test @MainActor
+    func invalidImageSourceRemovesOwnedFile() throws {
+        let context = MockChatMediaTransferContext()
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("invalid-image-\(UUID().uuidString).jpg")
+        try Data().write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(FileManager.default.fileExists(atPath: url.path))
+
+        coordinator.sendImage(from: url, cleanup: {
+            try? FileManager.default.removeItem(at: url)
+        })
+
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+        #expect(context.systemMessages == ["Failed to prepare image for sending."])
+        #expect(context.privateChats.isEmpty)
+        #expect(context.appendedPublicMessages.isEmpty)
+    }
+
+    @Test @MainActor
     func pickerImageSendsPreparedJPEGWithoutEnteringRawImagePreparation() async throws {
         let context = MockChatMediaTransferContext()
         let peerID = PeerID(str: "99aabbccddeeff00")
