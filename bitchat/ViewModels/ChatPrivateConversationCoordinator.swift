@@ -856,6 +856,7 @@ final class ChatPrivateConversationCoordinator {
             var oldPeerIDsToRemove: [PeerID] = []
             var didMigrate = false
             let cutoffTime = Date().addingTimeInterval(-TransportConfig.uiMigrationCutoffSeconds)
+            let myPeerID = context.myPeerID
 
             for (oldPeerID, messages) in context.privateChats where oldPeerID != peerID {
                 let oldFingerprint = context.storedFingerprint(for: oldPeerID)
@@ -881,6 +882,16 @@ final class ChatPrivateConversationCoordinator {
                         category: .session
                     )
                 } else if currentFingerprint == nil || oldFingerprint == nil {
+                    // My geo-DM rows name me as their recipient
+                    // (sendGeohashDM), so the second clause below matches
+                    // them for any mesh peer who shares my nickname. As in
+                    // PrivateChatManager.consolidateMessages, a geo-DM thread
+                    // holding my rows never moves by nickname; moved into a
+                    // namesake's chat, my next reply there would go to the
+                    // namesake instead of the geohash stranger.
+                    if oldPeerID.isGeoDM, messages.contains(where: { $0.senderPeerID == myPeerID }) {
+                        continue
+                    }
                     let isRelevantChat = recentMessages.contains { msg in
                         (msg.sender == senderNickname && msg.sender != context.nickname)
                             || (msg.sender == context.nickname && msg.recipientNickname == senderNickname)

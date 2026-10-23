@@ -812,6 +812,120 @@ struct ChatPrivateConversationCoordinatorContextTests {
     }
 
     @Test @MainActor
+    func migratePrivateChats_leavesMyGeoDMThreadOutOfANamesakesChat() async {
+        // My reply to a geohash stranger names me as its recipient
+        // (sendGeohashDM), so by nickname it reads as written to any mesh
+        // peer called "alice". That namesake's first DM must not take the
+        // thread along, or my next reply there would go to them.
+        let context = MockChatPrivateConversationContext()
+        context.nickname = "alice"
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let geoThread = PeerID(nostr_: String(repeating: "42", count: 32))
+        let namesakePeerID = PeerID(str: "8899aabbccddeeff")
+        context.privateChats[geoThread] = [
+            makeIncomingMessage(
+                id: "stranger-1",
+                sender: "carol#4242",
+                timestamp: Date().addingTimeInterval(-120),
+                senderPeerID: geoThread,
+                recipientNickname: "alice"
+            ),
+            BitchatMessage(
+                id: "my-reply",
+                sender: "alice",
+                content: "hi carol",
+                timestamp: Date().addingTimeInterval(-60),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "alice",
+                senderPeerID: context.myPeerID,
+                deliveryStatus: .sent
+            )
+        ]
+        context.selectedPrivateChatPeer = geoThread
+
+        coordinator.handlePrivateMessage(
+            makeIncomingMessage(id: "namesake-1", sender: "alice", senderPeerID: namesakePeerID, recipientNickname: "alice")
+        )
+
+        #expect(context.privateChats[geoThread]?.map(\.id) == ["stranger-1", "my-reply"])
+        #expect(context.privateChats[namesakePeerID]?.map(\.id) == ["namesake-1"])
+        #expect(context.migratedChats.isEmpty)
+        // The open thread is still the stranger's, and the namesake's message
+        // waits unread rather than being read receipted from my thread.
+        #expect(context.selectedPrivateChatPeer == geoThread)
+        #expect(context.meshReadReceipts.isEmpty)
+        #expect(context.unreadPrivateMessages == [namesakePeerID])
+    }
+
+    @Test @MainActor
+    func migratePrivateChats_stillMovesAGeoDMThreadWithoutMyRowsByNickname() async {
+        // The skip is for threads holding my rows: a geo-DM thread of the
+        // peer's own rows still follows them to their mesh chat by name.
+        let context = MockChatPrivateConversationContext()
+        context.nickname = "alice"
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let theirThread = PeerID(nostr_: String(repeating: "43", count: 32))
+        let bobPeerID = PeerID(str: "8899aabbccddeeff")
+        context.privateChats[theirThread] = [
+            makeIncomingMessage(
+                id: "bob-earlier",
+                sender: "bob",
+                timestamp: Date().addingTimeInterval(-60),
+                senderPeerID: theirThread,
+                recipientNickname: "alice"
+            )
+        ]
+
+        coordinator.handlePrivateMessage(
+            makeIncomingMessage(id: "bob-1", sender: "bob", senderPeerID: bobPeerID, recipientNickname: "alice")
+        )
+
+        #expect(context.privateChats[theirThread] == nil)
+        #expect(context.privateChats[bobPeerID]?.map(\.id) == ["bob-earlier", "bob-1"])
+        #expect(context.migratedChats.map(\.from) == [theirThread])
+    }
+
+    @Test @MainActor
+    func migratePrivateChats_stillMovesMyMeshThreadByNickname() async {
+        // Only geo-DM rows name me as their recipient. My mesh rows name the
+        // peer, so my thread with bob under his previous peer ID follows him
+        // to the new one.
+        let context = MockChatPrivateConversationContext()
+        context.nickname = "alice"
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let previousPeerID = PeerID(str: "1122334455667788")
+        let bobPeerID = PeerID(str: "8899aabbccddeeff")
+        context.privateChats[previousPeerID] = [
+            makeIncomingMessage(
+                id: "bob-earlier",
+                sender: "bob",
+                timestamp: Date().addingTimeInterval(-120),
+                senderPeerID: previousPeerID,
+                recipientNickname: "alice"
+            ),
+            BitchatMessage(
+                id: "my-reply",
+                sender: "alice",
+                content: "hi bob",
+                timestamp: Date().addingTimeInterval(-60),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "bob",
+                senderPeerID: context.myPeerID,
+                deliveryStatus: .sent
+            )
+        ]
+
+        coordinator.handlePrivateMessage(
+            makeIncomingMessage(id: "bob-1", sender: "bob", senderPeerID: bobPeerID, recipientNickname: "alice")
+        )
+
+        #expect(context.privateChats[previousPeerID] == nil)
+        #expect(context.privateChats[bobPeerID]?.map(\.id) == ["bob-earlier", "my-reply", "bob-1"])
+    }
+
+    @Test @MainActor
     func handlePrivateMessage_postsNotificationOnlyWhenNotViewingChat() async {
         let context = MockChatPrivateConversationContext()
         let coordinator = ChatPrivateConversationCoordinator(context: context)
