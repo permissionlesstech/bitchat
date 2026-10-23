@@ -1431,7 +1431,8 @@ struct ViewSmokeTests {
     }
 
     /// E5: choosing a location channel while folded drops what was parked,
-    /// so the unfold shows that channel and reopens nothing.
+    /// for good: back on #mesh before unfolding, neither the parked geohash
+    /// nor the parked DM returns, and the trailing pane is the idle picker.
     @Test
     func contentView_compactLocationChoiceDropsWhatWasParked() async {
         let split = await SplitContentHost.make()
@@ -1444,13 +1445,12 @@ struct ViewSmokeTests {
         #expect(await split.settle { split.timelineChannel == .mesh && split.openPeer == nil })
 
         #expect(await split.select(.location(other)))
+        #expect(await split.select(.mesh))
         #expect(await split.unfold())
-        let shown = await split.settle {
-            split.trailingPrompts.contains { $0.contains("#\(other.geohash)") }
-        }
-        #expect(shown, "\(split.diagnostics)")
+        let idle = await split.settle { split.trailingPrompts == ["geohash"] }
+        #expect(idle, "\(split.diagnostics)")
         let restored = await TestHelpers.waitUntil(
-            { split.channels.selectedChannel != .location(other) || split.openPeer != nil },
+            { split.channels.selectedChannel != .mesh || split.openPeer != nil },
             timeout: TestConstants.negativeWaitWindow
         )
         #expect(!restored)
