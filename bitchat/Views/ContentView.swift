@@ -29,6 +29,14 @@ struct ContentRootModalPresentationState {
     /// people UI is inline rather than a sheet.
     var isLegacyMediaConsentPresented = false
 
+    /// Only the people column puts the legacy-consent dialog in the root's
+    /// tree. In compact the people sheet hosts it and already defers the
+    /// root while up; a request left pending once the sheet closed has no
+    /// presenter, and waiting on it would swallow the root alerts.
+    static func legacyConsentDefersRoot(isSplitLayout: Bool, hasPendingRequest: Bool) -> Bool {
+        isSplitLayout && hasPendingRequest
+    }
+
     var hasPresentation: Bool {
         isPeopleSheetPresented
             || isAppInfoPresented
@@ -243,12 +251,10 @@ struct ContentView: View {
             isVerificationSheetPresented: isVerificationSheetPresented,
             isVoiceAlertPresented: includingVoiceAlert && voiceRecordingVM.showAlert,
             isMediaPickerPresented: isMediaPickerPresented,
-            // Only the column presents the dialog in the root's tree. In
-            // compact the people sheet hosts it and already defers the root
-            // while up; a request left pending once it closed has no
-            // presenter, and waiting on it would swallow the root alerts.
-            isLegacyMediaConsentPresented: isSplitLayoutActive
-                && conversationUIModel.legacyPrivateMediaConsentRequest != nil
+            isLegacyMediaConsentPresented: ContentRootModalPresentationState.legacyConsentDefersRoot(
+                isSplitLayout: isSplitLayoutActive,
+                hasPendingRequest: conversationUIModel.legacyPrivateMediaConsentRequest != nil
+            )
         )
     }
 

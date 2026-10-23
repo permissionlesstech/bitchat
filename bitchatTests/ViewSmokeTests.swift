@@ -646,6 +646,24 @@ struct ViewSmokeTests {
         )
     }
 
+    @Test("Only the people column's consent dialog holds back root alerts")
+    func rootAlertGuards_legacyConsentDefersOnlyOnSplitLayout() {
+        #expect(ContentRootModalPresentationState.legacyConsentDefersRoot(
+            isSplitLayout: true,
+            hasPendingRequest: true
+        ))
+        // Compact: the people sheet hosts the dialog and defers the root on
+        // its own; a request left behind once it closed has no presenter.
+        #expect(!ContentRootModalPresentationState.legacyConsentDefersRoot(
+            isSplitLayout: false,
+            hasPendingRequest: true
+        ))
+        #expect(!ContentRootModalPresentationState.legacyConsentDefersRoot(
+            isSplitLayout: true,
+            hasPendingRequest: false
+        ))
+    }
+
     @Test("People-sheet Bluetooth alert waits for local verification sheet")
     func peopleSheetBluetoothAlertGuard_includesVerificationSheet() {
         #expect(!ContentPeopleSheetModalPresentationState().hasPresentation)
