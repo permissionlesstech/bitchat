@@ -428,13 +428,18 @@ private extension AppRuntime {
             if case .location = chatViewModel.activeChannel { return true }
             return false
         }()
+        #if os(iOS)
+        let isPublicTimelineBesideConversation = appChromeModel.isPublicTimelineBesideConversation
+        #else
+        let isPublicTimelineBesideConversation = false
+        #endif
 
         switch Self.resolveScreenshotResponse(
             isLocationChannelsSheetPresented: appChromeModel.isLocationChannelsSheetPresented,
             isAppInfoPresented: appChromeModel.isAppInfoPresented,
             hasPrivateChatOpen: chatViewModel.selectedPrivateChatPeer != nil,
             isLocationChannelActive: isLocationChannelActive,
-            isPublicTimelineBesideConversation: appChromeModel.isPublicTimelineBesideConversation
+            isPublicTimelineBesideConversation: isPublicTimelineBesideConversation
         ) {
         case .warnLocally:
             appChromeModel.triggerScreenshotPrivacyWarning()
