@@ -239,7 +239,17 @@ struct LocationChannelsSheet: View {
         SheetCloseButton { isPresented = false }
     }
 
+    /// Participant counts mean "active in the last five minutes": they change
+    /// as people arrive and as quiet ones age out, neither of which publishes
+    /// anything this sheet observes, so re-read them every few seconds while
+    /// the sheet is open.
     private var channelList: some View {
+        TimelineView(.periodic(from: .now, by: 5)) { _ in
+            channelListContent
+        }
+    }
+
+    private var channelListContent: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
                 channelRow(title: Strings.meshTitle(peerListModel.reachableMeshPeerCount), subtitlePrefix: Strings.subtitlePrefix(geohash: "bluetooth", coverage: bluetoothRangeString()), isSelected: isMeshSelected, titleColor: standardBlue, titleBold: peerListModel.reachableMeshPeerCount > 0) {

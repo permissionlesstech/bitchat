@@ -182,9 +182,6 @@ struct AppArchitectureTests {
 
         #expect(store.geoNicknames == ["bbbbbb": "bob", "cccccc": "carol"])
 
-        store.retainGeoNicknames(keeping: Set(["CCCCCC"]))
-        #expect(store.geoNicknames == ["cccccc": "carol"])
-
         store.setCurrentGeohash("u4pruz")
         #expect(store.geoNicknames.isEmpty)
     }

@@ -329,11 +329,16 @@ struct GeohashParticipantTrackerTests {
         tracker.configure(context: context)
         tracker.setActiveGeohash("abc123")
 
-        // Replayed history from ten minutes ago doesn't make its author present.
+        var changes = 0
+        let cancellable = tracker.objectWillChange.sink { _ in changes += 1 }
+        // Replayed history from ten minutes ago doesn't make its author present
+        // (nor announce a count change or rebuild the roster).
         tracker.recordParticipant(pubkeyHex: "pubkey1", seenAt: Date().addingTimeInterval(-600))
 
         #expect(tracker.participantCount(for: "abc123") == 0)
         #expect(tracker.visiblePeople.isEmpty)
+        #expect(changes == 0)
+        _ = cancellable
     }
 
     @Test func recordParticipant_neverMovesActivityBackwards() async {

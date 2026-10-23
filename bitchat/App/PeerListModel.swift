@@ -132,8 +132,9 @@ final class PeerListModel: ObservableObject {
         chatViewModel.$allPeers
             .receive(on: DispatchQueue.main)
             .sink { [weak self] peers in
-                self?.allPeers = peers
-                self?.setNeedsRefresh()
+                guard let self, self.allPeers != peers else { return }
+                self.allPeers = peers
+                self.setNeedsRefresh()
             }
             .store(in: &cancellables)
 

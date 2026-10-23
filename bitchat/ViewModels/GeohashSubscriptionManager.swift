@@ -118,9 +118,11 @@ final class GeohashSubscriptionManager {
     /// Geohashes already told "sent via mesh gateway" this session, so the
     /// notice appears once per channel instead of once per message.
     private var gatewayNoticeGeohashes = Set<String>()
-    /// The geochat subscription whose stored history relays are still
-    /// replaying; cleared at its EOSE. See `NostrInboundPipeline`'s
-    /// `isHistoryReplay`.
+    /// The geochat subscription whose stored history relays may still be
+    /// replaying; cleared when its EOSE callback runs. Best effort: the relay
+    /// manager also runs that callback on its fallback timeout (e.g. while
+    /// Tor is still bootstrapping), and history arriving after it counts as
+    /// live activity. See `NostrInboundPipeline`'s `isHistoryReplay`.
     private var replayingGeoSubscriptionID: String?
 
     init(context: any GeohashSubscriptionContext, inbound: NostrInboundPipeline, presence: GeoPresenceTracker) {

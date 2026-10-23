@@ -292,6 +292,8 @@ struct CommandProcessorTests {
             Issue.record("Expected success result")
         }
         #expect(identityManager.isNostrBlocked(pubkeyHexLowercased: String(repeating: "d", count: 64)))
+        // The roster re-filters now rather than on its next timer tick.
+        #expect(context.geohashBlockListChangeCount == 1)
 
         let unblockResult = await withSelectedChannel(.mesh, context: context) {
             processor.process("/unblock @carol")
@@ -303,6 +305,7 @@ struct CommandProcessorTests {
             Issue.record("Expected success result")
         }
         #expect(!identityManager.isNostrBlocked(pubkeyHexLowercased: String(repeating: "d", count: 64)))
+        #expect(context.geohashBlockListChangeCount == 2)
     }
 
     /// /fav must go through toggleFavorite (which persists by the real noise
@@ -608,6 +611,7 @@ private final class MockCommandContextProvider: CommandContextProvider {
     private(set) var commandOutputDestinations: [CommandOutputDestination] = []
     private(set) var toggledFavorites: [PeerID] = []
     private(set) var favoriteNotifications: [(peerID: PeerID, isFavorite: Bool)] = []
+    private(set) var geohashBlockListChangeCount = 0
 
     init(nickname: String = "tester", idBridge: NostrIdentityBridge = NostrIdentityBridge(keychain: MockKeychain())) {
         self.nickname = nickname
@@ -624,6 +628,10 @@ private final class MockCommandContextProvider: CommandContextProvider {
 
     func nostrPubkeyForDisplayName(_ displayName: String) -> String? {
         displayNameToNostrPubkey[displayName]
+    }
+
+    func geohashBlockListDidChange() {
+        geohashBlockListChangeCount += 1
     }
 
     func startPrivateChat(with peerID: PeerID) {

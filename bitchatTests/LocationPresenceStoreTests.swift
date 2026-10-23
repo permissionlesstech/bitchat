@@ -33,7 +33,6 @@ struct LocationPresenceStoreTests {
         var changes = 0
         let cancellable = store.objectWillChange.sink { _ in changes += 1 }
         store.retainTeleportedGeo(keeping: ["aa", "bb"])
-        store.retainGeoNicknames(keeping: ["aa"])
         store.clearTeleported("cc")
         #expect(changes == 0)
 

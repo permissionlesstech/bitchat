@@ -89,13 +89,6 @@ final class LocationPresenceStore: ObservableObject {
         geoNicknameOrder.removeAll()
     }
 
-    func retainGeoNicknames(keeping pubkeys: Set<String>) {
-        let allowed = Set(pubkeys.map { $0.lowercased() })
-        guard geoNicknames.keys.contains(where: { !allowed.contains($0) }) else { return }
-        geoNicknameOrder = geoNicknameOrder.filter { allowed.contains($0) }
-        geoNicknames = geoNicknames.filter { allowed.contains($0.key) }
-    }
-
     func markTeleported(_ pubkeyHex: String) {
         guard teleportedGeoCapacity > 0 else {
             clearTeleportedGeo()

@@ -85,9 +85,10 @@ final class GeohashParticipantTracker: ObservableObject {
 
     /// Record activity from a participant in a specific geohash.
     ///
-    /// `seenAt` is when the activity happened (the event's own timestamp),
-    /// clamped to now: replayed history older than the activity window
-    /// must not make its authors count as present.
+    /// `seenAt` is when the activity happened, clamped to now: arrival time
+    /// for live events, the event's own timestamp for history relays replay
+    /// on subscribe. Replayed history older than the activity window must
+    /// not make its authors count as present.
     ///
     /// Runs for every inbound geohash event, so the common case — someone
     /// already present sending a heartbeat or message — only moves their

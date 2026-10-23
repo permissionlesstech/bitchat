@@ -271,6 +271,7 @@ private final class DiagnosticsMockContext: CommandContextProvider {
 
     func getVisibleGeoParticipants() -> [CommandGeoParticipant] { [] }
     func nostrPubkeyForDisplayName(_ displayName: String) -> String? { nil }
+    func geohashBlockListDidChange() {}
     func startPrivateChat(with peerID: PeerID) {}
     func sendPrivateMessage(_ content: String, to peerID: PeerID) {}
     func clearCurrentPublicTimeline() {}
