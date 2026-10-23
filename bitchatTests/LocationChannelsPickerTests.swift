@@ -60,6 +60,50 @@ struct LocationChannelsPickerTests {
             #expect(Picker.lifecycleActions(for: .panicWipe, presentation: .sheet, permission: permission).isEmpty)
         }
     }
+
+    // MARK: - Choices
+
+    /// The sheet selects whatever is chosen and closes at once, as ever.
+    @Test
+    func sheetSelectsEveryChoiceAndReportsAtOnce() {
+        let city = ChannelID.location(GeohashChannel(level: .city, geohash: "u4pru"))
+        for selected in [ChannelID.mesh, city] {
+            for geohash in [String?.none, "u4pru", "9q8yy"] {
+                #expect(Picker.choice(ofGeohash: geohash, presentation: .sheet, selected: selected)
+                    == Picker.Choice(selects: true, awaitsSelection: false))
+            }
+        }
+    }
+
+    /// E7, and no old geohash in between: the pane reports a choice once the
+    /// trailing pane can follow it.
+    @Test
+    func paneReportsAChoiceOnceTheTrailingPaneCanFollowIt() {
+        let city = ChannelID.location(GeohashChannel(level: .city, geohash: "u4pru"))
+        let atOnce = Picker.Choice(selects: false, awaitsSelection: false)
+
+        // The selected geohash again, at any level or case: no select (no
+        // resubscribe), and browsing ends at once.
+        #expect(Picker.choice(ofGeohash: "u4pru", presentation: Self.pane, selected: city) == atOnce)
+        #expect(Picker.choice(
+            ofGeohash: "U4PRU",
+            presentation: Self.pane,
+            selected: .location(GeohashChannel(level: .block, geohash: "u4pru"))
+        ) == atOnce)
+
+        // Browsing away from it: another geohash, or #mesh, waits for the
+        // selection to land before browsing ends.
+        for geohash in [String?.none, "9q8yy", "u4pr"] {
+            #expect(Picker.choice(ofGeohash: geohash, presentation: Self.pane, selected: city)
+                == Picker.Choice(selects: true, awaitsSelection: true))
+        }
+
+        // The idle pane has no browsing to end.
+        #expect(Picker.choice(ofGeohash: "9q8yy", presentation: Self.pane, selected: .mesh)
+            == Picker.Choice(selects: true, awaitsSelection: false))
+        // (#mesh isn't listed there; were it chosen, it is the selection.)
+        #expect(Picker.choice(ofGeohash: nil, presentation: Self.pane, selected: .mesh) == atOnce)
+    }
     #endif
 
     // MARK: - Through the location manager
