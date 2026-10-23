@@ -84,13 +84,21 @@ struct ConversationUIModelTargetTests {
     }
 
     @Test @MainActor
-    func aBlockConfirmsInTheConversationItCameFrom() async {
-        let (ui, viewModel, _) = makeTargetUIModel()
+    func aBlockOrUnblockConfirmsInTheConversationItCameFrom() async {
+        let (ui, viewModel, transport) = makeTargetUIModel()
+        transport.peerFingerprints[bob] = "fp-bob"
+        // The mesh people list's toggle, while a DM is open in the other pane.
         viewModel.selectedPrivateChatPeer = alice
 
         ui.block(peerID: bob, displayName: "bob", from: .mesh)
+        let blocked = String(format: String(localized: "system.mesh.blocked"), locale: .current, "bob")
+        #expect(viewModel.publicMessages(for: .mesh).last?.content == blocked)
 
-        #expect(viewModel.publicMessages(for: .mesh).last?.sender == "system")
+        ui.unblock(peerID: bob, displayName: "bob", from: .mesh)
+        let unblocked = String(format: String(localized: "system.mesh.unblocked"), locale: .current, "bob")
+        #expect(viewModel.publicMessages(for: .mesh).last?.content == unblocked)
+
+        // Neither line reached the open DM.
         #expect(viewModel.privateMessages(for: alice).isEmpty)
     }
 

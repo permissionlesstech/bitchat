@@ -137,7 +137,13 @@ final class ConversationUIModel: ObservableObject {
     /// also works for offline peers, which the `/unblock <displayName>` command
     /// cannot resolve.
     func unblock(peerID: PeerID, displayName: String) {
-        chatViewModel.unblockMeshPeer(peerID: peerID, displayName: displayName)
+        unblock(peerID: peerID, displayName: displayName, from: chatViewModel.selectionTarget)
+    }
+
+    /// Unblocks someone toggled in `target`'s list; a confirmation or
+    /// failure line lands in that conversation.
+    func unblock(peerID: PeerID, displayName: String, from target: ConversationTarget) {
+        chatViewModel.unblockMeshPeer(peerID: peerID, displayName: displayName, from: target)
     }
 
     func getFingerprint(for peerID: PeerID) -> String? {

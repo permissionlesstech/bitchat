@@ -1452,9 +1452,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         setMeshPeerBlocked(peerID, blocked: true, displayName: displayName, reportingTo: origin)
     }
 
+    /// Unblocks the peer toggled in `origin`'s list; the confirmation (or
+    /// failure) line lands there.
     @MainActor
-    func unblockMeshPeer(peerID: PeerID, displayName: String) {
-        setMeshPeerBlocked(peerID, blocked: false, displayName: displayName, reportingTo: selectionTarget)
+    func unblockMeshPeer(peerID: PeerID, displayName: String, from origin: ConversationTarget) {
+        setMeshPeerBlocked(peerID, blocked: false, displayName: displayName, reportingTo: origin)
     }
 
     @MainActor
