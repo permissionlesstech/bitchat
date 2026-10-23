@@ -483,12 +483,13 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
         guard !finalMessage.content.trimmed.isEmpty else { return }
 
         // Resolve the destination conversation. System messages surface on
-        // the active channel (matching their old visible-only routing); geo
-        // messages require a current geohash, mesh messages always land in
-        // the mesh conversation.
+        // the active channel (matching their old visible-only routing),
+        // except a mesh or bridged peer's beside a pinned #mesh (see
+        // `systemLineDestination`); geo messages require a current geohash,
+        // mesh messages always land in the mesh conversation.
         let destination: ConversationID?
         if isSystem {
-            destination = ConversationID(channelID: context.activeChannel)
+            destination = systemLineDestination(for: finalMessage, isGeo: isGeo)
         } else if isGeo {
             destination = context.currentGeohash.map { .geohash($0.lowercased()) }
         } else {
@@ -611,6 +612,21 @@ private extension ChatPublicConversationCoordinator {
             }
         }
         return "name:" + message.sender.lowercased()
+    }
+
+    /// Where an inbound system line lands. A peer's action line (a hug, a
+    /// slap, an old client's screenshot notice) arrives as a system line that
+    /// keeps its sender, and so does a peer whose nickname is "system". While
+    /// the split layout pins #mesh on screen beside the active channel, a mesh
+    /// or bridged sender's line lands in #mesh, where it was said, instead of
+    /// the geohash beside it. Any other system line lands on the active
+    /// channel, as before. Compact and macOS are unchanged: there #mesh is on
+    /// screen only while it is the active channel.
+    func systemLineDestination(for message: BitchatMessage, isGeo: Bool) -> ConversationID {
+        if message.senderPeerID != nil, !isGeo, context.isPublicConversationOnScreen(.mesh) {
+            return .mesh
+        }
+        return ConversationID(channelID: context.activeChannel)
     }
 
     /// Whether I wrote an inbound message (a gossip replay of my mesh text, or

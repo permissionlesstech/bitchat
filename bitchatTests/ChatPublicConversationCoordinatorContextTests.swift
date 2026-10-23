@@ -403,7 +403,8 @@ struct ChatPublicConversationCoordinatorContextTests {
         #expect(context.enqueuedMessages.isEmpty)
     }
 
-    /// System arrivals keep landing on the active channel, pinned mesh or not.
+    /// A system line with no sender keeps landing on the active channel,
+    /// pinned mesh or not.
     @Test @MainActor
     func handlePublicMessage_systemMessage_landsOnActiveChannelWhileMeshIsPinned() async {
         let context = MockChatPublicConversationContext()
@@ -416,6 +417,78 @@ struct ChatPublicConversationCoordinatorContextTests {
 
         #expect(context.enqueuedMessages.map(\.messageID) == ["sys-msg"])
         #expect(context.enqueuedMessages.first?.conversationID == .geohash("u4pruy"))
+    }
+
+    /// A mesh peer's hug or slap arrives as a system line that keeps its
+    /// sender. Beside a pinned #mesh it lands in #mesh, where it was said,
+    /// not in the selected geohash; so does a bridged sender's, and a mesh
+    /// peer whose nickname is "system".
+    @Test @MainActor
+    func handlePublicMessage_meshPeerSystemLine_landsInPinnedMesh() async {
+        let context = MockChatPublicConversationContext()
+        let coordinator = ChatPublicConversationCoordinator(context: context)
+        context.currentGeohash = "u4pruy"
+        context.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pruy"))
+        context.isMeshPinnedOnScreen = true
+
+        coordinator.handlePublicMessage(makePublicMessage(
+            id: "mesh-hug",
+            sender: "system",
+            content: "🫂 bob hugs alice",
+            senderPeerID: PeerID(str: "aabbccddeeff0011")
+        ))
+        coordinator.handlePublicMessage(makePublicMessage(
+            id: "bridged-slap",
+            sender: "system",
+            content: "🐟 remote slaps alice around a bit with a large trout",
+            senderPeerID: PeerID(bridge: String(repeating: "ef", count: 32))
+        ))
+
+        #expect(context.enqueuedMessages.map(\.messageID) == ["mesh-hug", "bridged-slap"])
+        #expect(context.enqueuedMessages.map(\.conversationID) == [.mesh, .mesh])
+        #expect(context.publicMessages(in: .geohash("u4pruy")).isEmpty)
+    }
+
+    /// A geohash peer's action line was said in the geohash: it stays on the
+    /// active channel while #mesh is pinned beside it.
+    @Test @MainActor
+    func handlePublicMessage_geoPeerSystemLine_staysOnActiveGeohashWhileMeshIsPinned() async {
+        let context = MockChatPublicConversationContext()
+        let coordinator = ChatPublicConversationCoordinator(context: context)
+        context.currentGeohash = "u4pruy"
+        context.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pruy"))
+        context.isMeshPinnedOnScreen = true
+
+        coordinator.handlePublicMessage(makePublicMessage(
+            id: "geo-hug",
+            sender: "system",
+            content: "🫂 carol hugs alice",
+            senderPeerID: PeerID(nostr: String(repeating: "cd", count: 32))
+        ))
+
+        #expect(context.enqueuedMessages.map(\.messageID) == ["geo-hug"])
+        #expect(context.enqueuedMessages.first?.conversationID == .geohash("u4pruy"))
+    }
+
+    /// Compact (no pin) keeps today's routing: a mesh peer's action line
+    /// lands on the selected geohash, the one timeline on screen.
+    @Test @MainActor
+    func handlePublicMessage_meshPeerSystemLine_withoutPin_landsOnActiveChannel() async {
+        let context = MockChatPublicConversationContext()
+        let coordinator = ChatPublicConversationCoordinator(context: context)
+        context.currentGeohash = "u4pruy"
+        context.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pruy"))
+
+        coordinator.handlePublicMessage(makePublicMessage(
+            id: "mesh-hug",
+            sender: "system",
+            content: "🫂 bob hugs alice",
+            senderPeerID: PeerID(str: "aabbccddeeff0011")
+        ))
+
+        #expect(context.enqueuedMessages.map(\.messageID) == ["mesh-hug"])
+        #expect(context.enqueuedMessages.first?.conversationID == .geohash("u4pruy"))
+        #expect(context.publicMessages(in: .mesh).isEmpty)
     }
 
     /// A peer-chosen wire timestamp near UInt64.max comes back from Date as

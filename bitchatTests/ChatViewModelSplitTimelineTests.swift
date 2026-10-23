@@ -153,6 +153,31 @@ struct ChatViewModelSplitTimelineTests {
         #expect(viewModel.publicConversationContainsMessage(withID: "geo-gm", in: .geohash(selectedGeohash.geohash)))
     }
 
+    /// Beside the pinned #mesh, a mesh peer's hug (bridged or by radio)
+    /// lands in #mesh, where it was said, not in the selected geohash; the
+    /// alias's replacement still lets the radio copy through.
+    @Test("pinned #mesh: a mesh peer's action line lands in #mesh, not the selected geohash")
+    func pinnedMesh_meshPeerActionLineLandsInMesh() {
+        let viewModel = makeSplitTimelineViewModel()
+        let geohash = ConversationID.geohash(selectedGeohash.geohash)
+        viewModel.activeChannel = .location(selectedGeohash)
+        viewModel.currentGeohash = selectedGeohash.geohash
+        viewModel.conversations.setMeshPinnedOnScreen(true)
+        let hug = makeHugPair(timestamp: Date())
+
+        viewModel.handlePublicMessage(hug.alias)
+        viewModel.publicMessagePipeline.flushIfNeeded()
+        #expect(viewModel.publicConversationContainsMessage(withID: hug.alias.id, in: .mesh))
+        #expect(!viewModel.publicConversationContainsMessage(withID: hug.alias.id, in: geohash))
+
+        viewModel.removeBridgeInjectedPublicMessage(withID: hug.alias.id)
+        viewModel.handlePublicMessage(hug.radio)
+        viewModel.publicMessagePipeline.flushIfNeeded()
+
+        #expect(viewModel.publicMessages(for: .mesh).map(\.id) == [hug.radio.id])
+        #expect(viewModel.publicMessages(for: .location(selectedGeohash)).isEmpty)
+    }
+
     @Test("live mesh bursts autoplay while #mesh is pinned on screen, not under a private chat")
     func liveVoiceAutoplay_followsPinnedMesh() {
         let viewModel = makeSplitTimelineViewModel()
