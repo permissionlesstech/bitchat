@@ -654,6 +654,7 @@ struct ContentView: View {
             }
             .onAppear {
                 isSplitLayout = layout != nil
+                appChromeModel.isPublicTimelineBesideConversation = layout != nil
             }
             .onChange(of: layout != nil) { isSplit in
                 handleLayoutModeChange(toSplit: isSplit)
@@ -882,6 +883,7 @@ struct ContentView: View {
         // First, so the departing sheet's setter reads as our own change and
         // leaves the conversation open.
         isSplitLayout = toSplit
+        appChromeModel.isPublicTimelineBesideConversation = toSplit
         // The DM composer changes hosts: the press on its mic is torn down
         // and would never finish the recording.
         if conversationMoves, voiceRecordingVM.isHoldInFlight {
