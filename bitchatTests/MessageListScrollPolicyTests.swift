@@ -4,8 +4,9 @@
 //
 // The pure rules behind MessageListView's scroll position: appended-message
 // counting (including at the store cap, where the count stops moving), the
-// window size that keeps a scrolled-up reader's first row in place, and the
-// gates on window expansion and deferred follow-scrolls.
+// window size that keeps a scrolled-up reader's first row in place, the
+// reaction to a timeline change (land, follow, keep position, hold), which
+// row callbacks count, and the gates on expansion and follow-scrolls.
 //
 
 import BitFoundation
@@ -231,21 +232,147 @@ struct MessageListScrollPolicyTests {
     }
 
     @Test
-    func bottomSettledKey_survivesASwitchOnlyForTheNewContext() {
-        // The new context's newest row already appeared before the switch
-        // handler ran: keep it.
-        #expect(Policy.bottomSettledKey("dm:peer-b", afterSwitchingTo: "dm:peer-b") == "dm:peer-b")
-        // Left over from the previous conversation: drop it.
-        #expect(Policy.bottomSettledKey("dm:peer-a", afterSwitchingTo: "dm:peer-b") == nil)
-        #expect(Policy.bottomSettledKey(nil, afterSwitchingTo: "mesh") == nil)
-    }
-
-    @Test
     func shouldRunDeferredFollowScroll_requiresTheBottomOfTheSameTimeline() {
         #expect(Policy.shouldRunDeferredFollowScroll(isAtBottom: true, scheduledContextKey: "mesh", currentContextKey: "mesh"))
         // The reader dragged away while the timer was held back.
         #expect(!Policy.shouldRunDeferredFollowScroll(isAtBottom: false, scheduledContextKey: "mesh", currentContextKey: "mesh"))
         // The timeline was switched before the timer fired.
         #expect(!Policy.shouldRunDeferredFollowScroll(isAtBottom: true, scheduledContextKey: "mesh", currentContextKey: "geo:u4pruy"))
+    }
+
+    @Test
+    func needsScroll_skipsTheBottomRetryOnceTheNewestRowIsOnScreen() {
+        #expect(Policy.needsScroll(toNewestRowID: "mesh|m9", bottomRowID: "mesh|m8"))
+        #expect(Policy.needsScroll(toNewestRowID: "mesh|m9", bottomRowID: nil))
+        // The first scroll landed: the retry would be a queued no-op.
+        #expect(!Policy.needsScroll(toNewestRowID: "mesh|m9", bottomRowID: "mesh|m9"))
+        // No row to scroll to.
+        #expect(!Policy.needsScroll(toNewestRowID: nil, bottomRowID: nil))
+    }
+
+    // MARK: - Row callbacks
+
+    @Test
+    func isRow_matchesOnlyRowsOfItsOwnContext() {
+        #expect(Policy.isRow("mesh|m1", inContext: "mesh"))
+        #expect(Policy.isRow("geo:u4pruy|m1", inContext: "geo:u4pruy"))
+        #expect(Policy.isRow("dm:0011223344556677|m1", inContext: "dm:0011223344556677"))
+        // The old timeline's rows after a switch.
+        #expect(!Policy.isRow("geo:u4pruy|m1", inContext: "mesh"))
+        #expect(!Policy.isRow("dm:aaaa|m1", inContext: "dm:bbbb"))
+        // A context that is a prefix of another is not that context.
+        #expect(!Policy.isRow("geo:u4pruyd|m1", inContext: "geo:u4pruy"))
+        #expect(!Policy.isRow("mesh", inContext: "mesh"))
+    }
+
+    // MARK: - Reactions
+
+    private func reaction(
+        mark: Policy.TimelineMark?,
+        _ messages: [BitchatMessage],
+        newestIsOwn: Bool = false,
+        appended: Int = 0,
+        windowCount: Int = 10,
+        isAtBottom: Bool
+    ) -> Policy.TimelineReaction {
+        Policy.reaction(
+            mark: mark,
+            messages: messages,
+            newestIsOwn: newestIsOwn,
+            appendedCount: appended,
+            windowCount: windowCount,
+            isAtBottom: isAtBottom
+        )
+    }
+
+    @Test
+    func reaction_landsInATimelineWithoutAMarkInItsContext() {
+        // A channel or DM switch: whatever isAtBottom says (the old
+        // timeline's rows report on their way out), the list lands.
+        #expect(reaction(mark: nil, timeline(0..<10), isAtBottom: false) == .land)
+        #expect(reaction(mark: nil, timeline(0..<10), newestIsOwn: true, isAtBottom: true) == .land)
+        // Even into an empty timeline.
+        #expect(reaction(mark: nil, [], isAtBottom: false) == .land)
+    }
+
+    @Test
+    func reaction_followsAtTheBottomWheneverTheRenderedRowsMayHaveMoved() {
+        let messages = timeline(0..<20)
+        let mark = Policy.TimelineMark(contextKey: "mesh", messages: messages, windowCount: 10)
+
+        // Appended below the bottom.
+        #expect(reaction(mark: mark, messages + timeline(20..<22), appended: 2, isAtBottom: true) == .follow)
+        // A late message landing among the visible rows pushes the newest one
+        // down: nothing was appended, but the bottom moved.
+        let lateAmongVisibleRows = inserting(message(100, at: 18.5), before: 19, in: messages)
+        #expect(reaction(mark: mark, lateAmongVisibleRows, isAtBottom: true) == .follow)
+        // A removal changes the rows too.
+        #expect(reaction(mark: mark, messages.filter { $0.id != "m15" }, isAtBottom: true) == .follow)
+    }
+
+    @Test
+    func reaction_holdsAtTheBottomWhenTheRenderedRowsAreUnchanged() {
+        // At the store cap a late message landing above the window evicts the
+        // oldest message, also above it: the rendered rows are the same, and
+        // a scroll would be a queued no-op that snaps the next drag back.
+        let capped = timeline(0..<20)
+        let mark = Policy.TimelineMark(contextKey: "mesh", messages: capped, windowCount: 10)
+        let lateAboveTheWindow = Array(inserting(message(100, at: 4.5), before: 5, in: capped).dropFirst())
+
+        #expect(reaction(mark: mark, lateAboveTheWindow, isAtBottom: true) == .hold)
+    }
+
+    @Test
+    func reaction_keepsAScrolledUpReaderInPlace() {
+        let messages = timeline(0..<10)
+        let mark = Policy.TimelineMark(contextKey: "mesh", messages: messages, windowCount: 300)
+
+        #expect(reaction(mark: mark, messages + timeline(10..<13), appended: 3, isAtBottom: false) == .keepPosition)
+        #expect(reaction(mark: mark, messages, isAtBottom: false) == .keepPosition)
+    }
+
+    @Test
+    func reaction_followsTheReadersOwnNewMessageFromAnywhere() {
+        let messages = timeline(0..<10)
+        let mark = Policy.TimelineMark(contextKey: "mesh", messages: messages, windowCount: 300)
+
+        #expect(reaction(mark: mark, messages + [message(10)], newestIsOwn: true, appended: 1, isAtBottom: false) == .follow)
+        // A message of mine that was already the newest (m9) does not pull a
+        // scrolled-up reader down when late messages land above it.
+        let lateAboveMine = inserting(message(100, at: 7.5), before: 8, in: messages)
+        #expect(reaction(mark: mark, lateAboveMine, newestIsOwn: true, isAtBottom: false) == .keepPosition)
+    }
+
+    @Test
+    func reaction_holdsWhenTheTimelineEmptied() {
+        let mark = Policy.TimelineMark(contextKey: "mesh", messages: timeline(0..<10), windowCount: 300)
+
+        #expect(reaction(mark: mark, [], isAtBottom: false) == .hold)
+        #expect(reaction(mark: mark, [], isAtBottom: true) == .hold)
+    }
+
+    @Test
+    func isRenderedWindowUnchanged_onlyForAFullWindowOfTheSameRows() {
+        let capped = timeline(0..<20)
+        let mark = Policy.TimelineMark(contextKey: "mesh", messages: capped, windowCount: 10)
+        func isUnchanged(_ messages: [BitchatMessage], appended: Int = 0, windowCount: Int = 10) -> Bool {
+            Policy.isRenderedWindowUnchanged(since: mark, appendedCount: appended, windowCount: windowCount, in: messages)
+        }
+
+        // Late message above the window at the cap (the oldest evicted).
+        #expect(isUnchanged(Array(inserting(message(100, at: 4.5), before: 5, in: capped).dropFirst())))
+        // Late message inside the window at the cap: its first row moves.
+        #expect(!isUnchanged(Array(inserting(message(101, at: 14.5), before: 15, in: capped).dropFirst())))
+        // Below the cap any insert changes the count.
+        #expect(!isUnchanged(inserting(message(102, at: 4.5), before: 5, in: capped)))
+        // Something appended.
+        #expect(!isUnchanged(Array((capped + [message(20)]).dropFirst()), appended: 1))
+        // The window was resized since the mark.
+        #expect(!isUnchanged(capped, windowCount: 12))
+
+        // A timeline shorter than its window renders every message.
+        let short = timeline(0..<5)
+        let shortMark = Policy.TimelineMark(contextKey: "mesh", messages: short, windowCount: 10)
+        #expect(!Policy.isRenderedWindowUnchanged(since: shortMark, appendedCount: 0, windowCount: 10, in: short))
     }
 }

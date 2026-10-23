@@ -24,6 +24,8 @@ enum MessageListScrollPolicy {
         /// was taken at: a window resized since then voids it.
         let windowFirstMessageID: String?
         let windowCount: Int
+        /// Messages in the timeline at the time.
+        let count: Int
     }
 
     /// Messages that landed after a mark's newest message.
@@ -32,6 +34,89 @@ enum MessageListScrollPolicy {
         var total = 0
         /// Those the jump-to-latest pill counts.
         var unseen = 0
+    }
+
+    /// What the list does about a change to the timeline it shows.
+    enum TimelineReaction: Equatable {
+        /// A timeline the list was not showing: land at its newest message.
+        case land
+        /// Scroll to the newest row.
+        case follow
+        /// Keep a scrolled-up reader's rows in place and count what's new.
+        case keepPosition
+        /// Leave the scroll alone: the rendered rows did not change.
+        case hold
+    }
+
+    /// The reaction to a timeline change. `mark` is the mark taken in this
+    /// timeline's context, if any; `windowCount` the window size it renders.
+    static func reaction(
+        mark: TimelineMark?,
+        messages: [BitchatMessage],
+        newestIsOwn: Bool,
+        appendedCount: Int,
+        windowCount: Int,
+        isAtBottom: Bool
+    ) -> TimelineReaction {
+        // No mark here: the list arrives from another timeline (a channel or
+        // DM switch), whatever the old timeline's row callbacks did to
+        // isAtBottom on the way out.
+        guard let mark else { return .land }
+        // Emptied (e.g. /clear): nothing to scroll to.
+        guard let newestMessageID = messages.last?.id else { return .hold }
+        // A new message of mine takes the reader to it from anywhere.
+        if newestIsOwn && newestMessageID != mark.newestMessageID {
+            return .follow
+        }
+        if !isAtBottom {
+            return .keepPosition
+        }
+        // At the bottom, follow any change that can move the rendered rows: a
+        // late message landing among the visible rows pushes the newest one
+        // off screen. Only provably unchanged rows skip the scroll, which
+        // would be a no-op, and a no-op scrollTo stays queued until the next
+        // layout pass: the reader's next drag, which it snaps back down.
+        let isWindowUnchanged = isRenderedWindowUnchanged(
+            since: mark,
+            appendedCount: appendedCount,
+            windowCount: windowCount,
+            in: messages
+        )
+        return isWindowUnchanged ? .hold : .follow
+    }
+
+    /// Whether the window rendered at the bottom (the last `windowCount`
+    /// messages) holds exactly the rows it held at `mark`: nothing appended,
+    /// the same message count, a full window starting at the same message.
+    /// True for a late message landing above the window at the store cap
+    /// (it evicts the oldest message, also above the window).
+    static func isRenderedWindowUnchanged(
+        since mark: TimelineMark,
+        appendedCount: Int,
+        windowCount: Int,
+        in messages: [BitchatMessage]
+    ) -> Bool {
+        appendedCount == 0
+            && mark.count == messages.count
+            && mark.windowCount == windowCount
+            && messages.count >= windowCount
+            && mark.windowFirstMessageID == messages.suffix(windowCount).first?.id
+    }
+
+    /// Whether a row ID (`"<context>|<message id>"`) belongs to the timeline
+    /// of `contextKey`. Row callbacks lag a switch, so the list checks them
+    /// against the context it has landed in.
+    static func isRow(_ rowID: String, inContext contextKey: String) -> Bool {
+        rowID.hasPrefix(contextKey + "|")
+    }
+
+    /// Whether the retry of a scroll to the bottom has anything to do: not
+    /// once the newest row is the one confirmed on screen, where the
+    /// scrollTo would be a no-op that stays queued until the reader's next
+    /// drag.
+    static func needsScroll(toNewestRowID newestRowID: String?, bottomRowID: String?) -> Bool {
+        guard let newestRowID else { return false }
+        return newestRowID != bottomRowID
     }
 
     /// Messages the unseen counters may book as "new": rows that render as
@@ -107,14 +192,6 @@ enum MessageListScrollPolicy {
         !isRestoringExpansion && bottomSettledContextKey == contextKey
     }
 
-    /// The settled marker to keep when the list switches to `contextKey`.
-    /// Row callbacks can land before the switch handler runs, so a marker
-    /// already set by the new context's newest row stays; anything else is
-    /// left over from another visit and must not let expansion run early.
-    static func bottomSettledKey(_ settledKey: String?, afterSwitchingTo contextKey: String) -> String? {
-        settledKey == contextKey ? settledKey : nil
-    }
-
     /// Whether a throttled follow-scroll should still run when its timer
     /// fires. The timer is held back while a drag is tracking, so by then the
     /// reader may have scrolled away from the bottom or switched timelines.
@@ -135,19 +212,21 @@ extension MessageListScrollPolicy.TimelineMark {
             newestMessageID: messages.last?.id,
             newestTimestamp: messages.last?.timestamp,
             windowFirstMessageID: messages.suffix(windowCount).first?.id,
-            windowCount: windowCount
+            windowCount: windowCount,
+            count: messages.count
         )
     }
 
     /// The same mark with the window re-taken at `windowCount` (after the
-    /// window grew without anything new being seen).
+    /// window was resized without anything new being seen).
     func withWindowCount(_ windowCount: Int, in messages: [BitchatMessage]) -> Self {
         Self(
             contextKey: contextKey,
             newestMessageID: newestMessageID,
             newestTimestamp: newestTimestamp,
             windowFirstMessageID: messages.suffix(windowCount).first?.id,
-            windowCount: windowCount
+            windowCount: windowCount,
+            count: count
         )
     }
 }

@@ -16,11 +16,14 @@ private struct MessageDisplayItem: Identifiable {
 
 /// What the list's change detection keys on. The count alone stops moving
 /// once the store's cap evicts the oldest message on every append, so the IDs
-/// at both ends ride along. The DM peer rides along because the deprecated
-/// `onChange(of:perform:)` runs the closure from the previous render, whose
-/// `privatePeer` is still the old one right after a DM switch.
+/// at both ends ride along, and the context key makes a switch to another
+/// timeline one change even between two empty ones. The DM peer rides along
+/// because the deprecated `onChange(of:perform:)` runs the closure from the
+/// previous render, whose `privatePeer` is still the old one right after a
+/// DM switch.
 private struct TimelineSignature: Equatable {
     let privatePeer: PeerID?
+    let contextKey: String
     // periphery:ignore - read only via the synthesized Equatable
     // conformance (onChange's comparison), which the indexer cannot
     // attribute.
@@ -30,8 +33,9 @@ private struct TimelineSignature: Equatable {
     // periphery:ignore - see `count`.
     let lastMessageID: String?
 
-    init(privatePeer: PeerID?, messages: [BitchatMessage]) {
+    init(privatePeer: PeerID?, contextKey: String, messages: [BitchatMessage]) {
         self.privatePeer = privatePeer
+        self.contextKey = contextKey
         count = messages.count
         firstMessageID = messages.first?.id
         lastMessageID = messages.last?.id
@@ -71,7 +75,9 @@ struct MessageListView: View {
     /// message (the next change counts what landed after it) and the
     /// window's first row (kept in place while the reader is scrolled up).
     /// Marks are per context: channel switches swap the timeline wholesale,
-    /// so a difference only means "new messages" within one context.
+    /// so a difference only means "new messages" within one context. Its
+    /// context is the one the list has landed in; row callbacks from any
+    /// other timeline are ignored.
     @State private var timelineMark: MessageListScrollPolicy.TimelineMark?
     /// Row whose appearance last put the list at the bottom, cleared when it
     /// leaves the screen. Its leaving means the reader scrolled up, even while
@@ -80,7 +86,7 @@ struct MessageListView: View {
     /// Set while an expansion's position-restoring scroll is still queued.
     @State private var isRestoringExpansion = false
     /// Context whose newest row has appeared since the list appeared or
-    /// switched to it, i.e. whose scroll to the bottom has landed. Window
+    /// landed in it, i.e. whose scroll to the bottom has landed. Window
     /// expansion waits for it.
     @State private var bottomSettledContextKey: String?
     /// Whether this instance holds the nearby-notes counter active (mesh
@@ -112,10 +118,9 @@ struct MessageListView: View {
             guard !message.content.trimmed.isEmpty else { return nil }
             return MessageDisplayItem(id: "\(contextKey)|\(message.id)", message: message)
         }
-        // Edges of the rendered window (whitespace-only messages get no row,
-        // so they could never report reaching an edge).
+        // Top edge of the rendered window (whitespace-only messages get no
+        // row, so they could never report reaching it).
         let firstRowID = messageItems.first?.id
-        let lastRowID = messageItems.last?.id
 
         VStack(spacing: 0) {
         // Notes pinned to this place stay visible while chatting — a
@@ -136,7 +141,14 @@ struct MessageListView: View {
                         let message = item.message
                         messageRow(for: message)
                             .onAppear {
-                                if item.id == lastRowID {
+                                // Callbacks lag a timeline switch: the new
+                                // rows appear before the old ones disappear,
+                                // each with its own render's view of which row
+                                // was last. Only rows of the timeline the list
+                                // has landed in may move its state, checked
+                                // against live state rather than the render's.
+                                guard isLandedRow(item.id) else { return }
+                                if item.id == newestRowID(for: privatePeer) {
                                     isAtBottom = true
                                     unseenCount = 0
                                     if bottomRowID != item.id {
@@ -145,6 +157,7 @@ struct MessageListView: View {
                                     if bottomSettledContextKey != contextKey {
                                         bottomSettledContextKey = contextKey
                                     }
+                                    returnWindowToInitialSize(for: privatePeer, contextKey: contextKey, messages: messages)
                                 }
                                 if item.id == firstRowID,
                                    messages.count > windowedMessages.count {
@@ -157,7 +170,10 @@ struct MessageListView: View {
                                 }
                             }
                             .onDisappear {
-                                if item.id == lastRowID || item.id == bottomRowID {
+                                // A row of the landed timeline shares this
+                                // closure's peer, so newestRowID is live here.
+                                guard isLandedRow(item.id) else { return }
+                                if item.id == newestRowID(for: privatePeer) || item.id == bottomRowID {
                                     isAtBottom = false
                                     bottomRowID = nil
                                     // Leaving the bottom drops a follow-scroll
@@ -252,19 +268,18 @@ struct MessageListView: View {
                 Button("common.cancel", role: .cancel) {}
             }
             .onAppear {
-                // Runs before the rows' onAppear: expansion waits until the
-                // scroll below has brought the newest row on screen.
+                // Runs before the rows' onAppear: lands the list (and sets the
+                // mark the row callbacks are checked against) before any row
+                // reports in. Expansion waits until the scroll below has
+                // brought the newest row on screen.
                 bottomSettledContextKey = nil
                 scrollToBottom(on: proxy, privatePeer: privatePeer)
             }
-            .onChange(of: privatePeer) { newPeer in
-                onPrivatePeerChange(newPeer, proxy: proxy)
-            }
-            .onChange(of: TimelineSignature(privatePeer: privatePeer, messages: messages)) { signature in
+            // The one change handler: a channel or DM switch changes the
+            // signature too, so landing in the new timeline happens here,
+            // ahead of that update's row callbacks.
+            .onChange(of: TimelineSignature(privatePeer: privatePeer, contextKey: contextKey, messages: messages)) { signature in
                 onTimelineChange(signature, proxy: proxy)
-            }
-            .onChange(of: locationChannelsModel.selectedChannel) { newChannel in
-                onSelectedChannelChange(newChannel, proxy: proxy)
             }
             .confirmationDialog(
                 selectedMessageSender.map { "@\($0)" } ?? String(localized: "content.actions.title", comment: "Fallback title for the message action sheet"),
@@ -356,12 +371,16 @@ private extension MessageListView {
     }
 
     /// Context key of the timeline shown for `privatePeer` (the DM, or the
-    /// selected public channel); also the prefix of its row IDs.
+    /// public channel); also the prefix of its row IDs. The public key comes
+    /// from the channel PublicChatModel publishes together with its messages:
+    /// the selected channel switches one render or more before the timeline
+    /// does, and keying the old messages with the new channel re-keys (and
+    /// re-appears) every row.
     func timelineContextKey(for privatePeer: PeerID?) -> String {
         if let peer = privatePeer {
             return "dm:\(peer)"
         }
-        return locationChannelsModel.selectedChannel.contextKey
+        return publicChatModel.activeChannel.contextKey
     }
 
     func windowCount(for privatePeer: PeerID?) -> Int {
@@ -379,10 +398,33 @@ private extension MessageListView {
         }
     }
 
+    /// Returns the window to its initial size once the reader is back at the
+    /// bottom (the newest row has appeared): whatever it grew by while they
+    /// were scrolled up, or expanded into history, need not stay rendered,
+    /// and dropping rows above the bottom moves nothing on screen. Never in
+    /// the same update as a scroll: rows changing above the viewport make
+    /// SwiftUI hold its position, and a pending scrollTo never lands.
+    func returnWindowToInitialSize(for privatePeer: PeerID?, contextKey: String, messages: [BitchatMessage]) {
+        let initialCount = privatePeer == nil
+            ? TransportConfig.uiWindowInitialCountPublic
+            : TransportConfig.uiWindowInitialCountPrivate
+        guard windowCount(for: privatePeer) > initialCount else { return }
+        setWindowCount(initialCount, for: privatePeer)
+        timelineMark = contextMark(for: contextKey)?.withWindowCount(initialCount, in: messages)
+    }
+
     /// The timeline mark, if it was taken in `contextKey`.
     func contextMark(for contextKey: String) -> MessageListScrollPolicy.TimelineMark? {
         guard let timelineMark, timelineMark.contextKey == contextKey else { return nil }
         return timelineMark
+    }
+
+    /// Whether a row belongs to the timeline the list has landed in (the
+    /// mark's context: the change handler lands a switch before the rows of
+    /// that update report in).
+    func isLandedRow(_ rowID: String) -> Bool {
+        guard let landedContextKey = timelineMark?.contextKey else { return false }
+        return MessageListScrollPolicy.isRow(rowID, inContext: landedContextKey)
     }
 
     /// Tappable strip above the mesh timeline while notes are pinned at this
@@ -638,6 +680,9 @@ private extension MessageListView {
     }
 
     func scrollToBottom(on proxy: ScrollViewProxy, privatePeer: PeerID?) {
+        // A follow-scroll still pending (possibly for a timeline being left)
+        // has nothing left to do.
+        cancelFollowScroll()
         isAtBottom = true
         unseenCount = 0
         timelineMark = MessageListScrollPolicy.TimelineMark(
@@ -652,10 +697,20 @@ private extension MessageListView {
             // Retry only a scroll that has not landed. Once the newest row is
             // on screen the retry would be a no-op, and a no-op scrollTo stays
             // queued until the next layout pass: the reader's next drag.
-            if let secondTarget = self.newestRowID(for: privatePeer), secondTarget != bottomRowID {
+            if let secondTarget = self.newestRowID(for: privatePeer),
+               MessageListScrollPolicy.needsScroll(toNewestRowID: secondTarget, bottomRowID: bottomRowID) {
                 proxy.scrollTo(secondTarget, anchor: .bottom)
             }
         }
+    }
+
+    /// Lands the list at the newest message of a timeline it was not showing
+    /// (a channel or DM switch): nothing about the old timeline's bottom
+    /// carries over.
+    func land(on proxy: ScrollViewProxy, privatePeer: PeerID?) {
+        bottomRowID = nil
+        bottomSettledContextKey = nil
+        scrollToBottom(on: proxy, privatePeer: privatePeer)
     }
 
     /// Row ID of the newest message that has a row (whitespace-only
@@ -667,73 +722,70 @@ private extension MessageListView {
         return "\(timelineContextKey(for: privatePeer))|\(newest.id)"
     }
 
-    /// Switching this list to another DM lands on that conversation's newest
-    /// message, like opening it does.
-    func onPrivatePeerChange(_ newPeer: PeerID?, proxy: ScrollViewProxy) {
-        cancelFollowScroll()
-        bottomSettledContextKey = MessageListScrollPolicy.bottomSettledKey(
-            bottomSettledContextKey,
-            afterSwitchingTo: timelineContextKey(for: newPeer)
-        )
-        // `newPeer`, not `privatePeer`: the deprecated onChange runs the
-        // closure captured by the previous render, which still holds the
-        // old peer.
-        scrollToBottom(on: proxy, privatePeer: newPeer)
-    }
-
     /// Handles any change to the shown timeline: an append, a late message
     /// inserted mid-timeline, an eviction at the cap, a removal, or a
-    /// different conversation altogether.
+    /// different timeline altogether (a channel or DM switch).
     func onTimelineChange(_ signature: TimelineSignature, proxy: ScrollViewProxy) {
         // The deprecated onChange runs the previous render's closure, so the
-        // peer comes from the new value rather than `self.privatePeer`.
+        // timeline comes from the new value rather than `self.privatePeer`.
         let privatePeer = signature.privatePeer
-        let contextKey = timelineContextKey(for: privatePeer)
+        let contextKey = signature.contextKey
         let messages = conversationMessages(for: privatePeer)
-        let currentWindowCount = windowCount(for: privatePeer)
 
-        // A mark from another context (timeline swapped wholesale) is no
-        // baseline: re-baseline and book nothing as "new".
+        // No mark in this context means the timeline was swapped wholesale:
+        // nothing is booked as "new", the list lands instead.
         let mark = contextMark(for: contextKey)
-        if mark == nil {
-            unseenCount = 0
-        }
         let appended = mark.map { MessageListScrollPolicy.appended(since: $0, in: messages) }
             ?? MessageListScrollPolicy.Appended()
+        let currentWindowCount = windowCount(for: privatePeer)
+        let reaction = MessageListScrollPolicy.reaction(
+            mark: mark,
+            messages: messages,
+            newestIsOwn: messages.last.map { conversationUIModel.isSentByCurrentUser($0) } ?? false,
+            appendedCount: appended.total,
+            windowCount: currentWindowCount,
+            isAtBottom: isAtBottom
+        )
 
-        guard let lastMsg = messages.last else {
-            // Timeline emptied (e.g. /clear): nothing below to jump to.
-            unseenCount = 0
-            timelineMark = MessageListScrollPolicy.TimelineMark(contextKey: contextKey, messages: messages, windowCount: currentWindowCount)
+        if reaction == .land {
+            land(on: proxy, privatePeer: privatePeer)
             return
         }
 
-        // If the newest message is a new one from me, always scroll to
-        // bottom. An older newest message of mine stays put while late
-        // messages land above it or old ones are evicted.
-        let isFromSelf = mark?.newestMessageID != lastMsg.id && conversationUIModel.isSentByCurrentUser(lastMsg)
-        if !isFromSelf && !isAtBottom { // Only autoscroll when the reader is at/near bottom
-            unseenCount += appended.unseen
-            // Record the window the render kept around the reader: widened
-            // over what landed below its first row instead of dropping that
-            // row (grown by the appended count if the mark lost track of it).
-            let keptWindowCount = MessageListScrollPolicy.windowCountKeepingFirstRow(
+        // Record the window this render kept: for a scrolled-up reader,
+        // widened over what landed below its first row instead of dropping
+        // that row (grown by the appended count if the mark lost track of
+        // it). A follow keeps it too: rows changing above the viewport in the
+        // same update as the scroll make SwiftUI hold its position instead.
+        let keptWindowCount = isAtBottom
+            ? currentWindowCount
+            : MessageListScrollPolicy.windowCountKeepingFirstRow(
                 current: currentWindowCount,
                 mark: mark,
                 appendedCount: appended.total,
                 in: messages
             )
-            if keptWindowCount != currentWindowCount {
-                setWindowCount(keptWindowCount, for: privatePeer)
-            }
-            timelineMark = MessageListScrollPolicy.TimelineMark(contextKey: contextKey, messages: messages, windowCount: keptWindowCount)
-            return
+        if keptWindowCount != currentWindowCount {
+            setWindowCount(keptWindowCount, for: privatePeer)
         }
-        // Ensure we consider ourselves at bottom for subsequent messages
-        isAtBottom = true
-        unseenCount = 0
-        timelineMark = MessageListScrollPolicy.TimelineMark(contextKey: contextKey, messages: messages, windowCount: currentWindowCount)
-        followToBottom(privatePeer: privatePeer, proxy: proxy)
+        timelineMark = MessageListScrollPolicy.TimelineMark(contextKey: contextKey, messages: messages, windowCount: keptWindowCount)
+
+        switch reaction {
+        case .keepPosition:
+            unseenCount += appended.unseen
+        case .follow:
+            // Ensure we consider ourselves at bottom for subsequent messages
+            isAtBottom = true
+            unseenCount = 0
+            followToBottom(privatePeer: privatePeer, proxy: proxy)
+        case .hold:
+            if messages.isEmpty {
+                // Timeline emptied (e.g. /clear): nothing below to jump to.
+                unseenCount = 0
+            }
+        case .land:
+            break
+        }
     }
 
     /// Scrolls to the newest row, at most once per throttle interval. A
@@ -774,40 +826,6 @@ private extension MessageListView {
         guard let timer = scrollThrottleTimer else { return }
         timer.invalidate()
         scrollThrottleTimer = nil
-    }
-
-    func onSelectedChannelChange(_ channel: ChannelID, proxy: ScrollViewProxy) {
-        // When switching to a new geohash channel, scroll to the bottom
-        guard privatePeer == nil else { return }
-        // Invalidate the timeline mark: the timeline is about to swap (or
-        // already has — the ordering of this onChange vs the timeline
-        // onChange is not guaranteed), so the next observation re-baselines
-        // instead of booking the cross-channel difference as "new".
-        unseenCount = 0
-        timelineMark = nil
-        // Nothing pending for the old channel may scroll this one, and
-        // expansion waits until this channel's newest row is on screen.
-        cancelFollowScroll()
-        bottomSettledContextKey = MessageListScrollPolicy.bottomSettledKey(
-            bottomSettledContextKey,
-            afterSwitchingTo: channel.contextKey
-        )
-        // Entering any public channel shows its latest messages: a channel
-        // switch swaps the timeline wholesale, so the prior scroll offset is
-        // meaningless. Landing at the bottom keeps isAtBottom honest (no
-        // stale jump-to-latest pill) and matches standard chat behavior.
-        isAtBottom = true
-        windowCountPublic = TransportConfig.uiWindowInitialCountPublic
-        let contextKey: String
-        switch channel {
-        case .mesh:
-            contextKey = "mesh"
-        case .location(let ch):
-            contextKey = "geo:\(ch.geohash)"
-        }
-        if let target = publicChatModel.messages.last?.id.map({ "\(contextKey)|\($0)" }) {
-            proxy.scrollTo(target, anchor: .bottom)
-        }
     }
 
     func conversationMessages(for privatePeer: PeerID?) -> [BitchatMessage] {
