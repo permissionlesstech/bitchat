@@ -28,6 +28,9 @@ struct ContentRootModalPresentationState {
     /// The legacy private-media dialog presents from the root whenever the
     /// people UI is inline rather than a sheet.
     var isLegacyMediaConsentPresented = false
+    /// A pane's people popover (the split layout). The root presents it, so
+    /// nothing else can present from the root while it is up.
+    var isPeoplePopoverPresented = false
 
     /// Only the people column puts the legacy-consent dialog in the root's
     /// tree. In compact the people sheet hosts it and already defers the
@@ -49,6 +52,7 @@ struct ContentRootModalPresentationState {
             || isScreenshotPrivacyAlertPresented
             || isMediaPickerPresented
             || isLegacyMediaConsentPresented
+            || isPeoplePopoverPresented
     }
 }
 
@@ -61,7 +65,8 @@ extension ContentRootModalPresentationState {
         isVerificationSheetPresented: Bool = false,
         isVoiceAlertPresented: Bool = false,
         isMediaPickerPresented: Bool = false,
-        isLegacyMediaConsentPresented: Bool = false
+        isLegacyMediaConsentPresented: Bool = false,
+        isPeoplePopoverPresented: Bool = false
     ) {
         self.init(
             isPeopleSheetPresented: isPeopleSheetPresented,
@@ -78,7 +83,8 @@ extension ContentRootModalPresentationState {
             isScreenshotPrivacyAlertPresented:
                 appChromeModel.showScreenshotPrivacyWarning,
             isMediaPickerPresented: isMediaPickerPresented,
-            isLegacyMediaConsentPresented: isLegacyMediaConsentPresented
+            isLegacyMediaConsentPresented: isLegacyMediaConsentPresented,
+            isPeoplePopoverPresented: isPeoplePopoverPresented
         )
     }
 }

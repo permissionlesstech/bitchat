@@ -40,6 +40,12 @@ struct ContentHeaderView: View {
     /// The badge is a label rather than a button (split layout, leading: the
     /// pane is #mesh, whatever the selection).
     var isBadgeStatic = false
+    /// Holds back the app-wide alert this bar hosts (the screenshot
+    /// warning) while the root presents something over the layout (the
+    /// split layout's people popover): presenting it then would fail and
+    /// leave its flag, which root alerts wait on, set for good. It shows
+    /// once that closes.
+    var defersAlerts = false
 
     /// Courier envelopes this device is carrying for offline third parties.
     @State private var carriedMailCount = 0
@@ -235,7 +241,7 @@ struct ContentHeaderView: View {
             guard carriesAppChrome else { return }
             locationChannelsModel.refreshMeshChannelsIfNeeded()
         }
-        .alert("content.alert.screenshot.title", isPresented: hosted($appChromeModel.showScreenshotPrivacyWarning)) {
+        .alert("content.alert.screenshot.title", isPresented: screenshotWarningBinding) {
             Button("common.ok", role: .cancel) {}
         } message: {
             Text("content.alert.screenshot.message")
@@ -482,6 +488,16 @@ struct ContentHeaderView: View {
     /// app chrome, never presenting from any other.
     private func hosted(_ isPresented: Binding<Bool>) -> Binding<Bool> {
         carriesAppChrome ? isPresented : .constant(false)
+    }
+
+    /// The screenshot warning, hosted like the sheets and held back while
+    /// `defersAlerts`.
+    private var screenshotWarningBinding: Binding<Bool> {
+        let warning = hosted($appChromeModel.showScreenshotPrivacyWarning)
+        return Binding(
+            get: { warning.wrappedValue && !defersAlerts },
+            set: { warning.wrappedValue = $0 }
+        )
     }
 
     private func requestHeaderShare(forGeohash geohash: String) {

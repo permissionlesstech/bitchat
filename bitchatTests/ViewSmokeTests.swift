@@ -1330,6 +1330,21 @@ struct ViewSmokeTests {
         )
     }
 
+    /// E13: the root presents a pane's people popover, so nothing else may
+    /// present from the root until it closes.
+    @Test("Root alerts wait for a people popover")
+    func rootAlertGuards_includeThePeoplePopover() {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+
+        #expect(ContentRootModalPresentationState(isPeoplePopoverPresented: true).hasPresentation)
+        #expect(!ContentRootModalPresentationState(appChromeModel: featureModels.appChromeModel).hasPresentation)
+        #expect(ContentRootModalPresentationState(
+            appChromeModel: featureModels.appChromeModel,
+            isPeoplePopoverPresented: true
+        ).hasPresentation)
+    }
+
     @Test("Only the people column's consent dialog holds back root alerts")
     func rootAlertGuards_legacyConsentDefersOnlyOnSplitLayout() {
         #expect(ContentRootModalPresentationState.legacyConsentDefersRoot(
