@@ -42,7 +42,8 @@ final class PerformanceBaselineTests: XCTestCase {
     /// appended to the file named by `BITCHAT_PERF_LOG` (if set): under
     /// `swift test --parallel` the runner swallows stdout of passing tests,
     /// so the CI floor gate (scripts/check-perf-floors.sh) reads the file.
-    private func reportThroughput(_ name: String, samples: [TimeInterval], operations: Int, unit: String) {
+    /// Internal so benchmark extensions in other files report the same way.
+    func reportThroughput(_ name: String, samples: [TimeInterval], operations: Int, unit: String) {
         guard !samples.isEmpty else { return }
         let avg = samples.reduce(0, +) / Double(samples.count)
         let opsPerSec = avg > 0 ? Double(operations) / avg : .infinity
