@@ -550,8 +550,9 @@ struct ContentPeopleListView: View {
         /// layout's panes replace that column.
         case column(headerHeight: CGFloat, trailingCornerReach: CGFloat)
         /// A pane's people popover in the split layout. Closing it never
-        /// ends a conversation; a row tap opens the DM, then closes it, and
-        /// a fingerprint shows in the popover's own navigation.
+        /// ends a conversation; a row tap opens the DM and closes the
+        /// popover once the DM is open, and a fingerprint shows in the
+        /// popover's own navigation.
         case popover(onClose: () -> Void, onShowFingerprint: (PeerID) -> Void)
         #endif
     }
@@ -634,7 +635,7 @@ struct ContentPeopleListView: View {
                     if case .location = listChannel {
                         GeohashPeopleList(
                             onTapPerson: {
-                                didOpenConversation()
+                                didOpenGeohashConversation()
                             }
                         )
                         // Skip re-rendering the roster when this view
@@ -740,12 +741,26 @@ struct ContentPeopleListView: View {
     }
 
     private func openConversation(with peerID: PeerID) {
-        peerListModel.startConversation(with: peerID)
-        didOpenConversation()
+        switch presentation {
+        case .sheet:
+            peerListModel.startConversation(with: peerID)
+            showSidebar = true
+        #if os(iOS)
+        case .column:
+            peerListModel.startConversation(with: peerID)
+            showSidebar = true
+        case .popover(let onClose, _):
+            // The popover stays when no DM opened (a blocked peer's): it
+            // would otherwise close on nothing.
+            if Self.openConversationFromPopover(with: peerID, in: privateConversationModel) {
+                onClose()
+            }
+        #endif
+        }
     }
 
-    /// A row has opened its DM.
-    private func didOpenConversation() {
+    /// A geohash row has opened its DM (GeohashPeopleList opens it itself).
+    private func didOpenGeohashConversation() {
         switch presentation {
         case .sheet:
             showSidebar = true
@@ -777,6 +792,20 @@ struct ContentPeopleListView: View {
         #endif
         }
     }
+
+    #if os(iOS)
+    /// Opens the DM with `peerID` from a popover row and says whether it
+    /// opened: a blocked peer's doesn't. Through the conversation model,
+    /// which takes the selection at once, so the answer is known before the
+    /// tap returns.
+    static func openConversationFromPopover(
+        with peerID: PeerID,
+        in model: PrivateConversationModel
+    ) -> Bool {
+        model.startConversation(with: peerID)
+        return model.selectedPeerID == peerID
+    }
+    #endif
 
     private var titleRowMinHeight: CGFloat? {
         #if os(iOS)

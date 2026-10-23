@@ -899,6 +899,34 @@ struct ViewSmokeTests {
         #expect(shownInPopover == [peerID])
     }
 
+    /// A popover row closes the popover once its DM is open, and only then:
+    /// a blocked peer's DM doesn't open, so the popover stays.
+    @Test
+    func peopleList_popoverClosesOnlyOnceTheDMIsOpen() async {
+        let (viewModel, transport, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let conversations = featureModels.privateConversationModel
+        let blocked = PeerID(str: "8182838485868788")
+        let reachable = PeerID(str: "9192939495969798")
+        transport.updatePeerSnapshots([
+            makeSnapshot(peerID: blocked, nickname: "Mallory", noiseByte: 0x81),
+            makeSnapshot(peerID: reachable, nickname: "Carol", noiseByte: 0x91)
+        ])
+        let known = await TestHelpers.waitUntil(
+            { featureModels.peerListModel.meshRows.contains { $0.peerID == blocked } },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(known)
+        featureModels.conversationUIModel.block(peerID: blocked, displayName: "Mallory")
+        #expect(viewModel.isPeerBlocked(blocked))
+
+        #expect(!ContentPeopleListView.openConversationFromPopover(with: blocked, in: conversations))
+        #expect(conversations.selectedPeerID == nil)
+
+        #expect(ContentPeopleListView.openConversationFromPopover(with: reachable, in: conversations))
+        #expect(conversations.selectedPeerID == reachable)
+    }
+
     @Test
     func paneTouchObserver_mounts() {
         _ = mount(PaneTouchObserver { _ in })
