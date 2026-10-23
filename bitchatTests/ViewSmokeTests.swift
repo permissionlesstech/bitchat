@@ -53,8 +53,13 @@ private func makeSmokeLocationManager() -> LocationChannelManager {
     return LocationChannelManager(storage: storage)
 }
 
+/// `sharedContentStore` backs the share-import review; without one no share
+/// is ever pending.
 @MainActor
-private func makeSmokeFeatureModels(for viewModel: ChatViewModel) -> SmokeFeatureModels {
+private func makeSmokeFeatureModels(
+    for viewModel: ChatViewModel,
+    sharedContentStore: SharedContentStore? = nil
+) -> SmokeFeatureModels {
     let locationManager = makeSmokeLocationManager()
     let conversations = viewModel.conversations
     let publicChatModel = PublicChatModel(conversations: conversations)
@@ -102,7 +107,7 @@ private func makeSmokeFeatureModels(for viewModel: ChatViewModel) -> SmokeFeatur
         conversationUIModel: conversationUIModel,
         peerListModel: peerListModel,
         boardAlertsModel: boardAlertsModel,
-        sharedContentImportModel: SharedContentImportModel(store: nil)
+        sharedContentImportModel: SharedContentImportModel(store: sharedContentStore)
     )
 }
 
@@ -1145,6 +1150,57 @@ struct ViewSmokeTests {
             timeout: TestConstants.settleTimeout
         )
         #expect(backOnMesh)
+    }
+
+    /// E11: the share review names the composer the share would fill. The
+    /// runtime labels a share from the selection each time it looks for one
+    /// (launch, the share link, becoming active), and the selection need not
+    /// be where that composer sends (the split layout's other pane, or a
+    /// switch still landing). The root relabels it on every look, not only
+    /// when a new share arrives.
+    @Test
+    func contentView_namesTheComposerAShareFillsAfterEveryLook() async throws {
+        let suite = "ViewSmokeTests.share.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = SharedContentStore(defaults: defaults)
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel, sharedContentStore: store)
+        let shares = featureModels.sharedContentImportModel
+        let sizeClass = SmokeSizeClass()
+        sizeClass.value = .compact
+        let host = WindowHost(
+            installSmokeEnvironment(ContentViewSizeClassHarness(sizeClass: sizeClass), featureModels: featureModels),
+            size: CGSize(width: 390, height: 844)
+        )
+        defer {
+            shares.discardAll()
+            host.close()
+        }
+        let now = Date()
+        try store.stage(.text("shared from another app", createdAt: now), now: now)
+        // The public composer sends to #mesh, the timeline on screen; the
+        // runtime's selection names a geohash.
+        let selection = SharedContentDestination.geohash("u4pruy")
+
+        // A share arriving takes the composer's conversation.
+        shares.refresh(destination: selection, now: now)
+        let labelled = await TestHelpers.waitUntil(
+            { shares.offer?.destination == .mesh },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(labelled)
+
+        // The runtime looks again and labels the same share from the
+        // selection once more.
+        shares.refresh(destination: selection, now: now)
+        #expect(shares.offer?.destination == selection)
+        let relabelled = await TestHelpers.waitUntil(
+            { shares.offer?.destination == .mesh },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(relabelled)
+        #expect(shares.offer?.payload.content == "shared from another app")
     }
 
     /// E13: a fingerprint asked for in a popover is the popover's own, so it

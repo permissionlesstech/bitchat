@@ -421,8 +421,12 @@ struct ContentView: View {
             retargetComposers(to: targets)
             sharedContentImportModel.updateDestination(sharedContentDestination)
         }
-        // A share arriving names the composer it would fill.
-        .onChange(of: sharedContentImportModel.offer?.id) { _ in
+        // A share names the composer it would fill: when it arrives, and
+        // whenever the runtime looks again (the share link, becoming
+        // active) and relabels the same share from the selection, which
+        // need not be where that composer sends. A label that already
+        // matches is left alone, so this settles after one pass.
+        .onChange(of: sharedContentImportModel.offer) { _ in
             sharedContentImportModel.updateDestination(sharedContentDestination)
         }
         .onChange(of: selectedPrivatePeerID) { newValue in
