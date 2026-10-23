@@ -30,7 +30,7 @@ struct GroupChatList: View {
 
                 ForEach(groups) { group in
                     HStack(spacing: 4) {
-                        Text("#\(group.name)")
+                        hashtagText(for: group)
                             .bitchatFont(size: 14)
                             .foregroundColor(palette.primary)
                             .lineLimit(1)
@@ -67,6 +67,21 @@ struct GroupChatList: View {
                 }
             }
         }
+    }
+
+    /// "#name", verbatim: there is nothing to translate, and a letterless
+    /// "#%@" catalog key breaks string catalog symbol generation (SwiftPM's
+    /// default build system). It keeps what the localized lookup gave the
+    /// text: FSI/PDI isolates around the name, so the "#" stays on the same
+    /// side of RTL names, and the app language for typesetting, so
+    /// language-specific glyphs still match (Urdu digits, for one).
+    private func hashtagText(for group: GroupChatRow) -> Text {
+        let text = Text(verbatim: "#\u{2068}\(group.name)\u{2069}")
+        if #available(iOS 17.0, macOS 14.0, *) {
+            let appLanguage = Bundle.main.preferredLocalizations.first ?? "en"
+            return text.typesettingLanguage(Locale.Language(identifier: appLanguage))
+        }
+        return text
     }
 
     private func accessibilityDescription(for group: GroupChatRow) -> String {
