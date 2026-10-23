@@ -10,9 +10,9 @@ struct GeohashPeopleList: View, Equatable {
     /// The only input is the tap action, which always reveals the DM pane
     /// and can't be compared. Treating it as equal lets SwiftUI skip this
     /// list when the presenting view re-renders for models the list doesn't
-    /// read (pipeline flushes, mesh peers, chrome); roster changes still
+    /// read (message batches, chrome, verification); roster changes still
     /// arrive through the observed PeerListModel.
-    static func == (lhs: GeohashPeopleList, rhs: GeohashPeopleList) -> Bool {
+    nonisolated static func == (lhs: GeohashPeopleList, rhs: GeohashPeopleList) -> Bool {
         true
     }
 
