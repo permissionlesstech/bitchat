@@ -36,9 +36,10 @@
 # Fails when:
 #   - any benchmark reports throughput below its floor on every attempt
 #     (exit 1), or
-#   - PERF lines are present but a floored benchmark is missing — a
-#     silently-dropped benchmark must be an explicit floors-file change and
-#     is not retried (exit 3).
+#   - PERF lines are present but a floored benchmark is missing, or a
+#     benchmark reports with no floor — the floors file and the benchmark
+#     suite must change together in both directions, and neither drift is
+#     retried (exit 3).
 
 set -euo pipefail
 
@@ -111,6 +112,7 @@ with open(output_file, errors="replace") as f:
 
 below_floor = []
 missing = []
+unfloored = []
 print(f"perf-floors: checking {len(measured)} benchmark(s) against {len(floors)} floor(s)")
 for name in sorted(set(floors) | set(measured)):
     floor = floors.get(name)
@@ -121,7 +123,9 @@ for name in sorted(set(floors) | set(measured)):
         continue
     value, unit = measured[name]
     if floor is None:
-        print(f"  NO-FLOOR {name}: {value:.0f} {unit}/sec (consider adding a floor)")
+        unfloored.append(
+            f"  NO-FLOOR {name}: {value:.0f} {unit}/sec reports a PERF line but has "
+            f"no floor (add one to perf-floors.json in the same change)")
         continue
     status = "OK" if value >= floor else "BELOW"
     line = f"  {status:8} {name}: {value:.0f} {unit}/sec (floor {floor})"
@@ -131,9 +135,9 @@ for name in sorted(set(floors) | set(measured)):
             f"  BELOW    {name}: {value:.0f} {unit}/sec is under floor {floor} "
             f"({value / floor * 100:.0f}% of floor)")
 
-if missing:
-    print("\nperf-floors: FAILED — floored benchmark(s) missing from the output:")
-    print("\n".join(missing + below_floor))
+if missing or unfloored:
+    print("\nperf-floors: FAILED — floors and benchmarks are out of step:")
+    print("\n".join(missing + unfloored + below_floor))
     sys.exit(3)
 
 if below_floor:

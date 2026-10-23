@@ -121,6 +121,12 @@ jobs:
           BITCHAT_PERF_LOG: ${{ github.workspace }}/perf-output.log
         run: swift test --quiet --filter PerformanceBaselineTests
 
+      # The gate below is the only check between a benchmark regression and
+      # main; its exit-code contract is pinned by scripts/tests before it runs.
+      - name: Test the performance floor gate
+        if: matrix.name == 'app'
+        run: python3 -m unittest discover -s scripts/tests -p "test_check_perf_floors.py" -v
+
       # Order-of-magnitude performance regression gate. Floors are deliberately
       # generous (see bitchatTests/Performance/perf-floors.json) so this
       # catches algorithmic regressions, never runner variance. If a metric
