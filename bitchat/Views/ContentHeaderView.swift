@@ -18,6 +18,10 @@ struct ContentHeaderView: View {
     let headerHeight: CGFloat
     let headerPeerIconSize: CGFloat
     let headerPeerCountFontSize: CGFloat
+    /// Extra inset keeping the content off a rounded display corner the safe
+    /// area leaves uncovered (TopCornerClearance).
+    var leadingCornerPadding: CGFloat = 0
+    var trailingCornerPadding: CGFloat = 0
 
     /// Courier envelopes this device is carrying for offline third parties.
     @State private var carriedMailCount = 0
@@ -323,6 +327,9 @@ struct ContentHeaderView: View {
         // Type.
         .frame(height: headerHeight)
         .padding(.horizontal, 12)
+        // Inside the bar's background or glass panel; horizontal only.
+        .padding(.leading, leadingCornerPadding)
+        .padding(.trailing, trailingCornerPadding)
         .onReceive(CourierStore.shared.$carriedCount) { count in
             carriedMailCount = count
         }

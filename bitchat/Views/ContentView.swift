@@ -621,12 +621,16 @@ struct ContentView: View {
                 division: ContentSplitLayout.division(in: proxy)
             )
             let split = isSplitLayout ? layout : nil
+            let corners = topCornerPadding(in: proxy, isSplit: split != nil)
             HStack(spacing: 0) {
-                mainContent
-                    .frame(width: split?.leadingWidth)
+                mainContent(
+                    headerLeadingCornerPadding: corners.headerLeading,
+                    headerTrailingCornerPadding: corners.headerTrailing
+                )
+                .frame(width: split?.leadingWidth)
                 if let split {
                     ContentColumnGap(width: split.gapWidth)
-                    peopleColumn
+                    peopleColumn(trailingCornerPadding: corners.columnTrailing)
                         .frame(width: split.trailingWidth)
                 }
             }
@@ -638,7 +642,7 @@ struct ContentView: View {
             }
         }
         #else
-        mainContent
+        mainContent()
         #endif
     }
 
@@ -646,11 +650,17 @@ struct ContentView: View {
     /// list scrolling underneath floating chrome panels (safe-area insets),
     /// so the translucency gains usable space instead of losing it.
     @ViewBuilder
-    private var mainContent: some View {
+    private func mainContent(
+        headerLeadingCornerPadding: CGFloat = 0,
+        headerTrailingCornerPadding: CGFloat = 0
+    ) -> some View {
         if usesGlassLayout {
             publicMessageList
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    headerView
+                    headerView(
+                        leadingCornerPadding: headerLeadingCornerPadding,
+                        trailingCornerPadding: headerTrailingCornerPadding
+                    )
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if selectedPrivatePeerID == nil {
@@ -659,7 +669,10 @@ struct ContentView: View {
                 }
         } else {
             VStack(spacing: 0) {
-                headerView
+                headerView(
+                    leadingCornerPadding: headerLeadingCornerPadding,
+                    trailingCornerPadding: headerTrailingCornerPadding
+                )
 
                 Divider()
 
@@ -681,7 +694,10 @@ struct ContentView: View {
         }
     }
 
-    private var headerView: some View {
+    private func headerView(
+        leadingCornerPadding: CGFloat,
+        trailingCornerPadding: CGFloat
+    ) -> some View {
         VStack(spacing: 0) {
             ContentHeaderView(
                 showSidebar: headerPeopleBinding,
@@ -689,7 +705,9 @@ struct ContentView: View {
                 isNicknameFieldFocused: $isNicknameFieldFocused,
                 headerHeight: headerHeight,
                 headerPeerIconSize: headerPeerIconSize,
-                headerPeerCountFontSize: headerPeerCountFontSize
+                headerPeerCountFontSize: headerPeerCountFontSize,
+                leadingCornerPadding: leadingCornerPadding,
+                trailingCornerPadding: trailingCornerPadding
             )
 
             // Failed-wipe outranks connectivity: "your data may still be
@@ -764,7 +782,7 @@ struct ContentView: View {
     }
 
     #if os(iOS)
-    private var peopleColumn: some View {
+    private func peopleColumn(trailingCornerPadding: CGFloat) -> some View {
         ContentPeopleColumnView(
             showSidebar: $showSidebar,
             showVerifySheet: $showColumnVerifySheet,
@@ -781,8 +799,55 @@ struct ContentView: View {
             showImagePicker: $showImagePicker,
             imagePickerSourceType: $imagePickerSourceType,
             headerHeight: headerHeight,
+            trailingCornerPadding: trailingCornerPadding,
             onSendMessage: sendMessage
         )
+    }
+
+    private struct TopCornerPadding {
+        var headerLeading: CGFloat = 0
+        var headerTrailing: CGFloat = 0
+        var columnTrailing: CGFloat = 0
+    }
+
+    /// Clearance for the top bars beside display corners the safe area
+    /// leaves uncovered (TopCornerClearance). Zero below iOS 26, which
+    /// can't report corners, and on iPhones whose status bar clears them.
+    private func topCornerPadding(in proxy: GeometryProxy, isSplit: Bool) -> TopCornerPadding {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            let corners = proxy.containerCornerInsets
+            let safeArea = proxy.safeAreaInsets
+            // The header's content sits 12pt in from its bar; glass floats the
+            // bar as a panel another 8pt in (themedChromePanel).
+            let headerBase: CGFloat = usesGlassLayout ? 20 : 12
+            // The column's title row and DM header pad their content 16pt.
+            let columnBase: CGFloat = 16
+            func trailingPadding(base: CGFloat) -> CGFloat {
+                TopCornerClearance.extraPadding(
+                    cornerWidth: corners.topTrailing.width,
+                    cornerHeight: corners.topTrailing.height,
+                    safeTop: safeArea.top,
+                    safeEdgeInset: safeArea.trailing,
+                    basePadding: base
+                )
+            }
+            return TopCornerPadding(
+                headerLeading: TopCornerClearance.extraPadding(
+                    cornerWidth: corners.topLeading.width,
+                    cornerHeight: corners.topLeading.height,
+                    safeTop: safeArea.top,
+                    safeEdgeInset: safeArea.leading,
+                    basePadding: headerBase
+                ),
+                // Split, the header ends at the fold and the column meets the
+                // trailing corner, the display's rounded one in right-to-left.
+                headerTrailing: isSplit ? 0 : trailingPadding(base: headerBase),
+                columnTrailing: isSplit ? trailingPadding(base: columnBase) : 0
+            )
+        }
+        #endif
+        return TopCornerPadding()
     }
 
     /// Folding, unfolding, rotating or resizing across the split threshold.
