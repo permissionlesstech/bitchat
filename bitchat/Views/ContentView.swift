@@ -226,8 +226,12 @@ struct ContentView: View {
             isVerificationSheetPresented: isVerificationSheetPresented,
             isVoiceAlertPresented: includingVoiceAlert && voiceRecordingVM.showAlert,
             isMediaPickerPresented: isMediaPickerPresented,
-            isLegacyMediaConsentPresented:
-                conversationUIModel.legacyPrivateMediaConsentRequest != nil
+            // Only the column presents the dialog in the root's tree. In
+            // compact the people sheet hosts it and already defers the root
+            // while up; a request left pending once it closed has no
+            // presenter, and waiting on it would swallow the root alerts.
+            isLegacyMediaConsentPresented: isSplitLayoutActive
+                && conversationUIModel.legacyPrivateMediaConsentRequest != nil
         )
     }
 
@@ -381,6 +385,15 @@ struct ContentView: View {
             if newValue != nil, !isSplitLayoutActive {
                 showSidebar = true
             }
+            #if os(iOS)
+            // The column swaps its list, and the QR sheet the list presents,
+            // for the DM without a dismissal reaching this flag. Left set, it
+            // would hold back the root alerts and bring the QR sheet back
+            // with the list.
+            if newValue != nil {
+                showColumnVerifySheet = false
+            }
+            #endif
             sharedContentImportModel.updateDestination(sharedContentDestination)
             switchComposerDraft(to: draftKey)
         }
