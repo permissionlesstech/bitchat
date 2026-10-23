@@ -55,7 +55,6 @@ struct RecentChatRow: Identifiable, Equatable {
 
 @MainActor
 final class PeerListModel: ObservableObject {
-    @Published private(set) var allPeers: [BitchatPeer] = []
     @Published private(set) var meshRows: [MeshPeerRow] = []
     @Published private(set) var geohashPeople: [GeohashPersonRow] = []
     @Published private(set) var groupRows: [GroupChatRow] = []
@@ -69,6 +68,9 @@ final class PeerListModel: ObservableObject {
     private let locationChannelsModel: LocationChannelsModel
     private let peerIdentityStore: PeerIdentityStore
     private let locationPresenceStore: LocationPresenceStore
+    /// The mesh roster `refresh()` builds rows from. Not published: no view
+    /// reads it, and publishing it would re-render on every mesh snapshot.
+    private var allPeers: [BitchatPeer] = []
     private var cancellables = Set<AnyCancellable>()
     private var refreshScheduled = false
 
@@ -129,10 +131,14 @@ final class PeerListModel: ObservableObject {
     }
 
     private func bind() {
+        // No equality guard: `BitchatPeer.==` compares only peer IDs, so a
+        // rename or a connection, favorite or petname change looks unchanged,
+        // and blocking someone republishes identical peers. The refresh is
+        // coalesced, and rows are compared in full before they're written.
         chatViewModel.$allPeers
             .receive(on: DispatchQueue.main)
             .sink { [weak self] peers in
-                guard let self, self.allPeers != peers else { return }
+                guard let self else { return }
                 self.allPeers = peers
                 self.setNeedsRefresh()
             }
