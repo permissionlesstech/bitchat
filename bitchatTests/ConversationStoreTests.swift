@@ -996,6 +996,29 @@ struct ConversationStoreTests {
         #expect(store.conversation(for: direct).messages.map(\.id) == ["dm-1"])
     }
 
+    @Test("removePublicMessageReportingConversation names the conversation the message left")
+    @MainActor
+    func removePublicMessageReportsItsConversation() {
+        let store = ConversationStore()
+        let direct = makeDirectConversationID("aa")
+        store.append(makeMessage(id: "mesh-1", timestamp: 1), to: .mesh)
+        store.append(makeMessage(id: "geo-1", timestamp: 2), to: .geohash("u4pruyd"))
+        store.append(makeMessage(id: "dm-1", timestamp: 3, isPrivate: true), to: direct)
+
+        let geo = store.removePublicMessageReportingConversation(withID: "geo-1")
+        #expect(geo?.message.id == "geo-1")
+        #expect(geo?.conversationID == .geohash("u4pruyd"))
+        #expect(store.conversation(for: .geohash("u4pruyd")).messages.isEmpty)
+
+        let mesh = store.removePublicMessageReportingConversation(withID: "mesh-1")
+        #expect(mesh?.message.id == "mesh-1")
+        #expect(mesh?.conversationID == .mesh)
+
+        #expect(store.removePublicMessageReportingConversation(withID: "dm-1") == nil)
+        #expect(store.removePublicMessageReportingConversation(withID: "missing") == nil)
+        #expect(store.conversation(for: direct).messages.map(\.id) == ["dm-1"])
+    }
+
     @Test("removeMessages(from:where:) purges matches and emits per removal")
     @MainActor
     func removeMessagesByPredicate() {

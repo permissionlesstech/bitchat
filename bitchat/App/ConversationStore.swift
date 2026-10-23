@@ -997,10 +997,19 @@ extension ConversationStore {
     /// conversation contains it. Returns the removed message, if any.
     @discardableResult
     func removePublicMessage(withID messageID: String) -> BitchatMessage? {
+        removePublicMessageReportingConversation(withID: messageID)?.message
+    }
+
+    /// `removePublicMessage(withID:)` that also names the conversation the
+    /// message left, which scopes anything recorded for it there (its
+    /// content-window marker).
+    func removePublicMessageReportingConversation(
+        withID messageID: String
+    ) -> (message: BitchatMessage, conversationID: ConversationID)? {
         for id in conversationIDs(forMessageID: messageID) {
             switch id {
             case .mesh, .geohash:
-                return removeMessage(withID: messageID, from: id)
+                return removeMessage(withID: messageID, from: id).map { ($0, id) }
             case .direct:
                 continue
             }

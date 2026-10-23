@@ -61,9 +61,59 @@ private func makeMeshArrival(id: String, content: String) -> BitchatMessage {
 }
 #endif
 
+/// The same hug twice, as a bridge alias and as the authenticated radio
+/// packet: an emote-shaped text arrives as a system line that keeps its
+/// sender.
+@MainActor
+private func makeHugPair(timestamp: Date) -> (alias: BitchatMessage, radio: BitchatMessage) {
+    let content = "* 🫂 remote hugs alice *"
+    let alias = BitchatMessage(
+        id: "bridge-hug",
+        sender: "remote#beef",
+        content: content,
+        timestamp: timestamp,
+        isRelay: false,
+        senderPeerID: PeerID(bridge: String(repeating: "be", count: 32)),
+        isBridged: true
+    )
+    let radio = BitchatMessage(
+        id: "radio-hug",
+        sender: "remote",
+        content: content,
+        timestamp: timestamp,
+        isRelay: false,
+        senderPeerID: PeerID(str: "1122334455667788")
+    )
+    return (alias, radio)
+}
+
 @Suite("ChatViewModel split timelines")
 @MainActor
 struct ChatViewModelSplitTimelineTests {
+    /// A bridged hug arrives as a system line and lands on the selected
+    /// geohash (compact). Replacing it with the authenticated radio copy must
+    /// forget the alias's content marker in that geohash, or the radio copy
+    /// is dropped as its duplicate.
+    @Test("a bridged action line's alias, replaced in the selected geohash, lets the radio copy through")
+    func bridgedActionLineAlias_forgetsItsMarkerWhereItLanded() {
+        let viewModel = makeSplitTimelineViewModel()
+        let geohash = ConversationID.geohash(selectedGeohash.geohash)
+        viewModel.activeChannel = .location(selectedGeohash)
+        viewModel.currentGeohash = selectedGeohash.geohash
+        let hug = makeHugPair(timestamp: Date())
+
+        viewModel.handlePublicMessage(hug.alias)
+        viewModel.publicMessagePipeline.flushIfNeeded()
+        #expect(viewModel.publicConversationContainsMessage(withID: hug.alias.id, in: geohash))
+
+        viewModel.removeBridgeInjectedPublicMessage(withID: hug.alias.id)
+        viewModel.handlePublicMessage(hug.radio)
+        viewModel.publicMessagePipeline.flushIfNeeded()
+
+        #expect(!viewModel.publicConversationContainsMessage(withID: hug.alias.id, in: geohash))
+        #expect(viewModel.publicConversationContainsMessage(withID: hug.radio.id, in: geohash))
+    }
+
     /// Our own #mesh wave must not swallow the same wave arriving in the
     /// selected geohash a moment later: the echo's content-window marker
     /// belongs to #mesh only.
