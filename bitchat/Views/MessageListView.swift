@@ -42,9 +42,81 @@ private struct TimelineSignature: Equatable {
     }
 }
 
+/// The one timeline model a message list observes: a public channel's
+/// model, or the private inbox for a DM list.
+@MainActor
+private protocol MessageListTimelineModel: ObservableObject {
+    /// The public channel the timeline belongs to, published together with
+    /// its messages; nil for private timelines.
+    var listChannel: ChannelID? { get }
+    /// The rows to show (`privatePeer` names the private conversation).
+    func listMessages(for privatePeer: PeerID?) -> [BitchatMessage]
+}
+
+extension PublicChatModel: MessageListTimelineModel {
+    fileprivate var listChannel: ChannelID? { channel }
+
+    fileprivate func listMessages(for _: PeerID?) -> [BitchatMessage] {
+        messages
+    }
+}
+
+extension PrivateInboxModel: MessageListTimelineModel {
+    fileprivate var listChannel: ChannelID? { nil }
+
+    fileprivate func listMessages(for privatePeer: PeerID?) -> [BitchatMessage] {
+        messages(for: privatePeer)
+    }
+}
+
+/// A conversation's message list. Each list observes exactly one timeline
+/// model, the one it renders: a public list its `PublicChatModel` (the split
+/// layout's #mesh pane is handed the pinned one), a DM list the private
+/// inbox. So a message in another timeline (the open DM beside the #mesh
+/// pane, a public channel under a DM) never re-renders the list.
 struct MessageListView: View {
-    @EnvironmentObject private var publicChatModel: PublicChatModel
-    @EnvironmentObject private var privateInboxModel: PrivateInboxModel
+    let privatePeer: PeerID?
+    @Binding var isAtBottom: Bool
+    @Binding var messageText: String
+    @Binding var selectedMessageSender: String?
+    @Binding var selectedMessageSenderID: PeerID?
+    @Binding var imagePreviewURL: URL?
+    @Binding var windowCountPublic: Int
+    @Binding var windowCountPrivate: [PeerID: Int]
+    @Binding var showSidebar: Bool
+
+    var isTextFieldFocused: FocusState<Bool>.Binding
+
+    var body: some View {
+        if privatePeer == nil {
+            content(observing: PublicChatModel.self)
+        } else {
+            content(observing: PrivateInboxModel.self)
+        }
+    }
+
+    private func content<Timeline: MessageListTimelineModel>(
+        observing _: Timeline.Type
+    ) -> MessageListContent<Timeline> {
+        MessageListContent(
+            privatePeer: privatePeer,
+            isAtBottom: $isAtBottom,
+            messageText: $messageText,
+            selectedMessageSender: $selectedMessageSender,
+            selectedMessageSenderID: $selectedMessageSenderID,
+            imagePreviewURL: $imagePreviewURL,
+            windowCountPublic: $windowCountPublic,
+            windowCountPrivate: $windowCountPrivate,
+            showSidebar: $showSidebar,
+            isTextFieldFocused: isTextFieldFocused
+        )
+    }
+}
+
+/// `MessageListView` over its one timeline model.
+private struct MessageListContent<Timeline: MessageListTimelineModel>: View {
+    /// The timeline this list renders, and the only one it observes.
+    @EnvironmentObject private var timeline: Timeline
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
@@ -367,7 +439,7 @@ struct MessageListView: View {
         }
         .onAppear { updateNotesCounterHold() }
         .onDisappear { releaseNotesCounterHold() }
-        .onChange(of: publicChatModel.channel) { _ in updateNotesCounterHold() }
+        .onChange(of: timeline.listChannel) { _ in updateNotesCounterHold() }
         .onChange(of: privatePeer) { _ in updateNotesCounterHold() }
         .environment(\.openURL, OpenURLAction { url in
             // Intercept custom cashu: links created in attributed text
@@ -393,7 +465,7 @@ struct MessageListView: View {
     }
 }
 
-private extension MessageListView {
+private extension MessageListContent {
     /// Whether the radio could be scanning at all — the empty-state radar
     /// must not sweep over a switched-off or denied radio.
     var bluetoothCanScan: Bool {
@@ -405,7 +477,7 @@ private extension MessageListView {
 
     /// Context key of the timeline shown for `privatePeer` (the DM, or the
     /// public channel); also the prefix of its row IDs. The public key comes
-    /// from the channel this list's PublicChatModel publishes together with
+    /// from the channel this list's timeline model publishes together with
     /// its messages, never from the selection: the selected channel switches
     /// one render or more before the timeline does (keying the old messages
     /// with the new channel re-keys, and re-appears, every row), and the split
@@ -414,12 +486,13 @@ private extension MessageListView {
         if let peer = privatePeer {
             return "dm:\(peer)"
         }
-        return publicChatModel.channel.contextKey
+        // A private timeline without a peer has no rows to key.
+        return timeline.listChannel?.contextKey ?? "dm:"
     }
 
     /// The channel decisions of the timeline this list renders.
     var channelPolicy: MessageListChannelPolicy {
-        MessageListChannelPolicy(channel: publicChatModel.channel, privatePeer: privatePeer)
+        MessageListChannelPolicy(channel: timeline.listChannel, privatePeer: privatePeer)
     }
 
     func windowCount(for privatePeer: PeerID?) -> Int {
@@ -868,10 +941,7 @@ private extension MessageListView {
     }
 
     func conversationMessages(for privatePeer: PeerID?) -> [BitchatMessage] {
-        if let privatePeer {
-            return privateInboxModel.messages(for: privatePeer)
-        }
-        return publicChatModel.messages
+        timeline.listMessages(for: privatePeer)
     }
 }
 
