@@ -113,13 +113,6 @@ extension ChatViewModel {
         return target.channel == .mesh ? .publicMesh : nil
     }
 
-    /// Picks the capture backend for the selection's hold-to-record gesture:
-    /// the single-composer form of `makeVoiceCaptureSession(for:)`.
-    @MainActor
-    func makeVoiceCaptureSession() -> VoiceCaptureSession {
-        makeVoiceCaptureSession(for: selectionTarget)
-    }
-
     /// Picks the capture backend for a hold in `target`'s composer: live
     /// push-to-talk when that conversation's audience can hear it now — a DM
     /// peer that is mesh-reachable with an established Noise session, or the
@@ -154,20 +147,12 @@ extension ChatViewModel {
     }
 
     #if os(iOS)
-    func processThenSendImage(_ image: UIImage?) {
-        mediaTransferCoordinator.processThenSendImage(image)
-    }
-
     /// Sends a photo picked in `target`'s composer to that conversation.
     @MainActor
     func processThenSendImage(_ image: UIImage?, to target: ConversationTarget) {
         mediaTransferCoordinator.processThenSendImage(image, to: target)
     }
     #elseif os(macOS)
-    func processThenSendImage(from url: URL?) {
-        mediaTransferCoordinator.processThenSendImage(from: url)
-    }
-
     /// Sends a photo picked in `target`'s composer to that conversation.
     @MainActor
     func processThenSendImage(from url: URL?, to target: ConversationTarget) {

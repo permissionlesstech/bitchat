@@ -61,8 +61,8 @@ final class ConversationUIModel: ObservableObject {
     // MARK: Sending and list actions
     //
     // Each takes the conversation the person acted in: the composer's or
-    // the list's own target, captured when they acted. The target-less
-    // forms act on the selection, for the single-composer screens.
+    // the list's own target, captured when they acted. The few target-less
+    // forms left act on the selection.
 
     func sendMessage(_ message: String) {
         sendMessage(message, to: chatViewModel.selectionTarget)
@@ -77,17 +77,9 @@ final class ConversationUIModel: ObservableObject {
     /// Resends a failed private message through the normal send path,
     /// removing the failed original so the re-submission replaces it
     /// instead of stacking a duplicate under the red bubble.
-    func resendFailedPrivateMessage(_ message: BitchatMessage) {
-        resendFailedPrivateMessage(message, in: chatViewModel.selectionTarget)
-    }
-
     func resendFailedPrivateMessage(_ message: BitchatMessage, in target: ConversationTarget) {
         chatViewModel.removePrivateMessage(withID: message.id)
         chatViewModel.sendMessage(message.content, to: target)
-    }
-
-    func clearCurrentConversation() {
-        clearConversation(chatViewModel.selectionTarget)
     }
 
     /// Clears `target`: its DM, or its channel's timeline.
@@ -95,16 +87,8 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.sendMessage("/clear", to: target)
     }
 
-    func sendHug(to sender: String) {
-        sendHug(to: sender, in: chatViewModel.selectionTarget)
-    }
-
     func sendHug(to sender: String, in target: ConversationTarget) {
         chatViewModel.sendMessage("/hug @\(sender)", to: target)
-    }
-
-    func sendSlap(to sender: String) {
-        sendSlap(to: sender, in: chatViewModel.selectionTarget)
     }
 
     func sendSlap(to sender: String, in target: ConversationTarget) {
@@ -150,10 +134,6 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.getFingerprint(for: peerID)
     }
 
-    func updateAutocomplete(for text: String, cursorPosition: Int) {
-        chatViewModel.updateAutocomplete(for: text, cursorPosition: cursorPosition)
-    }
-
     /// Mention suggestions for `text` in `target`'s composer. The composer
     /// keeps the returned state; nothing shared changes.
     func autocomplete(
@@ -168,35 +148,6 @@ final class ConversationUIModel: ObservableObject {
     /// returns the cursor position after it.
     func complete(_ suggestion: String, in text: inout String, state: ComposerAutocompleteState) -> Int {
         chatViewModel.complete(suggestion, in: &text, state: state)
-    }
-
-    func completeNickname(_ nickname: String, in text: inout String) -> Int {
-        chatViewModel.completeNickname(nickname, in: &text)
-    }
-
-    /// Accept the currently highlighted mention suggestion, if any.
-    func completeSelectedSuggestion(in text: inout String) -> Bool {
-        guard showAutocomplete,
-              autocompleteSuggestions.indices.contains(selectedAutocompleteIndex)
-        else { return false }
-        _ = completeNickname(autocompleteSuggestions[selectedAutocompleteIndex], in: &text)
-        return true
-    }
-
-    /// Dismiss the mention suggestion panel without inserting (Escape).
-    func dismissAutocomplete() {
-        guard showAutocomplete else { return }
-        chatViewModel.showAutocomplete = false
-        chatViewModel.autocompleteSuggestions = []
-        chatViewModel.autocompleteRange = nil
-        chatViewModel.selectedAutocompleteIndex = 0
-    }
-
-    func moveAutocompleteSelection(by delta: Int) {
-        guard showAutocomplete, !autocompleteSuggestions.isEmpty else { return }
-        let count = min(4, autocompleteSuggestions.count)
-        let next = (selectedAutocompleteIndex + delta + count) % count
-        chatViewModel.selectedAutocompleteIndex = next
     }
 
     func formatMessage(_ message: BitchatMessage, colorScheme: ColorScheme, theme: AppTheme? = nil) -> AttributedString {
@@ -277,22 +228,12 @@ final class ConversationUIModel: ObservableObject {
     }
 
     #if os(iOS)
-    func processSelectedImage(_ image: UIImage?) {
-        chatViewModel.processThenSendImage(image)
-    }
-
     /// Sends a photo picked from `target`'s composer to that conversation.
     /// Capture the target when the camera or library button is tapped.
     func processSelectedImage(_ image: UIImage?, to target: ConversationTarget) {
         chatViewModel.processThenSendImage(image, to: target)
     }
     #endif
-
-    func processSelectedImage(from url: URL?) {
-        #if os(macOS)
-        chatViewModel.processThenSendImage(from: url)
-        #endif
-    }
 
     #if os(macOS)
     /// Sends a photo file picked from `target`'s composer to that
@@ -320,12 +261,6 @@ final class ConversationUIModel: ObservableObject {
             requestID: requestID,
             approved: approved
         )
-    }
-
-    /// Capture backend for the mic gesture: live PTT when the current DM
-    /// peer can hear it now, classic voice note otherwise.
-    func makeVoiceCaptureSession() -> VoiceCaptureSession {
-        chatViewModel.makeVoiceCaptureSession()
     }
 
     /// Capture backend for a hold in `target`'s composer: live to that DM's
