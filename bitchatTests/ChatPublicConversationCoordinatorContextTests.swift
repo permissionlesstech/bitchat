@@ -36,6 +36,16 @@ private final class MockChatPublicConversationContext: ChatPublicConversationCon
         notifyUIChangedCount += 1
     }
 
+    /// Mirrors `ConversationStore.isPublicConversationOnScreen(_:)`: the
+    /// active channel's conversation, plus #mesh while the split layout pins
+    /// it beside the active channel.
+    var isMeshPinnedOnScreen = false
+
+    func isPublicConversationOnScreen(_ conversationID: ConversationID) -> Bool {
+        conversationID == ConversationID(channelID: activeChannel)
+            || (isMeshPinnedOnScreen && conversationID == .mesh)
+    }
+
     // Public conversation store (single-writer intents)
     var conversations: [ConversationID: [BitchatMessage]] = [:]
     private(set) var queuedGeohashSystemMessages: [String] = []
@@ -351,6 +361,61 @@ struct ChatPublicConversationCoordinatorContextTests {
         coordinator.handlePublicMessage(second)
         #expect(context.enqueuedMessages.map(\.messageID) == ["geo-msg-2"])
         #expect(context.enqueuedMessages.first?.conversationID == .geohash(geohash))
+    }
+
+    /// Split layout: #mesh is pinned on screen beside the selected geohash,
+    /// so its arrivals are batched like the active channel's, while the
+    /// geohash's keep batching too.
+    @Test @MainActor
+    func handlePublicMessage_meshPinnedBesideGeohash_batchesBothTimelines() async {
+        let context = MockChatPublicConversationContext()
+        let coordinator = ChatPublicConversationCoordinator(context: context)
+        let geohash = "u4pruy"
+        context.currentGeohash = geohash
+        context.activeChannel = .location(GeohashChannel(level: .city, geohash: geohash))
+        context.isMeshPinnedOnScreen = true
+
+        coordinator.handlePublicMessage(makePublicMessage(id: "mesh-msg", content: "mesh hello"))
+        coordinator.handlePublicMessage(makePublicMessage(
+            id: "geo-msg",
+            content: "geo hello",
+            senderPeerID: PeerID(nostr: String(repeating: "ab", count: 32))
+        ))
+
+        #expect(context.enqueuedMessages.map(\.messageID) == ["mesh-msg", "geo-msg"])
+        #expect(context.enqueuedMessages.map(\.conversationID) == [.mesh, .geohash(geohash)])
+        #expect(context.publicMessages(in: .mesh).isEmpty)
+        #expect(context.publicMessages(in: .geohash(geohash)).isEmpty)
+    }
+
+    /// Without the pin (compact, macOS) a mesh arrival while a geohash is
+    /// selected is a background arrival: appended at once, never batched.
+    @Test @MainActor
+    func handlePublicMessage_meshNotPinnedBesideGeohash_appendsImmediately() async {
+        let context = MockChatPublicConversationContext()
+        let coordinator = ChatPublicConversationCoordinator(context: context)
+        context.currentGeohash = "u4pruy"
+        context.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pruy"))
+
+        coordinator.handlePublicMessage(makePublicMessage(id: "mesh-msg", content: "mesh hello"))
+
+        #expect(context.publicMessages(in: .mesh).map(\.id) == ["mesh-msg"])
+        #expect(context.enqueuedMessages.isEmpty)
+    }
+
+    /// System arrivals keep landing on the active channel, pinned mesh or not.
+    @Test @MainActor
+    func handlePublicMessage_systemMessage_landsOnActiveChannelWhileMeshIsPinned() async {
+        let context = MockChatPublicConversationContext()
+        let coordinator = ChatPublicConversationCoordinator(context: context)
+        context.currentGeohash = "u4pruy"
+        context.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pruy"))
+        context.isMeshPinnedOnScreen = true
+
+        coordinator.handlePublicMessage(makePublicMessage(id: "sys-msg", sender: "system", content: "notice", senderPeerID: nil))
+
+        #expect(context.enqueuedMessages.map(\.messageID) == ["sys-msg"])
+        #expect(context.enqueuedMessages.first?.conversationID == .geohash("u4pruy"))
     }
 
     /// A peer-chosen wire timestamp near UInt64.max comes back from Date as

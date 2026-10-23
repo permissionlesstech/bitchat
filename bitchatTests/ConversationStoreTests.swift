@@ -677,6 +677,65 @@ struct ConversationStoreTests {
         #expect(store.selectedConversationID == nil)
     }
 
+    // MARK: - Public timelines on screen
+
+    @Test("compact: only the active channel's timeline is on screen, private chat or not")
+    @MainActor
+    func onlyActiveChannelIsOnScreenWithoutMeshPin() {
+        let store = ConversationStore()
+        let geohash = ChannelID.location(GeohashChannel(level: .city, geohash: "U4PRU"))
+
+        // Compact #mesh.
+        #expect(store.isPublicConversationOnScreen(.mesh))
+        #expect(!store.isPublicConversationOnScreen(.geohash("u4pru")))
+
+        // Compact geohash (the conversation ID is the lowercased geohash).
+        store.setActiveChannel(geohash)
+        #expect(store.isPublicConversationOnScreen(.geohash("u4pru")))
+        #expect(!store.isPublicConversationOnScreen(.mesh))
+        #expect(!store.isPublicConversationOnScreen(.geohash("u4prv")))
+
+        // A private chat over the channel does not take it off screen, and
+        // the private chat is not a public timeline.
+        let peerID = PeerID(str: "0102030405060708")
+        store.setSelectedPrivatePeer(peerID)
+        #expect(store.isPublicConversationOnScreen(.geohash("u4pru")))
+        #expect(!store.isPublicConversationOnScreen(.directPeer(peerID)))
+    }
+
+    #if os(iOS)
+    @Test("split: #mesh stays on screen beside the active channel while pinned")
+    @MainActor
+    func pinnedMeshIsOnScreenBesideActiveChannel() {
+        let store = ConversationStore()
+        let geohash = ChannelID.location(GeohashChannel(level: .city, geohash: "u4pru"))
+        var pinEmissions = 0
+        let cancellable = store.$isMeshPinnedOnScreen.dropFirst().sink { _ in pinEmissions += 1 }
+        defer { cancellable.cancel() }
+
+        // Pinned + geohash: both timelines.
+        store.setActiveChannel(geohash)
+        store.setMeshPinnedOnScreen(true)
+        #expect(store.isMeshPinnedOnScreen)
+        #expect(store.isPublicConversationOnScreen(.mesh))
+        #expect(store.isPublicConversationOnScreen(.geohash("u4pru")))
+        #expect(!store.isPublicConversationOnScreen(.geohash("u4prv")))
+
+        // Pinned + #mesh selected (the trailing pane shows the picker).
+        store.setActiveChannel(.mesh)
+        #expect(store.isPublicConversationOnScreen(.mesh))
+        #expect(!store.isPublicConversationOnScreen(.geohash("u4pru")))
+
+        // Setting the same value publishes nothing; unpinning restores compact.
+        store.setMeshPinnedOnScreen(true)
+        store.setActiveChannel(geohash)
+        store.setMeshPinnedOnScreen(false)
+        #expect(!store.isPublicConversationOnScreen(.mesh))
+        #expect(store.isPublicConversationOnScreen(.geohash("u4pru")))
+        #expect(pinEmissions == 2)
+    }
+    #endif
+
     // MARK: - Migration
 
     @Test("migrateConversation moves messages, dedups, and preserves order")

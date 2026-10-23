@@ -26,6 +26,10 @@ protocol ChatPublicConversationContext: AnyObject {
     var myPeerID: PeerID { get }
     /// Signals that message state changed so observers refresh (e.g. `objectWillChange.send()`).
     func notifyUIChanged()
+    /// Whether a public conversation's timeline is on screen: the active
+    /// channel's, plus #mesh while the split layout pins it beside the
+    /// active channel. Arrivals for on-screen timelines are batched.
+    func isPublicConversationOnScreen(_ conversationID: ConversationID) -> Bool
 
     // MARK: Public conversation store (single-writer intents)
     /// Appends a public message in timestamp order. Returns `false` when a
@@ -144,6 +148,10 @@ extension ChatViewModel: ChatPublicConversationContext {
 
     func enqueuePublicMessage(_ message: BitchatMessage, to conversationID: ConversationID) {
         publicMessagePipeline.enqueue(message, to: conversationID)
+    }
+
+    func isPublicConversationOnScreen(_ conversationID: ConversationID) -> Bool {
+        conversations.isPublicConversationOnScreen(conversationID)
     }
 
     func normalizedContentKey(_ content: String) -> String {
@@ -499,17 +507,11 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
             if archivedEchoKeys.contains(key) { return }
         }
 
-        let channelMatches: Bool = {
-            switch context.activeChannel {
-            case .mesh: return !isGeo || isSystem
-            case .location: return isGeo || isSystem
-            }
-        }()
-
-        if channelMatches {
-            // Visible-channel arrivals are batched: the pipeline's ~80 ms
-            // flush commits them to the store (which dedups by ID), keeping
-            // the deliberate UI flush cadence.
+        if context.isPublicConversationOnScreen(destination) {
+            // On-screen arrivals are batched: the pipeline's ~80 ms flush
+            // commits them to the store (which dedups by ID), keeping the
+            // deliberate UI flush cadence, and content-dedups them per
+            // conversation. That covers both timelines of the split layout.
             guard !context.publicConversationContainsMessage(withID: finalMessage.id, in: destination) else { return }
             context.enqueuePublicMessage(finalMessage, to: destination)
         } else {
