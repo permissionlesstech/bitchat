@@ -702,7 +702,7 @@ struct AppArchitectureTests {
         #expect(viewModel.activeChannel == ChannelID.mesh)
         #expect(uiModel.canSendMediaInCurrentContext)
 
-        uiModel.sendMessage("hello mesh")
+        uiModel.sendMessage("hello mesh", to: viewModel.selectionTarget)
 
         await waitUntil {
             transport.sentMessages.last?.content == "hello mesh"

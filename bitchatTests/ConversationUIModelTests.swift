@@ -348,9 +348,9 @@ struct ConversationUIModelTests {
 
     // With no nickname fallback, a send path that forgets to stamp the sender
     // ID turns my own row into a stranger's. Each test below sends the way the
-    // composer does, through the UI model's `sendMessage(_:)` and
-    // `makeVoiceNoteSender()`, and asks the UI model about the row that send
-    // produced.
+    // composer does, through the UI model's `sendMessage(_:to:)` and
+    // `makeVoiceNoteSender(for:)` with the selection as the target, and asks
+    // the UI model about the row that send produced.
 
     @MainActor
     private static func publicRow(_ content: String, in channel: ChannelID, of viewModel: ChatViewModel) -> BitchatMessage? {
@@ -376,7 +376,7 @@ struct ConversationUIModelTests {
         let (viewModel, transport) = makeChatViewModel(nickname: "alice")
         let uiModel = makeUIModel(for: viewModel)
 
-        uiModel.sendMessage("hello mesh")
+        uiModel.sendMessage("hello mesh", to: viewModel.selectionTarget)
 
         #expect(transport.sentMessages.map(\.content) == ["hello mesh"])
         let sent = try #require(Self.publicRow("hello mesh", in: .mesh, of: viewModel))
@@ -391,7 +391,7 @@ struct ConversationUIModelTests {
         transport.peerNicknames[Self.peerID] = "bob"
 
         viewModel.startPrivateChat(with: Self.peerID)
-        uiModel.sendMessage("hi bob")
+        uiModel.sendMessage("hi bob", to: viewModel.selectionTarget)
 
         #expect(transport.sentPrivateMessages.map(\.content) == ["hi bob"])
         let sent = try #require(Self.privateRow("hi bob", with: Self.peerID, of: viewModel))
@@ -408,7 +408,7 @@ struct ConversationUIModelTests {
         viewModel.registerNostrKeyMapping(stranger.publicKeyHex, for: conversation)
 
         viewModel.startPrivateChat(with: conversation)
-        uiModel.sendMessage("hi stranger")
+        uiModel.sendMessage("hi stranger", to: viewModel.selectionTarget)
 
         let sent = try #require(Self.privateRow("hi stranger", with: conversation, of: viewModel))
         // Handed to the Nostr transport, not failed on the way there.
@@ -423,7 +423,7 @@ struct ConversationUIModelTests {
         #expect(await Self.switchAndSettle(to: Self.locationChannel, in: viewModel, uiModel: uiModel))
         let myHex = try Self.myGeoHex(viewModel)
 
-        uiModel.sendMessage("hello geohash")
+        uiModel.sendMessage("hello geohash", to: viewModel.selectionTarget)
 
         // The echo lands once its NIP-13 nonce is mined off the main actor.
         #expect(await TestHelpers.waitUntil(
@@ -442,7 +442,7 @@ struct ConversationUIModelTests {
         let note = try Self.makeVoiceNote()
         defer { try? FileManager.default.removeItem(at: note) }
 
-        uiModel.makeVoiceNoteSender()(note)
+        uiModel.makeVoiceNoteSender(for: viewModel.selectionTarget)(note)
 
         // The row is enqueued at once; wait out the detached preparation so
         // the send has finished before the test does.
@@ -461,7 +461,7 @@ struct ConversationUIModelTests {
         defer { try? FileManager.default.removeItem(at: note) }
 
         viewModel.startPrivateChat(with: Self.peerID)
-        uiModel.makeVoiceNoteSender()(note)
+        uiModel.makeVoiceNoteSender(for: viewModel.selectionTarget)(note)
 
         #expect(await TestHelpers.waitUntil({ transport.sentPrivateFiles.count == 1 }, timeout: TestConstants.settleTimeout))
         let sent = try #require(Self.privateRow("[voice] \(note.lastPathComponent)", with: Self.peerID, of: viewModel))

@@ -61,12 +61,10 @@ final class ConversationUIModel: ObservableObject {
     // MARK: Sending and list actions
     //
     // Each takes the conversation the person acted in: the composer's or
-    // the list's own target, captured when they acted. The few target-less
-    // forms left act on the selection.
-
-    func sendMessage(_ message: String) {
-        sendMessage(message, to: chatViewModel.selectionTarget)
-    }
+    // the list's own target, captured when they acted. Sending text or a
+    // voice note has no other form, so no view can send to the selection;
+    // the few target-less list actions left (the people list's block and
+    // unblock) act on the selection.
 
     /// Sends `message` (or runs it as a command) in `target`, whatever is
     /// selected by the time it goes out.
@@ -243,14 +241,8 @@ final class ConversationUIModel: ObservableObject {
     }
     #endif
 
-    /// Make this at the mic's release and pass it as the recorder's
-    /// completion: the voice note goes to the conversation on screen then,
-    /// even if the person leaves it before the file is finalized.
-    func makeVoiceNoteSender() -> (URL) -> Void {
-        chatViewModel.makeVoiceNoteSender()
-    }
-
-    /// The release completion for `target`'s composer: the note goes to that
+    /// The release completion for `target`'s composer: make it at the mic's
+    /// release and pass it to the recorder. The note goes to that
     /// conversation, whatever is selected once the file is finalized.
     func makeVoiceNoteSender(for target: ConversationTarget) -> (URL) -> Void {
         chatViewModel.makeVoiceNoteSender(for: target)
