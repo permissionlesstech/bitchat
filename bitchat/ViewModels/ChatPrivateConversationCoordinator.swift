@@ -882,23 +882,20 @@ final class ChatPrivateConversationCoordinator {
                         category: .session
                     )
                 } else if currentFingerprint == nil || oldFingerprint == nil {
-                    // My geo-DM rows name me as their recipient
-                    // (sendGeohashDM), so the second clause below matches
-                    // them for any mesh peer who shares my nickname. As in
-                    // PrivateChatManager.consolidateMessages, a geo-DM thread
-                    // holding my rows never moves by nickname; moved into a
-                    // namesake's chat, my next reply there would go to the
-                    // namesake instead of the geohash stranger.
-                    if oldPeerID.isGeoDM, messages.contains(where: { $0.senderPeerID == myPeerID }) {
-                        continue
-                    }
                     // Which rows are mine goes by sender ID: after a rename my
                     // older rows carry my previous name, and a stranger who
-                    // takes that name must not read as their author.
+                    // takes that name must not read as their author. My
+                    // geo-DM rows name me, not the peer, as their recipient
+                    // (sendGeohashDM), so they say nothing about who a geo-DM
+                    // thread is with: there only the peer's rows count.
+                    // Otherwise a namesake (or someone who took my old name)
+                    // would take the thread, and my next reply, along.
+                    let isGeoDMThread = oldPeerID.isGeoDM
                     let isRelevantChat = recentMessages.contains { msg in
-                        let isMine = msg.isOwn(myPeerID: myPeerID, myGeoChatPeerID: nil)
-                        return (!isMine && msg.sender == senderNickname)
-                            || (isMine && msg.recipientNickname == senderNickname)
+                        if msg.isOwn(myPeerID: myPeerID, myGeoChatPeerID: nil) {
+                            return !isGeoDMThread && msg.recipientNickname == senderNickname
+                        }
+                        return msg.sender == senderNickname
                     }
 
                     if isRelevantChat {
