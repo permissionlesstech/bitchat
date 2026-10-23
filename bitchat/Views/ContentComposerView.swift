@@ -18,6 +18,9 @@ struct ContentComposerView: View {
     var isTextFieldFocused: FocusState<Bool>.Binding
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
     @Binding var autocompleteDebounceTimer: Timer?
+    /// The mic press itself. A drag gesture never reports a cancelled touch
+    /// through onEnded, but this resets either way.
+    @GestureState private var isMicPressed = false
 
     let onSendMessage: () -> Void
 
@@ -268,6 +271,9 @@ private extension ContentComposerView {
                 showImagePicker = true
             }
             .onLongPressGesture(minimumDuration: 0.3) {
+                // The simulator and camera-less devices have no camera
+                // source; the picker raises on an unavailable one.
+                guard UIImagePickerController.isSourceTypeAvailable(.camera) else { return }
                 imagePickerSourceType = .camera
                 showImagePicker = true
             }
@@ -281,6 +287,7 @@ private extension ContentComposerView {
             // The long-press → camera path is unreachable for VoiceOver users;
             // mirror it as a named action.
             .accessibilityAction(named: Text("content.accessibility.take_photo", comment: "Accessibility action name for taking a photo with the camera")) {
+                guard UIImagePickerController.isSourceTypeAvailable(.camera) else { return }
                 imagePickerSourceType = .camera
                 showImagePicker = true
             }
@@ -346,6 +353,9 @@ private extension ContentComposerView {
                     .contentShape(Circle())
                     .gesture(
                         DragGesture(minimumDistance: 0)
+                            .updating($isMicPressed) { _, isPressed, _ in
+                                isPressed = true
+                            }
                             .onChanged { _ in
                                 voiceRecordingVM.start(shouldShow: conversationUIModel.canSendMediaInCurrentContext)
                             }
@@ -354,6 +364,18 @@ private extension ContentComposerView {
                             }
                     )
             )
+            .onChange(of: isMicPressed) { isPressed in
+                guard !isPressed else { return }
+                // A lift already ran finish() in onEnded, which leaves the
+                // recorder idle synchronously. Still in flight a hop later
+                // means the touch was cancelled instead (a fold, a call, a
+                // system alert): nothing would ever end this hold, leaving
+                // the mic, or a live push-to-talk stream, open.
+                DispatchQueue.main.async {
+                    guard !isMicPressed, voiceRecordingVM.isHoldInFlight else { return }
+                    voiceRecordingVM.cancel()
+                }
+            }
             .accessibilityLabel(
                 String(localized: "content.accessibility.record_voice_note", comment: "Accessibility label for the voice note button")
             )

@@ -95,6 +95,36 @@ private final class GatedVoiceCaptureSession: VoiceCaptureSession {
     }
 }
 
+/// Keeps the microphone permission prompt up until the test answers it.
+@MainActor
+private final class PermissionPromptVoiceCaptureSession: VoiceCaptureSession {
+    let isLive = false
+    private(set) var startCount = 0
+    private var permissionContinuation: CheckedContinuation<Bool, Never>?
+
+    var isPromptShowing: Bool { permissionContinuation != nil }
+
+    func requestPermission() async -> Bool {
+        await withCheckedContinuation { continuation in
+            permissionContinuation = continuation
+        }
+    }
+
+    func answerPrompt(granted: Bool) {
+        let continuation = permissionContinuation
+        permissionContinuation = nil
+        continuation?.resume(returning: granted)
+    }
+
+    func start() async throws {
+        startCount += 1
+    }
+
+    func finish() async -> URL? { nil }
+    func cancel() async {}
+    func panicCancelSynchronously() {}
+}
+
 @MainActor
 struct VoiceCaptureSessionTests {
     private func waitUntil(
@@ -207,6 +237,30 @@ struct VoiceCaptureSessionTests {
         for _ in 0..<20 {
             await Task.yield()
         }
+        #expect(viewModel.state == .idle)
+    }
+
+    /// A system prompt cancels the touch that raised it, so a hold can be
+    /// abandoned while the permission prompt is up. Granting access then
+    /// must not start a recording nobody is holding.
+    @Test func holdCancelledAtThePermissionPromptNeverRecords() async {
+        let session = PermissionPromptVoiceCaptureSession()
+        let viewModel = VoiceRecordingViewModel()
+        viewModel.sessionProvider = { session }
+
+        viewModel.start(shouldShow: true)
+        await waitUntil { session.isPromptShowing }
+        #expect(viewModel.state == .requestingPermission)
+        #expect(viewModel.isHoldInFlight)
+
+        viewModel.cancel()
+        #expect(!viewModel.isHoldInFlight)
+
+        session.answerPrompt(granted: true)
+        for _ in 0..<20 {
+            await Task.yield()
+        }
+        #expect(session.startCount == 0)
         #expect(viewModel.state == .idle)
     }
 

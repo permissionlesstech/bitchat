@@ -316,15 +316,24 @@ struct ContentView: View {
         .frame(minWidth: 600, minHeight: 400)
         #endif
         .onChange(of: selectedPrivatePeerID) { newValue in
+            let draftKey = ComposerDraftStore.Key.from(
+                peerID: newValue,
+                fingerprint: newValue.flatMap { conversationUIModel.getFingerprint(for: $0) },
+                channel: locationChannelsModel.selectedChannel
+            )
+            // A hold records for the conversation it started in, but a voice
+            // note is routed by the selection when the hold ends, and a live
+            // push-to-talk stream keeps its original target; the composer
+            // holding the press may also just have been removed. Compared like
+            // drafts, so the same person's peer-ID handoff keeps the hold.
+            if draftKey != activeDraftKey, voiceRecordingVM.isHoldInFlight {
+                voiceRecordingVM.cancel()
+            }
             if newValue != nil {
                 showSidebar = true
             }
             sharedContentImportModel.updateDestination(sharedContentDestination)
-            switchComposerDraft(to: ComposerDraftStore.Key.from(
-                peerID: newValue,
-                fingerprint: newValue.flatMap { conversationUIModel.getFingerprint(for: $0) },
-                channel: locationChannelsModel.selectedChannel
-            ))
+            switchComposerDraft(to: draftKey)
         }
         .onChange(of: locationChannelsModel.selectedChannel) { newChannel in
             sharedContentImportModel.updateDestination(sharedContentDestination)

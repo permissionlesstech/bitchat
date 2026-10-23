@@ -59,6 +59,14 @@ final class VoiceRecordingViewModel: ObservableObject {
     /// composer switches its recording HUD to the LIVE treatment.
     @Published private(set) var isLiveStreaming = false
 
+    /// A press between start() and finish()/cancel(): waiting on the
+    /// microphone permission prompt, spinning up, or recording. Wider than
+    /// `state.isActive` because a hold abandoned at the permission prompt
+    /// would otherwise start recording once access is granted.
+    var isHoldInFlight: Bool {
+        state.isActive || state == .requestingPermission
+    }
+
     /// Supplies the capture backend per press. `ChatViewModel` swaps in a
     /// live push-to-talk session when the current DM peer can hear it now.
     var sessionProvider: () -> VoiceCaptureSession = { VoiceNoteCaptureSession() }
