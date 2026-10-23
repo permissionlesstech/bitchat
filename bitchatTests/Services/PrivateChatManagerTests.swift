@@ -355,6 +355,51 @@ struct PrivateChatManagerTests {
     }
 
     @Test @MainActor
+    func consolidateMessages_leavesAThreadWithMyRepliesOutOfANamesakesChat() async {
+        // One row of mine is enough, not a thread of only mine: their rows
+        // and my replies all read "alice", so the nickname check alone would
+        // fold the thread, my replies with it.
+        let transport = MockTransport()
+        transport.myPeerID = PeerID(str: "a1b2c3d4e5f60718")
+        let (manager, store) = Self.makeManager(transport: transport)
+        let namesakePeerID = PeerID(str: "0011223344556677")
+        let thread = PeerID(nostr_: String(repeating: "44", count: 32))
+
+        store.append(
+            BitchatMessage(
+                id: "their-geo-dm",
+                sender: "alice",
+                content: "hi from them",
+                timestamp: Date().addingTimeInterval(-60),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "alice",
+                senderPeerID: thread
+            ),
+            to: .directPeer(thread)
+        )
+        store.append(
+            BitchatMessage(
+                id: "my-reply",
+                sender: "alice",
+                content: "hi back",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "alice",
+                senderPeerID: transport.myPeerID,
+                deliveryStatus: .sent
+            ),
+            to: .directPeer(thread)
+        )
+
+        _ = manager.consolidateMessages(for: namesakePeerID, peerNickname: "alice", persistedReadReceipts: [])
+
+        #expect(manager.privateChats[thread]?.map(\.id) == ["their-geo-dm", "my-reply"])
+        #expect(manager.privateChats[namesakePeerID] == nil)
+    }
+
+    @Test @MainActor
     func syncReadReceiptsForSentMessages_onlyCopiesDeliveredAndRead() async {
         let transport = MockTransport()
         let (manager, store) = Self.makeManager(transport: transport)
