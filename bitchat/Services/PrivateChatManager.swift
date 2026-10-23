@@ -181,10 +181,10 @@ final class PrivateChatManager: ObservableObject {
                         originalSender: message.originalSender,
                         isPrivate: message.isPrivate,
                         recipientNickname: message.recipientNickname,
-                        // As in the stable-key branch above: my own rows keep
-                        // my ID, only the peer's rows move to `peerID`. (Threads
-                        // holding my rows are skipped above; this stays as a
-                        // second guard.)
+                        // Defense in depth: threads holding my rows are
+                        // skipped above, so every row here is the peer's and
+                        // moves to `peerID`. Were one of mine to get through,
+                        // it would keep my ID, as in the stable-key branch.
                         senderPeerID: message.senderPeerID == meshService.myPeerID ? meshService.myPeerID : peerID,
                         mentions: message.mentions,
                         deliveryStatus: message.deliveryStatus
