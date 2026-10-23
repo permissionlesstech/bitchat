@@ -3,9 +3,9 @@
 // bitchatTests
 //
 // Two public timelines can be on screen at once: the split layout pins
-// #mesh beside the selected geohash. Arrivals for both are batched and
-// the content window is per conversation. End to end through
-// `ChatViewModel`, the store, and the pipeline.
+// #mesh beside the selected geohash. Arrivals for both are batched, the
+// content window is per conversation, and live voice follows what is on
+// screen. End to end through `ChatViewModel`, the store, and the pipeline.
 //
 // This is free and unencumbered software released into the public domain.
 // For more information, see <https://unlicense.org>
@@ -101,6 +101,24 @@ struct ChatViewModelSplitTimelineTests {
 
         #expect(viewModel.publicConversationContainsMessage(withID: "mesh-gm", in: .mesh))
         #expect(viewModel.publicConversationContainsMessage(withID: "geo-gm", in: .geohash(selectedGeohash.geohash)))
+    }
+
+    @Test("live mesh bursts autoplay while #mesh is pinned on screen, not under a private chat")
+    func liveVoiceAutoplay_followsPinnedMesh() {
+        let viewModel = makeSplitTimelineViewModel()
+        viewModel.activeChannel = .location(selectedGeohash)
+        #expect(!viewModel.isViewingPublicMeshTimeline)
+
+        viewModel.conversations.setMeshPinnedOnScreen(true)
+        #expect(viewModel.isViewingPublicMeshTimeline)
+
+        viewModel.selectedPrivateChatPeer = PeerID(str: "0102030405060708")
+        #expect(!viewModel.isViewingPublicMeshTimeline)
+
+        viewModel.selectedPrivateChatPeer = nil
+        viewModel.conversations.setMeshPinnedOnScreen(false)
+        viewModel.activeChannel = .mesh
+        #expect(viewModel.isViewingPublicMeshTimeline)
     }
     #endif
 }
