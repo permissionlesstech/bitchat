@@ -46,6 +46,7 @@ struct LocationChannelsPickerTests {
             #expect(Picker.lifecycleActions(for: .appear, presentation: Self.pane, permission: permission) == refresh)
             #expect(Picker.lifecycleActions(for: .disappear, presentation: Self.pane, permission: permission).isEmpty)
             #expect(Picker.lifecycleActions(for: .permissionChange, presentation: Self.pane, permission: permission) == refresh)
+            #expect(Picker.lifecycleActions(for: .retry, presentation: Self.pane, permission: permission) == refresh)
         }
     }
 
@@ -103,6 +104,55 @@ struct LocationChannelsPickerTests {
             == Picker.Choice(selects: true, awaitsSelection: false))
         // (#mesh isn't listed there; were it chosen, it is the selection.)
         #expect(Picker.choice(ofGeohash: nil, presentation: Self.pane, selected: .mesh) == atOnce)
+    }
+
+    // MARK: - A fix that never comes
+
+    /// The pane asks for one fix; once that has had its chance it stops
+    /// promising one and offers a retry. The sheet's live updates keep
+    /// trying, so it keeps its spinner. No permission: the hint, always.
+    @Test
+    func paneStopsPromisingAFixThatNeverCame() {
+        let asked = Date(timeIntervalSince1970: 1_000_000)
+        let patience = Picker.nearbyFixPatience
+        let times: [Date] = [
+            asked,
+            asked.addingTimeInterval(patience - 1),
+            asked.addingTimeInterval(patience),
+            asked.addingTimeInterval(patience * 100)
+        ]
+
+        for permission in Self.permissions where permission != .authorized {
+            for presentation in [Picker.Presentation.sheet, Self.pane] {
+                for now in times {
+                    #expect(Picker.nearbyPlaceholder(
+                        presentation: presentation,
+                        permission: permission,
+                        fixRequestedAt: asked,
+                        now: now
+                    ) == .grantPermission)
+                }
+            }
+        }
+
+        for now in times {
+            #expect(Picker.nearbyPlaceholder(
+                presentation: .sheet,
+                permission: .authorized,
+                fixRequestedAt: asked,
+                now: now
+            ) == .finding)
+        }
+
+        func pane(at now: Date, askedAt: Date? = asked) -> Picker.NearbyPlaceholder {
+            Picker.nearbyPlaceholder(presentation: Self.pane, permission: .authorized, fixRequestedAt: askedAt, now: now)
+        }
+        #expect(pane(at: times[0]) == .finding)
+        #expect(pane(at: times[1]) == .finding)
+        #expect(pane(at: times[2]) == .unavailable)
+        #expect(pane(at: times[3]) == .unavailable)
+        // Not asked yet: it asks as it appears and as permission arrives.
+        #expect(pane(at: times[3], askedAt: nil) == .finding)
     }
     #endif
 
@@ -200,7 +250,7 @@ struct LocationChannelsPickerTests {
     }
 
     @Test
-    func paneWipeAsksForOneFixAndNeverPrompts() async {
+    func paneWipeAndRetryAskForOneFixAndNeverPrompt() async {
         let fixture = await Fixture(authorizationStatus: .authorizedAlways)
         defer { fixture.tearDown() }
         let location = fixture.location
@@ -208,6 +258,8 @@ struct LocationChannelsPickerTests {
         Picker.perform(.appear, presentation: Self.pane, permission: fixture.model.permissionState, on: fixture.model)
         Picker.perform(.panicWipe, presentation: Self.pane, permission: fixture.model.permissionState, on: fixture.model)
         #expect(location.requestLocationCallCount == 2)
+        Picker.perform(.retry, presentation: Self.pane, permission: fixture.model.permissionState, on: fixture.model)
+        #expect(location.requestLocationCallCount == 3)
 
         #expect(location.startUpdatingLocationCallCount == 0)
         #expect(location.stopUpdatingLocationCallCount == 0)

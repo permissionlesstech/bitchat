@@ -68,6 +68,11 @@ struct LocationChannelsPicker: View {
     @ThemedPalette private var palette
     /// What the picker holds of its own. A panic wipe drops all of it.
     @State private var local = LocalState()
+    #if os(iOS)
+    /// When the pane last asked for a fix: once `nearbyFixPatience` has
+    /// passed without one, it stops promising one.
+    @State private var fixRequestedAt: Date?
+    #endif
 
     private struct LocalState {
         var customGeohash = ""
@@ -92,6 +97,11 @@ struct LocationChannelsPicker: View {
         static let grantToFind: LocalizedStringKey = "location_channels.grant_to_find"
         static let teleport: LocalizedStringKey = "location_channels.action.teleport"
         static let bookmarked: LocalizedStringKey = "location_channels.bookmarked_section_title"
+        #if os(iOS)
+        // The notices sheet's words for the same situation: no fix came.
+        static let locationUnavailable: LocalizedStringKey = "content.notes.location_unavailable"
+        static let retry: LocalizedStringKey = "location_notes.action.retry"
+        #endif
         // Same string the settings pane shows under the tor toggle — the
         // warning belongs wherever the exposure is about to happen.
         static let torOffWarning = String(localized: "app_info.settings.tor.off_warning", defaultValue: "tor is off: every relay you connect to can see your IP address, including relays carrying your private messages.", comment: "Warning shown under the tor toggle while tor is switched off, stating that relay operators can see the device IP address")
@@ -332,7 +342,14 @@ struct LocationChannelsPicker: View {
     }
 
     private func perform(_ event: LifecycleEvent, permission: LocationChannelManager.PermissionState) {
+        #if os(iOS)
+        let actions = Self.perform(event, presentation: presentation, permission: permission, on: locationChannelsModel)
+        if actions.contains(.refreshChannels) {
+            fixRequestedAt = Date()
+        }
+        #else
         Self.perform(event, presentation: presentation, permission: permission, on: locationChannelsModel)
+        #endif
     }
 
     #if os(iOS)
@@ -418,12 +435,12 @@ struct LocationChannelsPicker: View {
     /// anything this picker observes, so re-read them every few seconds while
     /// it is on screen.
     private var channelList: some View {
-        TimelineView(.periodic(from: .now, by: 5)) { _ in
-            channelListContent
+        TimelineView(.periodic(from: .now, by: 5)) { context in
+            channelListContent(at: context.date)
         }
     }
 
-    private var channelListContent: some View {
+    private func channelListContent(at now: Date) -> some View {
         ScrollView {
             LazyVStack(spacing: 0) {
                 if showsMeshRow {
@@ -476,24 +493,9 @@ struct LocationChannelsPicker: View {
                         }
                         .padding(.vertical, 6)
                     }
-                } else if locationChannelsModel.permissionState == .authorized {
-                    sectionDivider
-                    HStack(spacing: 8) {
-                        ProgressView()
-                        Text(Strings.loadingNearby)
-                            .bitchatFont(size: 12)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 10)
                 } else {
-                    // No permission means no fix is coming: an honest hint
-                    // beats a spinner that would never finish.
                     sectionDivider
-                    Text(Strings.grantToFind)
-                        .bitchatFont(size: 12)
-                        .foregroundColor(palette.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 10)
+                    nearbyPlaceholder(at: now)
                 }
 
                 sectionDivider
@@ -520,6 +522,75 @@ struct LocationChannelsPicker: View {
         }
         .themedSurface()
     }
+
+    /// What stands in for the nearby cells while none is known.
+    /// - Parameter now: The list's timeline tick, so a fix that never comes
+    ///   turns into the retry within a tick of the patience running out.
+    @ViewBuilder
+    private func nearbyPlaceholder(at now: Date) -> some View {
+        #if os(iOS)
+        switch Self.nearbyPlaceholder(
+            presentation: presentation,
+            permission: locationChannelsModel.permissionState,
+            fixRequestedAt: fixRequestedAt,
+            now: now
+        ) {
+        case .finding:
+            findingNearbyRow
+        case .grantPermission:
+            grantToFindRow
+        case .unavailable:
+            locationUnavailableRow
+        }
+        #else
+        if locationChannelsModel.permissionState == .authorized {
+            findingNearbyRow
+        } else {
+            grantToFindRow
+        }
+        #endif
+    }
+
+    private var findingNearbyRow: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+            Text(Strings.loadingNearby)
+                .bitchatFont(size: 12)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 10)
+    }
+
+    /// No permission means no fix is coming: an honest hint beats a spinner
+    /// that would never finish.
+    private var grantToFindRow: some View {
+        Text(Strings.grantToFind)
+            .bitchatFont(size: 12)
+            .foregroundColor(palette.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 10)
+    }
+
+    #if os(iOS)
+    /// The pane's fix never came, and nothing would ask again while the pane
+    /// is up: say so, and leave the next ask to a tap (I3).
+    private var locationUnavailableRow: some View {
+        HStack(spacing: 8) {
+            Text(Strings.locationUnavailable)
+                .bitchatFont(size: 12)
+                .foregroundColor(palette.secondary)
+            Spacer()
+            Button(Strings.retry) {
+                perform(.retry, permission: locationChannelsModel.permissionState)
+            }
+            .buttonStyle(.plain)
+            .bitchatFont(size: 12)
+            .foregroundColor(standardGreen)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 10)
+    }
+    #endif
 
     private var sectionDivider: some View {
         Rectangle()
@@ -800,6 +871,8 @@ extension LocationChannelsPicker {
         #if os(iOS)
         /// A panic wipe: the pane's `panicEpoch` changed.
         case panicWipe
+        /// The pane's retry, after a fix that never came.
+        case retry
         #endif
     }
 
@@ -815,8 +888,8 @@ extension LocationChannelsPicker {
     /// prompts for permission: that stays the tap on the enable button. The
     /// sheet keeps its continuous refresh while it is up. The pane can sit on
     /// screen for hours, so it never starts one: it asks for a single fix as
-    /// it appears, when permission arrives and after a panic wipe (whatever
-    /// it listed came from a fix taken before the wipe).
+    /// it appears, when permission arrives, after a panic wipe (whatever it
+    /// listed came from a fix taken before the wipe) and on its retry.
     /// - Parameter permission: The permission state as of the event (after
     ///   the change, for `.permissionChange`).
     static func lifecycleActions(
@@ -840,6 +913,8 @@ extension LocationChannelsPicker {
         case (.panicWipe, .sheet):
             // The wipe closes the sheet; its disappearance ends the updates.
             return []
+        case (.retry, _):
+            return refresh
         #endif
         case (.permissionChange, _):
             return refresh
@@ -847,14 +922,17 @@ extension LocationChannelsPicker {
     }
 
     /// Runs `lifecycleActions(for:presentation:permission:)` on `model`.
+    /// - Returns: The actions it ran.
     @MainActor
+    @discardableResult
     static func perform(
         _ event: LifecycleEvent,
         presentation: Presentation,
         permission: LocationChannelManager.PermissionState,
         on model: LocationChannelsModel
-    ) {
-        for action in lifecycleActions(for: event, presentation: presentation, permission: permission) {
+    ) -> [LifecycleAction] {
+        let actions = lifecycleActions(for: event, presentation: presentation, permission: permission)
+        for action in actions {
             switch action {
             case .refreshChannels:
                 model.refreshChannels()
@@ -864,6 +942,7 @@ extension LocationChannelsPicker {
                 model.endLiveRefresh()
             }
         }
+        return actions
     }
 
     /// How a choice goes: whether it selects, and when it is reported.
@@ -914,6 +993,48 @@ extension LocationChannelsPicker {
             return geohash == nil
         case .location(let channel):
             return geohash?.lowercased() == channel.geohash.lowercased()
+        }
+    }
+
+    /// How long the pane waits for its one fix. CoreLocation answers a
+    /// one-shot request within seconds, a failure included, but a failure
+    /// only reaches the log, and a stop of continuous updates elsewhere (the
+    /// sheet, the notices) cancels the request outright.
+    static let nearbyFixPatience: TimeInterval = 15
+
+    /// What stands in for the nearby cells while none is known.
+    enum NearbyPlaceholder: Equatable {
+        /// A fix is on its way: the spinner.
+        case finding
+        /// No permission, so no fix is coming: the hint to grant it.
+        case grantPermission
+        /// The pane's fix had its chance and none came: say so, with a retry.
+        case unavailable
+    }
+
+    /// The sheet's continuous updates keep trying, so it keeps its spinner.
+    /// The pane asks once, so its spinner lasts `nearbyFixPatience` from the
+    /// ask. Nothing asked yet is a pane that will as it appears or as
+    /// permission arrives.
+    /// - Parameters:
+    ///   - fixRequestedAt: When the pane last asked for a fix.
+    ///   - now: The time to judge at.
+    static func nearbyPlaceholder(
+        presentation: Presentation,
+        permission: LocationChannelManager.PermissionState,
+        fixRequestedAt: Date?,
+        now: Date
+    ) -> NearbyPlaceholder {
+        guard permission == .authorized else { return .grantPermission }
+        switch presentation {
+        case .sheet:
+            return .finding
+        case .pane:
+            guard let fixRequestedAt,
+                  now.timeIntervalSince(fixRequestedAt) >= nearbyFixPatience else {
+                return .finding
+            }
+            return .unavailable
         }
     }
     #endif
