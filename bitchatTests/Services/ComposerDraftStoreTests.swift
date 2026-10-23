@@ -13,7 +13,7 @@ struct ComposerDraftStoreTests {
     }
 
     @Test func emptyDraftIsNotStored() throws {
-        try withCleanStore {
+        withCleanStore {
             ComposerDraftStore.save("hello", for: .mesh)
             ComposerDraftStore.save("   ", for: .mesh)
             // Whitespace-only is still a draft the user typed; empty string clears.
@@ -24,7 +24,7 @@ struct ComposerDraftStoreTests {
     }
 
     @Test func draftsAreIsolatedPerConversation() throws {
-        try withCleanStore {
+        withCleanStore {
             let peer = PeerID(str: "aabbccddeeff0011")
             ComposerDraftStore.save("mesh draft", for: .mesh)
             ComposerDraftStore.save("geo draft", for: .location(geohash: "u4pruy"))
@@ -38,7 +38,7 @@ struct ComposerDraftStoreTests {
     }
 
     @Test func geohashKeysAreCaseInsensitive() throws {
-        try withCleanStore {
+        withCleanStore {
             ComposerDraftStore.save("city chat", for: .location(geohash: "U4PRUY"))
             #expect(ComposerDraftStore.load(.location(geohash: "u4pruy")) == "city chat")
         }
@@ -62,7 +62,7 @@ struct ComposerDraftStoreTests {
     }
 
     @Test func longDraftsAreTruncated() throws {
-        try withCleanStore {
+        withCleanStore {
             let long = String(repeating: "a", count: ComposerDraftStore.maxDraftLength + 50)
             ComposerDraftStore.save(long, for: .mesh)
             #expect(ComposerDraftStore.load(.mesh).count == ComposerDraftStore.maxDraftLength)
@@ -70,7 +70,7 @@ struct ComposerDraftStoreTests {
     }
 
     @Test func resetClearsAllDrafts() throws {
-        try withCleanStore {
+        withCleanStore {
             ComposerDraftStore.save("keep quiet", for: .mesh)
             ComposerDraftStore.reset()
             #expect(ComposerDraftStore.load(.mesh).isEmpty)
@@ -79,7 +79,7 @@ struct ComposerDraftStoreTests {
     }
 
     @Test func maxDraftCountEvictsOldestKeys() throws {
-        try withCleanStore {
+        withCleanStore {
             for index in 0..<ComposerDraftStore.maxDraftCount {
                 ComposerDraftStore.save(
                     "d\(index)",
@@ -93,7 +93,7 @@ struct ComposerDraftStoreTests {
     }
 
     @Test func clearingDraftRemovesKeySoItDoesNotResurrect() throws {
-        try withCleanStore {
+        withCleanStore {
             ComposerDraftStore.save("old text", for: .mesh)
             ComposerDraftStore.save("", for: .mesh)
             #expect(ComposerDraftStore.load(.mesh).isEmpty)
