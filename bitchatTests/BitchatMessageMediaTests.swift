@@ -39,16 +39,20 @@ struct BitchatMessageMediaTests {
 
     @Test
     func nostrSendersNeverGetMediaRows() {
-        // Geochats and geo DMs carry no files, so a media-looking line from a
-        // Nostr sender must stay text instead of loading some local file.
+        // Geochats, geo DMs and bridged messages carry no files, so a
+        // media-looking line from a Nostr sender must stay text instead of
+        // loading some local file.
         let geoChatSender = PeerID(nostr: Self.nostrPubkey)
         let geoDMSender = PeerID(nostr_: Self.nostrPubkey)
+        let bridgedSender = PeerID(bridge: Self.nostrPubkey)
         #expect(geoChatSender.isGeoChat)
         #expect(geoDMSender.isGeoDM)
+        #expect(bridgedSender.isBridge)
 
         for content in ["[image] img_1.jpg", "[voice] note.m4a"] {
             #expect(message(content, senderPeerID: geoChatSender).mediaAttachment(for: "me") == nil)
             #expect(message(content, senderPeerID: geoDMSender).mediaAttachment(for: "me") == nil)
+            #expect(message(content, senderPeerID: bridgedSender).mediaAttachment(for: "me") == nil)
             #expect(message(content, sender: "me", senderPeerID: geoChatSender).mediaAttachment(for: "me") == nil)
         }
         // A message without a sender ID keeps the mesh behavior.

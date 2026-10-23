@@ -280,18 +280,24 @@ final class ConversationUIModel: ObservableObject {
     }
 
     private func refreshComputedState() {
+        let canSendMedia: Bool
         if let selectedPeerID = privateConversationModel.selectedPeerID {
             // Media transfer is not wired for groups in v1; keep it off so the
             // composer can't strand a media placeholder that never sends.
-            canSendMediaInCurrentContext = !(selectedPeerID.isGeoDM || selectedPeerID.isGeoChat || selectedPeerID.isGroup)
-            return
+            canSendMedia = !(selectedPeerID.isGeoDM || selectedPeerID.isGeoChat || selectedPeerID.isGroup)
+        } else {
+            switch activeChannel {
+            case .mesh:
+                canSendMedia = true
+            case .location:
+                canSendMedia = false
+            }
         }
-
-        switch activeChannel {
-        case .mesh:
-            canSendMediaInCurrentContext = true
-        case .location:
-            canSendMediaInCurrentContext = false
+        // Every write republishes to every message row, and most triggers
+        // (each peer, favorite or status refresh of the selection) leave the
+        // value as it was.
+        if canSendMediaInCurrentContext != canSendMedia {
+            canSendMediaInCurrentContext = canSendMedia
         }
     }
 }

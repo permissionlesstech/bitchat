@@ -33,10 +33,11 @@ extension BitchatMessage {
     }
 
     func mediaAttachment(for nickname: String) -> Media? {
-        // Files only travel over the mesh; geochats and geo DMs carry text
-        // alone (media sending is disabled there). A "[image] " line from a
-        // Nostr sender names no file it sent us, so it stays a text row.
-        if let senderPeerID, senderPeerID.isGeoChat || senderPeerID.isGeoDM {
+        // Files only travel over the mesh radio; geochats, geo DMs and
+        // bridged messages (internet-relayed from a rendezvous) carry text
+        // alone. A "[image] " line from such a sender names no file it sent
+        // us, so it stays a text row.
+        if let senderPeerID, senderPeerID.isGeoChat || senderPeerID.isGeoDM || senderPeerID.isBridge {
             return nil
         }
         guard let baseDirectory = Cache.shared.filesDir else { return nil }
