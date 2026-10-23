@@ -55,11 +55,6 @@ extension ChatViewModel {
         privateConversationCoordinator.handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: convKey)
     }
 
-    @MainActor
-    func sendVoiceNote(at url: URL) {
-        mediaTransferCoordinator.sendVoiceNote(at: url)
-    }
-
     /// The mic release's completion: the voice note goes to the conversation
     /// on screen at the release, not to whatever is selected once the
     /// recorder hands over the file.
@@ -139,11 +134,6 @@ extension ChatViewModel {
         mediaTransferCoordinator.processThenSendImage(from: url)
     }
     #endif
-
-    @MainActor
-    func sendImage(from sourceURL: URL, cleanup: (() -> Void)? = nil) {
-        mediaTransferCoordinator.sendImage(from: sourceURL, cleanup: cleanup)
-    }
 
     @MainActor
     func enqueueMediaMessage(content: String, targetPeer: PeerID?) -> BitchatMessage {

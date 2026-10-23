@@ -551,7 +551,9 @@ final class ChatMediaTransferCoordinator {
     /// sending it: the mic's release, the photo's pick. The file arrives
     /// later, after the recorder's finalize padding or detached image
     /// processing, and reading the selection only then would post a DM's
-    /// media to the public mesh if the person had just left the DM.
+    /// media to the public mesh if the person had just left the DM. That's
+    /// why the send paths take one and have no form that reads the
+    /// selection itself.
     struct MediaDestination {
         /// The DM partner, or nil for the public timeline.
         let privatePeer: PeerID?
@@ -583,10 +585,6 @@ final class ChatMediaTransferCoordinator {
             }
             self.sendVoiceNote(at: url, to: destination)
         }
-    }
-
-    func sendVoiceNote(at url: URL) {
-        sendVoiceNote(at: url, to: currentMediaDestination)
     }
 
     func sendVoiceNote(at url: URL, to destination: MediaDestination) {
@@ -738,10 +736,6 @@ final class ChatMediaTransferCoordinator {
         }
     }
     #endif
-
-    func sendImage(from sourceURL: URL, cleanup: (() -> Void)? = nil) {
-        sendImage(from: sourceURL, to: currentMediaDestination, cleanup: cleanup)
-    }
 
     func sendImage(
         from sourceURL: URL,
