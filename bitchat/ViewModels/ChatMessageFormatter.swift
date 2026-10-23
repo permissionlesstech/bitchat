@@ -16,7 +16,11 @@ final class ChatMessageFormatter {
     private var nostrPaletteKey: NostrPaletteKey?
 
     private struct NostrPaletteKey: Equatable {
+        // periphery:ignore - read only via the synthesized Equatable
+        // conformance (the rebuild check), which the indexer cannot
+        // attribute.
         let membershipRevision: UInt64
+        // periphery:ignore - see `membershipRevision`.
         let excludedHex: String?
     }
 
