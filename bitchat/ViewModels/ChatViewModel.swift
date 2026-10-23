@@ -1601,7 +1601,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
         // Clear all messages (public timelines and private chats live in the
         // single-writer ConversationStore; the derived `messages` view and
-        // the legacy mirror empty with it)
+        // the legacy mirror empty with it). Public arrivals still waiting for
+        // the batched flush (every timeline on screen, the split layout's
+        // pinned #mesh included) go first, or that flush would commit them
+        // into the wiped store.
+        publicMessagePipeline.discardAll()
         conversations.clearAll()
         pendingGeohashSystemMessages.removeAll()
 

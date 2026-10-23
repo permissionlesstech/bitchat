@@ -47,7 +47,6 @@ private func makeGeohashArrival(id: String, content: String) -> BitchatMessage {
     )
 }
 
-#if os(iOS)
 @MainActor
 private func makeMeshArrival(id: String, content: String) -> BitchatMessage {
     BitchatMessage(
@@ -59,7 +58,6 @@ private func makeMeshArrival(id: String, content: String) -> BitchatMessage {
         senderPeerID: PeerID(str: "1122334455667788")
     )
 }
-#endif
 
 /// The same hug twice, as a bridge alias and as the authenticated radio
 /// packet: an emote-shaped text arrives as a system line that keeps its
@@ -132,7 +130,47 @@ struct ChatViewModelSplitTimelineTests {
         #expect(viewModel.publicConversationContainsMessage(withID: "geo-wave", in: .geohash(selectedGeohash.geohash)))
     }
 
+    /// An arrival still waiting for the batched flush when panic runs is
+    /// wiped with the store: the flush after the wipe must not commit it into
+    /// the fresh timeline.
+    @Test("panic drops arrivals still waiting for the batched flush")
+    func panic_dropsArrivalsWaitingForTheFlush() {
+        let viewModel = makeSplitTimelineViewModel()
+        viewModel.handlePublicMessage(makeMeshArrival(id: "mesh-pre-panic", content: "before the wipe"))
+        #expect(viewModel.publicMessagePipeline.containsMessage(withID: "mesh-pre-panic"))
+
+        viewModel.panicClearAllData()
+        viewModel.publicMessagePipeline.flushIfNeeded()
+
+        #expect(!viewModel.publicMessagePipeline.containsMessage(withID: "mesh-pre-panic"))
+        #expect(!viewModel.publicConversationContainsMessage(withID: "mesh-pre-panic", in: .mesh))
+    }
+
     #if os(iOS)
+    /// The split layout batches both timelines, so panic must empty both,
+    /// the pinned #mesh pane's model included.
+    @Test("panic empties both on-screen timelines of arrivals waiting for the flush")
+    func panic_emptiesBothPinnedTimelines() {
+        let viewModel = makeSplitTimelineViewModel()
+        let geohash = ConversationID.geohash(selectedGeohash.geohash)
+        viewModel.activeChannel = .location(selectedGeohash)
+        viewModel.currentGeohash = selectedGeohash.geohash
+        viewModel.conversations.setMeshPinnedOnScreen(true)
+        let meshPane = PublicChatModel(conversations: viewModel.conversations, pinnedTo: .mesh)
+
+        viewModel.handlePublicMessage(makeMeshArrival(id: "mesh-pre-panic", content: "mesh before"))
+        viewModel.handlePublicMessage(makeGeohashArrival(id: "geo-pre-panic", content: "geo before"), powBits: 0)
+        #expect(viewModel.publicMessagePipeline.containsMessage(withID: "mesh-pre-panic"))
+        #expect(viewModel.publicMessagePipeline.containsMessage(withID: "geo-pre-panic"))
+
+        viewModel.panicClearAllData()
+        viewModel.publicMessagePipeline.flushIfNeeded()
+
+        #expect(!viewModel.publicConversationContainsMessage(withID: "mesh-pre-panic", in: .mesh))
+        #expect(!viewModel.publicConversationContainsMessage(withID: "geo-pre-panic", in: geohash))
+        #expect(!meshPane.messages.contains { $0.id == "mesh-pre-panic" })
+    }
+
     @Test("pinned #mesh beside a geohash: both timelines batch and keep the same text")
     func pinnedMesh_batchesBothTimelinesAndKeepsSameText() {
         let viewModel = makeSplitTimelineViewModel()

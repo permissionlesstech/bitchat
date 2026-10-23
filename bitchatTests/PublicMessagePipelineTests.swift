@@ -189,4 +189,28 @@ struct PublicMessagePipelineTests {
         #expect(delegate.committed.isEmpty)
         #expect(delegate.recordedContentKeys.isEmpty)
     }
+
+    /// Panic: nothing buffered for either on-screen timeline survives to a
+    /// later flush, and the pipeline keeps working afterwards.
+    @Test @MainActor
+    func discardAll_dropsEveryBufferedMessage() {
+        let pipeline = PublicMessagePipeline()
+        let delegate = TestPipelineDelegate()
+        pipeline.delegate = delegate
+        let now = Date()
+
+        pipeline.enqueue(makeMessage(id: "mesh-1", content: "mesh hello", timestamp: now), to: .mesh)
+        pipeline.enqueue(makeMessage(id: "geo-1", content: "geo hello", timestamp: now), to: .geohash("u4pruydq"))
+        pipeline.discardAll()
+
+        #expect(!pipeline.containsMessage(withID: "mesh-1"))
+        #expect(!pipeline.containsMessage(withID: "geo-1"))
+        pipeline.flushIfNeeded()
+        #expect(delegate.committed.isEmpty)
+        #expect(delegate.recordedContentKeys.isEmpty)
+
+        pipeline.enqueue(makeMessage(id: "mesh-2", content: "after the wipe", timestamp: now), to: .mesh)
+        pipeline.flushIfNeeded()
+        #expect(delegate.messages(in: .mesh).map(\.id) == ["mesh-2"])
+    }
 }

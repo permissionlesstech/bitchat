@@ -77,6 +77,18 @@ final class PublicMessagePipeline {
         buffer.contains { $0.message.id == messageID }
     }
 
+    /// Drops every buffered message and the pending flush (panic). A flush
+    /// after the store and the content window are wiped would commit the
+    /// pre-wipe arrivals into the fresh conversations, on whichever
+    /// timelines are on screen.
+    func discardAll() {
+        timer?.invalidate()
+        timer = nil
+        buffer.removeAll(keepingCapacity: false)
+        recentBatchSizes.removeAll(keepingCapacity: false)
+        dynamicFlushInterval = baseFlushInterval
+    }
+
     func flushIfNeeded() {
         flushBuffer()
     }
