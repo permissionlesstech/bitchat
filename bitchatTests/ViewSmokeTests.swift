@@ -5,6 +5,7 @@ import SwiftUI
 import CoreGraphics
 import AVFoundation
 #if os(iOS)
+import CoreLocation
 import UIKit
 #else
 import AppKit
@@ -220,6 +221,60 @@ private struct ContentConversationColumnHarness: View {
             onSendMessage: {}
         )
     }
+}
+#endif
+
+/// The header bar as each layout configures it.
+@MainActor
+private struct ContentHeaderHarness: View {
+    var paneChannel: ChannelID?
+    var carriesAppChrome = true
+    var isBadgeStatic = false
+    var handlesPaneTaps = false
+    @FocusState private var isNicknameFieldFocused: Bool
+
+    var body: some View {
+        ContentHeaderView(
+            showSidebar: .constant(false),
+            showVerifySheet: .constant(false),
+            isNicknameFieldFocused: $isNicknameFieldFocused,
+            headerHeight: 44,
+            headerPeerIconSize: 11,
+            headerPeerCountFontSize: 12,
+            trailingCornerReach: 55,
+            paneChannel: paneChannel,
+            carriesAppChrome: carriesAppChrome,
+            onPeopleTap: handlesPaneTaps ? {} : nil,
+            onBadgeTap: handlesPaneTaps ? {} : nil,
+            isBadgeStatic: isBadgeStatic
+        )
+    }
+}
+
+#if os(iOS)
+/// A `LocationChannelsModel` whose CoreLocation seam reports `status`,
+/// settled once the permission has reached the model.
+@MainActor
+private func makeSmokeLocationChannelsModel(
+    authorizationStatus: CLAuthorizationStatus
+) async -> LocationChannelsModel {
+    let suiteName = "ViewSmokeTests.\(UUID().uuidString)"
+    let storage = UserDefaults(suiteName: suiteName) ?? .standard
+    storage.removePersistentDomain(forName: suiteName)
+    let manager = LocationStateManager(
+        storage: storage,
+        locationManager: MockLocationStateManaging(authorizationStatus: authorizationStatus),
+        geocoder: MockLocationStateGeocoder(),
+        shouldInitializeCoreLocation: true
+    )
+    let model = LocationChannelsModel(manager: manager)
+    if authorizationStatus != .notDetermined {
+        _ = await TestHelpers.waitUntil(
+            { model.permissionState != .notDetermined },
+            timeout: TestConstants.settleTimeout
+        )
+    }
+    return model
 }
 #endif
 
@@ -618,7 +673,139 @@ struct ViewSmokeTests {
 
         _ = mount(installSmokeEnvironment(ContentConversationColumnHarness(), featureModels: featureModels))
     }
+
+    @Test
+    func peopleList_rendersEachPresentationForEitherChannel() async {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let geohash = GeohashChannel(level: .city, geohash: "u4pru")
+        let presentations: [ContentPeopleListView.Presentation] = [
+            .sheet,
+            .column(headerHeight: 44, trailingCornerReach: 55),
+            .popover(onClose: {})
+        ]
+
+        featureModels.locationChannelsModel.select(.location(geohash))
+        defer { featureModels.locationChannelsModel.select(.mesh) }
+        let selected = await TestHelpers.waitUntil(
+            { featureModels.locationChannelsModel.selectedChannel.isLocation },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(selected)
+        for presentation in presentations {
+            // #mesh's people while a geohash is selected, and the geohash's.
+            for channel in [ChannelID?.none, .mesh, .location(geohash)] {
+                _ = mount(installSmokeEnvironment(
+                    ContentPeopleListView(
+                        showSidebar: .constant(false),
+                        showVerifySheet: .constant(false),
+                        presentation: presentation,
+                        channel: channel
+                    ),
+                    featureModels: featureModels
+                ))
+            }
+        }
+    }
+
+    @Test
+    func peoplePopover_rendersMeshAndGeohashPeople() {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let geohash = GeohashChannel(level: .city, geohash: "u4pru")
+        var closes = 0
+
+        _ = mount(installSmokeEnvironment(
+            ContentPeoplePopoverView(channel: .mesh, paneWidth: 455.5, onClose: { closes += 1 }),
+            featureModels: featureModels
+        ))
+        _ = mount(installSmokeEnvironment(
+            ContentPeoplePopoverView(channel: .location(geohash), paneWidth: 371.5, onClose: { closes += 1 }),
+            featureModels: featureModels
+        ))
+        // The presenter, closed: only the models the people tree reads.
+        _ = mount(installSmokeEnvironment(
+            Color.clear.contentPeoplePopover(
+                isPresented: .constant(false),
+                channel: .mesh,
+                paneWidth: 455.5,
+                onClose: {}
+            ),
+            featureModels: featureModels
+        ))
+
+        // At most a phone sheet's width, and 16pt clear of either pane edge.
+        #expect(ContentPeoplePopoverView.idealWidth(forPaneWidth: 455.5) == 360)
+        #expect(ContentPeoplePopoverView.idealWidth(forPaneWidth: 371.5) == 339.5)
+        #expect(ContentPeoplePopoverView.idealWidth(forPaneWidth: 20) == 0)
+        #expect(closes == 0)
+    }
+
+    @Test
+    func locationChannelsPane_rendersEachPermissionAndBrowsing() async {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let pane = LocationChannelsPicker.Presentation.pane(headerHeight: 44, trailingCornerReach: 55)
+
+        for status in [CLAuthorizationStatus.notDetermined, .denied, .authorizedAlways] {
+            let model = await makeSmokeLocationChannelsModel(authorizationStatus: status)
+            // Idle: no close control, no #mesh row.
+            _ = mount(installSmokeEnvironment(
+                LocationChannelsPicker(presentation: pane, onChoose: {}, onClose: nil)
+                    .environmentObject(model),
+                featureModels: featureModels
+            ))
+            // Browsing away from a geohash: close, and the #mesh row back.
+            model.select(.location(GeohashChannel(level: .city, geohash: "u4pru")))
+            _ = await TestHelpers.waitUntil(
+                { model.selectedChannel.isLocation },
+                timeout: TestConstants.settleTimeout
+            )
+            _ = mount(installSmokeEnvironment(
+                LocationChannelsPicker(presentation: pane, onChoose: {}, onClose: {})
+                    .environmentObject(model),
+                featureModels: featureModels
+            ))
+            #expect(model.selectedChannel.isLocation)
+        }
+    }
+
+    @Test
+    func paneTouchObserver_mounts() {
+        _ = mount(PaneTouchObserver { _ in })
+        _ = mount(Color.clear.background(PaneTouchObserver { _ in }))
+    }
     #endif
+
+    @Test
+    func contentHeader_rendersTheSingleColumnAndBothPaneBars() async {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let geohash = GeohashChannel(level: .city, geohash: "u4pru")
+        let configurations = [
+            // The single column (compact iOS, macOS): today's bar.
+            ContentHeaderHarness(),
+            // Split, leading: #mesh as a label, the app chrome, mesh people.
+            ContentHeaderHarness(paneChannel: .mesh, isBadgeStatic: true, handlesPaneTaps: true),
+            // Split, trailing: the geohash's badge, bookmark and people only.
+            ContentHeaderHarness(paneChannel: .location(geohash), carriesAppChrome: false, handlesPaneTaps: true)
+        ]
+
+        for configuration in configurations {
+            _ = mount(installSmokeEnvironment(configuration, featureModels: featureModels))
+        }
+        // With the geohash selected, as the split layout runs it.
+        featureModels.locationChannelsModel.select(.location(geohash))
+        defer { featureModels.locationChannelsModel.select(.mesh) }
+        _ = await TestHelpers.waitUntil(
+            { featureModels.locationChannelsModel.selectedChannel.isLocation },
+            timeout: TestConstants.settleTimeout
+        )
+        for configuration in configurations {
+            _ = mount(installSmokeEnvironment(configuration, featureModels: featureModels))
+        }
+        #expect(featureModels.locationChannelsModel.selectedChannel == .location(geohash))
+    }
 
     @Test("Root Bluetooth alert waits for location and notices sheets")
     func rootBluetoothAlertGuard_includesHeaderSheets() {
