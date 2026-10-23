@@ -146,23 +146,39 @@ struct MessageListActionsTests {
         ])
     }
 
-    /// End to end: the split layout's #mesh list beside an open DM. Its
-    /// block confirms and its triple-tap clear empties in #mesh; the DM
-    /// the selection names gets neither.
-    @Test("a #mesh list's block and clear stay in #mesh while a DM is open")
-    func meshListActionsStayInMeshWhileADMIsOpen() async {
+    /// End to end: the split layout's #mesh list, on the pinned #mesh model,
+    /// while the selection names a geohash and a DM covers it. The list's
+    /// target comes from its own model, as the list takes it; its block
+    /// confirms and its triple-tap clear empties in #mesh, and neither the
+    /// selected geohash nor the DM gets anything.
+    @Test("a #mesh list's block and clear stay in #mesh beside a geohash and a DM")
+    func meshListActionsStayInMeshWhileTheSelectionIsElsewhere() async throws {
         let (ui, viewModel, transport) = makeActionsUIModel()
         transport.peerFingerprints[bob] = "fp-bob"
+        let geohashChannel = ChannelID.location(geohash)
+        viewModel.locationManager.select(geohashChannel)
+        let selected = await TestHelpers.waitUntil(
+            { viewModel.activeChannel == geohashChannel },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(selected)
+        viewModel.selectedPrivateChatPeer = alice
+        #expect(viewModel.selectionTarget == ConversationTarget(channel: geohashChannel, privatePeer: alice))
         viewModel.conversations.append(
             BitchatMessage(id: "mesh-row", sender: "bob", content: "on the mesh", timestamp: Date(), isRelay: false, senderPeerID: bob),
             to: .mesh
         )
-        viewModel.selectedPrivateChatPeer = alice
+        viewModel.conversations.append(
+            BitchatMessage(id: "geo-row", sender: "carol", content: "in the geohash", timestamp: Date(), isRelay: false),
+            to: ConversationID(channelID: geohashChannel)
+        )
+        let meshPane = PublicChatModel(conversations: viewModel.conversations, pinnedTo: .mesh)
         let meshList = actions(
-            target: MessageListActions.target(privateTarget: nil, timelineChannel: .mesh) ?? .mesh,
+            target: try #require(MessageListActions.target(privateTarget: nil, timelineChannel: meshPane.channel)),
             composer: nil,
             performer: ui
         )
+        #expect(meshList.target == .mesh)
 
         meshList.block(peerID: bob, displayName: "bob")
         let blocked = String(format: String(localized: "system.mesh.blocked"), locale: .current, "bob")
@@ -174,7 +190,30 @@ struct MessageListActionsTests {
             timeout: TestConstants.settleTimeout
         )
         #expect(cleared)
+        let geohashRows = viewModel.publicMessages(for: geohashChannel)
+        #expect(geohashRows.contains { $0.id == "geo-row" }, "the selected geohash isn't cleared")
+        #expect(!geohashRows.contains { $0.content == blocked })
         #expect(viewModel.privateMessages(for: alice).isEmpty)
-        #expect(viewModel.selectedPrivateChatPeer == alice)
+        #expect(viewModel.selectionTarget == ConversationTarget(channel: geohashChannel, privatePeer: alice))
+    }
+
+    /// A list acts in its own conversation: nothing in MessageListView reads
+    /// which DM is open or what the selection targets (stage B's policy
+    /// test already rules out the selected channel). #1792's gate read the
+    /// open DM to decide whether the public list's actions were its own.
+    @Test("MessageListView never reads the open DM or the selection target")
+    func messageListViewNeverReadsTheSelection() throws {
+        let source = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()  // bitchatTests
+            .deletingLastPathComponent()  // repo root
+            .appendingPathComponent("bitchat/Views/MessageListView.swift")
+        let text = try String(contentsOf: source, encoding: .utf8)
+        let selectionReads = ["selectedPeerID", "selectedPrivateChatPeer", "selectionTarget", "activeChannel"]
+
+        let offenders = text.components(separatedBy: .newlines)
+            .enumerated()
+            .filter { line in selectionReads.contains { line.element.contains($0) } }
+            .map { "MessageListView.swift:\($0.offset + 1): \($0.element.trimmingCharacters(in: .whitespaces))" }
+        #expect(offenders.isEmpty, "\(offenders)")
     }
 }
