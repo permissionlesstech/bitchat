@@ -639,10 +639,13 @@ struct ContentPeopleListView: View {
                                 )
                             },
                             onToggleBlock: { peer in
+                                // The confirmation lands in #mesh, whose
+                                // people these are: the selection can be the
+                                // other pane's conversation.
                                 if peer.isBlocked {
-                                    conversationUIModel.unblock(peerID: peer.peerID, displayName: peer.displayName)
+                                    conversationUIModel.unblock(peerID: peer.peerID, displayName: peer.displayName, from: .mesh)
                                 } else {
-                                    conversationUIModel.block(peerID: peer.peerID, displayName: peer.displayName)
+                                    conversationUIModel.block(peerID: peer.peerID, displayName: peer.displayName, from: .mesh)
                                 }
                             }
                         )

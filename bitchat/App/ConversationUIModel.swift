@@ -93,10 +93,6 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.sendMessage("/slap @\(sender)", to: target)
     }
 
-    func block(peerID: PeerID?, displayName: String?) {
-        block(peerID: peerID, displayName: displayName, from: chatViewModel.selectionTarget)
-    }
-
     /// Blocks someone tapped in `target`'s list; a confirmation or failure
     /// line lands in that conversation.
     func block(peerID: PeerID?, displayName: String?, from target: ConversationTarget) {
@@ -114,16 +110,12 @@ final class ConversationUIModel: ObservableObject {
         }
     }
 
-    /// Mesh counterpart of `block(peerID:displayName:)`. Resolves the unblock by
-    /// the tapped peer's stable identity so the exact row is unblocked — this
-    /// also works for offline peers, which the `/unblock <displayName>` command
-    /// cannot resolve.
-    func unblock(peerID: PeerID, displayName: String) {
-        unblock(peerID: peerID, displayName: displayName, from: chatViewModel.selectionTarget)
-    }
-
     /// Unblocks someone toggled in `target`'s list; a confirmation or
-    /// failure line lands in that conversation.
+    /// failure line lands in that conversation. Mesh counterpart of
+    /// `block(peerID:displayName:from:)`: it resolves the unblock by the
+    /// tapped peer's stable identity, so the exact row is unblocked, offline
+    /// peers included, which the `/unblock <displayName>` command cannot
+    /// resolve.
     func unblock(peerID: PeerID, displayName: String, from target: ConversationTarget) {
         chatViewModel.unblockMeshPeer(peerID: peerID, displayName: displayName, from: target)
     }

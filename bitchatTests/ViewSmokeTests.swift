@@ -1610,7 +1610,7 @@ struct ViewSmokeTests {
             timeout: TestConstants.settleTimeout
         )
         #expect(known)
-        featureModels.conversationUIModel.block(peerID: blocked, displayName: "Mallory")
+        featureModels.conversationUIModel.block(peerID: blocked, displayName: "Mallory", from: .mesh)
         #expect(viewModel.isPeerBlocked(blocked))
 
         #expect(!ContentPeopleListView.openConversationFromPopover(with: blocked, in: conversations))
