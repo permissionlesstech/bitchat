@@ -187,6 +187,38 @@ struct ChatViewModelTargetTests {
         #expect(viewModel.isNostrBlocked(pubkeyHexLowercased: carol))
     }
 
+    // MARK: Geohash DMs
+
+    /// A geohash DM signs with its own geohash's identity, never the
+    /// selection's, which would link two of our identities for the
+    /// recipient. The recipient here is our own identity in that geohash, so
+    /// the send stops at the self check, which only that identity can trip:
+    /// the selection's would have sent (another geohash) or refused as not
+    /// in a location channel (#mesh).
+    @Test @MainActor
+    func aGeohashDMSignsWithItsOwnGeohashsIdentityWhateverIsSelected() throws {
+        let (viewModel, transport) = makeTargetTestViewModel()
+        let scope = ChannelID.location(geohashChannel)
+        let ownHex = try viewModel.deriveNostrIdentity(forGeohash: geohashChannel.geohash).publicKeyHex
+        let geoDM = PeerID(nostr_: ownHex)
+        viewModel.registerNostrKeyMapping(ownHex, for: geoDM)
+
+        for selected in [ChannelID.mesh, otherGeohashChannel] {
+            viewModel.activeChannel = selected
+            // The composer's path, and the one /msg takes.
+            viewModel.sendMessage("composer", to: ConversationTarget(channel: scope, privatePeer: geoDM))
+            viewModel.sendPrivateMessage("msg", to: geoDM, scope: scope)
+        }
+
+        let thread = viewModel.privateMessages(for: geoDM)
+        let sent = thread.filter { $0.sender != "system" }
+        #expect(sent.map(\.content) == ["composer", "msg", "composer", "msg"])
+        let selfFailure = DeliveryStatus.failed(reason: String(localized: "content.delivery.reason.self"))
+        #expect(sent.allSatisfy { $0.deliveryStatus == selfFailure })
+        #expect(!thread.contains { $0.content == String(localized: "system.location.not_in_channel") })
+        #expect(transport.sentPrivateMessages.isEmpty)
+    }
+
     // MARK: A geohash that isn't live
 
     @Test @MainActor

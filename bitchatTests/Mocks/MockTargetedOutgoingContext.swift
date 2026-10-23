@@ -101,13 +101,16 @@ final class MockTargetedOutgoingContext: ChatOutgoingContext {
     // Geohash identity
     struct IdentityUnavailable: Error {}
     var deriveNostrIdentityError: Error?
+    /// Hands out an identity whose key can't sign (zero is no secp256k1
+    /// key), so a geohash send fails later, in its mining task.
+    var identityCannotSign = false
     private(set) var derivedIdentityGeohashes: [String] = []
 
     func deriveNostrIdentity(forGeohash geohash: String) throws -> NostrIdentity {
         derivedIdentityGeohashes.append(geohash)
         if let deriveNostrIdentityError { throw deriveNostrIdentityError }
         return NostrIdentity(
-            privateKey: Data(repeating: 0x11, count: 32),
+            privateKey: Data(repeating: identityCannotSign ? 0x00 : 0x11, count: 32),
             publicKey: Data(repeating: 0x22, count: 32),
             npub: "npub1mock",
             createdAt: Date(timeIntervalSince1970: 0)

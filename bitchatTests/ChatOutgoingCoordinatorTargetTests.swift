@@ -146,6 +146,28 @@ struct ChatOutgoingCoordinatorTargetTests {
     }
 
     @Test @MainActor
+    func aGeohashSendThatFailsAfterTheSelectionMovedReportsInItsOwnChannel() async {
+        let context = MockTargetedOutgoingContext()
+        let coordinator = ChatOutgoingCoordinator(context: context)
+        let target = ConversationTarget.publicChannel(.location(Self.geohash))
+        context.activeChannel = .location(Self.geohash)
+        context.identityCannotSign = true
+
+        coordinator.sendMessage("doomed", to: target)
+        // The selection moves on (another geohash, a DM over it) before the
+        // mining task gets to sign, and fails.
+        context.activeChannel = .location(Self.otherGeohash)
+        context.selectedPrivateChatPeer = Self.alice
+        await coordinator.geohashMiningTask?.value
+        await drainMainActorTasks()
+
+        #expect(context.systemMessages.map(\.target) == [target])
+        #expect(context.systemMessages.map(\.content) == [String(localized: "system.location.send_failed")])
+        #expect(context.sentGeohashContexts.isEmpty)
+        #expect(context.appendedPublicMessages.isEmpty)
+    }
+
+    @Test @MainActor
     func aCommandRunsInTheTargetItWasSentFrom() async {
         let context = MockTargetedOutgoingContext()
         let coordinator = ChatOutgoingCoordinator(context: context)
