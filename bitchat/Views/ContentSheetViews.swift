@@ -427,6 +427,7 @@ private struct ContentPeopleListView: View {
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var peerListModel: PeerListModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
     @Binding var showSidebar: Bool
@@ -483,7 +484,9 @@ private struct ContentPeopleListView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, isInline ? 0 : 16)
+            // Inline, level with the main header, which glass floats as a
+            // panel 4pt below the top (themedChromePanel).
+            .padding(.top, isInline ? (theme.usesGlassChrome ? 4 : 0) : 16)
             .padding(.bottom, isInline ? 0 : 12)
             // The content sits 16pt in; themedSurface adds no inset.
             .padding(.trailing, TopCornerClearance.padding(
@@ -616,6 +619,12 @@ private struct ContentPrivateChatSheetView: View {
     var isInline = false
     var trailingCornerReach: CGFloat = 0
 
+    /// Inline, the bar is as tall as the main header beside it, which
+    /// Dynamic Type below Large makes shorter than 44pt.
+    private var backButtonHeight: CGFloat {
+        isInline ? min(44, headerHeight) : 44
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if let headerState = privateConversationModel.selectedHeaderState {
@@ -628,8 +637,9 @@ private struct ContentPrivateChatSheetView: View {
                         Image(systemName: "chevron.left")
                             .font(.bitchatSystem(size: 12))
                             .foregroundColor(palette.primary)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
+                            .frame(width: 44, height: backButtonHeight)
+                            // Still a 44pt target where the bar is shorter.
+                            .contentShape(Rectangle().inset(by: (backButtonHeight - 44) / 2))
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(
