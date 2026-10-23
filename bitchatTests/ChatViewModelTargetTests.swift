@@ -142,6 +142,30 @@ struct ChatViewModelTargetTests {
         #expect(viewModel.getVisibleGeoParticipants(in: otherGeohashChannel).isEmpty)
     }
 
+    @Test @MainActor
+    func aBlockByNameNeverReachesAnotherChannelsPeople() async {
+        let (viewModel, _) = makeTargetTestViewModel()
+        viewModel.switchLocationChannel(to: .location(geohashChannel))
+        // carol is known in the live geohash, and is no mesh peer.
+        let carol = String(repeating: "c", count: 64)
+        viewModel.geoNicknames = [carol: "carol"]
+        #expect(viewModel.nostrPubkeyForDisplayName("carol", in: .location(geohashChannel)) == carol)
+        #expect(viewModel.nostrPubkeyForDisplayName("carol", in: .mesh) == nil)
+        #expect(viewModel.nostrPubkeyForDisplayName("carol", in: otherGeohashChannel) == nil)
+
+        // /block typed in #mesh beside the geohash finds nobody.
+        viewModel.handleCommand("/block carol", from: .mesh)
+        #expect(!viewModel.isNostrBlocked(pubkeyHexLowercased: carol))
+        #expect(viewModel.publicMessages(for: .mesh).last?.content
+            == "cannot block carol: not found or unable to verify identity")
+
+        // Typed in the geohash, it blocks her; #mesh can't unblock her.
+        viewModel.handleCommand("/block carol", from: .publicChannel(.location(geohashChannel)))
+        #expect(viewModel.isNostrBlocked(pubkeyHexLowercased: carol))
+        viewModel.handleCommand("/unblock carol", from: .mesh)
+        #expect(viewModel.isNostrBlocked(pubkeyHexLowercased: carol))
+    }
+
     // MARK: A geohash that isn't live
 
     @Test @MainActor

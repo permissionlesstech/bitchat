@@ -54,7 +54,14 @@ final class MockScopedCommandContext: CommandContextProvider {
         return geoParticipantsByChannel[scope] ?? []
     }
 
-    func nostrPubkeyForDisplayName(_ displayName: String) -> String? { nil }
+    /// Geohash participants' pubkeys by display name, per channel asked about.
+    var geoPubkeysByChannel: [ChannelID: [String: String]] = [:]
+    private(set) var geoPubkeyLookups: [(name: String, scope: ChannelID)] = []
+
+    func nostrPubkeyForDisplayName(_ displayName: String, in scope: ChannelID) -> String? {
+        geoPubkeyLookups.append((displayName, scope))
+        return geoPubkeysByChannel[scope]?[displayName]
+    }
 
     private(set) var geohashBlockListChangeCount = 0
     func geohashBlockListDidChange() {

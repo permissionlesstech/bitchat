@@ -44,7 +44,9 @@ protocol CommandContextProvider: AnyObject {
     /// `scope`'s visible geohash participants: nobody unless it is the
     /// selected geohash, the only one whose people are tracked.
     func getVisibleGeoParticipants(in scope: ChannelID) -> [CommandGeoParticipant]
-    func nostrPubkeyForDisplayName(_ displayName: String) -> String?
+    /// The geohash participant `scope` knows by `displayName`: nobody
+    /// unless it is the selected geohash, for the same reason.
+    func nostrPubkeyForDisplayName(_ displayName: String, in scope: ChannelID) -> String?
     /// A /block or /unblock by name changed which geohash participants are
     /// hidden; the roster re-filters instead of waiting for its timer.
     func geohashBlockListDidChange()
@@ -379,8 +381,9 @@ final class CommandProcessor {
             meshArchive?.purgeArchivedPublicMessages(from: peerID)
             return .success(message: String(format: String(localized: "command.block.done", defaultValue: "blocked %@. you will no longer see their messages", comment: "Confirmation after blocking a mesh peer"), locale: .current, nickname))
         }
-        // Mesh lookup failed; try geohash (Nostr) participant by display name
-        if let pub = contextProvider?.nostrPubkeyForDisplayName(nickname) {
+        // Mesh lookup failed; try a participant of the scope's geohash by
+        // display name (never another channel's people).
+        if let pub = contextProvider?.nostrPubkeyForDisplayName(nickname, in: scope.channel) {
             if identityManager.isNostrBlocked(pubkeyHexLowercased: pub) {
                 return .success(message: String(format: String(localized: "command.block.already", defaultValue: "%@ is already blocked", comment: "Reply when /block targets an already-blocked nickname"), locale: .current, nickname))
             }
@@ -408,8 +411,8 @@ final class CommandProcessor {
             identityManager.setBlocked(fingerprint, isBlocked: false)
             return .success(message: String(format: String(localized: "command.unblock.done", defaultValue: "unblocked %@", comment: "Confirmation after unblocking a mesh peer"), locale: .current, nickname))
         }
-        // Try geohash unblock
-        if let pub = contextProvider?.nostrPubkeyForDisplayName(nickname) {
+        // Try geohash unblock, in the scope's geohash only
+        if let pub = contextProvider?.nostrPubkeyForDisplayName(nickname, in: scope.channel) {
             if !identityManager.isNostrBlocked(pubkeyHexLowercased: pub) {
                 return .success(message: String(format: String(localized: "command.unblock.not_blocked", defaultValue: "%@ is not blocked", comment: "Reply when /unblock targets a nickname that isn't blocked"), locale: .current, nickname))
             }

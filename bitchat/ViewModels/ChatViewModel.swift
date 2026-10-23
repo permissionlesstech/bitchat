@@ -1382,11 +1382,27 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     /// are tracked. Nobody for #mesh or any other geohash.
     @MainActor
     func getVisibleGeoParticipants(in scope: ChannelID) -> [CommandGeoParticipant] {
-        guard scope.isLocation, ConversationID(channelID: scope) == ConversationID(channelID: activeChannel) else {
-            return []
-        }
+        guard isSelectedGeohash(scope) else { return [] }
         return publicConversationCoordinator.getVisibleGeoParticipants()
     }
+
+    /// CommandContextProvider conformance: the participant `scope` knows by
+    /// `displayName`, by the same rule. A /block or /unblock typed in #mesh,
+    /// or in a geohash that is no longer selected, never reaches the
+    /// selected geohash's people.
+    @MainActor
+    func nostrPubkeyForDisplayName(_ displayName: String, in scope: ChannelID) -> String? {
+        guard isSelectedGeohash(scope) else { return nil }
+        return nostrPubkeyForDisplayName(displayName)
+    }
+
+    /// Whether `scope` is the selected geohash: the only one subscribed, and
+    /// the only one whose participants and nicknames are tracked.
+    @MainActor
+    private func isSelectedGeohash(_ scope: ChannelID) -> Bool {
+        scope.isLocation && scope.isLive(whileSelected: activeChannel)
+    }
+
     /// Returns the current participant count for a specific geohash, using the 5-minute activity window.
     @MainActor
     func geohashParticipantCount(for geohash: String) -> Int {

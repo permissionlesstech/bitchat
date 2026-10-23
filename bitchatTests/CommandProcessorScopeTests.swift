@@ -227,6 +227,34 @@ struct CommandProcessorScopeTests {
         #expect(context.participantQueries == [Self.geoChannel])
     }
 
+    @Test func blockAndUnblockByNameReachOnlyTheScopesGeohashPeople() {
+        let context = MockScopedCommandContext()
+        // carol is a participant of the selected geohash, and no mesh peer.
+        context.activeChannel = Self.geoChannel
+        let carol = String(repeating: "c", count: 64)
+        context.geoPubkeysByChannel[Self.geoChannel] = ["carol": carol]
+        let identityManager = MockIdentityManager(MockKeychain())
+        let processor = makeProcessor(context, identityManager: identityManager)
+
+        // Typed in #mesh beside the geohash: carol is nobody there.
+        let blockFromMesh = processor.process("/block carol", in: .mesh)
+        #expect(message(of: blockFromMesh) == "cannot block carol: not found or unable to verify identity")
+        #expect(!identityManager.isNostrBlocked(pubkeyHexLowercased: carol))
+
+        // Typed in the geohash, she is blocked there...
+        let blockInGeohash = processor.process("/block carol", in: .publicChannel(Self.geoChannel))
+        #expect(message(of: blockInGeohash) == "blocked carol in geohash chats")
+        #expect(identityManager.isNostrBlocked(pubkeyHexLowercased: carol))
+
+        // ...and #mesh can't unblock her either.
+        let unblockFromMesh = processor.process("/unblock carol", in: .mesh)
+        #expect(message(of: unblockFromMesh) == "cannot unblock carol: not found")
+        #expect(identityManager.isNostrBlocked(pubkeyHexLowercased: carol))
+
+        #expect(context.geoPubkeyLookups.map(\.scope) == [.mesh, Self.geoChannel, .mesh])
+        #expect(context.geohashBlockListChangeCount == 1)
+    }
+
     // MARK: /pay
 
     @Test func payPostsInTheScope() {

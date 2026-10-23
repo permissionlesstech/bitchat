@@ -626,7 +626,7 @@ private final class MockCommandContextProvider: CommandContextProvider {
         visibleGeoParticipants
     }
 
-    func nostrPubkeyForDisplayName(_ displayName: String) -> String? {
+    func nostrPubkeyForDisplayName(_ displayName: String, in scope: ChannelID) -> String? {
         displayNameToNostrPubkey[displayName]
     }
 
