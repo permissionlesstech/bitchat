@@ -163,6 +163,11 @@ struct ContentView: View {
     /// Set when unfolding moves a focused DM composer out of the sheet; the
     /// sheet's dismissal hands focus to the column's composer.
     @State private var refocusComposerAfterLayoutChange = false
+    /// Set when unfolding moves an open DM out of the sheet. The column's list
+    /// lands on the latest message, but the departing sheet's list reports
+    /// its last row leaving afterwards, which raised a stale jump-to-latest
+    /// pill in the column.
+    @State private var repinConversationAfterLayoutChange = false
     #endif
     @ScaledMetric(relativeTo: .body) private var headerHeight: CGFloat = 44
     @ScaledMetric(relativeTo: .subheadline) private var headerPeerIconSize: CGFloat = 11
@@ -421,7 +426,7 @@ struct ContentView: View {
             ),
             onDismiss: {
                 #if os(iOS)
-                restoreComposerFocusAfterLayoutChange()
+                finishLayoutChangeAfterSheetDismissal()
                 #endif
             }
         ) {
@@ -885,6 +890,7 @@ struct ContentView: View {
         // focus to the column's composer; on folding, the sheet's composer
         // mounts as it presents.
         refocusComposerAfterLayoutChange = toSplit && composerWasFocused
+        repinConversationAfterLayoutChange = toSplit && conversationMoves
         if !toSplit, composerWasFocused {
             DispatchQueue.main.async {
                 isTextFieldFocused = true
@@ -892,10 +898,18 @@ struct ContentView: View {
         }
     }
 
-    private func restoreComposerFocusAfterLayoutChange() {
-        guard refocusComposerAfterLayoutChange else { return }
-        refocusComposerAfterLayoutChange = false
-        isTextFieldFocused = true
+    /// Only once the departing sheet is gone is the column's composer the one
+    /// field bound to the focus state, and has the sheet's list stopped
+    /// reporting where it is scrolled.
+    private func finishLayoutChangeAfterSheetDismissal() {
+        if repinConversationAfterLayoutChange {
+            repinConversationAfterLayoutChange = false
+            isAtBottomPrivate = true
+        }
+        if refocusComposerAfterLayoutChange {
+            refocusComposerAfterLayoutChange = false
+            isTextFieldFocused = true
+        }
     }
     #endif
 
