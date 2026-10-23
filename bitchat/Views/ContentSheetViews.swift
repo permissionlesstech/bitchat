@@ -306,8 +306,10 @@ struct ContentPeopleColumnView: View {
     @Binding var imagePickerSourceType: UIImagePickerController.SourceType
 
     let headerHeight: CGFloat
-    /// Keeps the top rows off a rounded display corner at the trailing edge.
-    let trailingCornerPadding: CGFloat
+    /// How far a rounded display corner reaches into the top rows from the
+    /// trailing edge (TopCornerClearance); each row pads by what its own
+    /// content inset leaves uncovered.
+    let trailingCornerReach: CGFloat
     let onSendMessage: () -> Void
 
     var body: some View {
@@ -330,7 +332,7 @@ struct ContentPeopleColumnView: View {
                     showImagePicker: $showImagePicker,
                     imagePickerSourceType: $imagePickerSourceType,
                     isInline: true,
-                    trailingCornerPadding: trailingCornerPadding
+                    trailingCornerReach: trailingCornerReach
                 )
             } else {
                 // Keeps hosting its own QR sheet, as in the people sheet.
@@ -339,7 +341,7 @@ struct ContentPeopleColumnView: View {
                     showVerifySheet: $showVerifySheet,
                     isInline: true,
                     headerHeight: headerHeight,
-                    trailingCornerPadding: trailingCornerPadding
+                    trailingCornerReach: trailingCornerReach
                 )
             }
         }
@@ -433,7 +435,7 @@ private struct ContentPeopleListView: View {
     /// and a title row as tall as the main header beside it.
     var isInline = false
     var headerHeight: CGFloat = 0
-    var trailingCornerPadding: CGFloat = 0
+    var trailingCornerReach: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -483,7 +485,11 @@ private struct ContentPeopleListView: View {
             .padding(.horizontal, 16)
             .padding(.top, isInline ? 0 : 16)
             .padding(.bottom, isInline ? 0 : 12)
-            .padding(.trailing, trailingCornerPadding)
+            // The content sits 16pt in; themedSurface adds no inset.
+            .padding(.trailing, TopCornerClearance.padding(
+                forReach: trailingCornerReach,
+                contentInset: 16
+            ))
             .themedSurface()
 
             ScrollView {
@@ -608,7 +614,7 @@ private struct ContentPrivateChatSheetView: View {
     /// and swipe-to-leave return to the list there, so there is no close
     /// button, and the header lines up with the main header beside it.
     var isInline = false
-    var trailingCornerPadding: CGFloat = 0
+    var trailingCornerReach: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -682,7 +688,12 @@ private struct ContentPrivateChatSheetView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, isInline ? 0 : 10)
                 .padding(.bottom, isInline ? 0 : 12)
-                .padding(.trailing, trailingCornerPadding)
+                // The content sits 16pt in, and glass floats the bar as a
+                // panel another 8pt in (PrivateHeaderChrome).
+                .padding(.trailing, TopCornerClearance.padding(
+                    forReach: trailingCornerReach,
+                    contentInset: theme.usesGlassChrome ? 24 : 16
+                ))
                 .modifier(PrivateHeaderChrome())
             }
 

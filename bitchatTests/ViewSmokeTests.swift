@@ -218,7 +218,7 @@ private struct ContentPeopleColumnHarness: View {
             showImagePicker: $showImagePicker,
             imagePickerSourceType: $imagePickerSourceType,
             headerHeight: 44,
-            trailingCornerPadding: 0,
+            trailingCornerReach: 0,
             onSendMessage: {}
         )
     }

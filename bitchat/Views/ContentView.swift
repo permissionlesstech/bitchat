@@ -153,6 +153,9 @@ struct ContentView: View {
     #endif
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    /// Display corners are named by physical side, while the padding that
+    /// clears them follows the layout direction (TopCornerClearance).
+    @Environment(\.layoutDirection) private var layoutDirection
     /// The live layout mode. Presentation bindings read this, never the size
     /// class: SwiftUI runs a departing sheet's setter after the layout has
     /// flipped, and environment values captured in that closure are stale.
@@ -639,16 +642,18 @@ struct ContentView: View {
                 division: ContentSplitLayout.division(in: proxy)
             )
             let split = isSplitLayout ? layout : nil
-            let corners = topCornerPadding(in: proxy, isSplit: split != nil)
+            let corners = topCornerClearance(in: proxy)
             HStack(spacing: 0) {
+                // Split, the header ends at the fold and the column's top
+                // rows meet the trailing corner instead.
                 mainContent(
-                    headerLeadingCornerPadding: corners.headerLeading,
-                    headerTrailingCornerPadding: corners.headerTrailing
+                    headerLeadingCornerReach: corners.leading,
+                    headerTrailingCornerReach: split == nil ? corners.trailing : 0
                 )
                 .frame(width: split?.leadingWidth)
                 if let split {
                     ContentColumnGap(width: split.gapWidth)
-                    peopleColumn(trailingCornerPadding: corners.columnTrailing)
+                    peopleColumn(trailingCornerReach: corners.trailing)
                         .frame(width: split.trailingWidth)
                 }
             }
@@ -670,15 +675,15 @@ struct ContentView: View {
     /// so the translucency gains usable space instead of losing it.
     @ViewBuilder
     private func mainContent(
-        headerLeadingCornerPadding: CGFloat = 0,
-        headerTrailingCornerPadding: CGFloat = 0
+        headerLeadingCornerReach: CGFloat = 0,
+        headerTrailingCornerReach: CGFloat = 0
     ) -> some View {
         if usesGlassLayout {
             publicMessageList
                 .safeAreaInset(edge: .top, spacing: 0) {
                     headerView(
-                        leadingCornerPadding: headerLeadingCornerPadding,
-                        trailingCornerPadding: headerTrailingCornerPadding
+                        leadingCornerReach: headerLeadingCornerReach,
+                        trailingCornerReach: headerTrailingCornerReach
                     )
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -689,8 +694,8 @@ struct ContentView: View {
         } else {
             VStack(spacing: 0) {
                 headerView(
-                    leadingCornerPadding: headerLeadingCornerPadding,
-                    trailingCornerPadding: headerTrailingCornerPadding
+                    leadingCornerReach: headerLeadingCornerReach,
+                    trailingCornerReach: headerTrailingCornerReach
                 )
 
                 Divider()
@@ -714,8 +719,8 @@ struct ContentView: View {
     }
 
     private func headerView(
-        leadingCornerPadding: CGFloat,
-        trailingCornerPadding: CGFloat
+        leadingCornerReach: CGFloat,
+        trailingCornerReach: CGFloat
     ) -> some View {
         VStack(spacing: 0) {
             ContentHeaderView(
@@ -725,8 +730,8 @@ struct ContentView: View {
                 headerHeight: headerHeight,
                 headerPeerIconSize: headerPeerIconSize,
                 headerPeerCountFontSize: headerPeerCountFontSize,
-                leadingCornerPadding: leadingCornerPadding,
-                trailingCornerPadding: trailingCornerPadding
+                leadingCornerReach: leadingCornerReach,
+                trailingCornerReach: trailingCornerReach
             )
 
             // Failed-wipe outranks connectivity: "your data may still be
@@ -801,7 +806,7 @@ struct ContentView: View {
     }
 
     #if os(iOS)
-    private func peopleColumn(trailingCornerPadding: CGFloat) -> some View {
+    private func peopleColumn(trailingCornerReach: CGFloat) -> some View {
         ContentPeopleColumnView(
             showSidebar: $showSidebar,
             showVerifySheet: $showColumnVerifySheet,
@@ -818,55 +823,29 @@ struct ContentView: View {
             showImagePicker: $showImagePicker,
             imagePickerSourceType: $imagePickerSourceType,
             headerHeight: headerHeight,
-            trailingCornerPadding: trailingCornerPadding,
+            trailingCornerReach: trailingCornerReach,
             onSendMessage: sendMessage
         )
     }
 
-    private struct TopCornerPadding {
-        var headerLeading: CGFloat = 0
-        var headerTrailing: CGFloat = 0
-        var columnTrailing: CGFloat = 0
-    }
-
-    /// Clearance for the top bars beside display corners the safe area
-    /// leaves uncovered (TopCornerClearance). Zero below iOS 26, which
-    /// can't report corners, and on iPhones whose status bar clears them.
-    private func topCornerPadding(in proxy: GeometryProxy, isSplit: Bool) -> TopCornerPadding {
+    /// How far display corners the safe area leaves uncovered reach into the
+    /// top bars; each bar subtracts its own content inset. Zero below iOS
+    /// 26, which can't report corners, and on iPhones whose status bar
+    /// clears them.
+    private func topCornerClearance(in proxy: GeometryProxy) -> TopCornerClearance {
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
             let corners = proxy.containerCornerInsets
-            let safeArea = proxy.safeAreaInsets
-            // The header's content sits 12pt in from its bar; glass floats the
-            // bar as a panel another 8pt in (themedChromePanel).
-            let headerBase: CGFloat = usesGlassLayout ? 20 : 12
-            // The column's title row and DM header pad their content 16pt.
-            let columnBase: CGFloat = 16
-            func trailingPadding(base: CGFloat) -> CGFloat {
-                TopCornerClearance.extraPadding(
-                    cornerWidth: corners.topTrailing.width,
-                    cornerHeight: corners.topTrailing.height,
-                    safeTop: safeArea.top,
-                    safeEdgeInset: safeArea.trailing,
-                    basePadding: base
-                )
-            }
-            return TopCornerPadding(
-                headerLeading: TopCornerClearance.extraPadding(
-                    cornerWidth: corners.topLeading.width,
-                    cornerHeight: corners.topLeading.height,
-                    safeTop: safeArea.top,
-                    safeEdgeInset: safeArea.leading,
-                    basePadding: headerBase
-                ),
-                // Split, the header ends at the fold and the column meets the
-                // trailing corner, the display's rounded one in right-to-left.
-                headerTrailing: isSplit ? 0 : trailingPadding(base: headerBase),
-                columnTrailing: isSplit ? trailingPadding(base: columnBase) : 0
+            // Named by physical side, right-to-left included.
+            return TopCornerClearance(
+                topLeft: corners.topLeading,
+                topRight: corners.topTrailing,
+                safeArea: proxy.safeAreaInsets,
+                isRightToLeft: layoutDirection == .rightToLeft
             )
         }
         #endif
-        return TopCornerPadding()
+        return TopCornerClearance()
     }
 
     /// Folding, unfolding, rotating or resizing across the split threshold.
