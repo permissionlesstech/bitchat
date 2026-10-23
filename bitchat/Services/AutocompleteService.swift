@@ -12,6 +12,15 @@ import Foundation
 final class AutocompleteService {
     private typealias Patterns = MessageFormattingEngine.Patterns
 
+    /// Whether the text before the cursor ends in an `@` mention token: the
+    /// only case `getSuggestions` can return anything for, whatever the peers.
+    /// Lets callers skip assembling the peer list after every keystroke.
+    static func hasMentionToken(in text: String, cursorPosition: Int) -> Bool {
+        let textToPosition = String(text.prefix(cursorPosition))
+        let range = NSRange(location: 0, length: (textToPosition as NSString).length)
+        return Patterns.mentionAutocomplete.firstMatch(in: textToPosition, options: [], range: range) != nil
+    }
+
     /// Get autocomplete suggestions for current text
     func getSuggestions(for text: String, peers: [String], cursorPosition: Int) -> (suggestions: [String], range: NSRange?) {
         let textToPosition = String(text.prefix(cursorPosition))

@@ -222,27 +222,35 @@ final class ConversationUIModel: ObservableObject {
     }
 
     private func bind() {
+        // Every message row observes this model, so each republish re-renders
+        // all of them: forward only real changes, never a re-sent equal value.
         chatViewModel.$nickname
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .assign(to: &$currentNickname)
 
         chatViewModel.$showAutocomplete
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .assign(to: &$showAutocomplete)
 
         chatViewModel.$autocompleteSuggestions
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .assign(to: &$autocompleteSuggestions)
 
         chatViewModel.$selectedAutocompleteIndex
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .assign(to: &$selectedAutocompleteIndex)
 
         chatViewModel.$activePublicVoiceTalker
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .assign(to: &$activeLiveVoiceTalker)
 
         chatViewModel.$legacyPrivateMediaConsentRequest
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .assign(to: &$legacyPrivateMediaConsentRequest)
 

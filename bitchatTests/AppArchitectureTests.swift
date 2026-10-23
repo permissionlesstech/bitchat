@@ -711,6 +711,44 @@ struct AppArchitectureTests {
         #expect(transport.sentMessages.last?.content == "hello mesh")
     }
 
+    @Test("ConversationUIModel republishes only changed composer state")
+    @MainActor
+    func conversationUIModelSkipsUnchangedComposerState() async {
+        let viewModel = makeArchitectureViewModel()
+        let locationChannelsModel = LocationChannelsModel(manager: makeArchitectureLocationManager())
+        let privateConversationModel = PrivateConversationModel(
+            chatViewModel: viewModel,
+            conversations: viewModel.conversations,
+            locationChannelsModel: locationChannelsModel
+        )
+        let uiModel = ConversationUIModel(
+            chatViewModel: viewModel,
+            privateConversationModel: privateConversationModel,
+            conversations: viewModel.conversations
+        )
+
+        // Bindings deliver on the main queue in FIFO order: once this change
+        // lands, every initial value delivered before it has landed too.
+        viewModel.selectedAutocompleteIndex = 1
+        await waitUntil { uiModel.selectedAutocompleteIndex == 1 }
+
+        var publishCount = 0
+        let cancellable = uiModel.objectWillChange.sink { publishCount += 1 }
+        defer { cancellable.cancel() }
+
+        // Re-sent equal values (what every typing pause used to produce) ...
+        viewModel.showAutocomplete = viewModel.showAutocomplete
+        viewModel.autocompleteSuggestions = viewModel.autocompleteSuggestions
+        viewModel.selectedAutocompleteIndex = 1
+        viewModel.activePublicVoiceTalker = viewModel.activePublicVoiceTalker
+        // ... are dropped: only the real change queued behind them publishes.
+        viewModel.selectedAutocompleteIndex = 2
+        await waitUntil { uiModel.selectedAutocompleteIndex == 2 }
+
+        #expect(uiModel.selectedAutocompleteIndex == 2)
+        #expect(publishCount == 1)
+    }
+
     @Test("VerificationModel bridges selected conversation and fingerprint actions")
     @MainActor
     func verificationModelBridgesSelectedConversationAndFingerprintActions() async {
