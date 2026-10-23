@@ -28,10 +28,11 @@ final class AppChromeModel: ObservableObject {
     /// triggered it needs to know data may remain on the device.
     @Published private(set) var panicWipeBlocked = false
     #if os(iOS)
-    /// The split layout keeps the public timeline on screen beside an open
-    /// DM instead of under its sheet. ContentView mirrors its layout here;
-    /// only screenshot routing reads it, so it isn't published.
-    var isPublicTimelineBesideConversation = false
+    /// Whether a screenshot of the split layout shows a place: a geohash
+    /// timeline or the location-channel picker, rather than a DM. Nil while
+    /// the single column is up. ContentView keeps it current; only
+    /// screenshot routing reads it, so it isn't published.
+    var splitLayoutShowsLocation: Bool?
     #endif
 
     private let chatViewModel: ChatViewModel
