@@ -433,6 +433,163 @@ struct ComposerSessionsTests {
         #expect(drafts.saves.isEmpty)
     }
 
+    // MARK: - What the root's composer glue calls
+
+    /// Lets everything already queued on the main queue run first: the main
+    /// queue runs its blocks in the order they were queued.
+    private static func mainQueueHop() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+    }
+
+    /// I1: a send takes the composer's text and its conversation at once,
+    /// and the text goes there after the hop whatever the composer, or the
+    /// selection, points at by then.
+    @Test func aSendGoesWhereItsComposerPointedWhenItWasTaken() async {
+        let sessions = makeSessions(InMemoryComposerDraftStore())
+        let sender = RecordingComposerSender()
+        sessions.retarget(Self.compactGeohash, fingerprint: Self.noFingerprint)
+        sessions.primary.text = "  gm geohash  "
+
+        sessions.send(from: .primary, through: sender)
+        #expect(sessions.primary.text.isEmpty, "taken at once")
+        // The timeline moves to #mesh before the send goes out.
+        sessions.retarget(Self.compactMesh, fingerprint: Self.noFingerprint)
+        await Self.mainQueueHop()
+
+        #expect(sender.sent.map(\.text) == ["gm geohash"])
+        #expect(sender.sent.map(\.target) == [.publicChannel(.location(Self.geohash))])
+
+        // Nothing to send, or nowhere to send it: nothing goes out.
+        sessions.primary.text = "   "
+        sessions.send(from: .primary, through: sender)
+        sessions.secondary.text = "no conversation"
+        sessions.send(from: .secondary, through: sender)
+        await Self.mainQueueHop()
+        #expect(sender.sent.count == 1)
+        #expect(sessions.secondary.text == "no conversation")
+    }
+
+    private static func isRecording(_ recorder: VoiceRecordingViewModel) -> Bool {
+        if case .recording = recorder.state { return true }
+        return false
+    }
+
+    private static func startHold(on recorder: VoiceRecordingViewModel, owner: ComposerSlot) async -> Bool {
+        let capture = MockVoiceCaptureSession()
+        recorder.start(shouldShow: true, owner: owner, session: { capture })
+        return await TestHelpers.waitUntil(
+            { Self.isRecording(recorder) && recorder.isHolding(owner) },
+            timeout: TestConstants.settleTimeout
+        )
+    }
+
+    /// E12: a retarget ends the hold of a composer whose conversation
+    /// changed, and only that one; the other composer's hold runs on.
+    @Test func aRetargetEndsOnlyTheHoldOfAComposerThatChangedConversation() async {
+        let sessions = makeSessions(InMemoryComposerDraftStore())
+        let recorder = VoiceRecordingViewModel()
+        defer { recorder.cancelAnyHold() }
+        let dmOverMesh = ComposerTargets.single(activeChannel: .mesh, privatePeer: Self.meshPeer)
+        let dmOverGeohash = ComposerTargets.single(activeChannel: .location(Self.geohash), privatePeer: Self.meshPeer)
+        sessions.retarget(dmOverMesh, fingerprint: Self.noFingerprint, cancellingHoldsOn: recorder)
+
+        // The DM composer holds the mic while the public timeline under the
+        // DM switches channel: the DM keeps its conversation.
+        #expect(await Self.startHold(on: recorder, owner: .secondary))
+        sessions.retarget(dmOverGeohash, fingerprint: Self.noFingerprint, cancellingHoldsOn: recorder)
+        #expect(recorder.isHolding(.secondary))
+        #expect(Self.isRecording(recorder))
+
+        // The DM closes: its composer has no conversation any more.
+        sessions.retarget(Self.compactGeohash, fingerprint: Self.noFingerprint, cancellingHoldsOn: recorder)
+        #expect(recorder.holdOwner == nil)
+        #expect(recorder.state == .idle)
+
+        // The public composer holds it while a DM opens over it: only the
+        // other composer changed.
+        #expect(await Self.startHold(on: recorder, owner: .primary))
+        sessions.retarget(dmOverGeohash, fingerprint: Self.noFingerprint, cancellingHoldsOn: recorder)
+        #expect(recorder.isHolding(.primary))
+        #expect(Self.isRecording(recorder))
+
+        // Its own timeline switches to #mesh under the DM.
+        sessions.retarget(dmOverMesh, fingerprint: Self.noFingerprint, cancellingHoldsOn: recorder)
+        #expect(recorder.holdOwner == nil)
+        #expect(recorder.state == .idle)
+    }
+
+    private static func pick(from slot: ComposerSlot, in sessions: ComposerSessions) -> MediaPickRequest? {
+        #if os(iOS)
+        sessions.mediaPickRequest(from: slot, source: .photoLibrary)
+        #else
+        sessions.mediaPickRequest(from: slot)
+        #endif
+    }
+
+    /// I1: a photo goes to the conversation of the composer whose button was
+    /// pressed, as it was at the press, and only where photos can go.
+    @Test func aMediaPickCarriesItsComposersConversationFromThePress() {
+        let sessions = makeSessions(InMemoryComposerDraftStore())
+        #expect(Self.pick(from: .primary, in: sessions) == nil, "no conversation yet")
+
+        let dm = ConversationTarget(channel: .mesh, privatePeer: Self.meshPeer)
+        sessions.retarget(.single(activeChannel: .mesh, privatePeer: Self.meshPeer), fingerprint: Self.noFingerprint)
+        let publicPick = Self.pick(from: .primary, in: sessions)
+        let dmPick = Self.pick(from: .secondary, in: sessions)
+        #expect(publicPick?.target == .mesh)
+        #expect(dmPick?.target == dm)
+        #if os(iOS)
+        #expect(dmPick?.source == .photoLibrary)
+        #endif
+
+        // The screen moves on while the picker is up: a geohash and a
+        // geohash DM take no photos, and the pick in flight keeps the
+        // conversation of its press.
+        sessions.retarget(
+            .single(activeChannel: .location(Self.geohash), privatePeer: Self.geoDMPeer),
+            fingerprint: Self.noFingerprint
+        )
+        #expect(Self.pick(from: .primary, in: sessions) == nil)
+        #expect(Self.pick(from: .secondary, in: sessions) == nil)
+        #expect(dmPick?.target == dm)
+    }
+
+    /// I4: a panic forgets every composer at once, and points them at the
+    /// screen again only once the wipe has landed, so nothing typed or
+    /// parked before it comes back.
+    @Test func aPanicPointsTheComposersAgainOnlyOnceTheWipeHasLanded() async {
+        let drafts = InMemoryComposerDraftStore([.mesh: "parked before the wipe"])
+        let sessions = makeSessions(drafts)
+        var onScreen = ComposerTargets.single(activeChannel: .location(Self.geohash), privatePeer: Self.meshPeer)
+        sessions.retarget(onScreen, fingerprint: Self.noFingerprint)
+        sessions.primary.text = "geo text"
+        sessions.secondary.text = "dm text"
+        drafts.clearLog()
+
+        sessions.resetForPanic(thenRetargetTo: { onScreen }, fingerprint: Self.noFingerprint)
+
+        for session in [sessions.primary, sessions.secondary] {
+            #expect(session.text.isEmpty)
+            #expect(session.target == nil)
+            #expect(session.draftKey == nil)
+        }
+        #expect(drafts.saves.isEmpty, "nothing typed before the wipe is parked")
+        #expect(drafts.loads.isEmpty, "nothing is loaded before the wipe")
+
+        // The wipe lands later in the same call: the drafts emptied, the
+        // selection back on #mesh, the DM closed.
+        drafts.wipe()
+        onScreen = Self.compactMesh
+        await Self.mainQueueHop()
+
+        #expect(sessions.primary.target == .mesh)
+        #expect(sessions.primary.text.isEmpty, "the draft parked before the wipe is gone")
+        #expect(sessions.secondary.target == nil)
+        #expect(drafts.saves.isEmpty)
+    }
+
     // MARK: - One composer's own state
 
     @Test func insertMentionAppendsWithASpaceEitherSide() {

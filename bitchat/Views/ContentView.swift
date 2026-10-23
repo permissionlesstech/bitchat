@@ -375,16 +375,14 @@ struct ContentView: View {
                     // Drop every composer's text, suggestions and keys before
                     // ChatViewModel resets the parked drafts — otherwise the
                     // next inactive/background save would write a pre-wipe
-                    // draft back. A pick still to come names a pre-wipe
-                    // conversation.
-                    composers.reset()
+                    // draft back — and point them at what is on screen once
+                    // that wipe has landed. A pick still to come names a
+                    // pre-wipe conversation.
+                    composers.resetForPanic(
+                        thenRetargetTo: { composerTargets },
+                        fingerprint: { conversationUIModel.getFingerprint(for: $0) }
+                    )
                     mediaPickRequest = nil
-                    // The wipe lands in the same call (drafts emptied, the
-                    // selection back on #mesh); point the composers at what is
-                    // on screen once it has.
-                    DispatchQueue.main.async {
-                        retargetComposers(to: composerTargets)
-                    }
                 }
                 #if os(macOS)
                 DispatchQueue.main.async {
@@ -936,21 +934,17 @@ struct ContentView: View {
     /// Points every composer at its conversation, and cancels a mic hold
     /// whose composer now shows another one.
     private func retargetComposers(to targets: ComposerTargets) {
-        let changed = composers.retarget(targets) { peerID in
-            conversationUIModel.getFingerprint(for: peerID)
-        }
-        for slot in changed {
-            voiceRecordingVM.cancel(owner: slot)
-        }
+        composers.retarget(
+            targets,
+            fingerprint: { conversationUIModel.getFingerprint(for: $0) },
+            cancellingHoldsOn: voiceRecordingVM
+        )
     }
 
-    /// Sends `slot`'s text to that composer's conversation, captured now:
-    /// a selection change during the hop below can't redirect it.
+    /// Sends `slot`'s text to that composer's conversation, both taken now:
+    /// a selection change before it goes out can't redirect it.
     private func send(from slot: ComposerSlot) {
-        guard let outgoing = composers.takeOutgoing(from: slot) else { return }
-        DispatchQueue.main.async {
-            self.conversationUIModel.sendMessage(outgoing.text, to: outgoing.target)
-        }
+        composers.send(from: slot, through: conversationUIModel)
     }
 
     /// A composer's photo button: records the composer's conversation with
@@ -958,15 +952,15 @@ struct ContentView: View {
     #if os(iOS)
     private func mediaPicker(for slot: ComposerSlot) -> (UIImagePickerController.SourceType) -> Void {
         { [composers] source in
-            guard let target = composers[slot].target, target.allowsMedia else { return }
-            mediaPickRequest = MediaPickRequest(target: target, source: source)
+            guard let request = composers.mediaPickRequest(from: slot, source: source) else { return }
+            mediaPickRequest = request
         }
     }
     #else
     private func mediaPicker(for slot: ComposerSlot) -> () -> Void {
         { [composers] in
-            guard let target = composers[slot].target, target.allowsMedia else { return }
-            mediaPickRequest = MediaPickRequest(target: target)
+            guard let request = composers.mediaPickRequest(from: slot) else { return }
+            mediaPickRequest = request
         }
     }
     #endif

@@ -91,6 +91,16 @@ struct MediaPickRequest: Identifiable {
     #endif
 }
 
+/// Sends a composer's text to the conversation it was taken for. There is
+/// no form without a target: a composer never sends to the selection.
+/// `ConversationUIModel` is the app's.
+@MainActor
+protocol ComposerMessageSending: AnyObject {
+    func sendMessage(_ message: String, to target: ConversationTarget)
+}
+
+extension ConversationUIModel: ComposerMessageSending {}
+
 /// Where `ComposerSessions` parks the text of a conversation no composer
 /// shows any more, and loads it back. The app parks in `ComposerDraftStore`
 /// (in memory, capped, reset by a panic wipe); tests park in their own map.
@@ -292,6 +302,58 @@ final class ComposerSessions: ObservableObject {
         return changed
     }
 
+    /// `retarget(_:fingerprint:)`, then cancels the mic hold of each slot
+    /// whose conversation changed: that hold was recording for a
+    /// conversation its composer no longer shows. A hold in a slot that kept
+    /// its conversation (the other composer moved, or a DM's peer-ID
+    /// handoff) runs on.
+    func retarget(
+        _ targets: ComposerTargets,
+        fingerprint: (PeerID) -> String?,
+        cancellingHoldsOn recorder: VoiceRecordingViewModel
+    ) {
+        for slot in retarget(targets, fingerprint: fingerprint) {
+            recorder.cancel(owner: slot)
+        }
+    }
+
+    /// Sends `slot`'s text: takes it, with the conversation it goes to, now,
+    /// and hands both to `sender` one main-queue hop later, once the text
+    /// field has finished its submit. Whatever the selection or the screen
+    /// does in between, the text goes where its composer pointed when it was
+    /// taken (I1). Nothing to send, or nowhere to send it, sends nothing.
+    func send(from slot: ComposerSlot, through sender: some ComposerMessageSending) {
+        guard let outgoing = takeOutgoing(from: slot) else { return }
+        DispatchQueue.main.async {
+            sender.sendMessage(outgoing.text, to: outgoing.target)
+        }
+    }
+
+    #if os(iOS)
+    /// A camera or library press in `slot`'s composer, with the conversation
+    /// the pick goes to: that composer's own as of the press, however the
+    /// screen changes while the picker is up. Nil where the composer takes
+    /// no photos (a geohash, a group) or has no conversation.
+    func mediaPickRequest(
+        from slot: ComposerSlot,
+        source: UIImagePickerController.SourceType
+    ) -> MediaPickRequest? {
+        mediaTarget(of: slot).map { MediaPickRequest(target: $0, source: source) }
+    }
+    #else
+    /// A photo-button press in `slot`'s composer, with the conversation the
+    /// pick goes to: that composer's own as of the press. Nil where the
+    /// composer takes no photos (a geohash, a group) or has no conversation.
+    func mediaPickRequest(from slot: ComposerSlot) -> MediaPickRequest? {
+        mediaTarget(of: slot).map { MediaPickRequest(target: $0) }
+    }
+    #endif
+
+    private func mediaTarget(of slot: ComposerSlot) -> ConversationTarget? {
+        guard let target = self[slot].target, target.allowsMedia else { return nil }
+        return target
+    }
+
     /// Takes the slot's text to send: trimmed, with the target it goes to as
     /// of now. The composer and its parked draft are emptied. Nil, leaving
     /// everything as it was, when there is nothing to send or nowhere to
@@ -328,6 +390,23 @@ final class ComposerSessions: ObservableObject {
             session.cancelAutocomplete()
             session.draftKey = nil
             session.target = nil
+        }
+    }
+
+    /// Panic: `reset()` at once, ahead of the wipe that empties the parked
+    /// drafts later in the same call, so nothing typed before it can be
+    /// parked again. One main-queue hop later, once that wipe has landed
+    /// (the drafts empty, the selection back on #mesh, any DM closed), the
+    /// slots point at `targets()` as they are by then. Pointed any sooner, a
+    /// slot would load a draft the wipe is about to empty. No hold is left
+    /// to cancel: the recorder's own panic wipe ended it first.
+    func resetForPanic(
+        thenRetargetTo targets: @escaping () -> ComposerTargets,
+        fingerprint: @escaping (PeerID) -> String?
+    ) {
+        reset()
+        DispatchQueue.main.async { [weak self] in
+            self?.retarget(targets(), fingerprint: fingerprint)
         }
     }
 }

@@ -36,4 +36,9 @@ final class InMemoryComposerDraftStore: ComposerDraftStoring {
         loads.removeAll()
         saves.removeAll()
     }
+
+    /// A panic wipe, like `ComposerDraftStore.reset()`: every draft goes.
+    func wipe() {
+        drafts.removeAll()
+    }
 }
