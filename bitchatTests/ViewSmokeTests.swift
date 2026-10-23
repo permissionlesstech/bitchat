@@ -525,7 +525,8 @@ private final class SplitContentHost {
         viewModel: ChatViewModel,
         models: SmokeFeatureModels,
         location: MockLocationStateManaging,
-        sizeClass: SmokeSizeClass
+        sizeClass: SmokeSizeClass,
+        theme: AppTheme
     ) {
         self.viewModel = viewModel
         self.models = models
@@ -534,16 +535,20 @@ private final class SplitContentHost {
         meshPaneTimeline = PublicChatModel(conversations: viewModel.conversations, pinnedTo: .mesh)
         host = WindowHost(
             installSmokeEnvironment(
-                ContentViewSizeClassHarness(sizeClass: sizeClass, meshPaneTimeline: meshPaneTimeline),
+                ContentViewSizeClassHarness(sizeClass: sizeClass, meshPaneTimeline: meshPaneTimeline, theme: theme),
                 featureModels: models
             ),
             size: Self.size
         )
     }
 
-    /// - Parameter compact: Start folded (the single column).
+    /// - Parameters:
+    ///   - compact: Start folded (the single column).
+    ///   - theme: Matrix (opaque bars) or glass (panels floating over the
+    ///     timelines).
     static func make(
         compact: Bool = false,
+        theme: AppTheme = .matrix,
         sharedContentStore: SharedContentStore? = nil
     ) async -> SplitContentHost {
         let suiteName = "ViewSmokeTests.split.\(UUID().uuidString)"
@@ -568,7 +573,13 @@ private final class SplitContentHost {
         )
         let sizeClass = SmokeSizeClass()
         sizeClass.value = compact ? .compact : .regular
-        let split = SplitContentHost(viewModel: viewModel, models: models, location: location, sizeClass: sizeClass)
+        let split = SplitContentHost(
+            viewModel: viewModel,
+            models: models,
+            location: location,
+            sizeClass: sizeClass,
+            theme: theme
+        )
         transport.updatePeerSnapshots([
             makeSnapshot(peerID: split.bob, nickname: "Bob", noiseByte: 0xB0)
         ])
@@ -644,11 +655,13 @@ private final class SplitContentHost {
 private struct ContentViewSizeClassHarness: View {
     @ObservedObject var sizeClass: SmokeSizeClass
     var meshPaneTimeline: PublicChatModel?
+    var theme: AppTheme = .matrix
 
     var body: some View {
         ContentView()
             .environment(\.horizontalSizeClass, sizeClass.value)
             .environment(\.meshPaneTimeline, meshPaneTimeline)
+            .environment(\.appTheme, theme)
     }
 }
 #endif
@@ -1307,10 +1320,10 @@ struct ViewSmokeTests {
     /// pane then shows the selected geohash with its own composer, and a DM
     /// covering it until it ends. Each pane's composer names its own
     /// conversation, and the screenshot flag follows what the trailing pane
-    /// shows as each selection lands (E10).
-    @Test
-    func contentView_splitShowsEachTrailingPane() async {
-        let split = await SplitContentHost.make()
+    /// shows as each selection lands (E10). In either theme's layout.
+    @Test(arguments: AppTheme.allCases)
+    func contentView_splitShowsEachTrailingPane(theme: AppTheme) async {
+        let split = await SplitContentHost.make(theme: theme)
         defer { split.close() }
 
         let idle = await split.settle {
