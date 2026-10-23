@@ -892,9 +892,13 @@ final class ChatPrivateConversationCoordinator {
                     if oldPeerID.isGeoDM, messages.contains(where: { $0.senderPeerID == myPeerID }) {
                         continue
                     }
+                    // Which rows are mine goes by sender ID: after a rename my
+                    // older rows carry my previous name, and a stranger who
+                    // takes that name must not read as their author.
                     let isRelevantChat = recentMessages.contains { msg in
-                        (msg.sender == senderNickname && msg.sender != context.nickname)
-                            || (msg.sender == context.nickname && msg.recipientNickname == senderNickname)
+                        let isMine = msg.isOwn(myPeerID: myPeerID, myGeoChatPeerID: nil)
+                        return (!isMine && msg.sender == senderNickname)
+                            || (isMine && msg.recipientNickname == senderNickname)
                     }
 
                     if isRelevantChat {

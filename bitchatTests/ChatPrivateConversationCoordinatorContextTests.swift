@@ -859,6 +859,49 @@ struct ChatPrivateConversationCoordinatorContextTests {
     }
 
     @Test @MainActor
+    func migratePrivateChats_leavesMyThreadAloneWhenAStrangerTakesMyOldName() async {
+        // I was "alice" and am now "alicia". My reply to bob still carries the
+        // old name, but it is mine by its sender ID, so a stranger who now
+        // calls themselves "alice" is not its author and must not take the
+        // thread (and with it my next reply) along.
+        let context = MockChatPrivateConversationContext()
+        context.nickname = "alicia"
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let bobThread = PeerID(str: "1122334455667788")
+        let strangerPeerID = PeerID(str: "8899aabbccddeeff")
+        context.privateChats[bobThread] = [
+            makeIncomingMessage(
+                id: "bob-1",
+                sender: "bob",
+                timestamp: Date().addingTimeInterval(-120),
+                senderPeerID: bobThread,
+                recipientNickname: "alice"
+            ),
+            BitchatMessage(
+                id: "my-old-reply",
+                sender: "alice",
+                content: "hi bob",
+                timestamp: Date().addingTimeInterval(-60),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "bob",
+                senderPeerID: context.myPeerID,
+                deliveryStatus: .sent
+            )
+        ]
+        context.selectedPrivateChatPeer = bobThread
+
+        coordinator.handlePrivateMessage(
+            makeIncomingMessage(id: "stranger-1", sender: "alice", senderPeerID: strangerPeerID, recipientNickname: "alicia")
+        )
+
+        #expect(context.privateChats[bobThread]?.map(\.id) == ["bob-1", "my-old-reply"])
+        #expect(context.privateChats[strangerPeerID]?.map(\.id) == ["stranger-1"])
+        #expect(context.migratedChats.isEmpty)
+        #expect(context.selectedPrivateChatPeer == bobThread)
+    }
+
+    @Test @MainActor
     func migratePrivateChats_stillMovesAGeoDMThreadWithoutMyRowsByNickname() async {
         // The skip is for threads holding my rows: a geo-DM thread of the
         // peer's own rows still follows them to their mesh chat by name.
