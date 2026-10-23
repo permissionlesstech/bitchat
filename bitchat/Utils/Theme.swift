@@ -197,7 +197,12 @@ struct ThemedRootBackground: View {
             }
             .ignoresSafeArea()
         } else {
+            // Fills under the safe area like the glass backdrop. Otherwise
+            // sheets show the system background beneath the home indicator,
+            // and iPhone Duo's outer display shows it in its trailing
+            // status-bar column.
             palette.background
+                .ignoresSafeArea()
         }
     }
 }
