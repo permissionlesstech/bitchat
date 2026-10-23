@@ -74,10 +74,18 @@ extension PrivateInboxModel: MessageListTimelineModel {
 /// layout's #mesh pane is handed the pinned one), a DM list the private
 /// inbox. So a message in another timeline (the open DM beside the #mesh
 /// pane, a public channel under a DM) never re-renders the list.
+///
+/// A mention types into the list's own composer.
 struct MessageListView: View {
-    let privatePeer: PeerID?
+    /// The DM this list shows, as its owner targets it (with the DM's
+    /// scope); nil for a public list, which shows the timeline of the
+    /// `PublicChatModel` it is handed.
+    let privateTarget: ConversationTarget?
     @Binding var isAtBottom: Bool
-    @Binding var messageText: String
+    /// The composer under this list, which a mention types into; held, not
+    /// observed, so typing never re-renders the list. Nil while that
+    /// composer isn't on screen: the list then offers no mention.
+    let composer: ComposerSession?
     @Binding var selectedMessageSender: String?
     @Binding var selectedMessageSenderID: PeerID?
     @Binding var imagePreviewURL: URL?
@@ -85,7 +93,12 @@ struct MessageListView: View {
     @Binding var windowCountPrivate: [PeerID: Int]
     @Binding var showSidebar: Bool
 
-    var isTextFieldFocused: FocusState<Bool>.Binding
+    /// The composer with the keyboard; a mention hands it to `composer`.
+    var focusedComposer: FocusState<ComposerSlot?>.Binding
+
+    private var privatePeer: PeerID? {
+        privateTarget?.privatePeer
+    }
 
     var body: some View {
         if privatePeer == nil {
@@ -101,14 +114,14 @@ struct MessageListView: View {
         MessageListContent(
             privatePeer: privatePeer,
             isAtBottom: $isAtBottom,
-            messageText: $messageText,
+            composer: composer,
             selectedMessageSender: $selectedMessageSender,
             selectedMessageSenderID: $selectedMessageSenderID,
             imagePreviewURL: $imagePreviewURL,
             windowCountPublic: $windowCountPublic,
             windowCountPrivate: $windowCountPrivate,
             showSidebar: $showSidebar,
-            isTextFieldFocused: isTextFieldFocused
+            focusedComposer: focusedComposer
         )
     }
 }
@@ -128,7 +141,7 @@ private struct MessageListContent<Timeline: MessageListTimelineModel>: View {
 
     let privatePeer: PeerID?
     @Binding var isAtBottom: Bool
-    @Binding var messageText: String
+    let composer: ComposerSession?
     @Binding var selectedMessageSender: String?
     @Binding var selectedMessageSenderID: PeerID?
     @Binding var imagePreviewURL: URL?
@@ -136,7 +149,7 @@ private struct MessageListContent<Timeline: MessageListTimelineModel>: View {
     @Binding var windowCountPrivate: [PeerID: Int]
     @Binding var showSidebar: Bool
 
-    var isTextFieldFocused: FocusState<Bool>.Binding
+    var focusedComposer: FocusState<ComposerSlot?>.Binding
 
     @State private var showMessageActions = false
     @State private var showClearConfirmation = false
@@ -262,9 +275,9 @@ private struct MessageListContent<Timeline: MessageListTimelineModel>: View {
                                     // mentioning the only other participant is noise, and "DM"
                                     // would just reopen the conversation that is already open.
                                     if privatePeer == nil {
-                                        if actionsTargetThisList {
+                                        if let composer {
                                             Button("content.actions.mention") {
-                                                insertMention(message.sender)
+                                                insertMention(message.sender, into: composer)
                                             }
                                         }
                                         if let peerID = message.senderPeerID {
@@ -375,10 +388,10 @@ private struct MessageListContent<Timeline: MessageListTimelineModel>: View {
                 isPresented: $showMessageActions,
                 titleVisibility: .visible
             ) {
-                if actionsTargetThisList {
+                if let composer {
                     Button("content.actions.mention") {
                         if let sender = selectedMessageSender {
-                            insertMention(sender)
+                            insertMention(sender, into: composer)
                         }
                     }
                 }
@@ -534,12 +547,19 @@ private extension MessageListContent {
         return MessageListScrollPolicy.isRow(rowID, inContext: landedContextKey)
     }
 
-    /// /clear, hug/slap and mentions act on the selected conversation (the
-    /// command processor and the shared composer draft), not on the list
-    /// they were triggered from. On the split layout the public timeline
-    /// sits beside an open DM, so it must not offer them while one is open.
+    /// /clear and hug/slap act on the selected conversation (through the
+    /// command processor), not on the list they were triggered from. On the
+    /// split layout the public timeline sits beside an open DM, so it must
+    /// not offer them while one is open.
     var actionsTargetThisList: Bool {
         privatePeer != nil || privateConversationModel.selectedPeerID == nil
+    }
+
+    /// Appends an @mention to the list's own composer (never overwrites
+    /// what is already typed) and gives it the keyboard.
+    func insertMention(_ sender: String, into composer: ComposerSession) {
+        composer.insertMention(sender)
+        focusedComposer.wrappedValue = composer.slot
     }
 
     /// Tappable strip above the mesh timeline while notes are pinned at this
@@ -643,20 +663,6 @@ private extension MessageListContent {
               case .failed = message.deliveryStatus
         else { return false }
         return true
-    }
-
-    /// Appends an @mention to the composer draft (never overwrites what the
-    /// user has already typed) and focuses the input field.
-    func insertMention(_ sender: String) {
-        let mention = "@\(sender) "
-        if messageText.isEmpty {
-            messageText = mention
-        } else if messageText.hasSuffix(" ") {
-            messageText += mention
-        } else {
-            messageText += " " + mention
-        }
-        isTextFieldFocused.wrappedValue = true
     }
 
     /// Floating pill shown while scrolled up: re-presents the isAtBottom /

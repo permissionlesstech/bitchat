@@ -126,59 +126,56 @@ private func installSmokeEnvironment<V: View>(
 
 @MainActor
 private struct ContentPeopleSheetHarness: View {
+    /// The open DM, as ContentView's secondary slot targets it.
+    var target: ConversationTarget?
     @State private var showSidebar = true
-    @State private var messageText = ""
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: PeerID?
     @State private var imagePreviewURL: URL?
     @State private var windowCountPublic = 300
     @State private var windowCountPrivate: [PeerID: Int] = [:]
     @State private var isAtBottomPrivate = true
-    @State private var autocompleteDebounceTimer: Timer?
     @StateObject private var voiceRecordingVM = VoiceRecordingViewModel()
-    @FocusState private var isTextFieldFocused: Bool
-    #if os(iOS)
-    @State private var showImagePicker = false
-    @State private var imagePickerSourceType: UIImagePickerController.SourceType = .photoLibrary
-    #else
-    @State private var showMacImagePicker = false
-    #endif
+    @StateObject private var composers = ComposerSessions(drafts: InMemoryComposerDraftStore())
+    @FocusState private var focusedComposer: ComposerSlot?
+    @State private var mediaPickRequest: MediaPickRequest?
 
     var body: some View {
         #if os(iOS)
         ContentPeopleSheetView(
             showSidebar: $showSidebar,
-            messageText: $messageText,
             selectedMessageSender: $selectedMessageSender,
             selectedMessageSenderID: $selectedMessageSenderID,
             imagePreviewURL: $imagePreviewURL,
             windowCountPublic: $windowCountPublic,
             windowCountPrivate: $windowCountPrivate,
             isAtBottomPrivate: $isAtBottomPrivate,
-            isTextFieldFocused: $isTextFieldFocused,
+            composer: composers.secondary,
+            target: target,
+            focusedComposer: $focusedComposer,
             voiceRecordingVM: voiceRecordingVM,
-            autocompleteDebounceTimer: $autocompleteDebounceTimer,
             headerHeight: 44,
             onSendMessage: {},
-            showImagePicker: $showImagePicker,
-            imagePickerSourceType: $imagePickerSourceType
+            onPickMedia: { _ in },
+            mediaPickRequest: $mediaPickRequest
         )
         #else
         ContentPeopleSheetView(
             showSidebar: $showSidebar,
-            messageText: $messageText,
             selectedMessageSender: $selectedMessageSender,
             selectedMessageSenderID: $selectedMessageSenderID,
             imagePreviewURL: $imagePreviewURL,
             windowCountPublic: $windowCountPublic,
             windowCountPrivate: $windowCountPrivate,
             isAtBottomPrivate: $isAtBottomPrivate,
-            isTextFieldFocused: $isTextFieldFocused,
+            composer: composers.secondary,
+            target: target,
+            focusedComposer: $focusedComposer,
             voiceRecordingVM: voiceRecordingVM,
-            autocompleteDebounceTimer: $autocompleteDebounceTimer,
             headerHeight: 44,
             onSendMessage: {},
-            showMacImagePicker: $showMacImagePicker
+            onPickMedia: {},
+            mediaPickRequest: $mediaPickRequest
         )
         #endif
     }
@@ -187,35 +184,33 @@ private struct ContentPeopleSheetHarness: View {
 #if os(iOS)
 @MainActor
 private struct ContentConversationColumnHarness: View {
+    /// The open DM, as ContentView's secondary slot targets it.
+    var target: ConversationTarget?
     @State private var showSidebar = false
-    @State private var messageText = ""
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: PeerID?
     @State private var imagePreviewURL: URL?
     @State private var windowCountPublic = 300
     @State private var windowCountPrivate: [PeerID: Int] = [:]
     @State private var isAtBottomPrivate = true
-    @State private var autocompleteDebounceTimer: Timer?
     @StateObject private var voiceRecordingVM = VoiceRecordingViewModel()
-    @FocusState private var isTextFieldFocused: Bool
-    @State private var showImagePicker = false
-    @State private var imagePickerSourceType: UIImagePickerController.SourceType = .photoLibrary
+    @StateObject private var composers = ComposerSessions(drafts: InMemoryComposerDraftStore())
+    @FocusState private var focusedComposer: ComposerSlot?
 
     var body: some View {
         ContentConversationColumnView(
             showSidebar: $showSidebar,
-            messageText: $messageText,
             selectedMessageSender: $selectedMessageSender,
             selectedMessageSenderID: $selectedMessageSenderID,
             imagePreviewURL: $imagePreviewURL,
             windowCountPublic: $windowCountPublic,
             windowCountPrivate: $windowCountPrivate,
             isAtBottomPrivate: $isAtBottomPrivate,
-            isTextFieldFocused: $isTextFieldFocused,
+            composer: composers.secondary,
+            target: target,
+            focusedComposer: $focusedComposer,
             voiceRecordingVM: voiceRecordingVM,
-            autocompleteDebounceTimer: $autocompleteDebounceTimer,
-            showImagePicker: $showImagePicker,
-            imagePickerSourceType: $imagePickerSourceType,
+            onPickMedia: { _ in },
             headerHeight: 44,
             trailingCornerReach: 0,
             onSendMessage: {}
@@ -224,32 +219,63 @@ private struct ContentConversationColumnHarness: View {
 }
 #endif
 
+/// One composer on the session and target a slot would give it.
+@MainActor
+private struct ComposerHarness: View {
+    @ObservedObject var session: ComposerSession
+    let target: ConversationTarget?
+    @StateObject private var voiceRecordingVM = VoiceRecordingViewModel()
+    @FocusState private var focusedComposer: ComposerSlot?
+
+    var body: some View {
+        #if os(iOS)
+        ContentComposerView(
+            session: session,
+            target: target,
+            focus: $focusedComposer,
+            voiceRecordingVM: voiceRecordingVM,
+            onSend: {},
+            onPickMedia: { _ in }
+        )
+        #else
+        ContentComposerView(
+            session: session,
+            target: target,
+            focus: $focusedComposer,
+            voiceRecordingVM: voiceRecordingVM,
+            onSend: {},
+            onPickMedia: {}
+        )
+        #endif
+    }
+}
+
 /// A public `MessageListView` with its own bindings; the timeline it shows
 /// is whatever `PublicChatModel` the environment hands it.
 @MainActor
 private struct MessageListHarness: View {
     @State private var isAtBottom = true
-    @State private var messageText = ""
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: PeerID?
     @State private var imagePreviewURL: URL?
     @State private var windowCountPublic = TransportConfig.uiWindowInitialCountPublic
     @State private var windowCountPrivate: [PeerID: Int] = [:]
     @State private var showSidebar = false
-    @FocusState private var isTextFieldFocused: Bool
+    @StateObject private var composers = ComposerSessions(drafts: InMemoryComposerDraftStore())
+    @FocusState private var focusedComposer: ComposerSlot?
 
     var body: some View {
         MessageListView(
-            privatePeer: nil,
+            privateTarget: nil,
             isAtBottom: $isAtBottom,
-            messageText: $messageText,
+            composer: composers.primary,
             selectedMessageSender: $selectedMessageSender,
             selectedMessageSenderID: $selectedMessageSenderID,
             imagePreviewURL: $imagePreviewURL,
             windowCountPublic: $windowCountPublic,
             windowCountPrivate: $windowCountPrivate,
             showSidebar: $showSidebar,
-            isTextFieldFocused: $isTextFieldFocused
+            focusedComposer: $focusedComposer
         )
     }
 }
@@ -624,10 +650,9 @@ struct ViewSmokeTests {
                 messageText: Binding(
                     get: { messageText },
                     set: { messageText = $0 }
-                )
+                ),
+                target: .publicChannel(.location(channel))
             )
-            .environmentObject(featureModels.privateConversationModel)
-            .environmentObject(featureModels.locationChannelsModel)
         )
 
         _ = mount(
@@ -783,10 +808,48 @@ struct ViewSmokeTests {
         featureModels.privateConversationModel.startConversation(with: peerID)
         try? await Task.sleep(nanoseconds: 50_000_000)
 
-        _ = mount(installSmokeEnvironment(ContentPeopleSheetHarness(), featureModels: featureModels))
+        _ = mount(installSmokeEnvironment(
+            ContentPeopleSheetHarness(target: ConversationTarget(channel: .mesh, privatePeer: peerID)),
+            featureModels: featureModels
+        ))
 
         #expect(featureModels.privateConversationModel.selectedPeerID == peerID)
         #expect(featureModels.privateConversationModel.selectedHeaderState?.headerPeerID == peerID)
+    }
+
+    /// Each slot's composer mounts on its own session: the public
+    /// timeline's (#mesh with photo and mic, a geohash with neither) and the
+    /// DM sheet's, with its text, command suggestions and mention panel, and
+    /// with no conversation at all.
+    @Test
+    func composer_mountsForEitherSlot() {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let peerID = PeerID(str: "7172737475767778")
+        let geohash = ChannelID.location(GeohashChannel(level: .city, geohash: "u4pru"))
+        let cases: [(ComposerSlot, ConversationTarget?, String)] = [
+            (.primary, .mesh, ""),
+            (.primary, .publicChannel(geohash), "/f"),
+            (.secondary, ConversationTarget(channel: .mesh, privatePeer: peerID), "hi @al"),
+            (.secondary, ConversationTarget(channel: geohash, privatePeer: peerID), "/"),
+            (.secondary, nil, "left behind")
+        ]
+
+        for (slot, target, text) in cases {
+            let session = ComposerSession(slot: slot)
+            session.text = text
+            if text.contains("@") {
+                session.autocomplete = ComposerAutocompleteState(
+                    suggestions: ["@alice", "@albert"],
+                    range: NSRange(location: 3, length: 3)
+                )
+            }
+            _ = mount(installSmokeEnvironment(
+                ComposerHarness(session: session, target: target),
+                featureModels: featureModels
+            ))
+            #expect(session.text == text, "mounting changed \(slot)'s text")
+        }
     }
 
     /// The split layout's leading list is handed the pinned #mesh model while
@@ -876,7 +939,10 @@ struct ViewSmokeTests {
         featureModels.privateConversationModel.startConversation(with: peerID)
         #expect(featureModels.privateConversationModel.selectedPeerID == peerID)
 
-        _ = mount(installSmokeEnvironment(ContentConversationColumnHarness(), featureModels: featureModels))
+        _ = mount(installSmokeEnvironment(
+            ContentConversationColumnHarness(target: ConversationTarget(channel: .mesh, privatePeer: peerID)),
+            featureModels: featureModels
+        ))
     }
 
     @Test

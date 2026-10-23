@@ -6,38 +6,50 @@ import UIKit
 import AppKit
 #endif
 
+/// A composer: the text field, its suggestions, the mic and the photo
+/// button. Everything it does goes to `target`, the conversation of the
+/// timeline it sits under, never to whatever is selected: its text through
+/// `onSend` (which takes the session's text and target), a photo through
+/// `onPickMedia`, a voice note or a live hold through the mic. Its slot is
+/// its session's.
 struct ContentComposerView: View {
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
-    @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @ObservedObject private var bridgeService = BridgeService.shared
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
-    @Binding var messageText: String
-    var isTextFieldFocused: FocusState<Bool>.Binding
+    /// This composer's text and suggestions; observed here only.
+    @ObservedObject var session: ComposerSession
+    /// Where this composer sends; nil while it has no conversation, when it
+    /// can only hold text.
+    let target: ConversationTarget?
+    /// The composer with the keyboard, shared by every composer on screen.
+    var focus: FocusState<ComposerSlot?>.Binding
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
-    @Binding var autocompleteDebounceTimer: Timer?
     /// The mic press itself. A drag gesture never reports a cancelled touch
     /// through onEnded, but this resets either way.
     @GestureState private var isMicPressed = false
 
-    let onSendMessage: () -> Void
-
+    /// Sends this slot's text (`ComposerSessions.takeOutgoing(from:)`).
+    let onSend: () -> Void
+    /// The photo button: the owner records `target` with the source and
+    /// presents the picker.
     #if os(iOS)
-    @Binding var showImagePicker: Bool
-    @Binding var imagePickerSourceType: UIImagePickerController.SourceType
+    let onPickMedia: (UIImagePickerController.SourceType) -> Void
     #else
-    @Binding var showMacImagePicker: Bool
+    let onPickMedia: () -> Void
     #endif
+
+    private var slot: ComposerSlot { session.slot }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if conversationUIModel.showAutocomplete && !conversationUIModel.autocompleteSuggestions.isEmpty {
+            if showsMentionSuggestions {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(conversationUIModel.autocompleteSuggestions.prefix(4).enumerated()), id: \.element) { index, suggestion in
+                    ForEach(Array(session.autocomplete.suggestions.prefix(ComposerSession.visibleSuggestionCount).enumerated()), id: \.element) { index, suggestion in
                         Button(action: {
-                            _ = conversationUIModel.completeNickname(suggestion, in: &messageText)
+                            complete(with: suggestion)
                         }) {
                             HStack {
                                 Text(suggestion)
@@ -50,7 +62,7 @@ struct ContentComposerView: View {
                             .padding(.vertical, 3)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(
-                                index == conversationUIModel.selectedAutocompleteIndex
+                                index == session.autocomplete.selectedIndex
                                     ? palette.secondary.opacity(0.15)
                                     : Color.clear
                             )
@@ -62,70 +74,68 @@ struct ContentComposerView: View {
                 .padding(.horizontal, 12)
             }
 
-            CommandSuggestionsView(messageText: $messageText)
+            if showsSuggestions {
+                CommandSuggestionsView(messageText: $session.text, target: target)
+            }
 
-            if voiceRecordingVM.state.isActive {
+            if isRecordingHere {
                 recordingIndicator
             }
 
             HStack(alignment: .center, spacing: 4) {
                 TextField(
                     "",
-                    text: $messageText,
+                    text: $session.text,
                     prompt: Text(placeholderText)
                         .foregroundColor(palette.secondary.opacity(0.6))
                 )
                 .textFieldStyle(.plain)
                 .bitchatFont(size: 15)
                 .foregroundColor(palette.primary)
-                .focused(isTextFieldFocused)
+                .focused(focus, equals: slot)
                 .autocorrectionDisabled(true)
                 #if os(iOS)
                 .textInputAutocapitalization(.sentences)
                 #endif
                 .submitLabel(.send)
                 .modifier(AutocompleteKeyboardNavigationModifier(
-                    isActive: { conversationUIModel.showAutocomplete
-                        && !conversationUIModel.autocompleteSuggestions.isEmpty },
-                    onMove: { delta in
-                        conversationUIModel.moveAutocompleteSelection(by: delta)
+                    isActive: { [session] in session.autocomplete.isShowing },
+                    onMove: { [session] delta in
+                        session.moveSuggestionSelection(by: delta)
                     },
                     onAccept: {
-                        conversationUIModel.completeSelectedSuggestion(in: &messageText)
+                        completeWithHighlightedSuggestion()
                     },
-                    onDismiss: {
-                        conversationUIModel.dismissAutocomplete()
+                    onDismiss: { [session] in
+                        session.dismissSuggestions()
                     }
                 ))
                 // Return while the mention panel is open completes the
                 // highlight instead of sending — matches command suggestions
                 // (#1504) and keeps Tab/Return/Escape on one convention.
                 .onSubmit {
-                    if conversationUIModel.showAutocomplete,
-                       !conversationUIModel.autocompleteSuggestions.isEmpty,
-                       conversationUIModel.completeSelectedSuggestion(in: &messageText) {
+                    if showsMentionSuggestions, completeWithHighlightedSuggestion() {
                         return
                     }
-                    onSendMessage()
+                    onSend()
                     // Only the return-key path: it steals focus on iOS, so
                     // every message would cost a tap to reopen the keyboard.
                     // The send button must not reopen a deliberately
                     // dismissed keyboard, so it stays out of this.
-                    isTextFieldFocused.wrappedValue = true
+                    focus.wrappedValue = slot
                 }
                 .padding(.vertical, theme.usesGlassChrome ? 8 : 4)
                 .padding(.horizontal, 6)
                 .themedInputBackground()
                 .modifier(FocusEffectDisabledModifier())
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .onChange(of: messageText) { newValue in
-                    autocompleteDebounceTimer?.invalidate()
-                    autocompleteDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
-                        let cursorPosition = newValue.count
-                        Task { @MainActor in
-                            conversationUIModel.updateAutocomplete(for: newValue, cursorPosition: cursorPosition)
-                        }
-                    }
+                .onChange(of: session.text) { _ in
+                    scheduleAutocomplete()
+                }
+                // A new conversation under the same text (a DM's scope
+                // following the channel, say) has its own people to suggest.
+                .onChange(of: target) { _ in
+                    scheduleAutocomplete()
                 }
 
                 HStack(alignment: .center, spacing: 4) {
@@ -133,7 +143,7 @@ struct ContentComposerView: View {
                         nearbyOnlyToggle
                     }
 
-                    if conversationUIModel.canSendMediaInCurrentContext {
+                    if allowsMedia {
                         attachmentButton
                     }
 
@@ -145,22 +155,59 @@ struct ContentComposerView: View {
         .padding(.top, theme.usesGlassChrome ? 8 : 6)
         .padding(.bottom, 8)
         .themedChromePanel(edge: .bottom)
-        .onDisappear {
-            autocompleteDebounceTimer?.invalidate()
-        }
     }
 }
 
 private extension ContentComposerView {
+    /// Only the composer being typed in shows suggestions: while the other
+    /// one has the keyboard, this one's stay hidden.
+    var showsSuggestions: Bool {
+        focus.wrappedValue == nil || focus.wrappedValue == slot
+    }
+
+    var showsMentionSuggestions: Bool {
+        showsSuggestions && session.autocomplete.isShowing
+    }
+
+    /// Photos and voice: #mesh and mesh DMs.
+    var allowsMedia: Bool {
+        target?.allowsMedia == true
+    }
+
+    /// The hold in flight is this composer's: the recording HUD and the red
+    /// mic show here only.
+    var isRecordingHere: Bool {
+        voiceRecordingVM.isHolding(slot) && voiceRecordingVM.state.isActive
+    }
+
+    /// Recomputes this composer's mention suggestions for its own text and
+    /// conversation once typing pauses.
+    func scheduleAutocomplete() {
+        session.scheduleAutocomplete { [conversationUIModel] text, target in
+            conversationUIModel.autocomplete(for: text, cursorPosition: text.count, in: target)
+        }
+    }
+
+    /// Puts `suggestion` in place of the @-token the suggestions were made
+    /// for, and hides them.
+    func complete(with suggestion: String) {
+        var text = session.text
+        _ = conversationUIModel.complete(suggestion, in: &text, state: session.autocomplete)
+        session.dismissSuggestions()
+        session.text = text
+    }
+
+    /// Completes with the highlighted suggestion, if one shows.
+    func completeWithHighlightedSuggestion() -> Bool {
+        guard let suggestion = session.highlightedSuggestion else { return false }
+        complete(with: suggestion)
+        return true
+    }
+
     /// The nearby-only scope toggle appears only where it means something:
     /// the public mesh channel with the bridge on.
     var showsNearbyOnlyToggle: Bool {
-        guard bridgeService.isEnabled,
-              privateConversationModel.selectedHeaderState == nil,
-              case .mesh = locationChannelsModel.selectedChannel else {
-            return false
-        }
-        return true
+        bridgeService.isEnabled && target == .mesh
     }
 
     /// Scope control for outgoing messages: bridged (default, crosses to
@@ -191,18 +238,20 @@ private extension ContentComposerView {
     /// chats, the channel (and its public nature) otherwise — so a stressed
     /// user never has to guess who can read what they're typing.
     var placeholderText: String {
-        if let header = privateConversationModel.selectedHeaderState {
+        guard let target else { return "" }
+        // A DM composer's conversation is the open DM, whose header names it.
+        if let peer = target.privatePeer,
+           let header = privateConversationModel.selectedHeaderState {
             // A geohash-DM display name already carries its own "#geohash/@name"
             // form, so it must not get another "@" prefix; a mesh nickname does.
-            let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true
-            let target = isGeoDM ? header.displayName : "@\(header.displayName)"
+            let partner = peer.isGeoDM ? header.displayName : "@\(header.displayName)"
             return String(
                 format: String(localized: "content.input.placeholder.private", comment: "Composer placeholder inside a private chat, naming the conversation partner"),
                 locale: .current,
-                target
+                partner
             )
         }
-        switch locationChannelsModel.selectedChannel {
+        switch target.channel {
         case .mesh:
             return String(localized: "content.input.placeholder.mesh", comment: "Composer placeholder for the public mesh channel")
         case .location(let channel):
@@ -240,7 +289,7 @@ private extension ContentComposerView {
                 }
             }
             Spacer()
-            Button(action: voiceRecordingVM.cancel) {
+            Button(action: { voiceRecordingVM.cancel(owner: slot) }) {
                 Label(String(localized: "common.cancel", comment: "Cancel action in the voice recording HUD"), systemImage: "xmark.circle")
                     .labelStyle(.iconOnly)
                     .font(.bitchatSystem(size: 18))
@@ -256,7 +305,7 @@ private extension ContentComposerView {
     }
 
     var composerAccentColor: Color {
-        privateConversationModel.selectedPeerID != nil ? Color.orange : palette.accent
+        target?.isPrivate == true ? Color.orange : palette.accent
     }
 
     var attachmentButton: some View {
@@ -267,15 +316,13 @@ private extension ContentComposerView {
             .frame(width: 36, height: 36)
             .contentShape(Circle())
             .onTapGesture {
-                imagePickerSourceType = .photoLibrary
-                showImagePicker = true
+                onPickMedia(.photoLibrary)
             }
             .onLongPressGesture(minimumDuration: 0.3) {
                 // The simulator and camera-less devices have no camera
                 // source; the picker raises on an unavailable one.
                 guard UIImagePickerController.isSourceTypeAvailable(.camera) else { return }
-                imagePickerSourceType = .camera
-                showImagePicker = true
+                onPickMedia(.camera)
             }
             .accessibilityLabel(
                 String(localized: "content.accessibility.attach_photo", comment: "Accessibility label for the photo attachment button")
@@ -288,11 +335,10 @@ private extension ContentComposerView {
             // mirror it as a named action.
             .accessibilityAction(named: Text("content.accessibility.take_photo", comment: "Accessibility action name for taking a photo with the camera")) {
                 guard UIImagePickerController.isSourceTypeAvailable(.camera) else { return }
-                imagePickerSourceType = .camera
-                showImagePicker = true
+                onPickMedia(.camera)
             }
         #else
-        Button(action: { showMacImagePicker = true }) {
+        Button(action: { onPickMedia() }) {
             Image(systemName: "photo.circle.fill")
                 .font(.bitchatSystem(size: 24))
                 .foregroundColor(composerAccentColor)
@@ -307,8 +353,8 @@ private extension ContentComposerView {
 
     @ViewBuilder
     var sendOrMicButton: some View {
-        let hasText = !messageText.trimmed.isEmpty
-        if conversationUIModel.canSendMediaInCurrentContext {
+        let hasText = !session.text.trimmed.isEmpty
+        if allowsMedia {
             ZStack {
                 micButtonView
                     .opacity(hasText ? 0 : 1)
@@ -328,7 +374,7 @@ private extension ContentComposerView {
     /// Only advisory — a decentralized mesh has no floor arbiter, so holding
     /// the mic still works; the tint just discourages talk-over.
     var busyTalker: String? {
-        guard privateConversationModel.selectedPeerID == nil else { return nil }
+        guard target == .mesh else { return nil }
         return conversationUIModel.activeLiveVoiceTalker
     }
 
@@ -336,7 +382,7 @@ private extension ContentComposerView {
     /// live or records a classic note is signaled by the recording HUD's
     /// LIVE treatment, not the idle button color.
     var micColor: Color {
-        if voiceRecordingVM.state.isActive { return .red }
+        if isRecordingHere { return .red }
         if busyTalker != nil { return Color.red.opacity(0.6) }
         return composerAccentColor
     }
@@ -345,7 +391,7 @@ private extension ContentComposerView {
         Image(systemName: "mic.circle.fill")
             .font(.bitchatSystem(size: 24))
             .foregroundColor(micColor)
-            .modifier(PulsingOpacityModifier(active: busyTalker != nil && !voiceRecordingVM.state.isActive))
+            .modifier(PulsingOpacityModifier(active: busyTalker != nil && !isRecordingHere))
             .frame(width: 36, height: 36)
             .contentShape(Circle())
             .overlay(
@@ -358,28 +404,29 @@ private extension ContentComposerView {
                             }
                             .onChanged { _ in
                                 // Every movement lands here; the model
-                                // starts at most one hold per press.
-                                voiceRecordingVM.pressChanged(shouldShow: conversationUIModel.canSendMediaInCurrentContext)
+                                // starts at most one hold per press, and none
+                                // while the other composer holds the mic.
+                                pressMic()
                             }
                             .onEnded { _ in
                                 // The sender is made now, so the note goes
                                 // where it was recorded even if the person
                                 // leaves before the file is finalized.
-                                voiceRecordingVM.pressEnded(completion: conversationUIModel.makeVoiceNoteSender())
+                                voiceRecordingVM.pressEnded(owner: slot, completion: makeVoiceNoteSender())
                             }
                     )
             )
             .onChange(of: isMicPressed) { isPressed in
                 guard !isPressed else { return }
-                voiceRecordingVM.pressReleased()
+                voiceRecordingVM.pressReleased(owner: slot)
                 // A lift already ran finish() in onEnded, which leaves the
                 // recorder idle synchronously. Still in flight a hop later
                 // means the touch was cancelled instead (a fold, a call, a
                 // system alert): nothing would ever end this hold, leaving
                 // the mic, or a live push-to-talk stream, open.
                 DispatchQueue.main.async {
-                    guard !isMicPressed, voiceRecordingVM.isHoldInFlight else { return }
-                    voiceRecordingVM.cancel()
+                    guard !isMicPressed, voiceRecordingVM.isHolding(slot) else { return }
+                    voiceRecordingVM.cancel(owner: slot)
                 }
             }
             .onDisappear {
@@ -387,13 +434,13 @@ private extension ContentComposerView {
                 // composer or once media isn't allowed here (#mesh to a
                 // geohash channel, say). A VoiceOver toggle or a second
                 // finger can get there with a hold live.
-                voiceRecordingVM.controlRemoved()
+                voiceRecordingVM.controlRemoved(owner: slot)
             }
             .accessibilityLabel(
                 String(localized: "content.accessibility.record_voice_note", comment: "Accessibility label for the voice note button")
             )
             .accessibilityValue(
-                voiceRecordingVM.state.isActive
+                isRecordingHere
                 ? String(localized: "content.accessibility.recording", comment: "Accessibility value announced while a voice note is recording")
                 : busyTalker.map {
                     String(
@@ -410,17 +457,39 @@ private extension ContentComposerView {
             // Press-and-hold drag gestures can't be activated by VoiceOver;
             // give it a start/stop toggle as the default action.
             .accessibilityAction {
-                if voiceRecordingVM.state.isActive {
-                    voiceRecordingVM.finish(completion: conversationUIModel.makeVoiceNoteSender())
+                if isRecordingHere {
+                    voiceRecordingVM.finish(owner: slot, completion: makeVoiceNoteSender())
                 } else {
-                    voiceRecordingVM.start(shouldShow: conversationUIModel.canSendMediaInCurrentContext)
+                    voiceRecordingVM.start(shouldShow: allowsMedia, owner: slot, session: captureSessionFactory)
                 }
             }
     }
 
+    /// A press on this composer's mic: a hold for this composer's
+    /// conversation, made for it when the hold starts.
+    func pressMic() {
+        voiceRecordingVM.pressChanged(shouldShow: allowsMedia, owner: slot, session: captureSessionFactory)
+    }
+
+    /// Makes the capture backend for a hold here: live only to this
+    /// composer's own conversation, a classic note otherwise.
+    var captureSessionFactory: (() -> VoiceCaptureSession)? {
+        guard let target else { return nil }
+        return { [conversationUIModel] in
+            conversationUIModel.makeVoiceCaptureSession(for: target)
+        }
+    }
+
+    /// The release's completion: the note goes to this composer's
+    /// conversation as of the release. Nil without one, which drops the
+    /// recording rather than sending it anywhere else.
+    func makeVoiceNoteSender() -> ((URL) -> Void)? {
+        target.map { conversationUIModel.makeVoiceNoteSender(for: $0) }
+    }
+
     func sendButtonView(enabled: Bool) -> some View {
         let activeColor = composerAccentColor
-        return Button(action: onSendMessage) {
+        return Button(action: onSend) {
             Image(systemName: "arrow.up.circle.fill")
                 .font(.bitchatSystem(size: 24))
                 .foregroundColor(enabled ? activeColor : Color.gray)

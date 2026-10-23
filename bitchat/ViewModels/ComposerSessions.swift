@@ -9,6 +9,9 @@
 import BitFoundation
 import Combine
 import Foundation
+#if os(iOS)
+import UIKit
+#endif
 
 /// Where each composer on screen sends: the conversation of the timeline it
 /// sits under. Built only through `single` and `split`, whose two slots can
@@ -74,6 +77,18 @@ struct ComposerTargets: Equatable {
     func shareImportSlot(preferring preferred: ComposerSlot) -> ComposerSlot {
         self[preferred] == nil ? .primary : preferred
     }
+}
+
+/// A camera or library press in a composer, with the conversation the pick
+/// goes to: the composer's own, taken at the press, so a pick can never land
+/// in another conversation however the screen changes while the picker is
+/// up.
+struct MediaPickRequest: Identifiable {
+    let id = UUID()
+    let target: ConversationTarget
+    #if os(iOS)
+    let source: UIImagePickerController.SourceType
+    #endif
 }
 
 /// Where `ComposerSessions` parks the text of a conversation no composer

@@ -150,11 +150,20 @@ struct ContentView: View {
     @EnvironmentObject private var privateInboxModel: PrivateInboxModel
 
     @StateObject private var voiceRecordingVM = VoiceRecordingViewModel()
-    @State private var messageText = ""
-    /// Conversation the current `messageText` belongs to, so a channel switch
-    /// can save under the previous key before loading the next draft.
-    @State private var activeDraftKey: ComposerDraftStore.Key = .mesh
-    @FocusState private var isTextFieldFocused: Bool
+    /// Every composer's text, suggestions and target, one session per slot.
+    /// Not observed here: each composer observes its own session.
+    @StateObject private var composers = ComposerSessions()
+    /// The composer with the keyboard.
+    @FocusState private var focusedComposer: ComposerSlot?
+    /// The channel the public timeline renders, mirrored from its model's
+    /// `$channel` without observing its messages; nil until the first value
+    /// lands. The primary composer sends there: a composer's target comes
+    /// from what its timeline shows, never from the location selection,
+    /// which runs ahead of the timeline.
+    @State private var publicTimelineChannel: ChannelID?
+    /// A composer's camera or library press, with the conversation the pick
+    /// goes to. The picker is up while it is set.
+    @State private var mediaPickRequest: MediaPickRequest?
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.appTheme) private var appTheme
     @Environment(\.scenePhase) private var scenePhase
@@ -164,15 +173,8 @@ struct ContentView: View {
     @FocusState private var isNicknameFieldFocused: Bool
     @State private var isAtBottomPublic = true
     @State private var isAtBottomPrivate = true
-    @State private var autocompleteDebounceTimer: Timer?
     @State private var showVerifySheet = false
     @State private var imagePreviewURL: URL?
-    #if os(iOS)
-    @State private var showImagePicker = false
-    @State private var imagePickerSourceType: UIImagePickerController.SourceType = .camera
-    #else
-    @State private var showMacImagePicker = false
-    #endif
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     /// Display corners are named by physical side, while the padding that
@@ -185,9 +187,9 @@ struct ContentView: View {
     /// The people column's QR sheet presents through the root, so its state
     /// lives here where the root alerts can defer to it.
     @State private var showColumnVerifySheet = false
-    /// Set when unfolding moves a focused DM composer out of the sheet; the
-    /// sheet's dismissal hands focus to the column's composer.
-    @State private var refocusComposerAfterLayoutChange = false
+    /// Set when unfolding moves a focused DM composer out of the sheet: the
+    /// conversation whose composer the sheet's dismissal hands focus to.
+    @State private var refocusConversationAfterLayoutChange: ConversationID?
     /// Set when unfolding moves an open DM out of the sheet. The column's list
     /// lands on the latest message, but the departing sheet's list reports
     /// its last row leaving afterwards, which raised a stale jump-to-latest
@@ -206,11 +208,28 @@ struct ContentView: View {
         privateConversationModel.selectedPeerID
     }
 
+    /// Where each composer sends: the public channel the timeline shows,
+    /// and the open DM in the sheet (or #1792's column).
+    private var composerTargets: ComposerTargets {
+        .single(
+            activeChannel: publicTimelineChannel ?? publicChatModel.channel,
+            privatePeer: selectedPrivatePeerID
+        )
+    }
+
+    /// The composer shared content goes into (E11): the DM's while one is
+    /// open, else the public timeline's.
+    private var shareImportSlot: ComposerSlot {
+        composerTargets.shareImportSlot(preferring: .secondary)
+    }
+
+    /// The share review names the conversation of the composer it fills.
     private var sharedContentDestination: SharedContentDestination {
-        SharedContentDestination.resolve(
-            selectedPrivatePeerID: selectedPrivatePeerID,
+        let target = composerTargets[shareImportSlot] ?? composerTargets.primary
+        return SharedContentDestination.resolve(
+            selectedPrivatePeerID: target.privatePeer,
             privateDisplayName: privateConversationModel.selectedHeaderState?.displayName,
-            activeChannel: locationChannelsModel.selectedChannel
+            activeChannel: target.channel
         )
     }
 
@@ -237,10 +256,8 @@ struct ContentView: View {
         includingVoiceAlert: Bool
     ) -> ContentRootModalPresentationState {
         #if os(iOS)
-        let isMediaPickerPresented = showImagePicker
         let isVerificationSheetPresented = showVerifySheet || showColumnVerifySheet
         #else
-        let isMediaPickerPresented = showMacImagePicker
         let isVerificationSheetPresented = showVerifySheet
         #endif
 
@@ -250,7 +267,7 @@ struct ContentView: View {
             isImagePreviewPresented: imagePreviewURL != nil,
             isVerificationSheetPresented: isVerificationSheetPresented,
             isVoiceAlertPresented: includingVoiceAlert && voiceRecordingVM.showAlert,
-            isMediaPickerPresented: isMediaPickerPresented,
+            isMediaPickerPresented: mediaPickRequest != nil,
             isLegacyMediaConsentPresented: ContentRootModalPresentationState.legacyConsentDefersRoot(
                 isSplitLayout: isSplitLayoutActive,
                 hasPendingRequest: conversationUIModel.legacyPrivateMediaConsentRequest != nil
@@ -353,30 +370,30 @@ struct ContentView: View {
             .onAppear {
                 conversationUIModel.setCurrentColorScheme(colorScheme)
                 conversationUIModel.setCurrentTheme(appTheme)
-                voiceRecordingVM.sessionProvider = { [weak conversationUIModel] in
-                    conversationUIModel?.makeVoiceCaptureSession() ?? VoiceNoteCaptureSession()
-                }
                 appChromeModel.setPanicPreparation { [weak voiceRecordingVM] in
                     voiceRecordingVM?.panicWipe()
-                    // Drop in-memory composer text before ChatViewModel resets
-                    // persisted drafts — otherwise the next inactive/background
-                    // transition would write the pre-wipe draft back.
-                    messageText = ""
-                    activeDraftKey = .mesh
+                    // Drop every composer's text, suggestions and keys before
+                    // ChatViewModel resets the parked drafts — otherwise the
+                    // next inactive/background save would write a pre-wipe
+                    // draft back. A pick still to come names a pre-wipe
+                    // conversation.
+                    composers.reset()
+                    mediaPickRequest = nil
+                    // The wipe lands in the same call (drafts emptied, the
+                    // selection back on #mesh); point the composers at what is
+                    // on screen once it has.
+                    DispatchQueue.main.async {
+                        retargetComposers(to: composerTargets)
+                    }
                 }
                 #if os(macOS)
                 DispatchQueue.main.async {
                     isNicknameFieldFocused = false
-                    isTextFieldFocused = true
+                    focusedComposer = .primary
                 }
                 #endif
+                retargetComposers(to: composerTargets)
                 sharedContentImportModel.updateDestination(sharedContentDestination)
-                activeDraftKey = ComposerDraftStore.Key.from(
-                    peerID: selectedPrivatePeerID,
-                    fingerprint: selectedPrivatePeerID.flatMap { conversationUIModel.getFingerprint(for: $0) },
-                    channel: locationChannelsModel.selectedChannel
-                )
-                messageText = ComposerDraftStore.load(activeDraftKey)
             }
             .onChange(of: colorScheme) { newValue in
                 conversationUIModel.setCurrentColorScheme(newValue)
@@ -389,20 +406,26 @@ struct ContentView: View {
         #if os(macOS)
         .frame(minWidth: 600, minHeight: 400)
         #endif
-        .onChange(of: selectedPrivatePeerID) { newValue in
-            let draftKey = ComposerDraftStore.Key.from(
-                peerID: newValue,
-                fingerprint: newValue.flatMap { conversationUIModel.getFingerprint(for: $0) },
-                channel: locationChannelsModel.selectedChannel
-            )
-            // A hold records for the conversation it started in, but a voice
-            // note is routed by the selection when the hold ends, and a live
-            // push-to-talk stream keeps its original target; the composer
-            // holding the press may also just have been removed. Compared like
-            // drafts, so the same person's peer-ID handoff keeps the hold.
-            if draftKey != activeDraftKey, voiceRecordingVM.isHoldInFlight {
-                voiceRecordingVM.cancel()
+        // The timeline's channel, not its messages: one update per switch.
+        .onReceive(publicChatModel.$channel) { channel in
+            if publicTimelineChannel != channel {
+                publicTimelineChannel = channel
             }
+        }
+        // Every composer follows its conversation in one step (the draft
+        // swap and any hand-over), and a hold whose composer changed
+        // conversation is cancelled: a live push-to-talk stream keeps the
+        // target it started with. Compared like drafts, so the same
+        // person's peer-ID handoff keeps the hold.
+        .onChange(of: composerTargets) { targets in
+            retargetComposers(to: targets)
+            sharedContentImportModel.updateDestination(sharedContentDestination)
+        }
+        // A share arriving names the composer it would fill.
+        .onChange(of: sharedContentImportModel.offer?.id) { _ in
+            sharedContentImportModel.updateDestination(sharedContentDestination)
+        }
+        .onChange(of: selectedPrivatePeerID) { newValue in
             // The split layout shows the DM in its column; a stale sidebar
             // flag would pop the people sheet after the next fold.
             if newValue != nil, !isSplitLayoutActive {
@@ -417,33 +440,18 @@ struct ContentView: View {
                 showColumnVerifySheet = false
             }
             #endif
-            sharedContentImportModel.updateDestination(sharedContentDestination)
-            switchComposerDraft(to: draftKey)
         }
+        #if os(iOS)
         .onChange(of: locationChannelsModel.selectedChannel) { newChannel in
-            #if os(iOS)
             appChromeModel.splitLayoutShowsLocation = SplitLayoutScreenshotPolicy.columnsShowLocation(
                 isSplit: isSplitLayout,
                 selectedChannel: newChannel
             )
-            #endif
-            sharedContentImportModel.updateDestination(sharedContentDestination)
-            // Private drafts are keyed by peer; only public channel switches
-            // need a draft swap while no DM is open.
-            if selectedPrivatePeerID == nil {
-                switchComposerDraft(to: ComposerDraftStore.Key.from(
-                    peerID: nil,
-                    fingerprint: nil,
-                    channel: newChannel
-                ))
-            }
         }
+        #endif
         .onChange(of: scenePhase) { phase in
             if phase == .background || phase == .inactive {
-                // Always save, including empty — clearing the composer must
-                // remove the in-memory draft so it does not resurrect on the
-                // next switch back into this conversation.
-                ComposerDraftStore.save(messageText, for: activeDraftKey)
+                composers.saveAll()
             }
         }
         .sheet(
@@ -473,23 +481,22 @@ struct ContentView: View {
                 #endif
             }
         ) {
-            #if os(iOS)
             ContentPeopleSheetView(
                 showSidebar: $showSidebar,
-                messageText: $messageText,
                 selectedMessageSender: $selectedMessageSender,
                 selectedMessageSenderID: $selectedMessageSenderID,
                 imagePreviewURL: $imagePreviewURL,
                 windowCountPublic: $windowCountPublic,
                 windowCountPrivate: $windowCountPrivate,
                 isAtBottomPrivate: $isAtBottomPrivate,
-                isTextFieldFocused: $isTextFieldFocused,
+                composer: composers.secondary,
+                target: composerTargets.secondary,
+                focusedComposer: $focusedComposer,
                 voiceRecordingVM: voiceRecordingVM,
-                autocompleteDebounceTimer: $autocompleteDebounceTimer,
                 headerHeight: headerHeight,
-                onSendMessage: sendMessage,
-                showImagePicker: $showImagePicker,
-                imagePickerSourceType: $imagePickerSourceType
+                onSendMessage: { send(from: .secondary) },
+                onPickMedia: mediaPicker(for: .secondary),
+                mediaPickRequest: $mediaPickRequest
             )
             // Sheets + NavigationStack can drop inherited EnvironmentObjects on
             // some iOS versions (#1558). Re-inject every model the sheet tree
@@ -502,32 +509,6 @@ struct ContentView: View {
             .environmentObject(peerListModel)
             .environmentObject(publicChatModel)
             .environmentObject(privateInboxModel)
-            #else
-            ContentPeopleSheetView(
-                showSidebar: $showSidebar,
-                messageText: $messageText,
-                selectedMessageSender: $selectedMessageSender,
-                selectedMessageSenderID: $selectedMessageSenderID,
-                imagePreviewURL: $imagePreviewURL,
-                windowCountPublic: $windowCountPublic,
-                windowCountPrivate: $windowCountPrivate,
-                isAtBottomPrivate: $isAtBottomPrivate,
-                isTextFieldFocused: $isTextFieldFocused,
-                voiceRecordingVM: voiceRecordingVM,
-                autocompleteDebounceTimer: $autocompleteDebounceTimer,
-                headerHeight: headerHeight,
-                onSendMessage: sendMessage,
-                showMacImagePicker: $showMacImagePicker
-            )
-            .environmentObject(appChromeModel)
-            .environmentObject(privateConversationModel)
-            .environmentObject(verificationModel)
-            .environmentObject(conversationUIModel)
-            .environmentObject(locationChannelsModel)
-            .environmentObject(peerListModel)
-            .environmentObject(publicChatModel)
-            .environmentObject(privateInboxModel)
-            #endif
         }
         .sheet(isPresented: $appChromeModel.isAppInfoPresented) {
             AppInfoView(
@@ -545,34 +526,22 @@ struct ContentView: View {
                     .environmentObject(verificationModel)
             }
         }
+        // A pick goes to the conversation recorded at the press, whatever
+        // the screen shows by the time it completes.
         #if os(iOS)
-        .fullScreenCover(isPresented: Binding(
-            get: { showImagePicker && !isPeopleSheetPresented },
-            set: { newValue in
-                if !newValue {
-                    showImagePicker = false
-                }
-            }
-        )) {
-            ImagePickerView(sourceType: imagePickerSourceType) { image in
-                showImagePicker = false
-                conversationUIModel.processSelectedImage(image)
+        .fullScreenCover(item: rootMediaPickBinding) { request in
+            ImagePickerView(sourceType: request.source) { image in
+                mediaPickRequest = nil
+                conversationUIModel.processSelectedImage(image, to: request.target)
             }
             .ignoresSafeArea()
         }
         #endif
         #if os(macOS)
-        .sheet(isPresented: Binding(
-            get: { showMacImagePicker && !isPeopleSheetPresented },
-            set: { newValue in
-                if !newValue {
-                    showMacImagePicker = false
-                }
-            }
-        )) {
+        .sheet(item: rootMediaPickBinding) { request in
             MacImagePickerView { url in
-                showMacImagePicker = false
-                conversationUIModel.processSelectedImage(from: url)
+                mediaPickRequest = nil
+                conversationUIModel.processSelectedImage(from: url, to: request.target)
             }
         }
         #endif
@@ -626,14 +595,15 @@ struct ContentView: View {
                 sharedContentImportModel.cancel(destination: sharedContentDestination)
             }
             Button("share_import.review.use_in_composer") {
+                let slot = shareImportSlot
                 guard let importedText = sharedContentImportModel.confirm(
                     destination: sharedContentDestination
                 ) else { return }
                 // Replacing is deliberate and called out in the prompt. It
                 // avoids combining a stale draft from another conversation
                 // with newly shared content.
-                messageText = importedText
-                isTextFieldFocused = true
+                composers[slot].text = importedText
+                focusedComposer = slot
             }
         } message: { offer in
             let format = String(
@@ -643,9 +613,21 @@ struct ContentView: View {
             Text(String(format: format, offer.destination.displayName) + "\n\n" + offer.payload.preview)
         }
         .onDisappear {
-            autocompleteDebounceTimer?.invalidate()
             appChromeModel.setPanicPreparation(nil)
         }
+    }
+
+    /// The root's media picker. While the people sheet is up the sheet
+    /// presents it instead: the root can't present over the sheet.
+    private var rootMediaPickBinding: Binding<MediaPickRequest?> {
+        Binding(
+            get: { isPeopleSheetPresented ? nil : mediaPickRequest },
+            set: { newValue in
+                if newValue == nil {
+                    mediaPickRequest = nil
+                }
+            }
+        )
     }
 
     /// iOS: where the width allows two columns (the iPhone Duo's inner
@@ -799,40 +781,29 @@ struct ContentView: View {
 
     private var publicMessageList: some View {
         MessageListView(
-            privatePeer: nil,
+            privateTarget: nil,
             isAtBottom: $isAtBottomPublic,
-            messageText: $messageText,
+            // Its composer is hidden while a DM is open: no mention then.
+            composer: selectedPrivatePeerID == nil ? composers.primary : nil,
             selectedMessageSender: $selectedMessageSender,
             selectedMessageSenderID: $selectedMessageSenderID,
             imagePreviewURL: $imagePreviewURL,
             windowCountPublic: $windowCountPublic,
             windowCountPrivate: $windowCountPrivate,
             showSidebar: $showSidebar,
-            isTextFieldFocused: $isTextFieldFocused
+            focusedComposer: $focusedComposer
         )
     }
 
     private var composerView: some View {
-        #if os(iOS)
         ContentComposerView(
-            messageText: $messageText,
-            isTextFieldFocused: $isTextFieldFocused,
+            session: composers.primary,
+            target: composerTargets.primary,
+            focus: $focusedComposer,
             voiceRecordingVM: voiceRecordingVM,
-            autocompleteDebounceTimer: $autocompleteDebounceTimer,
-            onSendMessage: sendMessage,
-            showImagePicker: $showImagePicker,
-            imagePickerSourceType: $imagePickerSourceType
+            onSend: { send(from: .primary) },
+            onPickMedia: mediaPicker(for: .primary)
         )
-        #else
-        ContentComposerView(
-            messageText: $messageText,
-            isTextFieldFocused: $isTextFieldFocused,
-            voiceRecordingVM: voiceRecordingVM,
-            autocompleteDebounceTimer: $autocompleteDebounceTimer,
-            onSendMessage: sendMessage,
-            showMacImagePicker: $showMacImagePicker
-        )
-        #endif
     }
 
     #if os(iOS)
@@ -842,21 +813,20 @@ struct ContentView: View {
         if selectedPrivatePeerID != nil {
             ContentConversationColumnView(
                 showSidebar: $showSidebar,
-                messageText: $messageText,
                 selectedMessageSender: $selectedMessageSender,
                 selectedMessageSenderID: $selectedMessageSenderID,
                 imagePreviewURL: $imagePreviewURL,
                 windowCountPublic: $windowCountPublic,
                 windowCountPrivate: $windowCountPrivate,
                 isAtBottomPrivate: $isAtBottomPrivate,
-                isTextFieldFocused: $isTextFieldFocused,
+                composer: composers.secondary,
+                target: composerTargets.secondary,
+                focusedComposer: $focusedComposer,
                 voiceRecordingVM: voiceRecordingVM,
-                autocompleteDebounceTimer: $autocompleteDebounceTimer,
-                showImagePicker: $showImagePicker,
-                imagePickerSourceType: $imagePickerSourceType,
+                onPickMedia: mediaPicker(for: .secondary),
                 headerHeight: headerHeight,
                 trailingCornerReach: trailingCornerReach,
-                onSendMessage: sendMessage
+                onSendMessage: { send(from: .secondary) }
             )
         } else {
             // Keeps hosting its own QR sheet, as in the people sheet, and
@@ -902,7 +872,11 @@ struct ContentView: View {
         let conversationMoves = selectedPrivatePeerID != nil
         let sheetWasPresented = isPeopleSheetPresented
         let sheetWillBePresented = !toSplit && conversationMoves
-        let composerWasFocused = conversationMoves && isTextFieldFocused
+        // Focus follows the conversation whose composer had it, into
+        // whichever slot shows that conversation once the layout changed.
+        let focusedConversation: ConversationID? = conversationMoves
+            ? focusedComposer.flatMap { composerTargets[$0]?.conversationID }
+            : nil
 
         // First, so the departing sheet's setter reads as our own change and
         // leaves the conversation open.
@@ -913,8 +887,8 @@ struct ContentView: View {
         )
         // The DM composer changes hosts: the press on its mic is torn down
         // and would never finish the recording.
-        if conversationMoves, voiceRecordingVM.isHoldInFlight {
-            voiceRecordingVM.cancel()
+        if conversationMoves {
+            voiceRecordingVM.cancel(owner: .secondary)
         }
         // Folding brings an open DM back in the sheet, the list behind it;
         // an idle column must not pop the people sheet.
@@ -923,7 +897,7 @@ struct ContentView: View {
         if sheetWasPresented != sheetWillBePresented {
             // Presented by the sheet, or by the root for the column: the
             // other host can't adopt them.
-            showImagePicker = false
+            mediaPickRequest = nil
             imagePreviewURL = nil
             appChromeModel.clearFingerprint()
         }
@@ -931,45 +905,65 @@ struct ContentView: View {
         // Best effort: on unfolding, the departing sheet's dismissal hands
         // focus to the column's composer; on folding, the sheet's composer
         // mounts as it presents.
-        refocusComposerAfterLayoutChange = toSplit && composerWasFocused
+        refocusConversationAfterLayoutChange = toSplit ? focusedConversation : nil
         repinConversationAfterLayoutChange = toSplit && conversationMoves
-        if !toSplit, composerWasFocused {
+        if !toSplit, let focusedConversation {
             DispatchQueue.main.async {
-                isTextFieldFocused = true
+                focusedComposer = composerTargets.slot(showing: focusedConversation)
             }
         }
     }
 
     /// Only once the departing sheet is gone is the column's composer the one
-    /// field bound to the focus state, and has the sheet's list stopped
+    /// field bound to its slot's focus, and has the sheet's list stopped
     /// reporting where it is scrolled.
     private func finishLayoutChangeAfterSheetDismissal() {
         if repinConversationAfterLayoutChange {
             repinConversationAfterLayoutChange = false
             isAtBottomPrivate = true
         }
-        if refocusComposerAfterLayoutChange {
-            refocusComposerAfterLayoutChange = false
-            isTextFieldFocused = true
+        if let conversation = refocusConversationAfterLayoutChange {
+            refocusConversationAfterLayoutChange = nil
+            focusedComposer = composerTargets.slot(showing: conversation)
         }
     }
     #endif
 
-    private func sendMessage() {
-        guard let trimmed = messageText.trimmedOrNilIfEmpty else { return }
-
-        messageText = ""
-        ComposerDraftStore.save("", for: activeDraftKey)
-
-        DispatchQueue.main.async {
-            self.conversationUIModel.sendMessage(trimmed)
+    /// Points every composer at its conversation, and cancels a mic hold
+    /// whose composer now shows another one.
+    private func retargetComposers(to targets: ComposerTargets) {
+        let changed = composers.retarget(targets) { peerID in
+            conversationUIModel.getFingerprint(for: peerID)
+        }
+        for slot in changed {
+            voiceRecordingVM.cancel(owner: slot)
         }
     }
 
-    private func switchComposerDraft(to newKey: ComposerDraftStore.Key) {
-        guard newKey != activeDraftKey else { return }
-        ComposerDraftStore.save(messageText, for: activeDraftKey)
-        activeDraftKey = newKey
-        messageText = ComposerDraftStore.load(newKey)
+    /// Sends `slot`'s text to that composer's conversation, captured now:
+    /// a selection change during the hop below can't redirect it.
+    private func send(from slot: ComposerSlot) {
+        guard let outgoing = composers.takeOutgoing(from: slot) else { return }
+        DispatchQueue.main.async {
+            self.conversationUIModel.sendMessage(outgoing.text, to: outgoing.target)
+        }
     }
+
+    /// A composer's photo button: records the composer's conversation with
+    /// the source and puts the picker up.
+    #if os(iOS)
+    private func mediaPicker(for slot: ComposerSlot) -> (UIImagePickerController.SourceType) -> Void {
+        { [composers] source in
+            guard let target = composers[slot].target, target.allowsMedia else { return }
+            mediaPickRequest = MediaPickRequest(target: target, source: source)
+        }
+    }
+    #else
+    private func mediaPicker(for slot: ComposerSlot) -> () -> Void {
+        { [composers] in
+            guard let target = composers[slot].target, target.allowsMedia else { return }
+            mediaPickRequest = MediaPickRequest(target: target)
+        }
+    }
+    #endif
 }

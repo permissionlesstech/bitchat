@@ -30,45 +30,43 @@ struct ContentPeopleSheetView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     @Binding var showSidebar: Bool
-    @Binding var messageText: String
     @Binding var selectedMessageSender: String?
     @Binding var selectedMessageSenderID: PeerID?
     @Binding var imagePreviewURL: URL?
     @Binding var windowCountPublic: Int
     @Binding var windowCountPrivate: [PeerID: Int]
     @Binding var isAtBottomPrivate: Bool
-    var isTextFieldFocused: FocusState<Bool>.Binding
+    /// The DM composer's session (the secondary slot's).
+    let composer: ComposerSession
+    /// The open DM, scoped as its composer sends: the secondary slot's
+    /// target. Nil while no DM is open.
+    let target: ConversationTarget?
+    var focusedComposer: FocusState<ComposerSlot?>.Binding
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
-    @Binding var autocompleteDebounceTimer: Timer?
     @State private var showVerifySheet = false
     @ThemedPalette private var palette
 
     let headerHeight: CGFloat
     let onSendMessage: () -> Void
-
     #if os(iOS)
-    @Binding var showImagePicker: Bool
-    @Binding var imagePickerSourceType: UIImagePickerController.SourceType
+    let onPickMedia: (UIImagePickerController.SourceType) -> Void
     #else
-    @Binding var showMacImagePicker: Bool
+    let onPickMedia: () -> Void
     #endif
+    /// A pick from the DM composer presents from this sheet, which the root
+    /// can't present over.
+    @Binding var mediaPickRequest: MediaPickRequest?
 
     private func modalPresentationState(
         includingVoiceAlert: Bool
     ) -> ContentPeopleSheetModalPresentationState {
-        #if os(iOS)
-        let isMediaPickerPresented = showImagePicker
-        #else
-        let isMediaPickerPresented = showMacImagePicker
-        #endif
-
-        return ContentPeopleSheetModalPresentationState(
+        ContentPeopleSheetModalPresentationState(
             isImagePreviewPresented: imagePreviewURL != nil,
             isVerificationSheetPresented: showVerifySheet,
             legacyPrivateMediaConsentRequest:
                 conversationUIModel.legacyPrivateMediaConsentRequest,
             isVoiceAlertPresented: includingVoiceAlert && voiceRecordingVM.showAlert,
-            isMediaPickerPresented: isMediaPickerPresented
+            isMediaPickerPresented: mediaPickRequest != nil
         )
     }
 
@@ -140,42 +138,22 @@ struct ContentPeopleSheetView: View {
         NavigationStack {
             Group {
                 if privateConversationModel.selectedPeerID != nil {
-                    #if os(iOS)
                     ContentPrivateChatSheetView(
                         showSidebar: $showSidebar,
-                        messageText: $messageText,
                         selectedMessageSender: $selectedMessageSender,
                         selectedMessageSenderID: $selectedMessageSenderID,
                         imagePreviewURL: $imagePreviewURL,
                         windowCountPublic: $windowCountPublic,
                         windowCountPrivate: $windowCountPrivate,
                         isAtBottomPrivate: $isAtBottomPrivate,
-                        isTextFieldFocused: isTextFieldFocused,
+                        composer: composer,
+                        target: target,
+                        focusedComposer: focusedComposer,
                         voiceRecordingVM: voiceRecordingVM,
-                        autocompleteDebounceTimer: $autocompleteDebounceTimer,
                         headerHeight: headerHeight,
                         onSendMessage: onSendMessage,
-                        showImagePicker: $showImagePicker,
-                        imagePickerSourceType: $imagePickerSourceType
+                        onPickMedia: onPickMedia
                     )
-                    #else
-                    ContentPrivateChatSheetView(
-                        showSidebar: $showSidebar,
-                        messageText: $messageText,
-                        selectedMessageSender: $selectedMessageSender,
-                        selectedMessageSenderID: $selectedMessageSenderID,
-                        imagePreviewURL: $imagePreviewURL,
-                        windowCountPublic: $windowCountPublic,
-                        windowCountPrivate: $windowCountPrivate,
-                        isAtBottomPrivate: $isAtBottomPrivate,
-                        isTextFieldFocused: isTextFieldFocused,
-                        voiceRecordingVM: voiceRecordingVM,
-                        autocompleteDebounceTimer: $autocompleteDebounceTimer,
-                        headerHeight: headerHeight,
-                        onSendMessage: onSendMessage,
-                        showMacImagePicker: $showMacImagePicker
-                    )
-                    #endif
                 } else {
                     ContentPeopleListView(
                         showSidebar: $showSidebar,
@@ -216,26 +194,26 @@ struct ContentPeopleSheetView: View {
         .frame(minWidth: 420, minHeight: 520)
         #endif
         #if os(iOS)
-        .fullScreenCover(isPresented: Binding(
-            get: { showImagePicker && (showSidebar || privateConversationModel.selectedPeerID != nil) },
+        .fullScreenCover(item: Binding(
+            get: { (showSidebar || privateConversationModel.selectedPeerID != nil) ? mediaPickRequest : nil },
             set: { newValue in
-                if !newValue {
-                    showImagePicker = false
+                if newValue == nil {
+                    mediaPickRequest = nil
                 }
             }
-        )) {
-            ImagePickerView(sourceType: imagePickerSourceType) { image in
-                showImagePicker = false
-                conversationUIModel.processSelectedImage(image)
+        )) { request in
+            ImagePickerView(sourceType: request.source) { image in
+                mediaPickRequest = nil
+                conversationUIModel.processSelectedImage(image, to: request.target)
             }
             .ignoresSafeArea()
         }
         #endif
         #if os(macOS)
-        .sheet(isPresented: $showMacImagePicker) {
+        .sheet(item: $mediaPickRequest) { request in
             MacImagePickerView { url in
-                showMacImagePicker = false
-                conversationUIModel.processSelectedImage(from: url)
+                mediaPickRequest = nil
+                conversationUIModel.processSelectedImage(from: url, to: request.target)
             }
         }
         #endif
@@ -291,18 +269,21 @@ struct ContentConversationColumnView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
 
     @Binding var showSidebar: Bool
-    @Binding var messageText: String
     @Binding var selectedMessageSender: String?
     @Binding var selectedMessageSenderID: PeerID?
     @Binding var imagePreviewURL: URL?
     @Binding var windowCountPublic: Int
     @Binding var windowCountPrivate: [PeerID: Int]
     @Binding var isAtBottomPrivate: Bool
-    var isTextFieldFocused: FocusState<Bool>.Binding
+    /// The DM composer's session (the secondary slot's).
+    let composer: ComposerSession
+    /// The open DM, scoped as its composer sends (the secondary slot's
+    /// target).
+    let target: ConversationTarget?
+    var focusedComposer: FocusState<ComposerSlot?>.Binding
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
-    @Binding var autocompleteDebounceTimer: Timer?
-    @Binding var showImagePicker: Bool
-    @Binding var imagePickerSourceType: UIImagePickerController.SourceType
+    /// The photo button; the root presents the picker for the column.
+    let onPickMedia: (UIImagePickerController.SourceType) -> Void
 
     let headerHeight: CGFloat
     /// How far a rounded display corner reaches into the top rows from the
@@ -318,20 +299,19 @@ struct ContentConversationColumnView: View {
             if privateConversationModel.selectedPeerID != nil {
                 ContentPrivateChatSheetView(
                     showSidebar: $showSidebar,
-                    messageText: $messageText,
                     selectedMessageSender: $selectedMessageSender,
                     selectedMessageSenderID: $selectedMessageSenderID,
                     imagePreviewURL: $imagePreviewURL,
                     windowCountPublic: $windowCountPublic,
                     windowCountPrivate: $windowCountPrivate,
                     isAtBottomPrivate: $isAtBottomPrivate,
-                    isTextFieldFocused: isTextFieldFocused,
+                    composer: composer,
+                    target: target,
+                    focusedComposer: focusedComposer,
                     voiceRecordingVM: voiceRecordingVM,
-                    autocompleteDebounceTimer: $autocompleteDebounceTimer,
                     headerHeight: headerHeight,
                     onSendMessage: onSendMessage,
-                    showImagePicker: $showImagePicker,
-                    imagePickerSourceType: $imagePickerSourceType,
+                    onPickMedia: onPickMedia,
                     isInline: true,
                     trailingCornerReach: trailingCornerReach
                 )
@@ -857,27 +837,28 @@ private struct ContentPrivateChatSheetView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
 
     @Binding var showSidebar: Bool
-    @Binding var messageText: String
     @Binding var selectedMessageSender: String?
     @Binding var selectedMessageSenderID: PeerID?
     @Binding var imagePreviewURL: URL?
     @Binding var windowCountPublic: Int
     @Binding var windowCountPrivate: [PeerID: Int]
     @Binding var isAtBottomPrivate: Bool
-    var isTextFieldFocused: FocusState<Bool>.Binding
+    /// The DM composer's session; its list's mentions type into it too.
+    let composer: ComposerSession
+    /// The DM, scoped as it sends: what its list acts in and its composer
+    /// sends to.
+    let target: ConversationTarget?
+    var focusedComposer: FocusState<ComposerSlot?>.Binding
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
-    @Binding var autocompleteDebounceTimer: Timer?
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
     let headerHeight: CGFloat
     let onSendMessage: () -> Void
-
     #if os(iOS)
-    @Binding var showImagePicker: Bool
-    @Binding var imagePickerSourceType: UIImagePickerController.SourceType
+    let onPickMedia: (UIImagePickerController.SourceType) -> Void
     #else
-    @Binding var showMacImagePicker: Bool
+    let onPickMedia: () -> Void
     #endif
 
     /// Shown in the people column rather than the sheet: the back chevron
@@ -975,16 +956,16 @@ private struct ContentPrivateChatSheetView: View {
             }
 
             MessageListView(
-                privatePeer: privateConversationModel.selectedPeerID,
+                privateTarget: target,
                 isAtBottom: $isAtBottomPrivate,
-                messageText: $messageText,
+                composer: composer,
                 selectedMessageSender: $selectedMessageSender,
                 selectedMessageSenderID: $selectedMessageSenderID,
                 imagePreviewURL: $imagePreviewURL,
                 windowCountPublic: $windowCountPublic,
                 windowCountPrivate: $windowCountPrivate,
                 showSidebar: $showSidebar,
-                isTextFieldFocused: isTextFieldFocused
+                focusedComposer: focusedComposer
             )
             .themedSurface()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1000,26 +981,14 @@ private struct ContentPrivateChatSheetView: View {
 
             privacyCaption
 
-            #if os(iOS)
             ContentComposerView(
-                messageText: $messageText,
-                isTextFieldFocused: isTextFieldFocused,
+                session: composer,
+                target: target,
+                focus: focusedComposer,
                 voiceRecordingVM: voiceRecordingVM,
-                autocompleteDebounceTimer: $autocompleteDebounceTimer,
-                onSendMessage: onSendMessage,
-                showImagePicker: $showImagePicker,
-                imagePickerSourceType: $imagePickerSourceType
+                onSend: onSendMessage,
+                onPickMedia: onPickMedia
             )
-            #else
-            ContentComposerView(
-                messageText: $messageText,
-                isTextFieldFocused: isTextFieldFocused,
-                voiceRecordingVM: voiceRecordingVM,
-                autocompleteDebounceTimer: $autocompleteDebounceTimer,
-                onSendMessage: onSendMessage,
-                showMacImagePicker: $showMacImagePicker
-            )
-            #endif
         }
         .background {
             // Inline, the root backdrop already spans both columns; a second

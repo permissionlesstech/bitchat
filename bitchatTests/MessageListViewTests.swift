@@ -47,18 +47,18 @@ private func firstValue(under root: Any, typeNamePrefix prefix: String) -> Any? 
 }
 
 @MainActor
-private func makeList(privatePeer: PeerID?, focus: FocusState<Bool>) -> MessageListView {
+private func makeList(privatePeer: PeerID?, focus: FocusState<ComposerSlot?>) -> MessageListView {
     MessageListView(
-        privatePeer: privatePeer,
+        privateTarget: privatePeer.map { ConversationTarget(channel: .mesh, privatePeer: $0) },
         isAtBottom: .constant(true),
-        messageText: .constant(""),
+        composer: ComposerSession(slot: privatePeer == nil ? .primary : .secondary),
         selectedMessageSender: .constant(nil),
         selectedMessageSenderID: .constant(nil),
         imagePreviewURL: .constant(nil),
         windowCountPublic: .constant(TransportConfig.uiWindowInitialCountPublic),
         windowCountPrivate: .constant([:]),
         showSidebar: .constant(false),
-        isTextFieldFocused: focus.projectedValue
+        focusedComposer: focus.projectedValue
     )
 }
 
@@ -67,7 +67,7 @@ private func makeList(privatePeer: PeerID?, focus: FocusState<Bool>) -> MessageL
 struct MessageListViewTests {
     @Test("a public list observes its public timeline and not the private inbox")
     func publicList_observesOnlyItsPublicTimeline() throws {
-        let list = makeList(privatePeer: nil, focus: FocusState<Bool>())
+        let list = makeList(privatePeer: nil, focus: FocusState<ComposerSlot?>())
         // The list itself decides which timeline to render; it observes none.
         #expect(observedModelTypes(of: list).isEmpty)
 
@@ -79,7 +79,7 @@ struct MessageListViewTests {
 
     @Test("a DM list observes the private inbox and not a public timeline")
     func privateList_observesOnlyThePrivateInbox() throws {
-        let list = makeList(privatePeer: PeerID(str: "0102030405060708"), focus: FocusState<Bool>())
+        let list = makeList(privatePeer: PeerID(str: "0102030405060708"), focus: FocusState<ComposerSlot?>())
         #expect(observedModelTypes(of: list).isEmpty)
 
         let content = try #require(firstValue(under: list.body, typeNamePrefix: "MessageListContent<"))
