@@ -411,11 +411,28 @@ private final class WindowHost {
     /// The prompts of the text fields whose centre lies in `frame` (window
     /// coordinates): which composers, or which picker, a region shows.
     func placeholders(in frame: CGRect) -> [String] {
-        Self.textFields(in: window).compactMap { field in
+        // The hierarchy as SwiftUI last rendered it, whatever the run loop
+        // has drawn so far.
+        window.layoutIfNeeded()
+        return Self.textFields(in: window).compactMap { field in
             let center = field.convert(CGPoint(x: field.bounds.midX, y: field.bounds.midY), to: window)
             guard frame.contains(center) else { return nil }
             return field.attributedPlaceholder?.string ?? field.placeholder
         }
+    }
+
+    /// Every text field's prompt and window frame, for failure messages,
+    /// with whether the window is key.
+    var fieldReport: String {
+        window.layoutIfNeeded()
+        return "key \(window.isKeyWindow): " + Self.textFields(in: window).map { field in
+            let frame = field.convert(field.bounds, to: window)
+            let prompt = field.attributedPlaceholder?.string ?? field.placeholder ?? ""
+            return "\(prompt)@\(Int(frame.minX)),\(Int(frame.minY)) \(Int(frame.width))x\(Int(frame.height))"
+                + (field.window == nil ? " (no window)" : "")
+                + (field.isHidden ? " (hidden)" : "")
+        }
+        .joined(separator: "; ")
     }
 
     /// A touch going down at `point` (window coordinates), as the split
@@ -440,6 +457,9 @@ private final class WindowHost {
     }
 
     func close() {
+        // A field left first responder outlives its window and keeps the
+        // keyboard: no later test window becomes key.
+        window.endEditing(true)
         window.resignKey()
         window.isHidden = true
         window.rootViewController = nil
@@ -606,6 +626,15 @@ private final class SplitContentHost {
 
     func close() {
         host.close()
+    }
+
+    /// The state a failed expectation reports: the selection, the timeline,
+    /// the DM, the layout flags and every text field's prompt with where it
+    /// sits in the window.
+    var diagnostics: String {
+        "selection \(channels.selectedChannel), timeline \(timelineChannel), DM \(String(describing: openPeer)), "
+            + "split flag \(String(describing: chrome.splitLayoutShowsLocation)), pinned \(isMeshPinned), "
+            + "fields \(host.fieldReport)"
     }
 }
 
@@ -1290,21 +1319,21 @@ struct ViewSmokeTests {
                 && split.leadingPrompts.contains { $0.contains("#mesh") }
                 && split.trailingPrompts == ["geohash"]
         }
-        #expect(idle, "idle picker beside #mesh: \(split.leadingPrompts) | \(split.trailingPrompts)")
+        #expect(idle, "idle picker beside #mesh: \(split.diagnostics)")
 
         #expect(await split.select(.location(split.geohash)))
         let channel = await split.settle {
             split.trailingPrompts.contains { $0.contains("#\(split.geohash.geohash)") }
                 && split.chrome.splitLayoutShowsLocation == true
         }
-        #expect(channel, "geohash pane: \(split.trailingPrompts)")
+        #expect(channel, "geohash pane: \(split.diagnostics)")
 
         #expect(await split.open(split.bob))
         let conversation = await split.settle {
             split.trailingPrompts.contains { $0.contains("Bob") }
                 && split.chrome.splitLayoutShowsLocation == false
         }
-        #expect(conversation, "DM pane: \(split.trailingPrompts)")
+        #expect(conversation, "DM pane: \(split.diagnostics)")
         // #mesh keeps its composer beside the DM.
         #expect(split.leadingPrompts.contains { $0.contains("#mesh") })
 
@@ -1313,7 +1342,7 @@ struct ViewSmokeTests {
             split.trailingPrompts.contains { $0.contains("#\(split.geohash.geohash)") }
                 && split.chrome.splitLayoutShowsLocation == true
         }
-        #expect(back, "geohash again: \(split.trailingPrompts)")
+        #expect(back, "geohash again: \(split.diagnostics)")
         // The picker never prompted, nor kept location running (I3).
         #expect(split.location.requestAuthorizationCallCount == 0)
         #expect(split.location.startUpdatingLocationCallCount == 0)
@@ -1404,7 +1433,7 @@ struct ViewSmokeTests {
         let shown = await split.settle {
             split.trailingPrompts.contains { $0.contains("#\(other.geohash)") }
         }
-        #expect(shown, "\(split.trailingPrompts)")
+        #expect(shown, "\(split.diagnostics)")
         let restored = await TestHelpers.waitUntil(
             { split.channels.selectedChannel != .location(other) || split.openPeer != nil },
             timeout: TestConstants.negativeWaitWindow
@@ -1428,7 +1457,7 @@ struct ViewSmokeTests {
 
         #expect(await split.unfold())
         let idle = await split.settle { split.trailingPrompts == ["geohash"] }
-        #expect(idle, "\(split.trailingPrompts)")
+        #expect(idle, "\(split.diagnostics)")
         let restored = await TestHelpers.waitUntil(
             { split.channels.selectedChannel != .mesh || split.openPeer != nil },
             timeout: TestConstants.negativeWaitWindow
@@ -1443,7 +1472,8 @@ struct ViewSmokeTests {
         let split = await SplitContentHost.make()
         defer { split.close() }
         #expect(await split.select(.location(split.geohash)))
-        #expect(await split.settle { split.trailingPrompts.contains { $0.contains("#\(split.geohash.geohash)") } })
+        let channel = await split.settle { split.trailingPrompts.contains { $0.contains("#\(split.geohash.geohash)") } }
+        #expect(channel, "\(split.diagnostics)")
 
         split.chrome.panicClearAllData()
 
@@ -1452,7 +1482,7 @@ struct ViewSmokeTests {
                 && split.trailingPrompts == ["geohash"]
                 && split.chrome.splitLayoutShowsLocation == true
         }
-        #expect(idle, "\(split.trailingPrompts)")
+        #expect(idle, "\(split.diagnostics)")
     }
 
     /// E8: the location sheet up at unfold closes, and the trailing pane
@@ -1471,7 +1501,7 @@ struct ViewSmokeTests {
                 && split.trailingPrompts == ["geohash"]
                 && split.chrome.splitLayoutShowsLocation == true
         }
-        #expect(browsing, "\(split.trailingPrompts)")
+        #expect(browsing, "\(split.diagnostics)")
         #expect(split.channels.selectedChannel == .location(split.geohash))
     }
 
