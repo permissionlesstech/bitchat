@@ -288,14 +288,19 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
     }
 
     func clearCurrentPublicTimeline() {
-        context.clearPublicConversation(ConversationID(channelID: context.activeChannel))
+        clearPublicTimeline(context.activeChannel)
+    }
+
+    /// Empties `channel`'s timeline, selected or not.
+    func clearPublicTimeline(_ channel: ChannelID) {
+        context.clearPublicConversation(ConversationID(channelID: channel))
 
         // Clearing the mesh timeline also dismisses its archived echoes for
         // good: the watermark stops the next launch from re-seeding them, the
         // archive on disk is erased so the cleared history is actually gone
         // rather than merely hidden, and the dedup keys go so a cleared
         // message arriving live shows again.
-        if case .mesh = context.activeChannel {
+        if case .mesh = channel {
             MeshEchoSettings.clearedThrough = Date()
             archivedEchoKeys.removeAll()
             context.purgeArchivedPublicMessages()
@@ -343,33 +348,40 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
     }
 
     func addSystemMessage(_ content: String, timestamp: Date = Date()) {
+        addSystemMessage(content, to: context.activeChannel, timestamp: timestamp)
+    }
+
+    /// A local system line in `channel`'s timeline, selected or not.
+    func addSystemMessage(_ content: String, to channel: ChannelID, timestamp: Date = Date()) {
         let systemMessage = BitchatMessage(
             sender: "system",
             content: content,
             timestamp: timestamp,
             isRelay: false
         )
-        context.appendPublicMessage(systemMessage, to: ConversationID(channelID: context.activeChannel))
+        context.appendPublicMessage(systemMessage, to: ConversationID(channelID: channel))
     }
 
     func addMeshOnlySystemMessage(_ content: String) {
-        let systemMessage = BitchatMessage(
-            sender: "system",
-            content: content,
-            timestamp: Date(),
-            isRelay: false
-        )
-        context.appendPublicMessage(systemMessage, to: .mesh)
+        addSystemMessage(content, to: .mesh)
     }
 
     func addPublicSystemMessage(_ content: String) {
+        addPublicSystemMessage(content, to: context.activeChannel)
+    }
+
+    /// A system line in `channel`'s timeline that also records its content
+    /// key, so the same text arriving from the network right after (an
+    /// emote's own echo) is not shown twice.
+    func addPublicSystemMessage(_ content: String, to channel: ChannelID) {
+        let conversationID = ConversationID(channelID: channel)
         let systemMessage = BitchatMessage(
             sender: "system",
             content: content,
             timestamp: Date(),
             isRelay: false
         )
-        context.appendPublicMessage(systemMessage, to: ConversationID(channelID: context.activeChannel))
+        context.appendPublicMessage(systemMessage, to: conversationID)
         let contentKey = context.normalizedContentKey(systemMessage.content)
         context.recordContentKey(contentKey, timestamp: systemMessage.timestamp)
     }
@@ -383,7 +395,25 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
     }
 
     func sendPublicRaw(_ content: String) {
-        if case .location(let channel) = context.activeChannel {
+        sendPublicRaw(content, to: context.activeChannel)
+    }
+
+    /// Sends `content` to `channel` with no local echo (emotes add their own
+    /// system-style line). Returns false, after saying so in that channel's
+    /// timeline, when `channel` is a geohash that is no longer the selected
+    /// one: only the selected geohash is live, so a stale target sends
+    /// nothing.
+    @discardableResult
+    func sendPublicRaw(_ content: String, to channel: ChannelID) -> Bool {
+        guard channel.isLive(whileSelected: context.activeChannel) else {
+            SecureLogger.info("Geo: not sending a raw message to a channel that is no longer selected", category: .session)
+            addSystemMessage(
+                String(localized: "system.location.not_in_channel", comment: "System message when attempting to send without being in a location channel"),
+                to: channel
+            )
+            return false
+        }
+        if case .location(let channel) = channel {
             Task { @MainActor [weak context] in
                 guard let context else { return }
                 do {
@@ -405,7 +435,7 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
                     SecureLogger.error("❌ Failed to send geohash raw message: \(error)", category: .session)
                 }
             }
-            return
+            return true
         }
 
         context.sendMeshMessage(
@@ -414,6 +444,7 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
             messageID: UUID().uuidString,
             timestamp: Date()
         )
+        return true
     }
 
     /// - Parameter powBits: validated NIP-13 difficulty of the source Nostr

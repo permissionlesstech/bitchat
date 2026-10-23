@@ -40,7 +40,7 @@ private final class MockChatGroupContext: ChatGroupContext {
     // Peers: the fingerprint each Noise session authenticated.
     var fingerprintsByPeerID: [PeerID: String] = [:]
 
-    func getPeerIDForNickname(_ nickname: String) -> PeerID? { nil }
+    func getPeerIDForNickname(_ nickname: String, in scope: ChannelID) -> PeerID? { nil }
     func isPeerConnected(_ peerID: PeerID) -> Bool { false }
     func peerNickname(for peerID: PeerID) -> String? { nil }
     func meshFingerprint(for peerID: PeerID) -> String? { fingerprintsByPeerID[peerID] }

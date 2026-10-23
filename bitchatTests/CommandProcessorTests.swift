@@ -608,7 +608,7 @@ private final class MockCommandContextProvider: CommandContextProvider {
     private(set) var localPrivateSystemMessages: [(content: String, peerID: PeerID)] = []
     private(set) var publicSystemMessages: [String] = []
     private(set) var commandOutputs: [String] = []
-    private(set) var commandOutputDestinations: [CommandOutputDestination] = []
+    private(set) var commandOutputDestinations: [ConversationTarget] = []
     private(set) var toggledFavorites: [PeerID] = []
     private(set) var favoriteNotifications: [(peerID: PeerID, isFavorite: Bool)] = []
     private(set) var geohashBlockListChangeCount = 0
@@ -618,11 +618,11 @@ private final class MockCommandContextProvider: CommandContextProvider {
         self.idBridge = idBridge
     }
 
-    func getPeerIDForNickname(_ nickname: String) -> PeerID? {
+    func getPeerIDForNickname(_ nickname: String, in scope: ChannelID) -> PeerID? {
         nicknameToPeerID[nickname]
     }
 
-    func getVisibleGeoParticipants() -> [CommandGeoParticipant] {
+    func getVisibleGeoParticipants(in scope: ChannelID) -> [CommandGeoParticipant] {
         visibleGeoParticipants
     }
 
@@ -638,11 +638,11 @@ private final class MockCommandContextProvider: CommandContextProvider {
         startedPrivateChats.append(peerID)
     }
 
-    func sendPrivateMessage(_ content: String, to peerID: PeerID) {
+    func sendPrivateMessage(_ content: String, to peerID: PeerID, scope: ChannelID) {
         sentPrivateMessages.append((content, peerID))
     }
 
-    func clearCurrentPublicTimeline() {
+    func clearPublicTimeline(_ channel: ChannelID) {
         clearCurrentPublicTimelineCallCount += 1
     }
 
@@ -652,33 +652,28 @@ private final class MockCommandContextProvider: CommandContextProvider {
         privateChats[peerID] = []
     }
 
-    func sendPublicRaw(_ content: String) {
+    func sendPublicRaw(_ content: String, to channel: ChannelID) -> Bool {
         sentPublicRawMessages.append(content)
+        return true
     }
 
     private(set) var sentPublicMessages: [String] = []
-    func sendPublicMessage(_ content: String) {
+    func sendPublicMessage(_ content: String, to channel: ChannelID) -> Bool {
         sentPublicMessages.append(content)
+        return true
     }
 
     func addLocalPrivateSystemMessage(_ content: String, to peerID: PeerID) {
         localPrivateSystemMessages.append((content, peerID))
     }
 
-    func addPublicSystemMessage(_ content: String) {
+    func addPublicSystemMessage(_ content: String, to channel: ChannelID) {
         publicSystemMessages.append(content)
     }
 
-    func currentCommandDestination() -> CommandOutputDestination {
-        if let peerID = selectedPrivateChatPeer {
-            return .privateChat(peerID)
-        }
-        return .meshTimeline
-    }
-
-    func addCommandOutput(_ content: String, to destination: CommandOutputDestination) {
+    func addCommandOutput(_ content: String, to target: ConversationTarget) {
         commandOutputs.append(content)
-        commandOutputDestinations.append(destination)
+        commandOutputDestinations.append(target)
     }
 
     func toggleFavorite(peerID: PeerID) {
@@ -693,17 +688,17 @@ private final class MockCommandContextProvider: CommandContextProvider {
         return .handled
     }
 
-    func groupInvite(nickname: String) -> CommandResult {
+    func groupInvite(nickname: String, in scope: ConversationTarget) -> CommandResult {
         groupCommands.append(("invite", nickname))
         return .handled
     }
 
-    func groupRemove(nickname: String) -> CommandResult {
+    func groupRemove(nickname: String, in scope: ConversationTarget) -> CommandResult {
         groupCommands.append(("remove", nickname))
         return .handled
     }
 
-    func groupLeave() -> CommandResult {
+    func groupLeave(in scope: ConversationTarget) -> CommandResult {
         groupCommands.append(("leave", ""))
         return .handled
     }

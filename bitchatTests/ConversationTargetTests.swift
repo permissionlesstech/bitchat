@@ -2,8 +2,9 @@
 // ConversationTargetTests.swift
 // bitchatTests
 //
-// Pins the value type the send path is addressed with: where a target
-// writes, what it accepts, and how a geohash counts as live.
+// Pins the value types the send path is addressed with: where a target
+// writes, what it accepts, how a geohash counts as live, and where a
+// command's output lands.
 //
 // This is free and unencumbered software released into the public domain.
 // For more information, see <https://unlicense.org>
@@ -97,5 +98,51 @@ struct ConversationTargetTests {
         // The geohash is the identity, not its level or case.
         let sameCellOtherLevel = ChannelID.location(GeohashChannel(level: .neighborhood, geohash: "U4PRUY"))
         #expect(geo.isLive(whileSelected: sameCellOtherLevel))
+    }
+
+    // MARK: Where command output lands
+
+    @Test func commandOutputStaysWhereItWasTyped() {
+        let geoDM = ConversationTarget(channel: .location(Self.geohash), privatePeer: Self.geoDMPeer)
+        let cases: [(ConversationTarget, PeerID?)] = [
+            (.mesh, nil),
+            (.publicChannel(.location(Self.geohash)), nil),
+            // A public pane beside an open DM keeps its own output.
+            (.mesh, Self.meshPeer),
+            (geoDM, Self.geoDMPeer)
+        ]
+        for (origin, open) in cases {
+            #expect(ChatViewModel.commandOutputTarget(origin: origin, openBefore: open, openAfter: open) == origin)
+        }
+    }
+
+    @Test func commandOutputFollowsAChatTheCommandOpened() {
+        // /msg from #mesh beside nothing, beside another DM, and from a DM.
+        #expect(
+            ChatViewModel.commandOutputTarget(origin: .mesh, openBefore: nil, openAfter: Self.meshPeer)
+                == ConversationTarget(channel: .mesh, privatePeer: Self.meshPeer)
+        )
+        #expect(
+            ChatViewModel.commandOutputTarget(origin: .mesh, openBefore: Self.otherMeshPeer, openAfter: Self.meshPeer)
+                == ConversationTarget(channel: .mesh, privatePeer: Self.meshPeer)
+        )
+        let dm = ConversationTarget(channel: .location(Self.geohash), privatePeer: Self.otherMeshPeer)
+        #expect(
+            ChatViewModel.commandOutputTarget(origin: dm, openBefore: Self.otherMeshPeer, openAfter: Self.groupPeer)
+                == ConversationTarget(channel: .location(Self.geohash), privatePeer: Self.groupPeer)
+        )
+    }
+
+    @Test func commandOutputFromAChatItClosedLandsInItsScope() {
+        // /group leave: the group closed, so its line goes to the group's
+        // channel instead of bringing the chat back.
+        let group = ConversationTarget(channel: .mesh, privatePeer: Self.groupPeer)
+        #expect(
+            ChatViewModel.commandOutputTarget(origin: group, openBefore: Self.groupPeer, openAfter: nil) == .mesh
+        )
+        // A public origin closing someone else's DM still prints where typed.
+        #expect(
+            ChatViewModel.commandOutputTarget(origin: .mesh, openBefore: Self.meshPeer, openAfter: nil) == .mesh
+        )
     }
 }

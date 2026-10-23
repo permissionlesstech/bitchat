@@ -25,7 +25,9 @@ protocol ChatGroupContext: AnyObject {
     func signWithNoiseKey(_ data: Data) -> Data?
 
     // MARK: Peers
-    func getPeerIDForNickname(_ nickname: String) -> PeerID?
+    /// Resolves a name as `scope` sees people (an invitee is looked up in
+    /// the group's own channel, not whatever is selected).
+    func getPeerIDForNickname(_ nickname: String, in scope: ChannelID) -> PeerID?
     func isPeerConnected(_ peerID: PeerID) -> Bool
     func peerNickname(for peerID: PeerID) -> String?
     /// The peer's Noise fingerprint from the live session/registry.
@@ -58,7 +60,7 @@ protocol ChatGroupContext: AnyObject {
 
 extension ChatViewModel: ChatGroupContext {
     // `nickname`, `myPeerID`, `selectedPrivateChatPeer`, `groupStore`,
-    // `getPeerIDForNickname(_:)`, `isPeerConnected(_:)`, `peerNickname(for:)`,
+    // `getPeerIDForNickname(_:in:)`, `isPeerConnected(_:)`, `peerNickname(for:)`,
     // `appendPrivateMessage(_:to:)`, `markPrivateChatUnread(_:)`,
     // `removePrivateChat(_:)`, `startPrivateChat(with:)`,
     // `addSystemMessage(_:)`, `addLocalPrivateSystemMessage(_:to:)`,
@@ -126,16 +128,16 @@ extension ChatViewModel: ChatGroupContext {
         groupCoordinator.createGroup(named: name)
     }
 
-    func groupInvite(nickname: String) -> CommandResult {
-        groupCoordinator.inviteMember(nickname: nickname)
+    func groupInvite(nickname: String, in scope: ConversationTarget) -> CommandResult {
+        groupCoordinator.inviteMember(nickname: nickname, in: scope)
     }
 
-    func groupRemove(nickname: String) -> CommandResult {
-        groupCoordinator.removeMember(nickname: nickname)
+    func groupRemove(nickname: String, in scope: ConversationTarget) -> CommandResult {
+        groupCoordinator.removeMember(nickname: nickname, in: scope)
     }
 
-    func groupLeave() -> CommandResult {
-        groupCoordinator.leaveGroup()
+    func groupLeave(in scope: ConversationTarget) -> CommandResult {
+        groupCoordinator.leaveGroup(in: scope)
     }
 
     func groupList() -> CommandResult {
@@ -187,18 +189,20 @@ final class ChatGroupCoordinator {
         ))
     }
 
-    func inviteMember(nickname rawNickname: String) -> CommandResult {
+    /// `scope` is where the command was typed: the group it manages is
+    /// that conversation's, never whichever chat is open elsewhere.
+    func inviteMember(nickname rawNickname: String, in scope: ConversationTarget) -> CommandResult {
         let nickname = normalizedNickname(rawNickname)
         guard !nickname.isEmpty else {
             return .error(message: String(localized: "system.group.usage_invite", comment: "Usage hint for /group invite"))
         }
-        guard let group = selectedGroup() else {
+        guard let group = group(in: scope) else {
             return .error(message: String(localized: "system.group.not_in_group", comment: "Error when a group command requires an open group chat"))
         }
         guard group.creatorFingerprint == context.myNoiseFingerprint() else {
             return .error(message: String(localized: "system.group.creator_only", comment: "Error when a non-creator attempts a creator-only group action"))
         }
-        guard let peerID = context.getPeerIDForNickname(nickname) else {
+        guard let peerID = context.getPeerIDForNickname(nickname, in: scope.channel) else {
             return .error(message: String(
                 format: String(localized: "system.group.peer_not_found", comment: "Error when the invitee nickname is unknown; placeholder is the nickname"),
                 locale: .current,
@@ -263,12 +267,12 @@ final class ChatGroupCoordinator {
     /// Creator-side removal: rotates the group key (epoch + 1) and sends the
     /// new state to every remaining member so the removed member's key stops
     /// decrypting future traffic.
-    func removeMember(nickname rawNickname: String) -> CommandResult {
+    func removeMember(nickname rawNickname: String, in scope: ConversationTarget) -> CommandResult {
         let nickname = normalizedNickname(rawNickname)
         guard !nickname.isEmpty else {
             return .error(message: String(localized: "system.group.usage_remove", comment: "Usage hint for /group remove"))
         }
-        guard let group = selectedGroup() else {
+        guard let group = group(in: scope) else {
             return .error(message: String(localized: "system.group.not_in_group", comment: "Error when a group command requires an open group chat"))
         }
         guard group.creatorFingerprint == context.myNoiseFingerprint() else {
@@ -301,13 +305,16 @@ final class ChatGroupCoordinator {
         ))
     }
 
-    func leaveGroup() -> CommandResult {
-        guard let group = selectedGroup() else {
+    func leaveGroup(in scope: ConversationTarget) -> CommandResult {
+        guard let group = group(in: scope) else {
             return .error(message: String(localized: "system.group.not_in_group", comment: "Error when a group command requires an open group chat"))
         }
         // Close the chat window first so the confirmation message doesn't
-        // resurrect the conversation we're about to remove.
-        context.endPrivateChat()
+        // resurrect the conversation we're about to remove. Only this
+        // group's: another open chat isn't the one being left.
+        if context.selectedPrivateChatPeer == group.peerID {
+            context.endPrivateChat()
+        }
         context.removePrivateChat(group.peerID)
         context.groupStore.removeGroup(withID: group.groupID)
         context.notifyUIChanged()
@@ -490,9 +497,11 @@ private extension ChatGroupCoordinator {
         return trimmed.hasPrefix("@") ? String(trimmed.dropFirst()) : trimmed
     }
 
-    func selectedGroup() -> BitchatGroup? {
-        guard let selected = context.selectedPrivateChatPeer, selected.isGroup else { return nil }
-        return context.groupStore.group(for: selected)
+    /// The group a command typed into `scope` manages: that conversation's,
+    /// when it is a group chat.
+    func group(in scope: ConversationTarget) -> BitchatGroup? {
+        guard let peerID = scope.privatePeer, peerID.isGroup else { return nil }
+        return context.groupStore.group(for: peerID)
     }
 
     func signedStatePayload(for group: BitchatGroup, key: Data) -> Data? {

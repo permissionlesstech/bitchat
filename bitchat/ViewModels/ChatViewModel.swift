@@ -1306,13 +1306,29 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
     // MARK: - Message Sending
 
-    /// Sends a message through the BitChat network.
+    /// The selection as a send target: the open DM (in the selected
+    /// channel's scope), or the selected channel's timeline. What every
+    /// target-less API sends to.
+    @MainActor
+    var selectionTarget: ConversationTarget {
+        ConversationTarget(channel: activeChannel, privatePeer: selectedPrivateChatPeer)
+    }
+
+    /// Sends a message through the BitChat network to whatever is selected.
     /// - Parameter content: The message content to send
     /// - Note: Automatically handles command processing if content starts with '/'
     ///         Routes to private chat if one is selected, otherwise broadcasts
     @MainActor
     func sendMessage(_ content: String) {
-        outgoingCoordinator.sendMessage(content)
+        sendMessage(content, to: selectionTarget)
+    }
+
+    /// Sends a message, or runs a command, in `target`: the conversation the
+    /// person typed into, captured when they sent. The selection is not
+    /// consulted, so a composer beside another conversation can't send there.
+    @MainActor
+    func sendMessage(_ content: String, to target: ConversationTarget) {
+        outgoingCoordinator.sendMessage(content, to: target)
     }
 
     /// Sends a 👋 to the mesh channel regardless of the active channel.
@@ -1367,9 +1383,15 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         publicConversationCoordinator.visibleGeohashPeople()
     }
 
-    /// CommandContextProvider conformance - returns visible geo participants
-    func getVisibleGeoParticipants() -> [CommandGeoParticipant] {
-        publicConversationCoordinator.getVisibleGeoParticipants()
+    /// CommandContextProvider conformance: the visible participants of
+    /// `scope` when it is the selected geohash, the only one whose people
+    /// are tracked. Nobody for #mesh or any other geohash.
+    @MainActor
+    func getVisibleGeoParticipants(in scope: ChannelID) -> [CommandGeoParticipant] {
+        guard scope.isLocation, ConversationID(channelID: scope) == ConversationID(channelID: activeChannel) else {
+            return []
+        }
+        return publicConversationCoordinator.getVisibleGeoParticipants()
     }
     /// Returns the current participant count for a specific geohash, using the 5-minute activity window.
     @MainActor
@@ -1412,18 +1434,26 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     // fingerprint (derived from `peerID`), so the exact tapped peer is
     // (un)blocked — unambiguous across nickname collisions and functional for
     // offline peers that can no longer be resolved through the mesh service.
+
+    /// Blocks the peer tapped in `origin`'s timeline or DM; the confirmation
+    /// (or failure) line lands there.
     @MainActor
-    func blockMeshPeer(peerID: PeerID, displayName: String) {
-        setMeshPeerBlocked(peerID, blocked: true, displayName: displayName)
+    func blockMeshPeer(peerID: PeerID, displayName: String, from origin: ConversationTarget) {
+        setMeshPeerBlocked(peerID, blocked: true, displayName: displayName, reportingTo: origin)
     }
 
     @MainActor
     func unblockMeshPeer(peerID: PeerID, displayName: String) {
-        setMeshPeerBlocked(peerID, blocked: false, displayName: displayName)
+        setMeshPeerBlocked(peerID, blocked: false, displayName: displayName, reportingTo: selectionTarget)
     }
 
     @MainActor
-    private func setMeshPeerBlocked(_ peerID: PeerID, blocked: Bool, displayName: String) {
+    private func setMeshPeerBlocked(
+        _ peerID: PeerID,
+        blocked: Bool,
+        displayName: String,
+        reportingTo origin: ConversationTarget
+    ) {
         guard unifiedPeerService.setBlocked(peerID, blocked: blocked) != nil else {
             addCommandOutput(
                 String(
@@ -1433,7 +1463,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
                     ),
                     locale: .current,
                     displayName
-                )
+                ),
+                to: origin
             )
             return
         }
@@ -1445,7 +1476,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
                 ),
                 locale: .current,
                 displayName
-            )
+            ),
+            to: origin
         )
     }
 
@@ -1551,6 +1583,19 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     @MainActor
     func getPeerIDForNickname(_ nickname: String) -> PeerID? {
         peerIdentityCoordinator.getPeerIDForNickname(nickname)
+    }
+
+    /// Resolves a name as `scope` sees people. The selected channel resolves
+    /// as it always has (a geohash's participants first, then mesh peers).
+    /// Any other channel resolves mesh peers only: geohash participants are
+    /// tracked for the selected geohash alone, so #mesh beside a live
+    /// geohash never resolves one of its people.
+    @MainActor
+    func getPeerIDForNickname(_ nickname: String, in scope: ChannelID) -> PeerID? {
+        if ConversationID(channelID: scope) == ConversationID(channelID: activeChannel) {
+            return peerIdentityCoordinator.getPeerIDForNickname(nickname)
+        }
+        return unifiedPeerID(forNickname: nickname.normalizedNickname)
     }
 
     // MARK: - Emergency Functions
@@ -1931,7 +1976,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     // Clear the current public channel's timeline (visible + persistent buffer)
     @MainActor
     func clearCurrentPublicTimeline() {
-        publicConversationCoordinator.clearCurrentPublicTimeline()
+        clearPublicTimeline(activeChannel)
+    }
+
+    /// Clears one channel's timeline, selected or not (`/clear` typed in it).
+    @MainActor
+    func clearPublicTimeline(_ channel: ChannelID) {
+        publicConversationCoordinator.clearPublicTimeline(channel)
     }
 
     // MARK: - Peer Lookup Helpers
@@ -1987,63 +2038,78 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
     // MARK: - Command Handling
 
-    /// Processes IRC-style commands starting with '/'.
+    /// Processes IRC-style commands starting with '/', typed into whatever
+    /// is selected: the single-composer form.
     /// - Parameter command: The full command string including the leading slash
     /// - Note: Supports commands like /msg, /who, /slap, /clear, /help
     @MainActor
     func handleCommand(_ command: String) {
-        let result = commandProcessor.process(command)
+        handleCommand(command, from: selectionTarget)
+    }
+
+    /// Runs a command typed into `origin`. It acts on that conversation (its
+    /// channel's people, its DM, its group) whatever else is selected, and
+    /// its output lands per `commandOutputTarget(origin:openBefore:openAfter:)`.
+    @MainActor
+    func handleCommand(_ command: String, from origin: ConversationTarget) {
+        let openBefore = selectedPrivateChatPeer
+        let result = commandProcessor.process(command, in: origin)
+        let output = Self.commandOutputTarget(
+            origin: origin,
+            openBefore: openBefore,
+            openAfter: selectedPrivateChatPeer
+        )
 
         switch result {
         case .success(let message):
             if let msg = message {
-                addCommandOutput(msg)
+                addCommandOutput(msg, to: output)
             }
         case .error(let message):
-            addCommandOutput(message)
+            addCommandOutput(message, to: output)
         case .handled:
             // Command was handled, no message needed
             break
         }
     }
 
-    /// Command output belongs in the conversation where the user typed the
-    /// command; the public timeline is invisible while a DM is open. The DM
-    /// selection is read *after* processing so commands that switch chats
-    /// (`/msg`) print into the conversation they just opened.
+    /// Where a command's output lands: where it was typed, with two
+    /// exceptions. A command that opened a chat (`/msg`, `/group create`)
+    /// prints in the chat it opened, where the person now is. One that
+    /// closed its own chat (`/group leave`) prints in that chat's scope,
+    /// since the chat is gone and a line there would bring it back.
+    nonisolated static func commandOutputTarget(
+        origin: ConversationTarget,
+        openBefore: PeerID?,
+        openAfter: PeerID?
+    ) -> ConversationTarget {
+        if let opened = openAfter, opened != openBefore {
+            return ConversationTarget(channel: origin.channel, privatePeer: opened)
+        }
+        if let originPeer = origin.privatePeer, openBefore == originPeer, openAfter == nil {
+            return .publicChannel(origin.channel)
+        }
+        return origin
+    }
+
+    /// Command output, immediate or deferred (an async /ping result), in
+    /// `target`'s conversation, captured when the command was issued so a
+    /// chat switch in the meantime can't misroute it. A DM result lands in
+    /// that chat's history even if it is no longer open (or was cleared — it
+    /// then reappears as the first message when the chat is reopened).
     @MainActor
-    private func addCommandOutput(_ content: String) {
-        if let peerID = selectedPrivateChatPeer {
+    func addCommandOutput(_ content: String, to target: ConversationTarget) {
+        addSystemMessage(content, to: target)
+    }
+
+    /// A local system line in `target`'s conversation: the DM's thread, or
+    /// the channel's timeline. Never on whatever happens to be selected.
+    @MainActor
+    func addSystemMessage(_ content: String, to target: ConversationTarget) {
+        if let peerID = target.privatePeer {
             addLocalPrivateSystemMessage(content, to: peerID)
         } else {
-            addSystemMessage(content)
-        }
-    }
-
-    /// Origin conversation for deferred command output, captured when the
-    /// command is issued (before any async work starts).
-    @MainActor
-    func currentCommandDestination() -> CommandOutputDestination {
-        if let peerID = selectedPrivateChatPeer {
-            return .privateChat(peerID)
-        }
-        // Deferring commands (/ping) are rejected in geohash channels, so a
-        // non-DM origin is always the #mesh timeline.
-        return .meshTimeline
-    }
-
-    /// Routes deferred command output (async /ping results) into the
-    /// conversation captured at issue time, immune to chat switches in the
-    /// meantime. A DM result lands in the origin chat's history even if that
-    /// chat is no longer selected (or was cleared — it then reappears as the
-    /// first message when the chat is reopened).
-    @MainActor
-    func addCommandOutput(_ content: String, to destination: CommandOutputDestination) {
-        switch destination {
-        case .privateChat(let peerID):
-            addLocalPrivateSystemMessage(content, to: peerID)
-        case .meshTimeline:
-            publicConversationCoordinator.addMeshOnlySystemMessage(content)
+            publicConversationCoordinator.addSystemMessage(content, to: target.channel)
         }
     }
 
@@ -2293,6 +2359,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         publicConversationCoordinator.addPublicSystemMessage(content)
     }
 
+    /// `addPublicSystemMessage(_:)` for one channel's timeline, selected or
+    /// not: a command's echo lands where the command was typed.
+    @MainActor
+    func addPublicSystemMessage(_ content: String, to channel: ChannelID) {
+        publicConversationCoordinator.addPublicSystemMessage(content, to: channel)
+    }
+
     /// Add a system message only if viewing a geohash location channel (never post to mesh).
     @MainActor
     func addGeohashOnlySystemMessage(_ content: String) {
@@ -2311,19 +2384,25 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         )
         appendGeohashMessageIfAbsent(systemMessage, toGeohash: geohash)
     }
-    // Send a public message without adding a local user echo.
-    // Used for emotes where we want a local system-style confirmation instead.
+    /// Sends to `channel` without a local echo: emotes add a system-style
+    /// confirmation instead. False when `channel` is a geohash that is no
+    /// longer selected; nothing was sent and its timeline says so.
     @MainActor
-    func sendPublicRaw(_ content: String) {
-        publicConversationCoordinator.sendPublicRaw(content)
+    @discardableResult
+    func sendPublicRaw(_ content: String, to channel: ChannelID) -> Bool {
+        publicConversationCoordinator.sendPublicRaw(content, to: channel)
     }
 
-    // Send a normal public message (with local echo) to the active channel.
-    // CommandContextProvider hook for commands that post real messages
-    // (`/pay`); only called when no private chat is selected.
+    /// Sends a normal public message (with local echo) to `channel`: the
+    /// CommandContextProvider hook for commands that post real messages
+    /// (`/pay … public`). False when `channel` is a geohash that is no
+    /// longer selected; nothing was sent and its timeline says so.
     @MainActor
-    func sendPublicMessage(_ content: String) {
-        sendMessage(content)
+    @discardableResult
+    func sendPublicMessage(_ content: String, to channel: ChannelID) -> Bool {
+        let accepted = channel.isLive(whileSelected: activeChannel)
+        sendMessage(content, to: .publicChannel(channel))
+        return accepted
     }
 
     /// Handle incoming public message

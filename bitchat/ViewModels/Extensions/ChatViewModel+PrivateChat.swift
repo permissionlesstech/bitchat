@@ -12,15 +12,24 @@ import SwiftUI
 
 extension ChatViewModel {
 
+    /// Sends in the selected channel's scope: the single-composer form.
     @MainActor
     func sendPrivateMessage(_ content: String, to peerID: PeerID) {
+        sendPrivateMessage(content, to: peerID, scope: activeChannel)
+    }
+
+    /// `scope` is the channel the DM lives in. A geohash DM is signed with
+    /// that geohash's identity, the one its recipient knows, whatever is
+    /// selected by the time it sends.
+    @MainActor
+    func sendPrivateMessage(_ content: String, to peerID: PeerID, scope: ChannelID) {
         // Group chats reuse the private-chat surface but broadcast a sealed
         // envelope instead of routing to a single peer.
         if peerID.isGroup {
             groupCoordinator.sendGroupMessage(content, to: peerID)
             return
         }
-        privateConversationCoordinator.sendPrivateMessage(content, to: peerID)
+        privateConversationCoordinator.sendPrivateMessage(content, to: peerID, scope: scope)
     }
 
     @MainActor

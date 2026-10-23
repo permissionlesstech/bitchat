@@ -58,31 +58,66 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.currentTheme = theme
     }
 
+    // MARK: Sending and list actions
+    //
+    // Each takes the conversation the person acted in: the composer's or
+    // the list's own target, captured when they acted. The target-less
+    // forms act on the selection, for the single-composer screens.
+
     func sendMessage(_ message: String) {
-        chatViewModel.sendMessage(message)
+        sendMessage(message, to: chatViewModel.selectionTarget)
+    }
+
+    /// Sends `message` (or runs it as a command) in `target`, whatever is
+    /// selected by the time it goes out.
+    func sendMessage(_ message: String, to target: ConversationTarget) {
+        chatViewModel.sendMessage(message, to: target)
     }
 
     /// Resends a failed private message through the normal send path,
     /// removing the failed original so the re-submission replaces it
     /// instead of stacking a duplicate under the red bubble.
     func resendFailedPrivateMessage(_ message: BitchatMessage) {
+        resendFailedPrivateMessage(message, in: chatViewModel.selectionTarget)
+    }
+
+    func resendFailedPrivateMessage(_ message: BitchatMessage, in target: ConversationTarget) {
         chatViewModel.removePrivateMessage(withID: message.id)
-        chatViewModel.sendMessage(message.content)
+        chatViewModel.sendMessage(message.content, to: target)
     }
 
     func clearCurrentConversation() {
-        chatViewModel.sendMessage("/clear")
+        clearConversation(chatViewModel.selectionTarget)
+    }
+
+    /// Clears `target`: its DM, or its channel's timeline.
+    func clearConversation(_ target: ConversationTarget) {
+        chatViewModel.sendMessage("/clear", to: target)
     }
 
     func sendHug(to sender: String) {
-        chatViewModel.sendMessage("/hug @\(sender)")
+        sendHug(to: sender, in: chatViewModel.selectionTarget)
+    }
+
+    func sendHug(to sender: String, in target: ConversationTarget) {
+        chatViewModel.sendMessage("/hug @\(sender)", to: target)
     }
 
     func sendSlap(to sender: String) {
-        chatViewModel.sendMessage("/slap @\(sender)")
+        sendSlap(to: sender, in: chatViewModel.selectionTarget)
+    }
+
+    func sendSlap(to sender: String, in target: ConversationTarget) {
+        chatViewModel.sendMessage("/slap @\(sender)", to: target)
     }
 
     func block(peerID: PeerID?, displayName: String?) {
+        block(peerID: peerID, displayName: displayName, from: chatViewModel.selectionTarget)
+    }
+
+    /// Blocks someone tapped in `target`'s list; a confirmation or failure
+    /// line lands in that conversation.
+    func block(peerID: PeerID?, displayName: String?, from target: ConversationTarget) {
         guard let displayName else { return }
 
         if let peerID, peerID.isGeoChat,
@@ -91,9 +126,9 @@ final class ConversationUIModel: ObservableObject {
         } else if let peerID, !peerID.isGeoDM, !peerID.isGeoChat {
             // Mesh: block the peer's stable Noise identity resolved from the
             // tapped peerID rather than re-resolving a display-name string.
-            chatViewModel.blockMeshPeer(peerID: peerID, displayName: displayName)
+            chatViewModel.blockMeshPeer(peerID: peerID, displayName: displayName, from: target)
         } else {
-            chatViewModel.sendMessage("/block \(displayName)")
+            chatViewModel.sendMessage("/block \(displayName)", to: target)
         }
     }
 
