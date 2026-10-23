@@ -102,7 +102,13 @@ private final class MockChatMediaTransferContext: ChatMediaTransferContext {
         deliveryStatusUpdates.append((messageID, status))
     }
 
-    func normalizedContentKey(_ content: String) -> String { content.lowercased() }
+    /// Conversation each content key was requested for, in request order.
+    private(set) var contentKeyScopes: [ConversationID] = []
+
+    func contentKey(for content: String, in conversationID: ConversationID) -> String {
+        contentKeyScopes.append(conversationID)
+        return content.lowercased()
+    }
 
     func recordContentKey(_ key: String, timestamp: Date) {
         recordedContentKeys.append(key)
@@ -405,6 +411,25 @@ struct ChatMediaTransferCoordinatorContextTests {
         #expect(message.sender == "me")
         #expect(context.privateChats.isEmpty)
         #expect(context.notifyUIChangedCount == 1)
+    }
+
+    /// The media echo's content-window marker is scoped to the conversation
+    /// the echo landed in, so it never swallows the same text arriving in
+    /// another timeline on screen.
+    @Test @MainActor
+    func enqueueMediaMessage_scopesContentKeyToTheEchoConversation() async {
+        let context = MockChatMediaTransferContext()
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        let peerID = PeerID(str: "1122334455667788")
+
+        _ = coordinator.enqueueMediaMessage(content: "[image] pic.jpg", targetPeer: nil)
+        _ = coordinator.enqueueMediaMessage(content: "[voice] note.m4a", targetPeer: peerID)
+        // Bound to #mesh before a switch to a geohash: still #mesh.
+        context.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pruydq"))
+        _ = coordinator.enqueueMediaMessage(content: "[image] late.jpg", targetPeer: nil, publicChannel: .mesh)
+
+        #expect(context.contentKeyScopes == [.mesh, .directPeer(peerID), .mesh])
+        #expect(context.recordedContentKeys.count == 3)
     }
 
     @Test @MainActor

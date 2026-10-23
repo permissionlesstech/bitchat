@@ -99,7 +99,9 @@ protocol ChatMediaTransferContext: AnyObject {
 
     // MARK: Delivery status & dedup
     func updateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus)
-    func normalizedContentKey(_ content: String) -> String
+    /// Content-window key for `content` in `conversationID` (scoped per
+    /// conversation; see `MessageDeduplicationService.contentKey(_:in:)`).
+    func contentKey(for content: String, in conversationID: ConversationID) -> String
     func recordContentKey(_ key: String, timestamp: Date)
 
     // MARK: Mesh file transfer
@@ -146,7 +148,7 @@ extension ChatViewModel: ChatMediaTransferContext {
     // `currentPublicSender()`,
     // `appendPublicMessage(_:to:)`, `removeMessage(withID:cleanupFile:)`,
     // `addSystemMessage(_:)`, `notifyUIChanged()`,
-    // `updateMessageDeliveryStatus(_:status:)`, `normalizedContentKey(_:)`,
+    // `updateMessageDeliveryStatus(_:status:)`, `contentKey(for:in:)`,
     // and `recordContentKey(_:timestamp:)` are shared requirements with the
     // other contexts or satisfied by existing `ChatViewModel` members. The
     // members below flatten mesh service accesses.
@@ -842,6 +844,7 @@ final class ChatMediaTransferCoordinator {
     ) -> BitchatMessage {
         let timestamp = Date()
         let message: BitchatMessage
+        let conversationID: ConversationID
 
         if let peerID = targetPeer {
             message = BitchatMessage(
@@ -857,6 +860,7 @@ final class ChatMediaTransferCoordinator {
                 deliveryStatus: .sending
             )
             context.appendPrivateMessage(message, to: peerID)
+            conversationID = .directPeer(peerID)
         } else {
             let channel = publicChannel ?? context.activeChannel
             // currentPublicSender() speaks for the active channel, and a
@@ -877,10 +881,11 @@ final class ChatMediaTransferCoordinator {
                 senderPeerID: senderPeerID,
                 deliveryStatus: .sending
             )
-            context.appendPublicMessage(message, to: ConversationID(channelID: channel))
+            conversationID = ConversationID(channelID: channel)
+            context.appendPublicMessage(message, to: conversationID)
         }
 
-        let key = context.normalizedContentKey(message.content)
+        let key = context.contentKey(for: message.content, in: conversationID)
         context.recordContentKey(key, timestamp: timestamp)
         context.notifyUIChanged()
         return message

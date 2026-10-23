@@ -66,8 +66,13 @@ private final class MockChatOutgoingContext: ChatOutgoingContext {
 
     // Content dedup
     private(set) var recordedContentKeys: [(key: String, timestamp: Date)] = []
+    /// Conversation each content key was requested for, in request order.
+    private(set) var contentKeyScopes: [ConversationID] = []
 
-    func normalizedContentKey(_ content: String) -> String { "key:\(content)" }
+    func contentKey(for content: String, in conversationID: ConversationID) -> String {
+        contentKeyScopes.append(conversationID)
+        return "key:\(content)"
+    }
     func recordContentKey(_ key: String, timestamp: Date) {
         recordedContentKeys.append((key, timestamp))
     }
@@ -255,5 +260,26 @@ struct ChatOutgoingCoordinatorContextTests {
         #expect(context.sentGeohashContexts.count == 2)
         #expect(context.sentGeohashContexts.map(\.event.id)
                 == context.appendedPublicMessages.map(\.message.id))
+    }
+
+    /// Each local echo's content-window marker is scoped to the timeline the
+    /// echo landed in: with #mesh and a geohash on screen together, a mesh
+    /// echo must not swallow the same text arriving in the geohash, and vice
+    /// versa.
+    @Test @MainActor
+    func localEchoContentKeys_areScopedToTheEchoConversation() async {
+        let context = MockChatOutgoingContext()
+        let coordinator = ChatOutgoingCoordinator(context: context)
+
+        coordinator.sendMessage("gm")
+        await drainMainActorTasks()
+        #expect(context.contentKeyScopes == [.mesh])
+
+        context.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pruydq"))
+        coordinator.sendMessage("gm")
+        await coordinator.geohashMiningTask?.value
+        await drainMainActorTasks()
+        #expect(context.contentKeyScopes == [.mesh, .geohash("u4pruydq")])
+        #expect(context.recordedContentKeys.count == 2)
     }
 }

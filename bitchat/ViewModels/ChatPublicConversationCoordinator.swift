@@ -87,7 +87,11 @@ protocol ChatPublicConversationContext: AnyObject {
     func cachedStablePeerID(for shortPeerID: PeerID) -> PeerID?
 
     // MARK: Content dedup & formatting
+    /// Unscoped content key: the rate limiter's content buckets.
     func normalizedContentKey(_ content: String) -> String
+    /// Content-window key for `content` in `conversationID` (scoped per
+    /// conversation; see `MessageDeduplicationService.contentKey(_:in:)`).
+    func contentKey(for content: String, in conversationID: ConversationID) -> String
     func contentTimestamp(forKey key: String) -> Date?
     func recordContentKey(_ key: String, timestamp: Date)
     /// Pre-renders the message so the formatting cache is warm before display.
@@ -144,6 +148,10 @@ extension ChatViewModel: ChatPublicConversationContext {
 
     func normalizedContentKey(_ content: String) -> String {
         deduplicationService.normalizedContentKey(content)
+    }
+
+    func contentKey(for content: String, in conversationID: ConversationID) -> String {
+        deduplicationService.contentKey(content, in: conversationID)
     }
 
     func contentTimestamp(forKey key: String) -> Date? {
@@ -369,8 +377,9 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
             timestamp: Date(),
             isRelay: false
         )
-        context.appendPublicMessage(systemMessage, to: ConversationID(channelID: context.activeChannel))
-        let contentKey = context.normalizedContentKey(systemMessage.content)
+        let conversationID = ConversationID(channelID: context.activeChannel)
+        context.appendPublicMessage(systemMessage, to: conversationID)
+        let contentKey = context.contentKey(for: systemMessage.content, in: conversationID)
         context.recordContentKey(contentKey, timestamp: systemMessage.timestamp)
     }
 
@@ -565,8 +574,8 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
         #endif
     }
 
-    func pipeline(_: PublicMessagePipeline, normalizeContent content: String) -> String {
-        context.normalizedContentKey(content)
+    func pipeline(_: PublicMessagePipeline, contentKeyFor content: String, in conversationID: ConversationID) -> String {
+        context.contentKey(for: content, in: conversationID)
     }
 
     func pipeline(_: PublicMessagePipeline, contentTimestampForKey key: String) -> Date? {

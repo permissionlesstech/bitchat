@@ -2,11 +2,11 @@
 // PublicMessagePipeline.swift
 // bitchat
 //
-// Batches visible-channel public messages before committing them to the
-// ConversationStore: the deliberate ~80 ms UI flush cadence survives the
-// store cutover, while ordering, dedup, and caps live in the store itself
-// (its timestamp-ordered insert replaced this pipeline's late-insert
-// threshold positioning; see docs/CONVERSATION-STORE-DESIGN.md).
+// Batches public messages bound for on-screen timelines before committing
+// them to the ConversationStore: the deliberate ~80 ms UI flush cadence
+// survives the store cutover, while ordering, dedup, and caps live in the
+// store itself (its timestamp-ordered insert replaced this pipeline's
+// late-insert threshold positioning; see docs/CONVERSATION-STORE-DESIGN.md).
 //
 
 import BitFoundation
@@ -14,7 +14,10 @@ import Foundation
 
 @MainActor
 protocol PublicMessagePipelineDelegate: AnyObject {
-    func pipeline(_: PublicMessagePipeline, normalizeContent content: String) -> String
+    /// The content-window key for `content` landing in `conversationID`.
+    /// Keys are per conversation: the same text in two timelines is not a
+    /// duplicate.
+    func pipeline(_: PublicMessagePipeline, contentKeyFor content: String, in conversationID: ConversationID) -> String
     func pipeline(_: PublicMessagePipeline, contentTimestampForKey key: String) -> Date?
     func pipeline(_: PublicMessagePipeline, recordContentKey key: String, timestamp: Date)
     /// Commits a batched message to its conversation in the store.
@@ -99,13 +102,14 @@ private extension PublicMessagePipeline {
             return
         }
 
-        // Content-window dedup against recorded keys and within the batch;
-        // ID dedup happens in the store at commit time.
+        // Content-window dedup against recorded keys and within the batch,
+        // per destination conversation; ID dedup happens in the store at
+        // commit time.
         var pending: [(message: BitchatMessage, conversationID: ConversationID, contentKey: String)] = []
         var batchContentLatest: [String: Date] = [:]
 
         for item in buffer {
-            let contentKey = delegate.pipeline(self, normalizeContent: item.message.content)
+            let contentKey = delegate.pipeline(self, contentKeyFor: item.message.content, in: item.conversationID)
             if let ts = delegate.pipeline(self, contentTimestampForKey: contentKey),
                abs(ts.timeIntervalSince(item.message.timestamp)) < dedupWindow {
                 continue

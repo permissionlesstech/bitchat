@@ -216,6 +216,14 @@ private final class MockChatPublicConversationContext: ChatPublicConversationCon
         content.lowercased()
     }
 
+    /// Conversation each content-window key was requested for, in order.
+    private(set) var contentKeyScopes: [ConversationID] = []
+
+    func contentKey(for content: String, in conversationID: ConversationID) -> String {
+        contentKeyScopes.append(conversationID)
+        return content.lowercased()
+    }
+
     func contentTimestamp(forKey key: String) -> Date? {
         contentTimestamps[key]
     }
@@ -503,6 +511,21 @@ struct ChatPublicConversationCoordinatorContextTests {
         #expect(context.queuedGeohashSystemMessages == ["geo notice"])
     }
 
+    /// The system line's content-window marker is scoped to the timeline it
+    /// lands in, so it can only swallow a same-text arrival in that timeline.
+    @Test @MainActor
+    func addPublicSystemMessage_scopesContentKeyToItsConversation() async {
+        let context = MockChatPublicConversationContext()
+        let coordinator = ChatPublicConversationCoordinator(context: context)
+
+        coordinator.addPublicSystemMessage("on mesh")
+        context.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pruy"))
+        coordinator.addPublicSystemMessage("on geohash")
+
+        #expect(context.contentKeyScopes == [.mesh, .geohash("u4pruy")])
+        #expect(context.publicMessages(in: .geohash("u4pruy")).map(\.content) == ["on geohash"])
+    }
+
     @Test @MainActor
     func sendPublicRaw_onMeshChannel_sendsViaMeshTransport() async {
         let context = MockChatPublicConversationContext()
@@ -522,7 +545,8 @@ struct ChatPublicConversationCoordinatorContextTests {
         let message = makePublicMessage(id: "pipeline-msg")
         context.contentTimestamps["key-1"] = Date(timeIntervalSince1970: 42)
 
-        #expect(coordinator.pipeline(pipeline, normalizeContent: "HeLLo") == "hello")
+        #expect(coordinator.pipeline(pipeline, contentKeyFor: "HeLLo", in: .mesh) == "hello")
+        #expect(context.contentKeyScopes == [.mesh])
         #expect(coordinator.pipeline(pipeline, contentTimestampForKey: "key-1") == Date(timeIntervalSince1970: 42))
 
         // Commit lands in the store via the append intent; a duplicate ID

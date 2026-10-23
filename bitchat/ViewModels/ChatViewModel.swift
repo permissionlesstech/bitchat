@@ -1044,12 +1044,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     /// Replaces an unauthenticated bridge alias with a later authenticated
     /// radio row. In addition to both storage layers, clear the content-window
     /// marker written by an already-flushed alias or it would suppress the
-    /// genuine row during the next public-message batch.
+    /// genuine row during the next public-message batch. Bridged rows only
+    /// ever land in #mesh, so that is the marker's scope.
     @MainActor
     func removeBridgeInjectedPublicMessage(withID messageID: String) {
         publicMessagePipeline.removeMessage(withID: messageID)
         guard let removed = conversations.removePublicMessage(withID: messageID) else { return }
-        deduplicationService.forgetContent(removed.content, ifRecordedAt: removed.timestamp)
+        deduplicationService.forgetContent(removed.content, in: .mesh, ifRecordedAt: removed.timestamp)
     }
 
     /// Removes every message matching `predicate` from a geohash
