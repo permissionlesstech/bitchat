@@ -522,7 +522,7 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
         }
         let isMentioned = message.mentions?.contains { myTokens.contains($0.normalizedNickname) } ?? false
 
-        if isMentioned && message.sender != context.nickname {
+        if isMentioned && !isOwnMessage(message) {
             SecureLogger.info("🔔 Mention from \(message.sender)", category: .session)
             context.notifyMention(from: message.sender, message: message.content)
         }
@@ -547,7 +547,7 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
         let isHugForMe = message.content.contains("🫂") && hugsMe
         let isSlapForMe = message.content.contains("🐟") && slapsMe
 
-        if isHugForMe && message.sender != context.nickname {
+        if isHugForMe && !isOwnMessage(message) {
             let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
             impactFeedback.prepare()
 
@@ -558,7 +558,7 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
                     impactFeedback.impactOccurred()
                 }
             }
-        } else if isSlapForMe && message.sender != context.nickname {
+        } else if isSlapForMe && !isOwnMessage(message) {
             let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
             impactFeedback.prepare()
             impactFeedback.impactOccurred()
@@ -605,5 +605,16 @@ private extension ChatPublicConversationCoordinator {
             }
         }
         return "name:" + message.sender.lowercased()
+    }
+
+    /// Whether I wrote an inbound message (a gossip replay of my mesh text, or
+    /// a relay echo of my geochat text), by its sender ID rather than its
+    /// display name, so a namesake's mention or hug still reaches me.
+    func isOwnMessage(_ message: BitchatMessage) -> Bool {
+        message.isOwn(
+            myPeerID: context.myPeerID,
+            // The ID my own public rows carry in the active channel.
+            myGeoChatPeerID: currentPublicSender().peerID
+        )
     }
 }
