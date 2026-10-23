@@ -6,13 +6,13 @@ import BitFoundation
 @Suite(.serialized)
 struct ComposerDraftStoreTests {
     /// Isolate each test from leftover in-memory drafts.
-    private func withCleanStore(_ body: () throws -> Void) rethrows {
+    private func withCleanStore(_ body: () -> Void) {
         ComposerDraftStore.replaceAllForTesting([:])
         defer { ComposerDraftStore.replaceAllForTesting([:]) }
-        try body()
+        body()
     }
 
-    @Test func emptyDraftIsNotStored() throws {
+    @Test func emptyDraftIsNotStored() {
         withCleanStore {
             ComposerDraftStore.save("hello", for: .mesh)
             ComposerDraftStore.save("   ", for: .mesh)
@@ -23,7 +23,7 @@ struct ComposerDraftStoreTests {
         }
     }
 
-    @Test func draftsAreIsolatedPerConversation() throws {
+    @Test func draftsAreIsolatedPerConversation() {
         withCleanStore {
             let peer = PeerID(str: "aabbccddeeff0011")
             ComposerDraftStore.save("mesh draft", for: .mesh)
@@ -37,7 +37,7 @@ struct ComposerDraftStoreTests {
         }
     }
 
-    @Test func geohashKeysAreCaseInsensitive() throws {
+    @Test func geohashKeysAreCaseInsensitive() {
         withCleanStore {
             ComposerDraftStore.save("city chat", for: .location(geohash: "U4PRUY"))
             #expect(ComposerDraftStore.load(.location(geohash: "u4pruy")) == "city chat")
@@ -61,7 +61,7 @@ struct ComposerDraftStoreTests {
         #expect(withoutFP == .privateChat(stableID: peer.id))
     }
 
-    @Test func longDraftsAreTruncated() throws {
+    @Test func longDraftsAreTruncated() {
         withCleanStore {
             let long = String(repeating: "a", count: ComposerDraftStore.maxDraftLength + 50)
             ComposerDraftStore.save(long, for: .mesh)
@@ -69,7 +69,7 @@ struct ComposerDraftStoreTests {
         }
     }
 
-    @Test func resetClearsAllDrafts() throws {
+    @Test func resetClearsAllDrafts() {
         withCleanStore {
             ComposerDraftStore.save("keep quiet", for: .mesh)
             ComposerDraftStore.reset()
@@ -78,7 +78,7 @@ struct ComposerDraftStoreTests {
         }
     }
 
-    @Test func maxDraftCountEvictsOldestKeys() throws {
+    @Test func maxDraftCountEvictsOldestKeys() {
         withCleanStore {
             for index in 0..<ComposerDraftStore.maxDraftCount {
                 ComposerDraftStore.save(
@@ -92,7 +92,7 @@ struct ComposerDraftStoreTests {
         }
     }
 
-    @Test func clearingDraftRemovesKeySoItDoesNotResurrect() throws {
+    @Test func clearingDraftRemovesKeySoItDoesNotResurrect() {
         withCleanStore {
             ComposerDraftStore.save("old text", for: .mesh)
             ComposerDraftStore.save("", for: .mesh)

@@ -69,19 +69,17 @@ struct GroupChatList: View {
         }
     }
 
-    /// "#name", verbatim: there is nothing to translate, and a letterless
-    /// "#%@" catalog key breaks string catalog symbol generation (SwiftPM's
-    /// default build system). It keeps what the localized lookup gave the
-    /// text: FSI/PDI isolates around the name, so the "#" stays on the same
-    /// side of RTL names, and the app language for typesetting, so
-    /// language-specific glyphs still match (Urdu digits, for one).
+    /// "#name", not localized: there is nothing to translate, and a
+    /// letterless "#%@" catalog key breaks string catalog symbol generation
+    /// (SwiftPM's default build system). It renders as the localized lookup
+    /// did: the name is isolated (the lookup isolates names containing
+    /// right-to-left text; isolating every name renders the same), so the
+    /// "#" stays on the same side of RTL names, and the text is tagged with
+    /// the app language, as text from a localization table is.
     private func hashtagText(for group: GroupChatRow) -> Text {
-        let text = Text(verbatim: "#\u{2068}\(group.name)\u{2069}")
-        if #available(iOS 17.0, macOS 14.0, *) {
-            let appLanguage = Bundle.main.preferredLocalizations.first ?? "en"
-            return text.typesettingLanguage(Locale.Language(identifier: appLanguage))
-        }
-        return text
+        var hashtag = AttributedString("#\u{2068}\(group.name)\u{2069}")
+        hashtag.languageIdentifier = Bundle.main.preferredLocalizations.first ?? "en"
+        return Text(hashtag)
     }
 
     private func accessibilityDescription(for group: GroupChatRow) -> String {

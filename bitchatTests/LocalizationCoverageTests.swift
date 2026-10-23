@@ -79,6 +79,9 @@ struct LocalizationCoverageTests {
     /// whole build on a key it cannot name ("%@", "#%@", "%lld/%lld"). CI may
     /// still run the native build system, which never generates symbols, so
     /// check the rule here rather than wait for the runner image to move.
+    /// This covers nameability only: the tool also fails on two manual keys
+    /// that generate the same symbol ("1" and "_1") and on skipped positional
+    /// arguments ("%1$@ %3$@"), which this does not check.
     @Test func everyManualKeyCanDeriveAGeneratedSymbol() throws {
         for path in [Self.mainCatalogPath, Self.shareExtensionCatalogPath] {
             let unnameable = try Self.loadStrings(path).compactMap { key, value -> String? in
