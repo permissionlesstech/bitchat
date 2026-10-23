@@ -731,7 +731,7 @@ struct NostrProtocol {
         }
         
         // Perform ECDH
-        let sharedSecret = try keyAgreementPrivateKey.sharedSecretFromKeyAgreement(
+        let sharedSecret = keyAgreementPrivateKey.sharedSecretFromKeyAgreement(
             with: keyAgreementPublicKey,
             format: .compressed
         )
