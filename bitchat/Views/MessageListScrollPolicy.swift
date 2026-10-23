@@ -49,7 +49,8 @@ enum MessageListScrollPolicy {
     }
 
     /// The reaction to a timeline change. `mark` is the mark taken in this
-    /// timeline's context, if any; `windowCount` the window size it renders.
+    /// timeline's context, if any; `appendedCount` what `appended(since:in:)`
+    /// counted after it; `windowCount` the window size the list renders.
     static func reaction(
         mark: TimelineMark?,
         messages: [BitchatMessage],
@@ -63,9 +64,12 @@ enum MessageListScrollPolicy {
         // isAtBottom on the way out.
         guard let mark else { return .land }
         // Emptied (e.g. /clear): nothing to scroll to.
-        guard let newestMessageID = messages.last?.id else { return .hold }
-        // A new message of mine takes the reader to it from anywhere.
-        if newestIsOwn && newestMessageID != mark.newestMessageID {
+        guard !messages.isEmpty else { return .hold }
+        // A new message of mine takes the reader to it from anywhere. New
+        // means appended since the mark (the newest message is then the last
+        // one counted): an older message of mine that a removal left newest
+        // (a retracted bridge alias, a dropped empty voice burst) is not.
+        if newestIsOwn && appendedCount > 0 {
             return .follow
         }
         if !isAtBottom {

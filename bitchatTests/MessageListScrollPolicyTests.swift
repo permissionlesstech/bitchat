@@ -344,6 +344,28 @@ struct MessageListScrollPolicyTests {
     }
 
     @Test
+    func reaction_followsOnlyAMessageOfMineThatLandedSinceTheMark() {
+        // m8 is mine; m9 after it, the newest seen, is a bridge alias.
+        let messages = timeline(0..<10)
+        let mark = Policy.TimelineMark(contextKey: "mesh", messages: messages, windowCount: 300)
+
+        // The radio copy retracts the alias a batch before it lands itself:
+        // m8 is the newest again, but nothing landed since the mark.
+        let retracted = Array(messages.dropLast())
+        let appended = Policy.appended(since: mark, in: retracted)
+        #expect(appended == Policy.Appended())
+        #expect(reaction(mark: mark, retracted, newestIsOwn: true, appended: appended.total, isAtBottom: false) == .keepPosition)
+        // At the bottom the removal still moves the rows.
+        #expect(reaction(mark: mark, retracted, newestIsOwn: true, appended: appended.total, windowCount: 300, isAtBottom: true) == .follow)
+
+        // A message of mine landing in the same change is new.
+        let retractedWithMine = retracted + [message(10)]
+        let appendedWithMine = Policy.appended(since: mark, in: retractedWithMine)
+        #expect(appendedWithMine == Policy.Appended(total: 1, unseen: 1))
+        #expect(reaction(mark: mark, retractedWithMine, newestIsOwn: true, appended: appendedWithMine.total, isAtBottom: false) == .follow)
+    }
+
+    @Test
     func reaction_holdsWhenTheTimelineEmptied() {
         let mark = Policy.TimelineMark(contextKey: "mesh", messages: timeline(0..<10), windowCount: 300)
 
