@@ -156,8 +156,14 @@ struct QRScanView: View {
                         .padding(16)
                 }
             }
-            .frame(height: 260)
+            // A centered square rather than a full-width 260pt strip, which
+            // showed only a thin band of the camera on wide sheets (iPhone
+            // Duo's inner display). The ideal width keeps the square from
+            // collapsing where a sheet sizes itself to its content (macOS).
+            .aspectRatio(1, contentMode: .fit)
+            .frame(idealWidth: 360, maxWidth: 360)
             .clipShape(RoundedRectangle(cornerRadius: 8))
+            .frame(maxWidth: .infinity)
 
             #if os(macOS)
             Text(Strings.pastePrompt)
@@ -431,32 +437,36 @@ struct VerificationSheetView: View {
 
             Divider()
 
-            // Content area
-            Group {
-                if showingScanner {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("verification.scan.prompt_friend")
-                            .bitchatFont(size: 16, weight: .bold)
-                            .frame(maxWidth: .infinity)
-                            .multilineTextAlignment(.center)
-                            .foregroundColor(accentColor)
-                        QRScanView(isActive: showingScanner, onSuccess: {
-                            showingScanner = false
-                        })
-                            .environmentObject(verificationModel)
-                            .frame(minHeight: 280)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
+            // Content area. Scrolls between the pinned header and controls:
+            // the QR code and its payload outgrow short sheets (iPhone Duo's
+            // outer display, SE-class phones).
+            ScrollView {
+                Group {
+                    if showingScanner {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("verification.scan.prompt_friend")
+                                .bitchatFont(size: 16, weight: .bold)
+                                .frame(maxWidth: .infinity)
+                                .multilineTextAlignment(.center)
+                                .foregroundColor(accentColor)
+                            QRScanView(isActive: showingScanner, onSuccess: {
+                                showingScanner = false
+                            })
+                                .environmentObject(verificationModel)
+                                .frame(minHeight: 280)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(boxColor)
+                        .cornerRadius(8)
+                    } else {
+                        MyQRView(qrString: verificationModel.myQRString())
                     }
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(boxColor)
-                    .cornerRadius(8)
-                } else {
-                    MyQRView(qrString: verificationModel.myQRString())
                 }
+                .padding(16)
+                .frame(maxWidth: .infinity)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
             // Centered controls moved up
             VStack(spacing: 10) {
