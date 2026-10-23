@@ -3251,6 +3251,14 @@ extension BLEService {
         try noiseService.processHandshakeMessage(from: peerID, message: message)
     }
 
+    /// Expires the pending Noise responder handshake (and its rollback
+    /// quarantine) now, so a test can inject a deadline no run can outlive
+    /// instead of racing a short one through its setup handshake. Returns
+    /// whether a timeout was armed.
+    func _test_fireNoiseResponderTimeout(for peerID: PeerID) -> Bool {
+        noiseService._test_fireOrdinaryResponderTimeout(for: peerID)
+    }
+
     func _test_enqueuePendingPrivateMessage(
         content: String,
         messageID: String,

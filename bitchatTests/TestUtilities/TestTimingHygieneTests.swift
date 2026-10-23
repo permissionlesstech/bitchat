@@ -11,7 +11,7 @@ import Testing
 /// into a red build that reads like a product bug, and the debugging cost lands
 /// on whoever opened an unrelated PR.
 ///
-/// Two rules, both enforced below:
+/// Three rules, all enforced below:
 ///
 /// 1. A wait helper's default deadline must be at least
 ///    `TestConstants.minimumSettleTimeout`. Waits return as soon as their
@@ -20,8 +20,11 @@ import Testing
 ///    assertion cannot distinguish the behaviour under test from a slow
 ///    machine, so it can only be flaky. Assert the property somewhere it is
 ///    computable — with an injected clock, on the pure logic — instead.
+/// 3. A Noise handshake timeout is never sized to the work. The timer arms
+///    on the first handshake message and a stalled runner lets it fire before
+///    the next, so it is made unlosable and expiry is fired by hook.
 ///
-/// Both rules can be waived per line with `\(Self.waiver)` plus a reason, for
+/// All rules can be waived per line with `\(Self.waiver)` plus a reason, for
 /// the rare case where the timing itself is genuinely the thing under test.
 struct TestTimingHygieneTests {
     /// Opt-out marker. Reviewers should expect a reason next to it.
@@ -85,8 +88,7 @@ struct TestTimingHygieneTests {
         //
         // Deliberately NOT matched: a bare `timeout:` label on something that is
         // not a wait, such as the injected production handshake timeouts in the
-        // Noise tests. Those are the behaviour under test, and a short value is
-        // correct there.
+        // Noise tests. A floor is the wrong rule for those; rule 3 covers them.
         let patterns = [
             #"(?:timeout|deadline)\s*:\s*TimeInterval\s*=\s*([0-9]+(?:\.[0-9]+)?)"#,
             #"(?:wait|waitUntil|waitFor|fulfillment)\s*\([^)]*\btimeout:\s*([0-9]+(?:\.[0-9]+)?)"#
@@ -162,6 +164,73 @@ struct TestTimingHygieneTests {
             behaviour under test from a slow machine. Assert the property where \
             it is computable — inject a clock, or test the pure logic — or add \
             "\(Self.waiver) <reason>".
+
+            \(offenders.joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// Rule 3: a Noise handshake timeout is never sized to the work.
+    ///
+    /// Rule 1 deliberately leaves injected production timeouts alone, and
+    /// that was the blind spot: the ordinary initiator and responder
+    /// timeouts arm on the first handshake message, and tests step a
+    /// handshake as consecutive synchronous calls. A runner that stalls
+    /// between two of them lets the timer tear the half-open session down,
+    /// and message 3 is then answered as a fresh initiation. It kept
+    /// recurring while the injected value was raised from 20 ms to 1 s
+    /// (#1483, #1491), and then outran the 20 s production default (#1737).
+    ///
+    /// Services are built with `TestConstants.unlosableInterval` instead, and
+    /// a test whose subject is expiry fires it through a `_test_fire…Timeout`
+    /// hook. Two checks hold that in place:
+    ///
+    /// - In `NoiseEncryptionServiceTests`, which drives more handshakes than
+    ///   any other suite, a service may only come from the factory. The
+    ///   factory takes no timing parameters, so there a real timer needs a
+    ///   waived construction.
+    /// - In every test file, a numeric handshake timeout written next to its
+    ///   label is flagged. A value passed through a variable, or wrapped onto
+    ///   the next line, is not seen; outside the file above this check is a
+    ///   tripwire and not a guarantee.
+    @Test func noiseHandshakeTimeoutsAreNotSizedToTheWork() throws {
+        let lines = try Self.swiftLines()
+
+        let factoryOnlyFile = "NoiseEncryptionServiceTests.swift"
+        #expect(
+            lines.contains { $0.file == factoryOnlyFile },
+            "hygiene scan did not find \(factoryOnlyFile) — was it renamed?"
+        )
+        let directConstruction = try NSRegularExpression(
+            pattern: #"\bNoiseEncryptionService\s*\("#
+        )
+        let literalTimeout = try NSRegularExpression(
+            pattern: #"[Hh]andshakeTimeout\s*:\s*[0-9]"#
+        )
+
+        var offenders: [String] = []
+        for line in lines where !Self.isWaived(line) {
+            let range = NSRange(line.text.startIndex..., in: line.text)
+            let isOffender =
+                literalTimeout.firstMatch(in: line.text, range: range) != nil
+                || (line.file == factoryOnlyFile
+                    && directConstruction.firstMatch(
+                        in: line.text,
+                        range: range
+                    ) != nil)
+            guard isOffender else { continue }
+            offenders.append("\(line.file):\(line.number) — \(line.text.trimmingCharacters(in: .whitespaces))")
+        }
+
+        #expect(
+            offenders.isEmpty,
+            """
+            A Noise handshake timeout sized to the work will fire mid-handshake \
+            on a stalled runner. Build the service with \
+            TestConstants.unlosableInterval (in \(factoryOnlyFile), through \
+            makeNoiseService) and fire expiry with a _test_fire…Timeout hook, \
+            or add "\(Self.waiver) <reason>" if the real deadline is what the \
+            test measures.
 
             \(offenders.joined(separator: "\n"))
             """
