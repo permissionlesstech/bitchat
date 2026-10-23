@@ -23,6 +23,12 @@ final class ConversationUIModel: ObservableObject {
     private let conversations: ConversationStore
     private var activeChannel: ChannelID
     private var cancellables = Set<AnyCancellable>()
+    /// My geochat sender ID for the location channel on screen, kept with the
+    /// public key it was built from. `publicKeyHex` hex-encodes on every
+    /// access, too slow to repeat per row render; keying on the key itself
+    /// means a geohash switch or a panic wipe (which reseeds every identity)
+    /// can never leave a stale ID behind.
+    private var ownGeoChatSender: (publicKey: Data, peerID: PeerID)?
 
     init(
         chatViewModel: ChatViewModel,
@@ -144,19 +150,50 @@ final class ConversationUIModel: ObservableObject {
     }
 
     func mediaAttachment(for message: BitchatMessage) -> BitchatMessage.Media? {
-        message.mediaAttachment(for: currentNickname)
+        // The model loads from outgoing/ exactly when the row's sender equals
+        // the name it is given. Ask with the row's own sender first: text rows,
+        // most of the timeline, stop here without an identity check per render.
+        guard let outgoing = message.mediaAttachment(for: message.sender) else { return nil }
+        if isSentByCurrentUser(message) { return outgoing }
+        // Not mine by identity: a name the sender can never equal (one
+        // character longer) loads it from incoming/, so a namesake's file
+        // resolves there while my send from before a rename stays outgoing.
+        return message.mediaAttachment(for: message.sender + "\u{0}")
     }
 
     func isSelfSender(peerID: PeerID?, displayName: String?) -> Bool {
         chatViewModel.isSelfSender(peerID: peerID, displayName: displayName)
     }
 
+    /// Whether this device wrote the row, by the sender ID it carries (see
+    /// `BitchatMessage.isOwn`), never by its display name: a namesake, an
+    /// `anon#xxxx` stranger next to a reader named "anon", and my own rows
+    /// from before a rename are all told apart correctly.
     func isSentByCurrentUser(_ message: BitchatMessage) -> Bool {
-        message.sender == currentNickname || message.sender.hasPrefix(currentNickname + "#")
+        message.isOwn(
+            myPeerID: chatViewModel.meshService.myPeerID,
+            myGeoChatPeerID: ownGeoChatPeerID()
+        )
     }
 
     func isMediaMessageFromCurrentUser(_ message: BitchatMessage) -> Bool {
-        message.sender == currentNickname || message.senderPeerID == chatViewModel.meshService.myPeerID
+        isSentByCurrentUser(message)
+    }
+
+    /// My geochat sender ID in the location channel on screen (nil on #mesh),
+    /// memoized in `ownGeoChatSender`.
+    private func ownGeoChatPeerID() -> PeerID? {
+        // The store's channel, not the mirrored `activeChannel`, which trails
+        // a switch by a runloop turn.
+        guard case .location(let channel) = conversations.activeChannel,
+              let identity = chatViewModel.geohashIdentity(for: channel.geohash)
+        else { return nil }
+        if let cached = ownGeoChatSender, cached.publicKey == identity.publicKey {
+            return cached.peerID
+        }
+        let peerID = PeerID(nostr: identity.publicKeyHex)
+        ownGeoChatSender = (identity.publicKey, peerID)
+        return peerID
     }
 
     /// Whether a private-message row should show the filled verification seal

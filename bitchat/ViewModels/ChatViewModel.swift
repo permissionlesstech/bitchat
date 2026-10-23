@@ -1355,6 +1355,19 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         return false
     }
 
+    /// This device's identity in `geohash`'s location channel, through the
+    /// `cachedGeohashIdentity` slot the message formatter shares (cleared on
+    /// panic), so per-row callers pay no derivation.
+    @MainActor
+    func geohashIdentity(for geohash: String) -> NostrIdentity? {
+        if let cached = cachedGeohashIdentity, cached.geohash == geohash {
+            return cached.identity
+        }
+        guard let identity = try? idBridge.deriveIdentity(forGeohash: geohash) else { return nil }
+        cachedGeohashIdentity = (geohash, identity)
+        return identity
+    }
+
     // MARK: - Public helpers
 
     /// Return the current, pruned, sorted people list for the active geohash without mutating state.
