@@ -59,7 +59,7 @@
     "store.audit": 70,
     "geochat.peopleListColors": 40000,
     "geochat.participantHeartbeat": 150000,
-    "geochat.formatMessage": 3000,
+    "geochat.formatMessage": 2500,
     "hex.encodePublicKey": 250000
   },
   "_slowest_observed_ci_numbers_2026_06": {
@@ -74,5 +74,11 @@
     "pipeline.publicIngest": 5006,
     "store.append": 97423,
     "store.audit": 140
+  },
+  "_slowest_observed_ci_numbers_2026_10": {
+    "geochat.peopleListColors": 212895,
+    "geochat.participantHeartbeat": 717459,
+    "geochat.formatMessage": 5176,
+    "hex.encodePublicKey": 655398
   }
 }
