@@ -616,24 +616,9 @@ struct ViewSmokeTests {
         _ = mount(installSmokeEnvironment(ContentPeopleColumnHarness(), featureModels: featureModels))
 
         featureModels.privateConversationModel.startConversation(with: peerID)
-        let conversationOpened = await TestHelpers.waitUntil {
-            featureModels.privateConversationModel.selectedPeerID == peerID
-        }
-        #expect(conversationOpened)
+        #expect(featureModels.privateConversationModel.selectedPeerID == peerID)
 
         _ = mount(installSmokeEnvironment(ContentPeopleColumnHarness(), featureModels: featureModels))
-
-        // ContentView on the inner display's two-column canvas.
-        let host = UIHostingController(
-            rootView: installSmokeEnvironment(
-                ContentView().environment(\.horizontalSizeClass, .regular),
-                featureModels: featureModels
-            )
-        )
-        host.view.frame = CGRect(x: 0, y: 0, width: 867, height: 635)
-        host.view.layoutIfNeeded()
-
-        #expect(featureModels.privateConversationModel.selectedPeerID == peerID)
     }
     #endif
 

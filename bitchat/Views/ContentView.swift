@@ -75,6 +75,16 @@ extension ContentRootModalPresentationState {
     }
 }
 
+/// What a dismissal reported through the people sheet's binding asks for.
+enum PeopleSheetDismissal: Equatable {
+    /// Nothing: SwiftUI catching up with our own state.
+    case ignore
+    /// Close the people list but keep any open conversation selected.
+    case closeList
+    /// A person leaving: close the list and the conversation.
+    case endConversation
+}
+
 /// Whether the people/DM UI is up as a modal sheet, and what a dismissal of
 /// that sheet means. On a split layout the same UI is an inline column, so
 /// the sheet's getter turns false while the conversation stays open.
@@ -87,16 +97,20 @@ enum PeopleSheetPresentationPolicy {
         !isSplitLayout && (showSidebar || hasSelectedConversation)
     }
 
-    /// Consulted only for a dismissal SwiftUI reports while the sheet is
-    /// still logically presented. Scene/background and alert-presentation
-    /// reconciliation (Bluetooth-off, recording errors) are not requests to
-    /// leave the conversation: keeping the DM selected lets the sheet come
-    /// back when the app returns from Settings.
-    static func shouldEndConversationOnDismiss(
+    /// A getter that already reads false means SwiftUI is catching up with
+    /// our own state (the split layout moved the DM into its column), not a
+    /// person leaving: ending the conversation there would close the DM on
+    /// every unfold. Scene/background and alert-presentation reconciliation
+    /// (Bluetooth-off, recording errors) are not requests to leave the
+    /// conversation either: keeping the DM selected lets the sheet come back
+    /// when the app returns from Settings.
+    static func dismissal(
+        sheetStillPresented: Bool,
         sceneIsActive: Bool,
         alertPending: Bool
-    ) -> Bool {
-        sceneIsActive && !alertPending
+    ) -> PeopleSheetDismissal {
+        guard sheetStillPresented else { return .ignore }
+        return sceneIsActive && !alertPending ? .endConversation : .closeList
     }
 }
 
@@ -424,18 +438,19 @@ struct ContentView: View {
             isPresented: Binding(
                 get: { isPeopleSheetPresented },
                 set: { isPresented in
-                    // A getter that already reads false means SwiftUI is
-                    // catching up with our own state (the split layout
-                    // moved the DM into its column), not a person leaving:
-                    // ending the conversation there would close the DM on
-                    // every unfold.
-                    guard !isPresented, isPeopleSheetPresented else { return }
-                    showSidebar = false
-                    if PeopleSheetPresentationPolicy.shouldEndConversationOnDismiss(
+                    guard !isPresented else { return }
+                    switch PeopleSheetPresentationPolicy.dismissal(
+                        sheetStillPresented: isPeopleSheetPresented,
                         sceneIsActive: scenePhase == .active,
                         alertPending: appChromeModel.showBluetoothAlert
                             || voiceRecordingVM.showAlert
                     ) {
+                    case .ignore:
+                        break
+                    case .closeList:
+                        showSidebar = false
+                    case .endConversation:
+                        showSidebar = false
                         privateConversationModel.endConversation()
                     }
                 }

@@ -105,12 +105,23 @@ struct ContentSplitLayoutTests {
 
     @Test
     func horizontalFoldKeepsOneColumn() {
+        // A fold across the whole window leaves no width beside it, so the
+        // minimum-width check rejects it too.
         #expect(ContentSplitLayout.resolve(
             isRegularWidth: true,
             width: innerWidth,
             leadingInset: 0,
             trailingInset: statusColumn,
             division: CGRect(x: 0, y: 300, width: innerWidth, height: 40)
+        ) == nil)
+        // Only the orientation check rejects a region wider than tall that
+        // leaves room for two columns.
+        #expect(ContentSplitLayout.resolve(
+            isRegularWidth: true,
+            width: innerWidth,
+            leadingInset: 0,
+            trailingInset: statusColumn,
+            division: CGRect(x: 420, y: 300, width: 60, height: 40)
         ) == nil)
     }
 
