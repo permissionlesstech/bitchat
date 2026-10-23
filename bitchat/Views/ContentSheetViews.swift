@@ -281,6 +281,69 @@ struct ContentPeopleSheetView: View {
     }
 }
 
+#if os(iOS)
+/// The people list or the open DM as a column beside the public timeline
+/// (regular width, e.g. the iPhone Duo's inner display). It lives in
+/// ContentView's own tree, so it inherits every environment object and
+/// presents through the root: none of the sheet's NavigationStack, close
+/// buttons, banner mirror, alert copies or backdrop come along.
+struct ContentPeopleColumnView: View {
+    @EnvironmentObject private var privateConversationModel: PrivateConversationModel
+
+    @Binding var showSidebar: Bool
+    @Binding var showVerifySheet: Bool
+    @Binding var messageText: String
+    @Binding var selectedMessageSender: String?
+    @Binding var selectedMessageSenderID: PeerID?
+    @Binding var imagePreviewURL: URL?
+    @Binding var windowCountPublic: Int
+    @Binding var windowCountPrivate: [PeerID: Int]
+    @Binding var isAtBottomPrivate: Bool
+    var isTextFieldFocused: FocusState<Bool>.Binding
+    @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
+    @Binding var autocompleteDebounceTimer: Timer?
+    @Binding var showImagePicker: Bool
+    @Binding var imagePickerSourceType: UIImagePickerController.SourceType
+
+    let headerHeight: CGFloat
+    let onSendMessage: () -> Void
+
+    var body: some View {
+        Group {
+            if privateConversationModel.selectedPeerID != nil {
+                ContentPrivateChatSheetView(
+                    showSidebar: $showSidebar,
+                    messageText: $messageText,
+                    selectedMessageSender: $selectedMessageSender,
+                    selectedMessageSenderID: $selectedMessageSenderID,
+                    imagePreviewURL: $imagePreviewURL,
+                    windowCountPublic: $windowCountPublic,
+                    windowCountPrivate: $windowCountPrivate,
+                    isAtBottomPrivate: $isAtBottomPrivate,
+                    isTextFieldFocused: isTextFieldFocused,
+                    voiceRecordingVM: voiceRecordingVM,
+                    autocompleteDebounceTimer: $autocompleteDebounceTimer,
+                    headerHeight: headerHeight,
+                    onSendMessage: onSendMessage,
+                    showImagePicker: $showImagePicker,
+                    imagePickerSourceType: $imagePickerSourceType,
+                    isInline: true
+                )
+            } else {
+                // Keeps hosting its own QR sheet, as in the people sheet.
+                ContentPeopleListView(
+                    showSidebar: $showSidebar,
+                    showVerifySheet: $showVerifySheet,
+                    isInline: true,
+                    headerHeight: headerHeight
+                )
+            }
+        }
+        .modifier(LegacyPrivateMediaConsentDialog())
+    }
+}
+#endif
+
 /// Consent before one private-media send to a legacy client goes out in a
 /// clear signed envelope. Applied by the view that shows the DM, so a
 /// pending request always has a presenter; dismissing it denies the send.
@@ -362,6 +425,10 @@ private struct ContentPeopleListView: View {
 
     @Binding var showSidebar: Bool
     @Binding var showVerifySheet: Bool
+    /// Shown in the people column rather than the sheet: no close button,
+    /// and a title row as tall as the main header beside it.
+    var isInline = false
+    var headerHeight: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -386,15 +453,18 @@ private struct ContentPeopleListView: View {
                             String(localized: "content.help.verification", comment: "Help text for verification button")
                         )
                     }
-                    SheetCloseButton {
-                        withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                            dismiss()
-                            showSidebar = false
-                            showVerifySheet = false
-                            privateConversationModel.endConversation()
+                    if !isInline {
+                        SheetCloseButton {
+                            withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                                dismiss()
+                                showSidebar = false
+                                showVerifySheet = false
+                                privateConversationModel.endConversation()
+                            }
                         }
                     }
                 }
+                .frame(minHeight: isInline ? headerHeight : nil)
 
                 // The mesh sheet titles its sections inline (#mesh / across
                 // the bridge / groups) — no subtitle or count up here.
@@ -406,8 +476,8 @@ private struct ContentPeopleListView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 16)
-            .padding(.bottom, 12)
+            .padding(.top, isInline ? 0 : 16)
+            .padding(.bottom, isInline ? 0 : 12)
             .themedSurface()
 
             ScrollView {
@@ -528,6 +598,11 @@ private struct ContentPrivateChatSheetView: View {
     @Binding var showMacImagePicker: Bool
     #endif
 
+    /// Shown in the people column rather than the sheet: the back chevron
+    /// and swipe-to-leave return to the list there, so there is no close
+    /// button, and the header lines up with the main header beside it.
+    var isInline = false
+
     var body: some View {
         VStack(spacing: 0) {
             if let headerState = privateConversationModel.selectedHeaderState {
@@ -579,10 +654,18 @@ private struct ContentPrivateChatSheetView: View {
 
                     Spacer(minLength: 0)
 
-                    SheetCloseButton {
-                        withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                            privateConversationModel.endConversation()
-                            showSidebar = true
+                    if isInline {
+                        // Holds the close button's place so the name stays
+                        // centred as in the sheet.
+                        Color.clear
+                            .frame(width: 32, height: 32)
+                            .accessibilityHidden(true)
+                    } else {
+                        SheetCloseButton {
+                            withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                                privateConversationModel.endConversation()
+                                showSidebar = true
+                            }
                         }
                     }
                 }
@@ -590,8 +673,8 @@ private struct ContentPrivateChatSheetView: View {
                 // bar instead of clipping inside it.
                 .frame(minHeight: headerHeight)
                 .padding(.horizontal, 16)
-                .padding(.top, 10)
-                .padding(.bottom, 12)
+                .padding(.top, isInline ? 0 : 10)
+                .padding(.bottom, isInline ? 0 : 12)
                 .modifier(PrivateHeaderChrome())
             }
 
@@ -642,7 +725,13 @@ private struct ContentPrivateChatSheetView: View {
             )
             #endif
         }
-        .themedSheetBackground()
+        .background {
+            // Inline, the root backdrop already spans both columns; a second
+            // glass gradient would restart its glows at the column edge.
+            if !isInline {
+                ThemedRootBackground()
+            }
+        }
         .foregroundColor(palette.primary)
     }
 

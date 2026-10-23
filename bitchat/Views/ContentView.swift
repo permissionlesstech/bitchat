@@ -151,6 +151,19 @@ struct ContentView: View {
     #else
     @State private var showMacImagePicker = false
     #endif
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    /// The live layout mode. Presentation bindings read this, never the size
+    /// class: SwiftUI runs a departing sheet's setter after the layout has
+    /// flipped, and environment values captured in that closure are stale.
+    @State private var isSplitLayout = false
+    /// The people column's QR sheet presents through the root, so its state
+    /// lives here where the root alerts can defer to it.
+    @State private var showColumnVerifySheet = false
+    /// Set when unfolding moves a focused DM composer out of the sheet; the
+    /// sheet's dismissal hands focus to the column's composer.
+    @State private var refocusComposerAfterLayoutChange = false
+    #endif
     @ScaledMetric(relativeTo: .body) private var headerHeight: CGFloat = 44
     @ScaledMetric(relativeTo: .subheadline) private var headerPeerIconSize: CGFloat = 11
     @ScaledMetric(relativeTo: .subheadline) private var headerPeerCountFontSize: CGFloat = 12
@@ -173,9 +186,18 @@ struct ContentView: View {
 
     private var usesGlassLayout: Bool { appTheme.usesGlassChrome }
 
+    /// People list or DM as a column beside the timeline instead of a sheet.
+    private var isSplitLayoutActive: Bool {
+        #if os(iOS)
+        return isSplitLayout
+        #else
+        return false
+        #endif
+    }
+
     private var isPeopleSheetPresented: Bool {
         PeopleSheetPresentationPolicy.isPresented(
-            isSplitLayout: false,
+            isSplitLayout: isSplitLayoutActive,
             showSidebar: showSidebar,
             hasSelectedConversation: selectedPrivatePeerID != nil
         )
@@ -186,15 +208,17 @@ struct ContentView: View {
     ) -> ContentRootModalPresentationState {
         #if os(iOS)
         let isMediaPickerPresented = showImagePicker
+        let isVerificationSheetPresented = showVerifySheet || showColumnVerifySheet
         #else
         let isMediaPickerPresented = showMacImagePicker
+        let isVerificationSheetPresented = showVerifySheet
         #endif
 
         return ContentRootModalPresentationState(
             appChromeModel: appChromeModel,
             isPeopleSheetPresented: isPeopleSheetPresented,
             isImagePreviewPresented: imagePreviewURL != nil,
-            isVerificationSheetPresented: showVerifySheet,
+            isVerificationSheetPresented: isVerificationSheetPresented,
             isVoiceAlertPresented: includingVoiceAlert && voiceRecordingVM.showAlert,
             isMediaPickerPresented: isMediaPickerPresented,
             isLegacyMediaConsentPresented:
@@ -274,8 +298,26 @@ struct ContentView: View {
         )
     }
 
+    /// The header's people button. On the split layout the list is on screen
+    /// unless a DM covers it, so the button leaves the DM instead of toggling
+    /// a sheet that can't present there.
+    private var headerPeopleBinding: Binding<Bool> {
+        Binding(
+            get: { showSidebar },
+            set: { newValue in
+                if isSplitLayoutActive {
+                    if selectedPrivatePeerID != nil {
+                        privateConversationModel.endConversation()
+                    }
+                } else {
+                    showSidebar = newValue
+                }
+            }
+        )
+    }
+
     var body: some View {
-        mainContent
+        adaptiveContent
             .onAppear {
                 conversationUIModel.setCurrentColorScheme(colorScheme)
                 conversationUIModel.setCurrentTheme(appTheme)
@@ -329,7 +371,9 @@ struct ContentView: View {
             if draftKey != activeDraftKey, voiceRecordingVM.isHoldInFlight {
                 voiceRecordingVM.cancel()
             }
-            if newValue != nil {
+            // The split layout shows the DM in its column; a stale sidebar
+            // flag would pop the people sheet after the next fold.
+            if newValue != nil, !isSplitLayoutActive {
                 showSidebar = true
             }
             sharedContentImportModel.updateDestination(sharedContentDestination)
@@ -374,7 +418,12 @@ struct ContentView: View {
                         privateConversationModel.endConversation()
                     }
                 }
-            )
+            ),
+            onDismiss: {
+                #if os(iOS)
+                restoreComposerFocusAfterLayoutChange()
+                #endif
+            }
         ) {
             #if os(iOS)
             ContentPeopleSheetView(
@@ -551,6 +600,48 @@ struct ContentView: View {
         }
     }
 
+    /// iOS: where the width allows two columns (the iPhone Duo's inner
+    /// display), the people list or open DM becomes a column beside the
+    /// timeline, split at the hinge; everywhere else the single column stays,
+    /// with people and DMs in the sheet. The column appears only once
+    /// isSplitLayout has flipped as well, so the sheet and the column never
+    /// both host the DM in one frame, and mainContent stays the first child
+    /// in both modes so the public timeline keeps its identity and scroll
+    /// position. macOS keeps mainContent alone: a GeometryReader at the root
+    /// would change how the window sizes itself to its content.
+    @ViewBuilder
+    private var adaptiveContent: some View {
+        #if os(iOS)
+        GeometryReader { proxy in
+            let layout = ContentSplitLayout.resolve(
+                isRegularWidth: horizontalSizeClass == .regular,
+                width: proxy.size.width,
+                leadingInset: proxy.safeAreaInsets.leading,
+                trailingInset: proxy.safeAreaInsets.trailing,
+                division: ContentSplitLayout.division(in: proxy)
+            )
+            let split = isSplitLayout ? layout : nil
+            HStack(spacing: 0) {
+                mainContent
+                    .frame(width: split?.leadingWidth)
+                if let split {
+                    ContentColumnGap(width: split.gapWidth)
+                    peopleColumn
+                        .frame(width: split.trailingWidth)
+                }
+            }
+            .onAppear {
+                isSplitLayout = layout != nil
+            }
+            .onChange(of: layout != nil) { isSplit in
+                handleLayoutModeChange(toSplit: isSplit)
+            }
+        }
+        #else
+        mainContent
+        #endif
+    }
+
     /// Matrix: classic opaque bars with dividers. Glass: full-bleed message
     /// list scrolling underneath floating chrome panels (safe-area insets),
     /// so the translucency gains usable space instead of losing it.
@@ -593,7 +684,7 @@ struct ContentView: View {
     private var headerView: some View {
         VStack(spacing: 0) {
             ContentHeaderView(
-                showSidebar: $showSidebar,
+                showSidebar: headerPeopleBinding,
                 showVerifySheet: $showVerifySheet,
                 isNicknameFieldFocused: $isNicknameFieldFocused,
                 headerHeight: headerHeight,
@@ -671,6 +762,77 @@ struct ContentView: View {
         )
         #endif
     }
+
+    #if os(iOS)
+    private var peopleColumn: some View {
+        ContentPeopleColumnView(
+            showSidebar: $showSidebar,
+            showVerifySheet: $showColumnVerifySheet,
+            messageText: $messageText,
+            selectedMessageSender: $selectedMessageSender,
+            selectedMessageSenderID: $selectedMessageSenderID,
+            imagePreviewURL: $imagePreviewURL,
+            windowCountPublic: $windowCountPublic,
+            windowCountPrivate: $windowCountPrivate,
+            isAtBottomPrivate: $isAtBottomPrivate,
+            isTextFieldFocused: $isTextFieldFocused,
+            voiceRecordingVM: voiceRecordingVM,
+            autocompleteDebounceTimer: $autocompleteDebounceTimer,
+            showImagePicker: $showImagePicker,
+            imagePickerSourceType: $imagePickerSourceType,
+            headerHeight: headerHeight,
+            onSendMessage: sendMessage
+        )
+    }
+
+    /// Folding, unfolding, rotating or resizing across the split threshold.
+    /// The DM selection, the draft and the public scroll position are state
+    /// here and survive by construction; what the old host was presenting
+    /// cannot follow the DM to the new one, so it closes.
+    private func handleLayoutModeChange(toSplit: Bool) {
+        guard toSplit != isSplitLayout else { return }
+        let conversationMoves = selectedPrivatePeerID != nil
+        let sheetWasPresented = isPeopleSheetPresented
+        let sheetWillBePresented = !toSplit && conversationMoves
+        let composerWasFocused = conversationMoves && isTextFieldFocused
+
+        // First, so the departing sheet's setter reads as our own change and
+        // leaves the conversation open.
+        isSplitLayout = toSplit
+        // The DM composer changes hosts: the press on its mic is torn down
+        // and would never finish the recording.
+        if conversationMoves, voiceRecordingVM.isHoldInFlight {
+            voiceRecordingVM.cancel()
+        }
+        // Folding brings an open DM back in the sheet, the list behind it;
+        // an idle column must not pop the people sheet.
+        showSidebar = sheetWillBePresented
+        showColumnVerifySheet = false
+        if sheetWasPresented != sheetWillBePresented {
+            // Presented by the sheet, or by the root for the column: the
+            // other host can't adopt them.
+            showImagePicker = false
+            imagePreviewURL = nil
+            appChromeModel.clearFingerprint()
+        }
+
+        // Best effort: on unfolding, the departing sheet's dismissal hands
+        // focus to the column's composer; on folding, the sheet's composer
+        // mounts as it presents.
+        refocusComposerAfterLayoutChange = toSplit && composerWasFocused
+        if !toSplit, composerWasFocused {
+            DispatchQueue.main.async {
+                isTextFieldFocused = true
+            }
+        }
+    }
+
+    private func restoreComposerFocusAfterLayoutChange() {
+        guard refocusComposerAfterLayoutChange else { return }
+        refocusComposerAfterLayoutChange = false
+        isTextFieldFocused = true
+    }
+    #endif
 
     private func sendMessage() {
         guard let trimmed = messageText.trimmedOrNilIfEmpty else { return }

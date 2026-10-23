@@ -183,6 +183,47 @@ private struct ContentPeopleSheetHarness: View {
     }
 }
 
+#if os(iOS)
+@MainActor
+private struct ContentPeopleColumnHarness: View {
+    @State private var showSidebar = false
+    @State private var showVerifySheet = false
+    @State private var messageText = ""
+    @State private var selectedMessageSender: String?
+    @State private var selectedMessageSenderID: PeerID?
+    @State private var imagePreviewURL: URL?
+    @State private var windowCountPublic = 300
+    @State private var windowCountPrivate: [PeerID: Int] = [:]
+    @State private var isAtBottomPrivate = true
+    @State private var autocompleteDebounceTimer: Timer?
+    @StateObject private var voiceRecordingVM = VoiceRecordingViewModel()
+    @FocusState private var isTextFieldFocused: Bool
+    @State private var showImagePicker = false
+    @State private var imagePickerSourceType: UIImagePickerController.SourceType = .photoLibrary
+
+    var body: some View {
+        ContentPeopleColumnView(
+            showSidebar: $showSidebar,
+            showVerifySheet: $showVerifySheet,
+            messageText: $messageText,
+            selectedMessageSender: $selectedMessageSender,
+            selectedMessageSenderID: $selectedMessageSenderID,
+            imagePreviewURL: $imagePreviewURL,
+            windowCountPublic: $windowCountPublic,
+            windowCountPrivate: $windowCountPrivate,
+            isAtBottomPrivate: $isAtBottomPrivate,
+            isTextFieldFocused: $isTextFieldFocused,
+            voiceRecordingVM: voiceRecordingVM,
+            autocompleteDebounceTimer: $autocompleteDebounceTimer,
+            showImagePicker: $showImagePicker,
+            imagePickerSourceType: $imagePickerSourceType,
+            headerHeight: 44,
+            onSendMessage: {}
+        )
+    }
+}
+#endif
+
 @MainActor
 @discardableResult
 private func mount<V: View>(_ view: V) -> AnyObject {
@@ -556,6 +597,44 @@ struct ViewSmokeTests {
         #expect(featureModels.privateConversationModel.selectedPeerID == peerID)
         #expect(featureModels.privateConversationModel.selectedHeaderState?.headerPeerID == peerID)
     }
+
+    #if os(iOS)
+    @Test
+    func peopleColumn_rendersListAndConversation() async {
+        let (viewModel, transport, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let peerID = PeerID(str: "6162636465666768")
+
+        transport.updatePeerSnapshots([
+            makeSnapshot(peerID: peerID, nickname: "Bob", noiseByte: 0x77)
+        ])
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        // Unlike the sheet, the column gets no re-injected models: it must
+        // mount on exactly the environment ContentView's own tree provides.
+        _ = mount(installSmokeEnvironment(ContentPeopleColumnHarness(), featureModels: featureModels))
+
+        featureModels.privateConversationModel.startConversation(with: peerID)
+        let conversationOpened = await TestHelpers.waitUntil {
+            featureModels.privateConversationModel.selectedPeerID == peerID
+        }
+        #expect(conversationOpened)
+
+        _ = mount(installSmokeEnvironment(ContentPeopleColumnHarness(), featureModels: featureModels))
+
+        // ContentView on the inner display's two-column canvas.
+        let host = UIHostingController(
+            rootView: installSmokeEnvironment(
+                ContentView().environment(\.horizontalSizeClass, .regular),
+                featureModels: featureModels
+            )
+        )
+        host.view.frame = CGRect(x: 0, y: 0, width: 867, height: 635)
+        host.view.layoutIfNeeded()
+
+        #expect(featureModels.privateConversationModel.selectedPeerID == peerID)
+    }
+    #endif
 
     @Test("Root Bluetooth alert waits for location and notices sheets")
     func rootBluetoothAlertGuard_includesHeaderSheets() {
