@@ -14,7 +14,7 @@ struct LocationChannelsSheet: View {
         NavigationView {
             LocationChannelsPicker(
                 presentation: .sheet,
-                onChoose: { isPresented = false },
+                onChoose: { _ in isPresented = false },
                 onClose: { isPresented = false }
             )
             #if os(iOS)
@@ -50,13 +50,11 @@ struct LocationChannelsPicker: View {
     }
 
     let presentation: Presentation
-    /// A channel was chosen. The sheet reports it at once (and dismisses).
-    /// The pane reports it once the trailing pane can follow it: at once
-    /// from the idle pane, or when the selected geohash is chosen again (no
-    /// select); otherwise once the selection is the choice. `select` lands
-    /// a couple of run-loop hops after the tap, and browsing that ended
-    /// before then would bring the old geohash back meanwhile.
-    let onChoose: () -> Void
+    /// A channel was chosen, reported at the tap with whether the choice
+    /// selects anything (`selects(ofGeohash:presentation:selected:)`): false
+    /// for the pane's selected geohash chosen again, which only ends
+    /// browsing (E7). The sheet dismisses either way.
+    let onChoose: (_ selects: Bool) -> Void
     /// The close control's action; nil hides it (the idle pane).
     let onClose: (() -> Void)?
 
@@ -82,9 +80,6 @@ struct LocationChannelsPicker: View {
         var pendingShareGeohash: String?
         var showSharePrecisionWarning = false
         var activeSharePayload: ChannelSharePayload?
-        /// A choice made, waiting for the selection to change before it is
-        /// reported (`onChoose`).
-        var awaitsSelection = false
     }
 
     private enum Strings {
@@ -253,12 +248,6 @@ struct LocationChannelsPicker: View {
             perform(.permissionChange, permission: newValue)
         }
         .onChange(of: locationChannelsModel.availableChannels) { _ in }
-        .onChange(of: locationChannelsModel.selectedChannel) { _ in
-            // The choice that was waiting on its selection has landed.
-            guard local.awaitsSelection else { return }
-            local.awaitsSelection = false
-            onChoose()
-        }
         #if os(iOS)
         .onChange(of: panicEpoch) { _ in
             wipe()
@@ -370,41 +359,33 @@ struct LocationChannelsPicker: View {
     }
     #endif
 
-    /// Selects `channel`, unless the choice says it is selected already, and
-    /// reports the choice when it says (`choice(ofGeohash:presentation:selected:)`).
+    /// Selects `channel`, unless it is the pane's selection already
+    /// (`selects(ofGeohash:presentation:selected:)`), and reports the choice.
     /// - Parameter prepare: Runs right before a selection (teleport marks).
     private func choose(_ channel: ChannelID, prepare: () -> Void = {}) {
-        let choice = Self.choice(
+        let selects = Self.selects(
             ofGeohash: channel.nostrGeohashTag,
             presentation: presentation,
             selected: locationChannelsModel.selectedChannel
         )
-        if choice.selects {
+        if selects {
             prepare()
             locationChannelsModel.select(channel)
         }
-        report(choice)
+        onChoose(selects)
     }
 
     /// Teleports to `geohash` as `choose(_:prepare:)` selects.
     private func chooseTeleport(to geohash: String) {
-        let choice = Self.choice(
+        let selects = Self.selects(
             ofGeohash: geohash,
             presentation: presentation,
             selected: locationChannelsModel.selectedChannel
         )
-        if choice.selects {
+        if selects {
             locationChannelsModel.teleport(to: geohash)
         }
-        report(choice)
-    }
-
-    private func report(_ choice: Choice) {
-        if choice.awaitsSelection {
-            local.awaitsSelection = true
-        } else {
-            onChoose()
-        }
+        onChoose(selects)
     }
 
     /// The #mesh row: hidden in the idle pane, where #mesh is the pane
@@ -958,40 +939,26 @@ extension LocationChannelsPicker {
         return actions
     }
 
-    /// How a choice goes: whether it selects, and when it is reported.
-    struct Choice: Equatable {
-        /// Select the channel (or teleport there). False: it is the
-        /// selection already.
-        let selects: Bool
-        /// Report it (`onChoose`) once the selection has changed rather than
-        /// at once.
-        let awaitsSelection: Bool
-    }
-
-    /// The sheet selects and reports at once, as it always has: it closes.
-    /// In the pane, choosing the selected channel again only ends browsing
-    /// (E7): selecting it again would resubscribe for nothing. Any other
-    /// choice made while browsing waits for its selection: `select` lands a
-    /// couple of run-loop hops after the tap, and browsing that ended first
-    /// would show the old geohash meanwhile. The idle pane has no browsing
-    /// to end, so it reports at once.
+    /// Whether a choice selects (or teleports): the sheet selects whatever
+    /// is chosen, as it always has. In the pane, choosing the selected
+    /// channel again only ends browsing (E7): selecting it again would
+    /// resubscribe for nothing. Any other choice moves the timeline, whose
+    /// landing ends browsing, so the geohash being left never comes back
+    /// while the choice lands.
     /// - Parameters:
     ///   - geohash: The chosen cell; nil for #mesh.
     ///   - selected: The selection as the choice is made.
-    static func choice(
+    static func selects(
         ofGeohash geohash: String?,
         presentation: Presentation,
         selected: ChannelID
-    ) -> Choice {
+    ) -> Bool {
         switch presentation {
         case .sheet:
-            return Choice(selects: true, awaitsSelection: false)
+            return true
         #if os(iOS)
         case .pane:
-            if isSelected(geohash: geohash, in: selected) {
-                return Choice(selects: false, awaitsSelection: false)
-            }
-            return Choice(selects: true, awaitsSelection: selected.isLocation)
+            return !isSelected(geohash: geohash, in: selected)
         #endif
         }
     }

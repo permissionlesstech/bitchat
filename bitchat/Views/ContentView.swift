@@ -1271,12 +1271,8 @@ struct ContentView: View {
                         trailingCornerReach: trailingCornerReach,
                         panicEpoch: appChromeModel.panicEpoch
                     ),
-                    onChoose: {
-                        changePanes {
-                            panes.choseChannel(
-                                timelineShowsSelection: locationChannelsModel.selectedChannel == timelineChannel
-                            )
-                        }
+                    onChoose: { selects in
+                        changePanes { panes.choseChannel(selects: selects) }
                     },
                     onClose: returnTo == nil ? nil : { changePanes { panes.endBrowsing() } }
                 )

@@ -552,14 +552,16 @@ struct SplitPaneState: Equatable {
         focus = .trailing
     }
 
-    /// A channel was chosen in the inline picker (E1, E7). Browsing ends
-    /// now if the timeline already shows the selection (the selected
-    /// geohash chosen again, or a choice from the idle picker, which
-    /// isn't browsing); otherwise the timeline's move to the choice ends
-    /// it, so the geohash being left never comes back meanwhile.
-    mutating func choseChannel(timelineShowsSelection: Bool) {
+    /// A channel was chosen in the inline picker (E1, E7). The selected
+    /// geohash chosen again selects nothing and ends browsing now; any
+    /// other choice moves the timeline, whose landing ends it
+    /// (`timelineChannelChanged`), so the geohash being left never comes
+    /// back meanwhile. (The idle picker isn't browsing.)
+    /// - Parameter selects: The choice selects a channel
+    ///   (`LocationChannelsPicker.selects(ofGeohash:presentation:selected:)`).
+    mutating func choseChannel(selects: Bool) {
         focus = .trailing
-        if timelineShowsSelection {
+        if !selects {
             isBrowsing = false
         }
     }

@@ -759,7 +759,7 @@ struct SplitPaneStateTests {
         state.composerFocused(.secondary)
         #expect(state.focus == .trailing)
         state.touched(.leading)
-        state.choseChannel(timelineShowsSelection: false)
+        state.choseChannel(selects: true)
         #expect(state.focus == .trailing)
         state.openPopover(.leading)
         #expect(state.focus == .leading)
@@ -803,13 +803,15 @@ struct SplitPaneStateTests {
         #expect(world.trailing == .picker(returnTo: geohash))
 
         // The selected geohash again: no selection, browsing ends.
-        world.state.choseChannel(timelineShowsSelection: true)
+        world.state.choseChannel(selects: false)
         #expect(world.trailing == .channel(geohash))
 
-        // Another geohash: the selection moves first, the timeline after.
+        // Another geohash, reported at the tap: the selection moves next,
+        // the timeline after.
         world.state.browse()
-        world.selection = .location(otherGeohash)
-        world.state.choseChannel(timelineShowsSelection: world.selection == world.timeline)
+        world.state.choseChannel(selects: true)
+        #expect(world.trailing == .picker(returnTo: geohash))
+        world.select(.location(otherGeohash))
         #expect(world.trailing == .picker(returnTo: geohash))
         world.land(.location(otherGeohash))
         #expect(world.trailing == .channel(otherGeohash))

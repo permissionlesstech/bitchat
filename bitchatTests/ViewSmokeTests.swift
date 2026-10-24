@@ -502,7 +502,7 @@ private struct LocationChannelsPaneHarness: View {
     var body: some View {
         LocationChannelsPicker(
             presentation: .pane(headerHeight: 44, trailingCornerReach: 0, panicEpoch: panicEpoch.value),
-            onChoose: {},
+            onChoose: { _ in },
             onClose: nil
         )
     }
@@ -1570,7 +1570,7 @@ struct ViewSmokeTests {
             let (model, _) = await makeSmokeLocationChannelsModel(authorizationStatus: status)
             // Idle: no close control, no #mesh row.
             _ = mount(installSmokeEnvironment(
-                LocationChannelsPicker(presentation: pane, onChoose: {}, onClose: nil)
+                LocationChannelsPicker(presentation: pane, onChoose: { _ in }, onClose: nil)
                     .environmentObject(model),
                 featureModels: featureModels
             ))
@@ -1581,7 +1581,7 @@ struct ViewSmokeTests {
                 timeout: TestConstants.settleTimeout
             )
             _ = mount(installSmokeEnvironment(
-                LocationChannelsPicker(presentation: pane, onChoose: {}, onClose: {})
+                LocationChannelsPicker(presentation: pane, onChoose: { _ in }, onClose: {})
                     .environmentObject(model),
                 featureModels: featureModels
             ))
