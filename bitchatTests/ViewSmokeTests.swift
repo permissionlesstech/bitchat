@@ -617,6 +617,8 @@ private final class SplitContentHost {
     var chrome: AppChromeModel { models.appChromeModel }
     var channels: LocationChannelsModel { models.locationChannelsModel }
     var openPeer: PeerID? { models.privateConversationModel.selectedPeerID }
+    /// Bob's Noise key ID: his DM moves there when he drops out of range.
+    var bobStableID: PeerID { PeerID(hexData: Data(repeating: 0xB0, count: 32)) }
     /// The channel the selection's timeline renders.
     var timelineChannel: ChannelID { models.publicChatModel.channel }
     var isMeshPinned: Bool { viewModel.conversations.isMeshPinnedOnScreen }
@@ -664,6 +666,15 @@ private final class SplitContentHost {
     /// A tap on a people button: a bar's, or the open popover's close.
     func tap(_ tap: SplitLayoutTestTap) {
         taps.send(tap)
+    }
+
+    /// The open DM handed to another ID of the same person, as a
+    /// disconnect (the Noise key's ID) or a reconnect (a new short ID)
+    /// hands it: its messages move, then the selection.
+    func handOffDM(to peer: PeerID) {
+        guard let current = viewModel.selectedPrivateChatPeer else { return }
+        viewModel.migratePrivateChat(from: current, to: peer)
+        viewModel.selectedPrivateChatPeer = peer
     }
 
     func fold() async -> Bool {
@@ -1756,6 +1767,36 @@ struct ViewSmokeTests {
             isShown: { split.presentedAlert?.preferredStyle == .alert },
             dismiss: { shares.discardAll() }
         )
+    }
+
+    /// A peer-ID handoff of the open DM (Bob drops out of range and his DM
+    /// moves to his Noise key's ID) opens no DM: the #mesh people popover
+    /// in use stays up, and a fold from #mesh still parks the geohash and
+    /// the DM (E3) rather than keeping both (E2).
+    @Test
+    func contentView_aPeerIDHandoffOfTheOpenDMOpensNothing() async {
+        let split = await SplitContentHost.make()
+        defer { split.close() }
+        #expect(await split.select(.location(split.geohash)))
+        #expect(await split.open(split.bob))
+        split.tap(.peopleButton(.leading))
+        #expect(await split.settle { split.isPresentingPopover }, "\(split.diagnostics)")
+
+        split.handOffDM(to: split.bobStableID)
+        #expect(await split.settle { split.openPeer == split.bobStableID })
+        let closed = await TestHelpers.waitUntil(
+            { !split.isPresentingPopover },
+            timeout: TestConstants.negativeWaitWindow
+        )
+        #expect(!closed, "the popover closed under the handoff")
+
+        #expect(await split.fold())
+        let parked = await split.settle {
+            split.channels.selectedChannel == .mesh
+                && split.timelineChannel == .mesh
+                && split.openPeer == nil
+        }
+        #expect(parked, "\(split.diagnostics)")
     }
 
     /// E13: a fingerprint asked for in a popover is the popover's own, so it

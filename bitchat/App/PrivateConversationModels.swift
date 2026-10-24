@@ -180,6 +180,15 @@ final class PrivateConversationModel: ObservableObject {
         }
         return !chatViewModel.isPeerBlocked(peerID)
     }
+
+    /// Whether two peer IDs name one DM: equal, or the same person across a
+    /// peer-ID handoff (the selection moving from a short mesh ID to the
+    /// Noise key's ID or to a new short ID). Compared the way drafts and
+    /// held mics are, so the split layout's panes treat a handoff as the
+    /// conversation they already show.
+    func isSameConversation(_ lhs: PeerID, _ rhs: PeerID) -> Bool {
+        chatViewModel.isSameDirectConversation(lhs, rhs)
+    }
     #endif
 
     func toggleFavorite(peerID: PeerID) {

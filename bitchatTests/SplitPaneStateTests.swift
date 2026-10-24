@@ -24,6 +24,9 @@ struct SplitPaneStateTests {
     private let otherMeshPeer = PeerID(str: "1112131415161718")
     private let group = PeerID(str: "group_" + String(repeating: "ab", count: 16))
     private let geoDM = PeerID(nostr_: String(repeating: "ef", count: 32))
+    /// The mesh peer's Noise key ID: the DM moves there when the peer drops
+    /// out of range, and back to a short ID when it reconnects.
+    private let meshPeerStableID = PeerID(str: String(repeating: "0a", count: 32))
 
     /// The world around the panes: what is selected, what the trailing
     /// timeline renders, and the open DM. Effects land as they do in the
@@ -36,6 +39,9 @@ struct SplitPaneStateTests {
         var openPeer: PeerID?
         var isLocationSheetUp = false
         var canReopen: (PeerID) -> Bool = { _ in true }
+        /// The peer IDs that name one person, as `isSameDirectConversation`
+        /// resolves them.
+        var people: [Set<PeerID>] = []
 
         var trailing: TrailingPaneContent {
             .resolve(conversation: openPeer, channel: timeline, isBrowsing: state.isBrowsing)
@@ -54,7 +60,10 @@ struct SplitPaneStateTests {
 
         mutating func open(_ peer: PeerID?) {
             openPeer = peer
-            state.conversationChanged(to: peer, isSplit: isSplit)
+            let people = people
+            state.conversationChanged(to: peer, isSplit: isSplit) { lhs, rhs in
+                lhs == rhs || people.contains { $0.contains(lhs) && $0.contains(rhs) }
+            }
         }
 
         /// Folds and lets the fold's own selection and DM end land.
@@ -365,6 +374,65 @@ struct SplitPaneStateTests {
         #expect(world.state.parked.conversation == meshPeer)
         world.open(nil)
         #expect(world.state.parked.conversation == meshPeer)
+    }
+
+    /// The open DM handed to another ID of the same person (a disconnect
+    /// moving it to the Noise key's ID, a reconnect under a new short ID)
+    /// opens nothing: the focus, the popover and what a fold would do stay
+    /// as they were. Another person's DM replacing it does open.
+    @Test
+    func aPeerIDHandoffOpensNothing() {
+        var world = World()
+        world.people = [[meshPeer, meshPeerStableID, otherMeshPeer]]
+        world.land(.location(geohash))
+        world.open(meshPeer)
+        world.state.touched(.leading)
+        world.state.openPopover(.leading)
+
+        world.open(meshPeerStableID)
+        #expect(world.state.conversation == meshPeerStableID)
+        #expect(world.state.focus == .leading)
+        #expect(world.state.popover == .leading)
+        // And back under a new short ID.
+        world.open(otherMeshPeer)
+        #expect(world.state.focus == .leading)
+        #expect(world.state.popover == .leading)
+
+        // E3 still: the geohash and the DM, under the ID it has now, park.
+        let effects = world.fold()
+        #expect(effects == .init(select: .mesh, endsConversation: true))
+        #expect(world.state.parked == .init(channel: geohash, conversation: otherMeshPeer))
+
+        // Someone else's DM is a DM opening.
+        var replaced = World()
+        replaced.people = [[meshPeer, meshPeerStableID]]
+        replaced.open(meshPeer)
+        replaced.state.touched(.leading)
+        replaced.state.openPopover(.leading)
+        replaced.open(otherMeshPeer)
+        #expect(replaced.state.focus == .trailing)
+        #expect(replaced.state.popover == nil)
+    }
+
+    /// E4 reopens a parked DM under the ID it was parked under, and the next
+    /// peer update hands it to the ID the person has now: the unfold's
+    /// focus on #mesh stands.
+    @Test
+    func aHandoffAfterAnUnfoldReopenKeepsTheUnfoldsFocus() {
+        var world = World()
+        world.people = [[meshPeer, meshPeerStableID]]
+        world.land(.location(geohash))
+        world.open(meshPeer)
+        world.state.touched(.leading)
+        world.fold()
+        world.unfold()
+        #expect(world.openPeer == meshPeer)
+        #expect(world.state.focus == .leading)
+
+        world.open(meshPeerStableID)
+
+        #expect(world.state.focus == .leading)
+        #expect(world.trailing == .conversation(meshPeerStableID))
     }
 
     // MARK: - Focus (E1)

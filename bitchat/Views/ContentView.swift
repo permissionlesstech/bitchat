@@ -557,8 +557,14 @@ struct ContentView: View {
         // As it happens, not at the next render: a touch or a fold right
         // after a DM opens must already see it, and the fold's own ending
         // of the DM must already have been recorded when its report comes.
+        // Every refresh republishes the selection, and a peer-ID handoff
+        // reports the same person under another ID: neither opens a DM.
         .onReceive(privateConversationModel.$selectedPeerID) { peer in
-            panes.conversationChanged(to: peer, isSplit: isSplitLayout)
+            panes.conversationChanged(
+                to: peer,
+                isSplit: isSplitLayout,
+                isSameConversation: privateConversationModel.isSameConversation
+            )
         }
         // A test host's taps on the people buttons (none in the app).
         .background {
@@ -1257,7 +1263,11 @@ struct ContentView: View {
             )
         apply(effects)
         // The DM as it now is, should a reopening not have opened.
-        panes.conversationChanged(to: selectedPrivatePeerID, isSplit: toSplit)
+        panes.conversationChanged(
+            to: selectedPrivatePeerID,
+            isSplit: toSplit,
+            isSameConversation: privateConversationModel.isSameConversation
+        )
 
         // Folding brings a kept DM back in the sheet, the list behind it;
         // anything else must not pop the people sheet.

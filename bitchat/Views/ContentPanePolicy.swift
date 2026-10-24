@@ -320,7 +320,8 @@ struct SplitPaneState: Equatable {
     private(set) var foldChannel: ChannelID?
     /// The open DM as last reported. A report repeating it changes
     /// nothing, so the DM a fold ends or an unfold reopens, already
-    /// recorded here, doesn't count again when its own report comes in.
+    /// recorded here, doesn't count again when its own report comes in;
+    /// nor does a report handing it to another ID of the same person.
     private(set) var conversation: PeerID?
 
     /// What `ContentView` does for an event, besides the state change.
@@ -423,8 +424,25 @@ struct SplitPaneState: Equatable {
     /// the focus (E1), closes the popovers (E13) and ends browsing.
     /// Folded: opening any DM drops the parked one (E5). Report it as it
     /// happens, so a touch or a fold that follows sees it.
-    mutating func conversationChanged(to peer: PeerID?, isSplit: Bool) {
+    ///
+    /// The open DM handed to another peer ID of the same person (a
+    /// reconnect under a new short ID, a disconnect handing it to the Noise
+    /// key's ID, a send re-resolving its route) opens nothing: only the ID
+    /// it is recorded under changes. The focus, the popovers, browsing and
+    /// anything parked stay as they were.
+    /// - Parameter isSameConversation: Whether two peer IDs name one
+    ///   conversation, compared the way drafts and mic holds are
+    ///   (`ChatViewModel.isSameDirectConversation`).
+    mutating func conversationChanged(
+        to peer: PeerID?,
+        isSplit: Bool,
+        isSameConversation: (PeerID, PeerID) -> Bool
+    ) {
         guard peer != conversation else { return }
+        if let peer, let current = conversation, isSameConversation(current, peer) {
+            conversation = peer
+            return
+        }
         conversation = peer
         guard isSplit else {
             parked = PaneFoldPolicy.parked(parked, afterCompactConversationChange: peer)
