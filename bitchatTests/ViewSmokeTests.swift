@@ -1615,6 +1615,36 @@ struct ViewSmokeTests {
         #expect(split.isMeshPinned)
     }
 
+    /// While a selected geohash lands (here E4 re-selecting the parked
+    /// geohash: applied a hop after the unfold, rendered later still) the
+    /// trailing pane holds a neutral placeholder. The picker never mounts
+    /// for a pane about to show the geohash, so it never asks for a
+    /// location fix.
+    @Test
+    func contentView_aGeohashLandingAfterAnUnfoldNeverMountsThePicker() async throws {
+        let split = try await SplitContentHost.make()
+        defer { split.close() }
+        try await split.select(.location(split.geohash))
+        try #require(split.touch(.leading))
+        try await split.fold()
+        try await split.require("parked") {
+            split.timelineChannel == .mesh && split.channels.selectedChannel == .mesh
+        }
+        // Whatever the single column asked for itself (#mesh's building
+        // cell, for the notices pin) has been asked.
+        try #require(await split.settleFrames(), "\(split.diagnostics)")
+        let fixes = split.location.requestLocationCallCount
+
+        try await split.unfold()
+        try await split.require("the geohash back") {
+            split.trailingPrompts.contains { $0.contains("#\(split.geohash.geohash)") }
+        }
+        #expect(
+            split.location.requestLocationCallCount == fixes,
+            "the picker mounted while the geohash landed: \(split.diagnostics)"
+        )
+    }
+
     /// E2: folding from the trailing pane keeps the geohash and the DM
     /// (into the sheet); nothing is selected away or ended.
     @Test

@@ -44,7 +44,7 @@ struct SplitPaneStateTests {
         var people: [Set<PeerID>] = []
 
         var trailing: TrailingPaneContent {
-            .resolve(conversation: openPeer, channel: timeline, isBrowsing: state.isBrowsing)
+            state.trailingContent(openPeer: openPeer, timelineChannel: timeline, selection: selection)
         }
 
         /// The split layout's composer targets, as ContentView builds them.
@@ -55,14 +55,21 @@ struct SplitPaneStateTests {
         /// A selection that lands in the timeline, as `select` does, with
         /// what its landing asks for (a geohash DM left behind ends).
         mutating func land(_ channel: ChannelID) {
-            selection = channel
-            if !isSplit {
-                state.compactSelectionChanged(to: channel)
-            }
+            select(channel)
             let old = timeline
             timeline = channel
             if state.timelineChannelChanged(from: old, to: channel).endsConversation {
                 open(nil)
+            }
+        }
+
+        /// The selection changing, a hop before the timeline follows.
+        mutating func select(_ channel: ChannelID) {
+            selection = channel
+            if isSplit {
+                state.splitSelectionChanged(to: channel)
+            } else {
+                state.compactSelectionChanged(to: channel)
             }
         }
 
@@ -404,6 +411,88 @@ struct SplitPaneStateTests {
         world.open(geoDM)
         world.state.panic(timelineChannel: world.timeline)
         #expect(world.state.conversationGeohash == nil)
+    }
+
+    // MARK: - A geohash on its way
+
+    /// An unfold's re-selection of the parked geohash lands a hop or more
+    /// later: until the timeline shows it the trailing pane holds a
+    /// placeholder rather than mount the picker, first on what the unfold
+    /// selected, then on the selection itself.
+    @Test
+    func anUnfoldsReselectionHoldsThePaneUntilItLands() {
+        var world = World()
+        world.land(.location(geohash))
+        world.state.touched(.leading)
+        world.fold()
+        #expect(world.timeline == .mesh)
+
+        let effects = world.state.unfold(
+            timelineChannel: world.timeline,
+            openPeer: world.openPeer,
+            locationSheetIsUp: false,
+            canReopen: { _ in true }
+        )
+        world.isSplit = true
+        #expect(effects.select == .location(geohash))
+        #expect(world.state.landingChannel == geohash)
+        #expect(world.trailing == .landing(geohash))
+
+        // The selection applies; the timeline is still on its way.
+        world.select(.location(geohash))
+        #expect(world.state.landingChannel == nil)
+        #expect(world.trailing == .landing(geohash))
+
+        let old = world.timeline
+        world.timeline = .location(geohash)
+        _ = world.state.timelineChannelChanged(from: old, to: world.timeline)
+        #expect(world.trailing == .channel(geohash))
+    }
+
+    /// The placeholder never outlives its landing: any timeline change, a
+    /// fold or a panic drops what the unfold had on its way, so a timeline
+    /// that never moved can't leave it holding the pane later.
+    @Test
+    func whatAnUnfoldHadOnItsWayNeverOutlivesIt() {
+        func unfolded() -> World {
+            var world = World()
+            world.land(.location(geohash))
+            world.state.touched(.leading)
+            world.fold()
+            _ = world.state.unfold(
+                timelineChannel: world.timeline,
+                openPeer: nil,
+                locationSheetIsUp: false,
+                canReopen: { _ in true }
+            )
+            world.isSplit = true
+            #expect(world.state.landingChannel == geohash)
+            return world
+        }
+
+        var moved = unfolded()
+        _ = moved.state.timelineChannelChanged(from: .mesh, to: .location(otherGeohash))
+        #expect(moved.state.landingChannel == nil)
+
+        var folded = unfolded()
+        folded.fold()
+        #expect(folded.state.landingChannel == nil)
+
+        var wiped = unfolded()
+        wiped.state.panic(timelineChannel: wiped.timeline)
+        #expect(wiped.state.landingChannel == nil)
+        #expect(wiped.trailing == .picker(returnTo: nil))
+    }
+
+    /// A choice from the idle picker, or a launch with a persisted geohash:
+    /// the selection is ahead of the timeline, and the pane waits on it.
+    @Test
+    func aSelectionAheadOfTheTimelineHoldsThePane() {
+        var world = World()
+        world.select(.location(geohash))
+        #expect(world.trailing == .landing(geohash))
+        world.land(.location(geohash))
+        #expect(world.trailing == .channel(geohash))
     }
 
     // MARK: - While folded (E5)

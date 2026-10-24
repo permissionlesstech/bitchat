@@ -52,30 +52,44 @@ enum TrailingPaneContent: Hashable {
     /// person is browsing away from (its close control returns there); nil
     /// is the idle picker: no location channel is selected.
     case picker(returnTo: GeohashChannel?)
+    /// A geohash selected for the pane that the timeline hasn't landed on
+    /// yet: an unfold re-selecting the parked geohash, a launch with a
+    /// persisted one, a choice still on its way. A neutral placeholder
+    /// holds the pane meanwhile: the picker would mount and ask for a
+    /// location fix for a pane about to show the geohash.
+    case landing(GeohashChannel)
 
     /// - Parameters:
     ///   - conversation: The open DM, if any.
     ///   - channel: The channel the trailing timeline renders: the selected
     ///     location channel, where `.mesh` means none (the idle picker).
+    ///   - selection: The location channel selected for the pane, which
+    ///     runs a hop or more ahead of the timeline.
     ///   - isBrowsing: The person tapped the trailing bar's #geohash badge
     ///     to switch channels.
     static func resolve(
         conversation: PeerID?,
         channel: ChannelID,
+        selection: ChannelID,
         isBrowsing: Bool
     ) -> TrailingPaneContent {
         if let conversation { return .conversation(conversation) }
         guard case .location(let geohash) = channel else {
-            // Nothing to browse away from: browsing without a channel is
-            // the idle picker.
+            // No geohash on screen: one on its way holds the pane;
+            // otherwise the idle picker (browsing without a channel is the
+            // idle picker too).
+            if case .location(let landing) = selection {
+                return .landing(landing)
+            }
             return .picker(returnTo: nil)
         }
         return isBrowsing ? .picker(returnTo: geohash) : .channel(geohash)
     }
 
     /// Whether a screenshot of the pane reveals a place (E10): a geohash
-    /// timeline, or the picker with its nearby cells and bookmarks. A DM
-    /// gets today's DM handling and no location warning.
+    /// timeline, the picker with its nearby cells and bookmarks, or a
+    /// geohash about to show. A DM gets today's DM handling and no location
+    /// warning.
     var showsLocation: Bool {
         if case .conversation = self { return false }
         return true
@@ -96,7 +110,7 @@ enum TrailingPaneContent: Hashable {
             return geohash
         case .conversation:
             return conversationGeohash
-        case .picker:
+        case .picker, .landing:
             return nil
         }
     }
@@ -263,7 +277,7 @@ enum PaneFoldPolicy {
         selectedChannel: ChannelID
     ) -> GeohashChannel? {
         switch trailing {
-        case .channel(let geohash):
+        case .channel(let geohash), .landing(let geohash):
             return geohash
         case .picker(let returnTo):
             return returnTo
@@ -339,6 +353,12 @@ struct SplitPaneState: Equatable {
     /// an unfold), which stays on #mesh and fails closed there as in the
     /// single column, and while folded, where the selection scopes it.
     private(set) var conversationGeohash: GeohashChannel?
+    /// The parked geohash an unfold selected again, until the selection
+    /// says so itself or the trailing timeline lands on a geohash: `select`
+    /// applies a hop after the unfold, and the timeline follows later
+    /// still. The trailing pane holds its placeholder for it meanwhile
+    /// (`TrailingPaneContent.landing`) rather than mount the picker.
+    private(set) var landingChannel: GeohashChannel?
 
     /// What `ContentView` does for an event, besides the state change.
     struct Effects: Equatable {
@@ -381,6 +401,7 @@ struct SplitPaneState: Equatable {
         foldChannel = fold.channel == timelineChannel ? nil : fold.channel
         // The single column scopes a DM by its selection.
         conversationGeohash = nil
+        landingChannel = nil
         if fold.endsConversation {
             conversation = nil
         }
@@ -418,6 +439,7 @@ struct SplitPaneState: Equatable {
         // Always selected, even if it reads as the selection already: a
         // fold's #mesh selection may still be on its way.
         var effects = Effects(select: unfold.reselect.map(ChannelID.location))
+        landingChannel = unfold.reselect
         // The DM in the sheet moves across scoped as the single column had
         // it: a geohash DM over the geohash on screen keeps that geohash,
         // one over #mesh stays there. (A parked DM is never a geohash DM.)
@@ -492,6 +514,15 @@ struct SplitPaneState: Equatable {
         parked = PaneFoldPolicy.parked(parked, afterCompactSelection: channel)
     }
 
+    /// The selection changed in the split layout. Once it names a location
+    /// channel, an unfold's re-selection has been applied (or overtaken):
+    /// the selection itself says what the trailing pane waits for.
+    mutating func splitSelectionChanged(to channel: ChannelID) {
+        if channel.isLocation {
+            landingChannel = nil
+        }
+    }
+
     /// The selection landed in the timeline. Leaving a geohash ends
     /// browsing whatever moved it (a choice in the picker, a link, a panic
     /// wipe), so the picker never stays up for a geohash that is gone, and
@@ -509,6 +540,9 @@ struct SplitPaneState: Equatable {
             isBrowsing = false
         }
         foldChannel = nil
+        // Landed, or overtaken: nothing is on its way any more that the
+        // selection doesn't name.
+        landingChannel = nil
         guard let geohash = conversationGeohash, new != .location(geohash) else { return Effects() }
         conversation = nil
         conversationGeohash = nil
@@ -585,12 +619,33 @@ struct SplitPaneState: Equatable {
         parked = .none
         foldChannel = nil
         conversationGeohash = nil
+        landingChannel = nil
         if !timelineChannel.isLocation {
             isBrowsing = false
         }
     }
 
-    // MARK: Composer targets
+    // MARK: What the panes show
+
+    /// What the trailing pane shows (`TrailingPaneContent.resolve`), with
+    /// what this state holds: browsing, and an unfold's re-selection still
+    /// on its way.
+    /// - Parameters:
+    ///   - openPeer: The open DM, if any.
+    ///   - timelineChannel: The channel the trailing timeline renders.
+    ///   - selection: The selected location channel.
+    func trailingContent(
+        openPeer: PeerID?,
+        timelineChannel: ChannelID,
+        selection: ChannelID
+    ) -> TrailingPaneContent {
+        .resolve(
+            conversation: openPeer,
+            channel: timelineChannel,
+            selection: landingChannel.map(ChannelID.location) ?? selection,
+            isBrowsing: isBrowsing
+        )
+    }
 
     /// The split layout's composer targets: #mesh, and the trailing pane's
     /// conversation (`ComposerTargets.split`). A geohash DM is scoped to the

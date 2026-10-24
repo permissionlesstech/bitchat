@@ -692,10 +692,14 @@ struct ContentView: View {
             }
         }
         .onChange(of: locationChannelsModel.selectedChannel) { _ in
-            guard !isSplitLayout else { return }
             // The selection as it is now: a change reported a render late
             // must not count as a later one.
-            panes.compactSelectionChanged(to: locationChannelsModel.selectedChannel)
+            let selection = locationChannelsModel.selectedChannel
+            if isSplitLayout {
+                changePanes { panes.splitSelectionChanged(to: selection) }
+            } else {
+                panes.compactSelectionChanged(to: selection)
+            }
         }
         // The previous render's content, through the capture list. The
         // backstop to `panesChanged`, as for the composers' targets.
@@ -1119,10 +1123,10 @@ struct ContentView: View {
     /// `trailingContent` with `openPeer` as the open DM, as for
     /// `composerTargets(openPeer:)`.
     private func trailingContent(openPeer: PeerID?) -> TrailingPaneContent {
-        .resolve(
-            conversation: openPeer,
-            channel: timelineChannel,
-            isBrowsing: panes.isBrowsing
+        panes.trailingContent(
+            openPeer: openPeer,
+            timelineChannel: timelineChannel,
+            selection: locationChannelsModel.selectedChannel
         )
     }
 
@@ -1198,10 +1202,10 @@ struct ContentView: View {
     }
 
     /// The trailing pane: the open DM covering the selected geohash, the
-    /// geohash with its own bar, timeline and composer, or the picker. The
-    /// picker keeps one identity between idle and browsing, so ending
-    /// browsing by choosing #mesh neither remounts it nor asks for another
-    /// location fix.
+    /// geohash with its own bar, timeline and composer, the picker, or a
+    /// placeholder while a selected geohash lands. The picker keeps one
+    /// identity between idle and browsing, so ending browsing by choosing
+    /// #mesh neither remounts it nor asks for another location fix.
     private func trailingPane(width: CGFloat, trailingCornerReach: CGFloat) -> some View {
         Group {
             switch trailingContent {
@@ -1235,6 +1239,14 @@ struct ContentView: View {
                         composerView(for: .secondary)
                     }
                 )
+            case .landing:
+                // A geohash on its way: the pane's own background and
+                // nothing to read, rather than a picker mounting (and
+                // asking for a location fix) for a pane about to show it.
+                Color.clear
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .themedSurface()
+                    .accessibilityHidden(true)
             case .picker(let returnTo):
                 LocationChannelsPicker(
                     presentation: .pane(

@@ -26,6 +26,7 @@ struct ContentPanePolicyTests {
                 #expect(TrailingPaneContent.resolve(
                     conversation: meshPeer,
                     channel: channel,
+                    selection: channel,
                     isBrowsing: isBrowsing
                 ) == .conversation(meshPeer))
             }
@@ -37,11 +38,13 @@ struct ContentPanePolicyTests {
         #expect(TrailingPaneContent.resolve(
             conversation: nil,
             channel: .location(geohash),
+            selection: .location(geohash),
             isBrowsing: false
         ) == .channel(geohash))
         #expect(TrailingPaneContent.resolve(
             conversation: nil,
             channel: .location(geohash),
+            selection: .location(geohash),
             isBrowsing: true
         ) == .picker(returnTo: geohash))
     }
@@ -52,9 +55,63 @@ struct ContentPanePolicyTests {
             #expect(TrailingPaneContent.resolve(
                 conversation: nil,
                 channel: .mesh,
+                selection: .mesh,
                 isBrowsing: isBrowsing
             ) == .picker(returnTo: nil))
         }
+    }
+
+    /// A geohash selected but not yet in the timeline (an unfold's
+    /// re-selection, a launch with a persisted geohash, a choice on its
+    /// way) holds the pane instead of the idle picker, which would ask for
+    /// a location fix for a pane about to change. A DM still covers it; a
+    /// geohash on screen, browsed or not, shows as before.
+    @Test
+    func aGeohashOnItsWayHoldsThePaneInsteadOfThePicker() {
+        for isBrowsing in [false, true] {
+            #expect(TrailingPaneContent.resolve(
+                conversation: nil,
+                channel: .mesh,
+                selection: .location(geohash),
+                isBrowsing: isBrowsing
+            ) == .landing(geohash))
+            #expect(TrailingPaneContent.resolve(
+                conversation: geoDM,
+                channel: .mesh,
+                selection: .location(geohash),
+                isBrowsing: isBrowsing
+            ) == .conversation(geoDM))
+        }
+        // Switching geohashes: the one on screen stays until the next lands.
+        #expect(TrailingPaneContent.resolve(
+            conversation: nil,
+            channel: .location(geohash),
+            selection: .location(otherGeohash),
+            isBrowsing: false
+        ) == .channel(geohash))
+        #expect(TrailingPaneContent.resolve(
+            conversation: nil,
+            channel: .location(geohash),
+            selection: .location(otherGeohash),
+            isBrowsing: true
+        ) == .picker(returnTo: geohash))
+
+        // It shows a place, has no composer, and folds and parks as the
+        // geohash it is about to show.
+        #expect(TrailingPaneContent.landing(geohash).showsLocation)
+        #expect(TrailingPaneContent.landing(geohash).composerGeohash(conversationGeohash: nil) == nil)
+        #expect(PaneFoldPolicy.fold(
+            focus: .trailing,
+            trailing: .landing(geohash),
+            selectedChannel: .mesh,
+            openPeer: nil
+        ) == PaneFoldPolicy.Fold(channel: .location(geohash), endsConversation: false, parked: .none))
+        #expect(PaneFoldPolicy.fold(
+            focus: .leading,
+            trailing: .landing(geohash),
+            selectedChannel: .mesh,
+            openPeer: nil
+        ) == PaneFoldPolicy.Fold(channel: .mesh, endsConversation: false, parked: .init(channel: geohash)))
     }
 
     /// E10: a place on screen warns; a DM, geohash DMs included, doesn't.
@@ -224,6 +281,7 @@ struct ContentPanePolicyTests {
                             trailing: TrailingPaneContent.resolve(
                                 conversation: openPeer,
                                 channel: selected,
+                                selection: selected,
                                 isBrowsing: isBrowsing
                             ),
                             selectedChannel: selected,
@@ -426,6 +484,7 @@ struct ContentPanePolicyTests {
             trailing: TrailingPaneContent.resolve(
                 conversation: openPeer,
                 channel: selected,
+                selection: selected,
                 isBrowsing: isBrowsing
             ),
             selectedChannel: selected,
@@ -451,13 +510,19 @@ struct ContentPanePolicyTests {
         let restored = TrailingPaneContent.resolve(
             conversation: restoredPeer,
             channel: restoredChannel,
+            selection: restoredChannel,
             isBrowsing: false
         )
 
         let label = "focus \(focus), selected \(selected), browsing \(isBrowsing), DM \(String(describing: openPeer))"
         #expect(restoredChannel == selected, "\(label)")
         #expect(restoredPeer == openPeer, "\(label)")
-        #expect(restored == TrailingPaneContent.resolve(conversation: openPeer, channel: selected, isBrowsing: false), "\(label)")
+        #expect(restored == TrailingPaneContent.resolve(
+            conversation: openPeer,
+            channel: selected,
+            selection: selected,
+            isBrowsing: false
+        ), "\(label)")
         let compactShowedMesh = compactChannel == .mesh && compactPeer == nil
         #expect(unfold.focus == (compactShowedMesh ? .leading : .trailing), "\(label)")
     }
