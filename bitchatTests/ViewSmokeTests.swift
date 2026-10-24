@@ -660,6 +660,28 @@ private final class SplitContentHost {
         guard let presented = host.presented else { return false }
         return !(presented is UIAlertController) && presented.modalPresentationStyle == .popover
     }
+    /// Where the presented popover's content sits, in window coordinates,
+    /// which way its arrow points, and which ways it was allowed to.
+    var presentedPopover: (frame: CGRect, arrow: UIPopoverArrowDirection, permitted: UIPopoverArrowDirection)? {
+        guard let presented = host.presented, isPresentingPopover,
+              let controller = presented.popoverPresentationController else { return nil }
+        return (
+            presented.view.convert(presented.view.bounds, to: nil),
+            controller.arrowDirection,
+            controller.permittedArrowDirections
+        )
+    }
+    /// The window fits on its screen. This window is wider than an
+    /// iPhone's screen, and UIKit places popovers against the screen, so
+    /// where one lands is only meaningful on a screen as wide as the
+    /// window (the Duo's inner display).
+    var windowFitsScreen: Bool {
+        host.window.bounds.width <= host.window.screen.bounds.width
+    }
+    /// The window region a pane occupies.
+    func paneRegion(_ pane: ContentPane) -> CGRect {
+        Self.region(of: pane)
+    }
     /// The prompts of the text fields in each pane: its composer's names
     /// its conversation; the picker's teleport field reads "geohash".
     var leadingPrompts: [String] { host.placeholders(in: Self.leadingRegion) }
@@ -2114,6 +2136,41 @@ struct ViewSmokeTests {
         try await split.require("the trailing popover") { split.isPresentingPopover }
         split.tap(.popoverCloseButton)
         try await split.require("the popover closed") { !split.isPresenting }
+    }
+
+    /// E13: each pane's people popover may only open under its own bar
+    /// (its arrow up), so it stays in its pane: left to the system, a bar
+    /// at the window's trailing edge can get its popover sideways, across
+    /// the hinge and over the other pane. Where the window fits its
+    /// screen, it also checks where the popover landed.
+    @Test
+    func contentView_eachPeoplePopoverOpensUnderItsBarInsideItsPane() async throws {
+        let split = try await SplitContentHost.make()
+        defer { split.close() }
+        try await split.select(.location(split.geohash))
+        try await split.require("the geohash pane") {
+            split.trailingPrompts.contains { $0.contains("#\(split.geohash.geohash)") }
+        }
+        for pane in [ContentPane.leading, .trailing] {
+            split.tap(.peopleButton(pane))
+            try await split.require("the \(pane) popover") { split.presentedPopover != nil }
+            _ = await split.settleFrames()
+            let popover = try #require(split.presentedPopover, "\(split.diagnostics)")
+            #expect(
+                popover.permitted == .up,
+                "the \(pane) popover may point \(popover.permitted.rawValue), not only up"
+            )
+            if split.windowFitsScreen {
+                let region = split.paneRegion(pane)
+                #expect(popover.arrow == .up, "the \(pane) popover's arrow points \(popover.arrow.rawValue)")
+                #expect(
+                    popover.frame.minX >= region.minX && popover.frame.maxX <= region.maxX,
+                    "the \(pane) popover at \(popover.frame) leaves its pane \(region)"
+                )
+            }
+            split.tap(.popoverCloseButton)
+            try await split.require("the \(pane) popover closed") { !split.isPresenting }
+        }
     }
 
     /// E1: choosing the DM that is already open from the #mesh pane (its

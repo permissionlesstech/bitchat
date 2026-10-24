@@ -349,7 +349,11 @@ private struct ContentPeoplePopoverPresenter: ViewModifier {
     let onClose: () -> Void
 
     func body(content: Content) -> some View {
-        content.popover(isPresented: $isPresented, attachmentAnchor: .rect(.bounds)) {
+        // Only an arrow on the popover's top edge: it opens under its own
+        // bar, inside its pane (its width leaves the pane a margin). Left to
+        // the system, a bar at the window's trailing edge can get its
+        // popover sideways, across the hinge and over the other pane.
+        content.popover(isPresented: $isPresented, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
             ContentPeoplePopoverView(channel: channel, paneWidth: paneWidth, onClose: onClose)
                 .environmentObject(appChromeModel)
                 .environmentObject(privateConversationModel)
