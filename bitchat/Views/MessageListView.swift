@@ -286,7 +286,7 @@ private struct MessageListContent<Timeline: MessageListTimelineModel>: View {
                                         }
                                         if let peerID = message.senderPeerID {
                                             Button("content.actions.direct_message") {
-                                                privateConversationModel.openConversation(for: peerID)
+                                                openConversation(with: peerID)
                                                 withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                                                     showSidebar = true
                                                 }
@@ -402,7 +402,7 @@ private struct MessageListContent<Timeline: MessageListTimelineModel>: View {
 
                 Button("content.actions.direct_message") {
                     if let peerID = selectedMessageSenderID {
-                        privateConversationModel.openConversation(for: peerID)
+                        openConversation(with: peerID)
                         withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                             showSidebar = true
                         }
@@ -549,6 +549,14 @@ private extension MessageListContent {
     func isLandedRow(_ rowID: String) -> Bool {
         guard let landedContextKey = timelineMark?.contextKey else { return false }
         return MessageListScrollPolicy.isRow(rowID, inContext: landedContextKey)
+    }
+
+    /// "Direct message": the sender's DM, opened from this list's own
+    /// conversation, where a refusal (a blocked sender's DM doesn't open)
+    /// lands, never the selection, which can be the other pane's.
+    func openConversation(with peerID: PeerID) {
+        guard let origin = actions?.target else { return }
+        privateConversationModel.openConversation(for: peerID, from: origin)
     }
 
     /// The list's actions: in its own conversation (its DM, or its own

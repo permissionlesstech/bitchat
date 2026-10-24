@@ -1559,15 +1559,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         peerIdentityCoordinator.startPrivateChat(with: peerID)
     }
 
-    #if os(iOS)
-    /// `startPrivateChat(with:)` from a list of `origin`'s people: a refusal
-    /// lands in `origin` rather than the selected channel. On the split
-    /// layout the #mesh people popover sits beside a selected geohash.
+    /// `startPrivateChat(with:)` from a list or a composer showing
+    /// `origin`: a refusal (a blocked peer's DM doesn't open) lands in
+    /// `origin` rather than the selected channel. On the split layout the
+    /// #mesh pane sits beside a selected geohash.
     @MainActor
     func startPrivateChat(with peerID: PeerID, from origin: ConversationTarget) {
         peerIdentityCoordinator.startPrivateChat(with: peerID, from: origin)
     }
-    #endif
 
     @MainActor
     func endPrivateChat() {

@@ -153,12 +153,19 @@ final class PrivateConversationModel: ObservableObject {
         refreshSelectedConversation()
     }
 
-    func openConversation(for peerID: PeerID) {
+    /// Opens the DM with a message's sender, from a message list showing
+    /// `origin`: the list's own conversation (its DM, or its timeline's
+    /// channel). A refusal (a blocked peer's DM doesn't open) lands there,
+    /// not in whatever is selected: on the split layout that can be the
+    /// other pane's conversation. A geohash participant's DM opens as
+    /// before; only the selected geohash's list shows one, and the
+    /// selection is its own.
+    func openConversation(for peerID: PeerID, from origin: ConversationTarget) {
         if peerID.isGeoChat {
             guard let full = chatViewModel.fullNostrHex(forSenderPeerID: peerID) else { return }
             chatViewModel.startGeohashDM(withPubkeyHex: full)
         } else {
-            chatViewModel.startPrivateChat(with: peerID)
+            chatViewModel.startPrivateChat(with: peerID, from: origin)
         }
 
         refreshSelectedConversation()

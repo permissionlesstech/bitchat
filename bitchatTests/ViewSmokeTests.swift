@@ -2508,6 +2508,54 @@ struct ViewSmokeTests {
     }
     #endif
 
+    /// I1: "direct message" in a message list opens the DM from the list's
+    /// own conversation. A blocked sender's refusal lands there: in #mesh
+    /// for the #mesh list beside a selected geohash, never in the geohash;
+    /// in a group chat's own thread for its list, not the public timeline
+    /// under it.
+    @Test
+    func messageList_aDirectMessageRefusalLandsInTheListsOwnConversation() async {
+        let manager = makeSmokeLocationManager()
+        let (viewModel, transport, _) = makeSmokeViewModel(locationManager: manager)
+        let featureModels = makeSmokeFeatureModels(for: viewModel, locationManager: manager)
+        let blocked = PeerID(str: "8182838485868788")
+        transport.peerNicknames[blocked] = "Mallory"
+        transport.updatePeerSnapshots([makeSnapshot(peerID: blocked, nickname: "Mallory", noiseByte: 0x81)])
+        let known = await TestHelpers.waitUntil(
+            { featureModels.peerListModel.meshRows.contains { $0.peerID == blocked } },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(known)
+        featureModels.conversationUIModel.block(peerID: blocked, displayName: "Mallory", from: .mesh)
+        let geohash = ChannelID.location(GeohashChannel(level: .city, geohash: "u4pru"))
+        featureModels.locationChannelsModel.select(geohash)
+        let selected = await TestHelpers.waitUntil(
+            { viewModel.activeChannel == geohash },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(selected)
+        func lines(_ channel: ChannelID) -> [String] {
+            viewModel.conversations.conversationsByID[ConversationID(channelID: channel)]?.messages.map(\.content) ?? []
+        }
+        let meshBefore = lines(.mesh)
+        let geohashBefore = lines(geohash)
+        let conversations = featureModels.privateConversationModel
+
+        conversations.openConversation(for: blocked, from: .mesh)
+
+        #expect(conversations.selectedPeerID == nil)
+        let refusal = lines(.mesh).dropFirst(meshBefore.count)
+        #expect(refusal.count == 1)
+        #expect(refusal.first?.contains("Mallory") == true, "\(Array(refusal))")
+        #expect(lines(geohash) == geohashBefore)
+
+        let group = PeerID(groupID: Data(repeating: 0x42, count: 16))
+        conversations.openConversation(for: blocked, from: ConversationTarget(channel: geohash, privatePeer: group))
+        #expect(viewModel.privateMessages(for: group).contains { $0.content.contains("Mallory") })
+        #expect(lines(geohash) == geohashBefore)
+        #expect(conversations.selectedPeerID == nil)
+    }
+
     @Test
     func contentHeader_rendersTheSingleColumnAndBothPaneBars() async {
         let (viewModel, _, _) = makeSmokeViewModel()
