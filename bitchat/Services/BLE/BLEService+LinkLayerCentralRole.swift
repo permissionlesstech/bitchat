@@ -296,12 +296,8 @@ extension BLEService: CBPeripheralDelegate {
             peripheral.setNotifyValue(true, for: characteristic)
             SecureLogger.debug("🔔 Subscribed to notifications from \(peripheral.name ?? "Unknown")", category: .session)
             
-            // Send announce after subscription is confirmed (force send for new connection)
-            engineScheduler.schedule(after: TransportConfig.blePostSubscribeAnnounceDelaySeconds) { [weak self] in
-                self?.sendAnnounce(forceSend: true)
-                // Try flushing any spooled directed packets now that we have a link
-                self?.flushDirectedSpool()
-            }
+            // Announce once the link can carry it (force send for new connection)
+            scheduleLinkUpAnnounce(after: TransportConfig.blePostSubscribeAnnounceDelaySeconds)
         } else {
             SecureLogger.warning("⚠️ Characteristic does not support notifications", category: .session)
         }

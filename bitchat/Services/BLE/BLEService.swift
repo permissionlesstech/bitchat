@@ -304,6 +304,18 @@ final class BLEService: NSObject {
     /// before it enqueues onto `messageQueue`. Tests use this boundary to
     /// force the quarantine-restore handler to win the dispatch race.
     var _test_beforeHandshakeRecoveryEnqueued: ((PeerID) -> Void)?
+    /// Clock for announce admission. SimulatedMesh points it at each node's
+    /// manual engine clock, so the forced-announce throttle — and with it
+    /// every announce count — follows virtual time, not runner speed.
+    var _test_announceClock: (() -> Date)?
+    /// Leaves initial gossip sync to the test (`_test_requestInitialSyncNow`).
+    /// Production schedules it through a main-actor hop and a wall-clock
+    /// delay, which land at arbitrary points of a virtual-time harness.
+    var _test_suppressAutoInitialSync = false
+    /// Replaces the random relay jitter. With one fixed delay a flood moves
+    /// in hop-count waves, so its reach no longer depends on which copy of
+    /// it wins a race (dense nodes clamp the TTL of the copy they relay).
+    var _test_fixedRelayDelay: TimeInterval?
     #endif
     private var selfBroadcastTracker = BLESelfBroadcastTracker()
     private let meshTopology = MeshTopologyTracker()
@@ -2752,12 +2764,31 @@ final class BLEService: NSObject {
         }
     }
 
+    /// Link-layer bootstrap for a link that just became usable (central: our
+    /// copy of the peer's characteristic is stored; peripheral: the central
+    /// subscribed). Called on bleQueue once the link is registered.
+    func scheduleLinkUpAnnounce(after delay: TimeInterval) {
+        engineScheduler.schedule(after: delay) { [weak self] in
+            self?.sendAnnounce(forceSend: true)
+            // Try flushing any spooled directed packets now that we have a link
+            self?.flushDirectedSpool()
+        }
+    }
+
+    /// Time source for announce admission.
+    private func announceClockNow() -> Date {
+        #if DEBUG
+        if let clock = _test_announceClock { return clock() }
+        #endif
+        return Date()
+    }
+
     private func sendAnnounceNow(forceSend: Bool) {
         // Re-check on the serialized queue: a panic suspend may have started
         // after this announce was scheduled but before it runs.
         guard !isPanicSuspended else { return }
         // Throttle announces to prevent flooding
-        if !announceThrottle.shouldSend(force: forceSend, now: Date()) {
+        if !announceThrottle.shouldSend(force: forceSend, now: announceClockNow()) {
             return
         }
 
@@ -3111,6 +3142,35 @@ extension BLEService {
     /// deterministic settling fence for simulated-mesh pumping.
     func _test_fenceEngine() {
         onEngine {}
+    }
+
+    /// Sends, now, the initial REQUEST_SYNC that `.peerConnected` schedules
+    /// (pairs with `_test_suppressAutoInitialSync`).
+    func _test_requestInitialSyncNow(to peerID: PeerID) {
+        gossipSyncManager?._sendInitialSyncNow(to: peerID)
+    }
+
+    /// Blocks until gossip work submitted so far (store updates, sync
+    /// replies handed back to the engine) has run.
+    func _test_fenceGossip() {
+        gossipSyncManager?._fence()
+    }
+
+    /// Pushes `count` unique IDs through the packet deduplicator — the
+    /// ordinary-traffic churn that evicts its oldest entries.
+    func _test_churnDeduplicator(count: Int) {
+        for index in 0..<count {
+            _ = messageDeduplicator.isDuplicate("test-churn-\(index)-\(UUID().uuidString)")
+        }
+    }
+
+    /// Whether this node's topology holds a fresh path of edges claimed by
+    /// both endpoints to `peerID` — what source routing needs. Refreshes our
+    /// own claim first, as `computeMeshPath` does; the version gate is off
+    /// because harness traffic is all v1.
+    func _test_hasConfirmedRoute(to peerID: PeerID) -> Bool {
+        refreshLocalTopology()
+        return meshTopology.computeRoute(from: myPeerIDData, to: routingData(for: peerID)) != nil
     }
 
     func _test_emitTransportEvent(
@@ -6097,9 +6157,16 @@ extension BLEService {
         messageQueue.async { [weak self] in
             self?.scheduledRelays.schedule(work, messageID: messageID)
         }
-        engineScheduler.schedule(after: Double(decision.delayMs) / 1_000, execute: work)
+        engineScheduler.schedule(after: relayDelay(for: decision), execute: work)
     }
     
+    private func relayDelay(for decision: RelayDecision) -> TimeInterval {
+        #if DEBUG
+        if let fixed = _test_fixedRelayDelay { return fixed }
+        #endif
+        return Double(decision.delayMs) / 1_000
+    }
+
     private func handleAnnounce(_ packet: BitchatPacket, from peerID: PeerID) {
         let result = announceHandler.handle(packet, from: peerID)
 
@@ -6433,6 +6500,15 @@ extension BLEService {
         }
     }
 
+    /// False only under a test harness that sends initial sync itself.
+    private var autoSchedulesInitialSync: Bool {
+        #if DEBUG
+        return !_test_suppressAutoInitialSync
+        #else
+        return true
+        #endif
+    }
+
     /// Builds the announce handler environment. All queue hops stay here so
     /// `BLEAnnounceHandler` remains queue-agnostic and synchronously testable.
     private func makeAnnounceHandlerEnvironment() -> BLEAnnounceHandlerEnvironment {
@@ -6539,7 +6615,7 @@ extension BLEService {
                     if notifyPeerConnected {
                         self.deliverTransportEvent(.peerConnected(peerID))
                     }
-                    if scheduleInitialSync {
+                    if scheduleInitialSync, self.autoSchedulesInitialSync {
                         self.gossipSyncManager?.scheduleInitialSyncToPeer(peerID, delaySeconds: 1.0)
                     }
                     // Get current peer list (after addition)

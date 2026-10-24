@@ -163,11 +163,7 @@ extension BLEService: CBPeripheralManagerDelegate {
         }
 
         // Send announce to the newly subscribed central after a small delay
-        engineScheduler.schedule(after: TransportConfig.blePostAnnounceDelaySeconds) { [weak self] in
-            self?.sendAnnounce(forceSend: true)
-            // Flush any spooled directed packets now that we have a central subscribed
-            self?.flushDirectedSpool()
-        }
+        scheduleLinkUpAnnounce(after: TransportConfig.blePostAnnounceDelaySeconds)
     }
     
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
