@@ -13,45 +13,49 @@ struct CommandSuggestionsView: View {
     @ThemedPalette private var palette
 
     @Binding var messageText: String
+    /// Highlighted row. The composer owns it so the keyboard handler and
+    /// the list agree.
+    var selectedIndex: Int = 0
+    /// Escape hides the panel until the text changes.
+    var isDismissed: Bool = false
 
-    /// The command already typed in full, once arguments have begun.
-    private var typedCommandAlias: String? {
-        guard messageText.hasPrefix("/"),
-              let spaceIndex = messageText.firstIndex(of: " ")
-        else { return nil }
-        return String(messageText[..<spaceIndex]).lowercased()
+    private var availableCommands: [CommandInfo] {
+        let isGeoPublic = locationChannelsModel.selectedChannel.isLocation
+        let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true
+        return CommandInfo.all(isGeoPublic: isGeoPublic, isGeoDM: isGeoDM)
+    }
+
+    private var panel: CommandSuggestionNavigation.Panel? {
+        guard !isDismissed else { return nil }
+        return CommandSuggestionNavigation.panel(
+            typedText: messageText,
+            commands: availableCommands.map {
+                CommandSuggestionNavigation.Command(alias: $0.alias, hasPlaceholder: $0.placeholder != nil)
+            }
+        )
     }
 
     private var filteredCommands: [CommandInfo] {
-        guard messageText.hasPrefix("/") else { return [] }
-        let isGeoPublic = locationChannelsModel.selectedChannel.isLocation
-        let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true
-        let commands = CommandInfo.all(isGeoPublic: isGeoPublic, isGeoDM: isGeoDM)
-        // While arguments are being typed, keep the matched command's usage
-        // row visible instead of vanishing at the first space.
-        if let typed = typedCommandAlias {
-            return commands.filter { $0.alias == typed && $0.placeholder != nil }
-        }
-        return commands.filter { command in
-            command.alias.starts(with: messageText.lowercased())
-        }
+        guard let panel else { return [] }
+        let byAlias = Dictionary(uniqueKeysWithValues: availableCommands.map { ($0.alias, $0) })
+        return panel.aliases.compactMap { byAlias[$0] }
     }
 
     var body: some View {
         // Render nothing when there are no matches: a zero-height view would
         // still receive the composer VStack's spacing and push the input row
         // off-center.
-        if !filteredCommands.isEmpty {
-            let isUsageReminder = typedCommandAlias != nil
+        if let panel, !filteredCommands.isEmpty {
+            let highlighted = CommandSuggestionNavigation.clamped(selectedIndex, count: filteredCommands.count)
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(filteredCommands) { command in
+                ForEach(Array(filteredCommands.enumerated()), id: \.element.id) { index, command in
                     Button {
                         // In usage-reminder mode the row is informational; an
                         // insert here would wipe the arguments being typed.
-                        guard !isUsageReminder else { return }
+                        guard !panel.isUsageReminder else { return }
                         messageText = command.alias + " "
                     } label: {
-                        buttonRow(for: command)
+                        buttonRow(for: command, isSelected: index == highlighted)
                     }
                     .buttonStyle(.plain)
                 }
@@ -59,8 +63,8 @@ struct CommandSuggestionsView: View {
             .themedOverlayPanel()
         }
     }
-    
-    private func buttonRow(for command: CommandInfo) -> some View {
+
+    private func buttonRow(for command: CommandInfo, isSelected: Bool) -> some View {
         HStack {
             Text(command.alias)
                 .bitchatFont(size: 11)
@@ -82,6 +86,7 @@ struct CommandSuggestionsView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 3)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background(isSelected ? palette.secondary.opacity(0.15) : Color.clear)
     }
 }
 
