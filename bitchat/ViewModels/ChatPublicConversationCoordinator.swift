@@ -311,10 +311,6 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
         context.notifyUIChanged()
     }
 
-    func clearCurrentPublicTimeline() {
-        clearPublicTimeline(context.activeChannel)
-    }
-
     /// Empties `channel`'s timeline, selected or not.
     func clearPublicTimeline(_ channel: ChannelID) {
         context.clearPublicConversation(ConversationID(channelID: channel))
@@ -431,10 +427,6 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
         } else {
             context.queueGeohashSystemMessage(content)
         }
-    }
-
-    func sendPublicRaw(_ content: String) {
-        sendPublicRaw(content, to: context.activeChannel)
     }
 
     /// Sends `content` to `channel` with no local echo (emotes add their own

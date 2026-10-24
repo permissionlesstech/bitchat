@@ -21,7 +21,6 @@ protocol ChatPrivateConversationContext: AnyObject {
     var sentReadReceipts: Set<String> { get }
     var selectedPrivateChatPeer: PeerID? { get }
     var nickname: String { get }
-    var activeChannel: ChannelID { get }
     var nostrKeyMapping: [PeerID: String] { get }
 
     // MARK: Conversation store intents
@@ -315,10 +314,6 @@ final class ChatPrivateConversationCoordinator {
         return targetPeerID
     }
 
-    func sendPrivateMessage(_ content: String, to peerID: PeerID) {
-        sendPrivateMessage(content, to: peerID, scope: context.activeChannel)
-    }
-
     /// `scope` is the channel the conversation lives in; only a geohash DM
     /// uses it, to sign with that geohash's identity.
     func sendPrivateMessage(_ content: String, to peerID: PeerID, scope: ChannelID) {
@@ -397,10 +392,6 @@ final class ChatPrivateConversationCoordinator {
         // Otherwise the message stays "sending"; router callbacks move it to
         // carried (📦) when a courier/bridge copy ships, delivered/read on
         // acks, or failed when the outbox TTL expires.
-    }
-
-    func sendGeohashDM(_ content: String, to peerID: PeerID) {
-        sendGeohashDM(content, to: peerID, scope: context.activeChannel)
     }
 
     /// Signs with `scope`'s geohash identity: the one this DM was started

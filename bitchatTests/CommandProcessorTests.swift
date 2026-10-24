@@ -10,7 +10,7 @@ struct CommandProcessorTests {
     @Test func slapNotFoundGrammar() {
         let identityManager = MockIdentityManager(MockKeychain())
         let processor = CommandProcessor(contextProvider: nil, meshService: nil, identityManager: identityManager)
-        let result = processor.process("/slap @system")
+        let result = processor.process("/slap @system", in: .mesh)
         switch result {
         case .error(let message):
             #expect(message == "cannot slap system: not found")
@@ -23,7 +23,7 @@ struct CommandProcessorTests {
     @Test func hugNotFoundGrammar() {
         let identityManager = MockIdentityManager(MockKeychain())
         let processor = CommandProcessor(contextProvider: nil, meshService: nil, identityManager: identityManager)
-        let result = processor.process("/hug @system")
+        let result = processor.process("/hug @system", in: .mesh)
         switch result {
         case .error(let message):
             #expect(message == "cannot hug system: not found")
@@ -36,7 +36,7 @@ struct CommandProcessorTests {
     @Test func slapUsageMessage() {
         let identityManager = MockIdentityManager(MockKeychain())
         let processor = CommandProcessor(contextProvider: nil, meshService: nil, identityManager: identityManager)
-        let result = processor.process("/slap")
+        let result = processor.process("/slap", in: .mesh)
         switch result {
         case .error(let message):
             #expect(message == "usage: /slap <nickname>")
@@ -54,7 +54,7 @@ struct CommandProcessorTests {
         let processor = CommandProcessor(contextProvider: context, meshService: nil, identityManager: identityManager)
 
         let result = await withSelectedChannel(.mesh, context: context) {
-            processor.process("/msg @alice hello there")
+            processor.process("/msg @alice hello there", in: context.selectionTarget)
         }
 
         switch result {
@@ -81,7 +81,7 @@ struct CommandProcessorTests {
         let processor = CommandProcessor(contextProvider: context, meshService: transport, identityManager: identityManager)
 
         let result = await withSelectedChannel(.mesh, context: context) {
-            processor.process("/who")
+            processor.process("/who", in: context.selectionTarget)
         }
 
         switch result {
@@ -107,7 +107,7 @@ struct CommandProcessorTests {
         let channel = ChannelID.location(GeohashChannel(level: .city, geohash: geohash))
 
         let result = await withSelectedChannel(channel, context: context) {
-            processor.process("/who")
+            processor.process("/who", in: context.selectionTarget)
         }
 
         switch result {
@@ -132,7 +132,7 @@ struct CommandProcessorTests {
         let processor = CommandProcessor(contextProvider: context, meshService: nil, identityManager: identityManager)
 
         let result = await withSelectedChannel(.mesh, context: context) {
-            processor.process("/clear")
+            processor.process("/clear", in: context.selectionTarget)
         }
 
         switch result {
@@ -152,7 +152,7 @@ struct CommandProcessorTests {
         let processor = CommandProcessor(contextProvider: context, meshService: nil, identityManager: identityManager)
 
         let result = await withSelectedChannel(.mesh, context: context) {
-            processor.process("/clear")
+            processor.process("/clear", in: context.selectionTarget)
         }
 
         switch result {
@@ -176,7 +176,7 @@ struct CommandProcessorTests {
         let processor = CommandProcessor(contextProvider: context, meshService: transport, identityManager: identityManager)
 
         let result = await withSelectedChannel(.mesh, context: context) {
-            processor.process("/hug @bob")
+            processor.process("/hug @bob", in: context.selectionTarget)
         }
 
         switch result {
@@ -200,7 +200,7 @@ struct CommandProcessorTests {
         let processor = CommandProcessor(contextProvider: context, meshService: MockTransport(), identityManager: identityManager)
 
         let result = await withSelectedChannel(.mesh, context: context) {
-            processor.process("/slap @bob")
+            processor.process("/slap @bob", in: context.selectionTarget)
         }
 
         switch result {
@@ -229,7 +229,7 @@ struct CommandProcessorTests {
         let processor = CommandProcessor(contextProvider: context, meshService: transport, identityManager: identityManager)
 
         let result = await withSelectedChannel(.mesh, context: context) {
-            processor.process("/block")
+            processor.process("/block", in: context.selectionTarget)
         }
 
         switch result {
@@ -251,7 +251,7 @@ struct CommandProcessorTests {
         let processor = CommandProcessor(contextProvider: context, meshService: transport, identityManager: identityManager)
 
         let blockResult = await withSelectedChannel(.mesh, context: context) {
-            processor.process("/block @bob")
+            processor.process("/block @bob", in: context.selectionTarget)
         }
         switch blockResult {
         case .success(let message):
@@ -264,7 +264,7 @@ struct CommandProcessorTests {
         #expect(identityManager.isBlocked(fingerprint: "fp-bob"))
 
         let unblockResult = await withSelectedChannel(.mesh, context: context) {
-            processor.process("/unblock bob")
+            processor.process("/unblock bob", in: context.selectionTarget)
         }
         switch unblockResult {
         case .success(let message):
@@ -283,7 +283,7 @@ struct CommandProcessorTests {
         let processor = CommandProcessor(contextProvider: context, meshService: MockTransport(), identityManager: identityManager)
 
         let blockResult = await withSelectedChannel(.mesh, context: context) {
-            processor.process("/block carol")
+            processor.process("/block carol", in: context.selectionTarget)
         }
         switch blockResult {
         case .success(let message):
@@ -296,7 +296,7 @@ struct CommandProcessorTests {
         #expect(context.geohashBlockListChangeCount == 1)
 
         let unblockResult = await withSelectedChannel(.mesh, context: context) {
-            processor.process("/unblock @carol")
+            processor.process("/unblock @carol", in: context.selectionTarget)
         }
         switch unblockResult {
         case .success(let message):
@@ -324,7 +324,7 @@ struct CommandProcessorTests {
         context.nicknameToPeerID["alice"] = peerID
 
         let result = await withSelectedChannel(.mesh, context: context) {
-            processor.process("/fav alice")
+            processor.process("/fav alice", in: context.selectionTarget)
         }
 
         switch result {
@@ -340,7 +340,7 @@ struct CommandProcessorTests {
 
         // Unfavoriting someone who is not a favorite is a no-op.
         let unfavResult = await withSelectedChannel(.mesh, context: context) {
-            processor.process("/unfav alice")
+            processor.process("/unfav alice", in: context.selectionTarget)
         }
         switch unfavResult {
         case .success(let message):
@@ -363,7 +363,7 @@ struct CommandProcessorTests {
         let channel = ChannelID.location(GeohashChannel(level: .city, geohash: "u4pruy"))
 
         let result = await withSelectedChannel(channel, context: context) {
-            processor.process("/fav alice")
+            processor.process("/fav alice", in: context.selectionTarget)
         }
 
         switch result {
@@ -379,7 +379,7 @@ struct CommandProcessorTests {
     @MainActor
     @Test func payWithoutArgumentsPrintsUsage() {
         let processor = makePayProcessor(context: MockScopedCommandContext())
-        switch processor.process("/pay") {
+        switch processor.process("/pay", in: .mesh) {
         case .success(let message):
             #expect(message?.contains("usage: /pay") == true)
         default:
@@ -392,7 +392,7 @@ struct CommandProcessorTests {
         let context = MockScopedCommandContext()
         let processor = makePayProcessor(context: context)
         for bad in ["/pay nonsense", "/pay cashuAshort", "/pay cashuA!!!!!!!!!!!!!!!!"] {
-            switch processor.process(bad) {
+            switch processor.process(bad, in: context.selectionTarget) {
             case .error:
                 break
             default:
@@ -411,7 +411,7 @@ struct CommandProcessorTests {
         let processor = makePayProcessor(context: context)
 
         // cashu: URI form must be normalized to the bare token before sending
-        switch processor.process("/pay cashu:\(Self.validV3Token)") {
+        switch processor.process("/pay cashu:\(Self.validV3Token)", in: context.selectionTarget) {
         case .success(let message):
             #expect(message?.contains("21 sat") == true)
         default:
@@ -428,7 +428,7 @@ struct CommandProcessorTests {
         let context = MockScopedCommandContext()
         let processor = makePayProcessor(context: context)
 
-        switch processor.process("/pay \(Self.validV3Token)") {
+        switch processor.process("/pay \(Self.validV3Token)", in: context.selectionTarget) {
         case .error(let message):
             #expect(message.contains("public") == true)
         default:
@@ -436,7 +436,7 @@ struct CommandProcessorTests {
         }
         #expect(context.sentPublicMessages.isEmpty)
 
-        switch processor.process("/pay \(Self.validV3Token) public") {
+        switch processor.process("/pay \(Self.validV3Token) public", in: context.selectionTarget) {
         case .success:
             break
         default:
@@ -457,7 +457,7 @@ struct CommandProcessorTests {
         let truncatedV4 = String(Self.validV4Token.prefix(Self.validV4Token.count - 12))
         let junkV4 = "cashuB" + String(repeating: "Q", count: 40)
         for bad in ["/pay \(truncatedV4)", "/pay \(junkV4)"] {
-            switch processor.process(bad) {
+            switch processor.process(bad, in: context.selectionTarget) {
             case .error(let message):
                 #expect(message.contains("invalid cashu token") == true)
             default:
@@ -475,7 +475,7 @@ struct CommandProcessorTests {
         context.selectedPrivateChatPeer = peerID
         let processor = makePayProcessor(context: context)
 
-        switch processor.process("/pay \(Self.validV4Token)") {
+        switch processor.process("/pay \(Self.validV4Token)", in: context.selectionTarget) {
         case .success(let message):
             #expect(message?.contains("21 sat") == true)
         default:

@@ -32,9 +32,6 @@ struct CommandGeoParticipant {
 protocol CommandContextProvider: AnyObject {
     // MARK: - State Properties
     var nickname: String { get }
-    /// The selection, read only by `process(_:)` to build its scope.
-    var activeChannel: ChannelID { get }
-    var selectedPrivateChatPeer: PeerID? { get }
     var blockedUsers: Set<String> { get }
     var idBridge: NostrIdentityBridge { get }
 
@@ -109,16 +106,6 @@ final class CommandProcessor {
         self.identityManager = identityManager
     }
     
-    /// Process a command typed into whatever is selected: the
-    /// single-composer form.
-    @MainActor
-    func process(_ command: String) -> CommandResult {
-        process(command, in: ConversationTarget(
-            channel: contextProvider?.activeChannel ?? .mesh,
-            privatePeer: contextProvider?.selectedPrivateChatPeer
-        ))
-    }
-
     /// Process a command typed into `scope`. Everything the command acts on
     /// comes from the scope, never from the selection: whose names resolve,
     /// which timeline it clears or posts to, which DM or group it acts in,

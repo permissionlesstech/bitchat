@@ -115,6 +115,14 @@ private final class MockChatOutgoingContext: ChatOutgoingContext {
     }
 }
 
+private extension MockChatOutgoingContext {
+    /// What a single composer sends to: the open DM, else the selected
+    /// channel, read when the person sends.
+    var selectionTarget: ConversationTarget {
+        ConversationTarget(channel: activeChannel, privatePeer: selectedPrivateChatPeer)
+    }
+}
+
 // MARK: - Helpers
 
 /// Lets the coordinator's internal `Task { @MainActor … }` hops run.
@@ -134,8 +142,8 @@ struct ChatOutgoingCoordinatorContextTests {
         let context = MockChatOutgoingContext()
         let coordinator = ChatOutgoingCoordinator(context: context)
 
-        coordinator.sendMessage("   ")
-        coordinator.sendMessage("/who all")
+        coordinator.sendMessage("   ", to: context.selectionTarget)
+        coordinator.sendMessage("/who all", to: context.selectionTarget)
         await drainMainActorTasks()
 
         #expect(context.handledCommands == ["/who all"])
@@ -153,14 +161,14 @@ struct ChatOutgoingCoordinatorContextTests {
         // The selected peer is refreshed (short → stable) before sending.
         context.selectedPrivateChatPeer = shortPeer
         context.selectedPeerAfterUpdate = stablePeer
-        coordinator.sendMessage("hi there")
+        coordinator.sendMessage("hi there", to: context.selectionTarget)
         #expect(context.updatePrivateChatPeerIfNeededCount == 1)
         #expect(context.sentPrivateMessages.map(\.peerID) == [stablePeer])
         #expect(context.sentPrivateMessages.map(\.content) == ["hi there"])
 
         // If the refresh clears the selection, nothing is sent.
         context.selectedPeerAfterUpdate = PeerID??.some(nil)
-        coordinator.sendMessage("dropped")
+        coordinator.sendMessage("dropped", to: context.selectionTarget)
         await drainMainActorTasks()
         #expect(context.sentPrivateMessages.count == 1)
         #expect(context.appendedPublicMessages.isEmpty)
@@ -171,7 +179,7 @@ struct ChatOutgoingCoordinatorContextTests {
         let context = MockChatOutgoingContext()
         let coordinator = ChatOutgoingCoordinator(context: context)
 
-        coordinator.sendMessage("  hello @bob  ")
+        coordinator.sendMessage("  hello @bob  ", to: context.selectionTarget)
         await drainMainActorTasks()
 
         // Local echo uses the trimmed content, own nickname/peer ID, mentions.
@@ -203,7 +211,7 @@ struct ChatOutgoingCoordinatorContextTests {
         context.activeChannel = .location(channel)
         context.isTeleported = true
 
-        coordinator.sendMessage("hello geo")
+        coordinator.sendMessage("hello geo", to: context.selectionTarget)
         // Geohash sends mine a NIP-13 nonce tag off-main before echoing and
         // sending; await the send task, then drain the main queue.
         await coordinator.geohashMiningTask?.value
@@ -226,7 +234,7 @@ struct ChatOutgoingCoordinatorContextTests {
 
         // Identity derivation failure: system message, no echo, no send.
         context.deriveNostrIdentityError = MockChatOutgoingContext.IdentityUnavailable()
-        coordinator.sendMessage("doomed")
+        coordinator.sendMessage("doomed", to: context.selectionTarget)
         await drainMainActorTasks()
         #expect(context.systemMessages.count == 1)
         #expect(context.appendedPublicMessages.count == 1)
@@ -249,8 +257,8 @@ struct ChatOutgoingCoordinatorContextTests {
         // visible order must always match the send order.
         let first = "first " + String(repeating: "x", count: 4000)
         let second = "second"
-        coordinator.sendMessage(first)
-        coordinator.sendMessage(second)
+        coordinator.sendMessage(first, to: context.selectionTarget)
+        coordinator.sendMessage(second, to: context.selectionTarget)
 
         // The stored task is the second send, which awaits the first.
         await coordinator.geohashMiningTask?.value
@@ -273,12 +281,12 @@ struct ChatOutgoingCoordinatorContextTests {
         let context = MockChatOutgoingContext()
         let coordinator = ChatOutgoingCoordinator(context: context)
 
-        coordinator.sendMessage("gm")
+        coordinator.sendMessage("gm", to: context.selectionTarget)
         await drainMainActorTasks()
         #expect(context.contentKeyScopes == [.mesh])
 
         context.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pruydq"))
-        coordinator.sendMessage("gm")
+        coordinator.sendMessage("gm", to: context.selectionTarget)
         await coordinator.geohashMiningTask?.value
         await drainMainActorTasks()
         #expect(context.contentKeyScopes == [.mesh, .geohash("u4pruydq")])

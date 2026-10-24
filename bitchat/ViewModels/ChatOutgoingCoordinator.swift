@@ -131,15 +131,6 @@ final class ChatOutgoingCoordinator {
         geohashMiningTask?.cancel()
     }
 
-    /// Sends to whatever is selected now: the single-composer form, kept
-    /// for callers that have no target of their own.
-    func sendMessage(_ content: String) {
-        sendMessage(content, to: ConversationTarget(
-            channel: context.activeChannel,
-            privatePeer: context.selectedPrivateChatPeer
-        ))
-    }
-
     /// Sends to `target`, captured when the person committed to the send.
     /// The selection never picks the destination: a command runs in the
     /// target, a DM goes to the target's peer, a public message to the

@@ -14,10 +14,10 @@ import Foundation
 ///
 /// The selection (the store's active channel plus the open DM) says what the
 /// screen shows. A target says where an action lands, captured when the
-/// person commits to it. On a one-pane screen the two agree, and
-/// `ChatViewModel.selectionTarget` is the selection as a target. With two
-/// composers on screen each holds its own target, so nothing on the send
-/// path has to read the selection to pick a destination.
+/// person commits to it. On a one-pane screen the two agree; with two
+/// composers on screen each holds its own target. Either way nothing on the
+/// send path reads the selection to pick a destination: there is no send
+/// without a target.
 struct ConversationTarget: Hashable {
     /// The channel for a public target. For a private one, the scope the
     /// conversation lives in: the channel whose identity signs a geohash DM,

@@ -1293,23 +1293,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
     // MARK: - Message Sending
 
-    /// The selection as a send target: the open DM (in the selected
-    /// channel's scope), or the selected channel's timeline. What every
-    /// target-less API sends to.
-    @MainActor
-    var selectionTarget: ConversationTarget {
-        ConversationTarget(channel: activeChannel, privatePeer: selectedPrivateChatPeer)
-    }
-
-    /// Sends a message through the BitChat network to whatever is selected.
-    /// - Parameter content: The message content to send
-    /// - Note: Automatically handles command processing if content starts with '/'
-    ///         Routes to private chat if one is selected, otherwise broadcasts
-    @MainActor
-    func sendMessage(_ content: String) {
-        sendMessage(content, to: selectionTarget)
-    }
-
     /// Sends a message, or runs a command, in `target`: the conversation the
     /// person typed into, captured when they sent. The selection is not
     /// consulted, so a composer beside another conversation can't send there.
@@ -1995,12 +1978,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         messageFormatter.colorForMeshPeer(id: peerID, isDark: isDark)
     }
 
-    // Clear the current public channel's timeline (visible + persistent buffer)
-    @MainActor
-    func clearCurrentPublicTimeline() {
-        clearPublicTimeline(activeChannel)
-    }
-
     /// Clears one channel's timeline, selected or not (`/clear` typed in it).
     @MainActor
     func clearPublicTimeline(_ channel: ChannelID) {
@@ -2059,15 +2036,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     // MARK: - BitchatDelegate Methods
 
     // MARK: - Command Handling
-
-    /// Processes IRC-style commands starting with '/', typed into whatever
-    /// is selected: the single-composer form.
-    /// - Parameter command: The full command string including the leading slash
-    /// - Note: Supports commands like /msg, /who, /slap, /clear, /help
-    @MainActor
-    func handleCommand(_ command: String) {
-        handleCommand(command, from: selectionTarget)
-    }
 
     /// Runs a command typed into `origin`. It acts on that conversation (its
     /// channel's people, its DM, its group) whatever else is selected, and

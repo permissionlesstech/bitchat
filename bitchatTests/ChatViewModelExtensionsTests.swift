@@ -51,7 +51,7 @@ struct ChatViewModelPrivateChatExtensionTests {
         transport.connectedPeers.insert(peerID)
         transport.peerNicknames[peerID] = "MeshUser"
         
-        viewModel.sendPrivateMessage("Hello Mesh", to: peerID)
+        viewModel.sendPrivateMessage("Hello Mesh", to: peerID, scope: viewModel.activeChannel)
         
         // Verify transport was called
         // Note: MockTransport stores sent messages
@@ -80,7 +80,7 @@ struct ChatViewModelPrivateChatExtensionTests {
         let validHex = "0102030405060708090a0b0c0d0e0f100102030405060708090a0b0c0d0e0f10"
         let peerID = PeerID(str: validHex)
 
-        viewModel.sendPrivateMessage("Hello", to: peerID)
+        viewModel.sendPrivateMessage("Hello", to: peerID, scope: viewModel.activeChannel)
 
         #expect(viewModel.privateChats[peerID]?.count == 1)
         #expect(viewModel.privateChats[peerID]?.last?.deliveryStatus == .sending)

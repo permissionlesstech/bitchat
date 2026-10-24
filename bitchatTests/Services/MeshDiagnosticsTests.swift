@@ -45,7 +45,7 @@ struct MeshDiagnosticsTests {
     @Test func pingWithoutArgumentShowsUsage() {
         let context = MockScopedCommandContext()
         let processor = makeProcessor(context: context, transport: MockTransport())
-        let result = processor.process("/ping")
+        let result = processor.process("/ping", in: context.selectionTarget)
         switch result {
         case .error(let message):
             #expect(message == "usage: /ping <nickname>")
@@ -58,7 +58,7 @@ struct MeshDiagnosticsTests {
     @Test func pingUnknownPeerFails() {
         let context = MockScopedCommandContext()
         let processor = makeProcessor(context: context, transport: MockTransport())
-        let result = processor.process("/ping @ghost")
+        let result = processor.process("/ping @ghost", in: context.selectionTarget)
         switch result {
         case .error(let message):
             #expect(message == "cannot ping ghost: not found on mesh")
@@ -72,7 +72,7 @@ struct MeshDiagnosticsTests {
         let context = MockScopedCommandContext()
         context.nicknameToPeerID["alice"] = PeerID(nostr_: "aabbccddeeff00112233445566778899")
         let processor = makeProcessor(context: context, transport: MockTransport())
-        let result = processor.process("/ping @alice")
+        let result = processor.process("/ping @alice", in: context.selectionTarget)
         switch result {
         case .error(let message):
             #expect(message == "cannot ping alice: not found on mesh")
@@ -90,7 +90,7 @@ struct MeshDiagnosticsTests {
         transport.meshPingResult = MeshPingResult(rttMs: 42, hops: 2)
         let processor = makeProcessor(context: context, transport: transport)
 
-        let result = processor.process("/ping @alice")
+        let result = processor.process("/ping @alice", in: context.selectionTarget)
         switch result {
         case .success(let message):
             #expect(message == "pinging alice…")
@@ -111,7 +111,7 @@ struct MeshDiagnosticsTests {
         transport.meshPingResult = MeshPingResult(rttMs: 8, hops: 1)
         let processor = makeProcessor(context: context, transport: transport)
 
-        _ = processor.process("/ping alice")
+        _ = processor.process("/ping alice", in: context.selectionTarget)
         await waitForCommandOutput(context)
         #expect(context.commandOutputs == ["pong from alice: 8 ms · direct (1 hop)"])
     }
@@ -124,7 +124,7 @@ struct MeshDiagnosticsTests {
         transport.meshPingResult = nil
         let processor = makeProcessor(context: context, transport: transport)
 
-        _ = processor.process("/ping @alice")
+        _ = processor.process("/ping @alice", in: context.selectionTarget)
         await waitForCommandOutput(context)
         #expect(context.commandOutputs == ["no reply from alice"])
     }
@@ -143,7 +143,7 @@ struct MeshDiagnosticsTests {
         // result lands. The output must follow the origin conversation, not
         // whatever is selected at callback time.
         context.selectedPrivateChatPeer = bob
-        _ = processor.process("/ping @alice")
+        _ = processor.process("/ping @alice", in: context.selectionTarget)
         context.selectedPrivateChatPeer = nil
 
         await waitForCommandOutput(context)
@@ -159,7 +159,7 @@ struct MeshDiagnosticsTests {
         transport.meshPingResult = MeshPingResult(rttMs: 7, hops: 1)
         let processor = makeProcessor(context: context, transport: transport)
 
-        _ = processor.process("/ping @alice")
+        _ = processor.process("/ping @alice", in: context.selectionTarget)
         // Opening a DM afterwards must not swallow the public-timeline result.
         context.selectedPrivateChatPeer = alice
 
@@ -178,7 +178,7 @@ struct MeshDiagnosticsTests {
         transport.meshPaths[bob] = []
         let processor = makeProcessor(context: context, transport: transport)
 
-        let result = processor.process("/trace @bob")
+        let result = processor.process("/trace @bob", in: context.selectionTarget)
         switch result {
         case .success(let message):
             #expect(message == "estimated path: you → bob (1 hop)")
@@ -199,7 +199,7 @@ struct MeshDiagnosticsTests {
         transport.meshPaths[bob] = [alice, unknown]
         let processor = makeProcessor(context: context, transport: transport)
 
-        let result = processor.process("/trace bob")
+        let result = processor.process("/trace bob", in: context.selectionTarget)
         switch result {
         case .success(let message):
             #expect(message == "estimated path: you → alice → dead00be… → bob (3 hops)")
@@ -214,7 +214,7 @@ struct MeshDiagnosticsTests {
         context.nicknameToPeerID["bob"] = PeerID(str: "b0b0b0b0b0b0b0b0")
         let processor = makeProcessor(context: context, transport: MockTransport())
 
-        let result = processor.process("/trace @bob")
+        let result = processor.process("/trace @bob", in: context.selectionTarget)
         switch result {
         case .success(let message):
             #expect(message == "no known path to bob")

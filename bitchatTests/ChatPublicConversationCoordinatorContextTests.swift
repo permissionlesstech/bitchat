@@ -563,7 +563,7 @@ struct ChatPublicConversationCoordinatorContextTests {
         let coordinator = ChatPublicConversationCoordinator(context: context)
         context.activeChannel = .mesh
 
-        coordinator.clearCurrentPublicTimeline()
+        coordinator.clearPublicTimeline(context.activeChannel)
 
         #expect(context.clearedConversations == [.mesh])
         #expect(context.archivePurgeCount == 1)
@@ -577,7 +577,7 @@ struct ChatPublicConversationCoordinatorContextTests {
         let coordinator = ChatPublicConversationCoordinator(context: context)
         context.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pruy"))
 
-        coordinator.clearCurrentPublicTimeline()
+        coordinator.clearPublicTimeline(context.activeChannel)
 
         #expect(context.archivePurgeCount == 0)
     }
@@ -594,7 +594,7 @@ struct ChatPublicConversationCoordinatorContextTests {
         let geohash = ChannelID.location(GeohashChannel(level: .city, geohash: "u4pruy"))
 
         context.activeChannel = geohash
-        coordinator.clearCurrentPublicTimeline()
+        coordinator.clearPublicTimeline(context.activeChannel)
         context.activeChannel = .mesh
         coordinator.clearPublicTimeline(geohash)
 
@@ -708,7 +708,7 @@ struct ChatPublicConversationCoordinatorContextTests {
         let context = MockChatPublicConversationContext()
         let coordinator = ChatPublicConversationCoordinator(context: context)
 
-        coordinator.sendPublicRaw("raw mesh payload")
+        coordinator.sendPublicRaw("raw mesh payload", to: context.activeChannel)
 
         #expect(context.sentMeshMessages.count == 1)
         #expect(context.sentMeshMessages.first?.content == "raw mesh payload")

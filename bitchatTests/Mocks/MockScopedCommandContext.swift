@@ -18,7 +18,9 @@ import BitFoundation
 @MainActor
 final class MockScopedCommandContext: CommandContextProvider {
     var nickname: String
-    /// The selection. A scoped command must never read it.
+    /// The selection: no `CommandContextProvider` requirement, so a command
+    /// can't read it. Tests that type where a single composer would build
+    /// the scope from it (`selectionTarget`).
     var activeChannel: ChannelID = .mesh
     var selectedPrivateChatPeer: PeerID?
     var blockedUsers: Set<String> = []
@@ -67,6 +69,12 @@ final class MockScopedCommandContext: CommandContextProvider {
     init(nickname: String = "me", idBridge: NostrIdentityBridge = NostrIdentityBridge(keychain: MockKeychain())) {
         self.nickname = nickname
         self.idBridge = idBridge
+    }
+
+    /// What a command typed into the selection runs in: the open DM, else
+    /// the selected channel.
+    var selectionTarget: ConversationTarget {
+        ConversationTarget(channel: activeChannel, privatePeer: selectedPrivateChatPeer)
     }
 
     func getPeerIDForNickname(_ nickname: String, in scope: ChannelID) -> PeerID? {

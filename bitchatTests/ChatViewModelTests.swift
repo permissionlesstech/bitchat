@@ -223,7 +223,7 @@ struct ChatViewModelSendingTests {
     func sendMessage_delegatesToTransport() async {
         let (viewModel, transport) = makeTestableViewModel()
 
-        viewModel.sendMessage("Hello World")
+        viewModel.sendMessage("Hello World", to: viewModel.selectionTarget)
 
         #expect(transport.sentMessages.count == 1)
         #expect(transport.sentMessages.first?.content == "Hello World")
@@ -233,9 +233,9 @@ struct ChatViewModelSendingTests {
     func sendMessage_emptyContent_ignored() async {
         let (viewModel, transport) = makeTestableViewModel()
 
-        viewModel.sendMessage("")
-        viewModel.sendMessage("   ")
-        viewModel.sendMessage("\n\t")
+        viewModel.sendMessage("", to: viewModel.selectionTarget)
+        viewModel.sendMessage("   ", to: viewModel.selectionTarget)
+        viewModel.sendMessage("\n\t", to: viewModel.selectionTarget)
 
         #expect(transport.sentMessages.isEmpty)
     }
@@ -244,7 +244,7 @@ struct ChatViewModelSendingTests {
     func sendMessage_withMentions_sendsContent() async {
         let (viewModel, transport) = makeTestableViewModel()
 
-        viewModel.sendMessage("Hello @alice")
+        viewModel.sendMessage("Hello @alice", to: viewModel.selectionTarget)
 
         #expect(transport.sentMessages.count == 1)
         #expect(transport.sentMessages.first?.content == "Hello @alice")
@@ -254,7 +254,7 @@ struct ChatViewModelSendingTests {
     func sendMessage_command_notSentToTransport() async {
         let (viewModel, transport) = makeTestableViewModel()
 
-        viewModel.sendMessage("/help")
+        viewModel.sendMessage("/help", to: viewModel.selectionTarget)
 
         // Commands are processed locally, not sent to transport
         #expect(transport.sentMessages.isEmpty)
@@ -272,7 +272,7 @@ struct ChatViewModelCommandTests {
 
         for command in commands {
             transport.resetRecordings()
-            viewModel.sendMessage(command)
+            viewModel.sendMessage(command, to: viewModel.selectionTarget)
             try? await Task.sleep(nanoseconds: 100_000_000)
 
             #expect(transport.sentMessages.isEmpty)
@@ -287,7 +287,7 @@ struct ChatViewModelCommandTests {
         transport.simulateConnect(peerID, nickname: "Alice")
         viewModel.selectedPrivateChatPeer = peerID
 
-        viewModel.handleCommand("/help")
+        viewModel.handleCommand("/help", from: viewModel.selectionTarget)
 
         #expect(viewModel.privateChats[peerID]?.last?.content == CommandProcessor.helpText)
         #expect(!viewModel.messages.contains { $0.content == CommandProcessor.helpText })
@@ -300,7 +300,7 @@ struct ChatViewModelCommandTests {
         transport.simulateConnect(peerID, nickname: "Alice")
         viewModel.selectedPrivateChatPeer = peerID
 
-        viewModel.handleCommand("/bogus")
+        viewModel.handleCommand("/bogus", from: viewModel.selectionTarget)
 
         let dmContents = viewModel.privateChats[peerID]?.map(\.content) ?? []
         #expect(dmContents.contains { $0.hasPrefix("unknown command: /bogus") })
@@ -311,7 +311,7 @@ struct ChatViewModelCommandTests {
     func handleCommand_outputRoutesToPublicTimelineWithoutOpenDM() async {
         let (viewModel, _) = makeTestableViewModel()
 
-        viewModel.handleCommand("/bogus")
+        viewModel.handleCommand("/bogus", from: viewModel.selectionTarget)
 
         #expect(viewModel.messages.last?.content.hasPrefix("unknown command: /bogus") == true)
     }
@@ -326,7 +326,7 @@ struct ChatViewModelCommandTests {
         }, timeout: TestConstants.negativeWaitWindow)
         #expect(resolved)
 
-        viewModel.handleCommand("/msg Alice")
+        viewModel.handleCommand("/msg Alice", from: viewModel.selectionTarget)
 
         #expect(viewModel.selectedPrivateChatPeer == peerID)
         #expect(viewModel.privateChats[peerID]?.last?.content == "started private chat with Alice")
@@ -448,7 +448,7 @@ struct ChatViewModelTimelineCapTests {
         let total = TransportConfig.meshTimelineCap + 5
 
         for i in 0..<total {
-            viewModel.sendMessage("cap-msg-\(i)")
+            viewModel.sendMessage("cap-msg-\(i)", to: viewModel.selectionTarget)
         }
 
         #expect(viewModel.messages.count == TransportConfig.meshTimelineCap)
@@ -868,7 +868,7 @@ struct ChatViewModelPublicConversationTests {
         viewModel.addPublicSystemMessage("system clear test")
         #expect(!viewModel.messages.isEmpty)
 
-        viewModel.clearCurrentPublicTimeline()
+        viewModel.clearPublicTimeline(viewModel.activeChannel)
         viewModel.refreshVisibleMessages(from: .mesh)
 
         #expect(viewModel.messages.isEmpty)
@@ -1087,7 +1087,7 @@ struct ChatViewModelPrivateChatTests {
         transport.connectedPeers.insert(recipientID)
         transport.peerNicknames[recipientID] = "Recipient"
 
-        viewModel.sendPrivateMessage("Secret message", to: recipientID)
+        viewModel.sendPrivateMessage("Secret message", to: recipientID, scope: viewModel.activeChannel)
 
         // The message routing depends on connection state and other factors
         // At minimum, it should not crash
