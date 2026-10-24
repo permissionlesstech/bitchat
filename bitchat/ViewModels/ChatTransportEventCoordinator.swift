@@ -56,7 +56,10 @@ protocol ChatTransportEventContext: AnyObject {
     func cachedStablePeerID(for shortPeerID: PeerID) -> PeerID?
 
     // MARK: Routing & acknowledgements
-    func flushRouterOutbox(for peerID: PeerID)
+    /// Drains the message router's disk outbox for every alias of one peer
+    /// as a single chronological stream, so mail split across the ephemeral
+    /// and stable keys cannot be delivered out of order.
+    func flushRouterOutbox(forAliases peerIDAliases: [PeerID], skippingMessageIDs: Set<String>)
     /// Offer queued mail for *other* peers to this newly connected courier.
     func retryCourierDeposits(via peerID: PeerID)
     func sendMeshDeliveryAck(for messageID: String, to peerID: PeerID)
@@ -114,8 +117,11 @@ extension ChatViewModel: ChatTransportEventContext {
         meshService.noiseSessionPublicKeyData(for: peerID)
     }
 
-    func flushRouterOutbox(for peerID: PeerID) {
-        messageRouter.flushOutbox(for: peerID)
+    func flushRouterOutbox(forAliases peerIDAliases: [PeerID], skippingMessageIDs: Set<String>) {
+        messageRouter.flushOutbox(
+            forAliases: peerIDAliases,
+            skippingMessageIDs: skippingMessageIDs
+        )
     }
 
     func retryCourierDeposits(via peerID: PeerID) {
@@ -274,12 +280,42 @@ final class ChatTransportEventCoordinator {
         context.registerEphemeralSession(peerID: peerID)
         context.notifyUIChanged()
 
+        // Resolve the stable key from evidence about *this* link only:
+        // unified-peer state, or the live noise session key. Both name the peer
+        // we just brought up.
+        //
+        // Deliberately no cache fallback. Short BLE IDs are ephemeral and get
+        // recycled, so a cache entry left by a previous owner of this ID names
+        // the wrong peer — and reaching the fallback means both live sources
+        // were absent, which is exactly when there is nothing to catch the
+        // mistake. Flushing `[shortID, wrongStableID]` would drain a stranger's
+        // queue and silently skip the right one. When neither live source has
+        // resolved yet, the short-ID flush below still runs, and authentication
+        // flushes both aliases once the identity is known.
+        var stablePeerID: PeerID?
         if let peer = context.unifiedPeer(for: peerID) {
-            let stablePeerID = PeerID(hexData: peer.noisePublicKey)
-            context.cacheStablePeerID(stablePeerID, for: peerID)
+            let resolved = PeerID(hexData: peer.noisePublicKey)
+            context.cacheStablePeerID(resolved, for: peerID)
+            stablePeerID = resolved
+        } else if let key = context.noiseSessionPublicKeyData(for: peerID) {
+            let derived = PeerID(hexData: key)
+            context.cacheStablePeerID(derived, for: peerID)
+            stablePeerID = derived
         }
 
-        context.flushRouterOutbox(for: peerID)
+        // Flush the short ID and the stable 64-hex key together. `flushOutbox`
+        // is keyed by exactly the ID it is handed, and a DM composed while the
+        // recipient was an offline favorite is queued under their stable key —
+        // so a short-ID flush alone never reaches it, and absent a courier it
+        // waits for a relaunch, a favorite-status change, or the 24h TTL.
+        // Passing both as aliases lets the router merge the two queues
+        // chronologically, so recent mail on the short ID cannot overtake the
+        // older mail that has been waiting under the stable key.
+        var aliases = [peerID]
+        if let stablePeerID, stablePeerID != peerID {
+            aliases.append(stablePeerID)
+        }
+        context.flushRouterOutbox(forAliases: aliases, skippingMessageIDs: [])
         context.retryCourierDeposits(via: peerID)
     }
 

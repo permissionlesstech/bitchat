@@ -124,7 +124,11 @@ private final class MockChatTransportEventContext: ChatTransportEventContext {
     private(set) var courierRetryPeerIDs: [PeerID] = []
     private(set) var meshDeliveryAcks: [(messageID: String, peerID: PeerID)] = []
 
-    func flushRouterOutbox(for peerID: PeerID) { flushedOutboxPeerIDs.append(peerID) }
+    private(set) var flushedSkippingMessageIDs: [Set<String>] = []
+    func flushRouterOutbox(forAliases peerIDAliases: [PeerID], skippingMessageIDs: Set<String>) {
+        flushedOutboxPeerIDs.append(contentsOf: peerIDAliases)
+        flushedSkippingMessageIDs.append(skippingMessageIDs)
+    }
     func retryCourierDeposits(via peerID: PeerID) { courierRetryPeerIDs.append(peerID) }
     func sendMeshDeliveryAck(for messageID: String, to peerID: PeerID) {
         meshDeliveryAcks.append((messageID, peerID))
@@ -343,7 +347,10 @@ struct ChatTransportEventCoordinatorContextTests {
         #expect(context.isConnected)
         #expect(context.registeredEphemeralSessions == [peerID])
         #expect(context.stablePeerIDCache[peerID] == PeerID(hexData: noiseKey))
-        #expect(context.flushedOutboxPeerIDs == [peerID])
+        // Both queues: the short id, then the stable 64-hex key that offline-
+        // composed mail is queued under (#1408). Order matters only in that the
+        // short-id flush is not delayed behind the stable-key resolution.
+        #expect(context.flushedOutboxPeerIDs == [peerID, PeerID(hexData: noiseKey)])
         #expect(context.notifyUIChangedCount == 1)
 
         // Their messages' read receipts are un-marked on disconnect so READ
@@ -479,5 +486,131 @@ struct ChatTransportEventCoordinatorContextTests {
         await drainMainActorTasks()
         #expect(context.handledPrivateMessages.count == 1)
         #expect(context.meshDeliveryAcks.count == 1)
+    }
+
+    /// #1408: a DM composed while the recipient was an offline favorite is
+    /// queued in the router outbox under the peer's STABLE 64-hex Noise key.
+    /// `flushOutbox` is keyed by exactly the id it is handed, so flushing only
+    /// the short 16-hex id on connect never reaches that queue — the mail waits
+    /// for an app relaunch, a favorite-status change, or the 24h TTL.
+    ///
+    /// Reconnect must flush both.
+    @Test @MainActor
+    func didConnectToPeer_flushesTheStableKeyOutboxAsWellAsTheShortID() {
+        let context = MockChatTransportEventContext()
+        let coordinator = ChatTransportEventCoordinator(context: context)
+
+        let shortPeerID = PeerID(str: "1122334455667788")
+        let noiseKey = Data((0..<32).map { UInt8(0xB0 &+ $0) })
+        let stablePeerID = PeerID(hexData: noiseKey)
+        #expect(stablePeerID != shortPeerID)
+
+        // The peer is known by its Noise key, as it is after a handshake.
+        context.peersByID[shortPeerID] = BitchatPeer(
+            peerID: shortPeerID,
+            noisePublicKey: noiseKey,
+            nickname: "alice"
+        )
+
+        coordinator.didConnectToPeerSynchronously(shortPeerID)
+
+        // Both queues are drained, and the stable key is the one that carries
+        // the offline-composed mail.
+        #expect(context.flushedOutboxPeerIDs.contains(shortPeerID))
+        #expect(
+            context.flushedOutboxPeerIDs.contains(stablePeerID),
+            "offline-queued mail under the stable key was never flushed"
+        )
+    }
+
+    /// The stable key must still resolve when unified-peer state has not been
+    /// populated yet at connect time — otherwise the flush silently no-ops in
+    /// exactly the case it is for. It resolves from the live Noise session key,
+    /// never from the cache alone.
+    @Test @MainActor
+    func didConnectToPeer_resolvesTheStableKeyWithoutUnifiedPeerState() {
+        let shortPeerID = PeerID(str: "1122334455667788")
+        let noiseKey = Data((0..<32).map { UInt8(0xC0 &+ $0) })
+        let stablePeerID = PeerID(hexData: noiseKey)
+
+        // Cache only, with no live evidence for this link. Short BLE IDs are
+        // recycled, so the entry may belong to a previous owner of this ID —
+        // flushing it would drain a stranger's queue and skip the right one.
+        let viaCache = MockChatTransportEventContext()
+        viaCache.cacheStablePeerID(stablePeerID, for: shortPeerID)
+        ChatTransportEventCoordinator(context: viaCache)
+            .didConnectToPeerSynchronously(shortPeerID)
+        #expect(
+            viaCache.flushedOutboxPeerIDs == [shortPeerID],
+            "a cache entry with no live corroboration named the stable peer"
+        )
+
+        // Noise session key only.
+        let viaSession = MockChatTransportEventContext()
+        viaSession.noiseSessionKeysByPeerID[shortPeerID] = noiseKey
+        ChatTransportEventCoordinator(context: viaSession)
+            .didConnectToPeerSynchronously(shortPeerID)
+        #expect(viaSession.flushedOutboxPeerIDs.contains(stablePeerID))
+
+        // Nothing resolvable: the short-id flush still happens, and no bogus
+        // second flush is issued.
+        let unresolvable = MockChatTransportEventContext()
+        ChatTransportEventCoordinator(context: unresolvable)
+            .didConnectToPeerSynchronously(shortPeerID)
+        #expect(unresolvable.flushedOutboxPeerIDs == [shortPeerID])
+    }
+
+    /// Both keys must be handed to the router in a *single* call. Two
+    /// sequential single-key flushes would drain the short-ID queue first, so
+    /// mail composed moments ago could be delivered ahead of the older mail
+    /// that has been waiting under the stable key. Only the merged call lets
+    /// the router order the two queues by timestamp.
+    @Test @MainActor
+    func didConnectToPeer_flushesBothKeysInOneMergedCall() {
+        let context = MockChatTransportEventContext()
+        let shortPeerID = PeerID(str: "1122334455667788")
+        let noiseKey = Data((0..<32).map { UInt8(0xD0 &+ $0) })
+        let stablePeerID = PeerID(hexData: noiseKey)
+
+        context.peersByID[shortPeerID] = BitchatPeer(
+            peerID: shortPeerID,
+            noisePublicKey: noiseKey,
+            nickname: "alice"
+        )
+
+        ChatTransportEventCoordinator(context: context)
+            .didConnectToPeerSynchronously(shortPeerID)
+
+        #expect(
+            context.flushedSkippingMessageIDs.count == 1,
+            "the two keys must be merged into one flush, not drained in sequence"
+        )
+        #expect(context.flushedOutboxPeerIDs == [shortPeerID, stablePeerID])
+        // Connect has no preceding retry pass, so nothing may be skipped.
+        #expect(context.flushedSkippingMessageIDs == [[]])
+    }
+
+    /// Short BLE IDs are ephemeral and get recycled. A cache entry left by a
+    /// previous owner of the same short ID must lose to the identity of the
+    /// link we just brought up, or the flush drains — and transmits under —
+    /// the wrong peer's queue.
+    @Test @MainActor
+    func didConnectToPeer_prefersTheLiveSessionKeyOverAStaleCacheEntry() {
+        let context = MockChatTransportEventContext()
+        let shortPeerID = PeerID(str: "1122334455667788")
+
+        let staleKey = Data(repeating: 0xAA, count: 32)
+        let liveKey = Data(repeating: 0xBB, count: 32)
+        context.cacheStablePeerID(PeerID(hexData: staleKey), for: shortPeerID)
+        context.noiseSessionKeysByPeerID[shortPeerID] = liveKey
+
+        ChatTransportEventCoordinator(context: context)
+            .didConnectToPeerSynchronously(shortPeerID)
+
+        #expect(context.flushedOutboxPeerIDs == [shortPeerID, PeerID(hexData: liveKey)])
+        #expect(
+            !context.flushedOutboxPeerIDs.contains(PeerID(hexData: staleKey)),
+            "a recycled short ID flushed the previous owner's outbox"
+        )
     }
 }

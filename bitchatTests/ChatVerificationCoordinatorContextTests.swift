@@ -91,6 +91,13 @@ private final class MockChatVerificationContext: ChatVerificationContext {
         stablePeerIDCache[shortPeerID] = stablePeerID
     }
 
+    private(set) var flushedOutboxPeerIDs: [PeerID] = []
+    private(set) var flushedSkippingMessageIDs: [Set<String>] = []
+    func flushRouterOutbox(forAliases peerIDAliases: [PeerID], skippingMessageIDs: Set<String>) {
+        flushedOutboxPeerIDs.append(contentsOf: peerIDAliases)
+        flushedSkippingMessageIDs.append(skippingMessageIDs)
+    }
+
     // Noise sessions & verification transport
     var myNoiseStaticKey = Data(repeating: 0x42, count: 32)
     var establishedNoiseSessions: Set<PeerID> = []
@@ -119,8 +126,10 @@ private final class MockChatVerificationContext: ChatVerificationContext {
         privateMediaAuthenticatedPeers.append(peerID)
     }
 
-    func retrySecurePrivateMessagesAfterAuthentication(for peerIDAliases: [PeerID]) {
+    var securePrivateMessageRetryResult: Set<String> = []
+    func retrySecurePrivateMessagesAfterAuthentication(for peerIDAliases: [PeerID]) -> Set<String> {
         securePrivateMessageRetryAliases.append(peerIDAliases)
+        return securePrivateMessageRetryResult
     }
 
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {
@@ -298,6 +307,39 @@ struct ChatVerificationCoordinatorContextTests {
         callbacks?.onHandshakeRequired(peerID)
         await waitForMainQueue()
         #expect(context.encryptionStatuses[peerID] == .noiseHandshaking)
+    }
+
+    /// A DM composed while the peer was offline sits in the outbox under their
+    /// stable 64-hex key and was never transmitted, so
+    /// `retrySecurePrivateMessagesAfterAuthentication` — which only covers
+    /// messages already sent through a secure session — cannot reach it. When
+    /// the stable key was still unresolvable at connect time, authentication is
+    /// the first moment it can be flushed at all.
+    @Test @MainActor
+    func peerAuthentication_flushesTheOutboxForBothAliases() async {
+        let context = MockChatVerificationContext()
+        let coordinator = ChatVerificationCoordinator(context: context)
+        let peerID = PeerID(str: "1122334455667788")
+        let noiseKey = Data(repeating: 0x55, count: 32)
+        let stablePeerID = PeerID(hexData: noiseKey)
+        context.noiseSessionKeysByPeerID[peerID] = noiseKey
+        context.securePrivateMessageRetryResult = ["retried-1"]
+
+        coordinator.setupNoiseCallbacks()
+        context.installedCallbacks?.onPeerAuthenticated(peerID, "fp-unverified")
+        await waitForMainQueue()
+
+        #expect(
+            context.flushedOutboxPeerIDs == [peerID, stablePeerID],
+            "offline-queued mail under the stable key was never flushed on authentication"
+        )
+        // The flush must skip exactly what the retry reported transmitting.
+        // Re-deriving that set from `secureTransmissions` would also skip mail
+        // the retry passed over for want of a live secure session, stranding it.
+        #expect(
+            context.flushedSkippingMessageIDs == [["retried-1"]],
+            "the flush did not skip exactly the set the retry transmitted"
+        )
     }
 
     @Test @MainActor
