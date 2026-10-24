@@ -342,3 +342,204 @@ private final class TransportEventCapture: TransportEventDelegate, @unchecked Se
         return count(content: content)
     }
 }
+
+/// Records one node's peer-presence events in delivery order. Delivery
+/// crosses the main actor (`notifyUI`); `drain()` gives already-posted
+/// hops a bounded number of main-actor turns to land, never a wall-clock
+/// wait.
+private final class PeerEventCapture: TransportEventDelegate, TransportPeerEventsDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private var connected: [PeerID] = []
+    private var lists: [[PeerID]] = []
+    private var order: [String] = []
+    private var latestSnapshotIDs: Set<PeerID> = []
+
+    func didReceiveTransportEvent(_ event: TransportEvent) {
+        lock.lock()
+        defer { lock.unlock() }
+        switch event {
+        case .peerConnected(let peerID):
+            connected.append(peerID)
+            order.append("connected")
+        case .peerListUpdated(let peerIDs):
+            lists.append(peerIDs)
+            order.append("list")
+        default:
+            break
+        }
+    }
+
+    func didUpdatePeerSnapshots(_ snapshots: [TransportPeerSnapshot]) {
+        lock.lock()
+        defer { lock.unlock() }
+        latestSnapshotIDs = Set(snapshots.map(\.peerID))
+    }
+
+    var connectedPeers: [PeerID] { lock.withLock { connected } }
+    var peerLists: [[PeerID]] { lock.withLock { lists } }
+    var deliveryOrder: [String] { lock.withLock { order } }
+    var snapshotPeerIDs: Set<PeerID> { lock.withLock { latestSnapshotIDs } }
+
+    func drain(turns: Int = 50) async {
+        for _ in 0..<turns {
+            await MainActor.run {}
+        }
+    }
+}
+
+/// Announce-driven peer-list refreshes are throttled on the engine: a
+/// burst of verified announces delivers one refresh at once and one
+/// trailing refresh per `blePeerListRefreshIntervalSeconds`, instead of one
+/// O(N) main-actor refresh per announce. Windows run on each node's manual
+/// clock, so every count here is deterministic.
+@Suite(.serialized)
+struct SimulatedMeshPeerListRefreshTests {
+    private static let spokeCount = 8
+
+    /// A hub linked to `spokeCount` spokes, after the discovery burst and
+    /// one refresh interval: the hub has delivered its leading and trailing
+    /// refresh, and the trailing one has kept its window open.
+    private func makeDiscoveredStar(
+        hubCapture: PeerEventCapture,
+        spokeCapture: PeerEventCapture
+    ) async -> (mesh: SimulatedMesh, spokeIDs: Set<PeerID>) {
+        let mesh = SimulatedMesh()
+        let hub = mesh.addNode(nickname: "hub")
+        for index in 1...Self.spokeCount {
+            mesh.addNode(nickname: "spoke\(index)")
+            mesh.connect(0, index)
+        }
+        hub.service.eventDelegate = hubCapture
+        mesh.nodes[1].service.eventDelegate = spokeCapture
+        let spokeIDs = Set(mesh.nodes.dropFirst().map { $0.service.myPeerID })
+
+        mesh.announceAll()
+        let allConnected = await TestHelpers.waitUntil(
+            { hubCapture.connectedPeers.count == Self.spokeCount },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(allConnected)
+        await hubCapture.drain()
+        return (mesh, spokeIDs)
+    }
+
+    @Test
+    func joinBurstDeliversOneLeadingAndOneTrailingRefresh() async {
+        let hubCapture = PeerEventCapture()
+        let spokeCapture = PeerEventCapture()
+        let (mesh, spokeIDs) = await makeDiscoveredStar(hubCapture: hubCapture, spokeCapture: spokeCapture)
+
+        // Eight new direct peers: every connect goes out at once, but only
+        // the first carries a list refresh (it rides that connect's hop).
+        #expect(Set(hubCapture.connectedPeers) == spokeIDs)
+        #expect(hubCapture.peerLists.count == 1)
+        let order = hubCapture.deliveryOrder
+        if let firstList = order.firstIndex(of: "list"), let firstConnect = order.firstIndex(of: "connected") {
+            #expect(firstConnect < firstList)
+        }
+
+        mesh.advanceTime(by: TransportConfig.blePeerListRefreshIntervalSeconds)
+        let trailing = await TestHelpers.waitUntil(
+            { hubCapture.peerLists.count >= 2 },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(trailing)
+        await hubCapture.drain()
+
+        // One trailing refresh, read when it ran: it lists every spoke.
+        #expect(hubCapture.peerLists.count == 2)
+        #expect(Set(hubCapture.peerLists.last ?? []).isSuperset(of: spokeIDs))
+    }
+
+    /// The steady state P002/P034 describe: known peers keep re-announcing
+    /// while a window is open. Neither their direct announces (at the hub)
+    /// nor their relayed ones (at a spoke) post a main-actor hop; the window
+    /// ends with exactly one refresh.
+    @Test
+    func knownPeerReannouncesInsideAWindowPostNoHop() async {
+        let hubCapture = PeerEventCapture()
+        let spokeCapture = PeerEventCapture()
+        let (mesh, spokeIDs) = await makeDiscoveredStar(hubCapture: hubCapture, spokeCapture: spokeCapture)
+        mesh.advanceTime(by: TransportConfig.blePeerListRefreshIntervalSeconds)
+        let trailing = await TestHelpers.waitUntil(
+            { hubCapture.peerLists.count >= 2 },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(trailing)
+        await hubCapture.drain()
+        let hubLists = hubCapture.peerLists.count
+        let spokeLists = spokeCapture.peerLists.count
+
+        // Every node re-announces: the hub hears eight known direct peers,
+        // each spoke hears the hub plus the other spokes through it.
+        mesh.announceAll()
+        await hubCapture.drain()
+        await spokeCapture.drain()
+
+        #expect(hubCapture.peerLists.count == hubLists)
+        #expect(spokeCapture.peerLists.count == spokeLists)
+        #expect(hubCapture.connectedPeers.count == Self.spokeCount)
+
+        mesh.advanceTime(by: TransportConfig.blePeerListRefreshIntervalSeconds)
+        let refreshed = await TestHelpers.waitUntil(
+            { hubCapture.peerLists.count > hubLists && spokeCapture.peerLists.count > spokeLists },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(refreshed)
+        await hubCapture.drain()
+        await spokeCapture.drain()
+
+        #expect(hubCapture.peerLists.count == hubLists + 1)
+        #expect(spokeCapture.peerLists.count == spokeLists + 1)
+        #expect(Set(hubCapture.peerLists.last ?? []).isSuperset(of: spokeIDs))
+    }
+
+    /// A peer that links up while a window is open gets its `.peerConnected`
+    /// at once, and the roster learns it at the coalesced publish cadence
+    /// rather than at the trailing list refresh: its first DM resolves the
+    /// sender's name and keys through that roster.
+    @Test
+    func peerLinkingDuringAWindowReachesTheRosterBeforeTheTrailingRefresh() async {
+        let mesh = SimulatedMesh()
+        let hub = mesh.addNode(nickname: "hub")
+        let alice = mesh.addNode(nickname: "alice")
+        let bob = mesh.addNode(nickname: "bob")
+        mesh.connect(0, 1)
+        let capture = PeerEventCapture()
+        hub.service.eventDelegate = capture
+        hub.service.peerEventsDelegate = capture
+
+        mesh.announceAll()
+        let aliceConnected = await TestHelpers.waitUntil(
+            { capture.connectedPeers == [alice.service.myPeerID] },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(aliceConnected)
+        // Release any snapshot publish the coalescer deferred, staying well
+        // inside the refresh window Alice's announce opened.
+        mesh.advanceTime(by: 0.2)
+        await capture.drain()
+
+        // Bob comes into range mid-window.
+        mesh.connect(0, 2)
+        bob.service._test_resetAnnounceThrottle()
+        mesh.forceAnnounce(from: 2)
+        let bobConnected = await TestHelpers.waitUntil(
+            { capture.connectedPeers.contains(bob.service.myPeerID) },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(bobConnected)
+        // The publish is coalesced to at most one per 0.1 s; releasing that
+        // much time still leaves the refresh window open.
+        mesh.advanceTime(by: 0.1)
+        let bobInRoster = await TestHelpers.waitUntil(
+            { capture.snapshotPeerIDs.contains(bob.service.myPeerID) },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(bobInRoster)
+        await capture.drain()
+
+        // The list itself still waits for the trailing refresh.
+        #expect(capture.peerLists.count == 1)
+    }
+}

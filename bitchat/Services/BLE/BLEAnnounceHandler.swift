@@ -62,7 +62,9 @@ struct BLEAnnounceHandlerEnvironment {
     /// `.peerConnected` (if flagged) → initial gossip sync scheduling (if
     /// flagged) → peer-ID snapshot + data publish + `.peerListUpdated`.
     /// A single closure keeps the original in-order delivery guarantee that
-    /// separate unstructured tasks would not provide.
+    /// separate unstructured tasks would not provide. The list part is
+    /// throttled: inside an open refresh window it rides one trailing
+    /// refresh, so an announce with nothing else to deliver posts no hop.
     let deliverAnnounceUIEvents: (
         _ peerID: PeerID,
         _ notifyPeerConnected: Bool,
@@ -266,7 +268,8 @@ final class BLEAnnounceHandler {
         )
 
         // Only notify of connection for new or reconnected peers when it is a
-        // direct announce; the list update always follows in the same hop.
+        // direct announce; a list refresh that goes out at once follows in
+        // the same hop (one inside an open window goes out at its end).
         env.deliverAnnounceUIEvents(
             peerID,
             responsePlan.shouldNotifyPeerConnected,

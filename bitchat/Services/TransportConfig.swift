@@ -162,6 +162,10 @@ enum TransportConfig {
 
     // BLE maintenance & thresholds
     static let bleMaintenanceInterval: TimeInterval = 5.0
+    // Announce-driven peer-list refreshes: the first change after a quiet
+    // interval goes out at once, later ones collapse into one trailing
+    // refresh per interval, however many announces arrive.
+    static let blePeerListRefreshIntervalSeconds: TimeInterval = 0.5
     static let bleMaintenanceLeewaySeconds: Int = 1
     static let bleIsolationRelaxThresholdSeconds: TimeInterval = 30
     // Isolated nodes accept the weakest usable links — a fringe connection

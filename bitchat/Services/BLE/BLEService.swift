@@ -481,6 +481,9 @@ final class BLEService: NSObject {
         recentTraffic: recentTrafficTracker
     )
     
+    // Announce-driven peer-list refreshes (engine-confined); see
+    // `admitPeerListRefresh()`.
+    private var peerListRefreshThrottle = BLEPeerListRefreshThrottle()
     // Debounced publish to coalesce rapid changes
     private var peerPublishCoalescer = BLEPeerPublishCoalescer()
     private func requestPeerDataPublish() {
@@ -6532,9 +6535,15 @@ extension BLEService {
                 self?.messageDeduplicator.markProcessed(id)
             },
             deliverAnnounceUIEvents: { [weak self] peerID, notifyPeerConnected, scheduleInitialSync in
+                guard let self else { return }
+                // On the engine: refresh the list now, or let this change
+                // ride the open window's trailing refresh.
+                let refreshList = self.admitPeerListRefresh()
+                guard notifyPeerConnected || scheduleInitialSync || refreshList else { return }
                 // Single main-actor hop so event order is guaranteed:
-                // .peerConnected → initial sync scheduling → .peerListUpdated.
-                self?.notifyUI { [weak self] in
+                // .peerConnected → initial sync scheduling → snapshot
+                // publish request → .peerListUpdated.
+                self.notifyUI { [weak self] in
                     guard let self = self else { return }
                     if notifyPeerConnected {
                         self.deliverTransportEvent(.peerConnected(peerID))
@@ -6542,10 +6551,15 @@ extension BLEService {
                     if scheduleInitialSync {
                         self.gossipSyncManager?.scheduleInitialSyncToPeer(peerID, delaySeconds: 1.0)
                     }
-                    // Get current peer list (after addition)
-                    let currentPeerIDs = self.peerRegistry.peerIDs
-                    self.requestPeerDataPublish()
-                    self.deliverTransportEvent(.peerListUpdated(currentPeerIDs))
+                    if refreshList {
+                        self.refreshPeerList()
+                    } else if notifyPeerConnected {
+                        // The list waits for the trailing refresh, but the
+                        // roster must learn a newly linked peer now: its
+                        // first DM resolves the sender through it. The
+                        // publish is coalesced, so this stays bounded.
+                        self.requestPeerDataPublish()
+                    }
                 }
             },
             trackPacketSeen: { [weak self] packet in
@@ -6982,6 +6996,47 @@ extension BLEService {
         }
     }
     
+    /// Engine-only: whether a verified announce's peer-list refresh goes out
+    /// now. A burst of announces costs one immediate refresh plus at most
+    /// one trailing refresh per `blePeerListRefreshIntervalSeconds`.
+    private func admitPeerListRefresh() -> Bool {
+        #if DEBUG
+        dispatchPrecondition(condition: .onQueue(messageQueue))
+        #endif
+        guard peerListRefreshThrottle.requestRefresh() else { return false }
+        schedulePeerListRefreshWindowEnd()
+        return true
+    }
+
+    private func schedulePeerListRefreshWindowEnd() {
+        engineScheduler.schedule(after: TransportConfig.blePeerListRefreshIntervalSeconds) { [weak self] in
+            self?.peerListRefreshWindowEnded()
+        }
+    }
+
+    /// Engine-only: delivers the window's trailing refresh, if a change
+    /// arrived during it, and keeps the window open for another interval.
+    private func peerListRefreshWindowEnded() {
+        #if DEBUG
+        dispatchPrecondition(condition: .onQueue(messageQueue))
+        #endif
+        guard peerListRefreshThrottle.windowEnded() else { return }
+        schedulePeerListRefreshWindowEnd()
+        notifyUI { [weak self] in
+            self?.refreshPeerList()
+        }
+    }
+
+    /// Requests a snapshot publish, then delivers the current peer IDs. The
+    /// publish's own hop is created here, on main, so it always lands after
+    /// this `.peerListUpdated`.
+    @MainActor
+    private func refreshPeerList() {
+        let currentPeerIDs = peerRegistry.peerIDs
+        requestPeerDataPublish()
+        deliverTransportEvent(.peerListUpdated(currentPeerIDs))
+    }
+
     // NEW: Publish peer snapshots to subscribers and notify Transport delegates
     private func publishFullPeerData() {
         let transportPeers = peerRegistry.transportSnapshots(selfNickname: myNickname)
