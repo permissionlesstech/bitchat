@@ -17,7 +17,7 @@ struct ChatUnreadStateResolverTests {
         #expect(ChatUnreadStateResolver.hasUnreadMessages(
             for: context,
             unreadPrivateMessages: [peerID],
-            privateChats: [:]
+            firstMessage: { _ in nil }
         ))
     }
 
@@ -35,7 +35,7 @@ struct ChatUnreadStateResolverTests {
         #expect(ChatUnreadStateResolver.hasUnreadMessages(
             for: context,
             unreadPrivateMessages: [stableID],
-            privateChats: [:]
+            firstMessage: { _ in nil }
         ))
     }
 
@@ -53,7 +53,7 @@ struct ChatUnreadStateResolverTests {
         #expect(ChatUnreadStateResolver.hasUnreadMessages(
             for: context,
             unreadPrivateMessages: [nostrID],
-            privateChats: [:]
+            firstMessage: { _ in nil }
         ))
     }
 
@@ -81,7 +81,7 @@ struct ChatUnreadStateResolverTests {
         #expect(ChatUnreadStateResolver.hasUnreadMessages(
             for: context,
             unreadPrivateMessages: [geoDM],
-            privateChats: [geoDM: [message]]
+            firstMessage: { $0 == geoDM ? message : nil }
         ))
     }
 
@@ -109,7 +109,38 @@ struct ChatUnreadStateResolverTests {
         #expect(!ChatUnreadStateResolver.hasUnreadMessages(
             for: context,
             unreadPrivateMessages: [geoDM],
-            privateChats: [geoDM: [message]]
+            firstMessage: { $0 == geoDM ? message : nil }
         ))
+    }
+
+    /// The first-message lookup feeds only the geoDM-nickname fallback, so
+    /// a direct hit never builds or reads any conversation.
+    @Test
+    func firstMessageIsReadOnlyForTheGeoDMNicknameFallback() {
+        let peerID = PeerID(str: "mesh-peer")
+        let geoDM = PeerID(nostr_: "0123456789abcdef")
+        let context = ChatUnreadPeerContext(
+            peerID: peerID,
+            noiseKeyPeerID: nil,
+            nostrPeerID: nil,
+            nickname: "Alice"
+        )
+        var lookups: [PeerID] = []
+
+        let direct = ChatUnreadStateResolver.hasUnreadMessages(
+            for: context,
+            unreadPrivateMessages: [peerID, geoDM],
+            firstMessage: { lookups.append($0); return nil }
+        )
+        #expect(direct)
+        #expect(lookups.isEmpty)
+
+        let fallback = ChatUnreadStateResolver.hasUnreadMessages(
+            for: context,
+            unreadPrivateMessages: [geoDM, PeerID(str: "other-peer")],
+            firstMessage: { lookups.append($0); return nil }
+        )
+        #expect(!fallback)
+        #expect(lookups == [geoDM])
     }
 }

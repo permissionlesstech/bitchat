@@ -9,10 +9,13 @@ struct ChatUnreadPeerContext {
 }
 
 enum ChatUnreadStateResolver {
+    /// `firstMessage` returns a direct conversation's first message; it is
+    /// consulted only for the geoDM-nickname fallback, so callers pass a
+    /// lookup instead of building every conversation up front.
     static func hasUnreadMessages(
         for context: ChatUnreadPeerContext,
         unreadPrivateMessages: Set<PeerID>,
-        privateChats: [PeerID: [BitchatMessage]]
+        firstMessage: (PeerID) -> BitchatMessage?
     ) -> Bool {
         if unreadPrivateMessages.contains(context.peerID) {
             return true
@@ -34,10 +37,10 @@ enum ChatUnreadStateResolver {
 
         return unreadPrivateMessages.contains { unreadPeerID in
             guard unreadPeerID.isGeoDM,
-                  let firstMessage = privateChats[unreadPeerID]?.first else {
+                  let message = firstMessage(unreadPeerID) else {
                 return false
             }
-            return firstMessage.sender.lowercased() == peerNickname
+            return message.sender.lowercased() == peerNickname
         }
     }
 }

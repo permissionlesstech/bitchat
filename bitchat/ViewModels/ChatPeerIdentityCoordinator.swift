@@ -264,6 +264,11 @@ final class ChatPeerIdentityCoordinator {
 
     @MainActor
     func hasUnreadMessages(for peerID: PeerID) -> Bool {
+        // Every rule below tests membership in this set; people-list rows ask
+        // for every peer, so skip the peer resolution when nothing is unread.
+        let unreadPrivateMessages = context.unreadPrivateMessages
+        guard !unreadPrivateMessages.isEmpty else { return false }
+
         var noiseKeyPeerID: PeerID?
         var nostrPeerID: PeerID?
 
@@ -283,8 +288,8 @@ final class ChatPeerIdentityCoordinator {
 
         return ChatUnreadStateResolver.hasUnreadMessages(
             for: unreadContext,
-            unreadPrivateMessages: context.unreadPrivateMessages,
-            privateChats: context.privateChats
+            unreadPrivateMessages: unreadPrivateMessages,
+            firstMessage: { context.privateMessages(for: $0).first }
         )
     }
 

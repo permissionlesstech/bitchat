@@ -92,7 +92,12 @@ private final class MockChatPeerIdentityContext: ChatPeerIdentityContext {
     var ephemeralPeerIDsByNoiseKey: [Data: PeerID] = [:]
     private(set) var toggledFavoritePeers: [PeerID] = []
 
-    func unifiedPeer(for peerID: PeerID) -> BitchatPeer? { peersByID[peerID] }
+    private(set) var unifiedPeerLookupCount = 0
+
+    func unifiedPeer(for peerID: PeerID) -> BitchatPeer? {
+        unifiedPeerLookupCount += 1
+        return peersByID[peerID]
+    }
     func unifiedIsBlocked(_ peerID: PeerID) -> Bool { blockedPeers.contains(peerID) }
     func unifiedToggleFavorite(_ peerID: PeerID) { toggledFavoritePeers.append(peerID) }
     func unifiedFingerprint(for peerID: PeerID) -> String? { fingerprintsByPeerID[peerID] }
@@ -401,6 +406,28 @@ struct ChatPeerIdentityCoordinatorContextTests {
         coordinator.updateEncryptionStatusForPeers()
         #expect(context.setEncryptionStatusCount == 4)
         #expect(context.storedEncryptionStatus(for: handshaking) == .noiseSecured)
+    }
+
+    /// People-list rows ask this for every peer on every rebuild; with
+    /// nothing unread anywhere the answer needs no peer resolution at all.
+    @Test @MainActor
+    func hasUnreadMessages_skipsPeerResolutionWhenNothingIsUnread() async {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        let peerID = PeerID(str: "1122334455667788")
+        context.peersByID[peerID] = BitchatPeer(
+            peerID: peerID,
+            noisePublicKey: Data(repeating: 0x11, count: 32),
+            nickname: "alice"
+        )
+
+        #expect(!coordinator.hasUnreadMessages(for: peerID))
+        #expect(context.unifiedPeerLookupCount == 0)
+
+        // Unread under the stable Noise-key ID still resolves through the peer.
+        context.unreadPrivateMessages = [PeerID(hexData: Data(repeating: 0x11, count: 32))]
+        #expect(coordinator.hasUnreadMessages(for: peerID))
+        #expect(context.unifiedPeerLookupCount == 1)
     }
 
     @Test @MainActor
