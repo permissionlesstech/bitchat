@@ -14,6 +14,7 @@
 // For more information, see <https://unlicense.org>
 //
 
+import CoreFoundation
 import Foundation
 
 enum CashuTokenDecoder {
@@ -138,9 +139,13 @@ enum CashuTokenDecoder {
                 mintHost = sanitizedHost(from: mint)
             }
             for proof in (entry["proofs"] as? [[String: Any]]) ?? [] {
-                guard let number = proof["amount"] as? NSNumber else { continue }
+                guard let number = proof["amount"] as? NSNumber,
+                      CFGetTypeID(number) != CFBooleanGetTypeID() else { continue }
+                // NSNumber.int64Value truncates fractions and wraps oversized values.
+                // Compare the converted integer with the original number before counting it.
                 let value = number.int64Value
-                guard value > 0, value <= maxAmount else { continue }
+                guard value > 0, value <= maxAmount,
+                      number.compare(NSNumber(value: value)) == .orderedSame else { continue }
                 total += value
                 guard total <= maxAmount else { return nil }
                 sawAmount = true
@@ -161,7 +166,7 @@ enum CashuTokenDecoder {
     /// { "m": mint, "u": unit, "d": memo, "t": [ { "i": bytes, "p": [ { "a": amount, … } ] } ] }
     private static func decodeV4(_ payload: Data) -> TokenInfo? {
         var reader = CBORReader(data: payload)
-        guard case .map(let pairs)? = reader.parseValue(depth: 0) else { return nil }
+        guard case .map(let pairs)? = reader.parseComplete() else { return nil }
         var mintHost: String?
         var unit: String?
         var memo: String?
@@ -254,6 +259,11 @@ private struct CBORReader {
         bytes = [UInt8](data)
     }
 
+    mutating func parseComplete() -> Value? {
+        guard let value = parseValue(depth: 0), index == bytes.count else { return nil }
+        return value
+    }
+
     mutating func parseValue(depth: Int) -> Value? {
         guard depth < Self.maxDepth, itemBudget > 0 else { return nil }
         itemBudget -= 1
@@ -267,7 +277,7 @@ private struct CBORReader {
             return readBytes(count: argument) != nil ? .opaque : nil
         case 3: // text string
             guard let raw = readBytes(count: argument) else { return nil }
-            return String(bytes: raw, encoding: .utf8).map(Value.text) ?? .opaque
+            return String(bytes: raw, encoding: .utf8).map(Value.text)
         case 4: // array
             guard argument <= Self.maxContainerCount else { return nil }
             var items: [Value] = []
@@ -280,10 +290,12 @@ private struct CBORReader {
         case 5: // map
             guard argument <= Self.maxContainerCount else { return nil }
             var pairs: [(Value, Value)] = []
+            var textKeys = Set<String>()
             pairs.reserveCapacity(Int(min(argument, 64)))
             for _ in 0..<argument {
                 guard let key = parseValue(depth: depth + 1),
                       let value = parseValue(depth: depth + 1) else { return nil }
+                if case .text(let name) = key, !textKeys.insert(name).inserted { return nil }
                 pairs.append((key, value))
             }
             return .map(pairs)
