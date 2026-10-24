@@ -65,6 +65,7 @@ struct BLEAnnounceHandlerEnvironment {
     /// separate unstructured tasks would not provide. The list part is
     /// throttled: inside an open refresh window it rides one trailing
     /// refresh, so an announce with nothing else to deliver posts no hop.
+    /// Called for verified announces only.
     let deliverAnnounceUIEvents: (
         _ peerID: PeerID,
         _ notifyPeerConnected: Bool,
@@ -270,11 +271,15 @@ final class BLEAnnounceHandler {
         // Only notify of connection for new or reconnected peers when it is a
         // direct announce; a list refresh that goes out at once follows in
         // the same hop (one inside an open window goes out at its end).
-        env.deliverAnnounceUIEvents(
-            peerID,
-            responsePlan.shouldNotifyPeerConnected,
-            responsePlan.shouldNotifyPeerConnected && responsePlan.shouldScheduleInitialSync
-        )
+        // Unverified and registry-refused announces changed nothing (their
+        // flags are already reset), so they cost no UI delivery at all.
+        if verifiedAnnounce {
+            env.deliverAnnounceUIEvents(
+                peerID,
+                responsePlan.shouldNotifyPeerConnected,
+                responsePlan.shouldNotifyPeerConnected && responsePlan.shouldScheduleInitialSync
+            )
+        }
 
         // Track for sync — verified announces only (our own are tracked at
         // send time). An unverified announce costs nothing to mint (any 32
