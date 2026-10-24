@@ -24,6 +24,17 @@ final class BLEEngineManualScheduler: BLEEngineScheduling, @unchecked Sendable {
         lock.withLock { pending.count }
     }
 
+    /// The same counter `advance(by:)` moves, exposed as a `Date` so
+    /// production code whose decisions are windowed on elapsed time (the
+    /// announce throttle) can be driven by test time instead of the
+    /// runner's speed. Anchored at a plausible wall-clock instant rather
+    /// than the epoch so any timestamp derived from it stays sane.
+    var currentDate: Date {
+        lock.withLock { Self.epoch.addingTimeInterval(now) }
+    }
+
+    private static let epoch = Date(timeIntervalSince1970: 1_780_000_000)
+
     /// Advances the clock, releasing due work in deadline order.
     /// Cancellation keeps its production semantics: dispatch skips a
     /// cancelled `DispatchWorkItem` at execution.
