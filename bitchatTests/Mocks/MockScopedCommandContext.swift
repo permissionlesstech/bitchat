@@ -33,6 +33,8 @@ final class MockScopedCommandContext: CommandContextProvider {
     private(set) var lookups: [(name: String, scope: ChannelID)] = []
     private(set) var participantQueries: [ChannelID] = []
     private(set) var startedPrivateChats: [PeerID] = []
+    /// Where each started chat's refusal would land.
+    private(set) var startedPrivateChatOrigins: [ConversationTarget] = []
     private(set) var sentPrivateMessages: [(content: String, peerID: PeerID, scope: ChannelID)] = []
     private(set) var clearedPublicTimelines: [ChannelID] = []
     private(set) var clearedPrivateChats: [PeerID] = []
@@ -68,8 +70,9 @@ final class MockScopedCommandContext: CommandContextProvider {
         geohashBlockListChangeCount += 1
     }
 
-    func startPrivateChat(with peerID: PeerID) {
+    func startPrivateChat(with peerID: PeerID, from origin: ConversationTarget) {
         startedPrivateChats.append(peerID)
+        startedPrivateChatOrigins.append(origin)
         selectedPrivateChatPeer = peerID
     }
 

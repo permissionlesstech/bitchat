@@ -634,7 +634,7 @@ private final class MockCommandContextProvider: CommandContextProvider {
         geohashBlockListChangeCount += 1
     }
 
-    func startPrivateChat(with peerID: PeerID) {
+    func startPrivateChat(with peerID: PeerID, from origin: ConversationTarget) {
         startedPrivateChats.append(peerID)
     }
 

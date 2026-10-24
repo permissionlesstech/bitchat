@@ -52,7 +52,10 @@ protocol CommandContextProvider: AnyObject {
     func geohashBlockListDidChange()
 
     // MARK: - Chat Actions
-    func startPrivateChat(with peerID: PeerID)
+    /// Opens the DM with `peerID` for a command typed into `origin`: a
+    /// refusal (a blocked peer's DM doesn't open) lands there, never in the
+    /// selection, which on a two-pane screen can be the other pane's.
+    func startPrivateChat(with peerID: PeerID, from origin: ConversationTarget)
     /// `scope` is the DM's channel, whose identity signs a geohash DM.
     func sendPrivateMessage(_ content: String, to peerID: PeerID, scope: ChannelID)
     func clearPublicTimeline(_ channel: ChannelID)
@@ -223,7 +226,7 @@ final class CommandProcessor {
             return .error(message: String(format: String(localized: "command.msg.not_found", defaultValue: "'%@' not found", comment: "Error when /msg can't resolve the nickname"), locale: .current, nickname))
         }
 
-        contextProvider?.startPrivateChat(with: peerID)
+        contextProvider?.startPrivateChat(with: peerID, from: scope)
 
         if parts.count > 1 {
             let message = String(parts[1])

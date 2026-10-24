@@ -168,6 +168,23 @@ struct CommandProcessorScopeTests {
         #expect(context.lookups.last?.scope == .mesh)
     }
 
+    /// A /msg opens its DM from the scope it was typed into, where a
+    /// refusal (a blocked peer's DM doesn't open) lands: #mesh's pane, or a
+    /// DM's own thread, never the selection beside them.
+    @Test func msgOpensItsDMFromTheCommandsScope() {
+        let context = MockScopedCommandContext()
+        context.activeChannel = Self.geoChannel
+        context.peersByChannel[.mesh] = ["bob": Self.bob]
+        let processor = makeProcessor(context)
+
+        _ = processor.process("/msg bob", in: .mesh)
+        let inDM = ConversationTarget(channel: .mesh, privatePeer: Self.alice)
+        _ = processor.process("/msg @bob hi", in: inDM)
+
+        #expect(context.startedPrivateChats == [Self.bob, Self.bob])
+        #expect(context.startedPrivateChatOrigins == [.mesh, inDM])
+    }
+
     // MARK: /group
 
     @Test func groupCommandsActOnTheScopesGroup() {

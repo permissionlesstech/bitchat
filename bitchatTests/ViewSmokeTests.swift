@@ -2615,6 +2615,46 @@ struct ViewSmokeTests {
         #expect(conversations.selectedPeerID == nil)
     }
 
+    /// I1: /msg to a blocked peer typed into the #mesh composer posts the
+    /// refusal in #mesh, where the command was typed, and nothing in the
+    /// geohash selected beside it.
+    @Test
+    func command_aMsgRefusalLandsWhereTheCommandWasTyped() async {
+        let manager = makeSmokeLocationManager()
+        let (viewModel, transport, _) = makeSmokeViewModel(locationManager: manager)
+        let featureModels = makeSmokeFeatureModels(for: viewModel, locationManager: manager)
+        let blocked = PeerID(str: "8182838485868788")
+        transport.peerNicknames[blocked] = "Mallory"
+        transport.updatePeerSnapshots([makeSnapshot(peerID: blocked, nickname: "Mallory", noiseByte: 0x81)])
+        let known = await TestHelpers.waitUntil(
+            { featureModels.peerListModel.meshRows.contains { $0.peerID == blocked } },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(known)
+        featureModels.conversationUIModel.block(peerID: blocked, displayName: "Mallory", from: .mesh)
+        let geohash = ChannelID.location(GeohashChannel(level: .city, geohash: "u4pru"))
+        featureModels.locationChannelsModel.select(geohash)
+        let selected = await TestHelpers.waitUntil(
+            { viewModel.activeChannel == geohash },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(selected)
+        func lines(_ channel: ChannelID) -> [String] {
+            viewModel.conversations.conversationsByID[ConversationID(channelID: channel)]?.messages.map(\.content) ?? []
+        }
+        let meshBefore = lines(.mesh)
+        let geohashBefore = lines(geohash)
+
+        viewModel.handleCommand("/msg @Mallory", from: .mesh)
+
+        #expect(viewModel.selectedPrivateChatPeer == nil)
+        #expect(lines(geohash) == geohashBefore, "\(lines(geohash).dropFirst(geohashBefore.count))")
+        // The refusal, then the command's own line (its wording unchanged).
+        let meshLines = lines(.mesh).dropFirst(meshBefore.count)
+        #expect(meshLines.count == 2, "\(Array(meshLines))")
+        #expect(meshLines.allSatisfy { $0.contains("Mallory") }, "\(Array(meshLines))")
+    }
+
     @Test
     func contentHeader_rendersTheSingleColumnAndBothPaneBars() async {
         let (viewModel, _, _) = makeSmokeViewModel()
