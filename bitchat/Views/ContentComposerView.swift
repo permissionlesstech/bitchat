@@ -21,6 +21,11 @@ struct ContentComposerView: View {
 
     let onSendMessage: () -> Void
 
+    /// Reference type on purpose: the macOS key monitor is installed once and
+    /// would otherwise keep the first value of a `@State` captured by the
+    /// view struct. Same reason mention navigation goes through the model.
+    @StateObject private var commandKeyboard = CommandSuggestionKeyboardState()
+
     #if os(iOS)
     @Binding var showImagePicker: Bool
     @Binding var imagePickerSourceType: UIImagePickerController.SourceType
@@ -59,7 +64,11 @@ struct ContentComposerView: View {
                 .padding(.horizontal, 12)
             }
 
-            CommandSuggestionsView(messageText: $messageText)
+            CommandSuggestionsView(
+                messageText: $messageText,
+                selectedIndex: commandKeyboard.selection,
+                isDismissed: commandKeyboard.dismissed
+            )
 
             if voiceRecordingVM.state.isActive {
                 recordingIndicator
@@ -82,25 +91,46 @@ struct ContentComposerView: View {
                 #endif
                 .submitLabel(.send)
                 .modifier(AutocompleteKeyboardNavigationModifier(
-                    isActive: { conversationUIModel.showAutocomplete
-                        && !conversationUIModel.autocompleteSuggestions.isEmpty },
+                    isActive: { mentionsActive || commandPanel != nil },
                     onMove: { delta in
-                        conversationUIModel.moveAutocompleteSelection(by: delta)
+                        if mentionsActive {
+                            conversationUIModel.moveAutocompleteSelection(by: delta)
+                        } else if let panel = commandPanel {
+                            commandKeyboard.selection = CommandSuggestionNavigation.moved(
+                                commandKeyboard.selection,
+                                by: delta,
+                                count: panel.aliases.count
+                            )
+                        }
                     },
                     onAccept: {
-                        conversationUIModel.completeSelectedSuggestion(in: &messageText)
+                        if mentionsActive {
+                            return conversationUIModel.completeSelectedSuggestion(in: &messageText)
+                        }
+                        return insertHighlightedCommand()
+                    },
+                    onReturn: {
+                        if mentionsActive {
+                            return conversationUIModel.completeSelectedSuggestion(in: &messageText)
+                        }
+                        return insertHighlightedCommandOnReturn()
                     },
                     onDismiss: {
-                        conversationUIModel.dismissAutocomplete()
+                        if mentionsActive {
+                            conversationUIModel.dismissAutocomplete()
+                        } else {
+                            commandKeyboard.dismissed = true
+                        }
                     }
                 ))
-                // Return while the mention panel is open completes the
-                // highlight instead of sending — matches command suggestions
-                // (#1504) and keeps Tab/Return/Escape on one convention.
+                // Return completes an open mention, or an incomplete command
+                // prefix. A finished command still sends (#233).
                 .onSubmit {
-                    if conversationUIModel.showAutocomplete,
-                       !conversationUIModel.autocompleteSuggestions.isEmpty,
+                    if mentionsActive,
                        conversationUIModel.completeSelectedSuggestion(in: &messageText) {
+                        return
+                    }
+                    if insertHighlightedCommandOnReturn() {
                         return
                     }
                     onSendMessage()
@@ -116,6 +146,8 @@ struct ContentComposerView: View {
                 .modifier(FocusEffectDisabledModifier())
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .onChange(of: messageText) { newValue in
+                    commandKeyboard.selection = 0
+                    commandKeyboard.dismissed = false
                     autocompleteDebounceTimer?.invalidate()
                     autocompleteDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
                         let cursorPosition = newValue.count
@@ -146,6 +178,41 @@ struct ContentComposerView: View {
             autocompleteDebounceTimer?.invalidate()
         }
     }
+
+    private var mentionsActive: Bool {
+        conversationUIModel.showAutocomplete && !conversationUIModel.autocompleteSuggestions.isEmpty
+    }
+
+    private var commandPanel: CommandSuggestionNavigation.Panel? {
+        guard !commandKeyboard.dismissed else { return nil }
+        let isGeoPublic = locationChannelsModel.selectedChannel.isLocation
+        let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true
+        let commands = CommandInfo.all(isGeoPublic: isGeoPublic, isGeoDM: isGeoDM).map {
+            CommandSuggestionNavigation.Command(alias: $0.alias, hasPlaceholder: $0.placeholder != nil)
+        }
+        return CommandSuggestionNavigation.panel(typedText: messageText, commands: commands)
+    }
+
+    @discardableResult
+    private func insertHighlightedCommand() -> Bool {
+        guard let panel = commandPanel, !panel.isUsageReminder else { return false }
+        let index = CommandSuggestionNavigation.clamped(commandKeyboard.selection, count: panel.aliases.count)
+        guard panel.aliases.indices.contains(index) else { return false }
+        messageText = panel.aliases[index] + " "
+        return true
+    }
+
+    private func insertHighlightedCommandOnReturn() -> Bool {
+        guard let panel = commandPanel, CommandSuggestionNavigation.returnInserts(panel) else { return false }
+        return insertHighlightedCommand()
+    }
+}
+
+/// Holds the command-panel highlight where the once-installed key monitor
+/// can see it. See `ContentComposerView.commandKeyboard`.
+private final class CommandSuggestionKeyboardState: ObservableObject {
+    @Published var selection = 0
+    @Published var dismissed = false
 }
 
 private extension ContentComposerView {
@@ -404,14 +471,13 @@ private extension ContentComposerView {
     }
 }
 
-/// Arrow/Tab/Return/Escape navigation for the mention suggestion list.
+/// Arrow/Tab/Return/Escape navigation for the mention and command panels.
 ///
 /// Deployment targets are iOS 16 / macOS 13, so `.onKeyPress` (iOS 17 /
 /// macOS 14+) is gated and unavailable on the minimum OS. Separately, on
 /// macOS the single-line field editor consumes `moveUp:`/`moveDown:` itself,
-/// so arrow keys never reach SwiftUI while the composer has focus — the
-/// same reason command suggestions (#1504) use an `NSEvent` local monitor.
-/// Mentions follow that mechanism on macOS and keep `.onKeyPress` for iOS 17+.
+/// so arrow keys never reach SwiftUI while the composer has focus. An
+/// `NSEvent` local monitor sees them anyway (#233).
 private struct AutocompleteKeyboardNavigationModifier: ViewModifier {
     /// Live activity check, not a captured Bool. The macOS monitor closure is
     /// registered once for the view's lifetime; a plain `Bool` would freeze
@@ -421,7 +487,10 @@ private struct AutocompleteKeyboardNavigationModifier: ViewModifier {
     /// state on every event.
     let isActive: () -> Bool
     let onMove: (Int) -> Void
+    /// Tab. Also the mention panel's return.
     let onAccept: () -> Bool
+    /// Return. False lets the key through so a finished command still sends.
+    let onReturn: () -> Bool
     let onDismiss: () -> Void
 
     #if os(macOS)
@@ -476,10 +545,9 @@ private struct AutocompleteKeyboardNavigationModifier: ViewModifier {
         keyMonitor = nil
     }
 
-    /// Standard autocomplete navigation (aligned with #1504): arrows move
-    /// the highlight, return/tab insert, escape dismisses. Returning nil
-    /// consumes the event so return completes instead of sending while the
-    /// list is up. Inactive monitors pass everything through.
+    /// Arrows move the highlight, tab inserts, escape dismisses. Return
+    /// inserts only when `onReturn` says so; otherwise the key reaches the
+    /// field and sends. Inactive monitors pass everything through.
     private func handleKeyDown(_ event: NSEvent) -> NSEvent? {
         guard isActive(),
               event.modifierFlags.isDisjoint(with: [.command, .option, .control]) else {
@@ -493,8 +561,10 @@ private struct AutocompleteKeyboardNavigationModifier: ViewModifier {
         case 125: // down arrow
             onMove(1)
             return nil
-        case 36, 48: // return, tab
+        case 48: // tab
             return onAccept() ? nil : event
+        case 36: // return
+            return onReturn() ? nil : event
         case 53: // escape
             onDismiss()
             return nil
