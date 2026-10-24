@@ -196,10 +196,10 @@ final class GlobeState: ObservableObject {
     }
 
     private enum Constants {
-        // Close to the projection limit so polar geohash cells remain selectable;
-        // clamping tighter would make syncSelection() encode the wrong cell.
-        static let minLat = -89.0
-        static let maxLat = 89.0
+        // Dragging stops close to the projection limit so polar geohash cells remain
+        // selectable; clamping tighter would make syncSelection() encode the wrong cell.
+        // Animations may go past it to reach a target (see clampedLat).
+        static let maxDragLat = 89.0
         static let minFlingPerSecond = 35.0
         static let maxFlingPerSecond = 1_200.0
         static let maxFrameDelta = 1.0 / 30
@@ -273,7 +273,9 @@ final class GlobeState: ObservableObject {
         guard r > 0 else { return }
         let degPerPoint = 180 / (Double.pi * r)
         centerLon = GlobeMath.normalizeLon(centerLon - dx * degPerPoint)
-        centerLat = min(max(centerLat + dy * degPerPoint, Constants.minLat), Constants.maxLat)
+        // A view already past the drag limit (a polar target) may move toward the
+        // equator but not further out, and never snaps back to the limit.
+        centerLat = clampedLat(centerLat + dy * degPerPoint, reaching: centerLat)
         syncSelection()
     }
 
@@ -354,7 +356,8 @@ final class GlobeState: ObservableObject {
 
     // MARK: - Frame loop
 
-    private func tick(_ timestamp: CFTimeInterval) {
+    /// One display frame. Internal so tests can drive animations deterministically.
+    func tick(_ timestamp: CFTimeInterval) {
         let previous = lastTick
         lastTick = timestamp
         let dt = previous.map { min(max(timestamp - $0, 0), Constants.maxFrameDelta) } ?? 0
@@ -400,7 +403,9 @@ final class GlobeState: ObservableObject {
     }
 
     private func applyTween(_ tween: Tween, t: Double) {
-        centerLat = min(max(tween.startLat + (tween.endLat - tween.startLat) * t, Constants.minLat), Constants.maxLat)
+        // The target itself is always reachable: a polar cell's center can lie past
+        // the drag limit, and clamping it would end the animation on another cell.
+        centerLat = clampedLat(tween.startLat + (tween.endLat - tween.startLat) * t, reaching: tween.endLat)
         centerLon = GlobeMath.normalizeLon(tween.startLon + tween.dLon * t)
         // Exponential interpolation feels natural for zoom.
         zoom = tween.startZoom * pow(tween.endZoom / tween.startZoom, t)
@@ -428,6 +433,13 @@ final class GlobeState: ObservableObject {
 
     private func publishMotionDetail() {
         if motionDetail != governor.detail { motionDetail = governor.detail }
+    }
+
+    /// Clamps to the drag limit, widened (up to that pole) on `reach`'s side only.
+    private func clampedLat(_ lat: Double, reaching reach: Double) -> Double {
+        let lower = max(min(-Constants.maxDragLat, reach), -90)
+        let upper = min(max(Constants.maxDragLat, reach), 90)
+        return min(max(lat, lower), upper)
     }
 
     private func syncPrecisionFromZoom() {

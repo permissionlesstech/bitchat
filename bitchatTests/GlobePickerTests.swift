@@ -303,6 +303,41 @@ struct GlobeStateTests {
         #expect(state.motionDetail == .full)
     }
 
+    /// Review regression (PR #1807): `zzzz`'s center is 89.91°, past the ±89° drag
+    /// limit. The animated intro used to clamp there and select `zzzf`, while the
+    /// Reduce Motion path kept `zzzz`.
+    @Test func polarIntroLandsOnTheRequestedCellWithAndWithoutAnimation() {
+        let target = GeohashPickerView.initialTarget(initialGeohash: "zzzz", nearbyGeohashes: [])
+        #expect(target.lat > 89)
+
+        let animated = GlobeState(targetLat: target.lat, targetLon: target.lon, initialPrecision: target.precision, startZoomedOut: true)
+        animated.setViewport(baseRadius: 170, screenMin: 390, animateIntro: true)
+        #expect(animated.isAnimating)
+        animated.tick(100)
+        animated.tick(110)
+        #expect(!animated.isAnimating)
+        #expect(animated.selectedGeohash == "zzzz")
+
+        let still = GlobeState(targetLat: target.lat, targetLon: target.lon, initialPrecision: target.precision, startZoomedOut: true)
+        still.setViewport(baseRadius: 170, screenMin: 390, animateIntro: false)
+        #expect(still.selectedGeohash == "zzzz")
+        #expect(still.centerLat == animated.centerLat)
+    }
+
+    @Test func draggingFromAPolarTargetNeverSnapsBackToTheDragLimit() {
+        let center = Geohash.decodeCenter("zzzz")
+        let state = GlobeState(targetLat: center.lat, targetLon: center.lon, initialPrecision: 4, startZoomedOut: false)
+        state.setViewport(baseRadius: 170, screenMin: 390)
+        let start = state.centerLat
+        state.rotateBy(dx: 0, dy: 50)
+        #expect(state.centerLat == start)
+        state.rotateBy(dx: 0, dy: -0.01)
+        #expect(state.centerLat < start)
+        #expect(state.centerLat > 89)
+        state.rotateBy(dx: 0, dy: -1_000_000)
+        #expect(state.centerLat == -89)
+    }
+
     @Test func slowFlingsAreIgnored() {
         let state = GlobeState(targetLat: 0, targetLon: 0, initialPrecision: 2, startZoomedOut: false)
         state.setViewport(baseRadius: 170, screenMin: 390)
