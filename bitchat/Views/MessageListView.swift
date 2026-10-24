@@ -12,6 +12,19 @@ import SwiftUI
 private struct MessageDisplayItem: Identifiable {
     let id: String
     let message: BitchatMessage
+    /// First row of its author's run (`MessageBubbleGrouping`): names its
+    /// sender.
+    let startsRun: Bool
+    /// Follows a row from the same author, however long before: sits at
+    /// the tight run spacing.
+    let followsSameAuthor: Bool
+    /// Rendered as a bubble, and if so, which edge it hugs.
+    let bubble: BubblePlacement?
+
+    enum BubblePlacement {
+        case own
+        case other
+    }
 }
 
 /// What the list's change detection keys on. The count alone stops moving
@@ -53,6 +66,7 @@ struct MessageListView: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appTheme) private var theme
+    @Environment(\.chatStyle) private var chatStyle
 
     let privatePeer: PeerID?
     @Binding var isAtBottom: Bool
@@ -114,10 +128,7 @@ struct MessageListView: View {
             )
         let windowedMessages = Array(messages.suffix(renderedWindowCount))
 
-        let messageItems: [MessageDisplayItem] = windowedMessages.compactMap { message in
-            guard !message.content.trimmed.isEmpty else { return nil }
-            return MessageDisplayItem(id: "\(contextKey)|\(message.id)", message: message)
-        }
+        let messageItems = displayItems(for: windowedMessages, contextKey: contextKey)
         // Top edge of the rendered window (whitespace-only messages get no
         // row, so they could never report reaching it).
         let firstRowID = messageItems.first?.id
@@ -139,7 +150,7 @@ struct MessageListView: View {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(messageItems) { item in
                         let message = item.message
-                        messageRow(for: message)
+                        messageRow(for: item)
                             .onAppear {
                                 // Callbacks lag a timeline switch: the new
                                 // rows appear before the old ones disappear,
@@ -183,6 +194,7 @@ struct MessageListView: View {
                                 }
                             }
                             .contentShape(Rectangle())
+                            .bubbleContextMenuPreviewShape(isBubble: item.bubble != nil)
                             .contextMenu {
                                 let showsUserActions = message.sender != "system" && !conversationUIModel.isSentByCurrentUser(message)
                                 if showsUserActions {
@@ -229,8 +241,12 @@ struct MessageListView: View {
                                     }
                                 }
                             }
+                            // Placed after the context menu so the menu lifts
+                            // only the bubble, not the empty side of the row.
+                            .modifier(BubbleRowPlacement(placement: item.bubble))
                             .padding(.horizontal, 12)
-                            .padding(.vertical, 1)
+                            .padding(.top, rowTopPadding(for: item))
+                            .padding(.bottom, item.bubble == nil ? 1 : 0)
                             // Archived echoes read as one tinted block, not
                             // just faded rows.
                             .background(message.isArchivedEcho ? palette.secondary.opacity(0.08) : Color.clear)
@@ -596,15 +612,48 @@ private extension MessageListView {
         return "\(base), \(count)"
     }
 
+    /// Rows for the rendered window (whitespace-only messages get none),
+    /// each knowing whether it starts its author's run and, in the bubble
+    /// layout, which edge its bubble hugs.
+    private func displayItems(for messages: [BitchatMessage], contextKey: String) -> [MessageDisplayItem] {
+        let usesBubbles = chatStyle.usesBubbles
+        var items: [MessageDisplayItem] = []
+        items.reserveCapacity(messages.count)
+        var previous: BitchatMessage?
+        for message in messages where !message.content.trimmed.isEmpty {
+            var bubble: MessageDisplayItem.BubblePlacement?
+            if usesBubbles, message.sender != "system" {
+                bubble = conversationUIModel.isSentByCurrentUser(message) ? .own : .other
+            }
+            items.append(MessageDisplayItem(
+                id: "\(contextKey)|\(message.id)",
+                message: message,
+                startsRun: !MessageBubbleGrouping.continuesRun(message, after: previous),
+                followsSameAuthor: MessageBubbleGrouping.hasSameAuthor(message, as: previous),
+                bubble: bubble
+            ))
+            previous = message
+        }
+        return items
+    }
+
+    /// Consecutive bubbles from one author sit close together and a change
+    /// of author opens a wider gap; every IRC row keeps the original rhythm.
+    private func rowTopPadding(for item: MessageDisplayItem) -> CGFloat {
+        guard item.bubble != nil else { return 1 }
+        return item.followsSameAuthor ? MessageBubbleMetrics.runSpacing : MessageBubbleMetrics.newRunSpacing
+    }
+
     @ViewBuilder
-    func messageRow(for message: BitchatMessage) -> some View {
+    func messageRow(for item: MessageDisplayItem) -> some View {
+        let message = item.message
         Group {
             if message.sender == "system" {
                 systemMessageRow(message)
             } else if let media = conversationUIModel.mediaAttachment(for: message) {
-                MediaMessageView(message: message, media: media, imagePreviewURL: $imagePreviewURL)
+                MediaMessageView(message: message, media: media, startsRun: item.startsRun, imagePreviewURL: $imagePreviewURL)
             } else {
-                TextMessageView(message: message)
+                TextMessageView(message: message, startsRun: item.startsRun)
             }
         }
         // Archived echoes ("heard here earlier") render dimmed: real history,
@@ -833,6 +882,22 @@ private extension MessageListView {
             return privateInboxModel.messages(for: privatePeer)
         }
         return publicChatModel.messages
+    }
+}
+
+/// Pins a bubble row to its edge at no more than the bubble's maximum width;
+/// IRC and system rows pass through untouched.
+private struct BubbleRowPlacement: ViewModifier {
+    let placement: MessageDisplayItem.BubblePlacement?
+
+    func body(content: Content) -> some View {
+        if let placement {
+            MessageBubbleRowLayout(isOwn: placement == .own) {
+                content
+            }
+        } else {
+            content
+        }
     }
 }
 
