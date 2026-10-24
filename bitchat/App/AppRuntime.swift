@@ -85,7 +85,6 @@ final class AppRuntime: ObservableObject {
         )
         self.conversationUIModel = ConversationUIModel(
             chatViewModel: self.chatViewModel,
-            privateConversationModel: self.privateConversationModel,
             conversations: conversations
         )
         self.peerListModel = PeerListModel(

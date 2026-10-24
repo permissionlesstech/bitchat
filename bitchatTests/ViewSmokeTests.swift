@@ -88,7 +88,6 @@ private func makeSmokeFeatureModels(
     )
     let conversationUIModel = ConversationUIModel(
         chatViewModel: viewModel,
-        privateConversationModel: privateConversationModel,
         conversations: conversations
     )
     let peerListModel = PeerListModel(

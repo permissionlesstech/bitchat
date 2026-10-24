@@ -69,12 +69,10 @@ private struct PrivateMediaReconnectRetryCandidate {
 @MainActor
 protocol ChatMediaTransferContext: AnyObject {
     // MARK: Composition state
-    /// The selection: read only to build `currentMediaDestination`, the
-    /// selection shim, and to tell which public identity speaks for it.
-    var canSendMediaInCurrentContext: Bool { get }
-    var selectedPrivateChatPeer: PeerID? { get }
     var nickname: String { get }
     var myPeerID: PeerID { get }
+    /// The selection: the channel `currentPublicSender()` speaks for, and
+    /// where a public media message bound to no channel lands.
     var activeChannel: ChannelID { get }
     func nicknameForPeer(_ peerID: PeerID) -> String
     func currentPublicSender() -> (name: String, peerID: PeerID)
@@ -147,8 +145,7 @@ protocol ChatMediaTransferContext: AnyObject {
 }
 
 extension ChatViewModel: ChatMediaTransferContext {
-    // `canSendMediaInCurrentContext`, `selectedPrivateChatPeer`, `nickname`,
-    // `myPeerID`, `activeChannel`, `nicknameForPeer(_:)`,
+    // `nickname`, `myPeerID`, `activeChannel`, `nicknameForPeer(_:)`,
     // `currentPublicSender()`,
     // `appendPublicMessage(_:to:)`, `removeMessage(withID:cleanupFile:)`,
     // `addSystemMessage(_:to:)`, `notifyUIChanged()`,
@@ -593,23 +590,6 @@ final class ChatMediaTransferCoordinator {
         }
     }
 
-    /// The conversation on screen now, for a send committed now: the
-    /// selection shim for callers with no target of their own.
-    var currentMediaDestination: MediaDestination {
-        MediaDestination(
-            privatePeer: context.selectedPrivateChatPeer,
-            publicChannel: context.activeChannel,
-            allowsMedia: context.canSendMediaInCurrentContext
-        )
-    }
-
-    /// The completion for a mic release. Created at the release, it binds
-    /// the voice note to the conversation on screen then, not to whatever
-    /// is selected once the recorder hands over the file.
-    func makeVoiceNoteSender() -> (URL) -> Void {
-        makeVoiceNoteSender(to: currentMediaDestination)
-    }
-
     /// The completion for a release in `target`'s composer: the note goes
     /// to that conversation, whatever is selected by the time it is ready.
     func makeVoiceNoteSender(for target: ConversationTarget) -> (URL) -> Void {
@@ -710,13 +690,9 @@ final class ChatMediaTransferCoordinator {
     }
 
     #if os(iOS)
-    func processThenSendImage(_ image: UIImage?) {
-        // Bound at the pick: processing takes long enough for the person to
-        // leave the conversation the photo was meant for.
-        processThenSendImage(image, to: currentMediaDestination)
-    }
-
     /// Sends a photo picked for `target`'s composer to that conversation.
+    /// Bound at the pick: processing takes long enough for the person to
+    /// leave the conversation the photo was meant for.
     func processThenSendImage(_ image: UIImage?, to target: ConversationTarget) {
         processThenSendImage(image, to: MediaDestination(target: target))
     }
@@ -752,13 +728,9 @@ final class ChatMediaTransferCoordinator {
         }
     }
     #elseif os(macOS)
-    func processThenSendImage(from url: URL?) {
-        // Bound at the pick: processing takes long enough for the person to
-        // leave the conversation the photo was meant for.
-        processThenSendImage(from: url, to: currentMediaDestination)
-    }
-
     /// Sends a photo picked for `target`'s composer to that conversation.
+    /// Bound at the pick: processing takes long enough for the person to
+    /// leave the conversation the photo was meant for.
     func processThenSendImage(from url: URL?, to target: ConversationTarget) {
         processThenSendImage(from: url, to: MediaDestination(target: target))
     }

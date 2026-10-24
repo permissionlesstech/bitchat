@@ -64,14 +64,6 @@ extension ChatViewModel {
         privateConversationCoordinator.handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: convKey)
     }
 
-    /// The mic release's completion: the voice note goes to the conversation
-    /// on screen at the release, not to whatever is selected once the
-    /// recorder hands over the file.
-    @MainActor
-    func makeVoiceNoteSender() -> (URL) -> Void {
-        mediaTransferCoordinator.makeVoiceNoteSender()
-    }
-
     /// The release's completion for `target`'s composer: the note goes to
     /// that conversation even if the selection moves before the file is
     /// finalized.

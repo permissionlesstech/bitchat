@@ -24,8 +24,9 @@ struct ConversationTargetTests {
     private static let geoChatPeer = PeerID(nostr: String(repeating: "cd", count: 32))
     private static let groupPeer = PeerID(groupID: Data(repeating: 0x42, count: 16))
 
-    /// The table `canSendMediaInCurrentContext` used before it was derived
-    /// from the target, kept verbatim so the two can't drift apart.
+    /// The table the selection's `canSendMediaInCurrentContext` used before
+    /// media followed a target, kept verbatim so `allowsMedia` can't drift
+    /// from it.
     private static func legacyCanSendMedia(activeChannel: ChannelID, selectedPeer: PeerID?) -> Bool {
         if let peer = selectedPeer {
             return !(peer.isGeoDM || peer.isGeoChat || peer.isGroup)

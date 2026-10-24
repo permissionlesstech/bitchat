@@ -339,7 +339,7 @@ struct ChatViewModelCommandTests {
 struct ChatViewModelComposerTests {
 
     @Test @MainActor
-    func updateAutocomplete_suggestsKnownPeersAndExcludesSelf() async {
+    func autocomplete_suggestsKnownPeersAndExcludesSelf() async {
         let (viewModel, transport) = makeTestableViewModel()
         let alice = PeerID(str: "00000000000000a1")
         let selfAlias = PeerID(str: "00000000000000a2")
@@ -347,29 +347,21 @@ struct ChatViewModelComposerTests {
         transport.simulateConnect(alice, nickname: "Alice")
         transport.simulateConnect(selfAlias, nickname: viewModel.nickname)
 
-        viewModel.updateAutocomplete(for: "hello @Al", cursorPosition: 9)
+        let state = viewModel.autocomplete(for: "hello @Al", cursorPosition: 9, in: .mesh)
 
-        #expect(viewModel.showAutocomplete)
-        #expect(viewModel.autocompleteSuggestions == ["@Alice"])
+        #expect(state.isShowing)
+        #expect(state.suggestions == ["@Alice"])
     }
 
     @Test @MainActor
-    func completeNickname_replacesTokenAndClearsAutocompleteState() async {
+    func complete_replacesToken() async {
         let (viewModel, _) = makeTestableViewModel()
         var text = "hello @Al"
 
-        viewModel.autocompleteSuggestions = ["@Alice"]
-        viewModel.autocompleteRange = NSRange(location: 6, length: 3)
-        viewModel.showAutocomplete = true
-        viewModel.selectedAutocompleteIndex = 0
-
-        _ = viewModel.completeNickname("@Alice", in: &text)
+        let state = ComposerAutocompleteState(suggestions: ["@Alice"], range: NSRange(location: 6, length: 3))
+        _ = viewModel.complete("@Alice", in: &text, state: state)
 
         #expect(text == "hello @Alice")
-        #expect(viewModel.autocompleteSuggestions.isEmpty)
-        #expect(viewModel.autocompleteRange == nil)
-        #expect(!viewModel.showAutocomplete)
-        #expect(viewModel.selectedAutocompleteIndex == 0)
     }
 
     @Test @MainActor

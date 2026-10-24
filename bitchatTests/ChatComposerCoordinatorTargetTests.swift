@@ -73,10 +73,6 @@ struct ChatComposerCoordinatorTargetTests {
 
         #expect(state == ComposerAutocompleteState(suggestions: ["@alice"], range: NSRange(location: 6, length: 3)))
         #expect(state.isShowing)
-        // Nothing shared moved: the other composer's panel is untouched.
-        #expect(context.autocompleteSuggestions.isEmpty)
-        #expect(context.autocompleteRange == nil)
-        #expect(!context.showAutocomplete)
 
         var text = "hello @al"
         let cursor = coordinator.complete("@alice", in: &text, state: state)
@@ -89,18 +85,6 @@ struct ChatComposerCoordinatorTargetTests {
 
         context.queryResult = ([], nil)
         #expect(coordinator.autocomplete(for: "plain", cursorPosition: 5, in: .mesh) == ComposerAutocompleteState())
-    }
-
-    @Test func theSelectionShimOffersTheOpenDMsNetwork() {
-        let context = makeContext()
-        context.activeChannel = Self.geoChannel
-        context.selectedPrivateChatPeer = Self.meshPeer
-        let coordinator = ChatComposerCoordinator(context: context)
-
-        coordinator.updateAutocomplete(for: "@", cursorPosition: 1)
-
-        #expect(context.queriedCandidates == [["alice", "bob"]])
-        #expect(context.showAutocomplete)
     }
 
     @Test func commandSuggestionsFollowTheTargetsContext() {

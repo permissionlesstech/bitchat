@@ -128,13 +128,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
     typealias GeoOutgoingContext = (channel: GeohashChannel, event: NostrEvent, identity: NostrIdentity, teleported: Bool)
 
-    /// Whether the selection takes photos and voice: `allowsMedia` of the
-    /// selection's target, one table for every composer.
-    @MainActor
-    var canSendMediaInCurrentContext: Bool {
-        selectionTarget.allowsMedia
-    }
-
     var publicRateLimiter = MessageRateLimiter(
         senderCapacity: TransportConfig.uiSenderRateBucketCapacity,
         senderRefillPerSec: TransportConfig.uiSenderRateBucketRefillPerSec,
@@ -299,13 +292,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     }
 
     var peerIndex: [PeerID: BitchatPeer] = [:]
-
-    // MARK: - Autocomplete Properties
-
-    @Published var autocompleteSuggestions: [String] = []
-    @Published var showAutocomplete: Bool = false
-    @Published var autocompleteRange: NSRange? = nil
-    @Published var selectedAutocompleteIndex: Int = 0
 
     // MARK: - Services and Storage
 
@@ -1751,12 +1737,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
         // Identity manager has cleared persisted identity data above
 
-        // Clear autocomplete state
-        autocompleteSuggestions.removeAll()
-        showAutocomplete = false
-        autocompleteRange = nil
-        selectedAutocompleteIndex = 0
-
         // Clear selected private chat
         selectedPrivateChatPeer = nil
 
@@ -1896,14 +1876,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     #endif
 
     // MARK: - Autocomplete
-
-    func updateAutocomplete(for text: String, cursorPosition: Int) {
-        composerCoordinator.updateAutocomplete(for: text, cursorPosition: cursorPosition)
-    }
-
-    func completeNickname(_ nickname: String, in text: inout String) -> Int {
-        composerCoordinator.completeNickname(nickname, in: &text)
-    }
 
     /// Mention suggestions for `text` in `target`'s composer, as a value
     /// that composer keeps; nothing shared changes.

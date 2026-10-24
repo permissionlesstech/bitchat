@@ -7,20 +7,14 @@ import UIKit
 
 @MainActor
 final class ConversationUIModel: ObservableObject {
-    @Published private(set) var showAutocomplete = false
-    @Published private(set) var autocompleteSuggestions: [String] = []
-    @Published private(set) var selectedAutocompleteIndex = 0
     @Published private(set) var currentNickname: String
-    @Published private(set) var canSendMediaInCurrentContext = true
     @Published private(set) var legacyPrivateMediaConsentRequest: LegacyPrivateMediaConsentRequest?
     /// Who is talking live in the public mesh channel right now (floor
     /// courtesy: the composer mic tints "busy" while someone holds the floor).
     @Published private(set) var activeLiveVoiceTalker: String?
 
     private let chatViewModel: ChatViewModel
-    private let privateConversationModel: PrivateConversationModel
     private let conversations: ConversationStore
-    private var activeChannel: ChannelID
     private var cancellables = Set<AnyCancellable>()
     /// My geochat sender ID for the location channel on screen, kept with the
     /// public key it was built from. `publicKeyHex` hex-encodes on every
@@ -34,18 +28,11 @@ final class ConversationUIModel: ObservableObject {
 
     init(
         chatViewModel: ChatViewModel,
-        privateConversationModel: PrivateConversationModel,
         conversations: ConversationStore
     ) {
         self.chatViewModel = chatViewModel
-        self.privateConversationModel = privateConversationModel
         self.conversations = conversations
-        self.activeChannel = conversations.activeChannel
         self.currentNickname = chatViewModel.nickname
-        self.showAutocomplete = chatViewModel.showAutocomplete
-        self.autocompleteSuggestions = chatViewModel.autocompleteSuggestions
-        self.selectedAutocompleteIndex = chatViewModel.selectedAutocompleteIndex
-        self.canSendMediaInCurrentContext = chatViewModel.canSendMediaInCurrentContext
 
         bind()
     }
@@ -182,8 +169,8 @@ final class ConversationUIModel: ObservableObject {
     /// My geochat sender ID in the location channel on screen (nil on #mesh),
     /// memoized in `ownGeoChatSender`.
     private func ownGeoChatPeerID() -> PeerID? {
-        // The store's channel, not the mirrored `activeChannel`, which trails
-        // a switch by a runloop turn.
+        // The store's channel as it is now: the sink in `bind()` hears of a
+        // switch a run-loop turn later.
         guard case .location(let channel) = conversations.activeChannel,
               let identity = chatViewModel.geohashIdentity(for: channel.geohash)
         else { return nil }
@@ -275,21 +262,6 @@ final class ConversationUIModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .assign(to: &$currentNickname)
 
-        chatViewModel.$showAutocomplete
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$showAutocomplete)
-
-        chatViewModel.$autocompleteSuggestions
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$autocompleteSuggestions)
-
-        chatViewModel.$selectedAutocompleteIndex
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$selectedAutocompleteIndex)
-
         chatViewModel.$activePublicVoiceTalker
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
@@ -303,18 +275,9 @@ final class ConversationUIModel: ObservableObject {
         conversations.$activeChannel
             .receive(on: DispatchQueue.main)
             .sink { [weak self] channel in
-                self?.activeChannel = channel
                 if channel == .mesh {
                     self?.ownGeoChatSender = nil
                 }
-                self?.refreshComputedState()
-            }
-            .store(in: &cancellables)
-
-        privateConversationModel.$selectedPeerID
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.refreshComputedState()
             }
             .store(in: &cancellables)
 
@@ -326,21 +289,5 @@ final class ConversationUIModel: ObservableObject {
                 self?.objectWillChange.send()
             }
             .store(in: &cancellables)
-    }
-
-    private func refreshComputedState() {
-        // One table for every composer: the selection's target allows media
-        // exactly where a composer's own target would. (Media transfer is not
-        // wired for groups in v1, so a group never takes it.)
-        let canSendMedia = ConversationTarget(
-            channel: activeChannel,
-            privatePeer: privateConversationModel.selectedPeerID
-        ).allowsMedia
-        // Every write republishes to every message row, and most triggers
-        // (each peer, favorite or status refresh of the selection) leave the
-        // value as it was.
-        if canSendMediaInCurrentContext != canSendMedia {
-            canSendMediaInCurrentContext = canSendMedia
-        }
     }
 }

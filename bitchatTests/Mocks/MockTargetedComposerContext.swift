@@ -15,12 +15,6 @@ import BitFoundation
 
 @MainActor
 final class MockTargetedComposerContext: ChatComposerContext {
-    // The shared published state the single composer reads.
-    var autocompleteSuggestions: [String] = []
-    var autocompleteRange: NSRange?
-    var showAutocomplete = false
-    var selectedAutocompleteIndex = 0
-
     /// What every query returns, so the candidates are what's under test.
     var queryResult: (suggestions: [String], range: NSRange?) = (["@x"], NSRange(location: 0, length: 1))
     private(set) var queriedCandidates: [[String]] = []
@@ -43,7 +37,6 @@ final class MockTargetedComposerContext: ChatComposerContext {
     var nickname = "me"
     var myPeerID = PeerID(str: "0011223344556677")
     var activeChannel: ChannelID = .mesh
-    var selectedPrivateChatPeer: PeerID?
     var meshNickname = "me"
     var meshNicknamesByPeerID: [PeerID: String] = [:]
 

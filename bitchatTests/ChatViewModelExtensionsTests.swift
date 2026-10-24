@@ -979,7 +979,7 @@ struct ChatViewModelMediaTransferTests {
         try Data("voice".utf8).write(to: url)
         viewModel.switchLocationChannel(to: .location(GeohashChannel(level: .city, geohash: geohash)))
 
-        viewModel.makeVoiceNoteSender()(url)
+        viewModel.makeVoiceNoteSender(for: viewModel.selectionTarget)(url)
 
         #expect(!FileManager.default.fileExists(atPath: url.path))
         #expect(viewModel.messages.contains(where: { $0.sender == "system" }))
@@ -995,7 +995,7 @@ struct ChatViewModelMediaTransferTests {
         let coordinator = viewModel.mediaTransferCoordinator
         coordinator.sendImage(
             from: URL(fileURLWithPath: "/tmp/ignored.jpg"),
-            to: coordinator.currentMediaDestination
+            to: .init(target: viewModel.selectionTarget)
         ) {
             cleanupCalled = true
         }
@@ -1015,7 +1015,7 @@ struct ChatViewModelMediaTransferTests {
         defer { try? FileManager.default.removeItem(at: url) }
 
         viewModel.selectedPrivateChatPeer = peerID
-        let sendVoiceNote = viewModel.makeVoiceNoteSender()
+        let sendVoiceNote = viewModel.makeVoiceNoteSender(for: viewModel.selectionTarget)
         viewModel.selectedPrivateChatPeer = nil
         sendVoiceNote(url)
 
@@ -1124,7 +1124,7 @@ struct ChatViewModelMediaTransferTests {
         try Data(repeating: 0x55, count: FileTransferLimits.maxVoiceNoteBytes + 1).write(to: url, options: .atomic)
 
         viewModel.selectedPrivateChatPeer = peerID
-        viewModel.makeVoiceNoteSender()(url)
+        viewModel.makeVoiceNoteSender(for: viewModel.selectionTarget)(url)
 
         let didFail = await TestHelpers.waitUntil({
             isFailed(status: viewModel.privateChats[peerID]?.last?.deliveryStatus)
@@ -1143,7 +1143,7 @@ struct ChatViewModelMediaTransferTests {
 
         viewModel.selectedPrivateChatPeer = peerID
         let coordinator = viewModel.mediaTransferCoordinator
-        coordinator.sendImage(from: sourceURL, to: coordinator.currentMediaDestination)
+        coordinator.sendImage(from: sourceURL, to: .init(target: viewModel.selectionTarget))
 
         let didSend = await TestHelpers.waitUntil({ transport.sentPrivateFiles.count == 1 }, timeout: TestConstants.settleTimeout)
         #expect(didSend)
@@ -1165,7 +1165,7 @@ struct ChatViewModelMediaTransferTests {
 
         viewModel.selectedPrivateChatPeer = peerID
         let coordinator = viewModel.mediaTransferCoordinator
-        coordinator.sendImage(from: url, to: coordinator.currentMediaDestination)
+        coordinator.sendImage(from: url, to: .init(target: viewModel.selectionTarget))
 
         let didNotify = await TestHelpers.waitUntil({
             viewModel.privateChats[peerID]?.contains(where: {

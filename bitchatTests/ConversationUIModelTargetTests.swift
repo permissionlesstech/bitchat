@@ -34,14 +34,8 @@ private func makeTargetUIModel() -> (ui: ConversationUIModel, viewModel: ChatVie
         transport: transport,
         locationManager: locationManager
     )
-    let privateModel = PrivateConversationModel(
-        chatViewModel: viewModel,
-        conversations: viewModel.conversations,
-        locationChannelsModel: LocationChannelsModel(manager: locationManager)
-    )
     let ui = ConversationUIModel(
         chatViewModel: viewModel,
-        privateConversationModel: privateModel,
         conversations: viewModel.conversations
     )
     return (ui, viewModel, transport)
@@ -139,7 +133,6 @@ struct ConversationUIModelTargetTests {
 
         let state = ui.autocomplete(for: "hi @al", cursorPosition: 6, in: .mesh)
         #expect(state.suggestions == ["@alice"])
-        #expect(!ui.showAutocomplete)
 
         var text = "hi @al"
         _ = ui.complete("@alice", in: &text, state: state)

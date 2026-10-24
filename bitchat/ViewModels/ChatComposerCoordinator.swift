@@ -22,11 +22,7 @@ struct ComposerAutocompleteState: Equatable {
 /// dependencies explicit.
 @MainActor
 protocol ChatComposerContext: AnyObject {
-    // MARK: Autocomplete UI state
-    var autocompleteSuggestions: [String] { get set }
-    var autocompleteRange: NSRange? { get set }
-    var showAutocomplete: Bool { get set }
-    var selectedAutocompleteIndex: Int { get set }
+    // MARK: Autocomplete
     /// Computes mention suggestions for the text up to the cursor.
     func autocompleteQuery(
         for text: String,
@@ -39,10 +35,8 @@ protocol ChatComposerContext: AnyObject {
     // MARK: Identity & channel state
     var nickname: String { get }
     var myPeerID: PeerID { get }
-    /// The selection: the published-state shim's target, and the geohash
-    /// whose nicknames `geoNicknames` holds.
+    /// The selection: the geohash whose nicknames `geoNicknames` holds.
     var activeChannel: ChannelID { get }
-    var selectedPrivateChatPeer: PeerID? { get }
     /// The transport's own nickname (excluded from autocomplete candidates).
     var meshNickname: String { get }
     func meshPeerNicknames() -> [PeerID: String]
@@ -57,9 +51,8 @@ protocol ChatComposerContext: AnyObject {
 }
 
 extension ChatViewModel: ChatComposerContext {
-    // `autocompleteSuggestions`, `autocompleteRange`, `showAutocomplete`,
-    // `selectedAutocompleteIndex`, `nickname`, `myPeerID`, `activeChannel`,
-    // `selectedPrivateChatPeer`, `geoNicknames`, `meshPeerNicknames()`, `isNostrBlocked(pubkeyHexLowercased:)`,
+    // `nickname`, `myPeerID`, `activeChannel`, `geoNicknames`,
+    // `meshPeerNicknames()`, `isNostrBlocked(pubkeyHexLowercased:)`,
     // and `deriveNostrIdentity(forGeohash:)` are shared requirements with the
     // other contexts or satisfied by existing `ChatViewModel` members. The
     // members below flatten nested service accesses into intent-named calls.
@@ -145,35 +138,6 @@ final class ChatComposerCoordinator {
         return commands.filter { $0.alias.starts(with: text.lowercased()) }
     }
 
-    /// The selection's composer: computes for the selection's target and
-    /// publishes the result on the shared state the single composer reads.
-    func updateAutocomplete(for text: String, cursorPosition: Int) {
-        let state = autocomplete(
-            for: text,
-            cursorPosition: cursorPosition,
-            in: ConversationTarget(channel: context.activeChannel, privatePeer: context.selectedPrivateChatPeer)
-        )
-        setAutocompleteState(suggestions: state.suggestions, range: state.range)
-    }
-
-    /// `complete(_:in:state:)` against the shared published state, which it
-    /// then clears.
-    func completeNickname(_ nickname: String, in text: inout String) -> Int {
-        let state = ComposerAutocompleteState(
-            suggestions: context.autocompleteSuggestions,
-            range: context.autocompleteRange
-        )
-        guard state.range != nil else { return text.count }
-        let cursor = complete(nickname, in: &text, state: state)
-
-        context.showAutocomplete = false
-        context.autocompleteSuggestions = []
-        context.autocompleteRange = nil
-        context.selectedAutocompleteIndex = 0
-
-        return cursor
-    }
-
     func parseMentions(from content: String) -> [String] {
         let regex = ChatViewModel.Patterns.mention
         let nsContent = content as NSString
@@ -202,25 +166,6 @@ final class ChatComposerCoordinator {
 }
 
 private extension ChatComposerCoordinator {
-    /// Shows `suggestions` (hidden when empty) with the highlight reset to the
-    /// first one. Writes only the properties that change: each write
-    /// republishes the composer state, which re-renders every message row.
-    func setAutocompleteState(suggestions: [String], range: NSRange?) {
-        let isShown = !suggestions.isEmpty
-        if context.autocompleteSuggestions != suggestions {
-            context.autocompleteSuggestions = suggestions
-        }
-        if context.autocompleteRange != range {
-            context.autocompleteRange = range
-        }
-        if context.showAutocomplete != isShown {
-            context.showAutocomplete = isShown
-        }
-        if context.selectedAutocompleteIndex != 0 {
-            context.selectedAutocompleteIndex = 0
-        }
-    }
-
     /// Who can be mentioned in `target`: mesh peers for #mesh and for mesh
     /// DMs and groups, whatever channel is selected; the participants of a
     /// geohash for that geohash and its DMs. Geohash names are only known
