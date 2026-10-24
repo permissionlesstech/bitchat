@@ -130,6 +130,9 @@ enum TransportConfig {
     // Sample interval for the periodic store-audit "OK" heartbeat line
     // (first + every Nth audit); violations always log at error level.
     static let conversationStoreAuditLogInterval: Int = 10
+    // Debug builds audit the store on the first read-receipt cleanup and then
+    // every Nth (cleanups ride peer-list updates, at most ~2 a second).
+    static let conversationStoreAuditCleanupInterval: Int = 32
     // Sample interval for the mirrored-republish debug line in the ID-only
     // delivery fan-out (first + every Nth republish).
     static let conversationStoreMirroredRepublishLogInterval: Int = 25

@@ -1117,6 +1117,72 @@ struct ConversationStoreTests {
         #expect(store.conversationIDs(forMessageID: "m2").isEmpty)
     }
 
+    /// Read receipts can only go stale when a message leaves a direct
+    /// conversation, so the receipt prune keys off this count. It must move
+    /// for every way a direct message disappears, and never for public
+    /// timelines (their churn would defeat the skip).
+    @Test("direct-message removal count moves for every direct removal only")
+    @MainActor
+    func directMessageRemovalCountTracksDirectRemovalsOnly() {
+        let store = ConversationStore()
+        let direct = makeDirectConversationID("aa")
+        let other = makeDirectConversationID("bb")
+        var count = store.directMessageRemovalCount
+
+        func expectBump(_ label: Comment) {
+            #expect(store.directMessageRemovalCount > count, label)
+            count = store.directMessageRemovalCount
+        }
+        func expectNoBump(_ label: Comment) {
+            #expect(store.directMessageRemovalCount == count, label)
+        }
+
+        // Public timelines: appends, trims and removals never count.
+        let geohash = ConversationID.geohash("u4pruyd")
+        let geoCap = store.conversation(for: geohash).cap
+        for index in 0...geoCap {
+            store.append(makeMessage(id: "g\(index)", timestamp: TimeInterval(index)), to: geohash)
+        }
+        store.append(makeMessage(id: "m1", timestamp: 1), to: .mesh)
+        store.append(makeMessage(id: "m2", timestamp: 2), to: .mesh)
+        store.removeMessage(withID: "m1", from: .mesh)
+        store.removeMessages(from: .mesh) { _ in true }
+        store.clear(geohash)
+        store.removeConversation(geohash)
+        expectNoBump("public appends, trims and removals")
+
+        for index in 0..<6 {
+            store.append(makeMessage(id: "d\(index)", timestamp: TimeInterval(index), isPrivate: true), to: direct)
+        }
+        store.upsertByID(makeMessage(id: "d0", timestamp: 0, content: "edited", isPrivate: true), in: direct)
+        expectNoBump("direct appends and in-place upserts")
+
+        store.removeMessage(withID: "d0", from: direct)
+        expectBump("removeMessage")
+        store.removeMessages(from: direct) { $0.id == "d1" }
+        expectBump("removeMessages")
+        store.migrateConversation(from: direct, to: other)
+        expectBump("migration out of a direct conversation")
+        store.clear(other)
+        expectBump("clear")
+
+        store.append(makeMessage(id: "e1", timestamp: 1, isPrivate: true), to: other)
+        store.removeConversation(other)
+        expectBump("removeConversation")
+
+        let capped = makeDirectConversationID("cc")
+        let directCap = store.conversation(for: capped).cap
+        for index in 0..<directCap {
+            store.append(makeMessage(id: "c\(index)", timestamp: TimeInterval(index + 1), isPrivate: true), to: capped)
+        }
+        expectNoBump("filling a direct conversation to its cap")
+        store.append(makeMessage(id: "c-overflow", timestamp: TimeInterval(directCap + 1), isPrivate: true), to: capped)
+        expectBump("cap trim")
+
+        store.clearAll()
+        expectBump("clearAll")
+    }
+
     @Test("shared message instance across conversations stays consistent")
     @MainActor
     func sharedInstanceMirroredCopiesStayConsistent() {

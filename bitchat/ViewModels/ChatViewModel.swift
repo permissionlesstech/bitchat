@@ -490,6 +490,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         didSet {
             // Only persist if there are changes
             guard oldValue != sentReadReceipts else { return }
+            sentReadReceiptsRevision &+= 1
 
             // Persist whenever it changes (no manual synchronize/verify re-read)
             if let data = try? JSONEncoder().encode(Array(sentReadReceipts)) {
@@ -500,6 +501,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         }
     }
 
+    /// Bumped on every change to `sentReadReceipts`; part of the read-receipt
+    /// prune's skip check (`readReceiptPruneGeneration`).
+    private(set) var sentReadReceiptsRevision = 0
+
     // Track which GeoDM messages we've already sent a delivery ACK for (by messageID)
     // Single-writer: mutate only via `markGeoDeliveryAckSent(_:)` below.
     private(set) var sentGeoDeliveryAcks: Set<String> = []
@@ -507,11 +512,16 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     // Track app startup phase to prevent marking old messages as unread
     var isStartupPhase = true
 
-    // ConversationStore field audit bookkeeping (see auditConversationStore()):
-    // runs on the read-receipt cleanup cadence, heartbeat sampled first +
-    // every `TransportConfig.conversationStoreAuditLogInterval`th audit.
+    #if DEBUG
+    // ConversationStore field audit bookkeeping (see
+    // auditConversationStoreIfDue()): sampled on the read-receipt cleanup
+    // cadence (first cleanup, then every
+    // `TransportConfig.conversationStoreAuditCleanupInterval`th), heartbeat
+    // logged first + every `TransportConfig.conversationStoreAuditLogInterval`th audit.
+    private var storeAuditCleanupCount = 0
     private var storeAuditCount = 0
     private var storeAuditLastAppendCount = 0
+    #endif
     // Announce Tor initial readiness once per launch to avoid duplicates
     var torInitialReadyAnnounced: Bool = false
 
@@ -2249,19 +2259,31 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     @MainActor
     func cleanupOldReadReceipts() {
         deliveryCoordinator.cleanupOldReadReceipts()
-        auditConversationStore()
+        #if DEBUG
+        auditConversationStoreIfDue()
+        #endif
     }
 
+    #if DEBUG
     /// Periodic on-device verification of the `ConversationStore`'s
-    /// correctness invariants, piggybacked on the read-receipt cleanup
-    /// cadence (peer-list updates) so no extra timer exists. Loud on
-    /// violation (one error line each), near-silent when healthy (sampled
-    /// heartbeat: first + every Nth audit). The audit is O(total messages)
-    /// and allocation-free while healthy — measured ~0.5 ms at 5k messages
-    /// (see `PerformanceBaselineTests.testConversationStoreAudit`), cheap
-    /// relative to its cadence, so it always runs.
+    /// correctness invariants in Debug (field-test) builds, piggybacked on
+    /// the read-receipt cleanup cadence (peer-list updates) so no extra timer
+    /// exists. Loud on violation (one error line each), near-silent when
+    /// healthy (sampled heartbeat: first + every Nth audit). Its only outputs
+    /// are log lines, which release builds compile out, so release skips the
+    /// audit entirely. It is O(total messages) (see
+    /// `PerformanceBaselineTests.testConversationStoreAudit`), over a
+    /// millisecond in debug with a full mesh timeline, so it runs on the
+    /// first cleanup and then every
+    /// `TransportConfig.conversationStoreAuditCleanupInterval`th, not on
+    /// every peer-list update.
     @MainActor
-    private func auditConversationStore() {
+    private func auditConversationStoreIfDue() {
+        storeAuditCleanupCount += 1
+        guard storeAuditCleanupCount == 1
+                || storeAuditCleanupCount.isMultiple(of: TransportConfig.conversationStoreAuditCleanupInterval) else {
+            return
+        }
         storeAuditCount += 1
         let violations = conversations.auditInvariants()
         guard violations.isEmpty else {
@@ -2279,6 +2301,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         }
         storeAuditLastAppendCount = appendCount
     }
+    #endif
 
     func parseMentions(from content: String) -> [String] {
         composerCoordinator.parseMentions(from: content)

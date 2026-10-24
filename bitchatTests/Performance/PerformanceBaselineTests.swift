@@ -564,11 +564,11 @@ final class PerformanceBaselineTests: XCTestCase {
     // MARK: - 8. ConversationStore invariant audit (field observability)
 
     /// `ConversationStore.auditInvariants()` over a realistic 5k-message
-    /// corpus (mesh + geohash + 75 private chats). The audit runs in the
-    /// field on the read-receipt cleanup cadence
-    /// (`ChatViewModel.auditConversationStore`), so this measures the
-    /// per-audit cost that piggybacks on peer-list updates — it must stay
-    /// trivially cheap relative to that cadence.
+    /// corpus (mesh + geohash + 75 private chats). Debug (field-test) builds
+    /// run it on the read-receipt cleanup cadence, sampled to the first and
+    /// then every 32nd cleanup (`ChatViewModel.auditConversationStoreIfDue`);
+    /// release builds never run it. This measures the per-audit cost — it
+    /// must stay cheap relative to that cadence.
     func testConversationStoreAudit() {
         let context = PerfDeliveryContext.makeCorpus(publicCount: 2000, peerCount: 75, messagesPerPeer: 40)
         let store = context.store
@@ -746,8 +746,16 @@ private final class PerfNostrContext: ChatNostrContext {
 @MainActor
 private final class PerfDeliveryContext: ChatDeliveryContext {
     let store = ConversationStore()
-    var sentReadReceipts: Set<String> = []
+    var sentReadReceipts: Set<String> = [] {
+        didSet {
+            if oldValue != sentReadReceipts { sentReadReceiptsRevision += 1 }
+        }
+    }
+    private var sentReadReceiptsRevision = 0
     var isStartupPhase: Bool { false }
+    var readReceiptPruneGeneration: Int {
+        store.directMessageRemovalCount &+ sentReadReceiptsRevision
+    }
     private var publicIDs: [String] = []
     private var privateIDsByPeer: [(peerID: PeerID, messageIDs: [String])] = []
 
