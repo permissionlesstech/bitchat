@@ -87,7 +87,11 @@ private final class MockChatMediaTransferContext: ChatMediaTransferContext {
         removedMessages.append((messageID, false))
     }
 
-    func addSystemMessage(_ content: String, to target: ConversationTarget) { systemMessages.append(content) }
+    private(set) var systemMessageTargets: [ConversationTarget] = []
+    func addSystemMessage(_ content: String, to target: ConversationTarget) {
+        systemMessages.append(content)
+        systemMessageTargets.append(target)
+    }
     private(set) var mediaDeletionRefusals: [String] = []
     func notifyMediaDeletionRefused(messageID: String) {
         mediaDeletionRefusals.append(messageID)
@@ -793,6 +797,44 @@ struct ChatMediaTransferCoordinatorContextTests {
         #expect(context.privateChats.isEmpty)
         #expect(context.appendedPublicMessages.isEmpty)
         #expect(coordinator.transferIdToMessageIDs.isEmpty)
+    }
+
+    /// I1: a send bound to a DM that can't go out says so in that DM's
+    /// thread: beside the split layout's #mesh pane a mesh DM's scope is
+    /// #mesh, and the line must not land in that pane. A public send's goes
+    /// to its own timeline.
+    @Test @MainActor
+    func aFailedSendIsReportedInTheConversationItWasBoundTo() async throws {
+        let context = MockChatMediaTransferContext()
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        let peer = PeerID(str: "a11ce000a11ce000")
+        let invalid = FileManager.default.temporaryDirectory
+            .appendingPathComponent("invalid-\(UUID().uuidString).jpg")
+        try Data("not-an-image".utf8).write(to: invalid, options: .atomic)
+        defer { try? FileManager.default.removeItem(at: invalid) }
+
+        coordinator.sendImage(
+            from: invalid,
+            to: .init(target: ConversationTarget(channel: .mesh, privatePeer: peer))
+        )
+        coordinator.sendImage(from: invalid, to: .init(target: .mesh))
+
+        // A geohash DM takes no voice notes.
+        let geohash = ChannelID.location(GeohashChannel(level: .city, geohash: "u4pruy"))
+        let geoDM = PeerID(nostr_: String(repeating: "ab", count: 32))
+        let voice = FileManager.default.temporaryDirectory
+            .appendingPathComponent("voice-\(UUID().uuidString).m4a")
+        try Data([0x01, 0x02]).write(to: voice)
+        coordinator.sendVoiceNote(
+            at: voice,
+            to: .init(target: ConversationTarget(channel: geohash, privatePeer: geoDM))
+        )
+
+        #expect(context.systemMessageTargets == [
+            ConversationTarget(channel: .mesh, privatePeer: peer),
+            .mesh,
+            ConversationTarget(channel: geohash, privatePeer: geoDM)
+        ])
     }
 
     @Test @MainActor

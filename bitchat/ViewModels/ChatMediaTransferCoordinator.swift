@@ -585,10 +585,11 @@ final class ChatMediaTransferCoordinator {
         }
 
         /// Where a line about this send goes when it can't go out: the
-        /// public timeline it was bound to (a DM's own scope), never one
-        /// selected since.
+        /// conversation it was bound to, a DM's own thread for a DM, never
+        /// one selected since. Beside the split layout's #mesh pane, a DM's
+        /// scope is #mesh: its failure must not land in the other pane.
         var failureTarget: ConversationTarget {
-            .publicChannel(publicChannel)
+            ConversationTarget(channel: publicChannel, privatePeer: privatePeer)
         }
     }
 

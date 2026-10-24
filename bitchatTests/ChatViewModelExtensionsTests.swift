@@ -1153,6 +1153,8 @@ struct ChatViewModelMediaTransferTests {
         #expect(viewModel.messageIDToTransferId.count == 1)
     }
 
+    /// A photo for a DM that can't be prepared says so in that DM's thread,
+    /// where it was picked, not in the public timeline under it.
     @Test @MainActor
     func sendImage_invalidSourceAddsFailureSystemMessage() async throws {
         let (viewModel, transport) = makeTestableViewModel()
@@ -1166,11 +1168,13 @@ struct ChatViewModelMediaTransferTests {
         coordinator.sendImage(from: url, to: coordinator.currentMediaDestination)
 
         let didNotify = await TestHelpers.waitUntil({
-            viewModel.messages.contains(where: { $0.sender == "system" && $0.content.contains("Failed to prepare image") })
+            viewModel.privateChats[peerID]?.contains(where: {
+                $0.sender == "system" && $0.content.contains("Failed to prepare image")
+            }) == true
         }, timeout: TestConstants.settleTimeout)
         #expect(didNotify)
         #expect(transport.sentPrivateFiles.isEmpty)
-        #expect(viewModel.privateChats[peerID]?.isEmpty != false)
+        #expect(!viewModel.messages.contains(where: { $0.content.contains("Failed to prepare image") }))
     }
 
     @Test @MainActor
