@@ -38,7 +38,10 @@ let package = Package(
                 "bitchat.entitlements",
                 "bitchat-macOS.entitlements",
                 "LaunchScreen.storyboard",
-                "ViewModels/Extensions/README.md"
+                "ViewModels/Extensions/README.md",
+                // Globe picker geometry, bundled by the Xcode app targets and read
+                // from Bundle.main; the SwiftPM build only runs tests.
+                "Resources/Globe"
             ],
             resources: [
                 .process("Localizable.xcstrings")

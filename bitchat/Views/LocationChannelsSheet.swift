@@ -16,6 +16,9 @@ struct LocationChannelsSheet: View {
     @State private var pendingShareGeohash: String?
     @State private var showSharePrecisionWarning = false
     @State private var activeSharePayload: ChannelSharePayload?
+    @State private var showGlobePicker = false
+    /// Geohash chosen on the globe; applied once the picker has dismissed.
+    @State private var pickedGeohash: String?
 
     private enum Strings {
         static let title: LocalizedStringKey = "location_channels.title"
@@ -55,6 +58,7 @@ struct LocationChannelsSheet: View {
         static let sharePrecisionTitle = String(localized: "channel.share.precision_warning.title", defaultValue: "share a precise location channel?", comment: "Title of the confirmation before sharing a neighborhood-or-finer geohash invite")
         static let sharePrecisionMessage = String(localized: "channel.share.precision_warning.message", defaultValue: "this channel covers a small area. an invite sent over sms or imessage is visible to the carrier and both handsets — it discloses interest in that place, not only that someone uses bitchat.", comment: "Body of the confirmation before sharing a fine-precision geohash invite")
         static let shareAnyway = String(localized: "channel.share.precision_warning.confirm", defaultValue: "share anyway", comment: "Confirms sharing a fine-precision location channel after the OpSec warning")
+        static let openMap = String(localized: "location_channels.accessibility.open_map", defaultValue: "open map", comment: "Accessibility label for the button that opens the globe geohash picker")
 
         static func meshTitle(_ count: Int) -> String {
             let label = String(localized: "location_channels.mesh_label", comment: "Label for the mesh channel row")
@@ -220,6 +224,47 @@ struct LocationChannelsSheet: View {
         .sheet(item: $activeSharePayload) { payload in
             ShareActivityView(text: payload.text)
         }
+        #if os(iOS)
+        .fullScreenCover(isPresented: $showGlobePicker, onDismiss: applyPickedGeohash) {
+            globePicker
+        }
+        #else
+        .sheet(isPresented: $showGlobePicker, onDismiss: applyPickedGeohash) {
+            globePicker
+        }
+        #endif
+    }
+
+    /// Opens on the typed geohash, else the current location channel; the picker
+    /// itself falls back to the coarsest nearby channel.
+    private var globePicker: some View {
+        let typed = customGeohash.trimmed.lowercased().replacingOccurrences(of: "#", with: "")
+        let initial: String
+        if !typed.isEmpty {
+            initial = typed
+        } else if case .location(let channel) = locationChannelsModel.selectedChannel {
+            initial = channel.geohash
+        } else {
+            initial = ""
+        }
+        return GeohashPickerView(
+            initialGeohash: initial,
+            nearbyGeohashes: locationChannelsModel.availableChannels.map(\.geohash),
+            onSelect: { geohash in
+                pickedGeohash = geohash
+                showGlobePicker = false
+            },
+            onCancel: { showGlobePicker = false }
+        )
+    }
+
+    private func applyPickedGeohash() {
+        guard let geohash = pickedGeohash else { return }
+        pickedGeohash = nil
+        guard validateGeohash(geohash) else { return }
+        customError = nil
+        locationChannelsModel.teleport(to: geohash)
+        isPresented = false
     }
 
     private func requestShare(forGeohash geohash: String) {
@@ -384,6 +429,15 @@ struct LocationChannelsSheet: View {
                     .lowercased()
                     .replacingOccurrences(of: "#", with: "")
                 let isValid = validateGeohash(normalized)
+                Button(action: { showGlobePicker = true }) {
+                    Image(systemName: "map")
+                        .font(.bitchatSystem(size: 16))
+                        .foregroundColor(palette.secondary)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Strings.openMap)
                 Button(action: {
                     let gh = normalized
                     guard isValid else { customError = Strings.invalidGeohash; return }
@@ -627,59 +681,12 @@ extension LocationChannelsSheet {
 // MARK: - Coverage helpers
 extension LocationChannelsSheet {
     private func coverageString(forPrecision len: Int) -> String {
-        // Approximate max cell dimension at equator for a given geohash length.
-        // Values sourced from common geohash dimension tables.
-        let maxMeters: Double = {
-            switch len {
-            case 2: return 1_250_000
-            case 3: return 156_000
-            case 4: return 39_100
-            case 5: return 4_890
-            case 6: return 1_220
-            case 7: return 153
-            case 8: return 38.2
-            case 9: return 4.77
-            case 10: return 1.19
-            default:
-                if len <= 1 { return 5_000_000 }
-                // For >10, scale down conservatively by ~1/4 each char
-                let over = len - 10
-                return 1.19 * pow(0.25, Double(over))
-            }
-        }()
-
-        let usesMetric: Bool = {
-            if #available(iOS 16.0, macOS 13.0, *) {
-                return Locale.current.measurementSystem == .metric
-            } else {
-                return Locale.current.usesMetricSystem
-            }
-        }()
-        if usesMetric {
-            let km = maxMeters / 1000.0
-            return "~\(formatDistance(km)) km"
-        } else {
-            let miles = maxMeters / 1609.344
-            return "~\(formatDistance(miles)) mi"
-        }
-    }
-
-    private func formatDistance(_ value: Double) -> String {
-        if value >= 100 { return String(format: "%.0f", value.rounded()) }
-        if value >= 10 { return String(format: "%.1f", value) }
-        return String(format: "%.1f", value)
+        GeohashCoverage.string(forPrecision: len)
     }
 
     private func bluetoothRangeString() -> String {
-        let usesMetric: Bool = {
-            if #available(iOS 16.0, macOS 13.0, *) {
-                return Locale.current.measurementSystem == .metric
-            } else {
-                return Locale.current.usesMetricSystem
-            }
-        }()
         // Approximate Bluetooth LE range for typical mobile devices; environment dependent
-        return usesMetric ? "~10–50 m" : "~30–160 ft"
+        GeohashCoverage.usesMetric() ? "~10–50 m" : "~30–160 ft"
     }
 
     private func locationName(for level: GeohashChannelLevel) -> String? {
