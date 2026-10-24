@@ -19,6 +19,12 @@ enum ContentPane: Hashable {
     /// location-channel picker (`TrailingPaneContent`).
     case trailing
 
+    /// The pane `slot`'s composer sits in: #mesh's is the primary, the
+    /// trailing pane's the secondary.
+    init(composer slot: ComposerSlot) {
+        self = slot == .primary ? .leading : .trailing
+    }
+
     /// The pane a touch landed in, from both panes' frames in the touch's
     /// coordinate space (the window's). The frames decide, never the side:
     /// right to left, the leading pane is the one on the right. Nil in the
@@ -487,9 +493,10 @@ struct SplitPaneState: Equatable {
         focus = pane
     }
 
-    /// A composer took the keyboard: its pane is the last touched (E1).
+    /// A composer took the keyboard, or was typed in: its pane is the last
+    /// touched (E1).
     mutating func composerFocused(_ slot: ComposerSlot) {
-        focus = slot == .primary ? .leading : .trailing
+        focus = ContentPane(composer: slot)
     }
 
     /// The trailing #geohash badge: the picker, to switch channels.

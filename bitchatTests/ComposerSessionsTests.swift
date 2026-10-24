@@ -15,6 +15,7 @@
 //
 
 import BitFoundation
+import Combine
 import Foundation
 import Testing
 @testable import bitchat
@@ -591,6 +592,34 @@ struct ComposerSessionsTests {
     }
 
     // MARK: - One composer's own state
+
+    #if os(iOS)
+    /// E1's typing signal: the field's own edits fire it; a write that
+    /// changes nothing doesn't, nor does text set from outside the field (a
+    /// mention, a send, a draft swap, a panic reset), so none of those can
+    /// move the split layout's focus.
+    @Test func onlyTheFieldsEditsCountAsTyping() {
+        let sessions = makeSessions(InMemoryComposerDraftStore())
+        sessions.retarget(Self.splitTargets(trailing: Self.geohash), fingerprint: Self.noFingerprint)
+        var edits = 0
+        let subscription = sessions.secondary.edits.sink { edits += 1 }
+        defer { subscription.cancel() }
+
+        sessions.secondary.edit("hel")
+        sessions.secondary.edit("hello")
+        // The field writing back what it shows, as it takes the keyboard.
+        sessions.secondary.edit("hello")
+        #expect(edits == 2)
+        #expect(sessions.secondary.text == "hello")
+
+        sessions.secondary.insertMention("alice")
+        _ = sessions.takeOutgoing(from: .secondary)
+        sessions.secondary.text = "draft"
+        sessions.retarget(Self.splitTargets(trailing: Self.otherGeohash), fingerprint: Self.noFingerprint)
+        sessions.reset()
+        #expect(edits == 2)
+    }
+    #endif
 
     @Test func insertMentionAppendsWithASpaceEitherSide() {
         let session = ComposerSession(slot: .primary)

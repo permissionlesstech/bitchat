@@ -85,7 +85,7 @@ struct ContentComposerView: View {
             HStack(alignment: .center, spacing: 4) {
                 TextField(
                     "",
-                    text: $session.text,
+                    text: editableText,
                     prompt: Text(placeholderText)
                         .foregroundColor(palette.secondary.opacity(0.6))
                 )
@@ -159,6 +159,15 @@ struct ContentComposerView: View {
 }
 
 private extension ContentComposerView {
+    /// The field's text. The field writes only what the person edits, so
+    /// its writes are the session's edits (`ComposerSession.edit`).
+    var editableText: Binding<String> {
+        Binding(
+            get: { session.text },
+            set: { session.edit($0) }
+        )
+    }
+
     /// Only the composer being typed in shows suggestions: while the other
     /// one has the keyboard, this one's stay hidden.
     var showsSuggestions: Bool {

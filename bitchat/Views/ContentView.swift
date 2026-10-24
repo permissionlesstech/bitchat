@@ -574,6 +574,18 @@ struct ContentView: View {
                 isSameConversation: privateConversationModel.isSameConversation
             )
         }
+        // Typing counts as a touch in its composer's pane (E1): keystrokes
+        // land in the keyboard's window, which the touch observer never
+        // sees. Received in a leaf, so the root observes no session.
+        .background {
+            Color.clear
+                .onReceive(composers.primary.edits) { _ in
+                    composerEdited(.primary)
+                }
+                .onReceive(composers.secondary.edits) { _ in
+                    composerEdited(.secondary)
+                }
+        }
         // A test host's taps on the people buttons (none in the app).
         .background {
             if let testTaps {
@@ -1214,6 +1226,14 @@ struct ContentView: View {
               let pane = ContentPane.containing(point, leading: leadingPaneFrame, trailing: trailingPaneFrame),
               pane != panes.focus else { return }
         panes.touched(pane)
+    }
+
+    /// The person edited `slot`'s text: typing makes its pane the last
+    /// touched (E1), however the other pane was touched since. Written only
+    /// when the pane changes, so a keystroke doesn't re-render the root.
+    private func composerEdited(_ slot: ComposerSlot) {
+        guard isSplitLayout, ContentPane(composer: slot) != panes.focus else { return }
+        panes.composerFocused(slot)
     }
 
     /// How far display corners the safe area leaves uncovered reach into the

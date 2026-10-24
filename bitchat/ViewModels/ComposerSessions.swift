@@ -134,6 +134,14 @@ final class ComposerSession: ObservableObject {
     let slot: ComposerSlot
     /// The live, unsent text.
     @Published var text = ""
+    #if os(iOS)
+    /// Fires for each edit the person makes in this composer's field
+    /// (typing, dictation, a paste), never for text set from outside it: a
+    /// draft swap, a mention, a send, a panic reset. The split layout
+    /// counts it as a touch in the composer's pane (E1): keystrokes land in
+    /// the keyboard's window, out of the touch observer's sight.
+    let edits = PassthroughSubject<Void, Never>()
+    #endif
     /// This composer's own mention suggestions, for its own text and target.
     @Published var autocomplete = ComposerAutocompleteState()
     /// Where this composer sends; nil while it has no conversation. Set only
@@ -145,6 +153,17 @@ final class ComposerSession: ObservableObject {
 
     init(slot: ComposerSlot) {
         self.slot = slot
+    }
+
+    /// The composer's field writes the person's edits through here. A
+    /// write that changes nothing (the field taking or giving up the
+    /// keyboard) is no edit.
+    func edit(_ newText: String) {
+        guard newText != text else { return }
+        text = newText
+        #if os(iOS)
+        edits.send()
+        #endif
     }
 
     /// Appends an @mention to the text (never overwrites what is already

@@ -448,6 +448,17 @@ private final class WindowHost {
         window.rootViewController?.presentedViewController
     }
 
+    /// The text field whose centre lies in `region` (window coordinates)
+    /// and whose prompt `matches`.
+    func textField(in region: CGRect, prompt matches: (String) -> Bool) -> UITextField? {
+        window.layoutIfNeeded()
+        return Self.textFields(in: window).first { field in
+            let center = field.convert(CGPoint(x: field.bounds.midX, y: field.bounds.midY), to: window)
+            let prompt = field.attributedPlaceholder?.string ?? field.placeholder ?? ""
+            return region.contains(center) && matches(prompt)
+        }
+    }
+
     private static func textFields(in view: UIView) -> [UITextField] {
         if let field = view as? UITextField { return [field] }
         return view.subviews.flatMap { textFields(in: $0) }
@@ -507,6 +518,32 @@ private final class SmokeSizeClass: ObservableObject {
     @Published var value: UserInterfaceSizeClass = .regular
 }
 
+/// Counts the frames the main run loop renders, so a test can wait for
+/// SwiftUI to catch up with something UIKit did: a field taking the
+/// keyboard reaches its `FocusState` a render later.
+@MainActor
+private final class FrameCounter: NSObject {
+    private(set) var count = 0
+    private var link: CADisplayLink?
+
+    func start() {
+        guard link == nil else { return }
+        let link = CADisplayLink(target: self, selector: #selector(tick))
+        link.add(to: .main, forMode: .common)
+        self.link = link
+    }
+
+    /// The display link holds its target until it is invalidated.
+    func stop() {
+        link?.invalidate()
+        link = nil
+    }
+
+    @objc private func tick() {
+        count += 1
+    }
+}
+
 /// ContentView in a window wide enough for the split layout: two 480pt
 /// panes either side of a 40pt gap at the window's centre. The view model
 /// switches channels on the same location manager the location model
@@ -523,6 +560,8 @@ private final class SplitContentHost {
     let sizeClass: SmokeSizeClass
     private let meshPaneTimeline: PublicChatModel
     private let host: WindowHost
+    private let sharedContentStore: SharedContentStore?
+    private let frames = FrameCounter()
     /// Taps on the panes' people buttons (`splitLayoutTestTaps`).
     private let taps = PassthroughSubject<SplitLayoutTestTap, Never>()
 
@@ -536,12 +575,14 @@ private final class SplitContentHost {
         location: MockLocationStateManaging,
         sizeClass: SmokeSizeClass,
         theme: AppTheme,
+        sharedContentStore: SharedContentStore?,
         sceneIsActive: Bool
     ) {
         self.viewModel = viewModel
         self.models = models
         self.location = location
         self.sizeClass = sizeClass
+        self.sharedContentStore = sharedContentStore
         meshPaneTimeline = PublicChatModel(conversations: viewModel.conversations, pinnedTo: .mesh)
         host = WindowHost(
             installSmokeEnvironment(
@@ -601,6 +642,7 @@ private final class SplitContentHost {
             location: location,
             sizeClass: sizeClass,
             theme: theme,
+            sharedContentStore: sharedContentStore,
             sceneIsActive: sceneIsActive
         )
         transport.updatePeerSnapshots([
@@ -686,6 +728,38 @@ private final class SplitContentHost {
         ) { _ in }
     }
 
+    /// The composer field in `pane`: the picker's teleport field
+    /// ("geohash") isn't one.
+    func composerField(in pane: ContentPane) -> UITextField? {
+        host.textField(in: Self.region(of: pane)) { $0 != "geohash" }
+    }
+
+    /// Waits for `count` more frames: by then SwiftUI has applied what
+    /// UIKit reported before the wait (a field taking the keyboard).
+    func settleFrames(_ count: Int = 5) async -> Bool {
+        frames.start()
+        let target = frames.count + count
+        return await settle { self.frames.count >= target }
+    }
+
+    /// A share arriving under the runtime's `label`, which the root
+    /// relabels for the composer it would fill; then reviewed away. Whether
+    /// the review came to name `expected`. Needs a share store (`make`).
+    func share(
+        labelled label: SharedContentDestination,
+        settlesOn expected: SharedContentDestination
+    ) async -> Bool {
+        guard let store = sharedContentStore else { return false }
+        let shares = models.sharedContentImportModel
+        let now = Date()
+        try? store.stage(.text("shared from another app", createdAt: now), now: now)
+        shares.refresh(destination: label, now: now)
+        let settled = await settle { shares.offer?.destination == expected }
+        shares.discardAll()
+        _ = await settle { !self.isPresenting }
+        return settled
+    }
+
     func fold() async -> Bool {
         sizeClass.value = .compact
         return await settle { self.chrome.splitLayoutShowsLocation == nil }
@@ -697,6 +771,7 @@ private final class SplitContentHost {
     }
 
     func close() {
+        frames.stop()
         host.close()
     }
 
@@ -1606,34 +1681,22 @@ struct ViewSmokeTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         let store = SharedContentStore(defaults: defaults)
         let split = await SplitContentHost.make(sharedContentStore: store)
-        let shares = split.models.sharedContentImportModel
         defer {
-            shares.discardAll()
+            split.models.sharedContentImportModel.discardAll()
             split.close()
         }
         let geohash = SharedContentDestination.geohash(split.geohash.geohash)
-        /// A share arriving under the runtime's `label`, which the root
-        /// relabels for the composer it fills; then reviewed away.
-        func share(labelled label: SharedContentDestination, settlesOn expected: SharedContentDestination) async -> Bool {
-            let now = Date()
-            try? store.stage(.text("shared from another app", createdAt: now), now: now)
-            shares.refresh(destination: label, now: now)
-            let settled = await split.settle { shares.offer?.destination == expected }
-            shares.discardAll()
-            _ = await split.settle { !split.isPresenting }
-            return settled
-        }
 
         // The picker has no composer: #mesh takes it, whichever pane.
         #expect(split.touch(.trailing))
-        #expect(await share(labelled: geohash, settlesOn: .mesh))
+        #expect(await split.share(labelled: geohash, settlesOn: .mesh))
 
         #expect(await split.select(.location(split.geohash)))
         #expect(split.touch(.trailing))
-        #expect(await share(labelled: .mesh, settlesOn: geohash))
+        #expect(await split.share(labelled: .mesh, settlesOn: geohash))
 
         #expect(split.touch(.leading))
-        #expect(await share(labelled: geohash, settlesOn: .mesh))
+        #expect(await split.share(labelled: geohash, settlesOn: .mesh))
     }
 
     /// E11: the share review names the composer the share would fill. The
@@ -1875,6 +1938,65 @@ struct ViewSmokeTests {
 
         split.viewModel.cancelAllLegacyPrivateMediaConsents()
         #expect(await split.settle { split.presentedAlert?.preferredStyle == .alert }, "\(split.diagnostics)")
+    }
+
+    /// E1: a composer taking the keyboard makes its pane the last touched,
+    /// whatever was touched before it: the share goes to that composer
+    /// (E11), and a fold keeps the trailing geohash (E2) rather than
+    /// parking it (E3).
+    @Test
+    func contentView_aComposerTakingTheKeyboardTakesItsPane() async throws {
+        let suite = "ViewSmokeTests.split.focus.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let split = await SplitContentHost.make(sharedContentStore: SharedContentStore(defaults: defaults))
+        defer {
+            split.models.sharedContentImportModel.discardAll()
+            split.close()
+        }
+        let geohash = SharedContentDestination.geohash(split.geohash.geohash)
+        #expect(await split.select(.location(split.geohash)))
+        #expect(split.touch(.leading))
+        #expect(await split.share(labelled: geohash, settlesOn: .mesh))
+
+        let trailingField = split.composerField(in: .trailing)
+        let field = try #require(trailingField, "\(split.diagnostics)")
+        #expect(field.becomeFirstResponder())
+        #expect(await split.share(labelled: .mesh, settlesOn: geohash), "\(split.diagnostics)")
+
+        #expect(await split.fold())
+        let parked = await TestHelpers.waitUntil(
+            { split.channels.selectedChannel != .location(split.geohash) },
+            timeout: TestConstants.negativeWaitWindow
+        )
+        #expect(!parked, "\(split.diagnostics)")
+    }
+
+    /// E1: typing makes the composer's pane the last touched again. A touch
+    /// in #mesh (a scroll, say) leaves the keyboard with the trailing
+    /// composer; typing on there takes the trailing pane back, so a fold
+    /// keeps the geohash being typed in (E2) instead of parking it with the
+    /// half-typed text (E3).
+    @Test
+    func contentView_typingTakesTheComposersPaneBack() async throws {
+        let split = await SplitContentHost.make()
+        defer { split.close() }
+        #expect(await split.select(.location(split.geohash)))
+        let trailingField = split.composerField(in: .trailing)
+        let field = try #require(trailingField, "\(split.diagnostics)")
+        #expect(field.becomeFirstResponder())
+        // The keyboard's focus reaches the panes before the touch.
+        #expect(await split.settleFrames())
+        #expect(split.touch(.leading))
+
+        field.insertText("still typing here")
+
+        #expect(await split.fold())
+        let parked = await TestHelpers.waitUntil(
+            { split.channels.selectedChannel != .location(split.geohash) },
+            timeout: TestConstants.negativeWaitWindow
+        )
+        #expect(!parked, "\(split.diagnostics)")
     }
 
     /// E13: a fingerprint asked for in a popover is the popover's own, so it
