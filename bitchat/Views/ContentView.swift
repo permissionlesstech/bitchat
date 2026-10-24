@@ -190,6 +190,13 @@ struct ContentModelReferences {
     let publicChatModel: PublicChatModel
     let privateInboxModel: PrivateInboxModel
     let peerListModel: PeerListModel
+    #if os(iOS)
+    /// The split layout's leading #mesh timeline (`AppRuntime
+    /// .meshPaneTimeline`): only the leading pane's list observes it.
+    /// Without one (previews, most test harnesses) the single column
+    /// stays. No presentation renders it, so it is never reinjected.
+    var meshPaneTimeline: PublicChatModel?
+    #endif
 
     /// Hands the models to a presentation, which can drop inherited
     /// environment objects on some iOS versions (#1558).
@@ -206,6 +213,21 @@ struct ContentModelReferences {
                 content
             }
         }
+    }
+}
+
+extension ContentModelReferences {
+    /// The app scene's: the runtime's models.
+    @MainActor
+    init(runtime: AppRuntime) {
+        self.init(
+            publicChatModel: runtime.publicChatModel,
+            privateInboxModel: runtime.privateInboxModel,
+            peerListModel: runtime.peerListModel
+        )
+        #if os(iOS)
+        meshPaneTimeline = runtime.meshPaneTimeline
+        #endif
     }
 }
 
@@ -296,7 +318,7 @@ struct ContentView: View {
     /// The split layout's leading #mesh timeline, a plain reference: only
     /// the leading pane's list observes it. Without one (previews, test
     /// harnesses) the single column stays.
-    @Environment(\.meshPaneTimeline) private var meshPaneTimeline
+    private var meshPaneTimeline: PublicChatModel? { modelReferences?.meshPaneTimeline }
     /// A test host's taps on the people buttons; nil in the app.
     @Environment(\.splitLayoutTestTaps) private var testTaps
     /// The live layout mode. Presentation bindings read this, never the size
@@ -1168,7 +1190,6 @@ struct ContentView: View {
                         trailingCornerReach: isSplit ? 0 : corners.trailing,
                         paneChannel: isSplit ? .mesh : nil,
                         onPeopleTap: peopleTap(.leading),
-                        isBadgeStatic: isSplit,
                         defersAlerts: { isPeoplePopoverPresented || isLegacyConsentShowingAtRoot }
                     )
                     // Anchored to the whole bar, so it centres in the pane,
@@ -1227,7 +1248,7 @@ struct ContentView: View {
         Group {
             switch trailingContent {
             case .conversation:
-                ContentConversationColumnView(
+                ContentPrivateChatSheetView(
                     showSidebar: $showSidebar,
                     selectedMessageSender: $selectedMessageSender,
                     selectedMessageSenderID: $selectedMessageSenderID,
@@ -1239,10 +1260,11 @@ struct ContentView: View {
                     target: composerTargets.secondary,
                     focusedComposer: $focusedComposer,
                     voiceRecordingVM: voiceRecordingVM,
-                    onPickMedia: mediaPicker(for: .secondary),
                     headerHeight: headerHeight,
-                    trailingCornerReach: trailingCornerReach,
-                    onSendMessage: { send(from: .secondary) }
+                    onSendMessage: { send(from: .secondary) },
+                    onPickMedia: mediaPicker(for: .secondary),
+                    isInline: true,
+                    trailingCornerReach: trailingCornerReach
                 )
             case .channel(let geohash):
                 publicPane(

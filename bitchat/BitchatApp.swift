@@ -42,19 +42,11 @@ struct BitchatApp: App {
                 .environmentObject(runtime.appChromeModel)
                 .environmentObject(runtime.boardAlertsModel)
                 .environmentObject(runtime.sharedContentImportModel)
-                // The same models again as plain references: ContentView
-                // hands them to its sheets without observing them, so a
-                // message doesn't re-render the root.
-                .environment(\.contentModelReferences, ContentModelReferences(
-                    publicChatModel: runtime.publicChatModel,
-                    privateInboxModel: runtime.privateInboxModel,
-                    peerListModel: runtime.peerListModel
-                ))
-                #if os(iOS)
-                // A plain reference, not an environment object: the root must
-                // not re-render on every mesh message (see `meshPaneTimeline`).
-                .environment(\.meshPaneTimeline, runtime.meshPaneTimeline)
-                #endif
+                // The same models again as plain references, with the split
+                // layout's pinned #mesh timeline: ContentView hands them on
+                // without observing them, so a message doesn't re-render the
+                // root.
+                .environment(\.contentModelReferences, ContentModelReferences(runtime: runtime))
                 .onAppear {
                     appDelegate.runtime = runtime
                     runtime.start()

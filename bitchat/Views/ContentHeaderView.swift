@@ -37,9 +37,6 @@ struct ContentHeaderView: View {
     /// Replaces the badge's location-channels sheet (split layout, trailing:
     /// the inline picker).
     var onBadgeTap: (() -> Void)? = nil
-    /// The badge is a label rather than a button (split layout, leading: the
-    /// pane is #mesh, whatever the selection).
-    var isBadgeStatic = false
     /// Holds back the app-wide alert this bar hosts (the screenshot
     /// warning) while the root presents something over the layout (the
     /// split layout's people popover, or its legacy-media consent dialog
@@ -435,6 +432,13 @@ struct ContentHeaderView: View {
         .help(
             String(localized: "content.header.notices", defaultValue: "Notices: pinned posts for this area and the mesh", comment: "Tooltip for the notices button")
         )
+    }
+
+    /// The badge is a label rather than a button: a pane's bar with no badge
+    /// action of its own (split layout, leading: the pane is #mesh,
+    /// whatever the selection).
+    private var isBadgeStatic: Bool {
+        paneChannel != nil && onBadgeTap == nil
     }
 
     /// The channel's name. A button to the location channels (or the bar's

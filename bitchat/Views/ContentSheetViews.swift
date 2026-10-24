@@ -261,67 +261,6 @@ struct ContentPeopleSheetView: View {
 }
 
 #if os(iOS)
-/// The open DM as the split layout's trailing pane (regular width, e.g. the
-/// iPhone Duo's inner display). It lives in ContentView's own tree, so it
-/// inherits every environment object and presents through the root: none of
-/// the sheet's NavigationStack, close buttons, banner mirror, alert copies or
-/// backdrop come along. The pane around it hosts the legacy-media consent
-/// dialog, whatever the pane shows.
-struct ContentConversationColumnView: View {
-    @EnvironmentObject private var privateConversationModel: PrivateConversationModel
-
-    @Binding var showSidebar: Bool
-    @Binding var selectedMessageSender: String?
-    @Binding var selectedMessageSenderID: PeerID?
-    @Binding var imagePreviewURL: URL?
-    @Binding var windowCountPublic: Int
-    @Binding var windowCountPrivate: [PeerID: Int]
-    @Binding var isAtBottomPrivate: Bool
-    /// The DM composer's session (the secondary slot's).
-    let composer: ComposerSession
-    /// The open DM, scoped as its composer sends (the secondary slot's
-    /// target).
-    let target: ConversationTarget?
-    var focusedComposer: FocusState<ComposerSlot?>.Binding
-    @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
-    /// The photo button; the root presents the picker for the pane.
-    let onPickMedia: (UIImagePickerController.SourceType) -> Void
-
-    let headerHeight: CGFloat
-    /// How far a rounded display corner reaches into the top rows from the
-    /// trailing edge (TopCornerClearance); each row pads by what its own
-    /// content inset leaves uncovered.
-    let trailingCornerReach: CGFloat
-    let onSendMessage: () -> Void
-
-    var body: some View {
-        Group {
-            // Without a conversation the DM's list would show the public
-            // timeline; the pane only outlives its DM for a frame.
-            if privateConversationModel.selectedPeerID != nil {
-                ContentPrivateChatSheetView(
-                    showSidebar: $showSidebar,
-                    selectedMessageSender: $selectedMessageSender,
-                    selectedMessageSenderID: $selectedMessageSenderID,
-                    imagePreviewURL: $imagePreviewURL,
-                    windowCountPublic: $windowCountPublic,
-                    windowCountPrivate: $windowCountPrivate,
-                    isAtBottomPrivate: $isAtBottomPrivate,
-                    composer: composer,
-                    target: target,
-                    focusedComposer: focusedComposer,
-                    voiceRecordingVM: voiceRecordingVM,
-                    headerHeight: headerHeight,
-                    onSendMessage: onSendMessage,
-                    onPickMedia: onPickMedia,
-                    isInline: true,
-                    trailingCornerReach: trailingCornerReach
-                )
-            }
-        }
-    }
-}
-
 /// A pane's people in the split layout, as a popover from the pane's bar:
 /// the people sheet's list for that pane's channel, with its own navigation
 /// for the fingerprint. Present it with `contentPeoplePopover(...)`.
@@ -794,7 +733,9 @@ private extension ContentPeopleListView {
 
 }
 
-private struct ContentPrivateChatSheetView: View {
+/// The open DM: the people sheet's, or the split layout's trailing pane
+/// (`isInline`).
+struct ContentPrivateChatSheetView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
 
     @Binding var showSidebar: Bool
@@ -824,7 +765,10 @@ private struct ContentPrivateChatSheetView: View {
     /// Shown in the split layout's trailing pane rather than the sheet: the
     /// back chevron and swipe-to-leave bring the pane's channel or picker
     /// back, so there is no close button, and the header lines up with the
-    /// #mesh bar beside it.
+    /// #mesh bar beside it. The pane lives in ContentView's own tree, so it
+    /// inherits every environment object and presents through the root:
+    /// none of the sheet's navigation, banner mirror or alert copies come
+    /// along, and the pane around it hosts the legacy-media consent dialog.
     var isInline = false
     var trailingCornerReach: CGFloat = 0
 
@@ -835,6 +779,17 @@ private struct ContentPrivateChatSheetView: View {
     }
 
     var body: some View {
+        // Inline, the pane outlasts its DM by the removal animation the
+        // back chevron and the swipe start (both end the DM inside
+        // withAnimation). Emptied at once, its composer, on the `.secondary`
+        // focus slot, never coexists with the incoming geohash composer on
+        // that same slot. The sheet only mounts this with a DM open.
+        if !isInline || privateConversationModel.selectedPeerID != nil {
+            chat
+        }
+    }
+
+    private var chat: some View {
         VStack(spacing: 0) {
             if let headerState = privateConversationModel.selectedHeaderState {
                 HStack(spacing: 12) {

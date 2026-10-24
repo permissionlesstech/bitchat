@@ -199,44 +199,6 @@ private struct ContentPeopleSheetHarness: View {
     }
 }
 
-#if os(iOS)
-@MainActor
-private struct ContentConversationColumnHarness: View {
-    /// The open DM, as ContentView's secondary slot targets it.
-    var target: ConversationTarget?
-    @State private var showSidebar = false
-    @State private var selectedMessageSender: String?
-    @State private var selectedMessageSenderID: PeerID?
-    @State private var imagePreviewURL: URL?
-    @State private var windowCountPublic = 300
-    @State private var windowCountPrivate: [PeerID: Int] = [:]
-    @State private var isAtBottomPrivate = true
-    @StateObject private var voiceRecordingVM = VoiceRecordingViewModel()
-    @StateObject private var composers = ComposerSessions(drafts: InMemoryComposerDraftStore())
-    @FocusState private var focusedComposer: ComposerSlot?
-
-    var body: some View {
-        ContentConversationColumnView(
-            showSidebar: $showSidebar,
-            selectedMessageSender: $selectedMessageSender,
-            selectedMessageSenderID: $selectedMessageSenderID,
-            imagePreviewURL: $imagePreviewURL,
-            windowCountPublic: $windowCountPublic,
-            windowCountPrivate: $windowCountPrivate,
-            isAtBottomPrivate: $isAtBottomPrivate,
-            composer: composers.secondary,
-            target: target,
-            focusedComposer: $focusedComposer,
-            voiceRecordingVM: voiceRecordingVM,
-            onPickMedia: { _ in },
-            headerHeight: 44,
-            trailingCornerReach: 0,
-            onSendMessage: {}
-        )
-    }
-}
-#endif
-
 /// One composer on a slot's session, pointed at its conversation.
 @MainActor
 private struct ComposerHarness: View {
@@ -300,8 +262,11 @@ private struct MessageListHarness: View {
 private struct ContentHeaderHarness: View {
     var paneChannel: ChannelID?
     var carriesAppChrome = true
-    var isBadgeStatic = false
-    var handlesPaneTaps = false
+    /// The pane's own people button (split layout).
+    var handlesPeopleTap = false
+    /// The pane's own badge action (split layout, trailing); without one a
+    /// pane's badge is a label.
+    var handlesBadgeTap = false
     @FocusState private var isNicknameFieldFocused: Bool
 
     var body: some View {
@@ -315,9 +280,8 @@ private struct ContentHeaderHarness: View {
             trailingCornerReach: 55,
             paneChannel: paneChannel,
             carriesAppChrome: carriesAppChrome,
-            onPeopleTap: handlesPaneTaps ? {} : nil,
-            onBadgeTap: handlesPaneTaps ? {} : nil,
-            isBadgeStatic: isBadgeStatic
+            onPeopleTap: handlesPeopleTap ? {} : nil,
+            onBadgeTap: handlesBadgeTap ? {} : nil
         )
     }
 }
@@ -877,7 +841,8 @@ private final class SplitContentHost {
 }
 
 /// ContentView with a test-driven width class and, for the split layout,
-/// the pinned #mesh timeline the app scene hands it (`meshPaneTimeline`).
+/// the pinned #mesh timeline the app scene hands it
+/// (`ContentModelReferences.meshPaneTimeline`).
 @MainActor
 private struct ContentViewSizeClassHarness: View {
     @ObservedObject var sizeClass: SmokeSizeClass
@@ -892,7 +857,9 @@ private struct ContentViewSizeClassHarness: View {
     var body: some View {
         ContentView()
             .environment(\.horizontalSizeClass, sizeClass.value)
-            .environment(\.meshPaneTimeline, meshPaneTimeline)
+            .transformEnvironment(\.contentModelReferences) { references in
+                references?.meshPaneTimeline = meshPaneTimeline
+            }
             .environment(\.appTheme, theme)
             .environment(\.splitLayoutTestTaps, testTaps)
             .transformEnvironment(\.scenePhase) { phase in
@@ -1470,30 +1437,6 @@ struct ViewSmokeTests {
     }
 
     #if os(iOS)
-    @Test
-    func conversationColumn_rendersTheConversation() async {
-        let (viewModel, transport, _) = makeSmokeViewModel()
-        let featureModels = makeSmokeFeatureModels(for: viewModel)
-        let peerID = PeerID(str: "6162636465666768")
-
-        transport.updatePeerSnapshots([
-            makeSnapshot(peerID: peerID, nickname: "Bob", noiseByte: 0x77)
-        ])
-        try? await Task.sleep(nanoseconds: 50_000_000)
-
-        // Unlike the sheet, the column gets no re-injected models: it must
-        // mount on exactly the environment ContentView's own tree provides.
-        _ = mount(installSmokeEnvironment(ContentConversationColumnHarness(), featureModels: featureModels))
-
-        featureModels.privateConversationModel.startConversation(with: peerID)
-        #expect(featureModels.privateConversationModel.selectedPeerID == peerID)
-
-        _ = mount(installSmokeEnvironment(
-            ContentConversationColumnHarness(target: ConversationTarget(channel: .mesh, privatePeer: peerID)),
-            featureModels: featureModels
-        ))
-    }
-
     @Test
     func peopleList_rendersEachPresentationForEitherChannel() async {
         let (viewModel, _, _) = makeSmokeViewModel()
@@ -2679,9 +2622,14 @@ struct ViewSmokeTests {
             // The single column (compact iOS, macOS): today's bar.
             ContentHeaderHarness(),
             // Split, leading: #mesh as a label, the app chrome, mesh people.
-            ContentHeaderHarness(paneChannel: .mesh, isBadgeStatic: true, handlesPaneTaps: true),
+            ContentHeaderHarness(paneChannel: .mesh, handlesPeopleTap: true),
             // Split, trailing: the geohash's badge, bookmark and people only.
-            ContentHeaderHarness(paneChannel: .location(geohash), carriesAppChrome: false, handlesPaneTaps: true)
+            ContentHeaderHarness(
+                paneChannel: .location(geohash),
+                carriesAppChrome: false,
+                handlesPeopleTap: true,
+                handlesBadgeTap: true
+            )
         ]
 
         for configuration in configurations {
