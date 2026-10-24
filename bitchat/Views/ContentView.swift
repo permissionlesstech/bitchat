@@ -26,8 +26,8 @@ struct ContentRootModalPresentationState {
     var isVoiceAlertPresented = false
     var isScreenshotPrivacyAlertPresented = false
     var isMediaPickerPresented = false
-    /// The legacy private-media dialog presents from the root's tree
-    /// whenever the people UI isn't a sheet.
+    /// The legacy private-media dialog presents from the root's tree (the
+    /// split layout) and is showing, or about to: nothing else is.
     var isLegacyMediaConsentPresented = false
     /// A pane's people popover (the split layout). The root presents it, so
     /// nothing else can present from the root while it is up.
@@ -39,8 +39,35 @@ struct ContentRootModalPresentationState {
     /// hosts it and already defers the root while up; a request left
     /// pending once the sheet closed has no presenter, and waiting on it
     /// would swallow the root alerts.
-    static func legacyConsentDefersRoot(isSplitLayout: Bool, hasPendingRequest: Bool) -> Bool {
-        isSplitLayout && hasPendingRequest
+    ///
+    /// One precedence rule (I5): every other root presentation goes before
+    /// the dialog, and whatever is on screen first keeps it. The dialog
+    /// takes the screen only while nothing else is presented from the root
+    /// (`legacyConsentMayTakeScreen`), and only once it has does it hold
+    /// the root back. A request arriving under a sheet or an alert waits its
+    /// turn instead of taking it down; a presentation flagged while the
+    /// dialog shows (a screenshot's warning, a Bluetooth alert) waits for
+    /// its answer, since presenting over it fails and loses its flag. The
+    /// two never wait on each other.
+    /// - Parameter isOnScreen: The pending request is the one the dialog
+    ///   has put on screen.
+    static func legacyConsentDefersRoot(
+        isSplitLayout: Bool,
+        hasPendingRequest: Bool,
+        isOnScreen: Bool
+    ) -> Bool {
+        isSplitLayout && hasPendingRequest && isOnScreen
+    }
+
+    /// Whether the split layout's consent dialog may take the screen: a
+    /// request is pending and nothing else is presented from the root, or
+    /// flagged to be.
+    static func legacyConsentMayTakeScreen(
+        isSplitLayout: Bool,
+        hasPendingRequest: Bool,
+        hasOtherPresentation: Bool
+    ) -> Bool {
+        isSplitLayout && hasPendingRequest && !hasOtherPresentation
     }
 
     var hasPresentation: Bool {
@@ -258,6 +285,7 @@ struct ContentView: View {
     @State private var isAtBottomPrivate = true
     @State private var showVerifySheet = false
     @State private var imagePreviewURL: URL?
+
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     /// Display corners are named by physical side, while the padding that
@@ -291,6 +319,14 @@ struct ContentView: View {
     /// its last row leaving afterwards, which raised a stale jump-to-latest
     /// pill in the pane.
     @State private var repinConversationAfterLayoutChange = false
+    /// The consent request the split layout's dialog has put on screen.
+    /// Whatever is up first keeps the screen (I5): a presentation flagged
+    /// while the dialog shows waits for its answer, as the dialog waits for
+    /// one already up. Compared with the pending request, so it lapses once
+    /// that is answered.
+    @State private var legacyConsentOnScreen: UUID?
+    /// Whether the window presents anything, one on its way out included.
+    @State private var windowPresentation = WindowPresentationProbe()
     #endif
     @ScaledMetric(relativeTo: .body) private var headerHeight: CGFloat = 44
     @ScaledMetric(relativeTo: .subheadline) private var headerPeerIconSize: CGFloat = 11
@@ -387,19 +423,70 @@ struct ContentView: View {
         #endif
     }
 
-    /// The split layout's legacy-media consent dialog has a request to
-    /// show. The trailing pane presents it from the root's tree, so the
-    /// root's alerts, and the screenshot warning the leading bar presents,
-    /// wait for it.
-    private var isLegacyConsentPendingAtRoot: Bool {
-        ContentRootModalPresentationState.legacyConsentDefersRoot(
-            isSplitLayout: isSplitLayoutActive,
-            hasPendingRequest: conversationUIModel.legacyPrivateMediaConsentRequest != nil
+    /// The split layout's legacy-media consent dialog is on screen: the
+    /// pending request is the one it put there (`legacyConsentOnScreen`).
+    /// The trailing pane presents it from the root's tree, so only then do
+    /// the root's alerts, the touch observer and the leading bar's
+    /// screenshot warning wait for it (`legacyConsentDefersRoot`).
+    private var isLegacyConsentShowingAtRoot: Bool {
+        #if os(iOS)
+        let request = conversationUIModel.legacyPrivateMediaConsentRequest
+        return ContentRootModalPresentationState.legacyConsentDefersRoot(
+            isSplitLayout: isSplitLayout,
+            hasPendingRequest: request != nil,
+            isOnScreen: request != nil && request?.id == legacyConsentOnScreen
         )
+        #else
+        return false
+        #endif
     }
 
+    #if os(iOS)
+    /// Something other than the split layout's consent dialog is presented
+    /// from the root, or flagged to be: a root sheet or alert, the share
+    /// review, the Bluetooth alert, the panic dialog, a people popover.
+    /// Each goes before the dialog.
+    private var hasRootPresentationBesidesConsent: Bool {
+        rootModalPresentationState(includingVoiceAlert: true, includingLegacyConsent: false).hasPresentation
+            || sharedContentImportModel.offer != nil
+            || (scenePhase == .active && appChromeModel.showBluetoothAlert)
+            || appChromeModel.showPanicConfirmation
+    }
+
+    /// The pending request while the split layout's dialog may take the
+    /// screen (`legacyConsentMayTakeScreen`).
+    private var legacyConsentRequestMayTakeScreen: UUID? {
+        let request = conversationUIModel.legacyPrivateMediaConsentRequest
+        guard ContentRootModalPresentationState.legacyConsentMayTakeScreen(
+            isSplitLayout: isSplitLayout,
+            hasPendingRequest: request != nil,
+            hasOtherPresentation: hasRootPresentationBesidesConsent
+        ) else { return nil }
+        return request?.id
+    }
+
+    /// Puts `requestID` on screen once the window has finished taking down
+    /// whatever it presented. SwiftUI says nothing when a presentation it
+    /// took down has left, and a dialog presented before then fails ("an
+    /// alert is already presented") and can leave one on screen that it no
+    /// longer tracks. Looked at again every tenth of a second while the
+    /// request may still take the screen.
+    private func takeScreenForLegacyConsent(_ requestID: UUID?) {
+        guard let requestID, requestID != legacyConsentOnScreen else { return }
+        guard !windowPresentation.isPresenting else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                guard legacyConsentRequestMayTakeScreen == requestID else { return }
+                takeScreenForLegacyConsent(requestID)
+            }
+            return
+        }
+        legacyConsentOnScreen = requestID
+    }
+    #endif
+
     private func rootModalPresentationState(
-        includingVoiceAlert: Bool
+        includingVoiceAlert: Bool,
+        includingLegacyConsent: Bool = true
     ) -> ContentRootModalPresentationState {
         ContentRootModalPresentationState(
             appChromeModel: appChromeModel,
@@ -408,7 +495,7 @@ struct ContentView: View {
             isVerificationSheetPresented: showVerifySheet,
             isVoiceAlertPresented: includingVoiceAlert && voiceRecordingVM.showAlert,
             isMediaPickerPresented: mediaPickRequest != nil,
-            isLegacyMediaConsentPresented: isLegacyConsentPendingAtRoot,
+            isLegacyMediaConsentPresented: includingLegacyConsent && isLegacyConsentShowingAtRoot,
             isPeoplePopoverPresented: isPeoplePopoverPresented
         )
     }
@@ -619,6 +706,11 @@ struct ContentView: View {
             guard isSplitLayout, let slot else { return }
             panes.composerFocused(slot)
         }
+        // The split layout's consent dialog takes the screen once nothing
+        // else holds it, and keeps it until it is answered.
+        .onChange(of: legacyConsentRequestMayTakeScreen) { requestID in
+            takeScreenForLegacyConsent(requestID)
+        }
         #endif
         .onChange(of: scenePhase) { phase in
             if phase == .background || phase == .inactive {
@@ -687,12 +779,13 @@ struct ContentView: View {
             .environmentObject(locationChannelsModel)
         }
         // A popover's fingerprint is its own; while one is up the root
-        // shows none (E13).
+        // shows none (E13). Nor over the split layout's consent dialog.
         .sheet(isPresented: Binding(
             get: {
                 appChromeModel.showingFingerprintFor != nil
                     && !isPeopleSheetPresented
                     && !isPeoplePopoverPresented
+                    && !isLegacyConsentShowingAtRoot
             },
             set: { _ in appChromeModel.clearFingerprint() }
         )) {
@@ -761,8 +854,14 @@ struct ContentView: View {
         .alert(
             String(localized: "share_import.review.title", comment: "Title for reviewing content received from the share extension"),
             isPresented: Binding(
-                // A popover the root presents holds the review back.
-                get: { sharedContentImportModel.offer != nil && !isPeoplePopoverPresented },
+                // A popover the root presents holds the review back, as
+                // does the split layout's consent dialog once it shows: the
+                // review would fail over it.
+                get: {
+                    sharedContentImportModel.offer != nil
+                        && !isPeoplePopoverPresented
+                        && !isLegacyConsentShowingAtRoot
+                },
                 set: { _ in }
             ),
             presenting: sharedContentImportModel.offer
@@ -853,6 +952,7 @@ struct ContentView: View {
                     }
                 }
             }
+            .background(WindowPresentationProbeView(probe: windowPresentation))
             .onAppear {
                 let isSplit = layout != nil
                 changePanes { isSplitLayout = isSplit }
@@ -1048,7 +1148,7 @@ struct ContentView: View {
                         paneChannel: isSplit ? .mesh : nil,
                         onPeopleTap: isSplit ? { peopleButtonTapped(.leading) } : nil,
                         isBadgeStatic: isSplit,
-                        defersAlerts: isPeoplePopoverPresented || isLegacyConsentPendingAtRoot
+                        defersAlerts: { isPeoplePopoverPresented || isLegacyConsentShowingAtRoot }
                     )
                     // Anchored to the whole bar, so it centres in the pane,
                     // off the hinge.
@@ -1154,10 +1254,10 @@ struct ContentView: View {
             }
         }
         // Whatever the pane shows: a request can still be pending after its
-        // DM closed, and the root waits on it in this layout. Held back
-        // while the root presents a people popover, as the root's alerts
-        // are: it shows once the popover closes.
-        .modifier(LegacyPrivateMediaConsentDialog(isDeferred: isPeoplePopoverPresented))
+        // DM closed. Held back while anything else up first is presented
+        // from the root (a sheet, an alert, a popover): it shows once that
+        // closes, still pending.
+        .modifier(LegacyPrivateMediaConsentDialog(isDeferred: { !isLegacyConsentShowingAtRoot }))
     }
 
     /// The trailing geohash's bar: its badge (back to the picker, to switch
@@ -1287,6 +1387,8 @@ struct ContentView: View {
         // leaves the conversation open, and the DM ends below only once its
         // pane has gone.
         isSplitLayout = toSplit
+        // The consent dialog's host changes: it takes the screen afresh.
+        legacyConsentOnScreen = nil
         // Every composer changes host or goes: a hold can't follow (E12).
         voiceRecordingVM.cancelAnyHold()
         appChromeModel.setMeshPinnedOnScreen(toSplit)
@@ -1474,6 +1576,36 @@ struct ContentView: View {
 }
 
 #if os(iOS)
+/// Tells whether the window a view is in presents anything over its
+/// content: a sheet, an alert, a dialog or a popover, one on its way out
+/// included. Read on demand; it publishes nothing.
+@MainActor
+private final class WindowPresentationProbe {
+    fileprivate weak var view: UIView?
+
+    var isPresenting: Bool {
+        view?.window?.rootViewController?.presentedViewController != nil
+    }
+}
+
+/// Puts `probe` in the view's window.
+private struct WindowPresentationProbeView: UIViewRepresentable {
+    let probe: WindowPresentationProbe
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        view.isAccessibilityElement = false
+        view.accessibilityElementsHidden = true
+        probe.view = view
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {
+        probe.view = view
+    }
+}
+
 /// Keeps `frame` at the view's frame in window coordinates, where the touch
 /// observer reports touches (the root hosting view fills the window). It
 /// changes only as the layout does.

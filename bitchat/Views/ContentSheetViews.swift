@@ -190,7 +190,7 @@ struct ContentPeopleSheetView: View {
         .themedSheetBackground()
         .foregroundColor(palette.primary)
         // The sheet presents it from its own tree, over whatever it shows.
-        .modifier(LegacyPrivateMediaConsentDialog(isDeferred: false))
+        .modifier(LegacyPrivateMediaConsentDialog(isDeferred: { false }))
         #if os(macOS)
         .frame(minWidth: 420, minHeight: 520)
         #endif
@@ -451,16 +451,18 @@ extension View {
 /// Consent before one private-media send to a legacy client goes out in a
 /// clear signed envelope. Applied by the people sheet and by the split
 /// layout's trailing pane, whatever either shows, so a pending request
-/// always has a presenter; dismissing it denies the send.
+/// always has a presenter. Only its buttons answer it: Cancel, which iOS
+/// also runs for a tap outside the dialog, denies the send.
 struct LegacyPrivateMediaConsentDialog: ViewModifier {
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
 
-    /// Holds a pending request back while something else is presented over
-    /// the dialog's host (the split layout's people popover, which the root
-    /// presents): presenting it then would fail and leave the request,
-    /// which the root's alerts wait on, pending for good. It shows once that
-    /// closes. Held back is not dismissed: the request stays pending.
-    let isDeferred: Bool
+    /// Holds a pending request back while something else is presented
+    /// from the dialog's host (on the split layout, any other root
+    /// presentation: they all go first): presenting it then would fail. It
+    /// shows once that closes. Held back is not dismissed: the request
+    /// stays pending. Asked each time, never captured: SwiftUI also runs
+    /// the bindings of earlier renders.
+    let isDeferred: () -> Bool
 
     func body(content: Content) -> some View {
         let legacyConsentRequest = conversationUIModel.legacyPrivateMediaConsentRequest
@@ -472,15 +474,14 @@ struct LegacyPrivateMediaConsentDialog: ViewModifier {
                     comment: "Title warning before sending private media to an older client in a clear signed envelope"
                 ),
                 isPresented: Binding(
-                    get: { legacyConsentRequest != nil && !isDeferred },
-                    set: { isPresented in
-                        if !isPresented, !isDeferred, let requestID = legacyConsentRequest?.id {
-                            conversationUIModel.resolveLegacyPrivateMediaConsent(
-                                requestID: requestID,
-                                approved: false
-                            )
-                        }
-                    }
+                    get: { legacyConsentRequest != nil && !isDeferred() },
+                    // SwiftUI writes false for every way the dialog goes:
+                    // a button (which has answered already), and also a
+                    // presentation it couldn't make (something else was
+                    // up) or a host taken down. Those are no answer: the
+                    // request stays pending and the dialog shows when it
+                    // can, rather than the send being denied unseen.
+                    set: { _ in }
                 ),
                 titleVisibility: .visible
             ) {

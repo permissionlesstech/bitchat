@@ -764,13 +764,31 @@ private final class SplitContentHost {
         viewModel.selectedPrivateChatPeer = peer
     }
 
-    /// A private-media send to Bob's legacy client asking for consent.
-    func requestLegacyConsent() {
+    /// A private-media send to Bob's legacy client asking for consent;
+    /// `answer` gets the answer it is given.
+    func requestLegacyConsent(answer: @escaping @MainActor (Bool) -> Void = { _ in }) {
         viewModel.enqueueLegacyPrivateMediaConsent(
             for: bob,
             transferId: "split-consent-transfer",
-            messageID: "split-consent-message"
-        ) { _ in }
+            messageID: "split-consent-message",
+            completion: answer
+        )
+    }
+
+    /// Presents something over the panes that the root doesn't know about,
+    /// as a list's own dialog or a bar's share sheet is.
+    func presentUntracked() {
+        host.window.rootViewController?.present(UIViewController(), animated: false)
+    }
+
+    /// Whether what the window presents is `presentUntracked()`'s.
+    var isPresentingUntracked: Bool {
+        guard let presented = host.presented else { return false }
+        return type(of: presented) == UIViewController.self
+    }
+
+    func dismissUntracked() {
+        host.window.rootViewController?.dismiss(animated: false)
     }
 
     /// The composer field in `pane`: the picker's teleport field
@@ -843,7 +861,8 @@ private final class SplitContentHost {
     var diagnostics: String {
         "selection \(channels.selectedChannel), timeline \(timelineChannel), DM \(String(describing: openPeer)), "
             + "split flag \(String(describing: chrome.splitLayoutShowsLocation)), pinned \(isMeshPinned), "
-            + "presented \(String(describing: host.presented)), "
+            + "presented \(String(describing: host.presented))"
+            + (presentedAlert.map { " \"\($0.title ?? "")\" style \($0.preferredStyle.rawValue)" } ?? "") + ", "
             + "app \(UIApplication.shared.applicationState == .active ? "active" : "not active"), "
             + "fields \(host.fieldReport)"
     }
@@ -1997,28 +2016,125 @@ struct ViewSmokeTests {
         try await split.require("the dialog after the popover") { split.presentedAlert?.preferredStyle == .actionSheet }
     }
 
-    /// I5: the screenshot warning (the leading bar's) waits for a consent
-    /// request the trailing pane is showing, and shows once it is answered.
+    /// I5: whatever is on screen first keeps it. The screenshot warning
+    /// (the leading bar's) flagged while the trailing pane's consent dialog
+    /// shows waits for it, with its flag kept, and shows once the request
+    /// is answered; the dialog isn't taken down unanswered.
     @Test
-    func contentView_aPendingConsentRequestHoldsTheScreenshotWarningBack() async throws {
+    func contentView_aShowingConsentDialogHoldsTheScreenshotWarningBack() async throws {
         let split = try await SplitContentHost.make()
+        var answers: [Bool] = []
         defer {
             split.viewModel.cancelAllLegacyPrivateMediaConsents()
             split.chrome.showScreenshotPrivacyWarning = false
             split.close()
         }
-        split.requestLegacyConsent()
+        split.requestLegacyConsent { answers.append($0) }
         try await split.require("the dialog") { split.presentedAlert?.preferredStyle == .actionSheet }
 
         split.chrome.showScreenshotPrivacyWarning = true
         let replaced = await TestHelpers.waitUntil(
-            { split.presentedAlert?.preferredStyle != .actionSheet },
+            { split.presentedAlert?.preferredStyle != .actionSheet || !answers.isEmpty },
             timeout: TestConstants.negativeWaitWindow
         )
         #expect(!replaced, "\(split.diagnostics)")
+        #expect(split.chrome.showScreenshotPrivacyWarning, "the warning's flag went")
 
         split.viewModel.cancelAllLegacyPrivateMediaConsents()
         try await split.require("the warning") { split.presentedAlert?.preferredStyle == .alert }
+    }
+
+    /// I5: a consent request arriving while another presentation is up
+    /// waits behind it: the root fingerprint sheet (the trailing DM
+    /// header's name opens it), the share review, the screenshot warning,
+    /// and one the root doesn't track at all. It neither takes that
+    /// presentation down nor gets answered unseen, and the dialog shows
+    /// once the presentation has gone.
+    @Test
+    func contentView_aConsentRequestWaitsBehindTheRootPresentationUp() async throws {
+        let suite = "ViewSmokeTests.split.consent.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = SharedContentStore(defaults: defaults)
+        let split = try await SplitContentHost.make(sharedContentStore: store)
+        let shares = split.models.sharedContentImportModel
+        var answers: [Bool] = []
+        defer {
+            split.viewModel.cancelAllLegacyPrivateMediaConsents()
+            shares.discardAll()
+            split.chrome.showScreenshotPrivacyWarning = false
+            split.chrome.clearFingerprint()
+            split.close()
+        }
+        /// `present`, then a request; `isShown` holds throughout, and the
+        /// dialog shows once `dismiss` takes the presentation away.
+        func waitsBehind(
+            _ name: String,
+            present: () -> Void,
+            isShown: @escaping () -> Bool,
+            dismiss: () -> Void
+        ) async throws {
+            present()
+            try await split.require(name) { isShown() }
+            split.requestLegacyConsent { answers.append($0) }
+            try await split.require("\(name): the request pending") {
+                split.models.conversationUIModel.legacyPrivateMediaConsentRequest != nil
+            }
+            let disturbed = await TestHelpers.waitUntil(
+                { !isShown() || !answers.isEmpty },
+                timeout: TestConstants.negativeWaitWindow
+            )
+            #expect(!disturbed, "\(name) under the request: \(split.diagnostics)")
+            #expect(answers.isEmpty, "\(name): the request was answered unseen")
+
+            dismiss()
+            try await split.require("\(name): the dialog once it closed") {
+                split.presentedAlert?.preferredStyle == .actionSheet
+            }
+            #expect(answers.isEmpty)
+            split.viewModel.cancelAllLegacyPrivateMediaConsents()
+            try await split.require("\(name): the dialog gone") { !split.isPresenting }
+            answers.removeAll()
+        }
+
+        try await waitsBehind(
+            "fingerprint sheet",
+            present: { split.chrome.showFingerprint(for: split.bob) },
+            isShown: {
+                split.chrome.showingFingerprintFor == split.bob
+                    && split.isPresenting
+                    && split.presentedAlert == nil
+                    && !split.isPresentingPopover
+            },
+            dismiss: { split.chrome.clearFingerprint() }
+        )
+        try await waitsBehind(
+            "share review",
+            present: {
+                let now = Date()
+                try? store.stage(.text("shared from another app", createdAt: now), now: now)
+                shares.refresh(destination: .mesh, now: now)
+            },
+            isShown: { shares.offer != nil && split.presentedAlert?.preferredStyle == .alert },
+            dismiss: { shares.discardAll() }
+        )
+        try await waitsBehind(
+            "screenshot warning",
+            present: { split.chrome.showScreenshotPrivacyWarning = true },
+            isShown: {
+                split.chrome.showScreenshotPrivacyWarning && split.presentedAlert?.preferredStyle == .alert
+            },
+            dismiss: { split.chrome.showScreenshotPrivacyWarning = false }
+        )
+        // The root can't hold the dialog back for what it doesn't know of:
+        // the dialog waits for the window itself to be free, so it is
+        // never refused (and never left on screen untracked).
+        try await waitsBehind(
+            "an untracked presentation",
+            present: { split.presentUntracked() },
+            isShown: { split.isPresentingUntracked },
+            dismiss: { split.dismissUntracked() }
+        )
     }
 
     /// I1: a composer's session follows its pane wherever the panes change,
@@ -2284,22 +2400,36 @@ struct ViewSmokeTests {
         ).hasPresentation)
     }
 
-    @Test("Only the people column's consent dialog holds back root alerts")
-    func rootAlertGuards_legacyConsentDefersOnlyOnSplitLayout() {
-        #expect(ContentRootModalPresentationState.legacyConsentDefersRoot(
-            isSplitLayout: true,
-            hasPendingRequest: true
-        ))
+    @Test("Only a split consent dialog on screen holds back root alerts")
+    func rootAlertGuards_legacyConsentTakesTheScreenOnlyWhenFreeAndThenKeepsIt() {
+        func mayTake(split: Bool = true, pending: Bool = true, other: Bool) -> Bool {
+            ContentRootModalPresentationState.legacyConsentMayTakeScreen(
+                isSplitLayout: split,
+                hasPendingRequest: pending,
+                hasOtherPresentation: other
+            )
+        }
+        func defers(split: Bool = true, pending: Bool = true, onScreen: Bool) -> Bool {
+            ContentRootModalPresentationState.legacyConsentDefersRoot(
+                isSplitLayout: split,
+                hasPendingRequest: pending,
+                isOnScreen: onScreen
+            )
+        }
+        // Every other root presentation goes first: a request arriving
+        // under one waits behind it rather than taking the screen.
+        #expect(mayTake(other: false))
+        #expect(!mayTake(other: true))
+        // Whatever is on screen first keeps it: only a dialog showing holds
+        // the root back, and it does whatever is flagged after it.
+        #expect(defers(onScreen: true))
+        #expect(!defers(onScreen: false))
         // Compact: the people sheet hosts the dialog and defers the root on
         // its own; a request left behind once it closed has no presenter.
-        #expect(!ContentRootModalPresentationState.legacyConsentDefersRoot(
-            isSplitLayout: false,
-            hasPendingRequest: true
-        ))
-        #expect(!ContentRootModalPresentationState.legacyConsentDefersRoot(
-            isSplitLayout: true,
-            hasPendingRequest: false
-        ))
+        #expect(!mayTake(split: false, other: false))
+        #expect(!defers(split: false, onScreen: true))
+        #expect(!mayTake(pending: false, other: false))
+        #expect(!defers(pending: false, onScreen: true))
     }
 
     @Test("People-sheet Bluetooth alert waits for local verification sheet")

@@ -42,10 +42,13 @@ struct ContentHeaderView: View {
     var isBadgeStatic = false
     /// Holds back the app-wide alert this bar hosts (the screenshot
     /// warning) while the root presents something over the layout (the
-    /// split layout's people popover, or its legacy-media consent dialog):
-    /// presenting it then would fail and leave its flag, which root alerts
-    /// wait on, set for good. It shows once that closes.
-    var defersAlerts = false
+    /// split layout's people popover, or its legacy-media consent dialog
+    /// once it shows): presenting it then would fail and leave its flag,
+    /// which root alerts wait on, set for good. It shows once that closes.
+    /// Asked each time rather than passed as a value: SwiftUI also runs
+    /// the bindings of earlier renders, and a value they captured would be
+    /// stale.
+    var defersAlerts: () -> Bool = { false }
 
     /// Courier envelopes this device is carrying for offline third parties.
     @State private var carriedMailCount = 0
@@ -492,11 +495,34 @@ struct ContentHeaderView: View {
 
     /// The screenshot warning, hosted like the sheets and held back while
     /// `defersAlerts`.
+    ///
+    /// Only a dismissal clears the flag: the alert's OK, or a presentation
+    /// SwiftUI couldn't make (a flag left set would hold every root alert
+    /// back). Never while the warning is held back, when SwiftUI also writes
+    /// false as it takes it down, and from an earlier render's instance of
+    /// this binding too: the warning must come back once that closes. The
+    /// flag and the deferral are read live, never from this binding's
+    /// capture; a flag already clear isn't written again; and the write
+    /// waits a hop, as SwiftUI can call this inside a view update, where
+    /// publishing is undefined.
     private var screenshotWarningBinding: Binding<Bool> {
-        let warning = hosted($appChromeModel.showScreenshotPrivacyWarning)
-        return Binding(
-            get: { warning.wrappedValue && !defersAlerts },
-            set: { warning.wrappedValue = $0 }
+        Binding(
+            get: {
+                carriesAppChrome
+                    && appChromeModel.showScreenshotPrivacyWarning
+                    && !defersAlerts()
+            },
+            set: { isPresented in
+                guard !isPresented,
+                      carriesAppChrome,
+                      appChromeModel.showScreenshotPrivacyWarning,
+                      !defersAlerts() else {
+                    return
+                }
+                Task { @MainActor in
+                    appChromeModel.showScreenshotPrivacyWarning = false
+                }
+            }
         )
     }
 
