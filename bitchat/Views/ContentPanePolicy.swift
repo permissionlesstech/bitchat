@@ -88,8 +88,8 @@ enum TrailingPaneContent: Hashable {
 
     /// Whether a screenshot of the pane reveals a place (E10): a geohash
     /// timeline, the picker with its nearby cells and bookmarks, or a
-    /// geohash about to show. A DM gets today's DM handling and no location
-    /// warning.
+    /// geohash about to show. A DM gets the DM handling the single column
+    /// gives it, and no location warning.
     var showsLocation: Bool {
         if case .conversation = self { return false }
         return true
@@ -147,7 +147,7 @@ enum PaneFoldPolicy {
         /// selection).
         let channel: ChannelID
         /// End the open DM: its peer is parked. False keeps an open DM,
-        /// which comes along as today's sheet.
+        /// which comes along as the single column's sheet.
         let endsConversation: Bool
         let parked: Parked
     }

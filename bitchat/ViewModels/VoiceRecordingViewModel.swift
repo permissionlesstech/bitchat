@@ -132,8 +132,8 @@ final class VoiceRecordingViewModel: ObservableObject {
     // The composer's press-and-hold forwards its events here, so one press
     // starting at most one hold is decided in one place. The VoiceOver
     // toggle has no press and calls start/finish directly. Every call names
-    // the composer it comes from (`owner`); one-composer screens leave it at
-    // `.primary`.
+    // the composer it comes from (`owner`); the `.primary` defaults serve
+    // callers that name none, which are now only tests.
 
     /// The press moved, its touch-down included. One press, one hold: when
     /// something ends the hold under a finger still down (a conversation or
@@ -285,16 +285,11 @@ final class VoiceRecordingViewModel: ObservableObject {
         finish(owner: owner, completion: nil)
     }
 
-    /// Cancels whichever hold is in flight: the layout changed, or the
-    /// screen's own cancel was pressed on a one-composer screen.
+    /// Cancels whichever hold is in flight: the layout changed, so every
+    /// composer changes host or goes.
     func cancelAnyHold() {
         guard holdOwner != nil else { return }
         endHold(completion: nil)
-    }
-
-    /// `cancelAnyHold()`, for one-composer callers.
-    func cancel() {
-        cancelAnyHold()
     }
 
     private func endHold(completion: ((URL) -> Void)?) {

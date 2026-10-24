@@ -48,10 +48,9 @@ final class ConversationUIModel: ObservableObject {
     // MARK: Sending and list actions
     //
     // Each takes the conversation the person acted in: the composer's or
-    // the list's own target, captured when they acted. Sending text or a
-    // voice note has no other form, so no view can send to the selection;
-    // the few target-less list actions left (the people list's block and
-    // unblock) act on the selection.
+    // the list's own target, captured when they acted. None has a form
+    // without one, so no view can send, block or unblock in the selection
+    // instead.
 
     /// Sends `message` (or runs it as a command) in `target`, whatever is
     /// selected by the time it goes out.

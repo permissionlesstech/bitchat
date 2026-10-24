@@ -70,7 +70,8 @@ struct ContentHeaderView: View {
 
     /// The channel this bar shows: its pane's, or the selection. Every
     /// channel-dependent part of the bar reads this, except the notices pin:
-    /// app chrome, it keeps today's scope (the mesh plus the selection).
+    /// app chrome, it keeps the single column's scope (the mesh plus the
+    /// selection).
     private var channel: ChannelID {
         paneChannel ?? locationChannelsModel.selectedChannel
     }
@@ -555,8 +556,9 @@ private extension ContentHeaderView {
     }
 
     // The notices pin is app chrome: one pin, on the bar that carries it,
-    // scoped as today to the mesh plus the selected location channel (in
-    // the split layout, the trailing pane's), whatever the bar's own pane.
+    // scoped as in the single column to the mesh plus the selected location
+    // channel (in the split layout, the trailing pane's), whatever the
+    // bar's own pane.
 
     /// Open the notices sheet on the tab matching the current channel: the
     /// geohash channel's notices, or the mesh-local board in mesh chat. An

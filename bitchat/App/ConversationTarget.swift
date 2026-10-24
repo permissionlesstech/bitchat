@@ -80,10 +80,10 @@ extension ChannelID {
 }
 
 /// Where a composer lives, so state that belongs to one composer can tell
-/// two composers apart: who owns the mic hold today, and each composer's
-/// text and suggestions once the views move onto targets. `.primary` is the
-/// composer under the main timeline. `.secondary` is the other
-/// conversation's: the DM sheet's, or the trailing pane's on a split layout.
+/// two composers apart: who owns the mic hold, and each composer's text,
+/// suggestions and target. `.primary` is the composer under the main
+/// timeline. `.secondary` is the other conversation's: the DM sheet's, or
+/// the trailing pane's on a split layout.
 enum ComposerSlot: Hashable {
     case primary
     case secondary
