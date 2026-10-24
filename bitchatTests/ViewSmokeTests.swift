@@ -264,27 +264,6 @@ private struct ContentHeaderHarness: View {
 }
 
 #if os(iOS)
-/// Hosts `view` in a visible window, so SwiftUI runs its appear and
-/// disappear actions (a bare hosting controller never appears). Returns the
-/// teardown that takes it off screen again.
-@MainActor
-private func present<V: View>(_ view: V) -> () -> Void {
-    let host = UIHostingController(rootView: view)
-    let frame = CGRect(x: 0, y: 0, width: 390, height: 844)
-    let window = UIApplication.shared.connectedScenes
-        .compactMap { $0 as? UIWindowScene }
-        .first
-        .map { UIWindow(windowScene: $0) } ?? UIWindow(frame: frame)
-    window.frame = frame
-    window.rootViewController = host
-    window.isHidden = false
-    host.view.layoutIfNeeded()
-    return {
-        window.isHidden = true
-        window.rootViewController = nil
-    }
-}
-
 /// How many views hold the shared nearby-notes counter. A public list takes
 /// the hold exactly when the timeline it renders is #mesh, which makes it the
 /// list's one channel decision visible from outside. Read by reflection: the
@@ -296,12 +275,13 @@ private func nearbyNotesHolderCount() -> Int? {
         .value as? Int
 }
 
-/// A `LocationChannelsModel` whose CoreLocation seam (`location`) reports
-/// `status`, settled once the permission has reached the model.
+/// A `LocationStateManager` on a fresh defaults suite whose CoreLocation
+/// seam (`location`) reports `status`. Its permission reaches a model a hop
+/// or more after the model is made.
 @MainActor
-private func makeSmokeLocationChannelsModel(
+private func makeMockLocationManager(
     authorizationStatus: CLAuthorizationStatus
-) async -> (model: LocationChannelsModel, location: MockLocationStateManaging) {
+) -> (manager: LocationStateManager, location: MockLocationStateManaging) {
     let suiteName = "ViewSmokeTests.\(UUID().uuidString)"
     let storage = UserDefaults(suiteName: suiteName) ?? .standard
     storage.removePersistentDomain(forName: suiteName)
@@ -312,6 +292,16 @@ private func makeSmokeLocationChannelsModel(
         geocoder: MockLocationStateGeocoder(),
         shouldInitializeCoreLocation: true
     )
+    return (manager, location)
+}
+
+/// A `LocationChannelsModel` whose CoreLocation seam (`location`) reports
+/// `status`, settled once the permission has reached the model.
+@MainActor
+private func makeSmokeLocationChannelsModel(
+    authorizationStatus: CLAuthorizationStatus
+) async -> (model: LocationChannelsModel, location: MockLocationStateManaging) {
+    let (manager, location) = makeMockLocationManager(authorizationStatus: authorizationStatus)
     let model = LocationChannelsModel(manager: manager)
     if authorizationStatus != .notDetermined {
         _ = await TestHelpers.waitUntil(
@@ -342,7 +332,7 @@ private final class WindowHost {
 
     /// The first text field in the hosted hierarchy.
     var textField: UITextField? {
-        Self.firstTextField(in: window)
+        Self.first(UITextField.self, in: window)
     }
 
     /// The prompts of the text fields whose centre lies in `frame` (window
@@ -419,14 +409,6 @@ private final class WindowHost {
         window.isHidden = true
         window.rootViewController = nil
     }
-
-    private static func firstTextField(in view: UIView) -> UITextField? {
-        if let field = view as? UITextField { return field }
-        for subview in view.subviews {
-            if let field = firstTextField(in: subview) { return field }
-        }
-        return nil
-    }
 }
 
 /// Stands in for `AppChromeModel.panicEpoch`.
@@ -497,7 +479,10 @@ private final class SplitContentHost {
     let sizeClass: SmokeSizeClass
     private let meshPaneTimeline: PublicChatModel
     private let host: WindowHost
-    private let sharedContentStore: SharedContentStore?
+    /// The share-import store on a temporary defaults suite (`make(shares:)`):
+    /// stage a share in it, and the runtime's refresh offers it.
+    let sharedContentStore: SharedContentStore?
+    private let sharesSuite: String?
     private let frames = FrameCounter()
     /// Taps on the panes' people buttons (`splitLayoutTestTaps`).
     private let taps = PassthroughSubject<SplitLayoutTestTap, Never>()
@@ -513,6 +498,7 @@ private final class SplitContentHost {
         sizeClass: SmokeSizeClass,
         theme: AppTheme,
         sharedContentStore: SharedContentStore?,
+        sharesSuite: String?,
         sceneIsActive: Bool
     ) {
         self.viewModel = viewModel
@@ -520,6 +506,7 @@ private final class SplitContentHost {
         self.location = location
         self.sizeClass = sizeClass
         self.sharedContentStore = sharedContentStore
+        self.sharesSuite = sharesSuite
         meshPaneTimeline = PublicChatModel(conversations: viewModel.conversations, pinnedTo: .mesh)
         host = WindowHost(
             installSmokeEnvironment(
@@ -540,6 +527,9 @@ private final class SplitContentHost {
     ///   - compact: Start folded (the single column).
     ///   - theme: Matrix (opaque bars) or glass (panels floating over the
     ///     timelines).
+    ///   - shares: Back the share-import review with a store of its own
+    ///     (`sharedContentStore`), whose shares and defaults suite `close()`
+    ///     discards. Without one no share is ever pending.
     ///   - sceneIsActive: Report an active scene, as the app's does, so the
     ///     root alerts that wait for one (Bluetooth, recording errors) can
     ///     present. Off by default: the simulator's Bluetooth state can
@@ -553,7 +543,7 @@ private final class SplitContentHost {
     static func make(
         compact: Bool = false,
         theme: AppTheme = .matrix,
-        sharedContentStore: SharedContentStore? = nil,
+        shares: Bool = false,
         sceneIsActive: Bool = false,
         sourceLocation: SourceLocation = #_sourceLocation
     ) async throws -> SplitContentHost {
@@ -562,16 +552,11 @@ private final class SplitContentHost {
             "the test host is in the background, where its windows don't render",
             sourceLocation: sourceLocation
         )
-        let suiteName = "ViewSmokeTests.split.\(UUID().uuidString)"
-        let storage = UserDefaults(suiteName: suiteName) ?? .standard
-        storage.removePersistentDomain(forName: suiteName)
-        let location = MockLocationStateManaging(authorizationStatus: .authorizedWhenInUse)
-        let manager = LocationStateManager(
-            storage: storage,
-            locationManager: location,
-            geocoder: MockLocationStateGeocoder(),
-            shouldInitializeCoreLocation: true
-        )
+        let (manager, location) = makeMockLocationManager(authorizationStatus: .authorizedWhenInUse)
+        let sharesSuite = shares ? "ViewSmokeTests.split.shares.\(UUID().uuidString)" : nil
+        let sharedContentStore = sharesSuite
+            .flatMap { UserDefaults(suiteName: $0) }
+            .map { SharedContentStore(defaults: $0) }
         let (viewModel, transport, _) = makeSmokeViewModel(locationManager: manager)
         let models = makeSmokeFeatureModels(
             for: viewModel,
@@ -592,6 +577,7 @@ private final class SplitContentHost {
             sizeClass: sizeClass,
             theme: theme,
             sharedContentStore: sharedContentStore,
+            sharesSuite: sharesSuite,
             sceneIsActive: sceneIsActive
         )
         // A failed setup closes its window: the test never gets to.
@@ -799,7 +785,13 @@ private final class SplitContentHost {
 
     func close() {
         frames.stop()
+        if sharedContentStore != nil {
+            models.sharedContentImportModel.discardAll()
+        }
         host.close()
+        if let sharesSuite {
+            UserDefaults(suiteName: sharesSuite)?.removePersistentDomain(forName: sharesSuite)
+        }
     }
 
     /// The state a failed expectation reports: the selection, the timeline,
@@ -1395,7 +1387,7 @@ struct ViewSmokeTests {
 
         #if os(iOS)
         let baseline = nearbyNotesHolderCount() ?? 0
-        let dismiss = present(bothLists)
+        let host = WindowHost(bothLists, size: CGSize(width: 390, height: 844))
         // Both lists appear in the same pass; only the #mesh one holds.
         let held = await TestHelpers.waitUntil(
             { nearbyNotesHolderCount() == baseline + 1 },
@@ -1403,7 +1395,7 @@ struct ViewSmokeTests {
         )
         #expect(held, "holders \(String(describing: nearbyNotesHolderCount())), baseline \(baseline)")
         #expect(nearbyNotesHolderCount() == baseline + 1)
-        dismiss()
+        host.close()
         #expect(await TestHelpers.waitUntil(
             { nearbyNotesHolderCount() == baseline },
             timeout: TestConstants.settleTimeout
@@ -1853,15 +1845,8 @@ struct ViewSmokeTests {
     /// arrives.
     @Test
     func contentView_shareGoesToTheLastTouchedPane() async throws {
-        let suite = "ViewSmokeTests.split.share.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let store = SharedContentStore(defaults: defaults)
-        let split = try await SplitContentHost.make(sharedContentStore: store)
-        defer {
-            split.models.sharedContentImportModel.discardAll()
-            split.close()
-        }
+        let split = try await SplitContentHost.make(shares: true)
+        defer { split.close() }
         let geohash = SharedContentDestination.geohash(split.geohash.geohash)
 
         // The picker has no composer: #mesh takes it, whichever pane.
@@ -1960,14 +1945,10 @@ struct ViewSmokeTests {
     /// popover closes.
     @Test
     func contentView_aPeoplePopoverHoldsTheOtherPresentationsBack() async throws {
-        let suite = "ViewSmokeTests.split.popover.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let store = SharedContentStore(defaults: defaults)
-        let split = try await SplitContentHost.make(sharedContentStore: store)
+        let split = try await SplitContentHost.make(shares: true)
+        let store = try #require(split.sharedContentStore)
         let shares = split.models.sharedContentImportModel
         defer {
-            shares.discardAll()
             split.chrome.showScreenshotPrivacyWarning = false
             split.chrome.clearFingerprint()
             split.close()
@@ -2175,16 +2156,12 @@ struct ViewSmokeTests {
     /// once the presentation has gone.
     @Test
     func contentView_aConsentRequestWaitsBehindTheRootPresentationUp() async throws {
-        let suite = "ViewSmokeTests.split.consent.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let store = SharedContentStore(defaults: defaults)
-        let split = try await SplitContentHost.make(sharedContentStore: store)
+        let split = try await SplitContentHost.make(shares: true)
+        let store = try #require(split.sharedContentStore)
         let shares = split.models.sharedContentImportModel
         var answers: [Bool] = []
         defer {
             split.viewModel.cancelAllLegacyPrivateMediaConsents()
-            shares.discardAll()
             split.chrome.showScreenshotPrivacyWarning = false
             split.chrome.clearFingerprint()
             split.close()
@@ -2298,14 +2275,8 @@ struct ViewSmokeTests {
     /// parking it (E3).
     @Test
     func contentView_aComposerTakingTheKeyboardTakesItsPane() async throws {
-        let suite = "ViewSmokeTests.split.focus.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let split = try await SplitContentHost.make(sharedContentStore: SharedContentStore(defaults: defaults))
-        defer {
-            split.models.sharedContentImportModel.discardAll()
-            split.close()
-        }
+        let split = try await SplitContentHost.make(shares: true)
+        defer { split.close() }
         let geohash = SharedContentDestination.geohash(split.geohash.geohash)
         try await split.select(.location(split.geohash))
         try #require(split.touch(.leading))
