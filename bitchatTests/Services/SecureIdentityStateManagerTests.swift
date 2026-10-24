@@ -561,6 +561,243 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         XCTAssertFalse(reloaded.isFavorite(fingerprint: fingerprint))
     }
 
+    // MARK: - Write accounting
+
+    func test_upsertCryptographicIdentity_unchangedReannounceDoesNotRewriteCache() {
+        let keychain = MockKeychain()
+        let manager = SecureIdentityStateManager(keychain)
+        let noisePublicKey = Data(repeating: 0x14, count: 32)
+        let fingerprint = noisePublicKey.sha256Fingerprint()
+        let signingPublicKey = Data(repeating: 0x25, count: 32)
+
+        manager.upsertCryptographicIdentity(
+            fingerprint: fingerprint,
+            noisePublicKey: noisePublicKey,
+            signingPublicKey: signingPublicKey,
+            claimedNickname: "alice"
+        )
+        XCTAssertEqual(cacheSaveCount(keychain), 1)
+
+        // A peer re-announces every few seconds with the same keys and name.
+        for _ in 0..<100 {
+            manager.upsertCryptographicIdentity(
+                fingerprint: fingerprint,
+                noisePublicKey: noisePublicKey,
+                signingPublicKey: signingPublicKey,
+                claimedNickname: "alice"
+            )
+        }
+        XCTAssertEqual(cacheSaveCount(keychain), 1)
+    }
+
+    func test_upsertCryptographicIdentity_rewritesCacheOnlyForRealChanges() throws {
+        let keychain = MockKeychain()
+        let manager = SecureIdentityStateManager(keychain)
+        let noisePublicKey = Data(repeating: 0x15, count: 32)
+        let fingerprint = noisePublicKey.sha256Fingerprint()
+        let peerID = PeerID(publicKey: noisePublicKey)
+        let signingPublicKey = Data(repeating: 0x26, count: 32)
+        func upsert(_ noiseKey: Data = noisePublicKey, signingKey: Data?, nickname: String?) {
+            manager.upsertCryptographicIdentity(
+                fingerprint: fingerprint,
+                noisePublicKey: noiseKey,
+                signingPublicKey: signingKey,
+                claimedNickname: nickname
+            )
+        }
+
+        upsert(signingKey: nil, nickname: "alice")
+        XCTAssertEqual(cacheSaveCount(keychain), 1, "a new identity is written")
+        upsert(signingKey: nil, nickname: "alice")
+        upsert(signingKey: nil, nickname: nil)
+        XCTAssertEqual(cacheSaveCount(keychain), 1, "nothing changed")
+
+        upsert(signingKey: nil, nickname: "alice2")
+        XCTAssertEqual(cacheSaveCount(keychain), 2, "a nickname change is written")
+
+        upsert(signingKey: signingPublicKey, nickname: "alice2")
+        XCTAssertEqual(cacheSaveCount(keychain), 3, "the first signing-key pin is written")
+        upsert(signingKey: signingPublicKey, nickname: "alice2")
+        upsert(signingKey: nil, nickname: "alice2")
+        XCTAssertEqual(cacheSaveCount(keychain), 3, "re-announcing the pinned key changes nothing")
+
+        upsert(signingKey: Data(repeating: 0x66, count: 32), nickname: "mallory")
+        XCTAssertEqual(cacheSaveCount(keychain), 3, "a refused key replacement writes nothing")
+        XCTAssertEqual(manager.getCryptoIdentitiesByPeerIDPrefix(peerID).first?.signingPublicKey, signingPublicKey)
+
+        let replacementNoiseKey = Data(repeating: 0x16, count: 32)
+        upsert(replacementNoiseKey, signingKey: nil, nickname: "alice2")
+        XCTAssertEqual(cacheSaveCount(keychain), 4, "a Noise key change is written")
+
+        // Every skipped write was a no-op: the keychain holds the live state.
+        let reloaded = SecureIdentityStateManager(keychain)
+        let persisted = try XCTUnwrap(reloaded.getCryptoIdentitiesByPeerIDPrefix(peerID).first)
+        XCTAssertEqual(persisted.publicKey, replacementNoiseKey)
+        XCTAssertEqual(persisted.signingPublicKey, signingPublicKey)
+        XCTAssertEqual(reloaded.getSocialIdentity(for: fingerprint)?.claimedNickname, "alice2")
+    }
+
+    func test_authenticatedPeerStateSequence_writesTrustPinsOnceAndNothingOnRepeat() {
+        let keychain = MockKeychain()
+        let manager = SecureIdentityStateManager(keychain)
+        let noisePublicKey = Data(repeating: 0x17, count: 32)
+        let fingerprint = noisePublicKey.sha256Fingerprint()
+        let signingPublicKey = Data(repeating: 0x27, count: 32)
+        // Known from a verified announce.
+        manager.upsertCryptographicIdentity(
+            fingerprint: fingerprint,
+            noisePublicKey: noisePublicKey,
+            signingPublicKey: signingPublicKey,
+            claimedNickname: "alice"
+        )
+        let afterAnnounce = cacheSaveCount(keychain)
+
+        // BLEService.handleAuthenticatedPeerState, once per Noise session.
+        func applyAuthenticatedPeerState() {
+            manager.bindAuthenticatedSigningPublicKey(signingPublicKey, fingerprint: fingerprint)
+            manager.upsertCryptographicIdentity(
+                fingerprint: fingerprint,
+                noisePublicKey: noisePublicKey,
+                signingPublicKey: signingPublicKey,
+                claimedNickname: nil
+            )
+            manager.markPrivateMediaCapable(fingerprint: fingerprint)
+        }
+
+        applyAuthenticatedPeerState()
+        XCTAssertEqual(cacheSaveCount(keychain) - afterAnnounce, 2, "the binding and the media pin")
+        applyAuthenticatedPeerState()
+        XCTAssertEqual(cacheSaveCount(keychain) - afterAnnounce, 2, "a repeat session changes nothing")
+    }
+
+    func test_bindAuthenticatedSigningPublicKey_persistsCryptoIdentityKeyChange() {
+        let keychain = MockKeychain()
+        let manager = SecureIdentityStateManager(keychain)
+        let noisePublicKey = Data(repeating: 0x18, count: 32)
+        let fingerprint = noisePublicKey.sha256Fingerprint()
+        let announcedKey = Data(repeating: 0x28, count: 32)
+        let authenticatedKey = Data(repeating: 0x29, count: 32)
+
+        manager.bindAuthenticatedSigningPublicKey(authenticatedKey, fingerprint: fingerprint)
+        manager.upsertCryptographicIdentity(
+            fingerprint: fingerprint,
+            noisePublicKey: noisePublicKey,
+            signingPublicKey: announcedKey,
+            claimedNickname: nil
+        )
+        // The binding itself is unchanged, but the crypto identity's signing
+        // key moves to the authenticated one and must be persisted.
+        manager.bindAuthenticatedSigningPublicKey(authenticatedKey, fingerprint: fingerprint)
+        XCTAssertEqual(manager.signingPublicKey(forFingerprint: fingerprint), authenticatedKey)
+
+        let reloaded = SecureIdentityStateManager(keychain)
+        XCTAssertEqual(reloaded.signingPublicKey(forFingerprint: fingerprint), authenticatedKey)
+    }
+
+    // MARK: - Failed writes
+
+    func test_forceSave_retriesFailedCacheWrite() {
+        let keychain = MockKeychain()
+        let manager = SecureIdentityStateManager(keychain)
+        let first = Data(repeating: 0x19, count: 32)
+        let second = Data(repeating: 0x1A, count: 32)
+        upsertStranger(first, into: manager)
+
+        // The save deletes the old item and then fails to add the new one:
+        // the keychain holds no identity cache at all.
+        keychain.failingIdentityKeySaves = [Self.cacheKey]
+        upsertStranger(second, into: manager)
+        XCTAssertNil(keychain.getIdentityKey(forKey: Self.cacheKey))
+
+        keychain.failingIdentityKeySaves = []
+        manager.forceSave()
+
+        let reloaded = SecureIdentityStateManager(keychain)
+        XCTAssertNotNil(reloaded.signingPublicKey(forFingerprint: first.sha256Fingerprint()))
+        XCTAssertNotNil(reloaded.signingPublicKey(forFingerprint: second.sha256Fingerprint()))
+    }
+
+    func test_upsertCryptographicIdentity_retriesFailedCacheWriteOnNextAnnounce() {
+        let keychain = MockKeychain()
+        let manager = SecureIdentityStateManager(keychain)
+        let first = Data(repeating: 0x1B, count: 32)
+        let second = Data(repeating: 0x1C, count: 32)
+        let start = Date(timeIntervalSince1970: 1_760_000_000)
+        upsertStranger(first, into: manager, now: start)
+
+        keychain.failingIdentityKeySaves = [Self.cacheKey]
+        upsertStranger(second, into: manager, now: start)
+        keychain.failingIdentityKeySaves = []
+
+        // An unchanged re-announce after the retry interval writes the
+        // pending state.
+        upsertStranger(
+            first,
+            into: manager,
+            now: start.addingTimeInterval(SecureIdentityStateManager.failedSaveRetryInterval)
+        )
+
+        let reloaded = SecureIdentityStateManager(keychain)
+        XCTAssertNotNil(reloaded.signingPublicKey(forFingerprint: first.sha256Fingerprint()))
+        XCTAssertNotNil(reloaded.signingPublicKey(forFingerprint: second.sha256Fingerprint()))
+    }
+
+    func test_upsertCryptographicIdentity_backsOffRetryingFailedWriteOnUnchangedAnnounces() {
+        let keychain = MockKeychain()
+        let manager = SecureIdentityStateManager(keychain)
+        let noisePublicKey = Data(repeating: 0x1D, count: 32)
+        let start = Date(timeIntervalSince1970: 1_760_000_000)
+        let interval = SecureIdentityStateManager.failedSaveRetryInterval
+        keychain.failingIdentityKeySaves = [Self.cacheKey]
+
+        upsertStranger(noisePublicKey, into: manager, now: start)
+        XCTAssertEqual(cacheSaveCount(keychain), 1)
+
+        // A keychain that keeps failing is not re-encoded and rewritten by
+        // every unchanged announce...
+        for step in 0..<100 {
+            upsertStranger(
+                noisePublicKey,
+                into: manager,
+                now: start.addingTimeInterval(interval * Double(step) / 100)
+            )
+        }
+        XCTAssertEqual(cacheSaveCount(keychain), 1)
+
+        // ...only once the retry interval has passed.
+        upsertStranger(noisePublicKey, into: manager, now: start.addingTimeInterval(interval))
+        XCTAssertEqual(cacheSaveCount(keychain), 2)
+
+        // A real change, and termination, always try again.
+        upsertStranger(noisePublicKey, nickname: "renamed", into: manager, now: start.addingTimeInterval(interval))
+        XCTAssertEqual(cacheSaveCount(keychain), 3)
+        manager.forceSave()
+        XCTAssertEqual(cacheSaveCount(keychain), 4)
+    }
+
+    private static let cacheKey = "bitchat.identityCache.v2"
+
+    private func cacheSaveCount(_ keychain: MockKeychain) -> Int {
+        keychain.identityKeySaveCounts[Self.cacheKey, default: 0]
+    }
+
+    /// A verified announce from a stranger whose signing key is derived from
+    /// its Noise key.
+    private func upsertStranger(
+        _ noisePublicKey: Data,
+        nickname: String = "stranger",
+        into manager: SecureIdentityStateManager,
+        now: Date = Date()
+    ) {
+        manager.upsertCryptographicIdentity(
+            fingerprint: noisePublicKey.sha256Fingerprint(),
+            noisePublicKey: noisePublicKey,
+            signingPublicKey: Data(noisePublicKey.reversed()),
+            claimedNickname: nickname,
+            now: now
+        )
+    }
+
     private func waitUntil(
         timeout: TimeInterval = TestConstants.settleTimeout,
         condition: @escaping () -> Bool

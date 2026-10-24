@@ -42,7 +42,9 @@
     "geochat.formatMessage_before": 107,
     "geochat.formatMessage": 18006,
     "hex.encodePublicKey_before": 64366,
-    "hex.encodePublicKey": 1194627
+    "hex.encodePublicKey": 1194627,
+    "identity.upsertKnownPeer_before": 151,
+    "identity.upsertKnownPeer": 1730092
   },
   "floors": {
     "nostrInbound.fresh": 450,
@@ -60,7 +62,8 @@
     "geochat.peopleListColors": 40000,
     "geochat.participantHeartbeat": 150000,
     "geochat.formatMessage": 2500,
-    "hex.encodePublicKey": 250000
+    "hex.encodePublicKey": 250000,
+    "identity.upsertKnownPeer": 100000
   },
   "_slowest_observed_ci_numbers_2026_06": {
     "nostrInbound.fresh": 918,
