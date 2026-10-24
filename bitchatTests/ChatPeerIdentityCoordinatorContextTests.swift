@@ -323,8 +323,12 @@ struct ChatPeerIdentityCoordinatorContextTests {
 
         #expect(context.systemMessages.isEmpty)
         #expect(context.targetedSystemMessages.map(\.target) == [.mesh])
-        #expect(context.targetedSystemMessages.first?.content.contains("mallory") == true)
         #expect(context.begunChatSessions.isEmpty)
+
+        // The same refusal the selection gets when the chat has no origin.
+        coordinator.startPrivateChat(with: peerID)
+        #expect(context.systemMessages.count == 1)
+        #expect(context.systemMessages == context.targetedSystemMessages.map(\.content))
     }
 
     @Test @MainActor
