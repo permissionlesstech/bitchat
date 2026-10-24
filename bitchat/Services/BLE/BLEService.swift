@@ -1996,26 +1996,24 @@ final class BLEService: NSObject {
         // Encode once using a small per-type padding policy, then delegate by type
         let padForBLE = BLEOutboundPacketPolicy.padsBLEFrame(for: packetToSend.type)
 
-        // The 256-fragment ceiling exists to protect *current Android*
-        // receivers, which only ever receive private media over the directed
-        // raw-file migration fallback (they do not implement the encrypted
-        // 0x20 path). Encrypted private media (`noiseEncrypted`) is sent only to
-        // peers that advertised the `.privateMedia` capability — modern clients
-        // that assemble up to the full receiver ceiling (see
-        // `BLEFragmentAssemblyBuffer`'s 10,000-fragment guard) — so forcing them
-        // down to Android's 256 cap would needlessly reject iOS→iOS photos in
-        // the ~120–512 KiB range that work today. Restrict the low cap to the
-        // migration fallback (directed `fileTransfer`); public media is
-        // unaffected. Run the same planner the scheduler will use, after route
-        // application, and reject before reserving a transfer slot or writing
-        // any fragment.
-        // TODO(#1434): negotiate an explicit per-peer fragment limit so a future
-        // Android client that adopts the encrypted 0x20 path but still caps its
-        // reassembler can advertise its own ceiling instead of relying on the
-        // capability/type proxy above.
+        // Android supports encrypted private media but still caps reassembly at
+        // 256 fragments. Capability support alone does not negotiate capacity.
+        // Apply authenticated limits after routing and before reserving a slot
+        // or writing fragments; raw migration traffic always keeps its low cap.
+        // Honor a peer's authenticated limit without planning every encrypted
+        // send twice. A missing limit preserves the existing encrypted path;
+        // raw migration sends always retain their preflight and 256 cap.
         if let transferId,
            let recipientPeerID = PeerID(hexData: packetToSend.recipientID),
-           packetToSend.type == MessageType.fileTransfer.rawValue {
+           BLEFragmentCeilingPolicy.requiresPreflight(
+               packetType: packetToSend.type,
+               negotiatedCeiling: privateMediaSessions.negotiatedFragmentCeiling(for: recipientPeerID.toShort())
+           ) {
+            let ceiling = BLEFragmentCeilingPolicy.decide(
+                packetType: packetToSend.type,
+                isDirectedToPeer: true,
+                negotiatedCeiling: privateMediaSessions.negotiatedFragmentCeiling(for: recipientPeerID.toShort())
+            )
             let compatibilityRequest = BLEOutboundFragmentTransferRequest(
                 packet: packetToSend,
                 pad: padForBLE,
@@ -2027,17 +2025,20 @@ final class BLEService: NSObject {
                 for: compatibilityRequest,
                 defaultChunkSize: defaultFragmentSize,
                 bleMaxMTU: bleMaxMTU
-            ), BLEOutboundFragmentPlanner.isPrivateMediaV1Compatible(plan) else {
+            ), ceiling.admits(fragmentCount: plan.totalFragments) else {
                 SecureLogger.warning(
-                    "Private media rejected: exceeds cross-platform 256-fragment limit",
+                    "Private media rejected: \(String(describing: ceiling.source)) limit of \(ceiling.maxFragments) fragments",
                     category: .security
                 )
                 TransferProgressManager.shared.rejectBeforeStart(
                     id: transferId,
                     reason: String(
-                        localized: "content.delivery.reason.private_media_too_many_fragments",
-                        defaultValue: "File is too large for this contact's client (more than 256 mesh fragments)",
-                        comment: "Failure reason when private media exceeds the Android-compatible fragment limit"
+                        format: String(
+                            localized: "content.delivery.reason.private_media_too_many_fragments",
+                            defaultValue: "File is too large for this contact's client (more than %lld mesh fragments)",
+                            comment: "Failure reason when private media exceeds the recipient's fragment limit; %lld is that limit"
+                        ),
+                        ceiling.maxFragments
                     )
                 )
                 if requiresPrivateMediaAdmission {
@@ -4234,6 +4235,8 @@ extension BLEService {
         let capabilities = localIdentityState.snapshot().advertisedCapabilities
         let state = AuthenticatedPeerStatePacket(
             capabilities: capabilities,
+            // Do not advertise the header sanity bound as capacity. Our byte
+            // budget cannot promise a fragment count without a payload size.
             signingPublicKey: noiseService.getSigningPublicKeyData()
         )
         guard let payload = BLENoisePayloadFactory.authenticatedPeerState(state) else {
@@ -4308,7 +4311,8 @@ extension BLEService {
                     for: normalizedPeerID,
                     fingerprint: fingerprint,
                     generation: generation,
-                    capabilities: state.capabilities
+                    capabilities: state.capabilities,
+                    maxReassemblyFragments: state.maxReassemblyFragments
                 ) else {
                     return (false, [])
                 }

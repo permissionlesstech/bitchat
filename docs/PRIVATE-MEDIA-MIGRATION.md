@@ -20,8 +20,14 @@ peer's Noise session before BLE fragmentation.
   type/length/value fields. Version 1 requires canonical TLV `0x01` (the
   minimal little-endian `PeerCapabilities` bitfield, 1-8 bytes) and TLV `0x02`
   (the 32-byte Ed25519 announcement signing key). Duplicate required fields,
-  non-minimal capabilities, malformed lengths, missing fields, and unknown
+  non-minimal capabilities, malformed required lengths, missing fields, and unknown
   versions are ignored without changing state. Unknown TLVs are skipped.
+  Optional TLV `0x03` is a two-byte big-endian fragment-count ceiling (`1...65535`).
+  A zero, wrong width, duplicate, or truncated `0x03` preserves the required
+  capabilities/signing key and selects a conservative limit of 256. A truncated
+  required field still invalidates the packet. TLV `0x04` is reserved for the
+  peer-ID binding proof described in `PEER-ID-ROTATION.md`.
+  For example, the ceiling extension for 256 is `03 02 01 00`.
 - The public `PeerCapabilities.privateMedia` announce bit is a discovery hint:
   it starts a Noise handshake, but never selects encrypted sending or creates
   a pin. A private transfer waits boundedly for the exact session's encrypted
@@ -105,18 +111,23 @@ iOS bounds inbound file content at 1 MiB and applies the expanded allocation
 budget only after a large Noise ciphertext authenticates to `0x20` or the
 temporary `0x09` alias. Ordinary Noise messages retain their 64 KiB limit.
 
-Current Android builds cap each reassembly at 256 fragments. Depending on the
-negotiated BLE packet size and routing overhead, that is roughly 110-120 KiB,
-well below iOS's absolute inbound ceiling. That cap only applies to those
-receivers, which take private media exclusively over the directed raw-file
-migration fallback (they do not implement the encrypted `0x20` path).
-Private-media v1 therefore runs the actual route-aware BLE fragment planner
-before a consented legacy send and rejects any plan above 256 fragments with a
-visible failure. Encrypted sends go only to peers that advertised the
-`privateMedia` capability — modern clients that reassemble up to the full
-receiver ceiling (10,000 fragments) — so they are not held to Android's cap and
-iOS→iOS photos in the ~120-512 KiB range keep working. This fragment-count
-contract, rather than a guessed byte threshold, stays correct as route overhead
-changes. A future Android client that adopts `0x20` but still caps its
-reassembler would need to negotiate an explicit per-peer fragment limit
-(tracked as a #1434 follow-up).
+Android's 256-fragment bound is independent of its encrypted-media capability:
+Android supports the `0x20` path (permissionlesstech/bitchat-android#728).
+Capability bit 8 alone therefore
+does not establish a peer's reassembly capacity. A directed raw migration send
+retains the 256-fragment cap even if the peer advertises a larger value; a
+smaller authenticated `0x03` limit lowers either path. Only encrypted media may
+use an authenticated value above 256, clamped to our local count sanity bound.
+
+Without an advertisement, encrypted sends keep their previous behavior. This
+preserves existing iOS-to-iOS transfers but does not fix oversized sends to
+released Android peers that advertise no ceiling. The companion negotiation
+work is permissionlesstech/bitchat-android#879; this PR does not claim to solve that deployed-client gap.
+
+The iOS reassembler also enforces a per-type byte budget. Its 10,000-fragment
+header sanity check is not a promise to accept that many fragments of arbitrary
+size. iOS therefore does not advertise a count in `0x03`; a future byte-budget
+extension or an agreed maximum fragment payload is needed before it can state a
+truthful capacity. The local sender clamp bounds fragment counts we originate,
+not another device's memory budget. Unnegotiated encrypted sends skip the extra
+fragment-planning preflight; raw migration sends and negotiated sends retain it.

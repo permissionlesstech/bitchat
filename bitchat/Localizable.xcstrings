@@ -16184,187 +16184,187 @@
       }
     },
     "content.delivery.reason.private_media_too_many_fragments" : {
-      "comment" : "Failure reason when private media exceeds the Android-compatible fragment limit",
+      "comment" : "Failure reason when private media exceeds the recipient's fragment limit; %lld is that limit",
       "extractionState" : "manual",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "الملف كبير جدًا على تطبيق جهة الاتصال هذه (أكثر من 256 جزءًا عبر الشبكة المتداخلة)"
+            "value" : "الملف كبير جدًا على تطبيق جهة الاتصال هذه (أكثر من %lld جزءًا عبر الشبكة المتداخلة)"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "এই কন্টাক্টের ক্লায়েন্টের জন্য ফাইলটি খুব বড় (256টির বেশি মেশ ফ্র্যাগমেন্ট)"
+            "value" : "এই কন্টাক্টের ক্লায়েন্টের জন্য ফাইলটি খুব বড় (%lldটির বেশি মেশ ফ্র্যাগমেন্ট)"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Datei ist zu groß für den Client dieses Kontakts (mehr als 256 Mesh-Fragmente)"
+            "value" : "Datei ist zu groß für den Client dieses Kontakts (mehr als %lld Mesh-Fragmente)"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "File is too large for this contact's client (more than 256 mesh fragments)"
+            "value" : "File is too large for this contact's client (more than %lld mesh fragments)"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "El archivo es demasiado grande para el cliente de este contacto (más de 256 fragmentos de malla)"
+            "value" : "El archivo es demasiado grande para el cliente de este contacto (más de %lld fragmentos de malla)"
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "فایل برای کلاینت این مخاطب خیلی بزرگ است (بیش از 256 قطعهٔ مش)"
+            "value" : "فایل برای کلاینت این مخاطب خیلی بزرگ است (بیش از %lld قطعهٔ مش)"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Masyadong malaki ang file para sa client ng contact na ito (mahigit 256 mesh fragment)"
+            "value" : "Masyadong malaki ang file para sa client ng contact na ito (mahigit %lld mesh fragment)"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Le fichier est trop volumineux pour le client de ce contact (plus de 256 fragments mesh)"
+            "value" : "Le fichier est trop volumineux pour le client de ce contact (plus de %lld fragments mesh)"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "הקובץ גדול מדי עבור הקליינט של איש הקשר הזה (יותר מ-256 מקטעי mesh)"
+            "value" : "הקובץ גדול מדי עבור הקליינט של איש הקשר הזה (יותר מ-%lld מקטעי mesh)"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "यह फ़ाइल इस संपर्क के क्लाइंट के लिए बहुत बड़ी है (256 से ज़्यादा मेश फ़्रैगमेंट)"
+            "value" : "यह फ़ाइल इस संपर्क के क्लाइंट के लिए बहुत बड़ी है (%lld से ज़्यादा मेश फ़्रैगमेंट)"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "File terlalu besar untuk klien kontak ini (lebih dari 256 fragmen mesh)"
+            "value" : "File terlalu besar untuk klien kontak ini (lebih dari %lld fragmen mesh)"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Il file è troppo grande per il client di questo contatto (più di 256 frammenti mesh)"
+            "value" : "Il file è troppo grande per il client di questo contatto (più di %lld frammenti mesh)"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "このファイルはこの連絡先のクライアントには大きすぎます(メッシュフラグメントが256個を超えています)"
+            "value" : "このファイルはこの連絡先のクライアントには大きすぎます(メッシュフラグメントが%lld個を超えています)"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이 연락처의 클라이언트에는 파일이 너무 커요(메시 조각 256개 초과)"
+            "value" : "이 연락처의 클라이언트에는 파일이 너무 커요(메시 조각 %lld개 초과)"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fail terlalu besar untuk klien kenalan ini (lebih daripada 256 fragmen mesh)"
+            "value" : "Fail terlalu besar untuk klien kenalan ini (lebih daripada %lld fragmen mesh)"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "यो सम्पर्कको क्लाइन्टका लागि फाइल धेरै ठूलो छ (256 भन्दा बढी मेश खण्डहरू)"
+            "value" : "यो सम्पर्कको क्लाइन्टका लागि फाइल धेरै ठूलो छ (%lld भन्दा बढी मेश खण्डहरू)"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Het bestand is te groot voor de client van dit contact (meer dan 256 mesh-fragmenten)"
+            "value" : "Het bestand is te groot voor de client van dit contact (meer dan %lld mesh-fragmenten)"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Plik jest za duży dla klienta tego kontaktu (ponad 256 fragmentów mesh)"
+            "value" : "Plik jest za duży dla klienta tego kontaktu (ponad %lld fragmentów mesh)"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O ficheiro é demasiado grande para o cliente deste contacto (mais de 256 fragmentos da malha)"
+            "value" : "O ficheiro é demasiado grande para o cliente deste contacto (mais de %lld fragmentos da malha)"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O arquivo é grande demais para o cliente deste contato (mais de 256 fragmentos da malha)"
+            "value" : "O arquivo é grande demais para o cliente deste contato (mais de %lld fragmentos da malha)"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Файл слишком большой для клиента этого контакта (больше 256 фрагментов mesh-сети)"
+            "value" : "Файл слишком большой для клиента этого контакта (больше %lld фрагментов mesh-сети)"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Filen är för stor för den här kontaktens klient (fler än 256 mesh-fragment)"
+            "value" : "Filen är för stor för den här kontaktens klient (fler än %lld mesh-fragment)"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "இந்தத் தொடர்பின் கிளையண்டுக்கு இந்தக் கோப்பு மிகப் பெரியது (256-க்கும் மேற்பட்ட மெஷ் துண்டுகள்)"
+            "value" : "இந்தத் தொடர்பின் கிளையண்டுக்கு இந்தக் கோப்பு மிகப் பெரியது (%lld-க்கும் மேற்பட்ட மெஷ் துண்டுகள்)"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ไฟล์ใหญ่เกินไปสำหรับไคลเอ็นต์ของผู้ติดต่อรายนี้ (เกิน 256 ส่วนย่อยของ mesh)"
+            "value" : "ไฟล์ใหญ่เกินไปสำหรับไคลเอ็นต์ของผู้ติดต่อรายนี้ (เกิน %lld ส่วนย่อยของ mesh)"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dosya bu kişinin istemcisi için çok büyük (256'dan fazla mesh parçası)"
+            "value" : "Dosya bu kişinin istemcisi için çok büyük (mesh parça sınırı: %lld)"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Файл завеликий для клієнта цього контакту (понад 256 фрагментів mesh-мережі)"
+            "value" : "Файл завеликий для клієнта цього контакту (понад %lld фрагментів mesh-мережі)"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "یہ فائل اس رابطے کے کلائنٹ کے لیے بہت بڑی ہے (256 سے زیادہ میش ٹکڑے)"
+            "value" : "یہ فائل اس رابطے کے کلائنٹ کے لیے بہت بڑی ہے (%lld سے زیادہ میش ٹکڑے)"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tệp quá lớn so với ứng dụng của liên hệ này (hơn 256 phân mảnh mesh)"
+            "value" : "Tệp quá lớn so với ứng dụng của liên hệ này (hơn %lld phân mảnh mesh)"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "文件太大,这位联系人的客户端无法接收(超过 256 个网状网络分片)"
+            "value" : "文件太大,这位联系人的客户端无法接收(超过 %lld 个网状网络分片)"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "檔案太大,這位聯絡人的用戶端無法接收(超過 256 個網狀網路分段)"
+            "value" : "檔案太大,這位聯絡人的用戶端無法接收(超過 %lld 個網狀網路分段)"
           }
         }
       }
