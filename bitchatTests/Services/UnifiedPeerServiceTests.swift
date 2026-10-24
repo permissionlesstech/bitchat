@@ -324,8 +324,8 @@ private final class TestIdentityManager: SecureIdentityStateManagerProtocol {
     // MARK: Vouching (unused by these tests)
 
     @discardableResult
-    func recordVouch(voucheeFingerprint: String, voucherFingerprint: String, timestamp: Date) -> Bool {
-        false
+    func recordVouches(_ vouches: [(voucheeFingerprint: String, timestamp: Date)], voucherFingerprint: String) -> Int {
+        0
     }
 
     func validVouchers(for fingerprint: String) -> [VouchRecord] {

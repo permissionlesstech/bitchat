@@ -6,7 +6,8 @@
 // that used to grow with the number of identities C:
 //
 // - every verified announce rewrote the whole encrypted cache (JSON encode,
-//   AES-GCM seal, keychain delete and add), even when nothing had changed.
+//   AES-GCM seal, keychain delete and add), even when nothing had changed;
+// - every vouch batch rewrote it once per vouch, up to 16 times, on main.
 //
 // The write-count assertions are the real gate. perf-floors.json keeps
 // loose floors that still sit far above the regression values.
@@ -52,5 +53,35 @@ extension PerformanceBaselineTests {
 
         XCTAssertEqual(fixture.cacheSaveCount, writesBefore, "unchanged re-announces must not rewrite the identity cache")
         reportThroughput("identity.upsertKnownPeer", samples: samples, operations: upserts, unit: "upserts")
+    }
+
+    // MARK: - Identity: vouch batch
+
+    /// One full vouch batch from a verified voucher. Every pass carries
+    /// strictly newer timestamps, so every vouch is a real change: the same
+    /// voucher's next batch, a day later.
+    func testIdentityVouchBatch() throws {
+        let fixture = try IdentityCacheFixture(count: Self.identityCount)
+        let manager = SecureIdentityStateManager(fixture.keychain)
+        let voucher = fixture.strangers[0].fingerprint
+        manager.setVerified(fingerprint: voucher, verified: true)
+        let vouchees = fixture.strangers[1...VouchAttestation.maxBatchCount].map(\.fingerprint)
+        let firstBatch = Date()
+        var pass = 0
+        let writesBefore = fixture.cacheSaveCount
+        var samples: [TimeInterval] = []
+
+        measure {
+            pass += 1
+            let timestamp = firstBatch.addingTimeInterval(TimeInterval(pass))
+            let batch = vouchees.map { (voucheeFingerprint: $0, timestamp: timestamp) }
+            let start = Date()
+            let stored = manager.recordVouches(batch, voucherFingerprint: voucher, now: timestamp)
+            samples.append(Date().timeIntervalSince(start))
+            XCTAssertEqual(stored, vouchees.count)
+        }
+
+        XCTAssertEqual(fixture.cacheSaveCount - writesBefore, samples.count, "a vouch batch must cost one identity-cache write")
+        reportThroughput("identity.vouchBatch", samples: samples, operations: 1, unit: "batches")
     }
 }

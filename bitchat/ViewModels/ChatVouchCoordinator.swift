@@ -18,9 +18,11 @@ protocol ChatVouchContext: AnyObject {
     func signingKey(forFingerprint fingerprint: String) -> Data?
     /// Verified fingerprints ordered most recently verified first.
     func recentlyVerifiedFingerprints(limit: Int, excluding fingerprint: String) -> [String]
-    /// Stores an accepted vouch (identity manager enforces the storage gates).
+    /// Stores one voucher's accepted vouches with a single identity-cache
+    /// write (identity manager enforces the storage gates). Returns how many
+    /// were stored.
     @discardableResult
-    func recordVouch(voucheeFingerprint: String, voucherFingerprint: String, timestamp: Date) -> Bool
+    func recordVouches(_ vouches: [(voucheeFingerprint: String, timestamp: Date)], voucherFingerprint: String) -> Int
     func lastVouchBatchSent(to fingerprint: String) -> Date?
     func markVouchBatchSent(to fingerprint: String, at date: Date)
 
@@ -57,12 +59,8 @@ extension ChatViewModel: ChatVouchContext {
     }
 
     @discardableResult
-    func recordVouch(voucheeFingerprint: String, voucherFingerprint: String, timestamp: Date) -> Bool {
-        identityManager.recordVouch(
-            voucheeFingerprint: voucheeFingerprint,
-            voucherFingerprint: voucherFingerprint,
-            timestamp: timestamp
-        )
+    func recordVouches(_ vouches: [(voucheeFingerprint: String, timestamp: Date)], voucherFingerprint: String) -> Int {
+        identityManager.recordVouches(vouches, voucherFingerprint: voucherFingerprint)
     }
 
     func lastVouchBatchSent(to fingerprint: String) -> Date? {
@@ -249,18 +247,16 @@ final class ChatVouchCoordinator {
             return
         }
 
-        var acceptedCount = 0
+        var accepted: [(voucheeFingerprint: String, timestamp: Date)] = []
         for attestation in VouchAttestation.decodeList(from: payload) {
             guard attestation.verifySignature(voucherSigningKey: senderSigningKey),
                   !attestation.isExpired(now: now) else { continue }
-            let stored = context.recordVouch(
-                voucheeFingerprint: attestation.voucheeFingerprintHex,
-                voucherFingerprint: senderFingerprint,
-                timestamp: attestation.timestamp
-            )
-            if stored { acceptedCount += 1 }
+            accepted.append((voucheeFingerprint: attestation.voucheeFingerprintHex, timestamp: attestation.timestamp))
         }
+        guard !accepted.isEmpty else { return }
 
+        // One store call, so the batch costs one identity-cache write.
+        let acceptedCount = context.recordVouches(accepted, voucherFingerprint: senderFingerprint)
         if acceptedCount > 0 {
             SecureLogger.info(
                 "🪪 Accepted \(acceptedCount) vouch(es) from \(senderFingerprint.prefix(8))…",

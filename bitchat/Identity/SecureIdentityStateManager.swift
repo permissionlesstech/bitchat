@@ -134,7 +134,7 @@ protocol SecureIdentityStateManagerProtocol {
 
     // MARK: Vouching (transitive verification)
     @discardableResult
-    func recordVouch(voucheeFingerprint: String, voucherFingerprint: String, timestamp: Date) -> Bool
+    func recordVouches(_ vouches: [(voucheeFingerprint: String, timestamp: Date)], voucherFingerprint: String) -> Int
     func validVouchers(for fingerprint: String) -> [VouchRecord]
     func isVouched(fingerprint: String) -> Bool
     func lastVouchBatchSent(to fingerprint: String) -> Date?
@@ -775,16 +775,50 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     /// Maximum vouchers retained per vouchee (most recent kept).
     static let maxVouchersPerVouchee = 8
 
-    /// Records an accepted vouch, enforcing every accept-policy gate that can
-    /// be evaluated against stored state (signature verification is the
-    /// caller's job — it needs the sender's announce-bound signing key):
+    /// Records a batch of accepted vouches from one voucher, enforcing every
+    /// accept-policy gate that can be evaluated against stored state
+    /// (signature verification is the caller's job — it needs the sender's
+    /// announce-bound signing key):
     /// - the voucher must be a fingerprint *I* verified
     /// - self-vouches are ignored
     /// - vouches for peers I already verified are ignored (nothing to add)
     /// - attestations outside the validity window are ignored
+    /// - a repeat vouch counts only with a strictly newer timestamp
     /// - at most `maxVouchersPerVouchee` vouchers are kept per vouchee
     ///
-    /// Returns true when the vouch was stored (or refreshed).
+    /// The batch is applied in one barrier and written at most once.
+    /// Returns how many vouches were stored (or refreshed).
+    @discardableResult
+    func recordVouches(_ vouches: [(voucheeFingerprint: String, timestamp: Date)], voucherFingerprint: String) -> Int {
+        recordVouches(vouches, voucherFingerprint: voucherFingerprint, now: Date())
+    }
+
+    @discardableResult
+    func recordVouches(
+        _ vouches: [(voucheeFingerprint: String, timestamp: Date)],
+        voucherFingerprint: String,
+        now: Date
+    ) -> Int {
+        queue.sync(flags: .barrier) {
+            guard self.cache.verifiedFingerprints.contains(voucherFingerprint) else { return 0 }
+            var stored = 0
+            for vouch in vouches where self.applyVouchLocked(
+                voucheeFingerprint: vouch.voucheeFingerprint,
+                voucherFingerprint: voucherFingerprint,
+                timestamp: vouch.timestamp,
+                now: now
+            ) {
+                stored += 1
+            }
+            if stored > 0 {
+                self.saveIdentityCache()
+            }
+            return stored
+        }
+    }
+
+    /// One-vouch `recordVouches`. Returns true when the vouch was stored (or
+    /// refreshed).
     @discardableResult
     func recordVouch(voucheeFingerprint: String, voucherFingerprint: String, timestamp: Date) -> Bool {
         recordVouch(
@@ -797,37 +831,44 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
 
     @discardableResult
     func recordVouch(voucheeFingerprint: String, voucherFingerprint: String, timestamp: Date, now: Date) -> Bool {
-        queue.sync(flags: .barrier) {
-            guard voucheeFingerprint != voucherFingerprint,
-                  self.cache.verifiedFingerprints.contains(voucherFingerprint),
-                  !self.cache.verifiedFingerprints.contains(voucheeFingerprint) else {
-                return false
-            }
-            let age = now.timeIntervalSince(timestamp)
-            guard age <= VouchAttestation.maxAge, age >= -VouchAttestation.maxClockSkew else {
-                return false
-            }
+        recordVouches(
+            [(voucheeFingerprint: voucheeFingerprint, timestamp: timestamp)],
+            voucherFingerprint: voucherFingerprint,
+            now: now
+        ) == 1
+    }
 
-            var records = self.cache.vouchesByVouchee?[voucheeFingerprint] ?? []
-            if let index = records.firstIndex(where: { $0.voucherFingerprint == voucherFingerprint }) {
-                let newest = max(records[index].timestamp, timestamp)
-                records[index] = VouchRecord(voucherFingerprint: voucherFingerprint, timestamp: newest)
-            } else {
-                records.append(VouchRecord(voucherFingerprint: voucherFingerprint, timestamp: timestamp))
-            }
-            // Keep the most recent vouchers up to the cap.
-            records.sort { $0.timestamp > $1.timestamp }
-            let capped = Array(records.prefix(Self.maxVouchersPerVouchee))
-            guard capped.contains(where: { $0.voucherFingerprint == voucherFingerprint }) else {
-                return false // Full of fresher vouches; nothing changed.
-            }
-
-            var vouches = self.cache.vouchesByVouchee ?? [:]
-            vouches[voucheeFingerprint] = capped
-            self.cache.vouchesByVouchee = vouches
-            self.saveIdentityCache()
-            return true
+    /// Requires `queue` (barrier) and a voucher I verified. Applies one vouch
+    /// without writing; returns whether the stored vouches changed.
+    private func applyVouchLocked(voucheeFingerprint: String, voucherFingerprint: String, timestamp: Date, now: Date) -> Bool {
+        guard voucheeFingerprint != voucherFingerprint,
+              !cache.verifiedFingerprints.contains(voucheeFingerprint) else {
+            return false
         }
+        let age = now.timeIntervalSince(timestamp)
+        guard age <= VouchAttestation.maxAge, age >= -VouchAttestation.maxClockSkew else {
+            return false
+        }
+
+        var records = cache.vouchesByVouchee?[voucheeFingerprint] ?? []
+        if let index = records.firstIndex(where: { $0.voucherFingerprint == voucherFingerprint }) {
+            // An equal or older redelivery changes nothing.
+            guard timestamp > records[index].timestamp else { return false }
+            records[index] = VouchRecord(voucherFingerprint: voucherFingerprint, timestamp: timestamp)
+        } else {
+            records.append(VouchRecord(voucherFingerprint: voucherFingerprint, timestamp: timestamp))
+        }
+        // Keep the most recent vouchers up to the cap.
+        records.sort { $0.timestamp > $1.timestamp }
+        let capped = Array(records.prefix(Self.maxVouchersPerVouchee))
+        guard capped.contains(where: { $0.voucherFingerprint == voucherFingerprint }) else {
+            return false // Full of fresher vouches; nothing changed.
+        }
+
+        var vouches = cache.vouchesByVouchee ?? [:]
+        vouches[voucheeFingerprint] = capped
+        cache.vouchesByVouchee = vouches
+        return true
     }
 
     /// The vouches that currently count for `fingerprint`. Validity is
