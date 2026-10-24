@@ -19,6 +19,12 @@ struct ContentComposerView: View {
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
     @Binding var autocompleteDebounceTimer: Timer?
 
+    /// Applied autocorrect gate — updated on a short debounce so crossing a
+    /// `/` `@` `#` boundary doesn't thrash UIKit text-input traits on every
+    /// keystroke (can flicker the keyboard on some iOS versions).
+    @State private var appliedAutocorrectDisabled = false
+    @State private var autocorrectTraitTimer: Timer?
+
     let onSendMessage: () -> Void
 
     #if os(iOS)
@@ -76,9 +82,12 @@ struct ContentComposerView: View {
                 .bitchatFont(size: 15)
                 .foregroundColor(palette.primary)
                 .focused(isTextFieldFocused)
-                .autocorrectionDisabled(true)
+                // Token-aware (#969): autocorrect for prose, off while the
+                // current token is a /command, @mention, or #channel so the
+                // keyboard doesn't fight exact tokens (or learn them).
+                .autocorrectionDisabled(appliedAutocorrectDisabled)
                 #if os(iOS)
-                .textInputAutocapitalization(.sentences)
+                .textInputAutocapitalization(appliedAutocorrectDisabled ? .never : .sentences)
                 #endif
                 .submitLabel(.send)
                 .modifier(AutocompleteKeyboardNavigationModifier(
@@ -123,6 +132,13 @@ struct ContentComposerView: View {
                             conversationUIModel.updateAutocomplete(for: newValue, cursorPosition: cursorPosition)
                         }
                     }
+                    scheduleAutocorrectTraitUpdate(for: newValue)
+                }
+                .onAppear {
+                    appliedAutocorrectDisabled = ComposerAutocorrect.shouldDisable(
+                        for: messageText,
+                        cursorPosition: messageText.count
+                    )
                 }
 
                 HStack(alignment: .center, spacing: 4) {
@@ -144,11 +160,33 @@ struct ContentComposerView: View {
         .themedChromePanel(edge: .bottom)
         .onDisappear {
             autocompleteDebounceTimer?.invalidate()
+            autocorrectTraitTimer?.invalidate()
         }
     }
 }
 
 private extension ContentComposerView {
+    /// Debounce trait flips so UIKit isn't asked to reload the keyboard on
+    /// every character while the user is still deciding the token.
+    func scheduleAutocorrectTraitUpdate(for text: String) {
+        let desired = ComposerAutocorrect.shouldDisable(for: text, cursorPosition: text.count)
+        guard desired != appliedAutocorrectDisabled else {
+            autocorrectTraitTimer?.invalidate()
+            return
+        }
+        autocorrectTraitTimer?.invalidate()
+        autocorrectTraitTimer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: false) { _ in
+            Task { @MainActor in
+                let latest = ComposerAutocorrect.shouldDisable(
+                    for: messageText,
+                    cursorPosition: messageText.count
+                )
+                guard latest != appliedAutocorrectDisabled else { return }
+                appliedAutocorrectDisabled = latest
+            }
+        }
+    }
+
     /// The nearby-only scope toggle appears only where it means something:
     /// the public mesh channel with the bridge on.
     var showsNearbyOnlyToggle: Bool {
