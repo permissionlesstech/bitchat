@@ -189,7 +189,8 @@ struct ContentPeopleSheetView: View {
         }
         .themedSheetBackground()
         .foregroundColor(palette.primary)
-        .modifier(LegacyPrivateMediaConsentDialog())
+        // The sheet presents it from its own tree, over whatever it shows.
+        .modifier(LegacyPrivateMediaConsentDialog(isDeferred: false))
         #if os(macOS)
         .frame(minWidth: 420, minHeight: 520)
         #endif
@@ -454,6 +455,13 @@ extension View {
 struct LegacyPrivateMediaConsentDialog: ViewModifier {
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
 
+    /// Holds a pending request back while something else is presented over
+    /// the dialog's host (the split layout's people popover, which the root
+    /// presents): presenting it then would fail and leave the request,
+    /// which the root's alerts wait on, pending for good. It shows once that
+    /// closes. Held back is not dismissed: the request stays pending.
+    let isDeferred: Bool
+
     func body(content: Content) -> some View {
         let legacyConsentRequest = conversationUIModel.legacyPrivateMediaConsentRequest
         content
@@ -464,9 +472,9 @@ struct LegacyPrivateMediaConsentDialog: ViewModifier {
                     comment: "Title warning before sending private media to an older client in a clear signed envelope"
                 ),
                 isPresented: Binding(
-                    get: { legacyConsentRequest != nil },
+                    get: { legacyConsentRequest != nil && !isDeferred },
                     set: { isPresented in
-                        if !isPresented, let requestID = legacyConsentRequest?.id {
+                        if !isPresented, !isDeferred, let requestID = legacyConsentRequest?.id {
                             conversationUIModel.resolveLegacyPrivateMediaConsent(
                                 requestID: requestID,
                                 approved: false

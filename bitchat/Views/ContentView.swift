@@ -382,6 +382,17 @@ struct ContentView: View {
         #endif
     }
 
+    /// The split layout's legacy-media consent dialog has a request to
+    /// show. The trailing pane presents it from the root's tree, so the
+    /// root's alerts, and the screenshot warning the leading bar presents,
+    /// wait for it.
+    private var isLegacyConsentPendingAtRoot: Bool {
+        ContentRootModalPresentationState.legacyConsentDefersRoot(
+            isSplitLayout: isSplitLayoutActive,
+            hasPendingRequest: conversationUIModel.legacyPrivateMediaConsentRequest != nil
+        )
+    }
+
     private func rootModalPresentationState(
         includingVoiceAlert: Bool
     ) -> ContentRootModalPresentationState {
@@ -392,10 +403,7 @@ struct ContentView: View {
             isVerificationSheetPresented: showVerifySheet,
             isVoiceAlertPresented: includingVoiceAlert && voiceRecordingVM.showAlert,
             isMediaPickerPresented: mediaPickRequest != nil,
-            isLegacyMediaConsentPresented: ContentRootModalPresentationState.legacyConsentDefersRoot(
-                isSplitLayout: isSplitLayoutActive,
-                hasPendingRequest: conversationUIModel.legacyPrivateMediaConsentRequest != nil
-            ),
+            isLegacyMediaConsentPresented: isLegacyConsentPendingAtRoot,
             isPeoplePopoverPresented: isPeoplePopoverPresented
         )
     }
@@ -1018,7 +1026,7 @@ struct ContentView: View {
                         paneChannel: isSplit ? .mesh : nil,
                         onPeopleTap: isSplit ? { peopleButtonTapped(.leading) } : nil,
                         isBadgeStatic: isSplit,
-                        defersAlerts: isPeoplePopoverPresented
+                        defersAlerts: isPeoplePopoverPresented || isLegacyConsentPendingAtRoot
                     )
                     // Anchored to the whole bar, so it centres in the pane,
                     // off the hinge.
@@ -1122,8 +1130,10 @@ struct ContentView: View {
             }
         }
         // Whatever the pane shows: a request can still be pending after its
-        // DM closed, and the root waits on it in this layout.
-        .modifier(LegacyPrivateMediaConsentDialog())
+        // DM closed, and the root waits on it in this layout. Held back
+        // while the root presents a people popover, as the root's alerts
+        // are: it shows once the popover closes.
+        .modifier(LegacyPrivateMediaConsentDialog(isDeferred: isPeoplePopoverPresented))
     }
 
     /// The trailing geohash's bar: its badge (back to the picker, to switch

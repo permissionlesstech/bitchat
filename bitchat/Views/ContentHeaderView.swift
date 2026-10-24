@@ -42,9 +42,9 @@ struct ContentHeaderView: View {
     var isBadgeStatic = false
     /// Holds back the app-wide alert this bar hosts (the screenshot
     /// warning) while the root presents something over the layout (the
-    /// split layout's people popover): presenting it then would fail and
-    /// leave its flag, which root alerts wait on, set for good. It shows
-    /// once that closes.
+    /// split layout's people popover, or its legacy-media consent dialog):
+    /// presenting it then would fail and leave its flag, which root alerts
+    /// wait on, set for good. It shows once that closes.
     var defersAlerts = false
 
     /// Courier envelopes this device is carrying for offline third parties.

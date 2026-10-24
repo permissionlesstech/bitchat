@@ -677,6 +677,15 @@ private final class SplitContentHost {
         viewModel.selectedPrivateChatPeer = peer
     }
 
+    /// A private-media send to Bob's legacy client asking for consent.
+    func requestLegacyConsent() {
+        viewModel.enqueueLegacyPrivateMediaConsent(
+            for: bob,
+            transferId: "split-consent-transfer",
+            messageID: "split-consent-message"
+        ) { _ in }
+    }
+
     func fold() async -> Bool {
         sizeClass.value = .compact
         return await settle { self.chrome.splitLayoutShowsLocation == nil }
@@ -1797,6 +1806,75 @@ struct ViewSmokeTests {
                 && split.openPeer == nil
         }
         #expect(parked, "\(split.diagnostics)")
+    }
+
+    /// Brief item 6: the trailing pane hosts the legacy-media consent dialog
+    /// whatever it shows, here the idle picker: a pending request always
+    /// has a presenter, so the root alerts waiting on it can't wait for
+    /// good.
+    @Test
+    func contentView_splitPresentsAPendingLegacyConsentRequest() async {
+        let split = await SplitContentHost.make()
+        defer {
+            split.viewModel.cancelAllLegacyPrivateMediaConsents()
+            split.close()
+        }
+        #expect(await split.settle { split.trailingPrompts == ["geohash"] }, "\(split.diagnostics)")
+
+        split.requestLegacyConsent()
+        #expect(await split.settle { split.presentedAlert?.preferredStyle == .actionSheet }, "\(split.diagnostics)")
+
+        split.viewModel.cancelAllLegacyPrivateMediaConsents()
+        #expect(await split.settle { !split.isPresenting }, "\(split.diagnostics)")
+    }
+
+    /// I5: a consent request arriving while a people popover is up waits
+    /// for it, still pending, and shows once the popover closes.
+    @Test
+    func contentView_aPeoplePopoverHoldsTheConsentDialogBack() async {
+        let split = await SplitContentHost.make()
+        defer {
+            split.viewModel.cancelAllLegacyPrivateMediaConsents()
+            split.close()
+        }
+        split.tap(.peopleButton(.leading))
+        #expect(await split.settle { split.isPresentingPopover }, "\(split.diagnostics)")
+
+        split.requestLegacyConsent()
+        let presented = await TestHelpers.waitUntil(
+            { split.presentedAlert != nil },
+            timeout: TestConstants.negativeWaitWindow
+        )
+        #expect(!presented, "\(split.diagnostics)")
+        #expect(split.isPresentingPopover)
+        #expect(split.models.conversationUIModel.legacyPrivateMediaConsentRequest != nil)
+
+        split.tap(.popoverCloseButton)
+        #expect(await split.settle { split.presentedAlert?.preferredStyle == .actionSheet }, "\(split.diagnostics)")
+    }
+
+    /// I5: the screenshot warning (the leading bar's) waits for a consent
+    /// request the trailing pane is showing, and shows once it is answered.
+    @Test
+    func contentView_aPendingConsentRequestHoldsTheScreenshotWarningBack() async {
+        let split = await SplitContentHost.make()
+        defer {
+            split.viewModel.cancelAllLegacyPrivateMediaConsents()
+            split.chrome.showScreenshotPrivacyWarning = false
+            split.close()
+        }
+        split.requestLegacyConsent()
+        #expect(await split.settle { split.presentedAlert?.preferredStyle == .actionSheet }, "\(split.diagnostics)")
+
+        split.chrome.showScreenshotPrivacyWarning = true
+        let replaced = await TestHelpers.waitUntil(
+            { split.presentedAlert?.preferredStyle != .actionSheet },
+            timeout: TestConstants.negativeWaitWindow
+        )
+        #expect(!replaced, "\(split.diagnostics)")
+
+        split.viewModel.cancelAllLegacyPrivateMediaConsents()
+        #expect(await split.settle { split.presentedAlert?.preferredStyle == .alert }, "\(split.diagnostics)")
     }
 
     /// E13: a fingerprint asked for in a popover is the popover's own, so it
