@@ -68,6 +68,8 @@ enum NoiseSecurityConstants {
     static let maxMessagesPerSession: UInt64 = 1_000_000_000 // 1 billion messages
     
     // Rate limiting
+    static let handshakeRateLimitWindow: TimeInterval = 60
+    static let messageRateLimitWindow: TimeInterval = 1
     static let maxHandshakesPerMinute = 10
     static let maxMessagesPerSecond = 100
     
