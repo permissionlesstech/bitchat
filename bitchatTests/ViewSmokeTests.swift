@@ -2044,11 +2044,52 @@ struct ViewSmokeTests {
         featureModels.conversationUIModel.block(peerID: blocked, displayName: "Mallory", from: .mesh)
         #expect(viewModel.isPeerBlocked(blocked))
 
-        #expect(!ContentPeopleListView.openConversationFromPopover(with: blocked, in: conversations))
+        #expect(!ContentPeopleListView.openConversationFromPopover(with: blocked, from: .mesh, in: conversations))
         #expect(conversations.selectedPeerID == nil)
 
-        #expect(ContentPeopleListView.openConversationFromPopover(with: reachable, in: conversations))
+        #expect(ContentPeopleListView.openConversationFromPopover(with: reachable, from: .mesh, in: conversations))
         #expect(conversations.selectedPeerID == reachable)
+    }
+
+    /// I1: a blocked peer tapped in the #mesh popover has its refusal land
+    /// in #mesh, where the tap was, not in the geohash selected beside it.
+    @Test
+    func peopleList_aPopoverRefusalLandsInTheListedChannel() async {
+        let manager = makeSmokeLocationManager()
+        let (viewModel, transport, _) = makeSmokeViewModel(locationManager: manager)
+        let featureModels = makeSmokeFeatureModels(for: viewModel, locationManager: manager)
+        let blocked = PeerID(str: "8182838485868788")
+        transport.peerNicknames[blocked] = "Mallory"
+        transport.updatePeerSnapshots([makeSnapshot(peerID: blocked, nickname: "Mallory", noiseByte: 0x81)])
+        let known = await TestHelpers.waitUntil(
+            { featureModels.peerListModel.meshRows.contains { $0.peerID == blocked } },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(known)
+        featureModels.conversationUIModel.block(peerID: blocked, displayName: "Mallory", from: .mesh)
+        let geohash = ChannelID.location(GeohashChannel(level: .city, geohash: "u4pru"))
+        featureModels.locationChannelsModel.select(geohash)
+        let selected = await TestHelpers.waitUntil(
+            { viewModel.activeChannel == geohash },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(selected)
+        func lines(_ channel: ChannelID) -> [String] {
+            viewModel.conversations.conversationsByID[ConversationID(channelID: channel)]?.messages.map(\.content) ?? []
+        }
+        let meshBefore = lines(.mesh)
+        let geohashBefore = lines(geohash)
+
+        #expect(!ContentPeopleListView.openConversationFromPopover(
+            with: blocked,
+            from: .mesh,
+            in: featureModels.privateConversationModel
+        ))
+
+        let refusal = lines(.mesh).dropFirst(meshBefore.count)
+        #expect(refusal.count == 1)
+        #expect(refusal.first?.contains("Mallory") == true, "\(Array(refusal))")
+        #expect(lines(geohash) == geohashBefore)
     }
 
     @Test

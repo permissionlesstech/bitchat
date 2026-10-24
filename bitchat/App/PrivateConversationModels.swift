@@ -189,6 +189,15 @@ final class PrivateConversationModel: ObservableObject {
     func isSameConversation(_ lhs: PeerID, _ rhs: PeerID) -> Bool {
         chatViewModel.isSameDirectConversation(lhs, rhs)
     }
+
+    /// Opens the DM with `peerID` from a list that lists `origin`'s people.
+    /// A refusal (a blocked peer's DM doesn't open) lands in `origin`, not
+    /// in whatever is selected: on the split layout that can be the other
+    /// pane's conversation.
+    func startConversation(with peerID: PeerID, from origin: ConversationTarget) {
+        chatViewModel.startPrivateChat(with: peerID, from: origin)
+        refreshSelectedConversation()
+    }
     #endif
 
     func toggleFavorite(peerID: PeerID) {

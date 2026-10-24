@@ -725,8 +725,13 @@ struct ContentPeopleListView: View {
         #if os(iOS)
         case .popover(let onClose, _):
             // The popover stays when no DM opened (a blocked peer's): it
-            // would otherwise close on nothing.
-            if Self.openConversationFromPopover(with: peerID, in: privateConversationModel) {
+            // would otherwise close on nothing. The refusal lands in the
+            // listed channel, which need not be the selected one.
+            if Self.openConversationFromPopover(
+                with: peerID,
+                from: .publicChannel(listChannel),
+                in: privateConversationModel
+            ) {
                 onClose()
             }
         #endif
@@ -765,14 +770,16 @@ struct ContentPeopleListView: View {
 
     #if os(iOS)
     /// Opens the DM with `peerID` from a popover row and says whether it
-    /// opened: a blocked peer's doesn't. Through the conversation model,
-    /// which takes the selection at once, so the answer is known before the
-    /// tap returns.
+    /// opened: a blocked peer's doesn't, and its refusal lands in `origin`,
+    /// the conversation whose people the popover lists. Through the
+    /// conversation model, which takes the selection at once, so the
+    /// answer is known before the tap returns.
     static func openConversationFromPopover(
         with peerID: PeerID,
+        from origin: ConversationTarget,
         in model: PrivateConversationModel
     ) -> Bool {
-        model.startConversation(with: peerID)
+        model.startConversation(with: peerID, from: origin)
         return model.selectedPeerID == peerID
     }
     #endif
