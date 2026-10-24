@@ -775,6 +775,18 @@ private final class SplitContentHost {
         )
     }
 
+    /// A location fix arriving: the device's cells, its building cell
+    /// included, become known.
+    func deliverLocationFix(sourceLocation: SourceLocation = #_sourceLocation) async throws {
+        location.delegate?.locationManager?(
+            CLLocationManager(),
+            didUpdateLocations: [CLLocation(latitude: 48.8566, longitude: 2.3522)]
+        )
+        try await require("the building cell", sourceLocation: sourceLocation) {
+            self.channels.currentBuildingGeohash != nil
+        }
+    }
+
     /// Presents something over the panes that the root doesn't know about,
     /// as a list's own dialog or a bar's share sheet is.
     func presentUntracked() {
@@ -1204,6 +1216,87 @@ struct ViewSmokeTests {
         #expect(loadedManager.notes.count == 1)
         #expect(noRelayManager.state == .noRelays)
     }
+
+    #if os(iOS)
+    /// I3: the notices sheet keeps the geo scope it opened with. Opened on a
+    /// location channel, a selection it didn't make (a fold selecting
+    /// #mesh beneath it) never moves it onto the device's location: no
+    /// continuous location updates start, though the device's building
+    /// cell is known.
+    @Test
+    func noticesView_keepsTheGeoScopeItOpenedWith() async throws {
+        let suiteName = "ViewSmokeTests.notices.\(UUID().uuidString)"
+        let storage = try #require(UserDefaults(suiteName: suiteName))
+        defer { storage.removePersistentDomain(forName: suiteName) }
+        let location = MockLocationStateManaging(authorizationStatus: .authorizedWhenInUse)
+        let manager = LocationStateManager(
+            storage: storage,
+            locationManager: location,
+            geocoder: MockLocationStateGeocoder(),
+            shouldInitializeCoreLocation: true
+        )
+        let channels = LocationChannelsModel(manager: manager)
+        let authorized = await TestHelpers.waitUntil(
+            { channels.permissionState == .authorized },
+            timeout: TestConstants.settleTimeout
+        )
+        try #require(authorized)
+        location.delegate?.locationManager?(
+            CLLocationManager(),
+            didUpdateLocations: [CLLocation(latitude: 48.8566, longitude: 2.3522)]
+        )
+        let located = await TestHelpers.waitUntil(
+            { channels.currentBuildingGeohash != nil },
+            timeout: TestConstants.settleTimeout
+        )
+        try #require(located)
+        let remote = GeohashChannel(level: .city, geohash: "9q8yy")
+        channels.select(.location(remote))
+        let selected = await TestHelpers.waitUntil(
+            { channels.selectedChannel == .location(remote) },
+            timeout: TestConstants.settleTimeout
+        )
+        try #require(selected)
+
+        let board = BoardManager(
+            transport: MockTransport(),
+            store: BoardStore(persistsToDisk: false, fileURL: nil, now: { Date() }),
+            publishToNostr: { _, _, _, _, _ in nil },
+            deleteFromNostr: { _, _ in }
+        )
+        let notes = LocationNotesManager(
+            geohash: remote.geohash,
+            dependencies: LocationNotesDependencies(
+                relayLookup: { _, _ in [] },
+                subscribe: { _, _, _, _, _ in },
+                unsubscribe: { _ in },
+                sendEvent: { _, _ in },
+                deriveIdentity: { _ in try NostrIdentity.generate() },
+                now: { Date() }
+            )
+        )
+        let host = WindowHost(
+            NoticesView(senderNickname: "me", board: board, initialTab: .geo, notesManager: notes)
+                .environmentObject(channels),
+            size: CGSize(width: 390, height: 844)
+        )
+        defer { host.close() }
+        let updates = location.startUpdatingLocationCallCount
+
+        channels.select(.mesh)
+        let deselected = await TestHelpers.waitUntil(
+            { channels.selectedChannel == .mesh },
+            timeout: TestConstants.settleTimeout
+        )
+        try #require(deselected)
+        let started = await TestHelpers.waitUntil(
+            { location.startUpdatingLocationCallCount > updates },
+            timeout: TestConstants.negativeWaitWindow
+        )
+        #expect(!started, "the sheet moved onto the device's location")
+        channels.endLiveRefresh()
+    }
+    #endif
 
     @Test
     func appInfoAndComponentViews_render() {
@@ -1798,6 +1891,38 @@ struct ViewSmokeTests {
         }
         #expect(split.location.isFixPending, "the pane's fix died with the sheet's updates")
         #expect(split.location.requestAuthorizationCallCount == 0)
+    }
+
+    /// I3 across an E3 fold: the notices sheet, opened on the trailing
+    /// geohash's geo tab, closes as the fold selects #mesh, and never moves
+    /// onto the device's location on the way: no continuous location
+    /// updates start (beginLiveRefresh), so no building-cell notes request
+    /// goes out either.
+    @Test
+    func contentView_aFoldNeverMovesTheNoticesSheetOntoDeviceLocation() async throws {
+        let split = try await SplitContentHost.make()
+        defer {
+            split.chrome.isNoticesSheetPresented = false
+            split.close()
+        }
+        try await split.deliverLocationFix()
+        try await split.select(.location(split.geohash))
+        try #require(split.touch(.leading))
+        split.chrome.presentNotices()
+        try await split.require("the notices sheet") { split.isPresenting }
+        let updates = split.location.startUpdatingLocationCallCount
+
+        try await split.fold()
+        try await split.require("the notices sheet closed, #mesh selected") {
+            !split.chrome.isNoticesSheetPresented
+                && !split.isPresenting
+                && split.channels.selectedChannel == .mesh
+        }
+        let started = await TestHelpers.waitUntil(
+            { split.location.startUpdatingLocationCallCount > updates },
+            timeout: TestConstants.negativeWaitWindow
+        )
+        #expect(!started, "the notices sheet started live location updates: \(split.diagnostics)")
     }
 
     /// E1 and E11: shared content goes to the last-touched pane's composer,

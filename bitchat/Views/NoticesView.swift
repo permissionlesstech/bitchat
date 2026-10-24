@@ -52,6 +52,9 @@ struct NoticesView: View {
     /// Combine/SwiftUI invalidations do not restart CoreLocation and a
     /// revocation or kill-switch transition balances the begin call once.
     @State private var ownsLiveGeoRefresh = false
+    /// The geo tab's scope, taken as the sheet appears (`GeoScope`); nil
+    /// until then.
+    @State private var openedGeoScope: GeoScope?
 
     init(
         senderNickname: String,
@@ -83,6 +86,49 @@ struct NoticesView: View {
     struct GeoSessionState {
         let manager: LocationNotesManager?
         let ownsLiveRefresh: Bool
+    }
+
+    /// Where the geo tab's notices come from: the location channel selected
+    /// as the sheet appeared, or the device's own building cell when none
+    /// was. Taken once and kept: a selection the sheet didn't make (a fold
+    /// selecting #mesh beneath it) must never move it onto the device's
+    /// location, which would start continuous location updates and a
+    /// building-precision notes request nobody tapped for (I3), nor swap a
+    /// remote place's notes for the person's own building's.
+    enum GeoScope: Equatable {
+        /// A selected location channel's geohash: an explicit, possibly
+        /// remote, scope that needs no device location.
+        case channel(String)
+        /// The device's building cell, from device location.
+        case device
+
+        init(selectedChannel: ChannelID) {
+            if case .location(let channel) = selectedChannel {
+                self = .channel(channel.geohash)
+            } else {
+                self = .device
+            }
+        }
+
+        /// The device-derived scope is the one that needs the location
+        /// machinery.
+        var needsDeviceLocation: Bool {
+            self == .device
+        }
+
+        /// The geohash the scope stands for: the channel's, or the
+        /// building cell's while location is authorized.
+        func geohash(
+            permissionState: LocationChannelManager.PermissionState,
+            buildingGeohash: String?
+        ) -> String? {
+            switch self {
+            case .channel(let geohash):
+                return geohash
+            case .device:
+                return permissionState == .authorized ? buildingGeohash : nil
+            }
+        }
     }
 
     enum GeoPresentationState: Equatable {
@@ -205,23 +251,27 @@ struct NoticesView: View {
 
     private var maxDraftLines: Int { dynamicTypeSize.isAccessibilitySize ? 5 : 3 }
 
-    /// The geohash the geo tab is scoped to: the selected location channel,
-    /// or the device's building geohash when chatting on mesh.
-    private var geoGeohash: String? {
-        if case .location(let channel) = locationChannelsModel.selectedChannel {
-            return channel.geohash
-        }
-        guard locationChannelsModel.permissionState == .authorized else {
-            return nil
-        }
-        return locationChannelsModel.currentBuildingGeohash
+    /// The geo tab's scope: as the sheet opened, or, before it has
+    /// appeared, as it is about to.
+    private var geoScope: GeoScope {
+        openedGeoScope ?? GeoScope(selectedChannel: locationChannelsModel.selectedChannel)
     }
 
-    /// The geo scope comes from device location only when no location channel
-    /// is selected; that's the case that needs the location machinery.
+    /// The geohash the geo tab is scoped to: the location channel selected
+    /// as the sheet opened, or the device's building geohash when it opened
+    /// on mesh.
+    private var geoGeohash: String? {
+        geoScope.geohash(
+            permissionState: locationChannelsModel.permissionState,
+            buildingGeohash: locationChannelsModel.currentBuildingGeohash
+        )
+    }
+
+    /// The geo scope comes from device location only when the sheet opened
+    /// with no location channel selected; that's the case that needs the
+    /// location machinery.
     private var geoTabNeedsDeviceLocation: Bool {
-        if case .location = locationChannelsModel.selectedChannel { return false }
-        return true
+        geoScope.needsDeviceLocation
     }
 
     private var activeGeohash: String? {
@@ -306,6 +356,9 @@ struct NoticesView: View {
         #endif
         .themedSheetBackground()
         .onAppear {
+            if openedGeoScope == nil {
+                openedGeoScope = GeoScope(selectedChannel: locationChannelsModel.selectedChannel)
+            }
             reconcileGeoSession()
         }
         .onChange(of: tab) { newTab in
@@ -325,10 +378,9 @@ struct NoticesView: View {
         .onChange(of: locationChannelsModel.permissionState) { _ in
             reconcileGeoSession()
         }
+        // The building cell moving, or arriving with a fix; never the
+        // selection (`GeoScope`).
         .onChange(of: geoGeohash) { _ in
-            reconcileGeoSession()
-        }
-        .onChange(of: geoTabNeedsDeviceLocation) { _ in
             reconcileGeoSession()
         }
         .onReceive(NotificationCenter.default.publisher(for: LocationNotesSettings.didChangeNotification)) { _ in

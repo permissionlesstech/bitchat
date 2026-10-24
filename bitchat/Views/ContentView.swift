@@ -1469,6 +1469,9 @@ struct ContentView: View {
         if effects.closesLocationSheet {
             appChromeModel.isLocationChannelsSheetPresented = false
         }
+        if effects.closesNoticesSheet {
+            appChromeModel.isNoticesSheetPresented = false
+        }
     }
 
     /// The open DM is now `peer`, reported as the model publishes it, before

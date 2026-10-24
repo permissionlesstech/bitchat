@@ -370,6 +370,9 @@ struct SplitPaneState: Equatable {
         var reopensConversation: PeerID?
         /// Close the location channels sheet.
         var closesLocationSheet = false
+        /// Close the notices sheet: the selection it opened over is about to
+        /// change under it.
+        var closesNoticesSheet = false
     }
 
     // MARK: Layout changes
@@ -405,9 +408,15 @@ struct SplitPaneState: Equatable {
         if fold.endsConversation {
             conversation = nil
         }
+        let select = fold.channel == selection ? nil : fold.channel
         return Effects(
-            select: fold.channel == selection ? nil : fold.channel,
-            endsConversation: fold.endsConversation
+            select: select,
+            endsConversation: fold.endsConversation,
+            // A notices sheet up across the fold opened over the selection
+            // this changes (E3's #mesh). It keeps the scope it opened with
+            // whatever the selection does, but closes rather than sit over
+            // a #mesh it never showed.
+            closesNoticesSheet: select != nil
         )
     }
 

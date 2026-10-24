@@ -141,7 +141,7 @@ struct SplitPaneStateTests {
             openPeer: world.openPeer
         )
 
-        #expect(effects == .init(select: .mesh, endsConversation: true))
+        #expect(effects == .init(select: .mesh, endsConversation: true, closesNoticesSheet: true))
         #expect(world.state.parked == .init(channel: geohash, conversation: meshPeer))
         // The single column's composer sends to #mesh while that lands.
         #expect(world.state.foldChannel == .mesh)
@@ -162,6 +162,27 @@ struct SplitPaneStateTests {
         #expect(world.state.foldChannel == nil)
         #expect(world.selection == .location(geohash))
         #expect(world.openPeer == meshPeer)
+    }
+
+    /// A notices sheet up across a fold opened over the selection the fold
+    /// changes: an E3 fold that selects #mesh closes it (it keeps its own
+    /// scope regardless). A fold that leaves the selection leaves it.
+    @Test
+    func aFoldThatSelectsAwayClosesTheNoticesSheet() {
+        var fromMesh = World()
+        fromMesh.land(.location(geohash))
+        fromMesh.state.touched(.leading)
+        #expect(fromMesh.fold().closesNoticesSheet)
+
+        for selected in [ChannelID.mesh, .location(geohash)] {
+            var fromTrailing = World()
+            fromTrailing.land(selected)
+            fromTrailing.state.touched(.trailing)
+            #expect(!fromTrailing.fold().closesNoticesSheet, "\(selected)")
+        }
+        var idle = World()
+        idle.state.touched(.leading)
+        #expect(!idle.fold().closesNoticesSheet)
     }
 
     /// E3's exception: a geohash DM needs its geohash live.
@@ -607,7 +628,7 @@ struct SplitPaneStateTests {
 
         // E3 still: the geohash and the DM, under the ID it has now, park.
         let effects = world.fold()
-        #expect(effects == .init(select: .mesh, endsConversation: true))
+        #expect(effects == .init(select: .mesh, endsConversation: true, closesNoticesSheet: true))
         #expect(world.state.parked == .init(channel: geohash, conversation: otherMeshPeer))
 
         // Someone else's DM is a DM opening.

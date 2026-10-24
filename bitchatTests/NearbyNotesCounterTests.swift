@@ -199,6 +199,25 @@ final class NearbyNotesCounterTests: XCTestCase {
         )
     }
 
+    /// The notices sheet's geo scope comes from the selection as it opens:
+    /// a location channel's geohash, which needs no device location, or the
+    /// device's building cell, which does and needs authorization.
+    func test_noticesGeoScope_isTheOpeningSelectionsAndOnlyDeviceScopeNeedsLocation() {
+        let channel = NoticesView.GeoScope(
+            selectedChannel: .location(GeohashChannel(level: .city, geohash: "9q8yy"))
+        )
+        XCTAssertEqual(channel, .channel("9q8yy"))
+        XCTAssertFalse(channel.needsDeviceLocation)
+        XCTAssertEqual(channel.geohash(permissionState: .denied, buildingGeohash: "u4pruydq"), "9q8yy")
+
+        let device = NoticesView.GeoScope(selectedChannel: .mesh)
+        XCTAssertEqual(device, .device)
+        XCTAssertTrue(device.needsDeviceLocation)
+        XCTAssertEqual(device.geohash(permissionState: .authorized, buildingGeohash: "u4pruydq"), "u4pruydq")
+        XCTAssertNil(device.geohash(permissionState: .denied, buildingGeohash: "u4pruydq"))
+        XCTAssertNil(device.geohash(permissionState: .authorized, buildingGeohash: nil))
+    }
+
     func test_noticesGeoSession_revocationEndsLiveRefreshAndReleasesDeviceScope() {
         let relays = SubscriptionRecorder()
         let manager = LocationNotesManager(geohash: "u4pruydq", dependencies: relays.dependencies)
