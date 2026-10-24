@@ -16,6 +16,7 @@ struct SimulatedMeshAnnounceBudgetTests {
     /// Interior anchors of the 6×6 king grid: every node is within three
     /// king moves of one of them.
     private static let anchors = [14, 15]
+
     /// A phone joining a dense 36-node mesh. Every node used to answer the
     /// newcomer's announces, and each answer was itself a mesh-wide flood.
     /// Now only the link's endpoints announce: the joiner's link-up, one
@@ -433,6 +434,43 @@ struct SimulatedMeshAnnounceBudgetTests {
         let lastHandshake = sent.lastIndex { $0.type == MessageType.noiseHandshake.rawValue }
         #expect(lastHandshake.map { toBob.last ?? -1 > $0 } == true)
         #expect(carol.service._test_isNoiseAuthenticatedCentral(mesh.linkUUID(from: bobIndex, at: 1), for: bob.myPeerID))
+    }
+
+    /// A rename right after another announce still reaches peers: its
+    /// announce is owed, so the forced throttle defers it instead of
+    /// dropping it. (A per-keystroke flood used to hide the drop.)
+    @Test
+    func renameRightAfterAnAnnounceStillReachesPeers() {
+        let mesh = SimulatedMesh(announceAccounting: true)
+        let alice = mesh.addNode(nickname: "alice")
+        let bob = mesh.addNode(nickname: "bob")
+        mesh.connect(0, 1)
+        mesh.announceAll()
+        mesh.settle()
+
+        bob.service._test_forceAnnounce()
+        bob.service.setNickname("robert")
+        mesh.advanceTime(by: 0.3, inStepsOf: 0.05)
+
+        #expect(alice.service.getPeerNicknames()[bob.service.myPeerID] == "robert")
+    }
+
+    /// Setting the nickname a node already has announces nothing (launch
+    /// sets it twice: once while loading, once while wiring the transport).
+    @Test
+    func unchangedNicknameSendsNoAnnounce() {
+        let mesh = SimulatedMesh(announceAccounting: true)
+        let bob = mesh.addNode(nickname: "bob")
+        mesh.addNode(nickname: "alice")
+        mesh.connect(0, 1)
+        mesh.announceAll()
+        mesh.settle()
+        let before = mesh.announceOriginations(from: 0)
+
+        bob.service.setNickname("bob")
+        mesh.settle()
+
+        #expect(mesh.announceOriginations(from: 0) - before == 0)
     }
 
     // MARK: - Helpers

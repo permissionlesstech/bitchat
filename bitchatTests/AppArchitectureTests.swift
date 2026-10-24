@@ -419,7 +419,7 @@ struct AppArchitectureTests {
         let privateInboxModel = PrivateInboxModel(conversations: conversations)
         let chromeModel = AppChromeModel(chatViewModel: viewModel, privateInboxModel: privateInboxModel)
 
-        chromeModel.setNickname("builder")
+        chromeModel.commitNickname("builder", replacing: chromeModel.nickname)
         await waitUntil {
             viewModel.nickname == "builder" && chromeModel.nickname == "builder"
         }

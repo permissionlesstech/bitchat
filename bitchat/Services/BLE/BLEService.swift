@@ -928,12 +928,16 @@ final class BLEService: NSObject {
     var myNickname: String { localIdentityState.snapshot().nickname }
     private var myPeerIDData: Data { localIdentityState.snapshot().peerIDData }
 
-    /// Sole mutator for `myNickname`: updates the stored value and force-sends
-    /// an announce so peers learn the new name.
+    /// Sole mutator for `myNickname`: updates the stored value and, when it
+    /// changed, announces so peers learn the new name. The announce is owed:
+    /// one landing inside the forced throttle window is sent right after it
+    /// instead of being dropped, which would leave peers on the old name
+    /// until the next periodic announce.
     func setNickname(_ nickname: String) {
-        localIdentityState.setNickname(nickname)
-        // Send announce to notify peers of nickname change (force send)
-        sendAnnounce(forceSend: true)
+        guard localIdentityState.setNickname(nickname), !isPanicSuspended else { return }
+        messageQueue.async { [weak self] in
+            self?.sendOwedAnnounce()
+        }
     }
     
     // MARK: Lifecycle

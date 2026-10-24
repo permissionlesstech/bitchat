@@ -327,7 +327,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     let locationManager: LocationChannelManager
 
     var nostrRelayManager: NostrRelayManager?
-    private let userDefaults = UserDefaults.standard
+    private let userDefaults: UserDefaults
     let keychain: KeychainManagerProtocol
     private let panicRecoveryOperations: PanicRecoveryOperations
     private let panicNetworkLifecycle: PanicNetworkLifecycle
@@ -1163,7 +1163,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         sfMetrics: StoreAndForwardMetrics? = nil,
         panicMediaWipe: (() throws -> Void)? = nil,
         panicRecoveryOperations: PanicRecoveryOperations? = nil,
-        panicNetworkLifecycle: PanicNetworkLifecycle = .noop
+        panicNetworkLifecycle: PanicNetworkLifecycle = .noop,
+        userDefaults: UserDefaults = .standard
     ) {
         let conversations = conversations ?? ConversationStore()
         let peerIdentityStore = peerIdentityStore ?? PeerIdentityStore()
@@ -1178,6 +1179,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         )
 
         self.keychain = keychain
+        self.userDefaults = userDefaults
         self.panicRecoveryOperations = panicRecoveryOperations
             ?? .ephemeral(wipeMedia: panicMediaWipe ?? {})
         self.panicNetworkLifecycle = panicNetworkLifecycle
@@ -1268,9 +1270,19 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         meshService.sendBroadcastAnnounce()
     }
 
-    func validateAndSaveNickname() {
-        nickname = nickname.trimmedOrNilIfEmpty ?? "anon\(Int.random(in: 1000...9999))"
-        saveNickname()
+    /// Commits an edited nickname: its canonical form becomes the nickname,
+    /// announced once (through `didSet`) and saved once. A draft edited from
+    /// a name that has since been replaced (a panic wipe resets it) is
+    /// dropped, so it can never carry the old name onto a new identity.
+    /// Committing the current name is free. Returns the resulting nickname.
+    @discardableResult
+    func commitNickname(_ draft: String, replacing base: String) -> String {
+        guard nickname == base else { return nickname }
+        let candidate = draft.trimmedOrNilIfEmpty?.normalizedNickname ?? "anon\(Int.random(in: 1000...9999))"
+        guard candidate != nickname else { return nickname }
+        nickname = candidate
+        userDefaults.set(nickname, forKey: nicknameKey)
+        return nickname
     }
 
     // MARK: - Blocked Users Management (Delegated to PeerStateManager)

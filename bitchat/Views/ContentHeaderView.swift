@@ -9,6 +9,7 @@ struct ContentHeaderView: View {
     @ObservedObject private var bridgeService = BridgeService.shared
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.appTheme) private var theme
+    @Environment(\.scenePhase) private var scenePhase
     @ThemedPalette private var palette
 
     @Binding var showSidebar: Bool
@@ -29,6 +30,15 @@ struct ContentHeaderView: View {
     /// Nostr-only location notes at this place (live while the empty mesh
     /// timeline is showing) — they should light the pin too.
     @ObservedObject private var nearbyNotes = NearbyNotesCounter.shared
+
+    /// The nickname as typed. Every rename is a mesh-wide announce and a
+    /// defaults write, so the draft is committed once — on Return, focus
+    /// loss, a sheet opening, or the app leaving the foreground — never per
+    /// keystroke.
+    @State private var nicknameDraft = ""
+    /// The committed name the draft started from; a commit against a stale
+    /// base (a panic wipe renamed us meanwhile) is dropped.
+    @State private var nicknameDraftBase = ""
 
     @State private var pendingShareGeohash: String?
     @State private var showSharePrecisionWarning = false
@@ -83,13 +93,7 @@ struct ContentHeaderView: View {
                     // Keep the sigil whole while the field beside it shrinks.
                     .fixedSize()
 
-                TextField(
-                    "content.input.nickname_placeholder",
-                    text: Binding(
-                        get: { appChromeModel.nickname },
-                        set: { appChromeModel.setNickname($0) }
-                    )
-                )
+                TextField("content.input.nickname_placeholder", text: $nicknameDraft)
                 .textFieldStyle(.plain)
                 .bitchatFont(size: 14)
                 .frame(maxWidth: 80)
@@ -102,12 +106,36 @@ struct ContentHeaderView: View {
                 .modifier(FocusEffectDisabledModifier())
                 .onChange(of: isNicknameFieldFocused.wrappedValue) { isFocused in
                     if !isFocused {
-                        appChromeModel.validateAndSaveNickname()
+                        commitNicknameDraft()
                     }
                 }
                 .onSubmit {
-                    appChromeModel.validateAndSaveNickname()
+                    commitNicknameDraft()
                 }
+            }
+            .onAppear {
+                seedNicknameDraft(appChromeModel.nickname)
+            }
+            // Load and panic change the name from outside; panic must win
+            // over a draft in progress.
+            .onChange(of: appChromeModel.nickname) { nickname in
+                seedNicknameDraft(nickname)
+            }
+            // On macOS, clicking a button or the message list does not move
+            // focus out of the field, and sheets show the committed name (the
+            // QR code, our own row, notices posted under it).
+            .onChange(of: isPresentingSheet) { isPresenting in
+                if isPresenting {
+                    commitNicknameDraft()
+                }
+            }
+            .onChange(of: scenePhase) { phase in
+                if phase != .active {
+                    commitNicknameDraft()
+                }
+            }
+            .onDisappear {
+                commitNicknameDraft()
             }
 
             Spacer()
@@ -385,6 +413,15 @@ struct ContentHeaderView: View {
         .themedChromePanel(edge: .top)
     }
 
+    private func commitNicknameDraft() {
+        seedNicknameDraft(appChromeModel.commitNickname(nicknameDraft, replacing: nicknameDraftBase))
+    }
+
+    private func seedNicknameDraft(_ nickname: String) {
+        nicknameDraft = nickname
+        nicknameDraftBase = nickname
+    }
+
     private func requestHeaderShare(forGeohash geohash: String) {
         if ChannelShare.shouldWarn(forGeohash: geohash) {
             pendingShareGeohash = geohash
@@ -405,6 +442,14 @@ private extension View {
 }
 
 private extension ContentHeaderView {
+    /// Whether anything the header can present is up.
+    var isPresentingSheet: Bool {
+        showSidebar || showVerifySheet
+            || appChromeModel.isAppInfoPresented
+            || appChromeModel.isNoticesSheetPresented
+            || appChromeModel.isLocationChannelsSheetPresented
+    }
+
     var headerLineLimit: Int? {
         dynamicTypeSize.isAccessibilitySize ? 2 : 1
     }
