@@ -384,8 +384,8 @@ struct ContentView: View {
     private func composerTargets(openPeer: PeerID?) -> ComposerTargets {
         #if os(iOS)
         if isSplitLayout {
-            // A geohash DM is scoped to the geohash it was opened over,
-            // never to the timeline under it.
+            // A geohash DM keeps the scope it opened with, never the
+            // timeline under it.
             return panes.composerTargets(trailing: trailingContent(openPeer: openPeer), openPeer: openPeer)
         }
         // A fold's selection names the channel the single column is about
@@ -1457,6 +1457,7 @@ struct ContentView: View {
             to: selectedPrivatePeerID,
             isSplit: toSplit,
             timelineChannel: timelineChannel,
+            selection: locationChannelsModel.selectedChannel,
             isSameConversation: privateConversationModel.isSameConversation
         )
 
@@ -1517,6 +1518,7 @@ struct ContentView: View {
             to: peer,
             isSplit: isSplitLayout,
             timelineChannel: timelineChannel,
+            selection: locationChannelsModel.selectedChannel,
             isSameConversation: privateConversationModel.isSameConversation
         )
         panesChanged(openPeer: peer, trailingBefore: before)

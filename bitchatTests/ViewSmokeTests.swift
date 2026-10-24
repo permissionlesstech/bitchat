@@ -1710,6 +1710,27 @@ struct ViewSmokeTests {
         }
     }
 
+    /// A geohash DM opened over the idle picker is scoped to #mesh, where
+    /// its sends fail closed. A geohash selected beside it ends it too, and
+    /// the trailing pane shows that geohash: kept, the DM would fold into
+    /// the single column, which scopes a DM by its selection, and sign with
+    /// that geohash's identity.
+    @Test
+    func contentView_aGeohashDMOverTheIdlePickerEndsWhenAGeohashLandsBesideIt() async throws {
+        let split = try await SplitContentHost.make()
+        defer { split.close() }
+        let geoDM = PeerID(nostr_: String(repeating: "ef", count: 32))
+        try await split.open(geoDM)
+
+        split.channels.select(.location(split.geohash))
+
+        try await split.require("the DM ended, the geohash on screen") {
+            split.timelineChannel == .location(split.geohash)
+                && split.openPeer == nil
+                && split.trailingPrompts.contains { $0.contains("#\(split.geohash.geohash)") }
+        }
+    }
+
     /// E5: choosing a location channel while folded drops what was parked,
     /// for good: back on #mesh before unfolding, neither the parked geohash
     /// nor the parked DM returns, and the trailing pane is the idle picker.

@@ -99,7 +99,7 @@ struct ContentPanePolicyTests {
         // It shows a place and has no composer. (It folds as the geohash it
         // is about to show: `SplitPaneStateTests`.)
         #expect(TrailingPaneContent.landing(geohash).showsLocation)
-        #expect(TrailingPaneContent.landing(geohash).composerGeohash(conversationGeohash: nil) == nil)
+        #expect(TrailingPaneContent.landing(geohash).composerGeohash(conversationScope: nil) == nil)
     }
 
     /// E10: a place on screen warns; a DM, geohash DMs included, doesn't.
@@ -113,33 +113,34 @@ struct ContentPanePolicyTests {
     }
 
     /// The trailing composer works in the geohash on screen or, under a
-    /// DM, the geohash that DM was opened over, which scopes a geohash DM;
-    /// the picker has no composer.
+    /// DM, the geohash that DM is scoped to, which signs a geohash DM; the
+    /// picker has no composer.
     @Test
-    func trailingComposerWorksInTheGeohashOnScreenOrTheOneTheDMOpenedOver() {
-        #expect(TrailingPaneContent.channel(geohash).composerGeohash(conversationGeohash: nil) == geohash)
-        #expect(TrailingPaneContent.conversation(geoDM).composerGeohash(conversationGeohash: otherGeohash) == otherGeohash)
-        #expect(TrailingPaneContent.conversation(geoDM).composerGeohash(conversationGeohash: nil) == nil)
-        #expect(TrailingPaneContent.picker(returnTo: geohash).composerGeohash(conversationGeohash: nil) == nil)
-        #expect(TrailingPaneContent.picker(returnTo: nil).composerGeohash(conversationGeohash: nil) == nil)
+    func trailingComposerWorksInTheGeohashOnScreenOrTheOneTheDMIsScopedTo() {
+        #expect(TrailingPaneContent.channel(geohash).composerGeohash(conversationScope: nil) == geohash)
+        #expect(TrailingPaneContent.conversation(geoDM).composerGeohash(conversationScope: .location(otherGeohash)) == otherGeohash)
+        #expect(TrailingPaneContent.conversation(geoDM).composerGeohash(conversationScope: .mesh) == nil)
+        #expect(TrailingPaneContent.conversation(geoDM).composerGeohash(conversationScope: nil) == nil)
+        #expect(TrailingPaneContent.picker(returnTo: geohash).composerGeohash(conversationScope: nil) == nil)
+        #expect(TrailingPaneContent.picker(returnTo: nil).composerGeohash(conversationScope: nil) == nil)
 
         // As the split layout's composer targets: the picker leaves the
         // trailing composer without a conversation; a geohash DM signs
-        // with the geohash it was opened over, else fails closed on #mesh;
+        // with the geohash it is scoped to, else fails closed on #mesh;
         // a mesh DM lives on #mesh.
-        func targets(_ content: TrailingPaneContent, opened: GeohashChannel?, _ peer: PeerID?) -> ComposerTargets {
-            .split(trailingChannel: content.composerGeohash(conversationGeohash: opened), privatePeer: peer)
+        func targets(_ content: TrailingPaneContent, scope: ChannelID?, _ peer: PeerID?) -> ComposerTargets {
+            .split(trailingChannel: content.composerGeohash(conversationScope: scope), privatePeer: peer)
         }
-        #expect(targets(.picker(returnTo: geohash), opened: nil, nil).secondary == nil)
-        #expect(targets(.channel(geohash), opened: nil, nil).secondary == .publicChannel(.location(geohash)))
-        #expect(targets(.conversation(geoDM), opened: geohash, geoDM).secondary
+        #expect(targets(.picker(returnTo: geohash), scope: nil, nil).secondary == nil)
+        #expect(targets(.channel(geohash), scope: nil, nil).secondary == .publicChannel(.location(geohash)))
+        #expect(targets(.conversation(geoDM), scope: .location(geohash), geoDM).secondary
             == ConversationTarget(channel: .location(geohash), privatePeer: geoDM))
-        #expect(targets(.conversation(geoDM), opened: nil, geoDM).secondary
+        #expect(targets(.conversation(geoDM), scope: .mesh, geoDM).secondary
             == ConversationTarget(channel: .mesh, privatePeer: geoDM))
-        #expect(targets(.conversation(meshPeer), opened: nil, meshPeer).secondary
+        #expect(targets(.conversation(meshPeer), scope: nil, meshPeer).secondary
             == ConversationTarget(channel: .mesh, privatePeer: meshPeer))
         for content in [TrailingPaneContent.picker(returnTo: nil), .channel(geohash), .conversation(meshPeer)] {
-            #expect(targets(content, opened: nil, nil).primary == .mesh)
+            #expect(targets(content, scope: nil, nil).primary == .mesh)
         }
     }
 

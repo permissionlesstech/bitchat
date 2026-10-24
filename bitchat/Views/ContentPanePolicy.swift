@@ -97,19 +97,20 @@ enum TrailingPaneContent: Hashable {
 
     /// The geohash the trailing composer works in
     /// (`ComposerTargets.split`): the channel on screen or, for a DM
-    /// covering it, the geohash that DM was opened over, which scopes a
-    /// geohash DM. Never the timeline under a DM: a selection made beside
+    /// covering it, the geohash that DM is scoped to, whose identity signs
+    /// a geohash DM. Never the timeline under a DM: a selection made beside
     /// it (a #geohash link or the nearby hint in #mesh) must not move a
-    /// geohash DM onto another geohash's identity. Nil for the picker,
-    /// which has no composer, and for a DM opened over no geohash.
-    /// - Parameter conversationGeohash: The geohash the open DM was opened
-    ///   over (`SplitPaneState.conversationGeohash`).
-    func composerGeohash(conversationGeohash: GeohashChannel?) -> GeohashChannel? {
+    /// geohash DM onto another geohash's identity. Nil for the picker and
+    /// the placeholder, which have no composer, and for a DM scoped to
+    /// #mesh or to nothing.
+    /// - Parameter conversationScope: The channel the open DM is scoped to
+    ///   (`SplitPaneState.conversationScope`).
+    func composerGeohash(conversationScope: ChannelID?) -> GeohashChannel? {
         switch self {
         case .channel(let geohash):
             return geohash
         case .conversation:
-            return conversationGeohash
+            return conversationScope?.geohashChannel
         case .picker, .landing:
             return nil
         }
@@ -288,16 +289,18 @@ struct SplitPaneState: Equatable {
     /// recorded here, doesn't count again when its own report comes in;
     /// nor does a report handing it to another ID of the same person.
     private(set) var conversation: PeerID?
-    /// The geohash the open DM was opened over, when it is a geohash DM in
-    /// the split layout: the trailing pane's geohash as the DM opened over
-    /// it, or the single column's as one moved across on unfold. It scopes
-    /// the DM, the identity that signs it (`composerTargets`), for as long
-    /// as the DM stays open, whatever is selected beside it; the DM ends
-    /// once the trailing timeline leaves it. Nil for a mesh DM or group, for
-    /// a geohash DM opened over no geohash (the idle picker, or #mesh before
-    /// an unfold), which stays on #mesh and fails closed there as in the
-    /// single column, and while folded, where the selection scopes it.
-    private(set) var conversationGeohash: GeohashChannel?
+    /// The channel the open DM is scoped to, when it is a geohash DM in the
+    /// split layout: the geohash the trailing pane stood for as the DM
+    /// opened over it (on screen, browsed from, or on its way), the single
+    /// column's as one moved across on unfold, or #mesh over none (the idle
+    /// picker, or #mesh before an unfold). A geohash's identity signs the
+    /// DM (`composerTargets`); #mesh signs nothing, so there it fails
+    /// closed, as in the single column. The DM ends once the trailing
+    /// timeline leaves that channel, whatever moved the selection beside
+    /// it: a fold would carry it into the single column, which scopes a DM
+    /// by its selection, under a geohash nobody chose for it. Nil for a
+    /// mesh DM or group, and while folded.
+    private(set) var conversationScope: ChannelID?
     /// The parked geohash an unfold selected again, until the selection
     /// says so itself or the trailing timeline lands on a geohash: `select`
     /// applies a hop after the unfold, and the timeline follows later
@@ -335,23 +338,21 @@ struct SplitPaneState: Equatable {
         selection: ChannelID,
         openPeer: PeerID?
     ) -> Effects {
-        // A geohash still landing folds, and parks, as the geohash the pane
-        // is about to show; otherwise the pane stands for the timeline's
-        // channel.
-        let trailing = trailingContent(openPeer: openPeer, timelineChannel: timelineChannel, selection: selection)
-        let paneChannel: ChannelID
-        if case .landing(let geohash) = trailing {
-            paneChannel = .location(geohash)
-        } else {
-            paneChannel = timelineChannel
-        }
+        // An open geohash DM folds with the channel it is scoped to, never
+        // the selection beside it: E3's exception keeps its geohash, and
+        // one scoped to #mesh keeps #mesh, where it fails closed. Otherwise
+        // the pane stands for the timeline's channel, or for a geohash
+        // still landing, which it folds and parks as.
+        let paneChannel = conversationScope
+            ?? standingChannel(openPeer: openPeer, timelineChannel: timelineChannel, selection: selection)
         let fold = PaneFoldPolicy.fold(focus: focus, selectedChannel: paneChannel, openPeer: openPeer)
         parked = fold.parked
         isBrowsing = false
         popover = nil
         foldChannel = fold.channel == timelineChannel ? nil : fold.channel
-        // The single column scopes a DM by its selection.
-        conversationGeohash = nil
+        // The single column scopes a DM by its selection: the fold leaves a
+        // geohash DM's scope selected.
+        conversationScope = nil
         landingChannel = nil
         if fold.endsConversation {
             conversation = nil
@@ -402,8 +403,8 @@ struct SplitPaneState: Equatable {
         // The DM in the sheet moves across scoped as the single column had
         // it: a geohash DM over the geohash on screen keeps that geohash,
         // one over #mesh stays there. (A parked DM is never a geohash DM.)
-        conversationGeohash = openPeer.flatMap { peer in
-            PaneFoldPolicy.isGeohashConversation(peer) ? compactChannel.geohashChannel : nil
+        conversationScope = openPeer.flatMap { peer in
+            PaneFoldPolicy.isGeohashConversation(peer) ? compactChannel : nil
         }
         // E8 over E4: a reopened DM would cover the picker the sheet turns
         // into, and take the focus it has.
@@ -438,9 +439,11 @@ struct SplitPaneState: Equatable {
     /// it is recorded under changes. The focus, the popovers, browsing and
     /// anything parked stay as they were.
     /// - Parameters:
-    ///   - timelineChannel: The channel the trailing timeline renders: a
-    ///     geohash DM opening over a geohash is scoped to it
-    ///     (`conversationGeohash`).
+    ///   - timelineChannel: The channel the trailing timeline renders.
+    ///   - selection: The selected location channel, which can be a hop
+    ///     ahead of the timeline. With the timeline, it says what the
+    ///     trailing pane stands for, which a geohash DM opening over it is
+    ///     scoped to (`conversationScope`).
     ///   - isSameConversation: Whether two peer IDs name one
     ///     conversation, compared the way drafts and mic holds are
     ///     (`ChatViewModel.isSameDirectConversation`).
@@ -448,6 +451,7 @@ struct SplitPaneState: Equatable {
         to peer: PeerID?,
         isSplit: Bool,
         timelineChannel: ChannelID,
+        selection: ChannelID,
         isSameConversation: (PeerID, PeerID) -> Bool
     ) {
         guard peer != conversation else { return }
@@ -457,7 +461,9 @@ struct SplitPaneState: Equatable {
         }
         conversation = peer
         let isGeohashConversation = peer.map(PaneFoldPolicy.isGeohashConversation) == true
-        conversationGeohash = isSplit && isGeohashConversation ? timelineChannel.geohashChannel : nil
+        conversationScope = isSplit && isGeohashConversation
+            ? standingChannel(openPeer: nil, timelineChannel: timelineChannel, selection: selection)
+            : nil
         guard isSplit else {
             parked = PaneFoldPolicy.parked(parked, afterCompactConversationChange: peer)
             return
@@ -503,11 +509,14 @@ struct SplitPaneState: Equatable {
     /// a choice never brings the old geohash back while it lands. A fold's
     /// channel has landed, or been overtaken.
     ///
-    /// A geohash DM whose geohash the timeline leaves (a #geohash link or
-    /// the nearby hint in #mesh moving the selection beside it) ends: it
-    /// can't follow onto the new geohash's identity, and a geohash DM needs
-    /// its geohash live (E3's premise). The trailing pane then shows the
-    /// channel that was asked for.
+    /// A geohash DM whose channel the timeline leaves (a #geohash link or
+    /// the nearby hint in #mesh moving the selection beside it) ends. One
+    /// scoped to a geohash can't follow onto another geohash's identity,
+    /// and a geohash DM needs its geohash live (E3's premise). One scoped
+    /// to #mesh, opened over no geohash, can't stay either: the next fold
+    /// would carry it into the single column, which scopes a DM by its
+    /// selection, under the geohash just selected beside it. The trailing
+    /// pane then shows the channel that was asked for.
     mutating func timelineChannelChanged(from old: ChannelID, to new: ChannelID) -> Effects {
         guard old != new else { return Effects() }
         if old.isLocation {
@@ -517,9 +526,9 @@ struct SplitPaneState: Equatable {
         // Landed, or overtaken: nothing is on its way any more that the
         // selection doesn't name.
         landingChannel = nil
-        guard let geohash = conversationGeohash, new != .location(geohash) else { return Effects() }
+        guard let scope = conversationScope, new != scope else { return Effects() }
         conversation = nil
-        conversationGeohash = nil
+        conversationScope = nil
         return Effects(endsConversation: true)
     }
 
@@ -598,7 +607,7 @@ struct SplitPaneState: Equatable {
         popover = nil
         parked = .none
         foldChannel = nil
-        conversationGeohash = nil
+        conversationScope = nil
         landingChannel = nil
         if !timelineChannel.isLocation {
             isBrowsing = false
@@ -628,17 +637,34 @@ struct SplitPaneState: Equatable {
     }
 
     /// The split layout's composer targets: #mesh, and the trailing pane's
-    /// conversation (`ComposerTargets.split`). A geohash DM is scoped to the
-    /// geohash it was opened over (`conversationGeohash`), never to the
-    /// timeline under it.
+    /// conversation (`ComposerTargets.split`). A geohash DM keeps the scope
+    /// it opened with (`conversationScope`), never the timeline under it.
     /// - Parameters:
     ///   - trailing: What the trailing pane shows.
     ///   - openPeer: The open DM, if any.
     func composerTargets(trailing: TrailingPaneContent, openPeer: PeerID?) -> ComposerTargets {
         .split(
-            trailingChannel: trailing.composerGeohash(conversationGeohash: conversationGeohash),
+            trailingChannel: trailing.composerGeohash(conversationScope: conversationScope),
             privatePeer: openPeer
         )
+    }
+
+    /// The channel the trailing pane stands for under `openPeer`: the
+    /// timeline's, or a geohash on its way, which the pane is about to show
+    /// (`TrailingPaneContent.landing`) unless a DM covers it.
+    private func standingChannel(
+        openPeer: PeerID?,
+        timelineChannel: ChannelID,
+        selection: ChannelID
+    ) -> ChannelID {
+        if case .landing(let geohash) = trailingContent(
+            openPeer: openPeer,
+            timelineChannel: timelineChannel,
+            selection: selection
+        ) {
+            return .location(geohash)
+        }
+        return timelineChannel
     }
 }
 
