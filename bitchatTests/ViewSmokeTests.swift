@@ -814,9 +814,10 @@ private final class SplitContentHost {
         return await settle { self.frames.count >= target }
     }
 
-    /// A share arriving under the runtime's `label`, which the root
-    /// relabels for the composer it would fill; then reviewed away. Whether
-    /// the review came to name `expected`. Needs a share store (`make`).
+    /// A share arriving under the runtime's `label`, which the root's
+    /// destination provider overrides with the composer it would fill; then
+    /// reviewed away. Whether the review came to name `expected`. Needs a
+    /// share store (`make`).
     func share(
         labelled label: SharedContentDestination,
         settlesOn expected: SharedContentDestination
@@ -2006,23 +2007,21 @@ struct ViewSmokeTests {
         // runtime's selection names a geohash.
         let selection = SharedContentDestination.geohash("u4pruy")
 
-        // A share arriving takes the composer's conversation.
-        shares.refresh(destination: selection, now: now)
-        let labelled = await TestHelpers.waitUntil(
-            { shares.offer?.destination == .mesh },
+        // The root, once on screen, tells the model where its composer sends.
+        let installed = await TestHelpers.waitUntil(
+            { shares.destinationProvider != nil },
             timeout: TestConstants.settleTimeout
         )
-        #expect(labelled)
+        try #require(installed)
 
-        // The runtime looks again and labels the same share from the
-        // selection once more.
+        // A share arriving takes the composer's conversation at once.
         shares.refresh(destination: selection, now: now)
-        #expect(shares.offer?.destination == selection)
-        let relabelled = await TestHelpers.waitUntil(
-            { shares.offer?.destination == .mesh },
-            timeout: TestConstants.settleTimeout
-        )
-        #expect(relabelled)
+        #expect(shares.offer?.destination == .mesh)
+
+        // The runtime looks again, in the same turn: still the composer's,
+        // with no relabelling for the next look to race.
+        shares.refresh(destination: selection, now: now)
+        #expect(shares.offer?.destination == .mesh)
         #expect(shares.offer?.payload.content == "shared from another app")
     }
 

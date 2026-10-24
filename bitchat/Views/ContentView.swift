@@ -641,6 +641,8 @@ struct ContentView: View {
                 }
                 #endif
                 retargetComposers(to: composerTargets)
+                // Every share is labelled for the composer it would fill.
+                sharedContentImportModel.destinationProvider = { sharedContentDestination }
                 sharedContentImportModel.updateDestination(sharedContentDestination)
             }
             .onChange(of: colorScheme) { newValue in
@@ -677,14 +679,6 @@ struct ContentView: View {
         }
         // The split layout's share goes to the last-touched pane's composer.
         .onChange(of: shareImportSlot) { _ in
-            sharedContentImportModel.updateDestination(sharedContentDestination)
-        }
-        // A share names the composer it would fill: when it arrives, and
-        // whenever the runtime looks again (the share link, becoming
-        // active) and relabels the same share from the selection, which
-        // need not be where that composer sends. A label that already
-        // matches is left alone, so this settles after one pass.
-        .onChange(of: sharedContentImportModel.offer) { _ in
             sharedContentImportModel.updateDestination(sharedContentDestination)
         }
         .onChange(of: selectedPrivatePeerID) { newValue in
@@ -930,6 +924,7 @@ struct ContentView: View {
             Text(String(format: format, offer.destination.displayName) + "\n\n" + offer.payload.preview)
         }
         .onDisappear {
+            sharedContentImportModel.destinationProvider = nil
             appChromeModel.setPanicPreparation(nil)
             #if os(iOS)
             appChromeModel.setSplitLayoutScreenshotProbe(nil)
