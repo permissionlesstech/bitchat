@@ -8,6 +8,7 @@
 
 import SwiftUI
 #if os(iOS)
+import Combine
 import UIKit
 #elseif os(macOS)
 import AppKit
@@ -59,6 +60,9 @@ struct ContentRootModalPresentationState {
 }
 
 extension ContentRootModalPresentationState {
+    /// - Parameter isPeoplePopoverPresented: No default: every root alert
+    ///   that defers through this state must also wait for the split
+    ///   layout's people popover, so its caller says whether one is up.
     @MainActor
     init(
         appChromeModel: AppChromeModel,
@@ -68,7 +72,7 @@ extension ContentRootModalPresentationState {
         isVoiceAlertPresented: Bool = false,
         isMediaPickerPresented: Bool = false,
         isLegacyMediaConsentPresented: Bool = false,
-        isPeoplePopoverPresented: Bool = false
+        isPeoplePopoverPresented: Bool
     ) {
         self.init(
             isPeopleSheetPresented: isPeopleSheetPresented,
@@ -190,6 +194,33 @@ extension EnvironmentValues {
     }
 }
 
+#if os(iOS)
+/// A tap a test host makes on the split layout's people buttons. A SwiftUI
+/// button has no control to send an action to, and no accessibility element
+/// unless an assistive technology runs, so a test can't press one; it sends
+/// the tap through `splitLayoutTestTaps`, and the button's own action runs.
+/// The app never sets that.
+enum SplitLayoutTestTap: Equatable {
+    /// A pane bar's people button: the leading bar's, or the trailing
+    /// geohash bar's while it shows.
+    case peopleButton(ContentPane)
+    /// The open people popover's close button.
+    case popoverCloseButton
+}
+
+private struct SplitLayoutTestTapsKey: EnvironmentKey {
+    static let defaultValue: PassthroughSubject<SplitLayoutTestTap, Never>? = nil
+}
+
+extension EnvironmentValues {
+    /// Taps a test host sends the split layout; nil in the app.
+    var splitLayoutTestTaps: PassthroughSubject<SplitLayoutTestTap, Never>? {
+        get { self[SplitLayoutTestTapsKey.self] }
+        set { self[SplitLayoutTestTapsKey.self] = newValue }
+    }
+}
+#endif
+
 struct ContentView: View {
     @EnvironmentObject private var appChromeModel: AppChromeModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
@@ -236,6 +267,8 @@ struct ContentView: View {
     /// the leading pane's list observes it. Without one (previews, test
     /// harnesses) the single column stays.
     @Environment(\.meshPaneTimeline) private var meshPaneTimeline
+    /// A test host's taps on the people buttons; nil in the app.
+    @Environment(\.splitLayoutTestTaps) private var testTaps
     /// The live layout mode. Presentation bindings read this, never the size
     /// class: SwiftUI runs a departing sheet's setter after the layout has
     /// flipped, and environment values captured in that closure are stale.
@@ -526,6 +559,14 @@ struct ContentView: View {
         // of the DM must already have been recorded when its report comes.
         .onReceive(privateConversationModel.$selectedPeerID) { peer in
             panes.conversationChanged(to: peer, isSplit: isSplitLayout)
+        }
+        // A test host's taps on the people buttons (none in the app).
+        .background {
+            if let testTaps {
+                Color.clear.onReceive(testTaps) { tap in
+                    perform(tap)
+                }
+            }
         }
         .onChange(of: locationChannelsModel.selectedChannel) { _ in
             guard !isSplitLayout else { return }
@@ -969,7 +1010,7 @@ struct ContentView: View {
                         // pane's top row meets the trailing corner instead.
                         trailingCornerReach: isSplit ? 0 : corners.trailing,
                         paneChannel: isSplit ? .mesh : nil,
-                        onPeopleTap: isSplit ? { panes.openPopover(.leading) } : nil,
+                        onPeopleTap: isSplit ? { peopleButtonTapped(.leading) } : nil,
                         isBadgeStatic: isSplit,
                         defersAlerts: isPeoplePopoverPresented
                     )
@@ -979,7 +1020,7 @@ struct ContentView: View {
                         isPresented: peoplePopoverBinding(.leading),
                         channel: .mesh,
                         paneWidth: split?.leadingWidth ?? 0,
-                        onClose: { panes.popoverClosed(.leading) }
+                        onClose: { popoverClosed(.leading) }
                     )
                 )
             },
@@ -1098,14 +1139,14 @@ struct ContentView: View {
             trailingCornerReach: trailingCornerReach,
             paneChannel: .location(geohash),
             carriesAppChrome: false,
-            onPeopleTap: { panes.openPopover(.trailing) },
+            onPeopleTap: { peopleButtonTapped(.trailing) },
             onBadgeTap: { panes.browse() }
         )
         .contentPeoplePopover(
             isPresented: peoplePopoverBinding(.trailing),
             channel: .location(geohash),
             paneWidth: paneWidth,
-            onClose: { panes.popoverClosed(.trailing) }
+            onClose: { popoverClosed(.trailing) }
         )
     }
 
@@ -1116,10 +1157,37 @@ struct ContentView: View {
             get: { panes.popover == pane },
             set: { isPresented in
                 if !isPresented {
-                    panes.popoverClosed(pane)
+                    popoverClosed(pane)
                 }
             }
         )
+    }
+
+    /// A bar's people button: that pane's people, as a popover.
+    private func peopleButtonTapped(_ pane: ContentPane) {
+        panes.openPopover(pane)
+    }
+
+    /// A popover closed itself: its close button, a row's DM, a tap outside.
+    private func popoverClosed(_ pane: ContentPane) {
+        panes.popoverClosed(pane)
+    }
+
+    /// A test host's tap, run as the button it stands for would run it:
+    /// only on a button that is on screen.
+    private func perform(_ tap: SplitLayoutTestTap) {
+        guard isSplitLayout else { return }
+        switch tap {
+        case .peopleButton(.leading):
+            peopleButtonTapped(.leading)
+        case .peopleButton(.trailing):
+            guard case .channel = trailingContent else { return }
+            peopleButtonTapped(.trailing)
+        case .popoverCloseButton:
+            if let pane = panes.popover {
+                popoverClosed(pane)
+            }
+        }
     }
 
     /// A touch went down in the window. A touch on something presented

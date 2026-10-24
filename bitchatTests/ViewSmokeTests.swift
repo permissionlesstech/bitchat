@@ -443,6 +443,11 @@ private final class WindowHost {
         return true
     }
 
+    /// What the window presents over the hosted view, if anything.
+    var presented: UIViewController? {
+        window.rootViewController?.presentedViewController
+    }
+
     private static func textFields(in view: UIView) -> [UITextField] {
         if let field = view as? UITextField { return [field] }
         return view.subviews.flatMap { textFields(in: $0) }
@@ -518,6 +523,8 @@ private final class SplitContentHost {
     let sizeClass: SmokeSizeClass
     private let meshPaneTimeline: PublicChatModel
     private let host: WindowHost
+    /// Taps on the panes' people buttons (`splitLayoutTestTaps`).
+    private let taps = PassthroughSubject<SplitLayoutTestTap, Never>()
 
     private static let size = CGSize(width: 1000, height: 800)
     private static let leadingRegion = CGRect(x: 0, y: 0, width: 480, height: 800)
@@ -528,7 +535,8 @@ private final class SplitContentHost {
         models: SmokeFeatureModels,
         location: MockLocationStateManaging,
         sizeClass: SmokeSizeClass,
-        theme: AppTheme
+        theme: AppTheme,
+        sceneIsActive: Bool
     ) {
         self.viewModel = viewModel
         self.models = models
@@ -537,7 +545,13 @@ private final class SplitContentHost {
         meshPaneTimeline = PublicChatModel(conversations: viewModel.conversations, pinnedTo: .mesh)
         host = WindowHost(
             installSmokeEnvironment(
-                ContentViewSizeClassHarness(sizeClass: sizeClass, meshPaneTimeline: meshPaneTimeline, theme: theme),
+                ContentViewSizeClassHarness(
+                    sizeClass: sizeClass,
+                    meshPaneTimeline: meshPaneTimeline,
+                    theme: theme,
+                    testTaps: taps,
+                    scenePhase: sceneIsActive ? .active : nil
+                ),
                 featureModels: models
             ),
             size: Self.size
@@ -548,10 +562,16 @@ private final class SplitContentHost {
     ///   - compact: Start folded (the single column).
     ///   - theme: Matrix (opaque bars) or glass (panels floating over the
     ///     timelines).
+    ///   - sceneIsActive: Report an active scene, as the app's does, so the
+    ///     root alerts that wait for one (Bluetooth, recording errors) can
+    ///     present. Off by default: the simulator's Bluetooth state can
+    ///     raise the Bluetooth alert on its own, and a presentation left up
+    ///     when a test closes its window stalls the windows after it.
     static func make(
         compact: Bool = false,
         theme: AppTheme = .matrix,
-        sharedContentStore: SharedContentStore? = nil
+        sharedContentStore: SharedContentStore? = nil,
+        sceneIsActive: Bool = false
     ) async -> SplitContentHost {
         let suiteName = "ViewSmokeTests.split.\(UUID().uuidString)"
         let storage = UserDefaults(suiteName: suiteName) ?? .standard
@@ -580,7 +600,8 @@ private final class SplitContentHost {
             models: models,
             location: location,
             sizeClass: sizeClass,
-            theme: theme
+            theme: theme,
+            sceneIsActive: sceneIsActive
         )
         transport.updatePeerSnapshots([
             makeSnapshot(peerID: split.bob, nickname: "Bob", noiseByte: 0xB0)
@@ -600,7 +621,16 @@ private final class SplitContentHost {
     var timelineChannel: ChannelID { models.publicChatModel.channel }
     var isMeshPinned: Bool { viewModel.conversations.isMeshPinnedOnScreen }
     /// The window presents something over the panes (the share review).
-    var isPresenting: Bool { host.window.rootViewController?.presentedViewController != nil }
+    var isPresenting: Bool { host.presented != nil }
+    /// What the window presents, if it is an alert (`.alert`) or a dialog
+    /// (`.actionSheet`, the legacy-media consent).
+    var presentedAlert: UIAlertController? { host.presented as? UIAlertController }
+    /// A people popover is up: presented as a popover, and neither an alert
+    /// nor a dialog (which wide layouts also present as popovers).
+    var isPresentingPopover: Bool {
+        guard let presented = host.presented else { return false }
+        return !(presented is UIAlertController) && presented.modalPresentationStyle == .popover
+    }
     /// The prompts of the text fields in each pane: its composer's names
     /// its conversation; the picker's teleport field reads "geohash".
     var leadingPrompts: [String] { host.placeholders(in: Self.leadingRegion) }
@@ -623,8 +653,17 @@ private final class SplitContentHost {
 
     /// A touch going down in the middle of `pane`.
     func touch(_ pane: ContentPane) -> Bool {
-        let region = pane == .leading ? Self.leadingRegion : Self.trailingRegion
+        let region = Self.region(of: pane)
         return host.touchDown(at: CGPoint(x: region.midX, y: region.midY))
+    }
+
+    private static func region(of pane: ContentPane) -> CGRect {
+        pane == .leading ? leadingRegion : trailingRegion
+    }
+
+    /// A tap on a people button: a bar's, or the open popover's close.
+    func tap(_ tap: SplitLayoutTestTap) {
+        taps.send(tap)
     }
 
     func fold() async -> Bool {
@@ -642,11 +681,15 @@ private final class SplitContentHost {
     }
 
     /// The state a failed expectation reports: the selection, the timeline,
-    /// the DM, the layout flags and every text field's prompt with where it
+    /// the DM, the layout flags, what is presented, whether the app is in
+    /// the foreground (a backgrounded test host stops rendering its windows,
+    /// whatever the state says) and every text field's prompt with where it
     /// sits in the window.
     var diagnostics: String {
         "selection \(channels.selectedChannel), timeline \(timelineChannel), DM \(String(describing: openPeer)), "
             + "split flag \(String(describing: chrome.splitLayoutShowsLocation)), pinned \(isMeshPinned), "
+            + "presented \(String(describing: host.presented)), "
+            + "app \(UIApplication.shared.applicationState == .active ? "active" : "not active"), "
             + "fields \(host.fieldReport)"
     }
 }
@@ -658,12 +701,23 @@ private struct ContentViewSizeClassHarness: View {
     @ObservedObject var sizeClass: SmokeSizeClass
     var meshPaneTimeline: PublicChatModel?
     var theme: AppTheme = .matrix
+    var testTaps: PassthroughSubject<SplitLayoutTestTap, Never>?
+    /// The scene's phase as the app's scene would report it. A view hosted
+    /// in a test window gets none, and the root alerts that wait for an
+    /// active scene (Bluetooth, recording errors) never present there.
+    var scenePhase: ScenePhase?
 
     var body: some View {
         ContentView()
             .environment(\.horizontalSizeClass, sizeClass.value)
             .environment(\.meshPaneTimeline, meshPaneTimeline)
             .environment(\.appTheme, theme)
+            .environment(\.splitLayoutTestTaps, testTaps)
+            .transformEnvironment(\.scenePhase) { phase in
+                if let scenePhase {
+                    phase = scenePhase
+                }
+            }
     }
 }
 #endif
@@ -1613,6 +1667,97 @@ struct ViewSmokeTests {
         #expect(shares.offer?.payload.content == "shared from another app")
     }
 
+    /// E13: a people popover holds the root's alerts back (the Bluetooth
+    /// alert here), and a fold closes it; the alert shows then.
+    @Test
+    func contentView_aPeoplePopoverHoldsRootAlertsBackUntilAFoldClosesIt() async {
+        let split = await SplitContentHost.make(sceneIsActive: true)
+        defer {
+            split.chrome.showBluetoothAlert = false
+            split.close()
+        }
+        split.tap(.peopleButton(.leading))
+        #expect(await split.settle { split.isPresentingPopover }, "\(split.diagnostics)")
+
+        split.chrome.showBluetoothAlert = true
+        let presented = await TestHelpers.waitUntil(
+            { split.presentedAlert != nil },
+            timeout: TestConstants.negativeWaitWindow
+        )
+        #expect(!presented, "\(split.diagnostics)")
+        #expect(split.isPresentingPopover)
+
+        #expect(await split.fold())
+        #expect(await split.settle { split.presentedAlert?.preferredStyle == .alert }, "\(split.diagnostics)")
+
+        split.chrome.showBluetoothAlert = false
+        #expect(await split.settle { !split.isPresenting }, "\(split.diagnostics)")
+    }
+
+    /// E13 and I5: while a people popover is up nothing else presents from
+    /// the root. The screenshot warning (the leading bar's), the
+    /// fingerprint sheet and the share review each wait, and show once the
+    /// popover closes.
+    @Test
+    func contentView_aPeoplePopoverHoldsTheOtherPresentationsBack() async throws {
+        let suite = "ViewSmokeTests.split.popover.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = SharedContentStore(defaults: defaults)
+        let split = await SplitContentHost.make(sharedContentStore: store)
+        let shares = split.models.sharedContentImportModel
+        defer {
+            shares.discardAll()
+            split.chrome.showScreenshotPrivacyWarning = false
+            split.chrome.clearFingerprint()
+            split.close()
+        }
+        /// `present` while the #mesh popover is up shows nothing over it;
+        /// once it closes, `isShown` holds; `dismiss` takes that away.
+        func waitsForThePopover(
+            _ name: String,
+            present: () -> Void,
+            isShown: @escaping () -> Bool,
+            dismiss: () -> Void
+        ) async {
+            split.tap(.peopleButton(.leading))
+            #expect(await split.settle { split.isPresentingPopover }, "\(name): \(split.diagnostics)")
+            present()
+            let shownOver = await TestHelpers.waitUntil(
+                { !split.isPresentingPopover || isShown() },
+                timeout: TestConstants.negativeWaitWindow
+            )
+            #expect(!shownOver, "\(name) over the popover: \(split.diagnostics)")
+            split.tap(.popoverCloseButton)
+            #expect(await split.settle { isShown() }, "\(name) after the popover: \(split.diagnostics)")
+            dismiss()
+            #expect(await split.settle { !split.isPresenting }, "\(name) dismissed: \(split.diagnostics)")
+        }
+
+        await waitsForThePopover(
+            "screenshot warning",
+            present: { split.chrome.showScreenshotPrivacyWarning = true },
+            isShown: { split.presentedAlert?.preferredStyle == .alert },
+            dismiss: { split.chrome.showScreenshotPrivacyWarning = false }
+        )
+        await waitsForThePopover(
+            "fingerprint sheet",
+            present: { split.chrome.showFingerprint(for: split.bob) },
+            isShown: { split.isPresenting && !split.isPresentingPopover && split.presentedAlert == nil },
+            dismiss: { split.chrome.clearFingerprint() }
+        )
+        await waitsForThePopover(
+            "share review",
+            present: {
+                let now = Date()
+                try? store.stage(.text("shared from another app", createdAt: now), now: now)
+                shares.refresh(destination: .mesh, now: now)
+            },
+            isShown: { split.presentedAlert?.preferredStyle == .alert },
+            dismiss: { shares.discardAll() }
+        )
+    }
+
     /// E13: a fingerprint asked for in a popover is the popover's own, so it
     /// can't come back as the root's fingerprint sheet once the popover goes.
     @Test
@@ -1734,7 +1879,10 @@ struct ViewSmokeTests {
         let featureModels = makeSmokeFeatureModels(for: viewModel)
 
         #expect(ContentRootModalPresentationState(isPeoplePopoverPresented: true).hasPresentation)
-        #expect(!ContentRootModalPresentationState(appChromeModel: featureModels.appChromeModel).hasPresentation)
+        #expect(!ContentRootModalPresentationState(
+            appChromeModel: featureModels.appChromeModel,
+            isPeoplePopoverPresented: false
+        ).hasPresentation)
         #expect(ContentRootModalPresentationState(
             appChromeModel: featureModels.appChromeModel,
             isPeoplePopoverPresented: true
@@ -1791,7 +1939,8 @@ struct ViewSmokeTests {
 
         #expect(
             !ContentRootModalPresentationState(
-                appChromeModel: featureModels.appChromeModel
+                appChromeModel: featureModels.appChromeModel,
+                isPeoplePopoverPresented: false
             ).hasPresentation
         )
 
@@ -1799,7 +1948,8 @@ struct ViewSmokeTests {
 
         #expect(
             ContentRootModalPresentationState(
-                appChromeModel: featureModels.appChromeModel
+                appChromeModel: featureModels.appChromeModel,
+                isPeoplePopoverPresented: false
             ).hasPresentation
         )
     }
