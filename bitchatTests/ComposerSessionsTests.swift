@@ -591,6 +591,37 @@ struct ComposerSessionsTests {
         #expect(drafts.saves.isEmpty)
     }
 
+    /// I4 beside I1's explicit retargets: the wipe publishes as it goes
+    /// (the timelines emptying, the selection and the DM going), and the
+    /// root retargets at each of those at once. Until the panic's own
+    /// retarget, those load nothing, so a draft the wipe hasn't emptied yet
+    /// can't come back into a composer; the reset slots count as current.
+    @Test func retargetsDuringAPanicWaitForThePanicsOwn() async {
+        let drafts = InMemoryComposerDraftStore([.mesh: "parked before the wipe"])
+        let sessions = makeSessions(drafts)
+        sessions.retarget(Self.compactGeohash, fingerprint: Self.noFingerprint)
+        drafts.clearLog()
+        var onScreen = Self.compactGeohash
+
+        sessions.resetForPanic(thenRetargetTo: { onScreen }, fingerprint: Self.noFingerprint)
+        // The wipe's selection change, before its drafts are emptied.
+        onScreen = Self.compactMesh
+        #expect(sessions.retarget(onScreen, fingerprint: Self.noFingerprint).isEmpty)
+        #expect(sessions.primary.target == nil)
+        #expect(sessions.primary.text.isEmpty)
+        #expect(drafts.loads.isEmpty, "nothing is loaded before the wipe has landed")
+        #expect(sessions.points(.primary, at: .mesh))
+
+        drafts.wipe()
+        await Self.mainQueueHop()
+
+        #expect(sessions.primary.target == .mesh)
+        #expect(sessions.primary.text.isEmpty, "the draft parked before the wipe is gone")
+        #expect(sessions.points(.primary, at: .mesh))
+        #expect(!sessions.points(.primary, at: .publicChannel(.location(Self.geohash))))
+        #expect(sessions.points(.secondary, at: nil))
+    }
+
     // MARK: - One composer's own state
 
     #if os(iOS)

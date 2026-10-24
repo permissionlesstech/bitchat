@@ -316,18 +316,24 @@ struct ContentView: View {
     /// timeline shows, and the open DM in the sheet. Split: #mesh, and the
     /// trailing pane's geohash or the DM covering it.
     private var composerTargets: ComposerTargets {
+        composerTargets(openPeer: selectedPrivatePeerID)
+    }
+
+    /// `composerTargets` with `openPeer` as the open DM: a `$selectedPeerID`
+    /// report brings the new one before the model holds it.
+    private func composerTargets(openPeer: PeerID?) -> ComposerTargets {
         #if os(iOS)
         if isSplitLayout {
             return .split(
-                trailingChannel: trailingContent.composerGeohash(timelineChannel: timelineChannel),
-                privatePeer: selectedPrivatePeerID
+                trailingChannel: trailingContent(openPeer: openPeer).composerGeohash(timelineChannel: timelineChannel),
+                privatePeer: openPeer
             )
         }
         // A fold's selection names the channel the single column is about
         // to show; until it lands, the composer already sends there.
-        return .single(activeChannel: panes.foldChannel ?? timelineChannel, privatePeer: selectedPrivatePeerID)
+        return .single(activeChannel: panes.foldChannel ?? timelineChannel, privatePeer: openPeer)
         #else
-        return .single(activeChannel: timelineChannel, privatePeer: selectedPrivatePeerID)
+        return .single(activeChannel: timelineChannel, privatePeer: openPeer)
         #endif
     }
 
@@ -504,6 +510,12 @@ struct ContentView: View {
                     panes.panic(timelineChannel: timelineChannel)
                     #endif
                 }
+                #if os(iOS)
+                // Screenshot routing asks the panes as they are (E10).
+                appChromeModel.setSplitLayoutScreenshotProbe {
+                    SplitLayoutScreenshotPolicy.panesShowLocation(isSplit: isSplitLayout, trailing: trailingContent)
+                }
+                #endif
                 #if os(macOS)
                 DispatchQueue.main.async {
                     isNicknameFieldFocused = false
@@ -537,7 +549,10 @@ struct ContentView: View {
         // swap and any hand-over), and a hold whose composer changed
         // conversation is cancelled: a live push-to-talk stream keeps the
         // target it started with. Compared like drafts, so the same
-        // person's peer-ID handoff keeps the hold.
+        // person's peer-ID handoff keeps the hold. The handlers that change
+        // what the panes show retarget at once (`panesChanged`); this is
+        // the backstop, as SwiftUI skips an onChange past two changes in
+        // one frame.
         .onChange(of: composerTargets) { targets in
             retargetComposers(to: targets)
             sharedContentImportModel.updateDestination(sharedContentDestination)
@@ -568,11 +583,7 @@ struct ContentView: View {
         // Every refresh republishes the selection, and a peer-ID handoff
         // reports the same person under another ID: neither opens a DM.
         .onReceive(privateConversationModel.$selectedPeerID) { peer in
-            panes.conversationChanged(
-                to: peer,
-                isSplit: isSplitLayout,
-                isSameConversation: privateConversationModel.isSameConversation
-            )
+            conversationReported(peer)
         }
         // Typing counts as a touch in its composer's pane (E1): keystrokes
         // land in the keyboard's window, which the touch observer never
@@ -600,15 +611,10 @@ struct ContentView: View {
             // must not count as a later one.
             panes.compactSelectionChanged(to: locationChannelsModel.selectedChannel)
         }
-        // The previous render's content, through the capture list.
+        // The previous render's content, through the capture list. The
+        // backstop to `panesChanged`, as for the composers' targets.
         .onChange(of: trailingContent) { [trailingContent] newContent in
             panes.trailingContentChanged(from: trailingContent, to: newContent)
-            // Screenshot routing follows what the trailing pane shows,
-            // asynchronous selections included (E10).
-            appChromeModel.splitLayoutShowsLocation = SplitLayoutScreenshotPolicy.panesShowLocation(
-                isSplit: isSplitLayout,
-                trailing: newContent
-            )
         }
         .onChange(of: focusedComposer) { slot in
             guard isSplitLayout, let slot else { return }
@@ -785,6 +791,9 @@ struct ContentView: View {
         }
         .onDisappear {
             appChromeModel.setPanicPreparation(nil)
+            #if os(iOS)
+            appChromeModel.setSplitLayoutScreenshotProbe(nil)
+            #endif
         }
     }
 
@@ -847,12 +856,8 @@ struct ContentView: View {
             }
             .onAppear {
                 let isSplit = layout != nil
-                isSplitLayout = isSplit
+                changePanes { isSplitLayout = isSplit }
                 appChromeModel.setMeshPinnedOnScreen(isSplit)
-                appChromeModel.splitLayoutShowsLocation = SplitLayoutScreenshotPolicy.panesShowLocation(
-                    isSplit: isSplit,
-                    trailing: trailingContent
-                )
             }
             .onChange(of: layout != nil) { isSplit in
                 handleLayoutModeChange(toSplit: isSplit)
@@ -1009,8 +1014,14 @@ struct ContentView: View {
     /// selected geohash, or the picker (idle, or browsing from the
     /// trailing badge).
     private var trailingContent: TrailingPaneContent {
+        trailingContent(openPeer: selectedPrivatePeerID)
+    }
+
+    /// `trailingContent` with `openPeer` as the open DM, as for
+    /// `composerTargets(openPeer:)`.
+    private func trailingContent(openPeer: PeerID?) -> TrailingPaneContent {
         .resolve(
-            conversation: selectedPrivatePeerID,
+            conversation: openPeer,
             channel: timelineChannel,
             isBrowsing: panes.isBrowsing
         )
@@ -1133,11 +1144,13 @@ struct ContentView: View {
                         panicEpoch: appChromeModel.panicEpoch
                     ),
                     onChoose: {
-                        panes.choseChannel(
-                            timelineShowsSelection: locationChannelsModel.selectedChannel == timelineChannel
-                        )
+                        changePanes {
+                            panes.choseChannel(
+                                timelineShowsSelection: locationChannelsModel.selectedChannel == timelineChannel
+                            )
+                        }
                     },
-                    onClose: returnTo == nil ? nil : { panes.endBrowsing() }
+                    onClose: returnTo == nil ? nil : { changePanes { panes.endBrowsing() } }
                 )
             }
         }
@@ -1168,7 +1181,7 @@ struct ContentView: View {
             paneChannel: .location(geohash),
             carriesAppChrome: false,
             onPeopleTap: { peopleButtonTapped(.trailing) },
-            onBadgeTap: { panes.browse() }
+            onBadgeTap: { changePanes { panes.browse() } }
         )
         .contentPeoplePopover(
             isPresented: peoplePopoverBinding(.trailing),
@@ -1310,10 +1323,8 @@ struct ContentView: View {
             imagePreviewURL = nil
             appChromeModel.clearFingerprint()
         }
-        appChromeModel.splitLayoutShowsLocation = SplitLayoutScreenshotPolicy.panesShowLocation(
-            isSplit: toSplit,
-            trailing: trailingContent
-        )
+        // Every composer to its slot in the new layout, at once.
+        panesChanged(openPeer: selectedPrivatePeerID, trailingBefore: trailing)
 
         // Best effort: a DM leaving the sheet takes focus to its pane's
         // composer once the sheet has gone; anything else moves slots (a
@@ -1346,6 +1357,41 @@ struct ContentView: View {
         }
     }
 
+    /// The open DM is now `peer`, reported as the model publishes it, before
+    /// it holds it: the panes hear of it first (a touch or a fold right
+    /// after must already see it), then everything that follows them.
+    private func conversationReported(_ peer: PeerID?) {
+        let before = trailingContent
+        panes.conversationChanged(
+            to: peer,
+            isSplit: isSplitLayout,
+            isSameConversation: privateConversationModel.isSameConversation
+        )
+        panesChanged(openPeer: peer, trailingBefore: before)
+    }
+
+    /// Runs `change` on what the panes show, then `panesChanged`.
+    private func changePanes(_ change: () -> Void) {
+        let before = trailingContent
+        change()
+        panesChanged(openPeer: selectedPrivatePeerID, trailingBefore: before)
+    }
+
+    /// Brings what follows the panes up to date at once: each composer's
+    /// target, cancelling a hold whose composer changed conversation (I1,
+    /// E12), and the trailing people popover, which closes when its bar goes
+    /// (E13). Every handler that changes what the panes show calls this, so
+    /// none of it rests on `onChange`, which SwiftUI skips past two changes
+    /// in one frame and never delivers later; the `onChange` handlers stay
+    /// as backstops. Idempotent.
+    /// - Parameters:
+    ///   - openPeer: The open DM after the change.
+    ///   - trailingBefore: What the trailing pane showed before it.
+    private func panesChanged(openPeer: PeerID?, trailingBefore: TrailingPaneContent) {
+        retargetComposers(to: composerTargets(openPeer: openPeer))
+        panes.trailingContentChanged(from: trailingBefore, to: trailingContent(openPeer: openPeer))
+    }
+
     /// Only once the departing sheet is gone is the pane's composer the one
     /// field bound to its slot's focus, and has the sheet's list stopped
     /// reporting where it is scrolled.
@@ -1365,11 +1411,14 @@ struct ContentView: View {
     private func followTimeline(to channel: ChannelID) {
         guard publicTimelineChannel != channel else { return }
         #if os(iOS)
-        let previous = timelineChannel
-        publicTimelineChannel = channel
-        panes.timelineChannelChanged(from: previous, to: channel)
+        changePanes {
+            let previous = timelineChannel
+            publicTimelineChannel = channel
+            panes.timelineChannelChanged(from: previous, to: channel)
+        }
         #else
         publicTimelineChannel = channel
+        retargetComposers(to: composerTargets)
         #endif
     }
 
@@ -1386,6 +1435,7 @@ struct ContentView: View {
     /// Sends `slot`'s text to that composer's conversation, both taken now:
     /// a selection change before it goes out can't redirect it.
     private func send(from slot: ComposerSlot) {
+        assertComposerIsCurrent(slot)
         composers.send(from: slot, through: conversationUIModel)
     }
 
@@ -1394,6 +1444,7 @@ struct ContentView: View {
     #if os(iOS)
     private func mediaPicker(for slot: ComposerSlot) -> (UIImagePickerController.SourceType) -> Void {
         { [composers] source in
+            assertComposerIsCurrent(slot)
             guard let request = composers.mediaPickRequest(from: slot, source: source) else { return }
             mediaPickRequest = request
         }
@@ -1401,11 +1452,23 @@ struct ContentView: View {
     #else
     private func mediaPicker(for slot: ComposerSlot) -> () -> Void {
         { [composers] in
+            assertComposerIsCurrent(slot)
             guard let request = composers.mediaPickRequest(from: slot) else { return }
             mediaPickRequest = request
         }
     }
     #endif
+
+    /// A send or a pick goes where `slot`'s session points: that must be the
+    /// conversation its composer shows now. Checked in debug builds, where a
+    /// missed retarget stops right here instead of sending into another
+    /// conversation than the one on screen (I1).
+    private func assertComposerIsCurrent(_ slot: ComposerSlot) {
+        assert(
+            composers.points(slot, at: composerTargets[slot]),
+            "the \(slot) composer sends to \(String(describing: composers[slot].target)), its pane shows \(String(describing: composerTargets[slot]))"
+        )
+    }
 }
 
 #if os(iOS)

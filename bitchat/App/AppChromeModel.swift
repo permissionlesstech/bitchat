@@ -30,9 +30,15 @@ final class AppChromeModel: ObservableObject {
     #if os(iOS)
     /// Whether a screenshot of the split layout shows a place: a geohash
     /// timeline or the location-channel picker, rather than a DM. Nil while
-    /// the single column is up. ContentView keeps it current; only
-    /// screenshot routing reads it, so it isn't published.
-    var splitLayoutShowsLocation: Bool?
+    /// the single column is up. Asked of the panes each time
+    /// (`setSplitLayoutScreenshotProbe`), so it is never a copy one of
+    /// SwiftUI's change callbacks has to keep current: SwiftUI skips those
+    /// past a couple of changes in one frame. Only screenshot routing reads
+    /// it, so it isn't published.
+    var splitLayoutShowsLocation: Bool? {
+        splitLayoutScreenshotProbe?()
+    }
+    private var splitLayoutScreenshotProbe: (@MainActor () -> Bool?)?
     /// Goes up with every panic wipe. The wipe closes the sheets, which takes
     /// what they hold with them; inline views outlive it (the split layout's
     /// location-channel picker) and drop what they hold when this changes.
@@ -132,6 +138,12 @@ final class AppChromeModel: ObservableObject {
     /// the selection: arrivals there batch like the selected timeline's.
     func setMeshPinnedOnScreen(_ pinned: Bool) {
         chatViewModel.conversations.setMeshPinnedOnScreen(pinned)
+    }
+
+    /// ContentView's answer to `splitLayoutShowsLocation`, read from the
+    /// panes as they are at that moment; nil while it is off screen.
+    func setSplitLayoutScreenshotProbe(_ probe: (@MainActor () -> Bool?)?) {
+        splitLayoutScreenshotProbe = probe
     }
     #endif
 

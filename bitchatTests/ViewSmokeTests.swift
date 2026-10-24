@@ -779,6 +779,21 @@ private final class SplitContentHost {
         host.textField(in: Self.region(of: pane)) { $0 != "geohash" }
     }
 
+    /// The text field, anywhere in the window (a sheet's included), whose
+    /// prompt `matches`.
+    func field(prompt matches: (String) -> Bool) -> UITextField? {
+        host.textField(in: CGRect(origin: .zero, size: Self.size), prompt: matches)
+    }
+
+    /// Types `text` into `field` and presses return, as the keyboard does:
+    /// its return key types a newline, which a text field turns into its
+    /// submit. The composer sends.
+    func submit(_ text: String, in field: UITextField) {
+        _ = field.becomeFirstResponder()
+        field.insertText(text)
+        field.insertText("\n")
+    }
+
     /// Waits for `count` more frames: by then SwiftUI has applied what
     /// UIKit reported before the wait (a field taking the keyboard).
     func settleFrames(_ count: Int = 5) async -> Bool {
@@ -1982,6 +1997,38 @@ struct ViewSmokeTests {
 
         split.viewModel.cancelAllLegacyPrivateMediaConsents()
         try await split.require("the warning") { split.presentedAlert?.preferredStyle == .alert }
+    }
+
+    /// I1: a composer's session follows its pane wherever the panes change,
+    /// not only through onChange, which SwiftUI skips past two changes in
+    /// one frame and never delivers later. The selection landing, a DM
+    /// opening and a fold all reach the root in one frame here; the
+    /// composer on screen afterwards (the DM sheet's) sends to the
+    /// conversation it shows, and its session points where its prompt says
+    /// (a debug assertion at the send).
+    @Test
+    func contentView_aComposerSendsWhereItsPaneShowsAfterChangesInOneFrame() async throws {
+        let split = try await SplitContentHost.make()
+        defer { split.close() }
+        split.channels.select(.location(split.geohash))
+        // The timeline's model, not the rendered pane: the landing reaches
+        // the root in the same frame as what follows.
+        try await split.require("the selection landing") { split.timelineChannel == .location(split.geohash) }
+        split.models.privateConversationModel.startConversation(with: split.bob)
+        split.sizeClass.value = .compact
+
+        try await split.require("folded, the DM in the sheet") {
+            split.chrome.splitLayoutShowsLocation == nil && split.field(prompt: { $0.contains("Bob") }) != nil
+        }
+        let field = try #require(split.field(prompt: { $0.contains("Bob") }), "\(split.diagnostics)")
+        split.submit("hello bob", in: field)
+
+        let sent = await split.settle {
+            split.viewModel.privateMessages(for: split.bob).contains { $0.content == "hello bob" }
+        }
+        try #require(sent, "Bob's DM has it; the field reads \"\(field.text ?? "")\": \(split.diagnostics)")
+        #expect(!split.viewModel.publicMessages(for: .location(split.geohash)).contains { $0.content == "hello bob" })
+        #expect(!split.viewModel.publicMessages(for: .mesh).contains { $0.content == "hello bob" })
     }
 
     /// E1: a composer taking the keyboard makes its pane the last touched,

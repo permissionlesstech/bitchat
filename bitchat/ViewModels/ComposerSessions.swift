@@ -243,6 +243,12 @@ final class ComposerSessions: ObservableObject {
     let primary = ComposerSession(slot: .primary)
     let secondary = ComposerSession(slot: .secondary)
     private let drafts: any ComposerDraftStoring
+    /// From a panic's reset until its own retarget, one main-queue hop
+    /// later. The wipe in between publishes as it goes (the timelines
+    /// emptying, the DM closing), and a retarget one of those set off would
+    /// load a draft the wipe hasn't emptied yet: every retarget waits for
+    /// the panic's.
+    private var awaitsPanicRetarget = false
 
     init(drafts: any ComposerDraftStoring = SharedComposerDraftStore()) {
         self.drafts = drafts
@@ -268,10 +274,16 @@ final class ComposerSessions: ObservableObject {
     /// its scope can follow the channel, and a fingerprint learnt mid-
     /// conversation must not swap its text away.
     ///
+    /// Idempotent: retargeting to the targets the slots already have changes
+    /// nothing, so every change of what a composer shows can retarget at
+    /// once. Between a panic's reset and its own retarget it does nothing
+    /// (`resetForPanic`).
+    ///
     /// - Returns: The slots whose key changed. A hold on their mic belonged
     ///   to the conversation they no longer show, so the caller cancels it.
     @discardableResult
     func retarget(_ targets: ComposerTargets, fingerprint: (PeerID) -> String?) -> Set<ComposerSlot> {
+        guard !awaitsPanicRetarget else { return [] }
         var liveTexts: [ComposerDraftStore.Key: String] = [:]
         var openDMKeys: [PeerID: ComposerDraftStore.Key] = [:]
         for session in sessions {
@@ -348,6 +360,15 @@ final class ComposerSessions: ObservableObject {
         }
     }
 
+    /// Whether `slot` points at `target`, the conversation its composer shows
+    /// now. It must whenever the composer sends or picks: a difference is a
+    /// retarget missed, and the text or photo would go where the screen no
+    /// longer says (I1). A panic's reset counts as current until its own
+    /// retarget lands.
+    func points(_ slot: ComposerSlot, at target: ConversationTarget?) -> Bool {
+        awaitsPanicRetarget || self[slot].target == target
+    }
+
     #if os(iOS)
     /// A camera or library press in `slot`'s composer, with the conversation
     /// the pick goes to: that composer's own as of the press, however the
@@ -417,15 +438,20 @@ final class ComposerSessions: ObservableObject {
     /// parked again. One main-queue hop later, once that wipe has landed
     /// (the drafts empty, the selection back on #mesh, any DM closed), the
     /// slots point at `targets()` as they are by then. Pointed any sooner, a
-    /// slot would load a draft the wipe is about to empty. No hold is left
-    /// to cancel: the recorder's own panic wipe ended it first.
+    /// slot would load a draft the wipe is about to empty, so any other
+    /// retarget meanwhile (one the wipe's own changes set off) does
+    /// nothing. No hold is left to cancel: the recorder's own panic wipe
+    /// ended it first.
     func resetForPanic(
         thenRetargetTo targets: @escaping () -> ComposerTargets,
         fingerprint: @escaping (PeerID) -> String?
     ) {
         reset()
+        awaitsPanicRetarget = true
         DispatchQueue.main.async { [weak self] in
-            self?.retarget(targets(), fingerprint: fingerprint)
+            guard let self else { return }
+            self.awaitsPanicRetarget = false
+            self.retarget(targets(), fingerprint: fingerprint)
         }
     }
 }
