@@ -224,9 +224,11 @@ extension EnvironmentValues {
 #if os(iOS)
 /// A tap a test host makes on the split layout's people buttons. A SwiftUI
 /// button has no control to send an action to, and no accessibility element
-/// unless an assistive technology runs, so a test can't press one; it sends
-/// the tap through `splitLayoutTestTaps`, and the button's own action runs.
-/// The app never sets that.
+/// unless an assistive technology runs, so a test can't press one. It sends
+/// the tap through `splitLayoutTestTaps` instead, and ContentView runs the
+/// very action it hands that button (or the popover's close button): a
+/// wiring mistake on ContentView's side fails the test, though the press
+/// itself is left to the device. The app never sets that.
 enum SplitLayoutTestTap: Equatable {
     /// A pane bar's people button: the leading bar's, or the trailing
     /// geohash bar's while it shows.
@@ -1150,7 +1152,7 @@ struct ContentView: View {
                         // pane's top row meets the trailing corner instead.
                         trailingCornerReach: isSplit ? 0 : corners.trailing,
                         paneChannel: isSplit ? .mesh : nil,
-                        onPeopleTap: isSplit ? { peopleButtonTapped(.leading) } : nil,
+                        onPeopleTap: peopleTap(.leading),
                         isBadgeStatic: isSplit,
                         defersAlerts: { isPeoplePopoverPresented || isLegacyConsentShowingAtRoot }
                     )
@@ -1160,7 +1162,7 @@ struct ContentView: View {
                         isPresented: peoplePopoverBinding(.leading),
                         channel: .mesh,
                         paneWidth: split?.leadingWidth ?? 0,
-                        onClose: { popoverClosed(.leading) }
+                        onClose: popoverClose(.leading)
                     )
                 )
             },
@@ -1291,14 +1293,14 @@ struct ContentView: View {
             trailingCornerReach: trailingCornerReach,
             paneChannel: .location(geohash),
             carriesAppChrome: false,
-            onPeopleTap: { peopleButtonTapped(.trailing) },
+            onPeopleTap: peopleTap(.trailing),
             onBadgeTap: { changePanes { panes.browse() } }
         )
         .contentPeoplePopover(
             isPresented: peoplePopoverBinding(.trailing),
             channel: .location(geohash),
             paneWidth: paneWidth,
-            onClose: { popoverClosed(.trailing) }
+            onClose: popoverClose(.trailing)
         )
     }
 
@@ -1309,35 +1311,40 @@ struct ContentView: View {
             get: { panes.popover == pane },
             set: { isPresented in
                 if !isPresented {
-                    popoverClosed(pane)
+                    popoverClose(pane)()
                 }
             }
         )
     }
 
-    /// A bar's people button: that pane's people, as a popover.
-    private func peopleButtonTapped(_ pane: ContentPane) {
-        panes.openPopover(pane)
+    /// The action ContentView hands `pane`'s people button: that pane's
+    /// people, as a popover. Nil where the bar has no such button: the
+    /// single column, whose button toggles the people sheet, and a
+    /// trailing pane without its geohash bar.
+    private func peopleTap(_ pane: ContentPane) -> (() -> Void)? {
+        guard isSplitLayout else { return nil }
+        if pane == .trailing {
+            guard case .channel = trailingContent else { return nil }
+        }
+        return { panes.openPopover(pane) }
     }
 
-    /// A popover closed itself: its close button, a row's DM, a tap outside.
-    private func popoverClosed(_ pane: ContentPane) {
-        panes.popoverClosed(pane)
+    /// The action ContentView hands `pane`'s popover close button (and its
+    /// rows, once they have opened a DM): the popover state follows the
+    /// popover closing itself. Also the binding's, for a tap outside.
+    private func popoverClose(_ pane: ContentPane) -> () -> Void {
+        { panes.popoverClosed(pane) }
     }
 
-    /// A test host's tap, run as the button it stands for would run it:
-    /// only on a button that is on screen.
+    /// A test host's tap: runs the action ContentView hands the button it
+    /// stands for, which exists only where that button is on screen.
     private func perform(_ tap: SplitLayoutTestTap) {
-        guard isSplitLayout else { return }
         switch tap {
-        case .peopleButton(.leading):
-            peopleButtonTapped(.leading)
-        case .peopleButton(.trailing):
-            guard case .channel = trailingContent else { return }
-            peopleButtonTapped(.trailing)
+        case .peopleButton(let pane):
+            peopleTap(pane)?()
         case .popoverCloseButton:
             if let pane = panes.popover {
-                popoverClosed(pane)
+                popoverClose(pane)()
             }
         }
     }

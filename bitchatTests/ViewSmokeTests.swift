@@ -2097,6 +2097,31 @@ struct ViewSmokeTests {
         )
     }
 
+    /// E13: the trailing bar's people button opens the geohash's people as
+    /// a popover, through the action ContentView hands the button, and
+    /// only while that bar is on screen: over the idle picker there is no
+    /// button. Its close button closes it.
+    @Test
+    func contentView_theTrailingPeopleButtonOpensItsPopoverOverItsGeohash() async throws {
+        let split = try await SplitContentHost.make()
+        defer { split.close() }
+        split.tap(.peopleButton(.trailing))
+        let opened = await TestHelpers.waitUntil(
+            { split.isPresentingPopover },
+            timeout: TestConstants.negativeWaitWindow
+        )
+        #expect(!opened, "a popover over the idle picker: \(split.diagnostics)")
+
+        try await split.select(.location(split.geohash))
+        try await split.require("the geohash pane") {
+            split.trailingPrompts.contains { $0.contains("#\(split.geohash.geohash)") }
+        }
+        split.tap(.peopleButton(.trailing))
+        try await split.require("the trailing popover") { split.isPresentingPopover }
+        split.tap(.popoverCloseButton)
+        try await split.require("the popover closed") { !split.isPresenting }
+    }
+
     /// A peer-ID handoff of the open DM (Bob drops out of range and his DM
     /// moves to his Noise key's ID) opens no DM: the #mesh people popover
     /// in use stays up, and a fold from #mesh still parks the geohash and
