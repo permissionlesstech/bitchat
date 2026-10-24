@@ -54,9 +54,11 @@ enum TrailingPaneContent: Hashable {
     case picker(returnTo: GeohashChannel?)
     /// A geohash selected for the pane that the timeline hasn't landed on
     /// yet: an unfold re-selecting the parked geohash, a launch with a
-    /// persisted one, a choice still on its way. A neutral placeholder
-    /// holds the pane meanwhile: the picker would mount and ask for a
-    /// location fix for a pane about to show the geohash.
+    /// persisted one, a selection made while the pane showed something
+    /// else. A neutral placeholder holds the pane meanwhile: the picker
+    /// would mount and ask for a location fix for a pane about to show the
+    /// geohash. A picker already up stays instead
+    /// (`SplitPaneState.isPickerUp`).
     case landing(GeohashChannel)
 
     /// - Parameters:
@@ -307,6 +309,14 @@ struct SplitPaneState: Equatable {
     /// still. The trailing pane holds its placeholder for it meanwhile
     /// (`TrailingPaneContent.landing`) rather than mount the picker.
     private(set) var landingChannel: GeohashChannel?
+    /// The trailing pane shows the picker, as last reported
+    /// (`trailingContentChanged`). A geohash selected while it is up, by a
+    /// choice in it or beside it (a #geohash link, the nearby hint), lands
+    /// under it rather than under the placeholder (`trailingContent`): it
+    /// has made its one location request already, and swapping it for the
+    /// placeholder would only flash a blank pane between the list and the
+    /// channel. Reported in either layout; an unfold starts it afresh.
+    private(set) var isPickerUp = false
 
     /// What `ContentView` does for an event, besides the state change.
     struct Effects: Equatable {
@@ -400,6 +410,9 @@ struct SplitPaneState: Equatable {
         // fold's #mesh selection may still be on its way.
         var effects = Effects(select: unfold.reselect.map(ChannelID.location))
         landingChannel = unfold.reselect
+        // The trailing pane mounts afresh; its first report says whether
+        // it shows the picker.
+        isPickerUp = false
         // The DM in the sheet moves across scoped as the single column had
         // it: a geohash DM over the geohash on screen keeps that geohash,
         // one over #mesh stays there. (A parked DM is never a geohash DM.)
@@ -533,12 +546,17 @@ struct SplitPaneState: Equatable {
     }
 
     /// What the trailing pane shows changed: its bar may have gone with it
-    /// (E13). #mesh's bar never leaves the split layout. Reported from
-    /// every handler that changes the panes, so the same content again
-    /// closes nothing.
+    /// (E13), and the picker may have come or gone (`isPickerUp`). #mesh's
+    /// bar never leaves the split layout. Reported from every handler that
+    /// changes the panes, so the same content again closes nothing.
     mutating func trailingContentChanged(from old: TrailingPaneContent, to new: TrailingPaneContent) {
         if popover == .trailing, old != new {
             popover = nil
+        }
+        if case .picker = new {
+            isPickerUp = true
+        } else {
+            isPickerUp = false
         }
     }
 
@@ -609,6 +627,7 @@ struct SplitPaneState: Equatable {
         foldChannel = nil
         conversationScope = nil
         landingChannel = nil
+        isPickerUp = false
         if !timelineChannel.isLocation {
             isBrowsing = false
         }
@@ -617,13 +636,27 @@ struct SplitPaneState: Equatable {
     // MARK: What the panes show
 
     /// What the trailing pane shows (`TrailingPaneContent.resolve`), with
-    /// what this state holds: browsing, and an unfold's re-selection still
-    /// on its way.
+    /// what this state holds: browsing, an unfold's re-selection still on
+    /// its way, and the picker staying up while a geohash lands under it.
     /// - Parameters:
     ///   - openPeer: The open DM, if any.
     ///   - timelineChannel: The channel the trailing timeline renders.
     ///   - selection: The selected location channel.
     func trailingContent(
+        openPeer: PeerID?,
+        timelineChannel: ChannelID,
+        selection: ChannelID
+    ) -> TrailingPaneContent {
+        let content = standingContent(openPeer: openPeer, timelineChannel: timelineChannel, selection: selection)
+        if isPickerUp, case .landing = content {
+            return .picker(returnTo: nil)
+        }
+        return content
+    }
+
+    /// What the trailing pane stands for: what it shows, except that a
+    /// geohash on its way is one under the picker kept up for it too.
+    private func standingContent(
         openPeer: PeerID?,
         timelineChannel: ChannelID,
         selection: ChannelID
@@ -651,13 +684,14 @@ struct SplitPaneState: Equatable {
 
     /// The channel the trailing pane stands for under `openPeer`: the
     /// timeline's, or a geohash on its way, which the pane is about to show
-    /// (`TrailingPaneContent.landing`) unless a DM covers it.
+    /// (under the placeholder or the picker kept up for it) unless a DM
+    /// covers it.
     private func standingChannel(
         openPeer: PeerID?,
         timelineChannel: ChannelID,
         selection: ChannelID
     ) -> ChannelID {
-        if case .landing(let geohash) = trailingContent(
+        if case .landing(let geohash) = standingContent(
             openPeer: openPeer,
             timelineChannel: timelineChannel,
             selection: selection

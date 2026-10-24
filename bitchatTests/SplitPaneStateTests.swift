@@ -42,6 +42,8 @@ struct SplitPaneStateTests {
         /// The peer IDs that name one person, as `isSameDirectConversation`
         /// resolves them.
         var people: [Set<PeerID>] = []
+        /// What the trailing pane showed as last reported (`report()`).
+        var reported: TrailingPaneContent = .picker(returnTo: nil)
 
         var trailing: TrailingPaneContent {
             state.trailingContent(openPeer: openPeer, timelineChannel: timeline, selection: selection)
@@ -55,6 +57,13 @@ struct SplitPaneStateTests {
                 return .single(activeChannel: state.foldChannel ?? timeline, privatePeer: openPeer)
             }
             return state.composerTargets(trailing: trailing, openPeer: openPeer)
+        }
+
+        /// Reports what the trailing pane shows, as ContentView does after
+        /// every change to the panes (`panesChanged`).
+        mutating func report() {
+            state.trailingContentChanged(from: reported, to: trailing)
+            reported = trailing
         }
 
         /// A selection that lands in the timeline, as `select` does, with
@@ -614,8 +623,9 @@ struct SplitPaneStateTests {
         #expect(wiped.trailing == .picker(returnTo: nil))
     }
 
-    /// A choice from the idle picker, or a launch with a persisted geohash:
-    /// the selection is ahead of the timeline, and the pane waits on it.
+    /// A launch with a persisted geohash: the selection is ahead of the
+    /// timeline before the pane has shown anything, and the pane waits on
+    /// it under the placeholder.
     @Test
     func aSelectionAheadOfTheTimelineHoldsThePane() {
         var world = World()
@@ -623,6 +633,93 @@ struct SplitPaneStateTests {
         #expect(world.trailing == .landing(geohash))
         world.land(.location(geohash))
         #expect(world.trailing == .channel(geohash))
+    }
+
+    /// A geohash selected while the picker is up, by a choice in it or one
+    /// beside it (a #geohash link, the nearby hint), lands under the picker
+    /// rather than the placeholder: it has made its one location request
+    /// already, and swapping it out would only flash a blank pane between
+    /// the list and the channel.
+    @Test
+    func aGeohashSelectedWhileThePickerIsUpLandsUnderIt() {
+        var world = World()
+        world.report()
+        #expect(world.state.isPickerUp)
+
+        world.state.choseChannel(selects: true)
+        world.select(.location(geohash))
+        world.report()
+        #expect(world.trailing == .picker(returnTo: nil))
+
+        world.land(.location(geohash))
+        world.report()
+        #expect(world.trailing == .channel(geohash))
+        #expect(!world.state.isPickerUp)
+    }
+
+    /// The placeholder still holds a pane that wasn't showing the picker
+    /// as the geohash was selected: a DM over it, or an unfold, whose pane
+    /// mounts afresh whatever was reported while folded.
+    @Test
+    func aGeohashOnItsWayHoldsThePlaceholderWhereNoPickerWasUp() {
+        var covered = World()
+        covered.report()
+        covered.open(meshPeer)
+        covered.report()
+        #expect(!covered.state.isPickerUp)
+        covered.select(.location(geohash))
+        covered.open(nil)
+        #expect(covered.trailing == .landing(geohash))
+
+        var unfolded = World()
+        unfolded.land(.location(geohash))
+        unfolded.state.touched(.leading)
+        unfolded.fold()
+        // The single column on #mesh reads as the idle picker.
+        unfolded.report()
+        #expect(unfolded.state.isPickerUp)
+        _ = unfolded.state.unfold(
+            timelineChannel: unfolded.timeline,
+            openPeer: nil,
+            locationSheetIsUp: false,
+            canReopen: { _ in true }
+        )
+        unfolded.isSplit = true
+        #expect(unfolded.trailing == .landing(geohash))
+    }
+
+    /// The picker kept up for a geohash on its way stands for that
+    /// geohash, as the placeholder does: a fold keeps or parks it, and a
+    /// geohash DM opening is scoped to it.
+    @Test
+    func thePickerKeptUpForAGeohashStandsForIt() {
+        func held() -> World {
+            var world = World()
+            world.report()
+            world.state.choseChannel(selects: true)
+            world.select(.location(geohash))
+            world.report()
+            #expect(world.trailing == .picker(returnTo: nil))
+            return world
+        }
+
+        // E2: the choice focused the trailing pane.
+        var kept = held()
+        #expect(kept.fold() == .init())
+        #expect(kept.selection == .location(geohash))
+        #expect(kept.state.foldChannel == .location(geohash))
+        #expect(kept.state.parked == .none)
+
+        var parked = held()
+        parked.state.touched(.leading)
+        #expect(parked.fold().select == .mesh)
+        #expect(parked.state.parked == .init(channel: geohash))
+
+        var withDM = held()
+        withDM.open(geoDM)
+        #expect(withDM.state.conversationScope == .location(geohash))
+        withDM.land(.location(geohash))
+        #expect(withDM.openPeer == geoDM)
     }
 
     /// E8 over E4: a DM the fold parked doesn't reopen over the picker the
@@ -964,6 +1061,8 @@ struct SplitPaneStateTests {
         var world = World()
         world.land(.location(geohash))
         world.state.browse()
+        world.report()
+        #expect(world.state.isPickerUp)
         world.state.openPopover(.trailing)
 
         world.state.panic(timelineChannel: world.timeline)

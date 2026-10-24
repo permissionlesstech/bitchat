@@ -388,17 +388,9 @@ struct LocationChannelsPicker: View {
         onChoose(selects)
     }
 
-    /// The #mesh row: hidden in the idle pane, where #mesh is the pane
-    /// beside it and no location channel is selected to leave (E7).
+    /// The #mesh row (`showsMeshRow(presentation:canClose:)`).
     private var showsMeshRow: Bool {
-        switch presentation {
-        case .sheet:
-            return true
-        #if os(iOS)
-        case .pane:
-            return locationChannelsModel.selectedChannel.isLocation
-        #endif
-        }
+        Self.showsMeshRow(presentation: presentation, canClose: onClose != nil)
     }
 
     private func requestShare(forGeohash geohash: String) {
@@ -961,6 +953,17 @@ extension LocationChannelsPicker {
             return !isSelected(geohash: geohash, in: selected)
         #endif
         }
+    }
+
+    /// Whether the #mesh row shows: always in the sheet. The pane shows it
+    /// only while browsing away from a geohash, its close control up: idle,
+    /// #mesh is the pane beside it and no location channel is selected to
+    /// leave (E7). Read from the close control, not the selection: a
+    /// geohash chosen in the idle pane is selected a hop or more before
+    /// its channel replaces the pane, and the row would pop in meanwhile.
+    /// - Parameter canClose: The picker has a close control.
+    static func showsMeshRow(presentation: Presentation, canClose: Bool) -> Bool {
+        presentation == .sheet || canClose
     }
 
     #if os(iOS)

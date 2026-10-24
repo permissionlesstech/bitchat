@@ -1235,7 +1235,8 @@ struct ContentView: View {
     /// geohash with its own bar, timeline and composer, the picker, or a
     /// placeholder while a selected geohash lands. The picker keeps one
     /// identity between idle and browsing, so ending browsing by choosing
-    /// #mesh neither remounts it nor asks for another location fix.
+    /// #mesh neither remounts it nor asks for another location fix; it
+    /// stays up while a geohash selected in it or beside it lands.
     private func trailingPane(width: CGFloat, trailingCornerReach: CGFloat) -> some View {
         Group {
             switch trailingContent {

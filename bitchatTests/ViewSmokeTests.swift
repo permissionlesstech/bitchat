@@ -463,6 +463,43 @@ private final class FrameCounter: NSObject {
     }
 }
 
+/// Samples the window after every render the main run loop commits, until
+/// stopped: a test sees each state the screen went through, however soon
+/// the next one replaced it.
+@MainActor
+private final class CommitSampler {
+    private(set) var samples: [String] = []
+    private var observer: CFRunLoopObserver?
+
+    /// - Parameter sample: What to record of this commit; nil skips it.
+    func start(_ sample: @escaping @MainActor () -> String?) {
+        guard observer == nil else { return }
+        // As the run loop is about to wait, after Core Animation has
+        // committed (order 2000000) what changed in this pass.
+        let observer = CFRunLoopObserverCreateWithHandler(
+            kCFAllocatorDefault,
+            CFRunLoopActivity.beforeWaiting.rawValue,
+            true,
+            CFIndex.max
+        ) { [weak self] _, _ in
+            MainActor.assumeIsolated {
+                if let value = sample() {
+                    self?.samples.append(value)
+                }
+            }
+        }
+        CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
+        self.observer = observer
+    }
+
+    /// The run loop holds the observer until it is removed.
+    func stop() {
+        guard let observer else { return }
+        CFRunLoopRemoveObserver(CFRunLoopGetMain(), observer, .commonModes)
+        self.observer = nil
+    }
+}
+
 /// ContentView in a window wide enough for the split layout: two 480pt
 /// panes either side of a 40pt gap at the window's centre. The view model
 /// switches channels on the same location manager the location model
@@ -1649,6 +1686,40 @@ struct ViewSmokeTests {
             split.location.requestLocationCallCount == fixes,
             "the picker mounted while the geohash landed: \(split.diagnostics)"
         )
+    }
+
+    /// A geohash selected while the idle picker is up (here beside it, as
+    /// a #geohash link or the nearby hint in #mesh selects) lands under the
+    /// picker: it has made its location request already, and the
+    /// placeholder would only flash a blank pane between the list and the
+    /// channel. Every render from the selection to the channel shows the
+    /// picker, and nothing asks for another fix.
+    @Test
+    func contentView_aGeohashSelectedBesideTheIdlePickerLandsUnderIt() async throws {
+        let split = try await SplitContentHost.make()
+        defer { split.close() }
+        try await split.require("idle picker") { split.trailingPrompts == ["geohash"] }
+        let fixes = split.location.requestLocationCallCount
+        let target = ChannelID.location(split.geohash)
+        let sampler = CommitSampler()
+        defer { sampler.stop() }
+        sampler.start {
+            // The geohash on its way: selected, not yet in the timeline.
+            guard split.channels.selectedChannel == target, split.timelineChannel != target else { return nil }
+            return split.trailingPrompts.joined(separator: "|")
+        }
+
+        split.channels.select(target)
+
+        try await split.require("the geohash pane") {
+            split.trailingPrompts.contains { $0.contains("#\(split.geohash.geohash)") }
+        }
+        sampler.stop()
+        #expect(
+            sampler.samples.allSatisfy { $0 == "geohash" },
+            "renders while the geohash landed: \(sampler.samples), \(split.diagnostics)"
+        )
+        #expect(split.location.requestLocationCallCount == fixes)
     }
 
     /// E2: folding from the trailing pane keeps the geohash and the DM

@@ -285,6 +285,16 @@ struct LocationChannelsPickerTests {
         #expect(chrome.panicEpoch == before &+ 1)
     }
 
+    /// E7: the sheet always lists #mesh; the pane only while browsing, its
+    /// close control up. Not while a geohash chosen in the idle pane is
+    /// selected but not yet on screen: the pane is still idle.
+    @Test
+    func onlyTheSheetAndABrowsingPaneListMesh() {
+        #expect(Picker.showsMeshRow(presentation: .sheet, canClose: true))
+        #expect(Picker.showsMeshRow(presentation: Self.pane, canClose: true))
+        #expect(!Picker.showsMeshRow(presentation: Self.pane, canClose: false))
+    }
+
     /// E7: choosing the selected channel again only ends browsing, so the
     /// choice is matched by cell, whatever level it arrives with.
     @Test
