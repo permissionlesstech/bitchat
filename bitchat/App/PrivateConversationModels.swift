@@ -123,6 +123,16 @@ final class PrivateConversationModel: ObservableObject {
     @Published private(set) var selectedPeerID: PeerID?
     @Published private(set) var selectedHeaderState: PrivateConversationHeaderState?
 
+    #if os(iOS)
+    /// A person opened a DM from a list of people: a people popover's row,
+    /// or a message list's "direct message". The DM already open counts
+    /// too, though opening it again changes no selection: the split layout
+    /// takes each as a DM opening (E1), which the selection alone can't
+    /// tell it. Refused opens (a blocked peer's) and the layout's own
+    /// reopenings don't fire.
+    let conversationChosen = PassthroughSubject<Void, Never>()
+    #endif
+
     private let chatViewModel: ChatViewModel
     private let conversations: ConversationStore
     private let locationChannelsModel: LocationChannelsModel
@@ -164,11 +174,17 @@ final class PrivateConversationModel: ObservableObject {
         if peerID.isGeoChat {
             guard let full = chatViewModel.fullNostrHex(forSenderPeerID: peerID) else { return }
             chatViewModel.startGeohashDM(withPubkeyHex: full)
+            refreshSelectedConversation()
+            #if os(iOS)
+            reportChoice(of: PeerID(nostr_: full))
+            #endif
         } else {
             chatViewModel.startPrivateChat(with: peerID, from: origin)
+            refreshSelectedConversation()
+            #if os(iOS)
+            reportChoice(of: peerID)
+            #endif
         }
-
-        refreshSelectedConversation()
     }
 
     func endConversation() {
@@ -204,6 +220,14 @@ final class PrivateConversationModel: ObservableObject {
     func startConversation(with peerID: PeerID, from origin: ConversationTarget) {
         chatViewModel.startPrivateChat(with: peerID, from: origin)
         refreshSelectedConversation()
+        reportChoice(of: peerID)
+    }
+
+    /// A person's open of `peerID`'s DM went through: it is the one open
+    /// now (`conversationChosen`).
+    private func reportChoice(of peerID: PeerID) {
+        guard selectedPeerID == peerID else { return }
+        conversationChosen.send()
     }
     #endif
 

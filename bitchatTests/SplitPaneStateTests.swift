@@ -640,6 +640,31 @@ struct SplitPaneStateTests {
         #expect(world.state.parked.conversation == meshPeer)
     }
 
+    /// E1: choosing the DM that is already open (its row in the #mesh
+    /// popover, its sender's "direct message" in the #mesh list) is a DM
+    /// opening too, though no report repeats it: it takes the focus and
+    /// closes the popover, so a fold keeps the DM (E2) instead of parking
+    /// it (E3), as choosing anyone else's would.
+    @Test
+    func choosingTheOpenDMAgainTakesTheFocus() {
+        var world = World()
+        world.land(.location(geohash))
+        world.open(meshPeer)
+        world.state.touched(.leading)
+        world.state.openPopover(.leading)
+        // The selection republished: nothing.
+        world.open(meshPeer)
+        #expect(world.state.focus == .leading)
+
+        world.state.conversationChosen()
+
+        #expect(world.state.focus == .trailing)
+        #expect(world.state.popover == nil)
+        #expect(world.fold() == .init())
+        #expect(world.openPeer == meshPeer)
+        #expect(world.selection == .location(geohash))
+    }
+
     /// The open DM handed to another ID of the same person (a disconnect
     /// moving it to the Noise key's ID, a reconnect under a new short ID)
     /// opens nothing: the focus, the popover and what a fold would do stay

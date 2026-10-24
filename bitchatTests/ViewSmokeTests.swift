@@ -2122,6 +2122,28 @@ struct ViewSmokeTests {
         try await split.require("the popover closed") { !split.isPresenting }
     }
 
+    /// E1: choosing the DM that is already open from the #mesh pane (its
+    /// sender's "direct message" in the #mesh list) moves the focus to it,
+    /// as choosing anyone else would: a fold keeps it as the sheet (E2)
+    /// rather than parking it with the geohash (E3).
+    @Test
+    func contentView_choosingTheOpenDMFromMeshTakesTheFocus() async throws {
+        let split = try await SplitContentHost.make()
+        defer { split.close() }
+        try await split.select(.location(split.geohash))
+        try await split.open(split.bob)
+        try #require(split.touch(.leading))
+
+        split.models.privateConversationModel.openConversation(for: split.bob, from: .mesh)
+
+        try await split.fold()
+        let moved = await TestHelpers.waitUntil(
+            { split.channels.selectedChannel != .location(split.geohash) || split.openPeer != split.bob },
+            timeout: TestConstants.negativeWaitWindow
+        )
+        #expect(!moved, "\(split.diagnostics)")
+    }
+
     /// A peer-ID handoff of the open DM (Bob drops out of range and his DM
     /// moves to his Noise key's ID) opens no DM: the #mesh people popover
     /// in use stays up, and a fold from #mesh still parks the geohash and
@@ -2430,6 +2452,43 @@ struct ViewSmokeTests {
         ContentPeopleListView.showFingerprint(for: peerID, presentation: .sheet, appChromeModel: chrome)
         #expect(chrome.showingFingerprintFor == peerID)
         #expect(shownInPopover == [peerID])
+    }
+
+    /// E1's report of a DM chosen from a list: an open from a list (a
+    /// popover's row, a list's "direct message") reports itself, the DM
+    /// already open included; a refused one (a blocked peer's) doesn't, nor
+    /// does an open no list asked for (the unfold's reopening).
+    @Test
+    func privateConversations_reportEveryDMChosenFromAList() async {
+        let (viewModel, transport, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let conversations = featureModels.privateConversationModel
+        let blocked = PeerID(str: "8182838485868788")
+        let carol = PeerID(str: "9192939495969798")
+        transport.updatePeerSnapshots([
+            makeSnapshot(peerID: blocked, nickname: "Mallory", noiseByte: 0x81),
+            makeSnapshot(peerID: carol, nickname: "Carol", noiseByte: 0x91)
+        ])
+        let known = await TestHelpers.waitUntil(
+            { featureModels.peerListModel.meshRows.contains { $0.peerID == blocked } },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(known)
+        featureModels.conversationUIModel.block(peerID: blocked, displayName: "Mallory", from: .mesh)
+        var chosen = 0
+        let subscription = conversations.conversationChosen.sink { chosen += 1 }
+        defer { subscription.cancel() }
+
+        conversations.startConversation(with: carol)
+        #expect(chosen == 0, "an open no list asked for")
+        conversations.startConversation(with: carol, from: .mesh)
+        #expect(chosen == 1, "a popover row, for the DM open already")
+        conversations.openConversation(for: carol, from: .mesh)
+        #expect(chosen == 2, "a list's direct message, for the DM open already")
+        conversations.openConversation(for: blocked, from: .mesh)
+        conversations.startConversation(with: blocked, from: .mesh)
+        #expect(chosen == 2, "refused opens")
+        #expect(conversations.selectedPeerID == carol)
     }
 
     /// A popover row closes the popover once its DM is open, and only then:

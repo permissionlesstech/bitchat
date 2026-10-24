@@ -520,6 +520,19 @@ struct SplitPaneState: Equatable {
         isBrowsing = false
     }
 
+    /// A person chose a DM from a list (a people popover's row, a message
+    /// list's "direct message"), the one already open included: it takes
+    /// the focus (E1), closes the popovers (E13) and ends browsing, as any
+    /// DM opening does. A DM opening that changes the selection does the
+    /// same through `conversationChanged`; this covers choosing the DM
+    /// that is open already, which changes nothing there. Never the
+    /// unfold's own reopening, which leaves E4's focus.
+    mutating func conversationChosen() {
+        focus = .trailing
+        popover = PeoplePopoverPolicy.pane(popover, after: .conversationOpened)
+        isBrowsing = false
+    }
+
     /// The selection changed while folded (E5): a location channel drops
     /// everything parked; #mesh, the fold's own selection included, keeps
     /// it.

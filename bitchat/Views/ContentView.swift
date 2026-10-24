@@ -673,6 +673,12 @@ struct ContentView: View {
         .onReceive(privateConversationModel.$selectedPeerID) { peer in
             conversationReported(peer)
         }
+        // A DM chosen from a list is a DM opening (E1) even when it is the
+        // one open already, which the selection doesn't report again.
+        .onReceive(privateConversationModel.conversationChosen) { _ in
+            guard isSplitLayout else { return }
+            changePanes { panes.conversationChosen() }
+        }
         // Typing counts as a touch in its composer's pane (E1): keystrokes
         // land in the keyboard's window, which the touch observer never
         // sees. Received in a leaf, so the root observes no session.
