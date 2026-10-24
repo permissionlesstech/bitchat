@@ -183,6 +183,13 @@ final class PrivateConversationModel: ObservableObject {
         chatViewModel.markPrivateMessagesAsRead(from: peerID)
     }
 
+    /// Clears the unread badge for the selected conversation without sending
+    /// read receipts — for when new messages arrive while the thread is open.
+    func clearUnreadForSelectedConversation() {
+        guard let peerID = selectedPeerID else { return }
+        chatViewModel.markPrivateChatRead(peerID)
+    }
+
     private func bind() {
         conversations.$selectedPrivatePeerID
             .receive(on: DispatchQueue.main)

@@ -86,6 +86,52 @@ struct ChatUnreadStateResolverTests {
     }
 
     @Test
+    func matchingUnreadPeerIDsIncludesStableNoiseKeyAlias() {
+        let peerID = PeerID(str: "ephemeral")
+        let stableID = PeerID(str: "stable")
+        let context = ChatUnreadPeerContext(
+            peerID: peerID,
+            noiseKeyPeerID: stableID,
+            nostrPeerID: nil,
+            nickname: nil
+        )
+
+        #expect(ChatUnreadStateResolver.matchingUnreadPeerIDs(
+            for: context,
+            unreadPrivateMessages: [stableID],
+            privateChats: [:]
+        ) == [stableID])
+    }
+
+    @Test
+    func matchingUnreadPeerIDsIncludesGeoDMAlias() {
+        let peerID = PeerID(str: "mesh-peer")
+        let geoDM = PeerID(nostr_: "0123456789abcdef")
+        let context = ChatUnreadPeerContext(
+            peerID: peerID,
+            noiseKeyPeerID: nil,
+            nostrPeerID: nil,
+            nickname: "Alice"
+        )
+        let message = BitchatMessage(
+            sender: "alice",
+            content: "hi",
+            timestamp: Date(timeIntervalSince1970: 1),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: true,
+            recipientNickname: "me",
+            senderPeerID: geoDM
+        )
+
+        #expect(ChatUnreadStateResolver.matchingUnreadPeerIDs(
+            for: context,
+            unreadPrivateMessages: [geoDM],
+            privateChats: [geoDM: [message]]
+        ) == [geoDM])
+    }
+
+    @Test
     func unmatchedUnreadStateReturnsFalse() {
         let peerID = PeerID(str: "mesh-peer")
         let geoDM = PeerID(nostr_: "0123456789abcdef")
