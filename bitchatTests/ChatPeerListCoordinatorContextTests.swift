@@ -53,13 +53,11 @@ private final class MockChatPeerListContext: ChatPeerListContext {
     var connectedMeshPeers: Set<PeerID> = []
     var reachableMeshPeers: Set<PeerID> = []
     var activeMeshPeerCountValue = 0
-    private(set) var registeredEphemeralSessions: [PeerID] = []
     private(set) var updateEncryptionStatusForPeersCount = 0
 
     func isPeerConnected(_ peerID: PeerID) -> Bool { connectedMeshPeers.contains(peerID) }
     func isPeerReachable(_ peerID: PeerID) -> Bool { reachableMeshPeers.contains(peerID) }
     func activeMeshPeerCount() -> Int { activeMeshPeerCountValue }
-    func registerEphemeralSession(peerID: PeerID) { registeredEphemeralSessions.append(peerID) }
     func updateEncryptionStatusForPeers() { updateEncryptionStatusForPeersCount += 1 }
 
     // Notifications
@@ -113,32 +111,29 @@ struct ChatPeerListCoordinatorContextTests {
         coordinator.didUpdatePeerListSynchronously([peerID])
 
         #expect(context.isConnected)
-        #expect(context.registeredEphemeralSessions == [peerID])
         #expect(context.updateEncryptionStatusForPeersCount == 1)
         #expect(context.cleanupOldReadReceiptsCount == 1)
     }
 
     @Test @MainActor
-    func didUpdatePeerList_updatesConnectionSessionsAndEncryptionStatus() async {
+    func didUpdatePeerList_updatesConnectionAndEncryptionStatus() async {
         let context = MockChatPeerListContext()
         let coordinator = ChatPeerListCoordinator(context: context)
         let peerA = PeerID(str: "0011223344556677")
         let peerB = PeerID(str: "8899aabbccddeeff")
         context.isConnected = true
 
-        // Empty list: disconnected, read-receipt hygiene still runs, no sessions.
+        // Empty list: disconnected, read-receipt hygiene still runs.
         coordinator.didUpdatePeerList([])
         await drainMainActorTasks()
         #expect(!context.isConnected)
         #expect(context.cleanupOldReadReceiptsCount == 1)
-        #expect(context.registeredEphemeralSessions.isEmpty)
         #expect(context.updateEncryptionStatusForPeersCount == 1)
 
-        // Non-empty list: connected, every peer gets an ephemeral session.
+        // Non-empty list: connected.
         coordinator.didUpdatePeerList([peerA, peerB])
         await drainMainActorTasks()
         #expect(context.isConnected)
-        #expect(context.registeredEphemeralSessions == [peerA, peerB])
         #expect(context.updateEncryptionStatusForPeersCount == 2)
         #expect(context.cleanupOldReadReceiptsCount == 2)
     }

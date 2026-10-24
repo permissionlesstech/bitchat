@@ -30,7 +30,6 @@ protocol ChatPeerListContext: AnyObject {
     /// Number of mesh peers currently connected or reachable, from the
     /// transport's live peer snapshots.
     func activeMeshPeerCount() -> Int
-    func registerEphemeralSession(peerID: PeerID)
     func updateEncryptionStatusForPeers()
 
     // MARK: Notifications
@@ -46,11 +45,10 @@ extension ChatViewModel: ChatPeerListContext {
     // `isConnected`, `privateMessages(for:)`, `unreadPrivateMessages`,
     // `hasTrackedPrivateChatSelection`, `updatePrivateChatPeerIfNeeded()`,
     // `cleanupOldReadReceipts()`, `unifiedPeers`, `isPeerConnected(_:)`,
-    // `isPeerReachable(_:)`, `registerEphemeralSession(peerID:)`, and
-    // `updateEncryptionStatusForPeers()` are shared requirements with the
-    // other contexts or satisfied by existing `ChatViewModel` members. The
-    // member below flattens the nested transport access into an intent-named
-    // call.
+    // `isPeerReachable(_:)`, and `updateEncryptionStatusForPeers()` are
+    // shared requirements with the other contexts or satisfied by existing
+    // `ChatViewModel` members. The member below flattens the nested
+    // transport access into an intent-named call.
 
     func activeMeshPeerCount() -> Int {
         meshService
@@ -120,10 +118,6 @@ private extension ChatPeerListCoordinator {
         }
 
         handleNetworkAvailability(meshPeers)
-
-        for peerID in peers {
-            context.registerEphemeralSession(peerID: peerID)
-        }
 
         context.updateEncryptionStatusForPeers()
 
