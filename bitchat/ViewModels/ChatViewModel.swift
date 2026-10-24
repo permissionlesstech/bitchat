@@ -462,6 +462,28 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         return scratch
     }
 
+    /// The daily sightings tally the peer-list handler feeds and the panic
+    /// wipe clears. Always `MeshSightingsTracker.shared` in production —
+    /// the instance `MeshEmptyStateView` observes.
+    let meshSightings: MeshSightingsTracker
+
+    /// Default sightings tracker. Production uses `.shared`. Under test,
+    /// view models share one tracker on a scratch suite (emptied once per
+    /// process), so tests never write `UserDefaults.standard` and leave no
+    /// per-instance plist behind. Tests that assert on the tally inject
+    /// their own tracker.
+    private static func defaultMeshSightings() -> MeshSightingsTracker {
+        guard TestEnvironment.isRunningTests else { return .shared }
+        return testMeshSightings
+    }
+
+    private static let testMeshSightings: MeshSightingsTracker = {
+        let suiteName = "chat.bitchat.tests.meshSightings"
+        guard let scratch = UserDefaults(suiteName: suiteName) else { return .shared }
+        scratch.removePersistentDomain(forName: suiteName)
+        return MeshSightingsTracker(defaults: scratch)
+    }()
+
     // Track sent read receipts to avoid duplicates (persisted across launches)
     // Note: Persistence happens automatically in didSet, no lifecycle observers needed
     var sentReadReceipts: Set<String> = [] {  // messageID set
@@ -1159,6 +1181,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         locationPresenceStore: LocationPresenceStore? = nil,
         locationManager: LocationChannelManager = .shared,
         readReceiptsDefaults: UserDefaults? = nil,
+        meshSightings: MeshSightingsTracker? = nil,
         outboxStore: MessageOutboxStore? = nil,
         sfMetrics: StoreAndForwardMetrics? = nil,
         panicMediaWipe: (() throws -> Void)? = nil,
@@ -1198,6 +1221,15 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         self.publicMessagePipeline = services.publicMessagePipeline
         let readReceiptsDefaults = readReceiptsDefaults ?? Self.defaultReadReceiptsDefaults()
         self.readReceiptsDefaults = readReceiptsDefaults
+        let meshSightings = meshSightings ?? Self.defaultMeshSightings()
+        // A second production instance would split the tally from the one
+        // the empty mesh timeline shows, and a panic wipe would leave the
+        // other holding today's peer IDs and salt.
+        assert(
+            TestEnvironment.isRunningTests || meshSightings === MeshSightingsTracker.shared,
+            "Production must feed MeshSightingsTracker.shared"
+        )
+        self.meshSightings = meshSightings
         self.sentReadReceipts = ChatViewModelBootstrapper.loadPersistedReadReceipts(userDefaults: readReceiptsDefaults)
 
         // Republish on every store change so SwiftUI observers of the
@@ -1645,7 +1677,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         // Ambient-liveliness bookkeeping: sampled nearby-chat previews, the
         // daily sightings tally, and the echoes-dismissed watermark
         GeohashChatActivityTracker.shared.clear()
-        MeshSightingsTracker.shared.clear()
+        meshSightings.clear()
         MeshEchoSettings.reset()
         NotificationPrivacySettings.reset()
         ComposerDraftStore.reset()

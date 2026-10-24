@@ -178,6 +178,7 @@ final class PeerListPerfFixture {
 
     let viewModel: ChatViewModel
     let transport: MockTransport
+    let tracker: MeshSightingsTracker
     let peerIDs: [PeerID]
     let peerListModel: PeerListModel
     let privateConversationModel: PrivateConversationModel
@@ -202,6 +203,7 @@ final class PeerListPerfFixture {
         let defaults = UserDefaults(suiteName: suiteName) ?? .standard
         defaults.removePersistentDomain(forName: suiteName)
         transport = MockTransport()
+        tracker = MeshSightingsTracker(defaults: defaults)
         let locationManager = LocationChannelManager(storage: defaults)
         viewModel = ChatViewModel(
             keychain: keychain,
@@ -210,7 +212,8 @@ final class PeerListPerfFixture {
             transport: transport,
             conversations: ConversationStore(),
             locationManager: locationManager,
-            readReceiptsDefaults: defaults
+            readReceiptsDefaults: defaults,
+            meshSightings: tracker
         )
         Self.drainMainQueue()
 
@@ -285,6 +288,7 @@ final class PeerListPerfFixture {
 
         // Sanity: the benchmark must exercise the busy-mesh state it claims.
         XCTAssertEqual(Set(peerIDs).count, peers)
+        XCTAssertEqual(tracker.todayCount, peers)
         XCTAssertEqual(viewModel.allPeers.count, peers)
         XCTAssertEqual(viewModel.connectedPeers.count, Self.connectedPeers)
         XCTAssertEqual(peerListModel.meshRows.count, peers)

@@ -269,6 +269,28 @@ struct ChatPeerListCoordinatorContextTests {
     }
 
     @Test @MainActor
+    func didUpdatePeerList_recordsPresentMeshPeersAndAnEmptyBatchWhenNobodyIsInRange() async {
+        let context = MockChatPeerListContext()
+        let coordinator = ChatPeerListCoordinator(context: context)
+        let peerA = PeerID(str: "0011223344556677")
+        let peerB = PeerID(str: "8899aabbccddeeff")
+        context.connectedMeshPeers = [peerA]
+
+        // Only mesh-active peers are sightings; the tally gets the full
+        // present set each time.
+        coordinator.didUpdatePeerList([peerA, peerB])
+        await drainMainActorTasks()
+
+        // Nobody in range: an empty batch lets the tally drop the peer IDs
+        // it holds for present peers.
+        context.connectedMeshPeers = []
+        coordinator.didUpdatePeerList([])
+        await drainMainActorTasks()
+
+        #expect(context.recordedSightings == [[peerA], []])
+    }
+
+    @Test @MainActor
     func didUpdatePeerList_meshInactivePeersNeverNotify() async {
         let context = MockChatPeerListContext()
         let coordinator = ChatPeerListCoordinator(context: context)
