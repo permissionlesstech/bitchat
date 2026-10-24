@@ -2603,16 +2603,23 @@ struct ViewSmokeTests {
         conversations.openConversation(for: blocked, from: .mesh)
 
         #expect(conversations.selectedPeerID == nil)
-        let refusal = lines(.mesh).dropFirst(meshBefore.count)
+        let refusal = Array(lines(.mesh).dropFirst(meshBefore.count))
         #expect(refusal.count == 1)
-        #expect(refusal.first?.contains("Mallory") == true, "\(Array(refusal))")
         #expect(lines(geohash) == geohashBefore)
 
         let group = PeerID(groupID: Data(repeating: 0x42, count: 16))
         conversations.openConversation(for: blocked, from: ConversationTarget(channel: geohash, privatePeer: group))
-        #expect(viewModel.privateMessages(for: group).contains { $0.content.contains("Mallory") })
+        let groupLines = viewModel.privateMessages(for: group).map(\.content)
         #expect(lines(geohash) == geohashBefore)
         #expect(conversations.selectedPeerID == nil)
+
+        // Each is the refusal the selection gets when no list asks: the same
+        // line, whatever the string table holds (SwiftPM's run has none).
+        viewModel.startPrivateChat(with: blocked)
+        let selectionRefusal = Array(lines(geohash).dropFirst(geohashBefore.count))
+        #expect(selectionRefusal.count == 1)
+        #expect(refusal == selectionRefusal)
+        #expect(groupLines == selectionRefusal)
     }
 
     /// I1: /msg to a blocked peer typed into the #mesh composer posts the
@@ -2650,9 +2657,16 @@ struct ViewSmokeTests {
         #expect(viewModel.selectedPrivateChatPeer == nil)
         #expect(lines(geohash) == geohashBefore, "\(lines(geohash).dropFirst(geohashBefore.count))")
         // The refusal, then the command's own line (its wording unchanged).
-        let meshLines = lines(.mesh).dropFirst(meshBefore.count)
-        #expect(meshLines.count == 2, "\(Array(meshLines))")
-        #expect(meshLines.allSatisfy { $0.contains("Mallory") }, "\(Array(meshLines))")
+        let meshLines = Array(lines(.mesh).dropFirst(meshBefore.count))
+        #expect(meshLines.count == 2, "\(meshLines)")
+
+        // The first is the refusal the selection gets when no command asks:
+        // the same line, whatever the string table holds (SwiftPM's run has
+        // none).
+        viewModel.startPrivateChat(with: blocked)
+        let selectionRefusal = Array(lines(geohash).dropFirst(geohashBefore.count))
+        #expect(selectionRefusal.count == 1)
+        #expect(meshLines.first == selectionRefusal.first)
     }
 
     @Test
