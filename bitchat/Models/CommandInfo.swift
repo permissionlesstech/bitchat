@@ -19,6 +19,7 @@ enum CommandInfo: String, Identifiable {
     case group
     case help
     case hug
+    case list
     case message = "msg"
     case slap
     case pay
@@ -40,6 +41,8 @@ enum CommandInfo: String, Identifiable {
             return "<" + String(localized: "content.input.nickname_placeholder") + ">"
         case .group:
             return "<" + String(localized: "content.input.group_placeholder") + ">"
+        case .list:
+            return "<" + String(localized: "content.input.list_placeholder") + ">"
         case .pay:
             return "<" + String(localized: "content.input.token_placeholder") + ">"
         case .drop:
@@ -56,6 +59,7 @@ enum CommandInfo: String, Identifiable {
         case .group:        String(localized: "content.commands.group")
         case .help:         String(localized: "content.commands.help")
         case .hug:          String(localized: "content.commands.hug")
+        case .list:         String(localized: "content.commands.list")
         case .message:      String(localized: "content.commands.message")
         case .pay:          String(localized: "content.commands.pay")
         case .slap:         String(localized: "content.commands.slap")
@@ -69,7 +73,7 @@ enum CommandInfo: String, Identifiable {
         }
     }
 
-    static func all(isGeoPublic: Bool, isGeoDM: Bool) -> [CommandInfo] {
+    static func all(isGeoPublic: Bool, isGeoDM: Bool, isGroupChat: Bool = false) -> [CommandInfo] {
         var commands: [CommandInfo] = [.block, .unblock, .clear, .drop, .help, .hug, .message, .slap, .who]
         // Cashu tokens are bearer instruments: in a public geohash any nearby
         // stranger can redeem one, so don't *suggest* /pay there (the
@@ -78,11 +82,18 @@ enum CommandInfo: String, Identifiable {
         if !isGeoPublic {
             commands.append(.pay)
         }
+        // /list edits the open group's shared checklist; elsewhere it only
+        // errors, so it's suggested inside group chats alone, whatever the
+        // public channel is.
+        if isGroupChat {
+            commands.append(.list)
+        }
         // The processor rejects favorites, groups, and mesh diagnostics in
         // geohash contexts, so only suggest them where they work: mesh.
         if isGeoPublic || isGeoDM {
             return commands
         }
-        return commands + [.favorite, .unfavorite, .ping, .trace, .group]
+        commands += [.favorite, .unfavorite, .ping, .trace, .group]
+        return commands
     }
 }
