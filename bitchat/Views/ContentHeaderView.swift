@@ -22,6 +22,30 @@ struct ContentHeaderView: View {
     /// reaches into the bar from each side (TopCornerClearance).
     var leadingCornerReach: CGFloat = 0
     var trailingCornerReach: CGFloat = 0
+    /// The channel of the pane this bar heads in the split layout. Nil
+    /// follows the selection (the single column, macOS).
+    var paneChannel: ChannelID? = nil
+    /// Whether this bar carries the app-wide chrome: the logo, nickname,
+    /// app-wide indicators and notices pin, and the app-wide presentations
+    /// (location channels, notices, QR, the screenshot alert). Exactly one
+    /// mounted bar may, or two would race to present the same sheet; in the
+    /// split layout the trailing bar doesn't.
+    var carriesAppChrome = true
+    /// Replaces the people button's sheet toggle (split layout: the pane's
+    /// people popover).
+    var onPeopleTap: (() -> Void)? = nil
+    /// Replaces the badge's location-channels sheet (split layout, trailing:
+    /// the inline picker).
+    var onBadgeTap: (() -> Void)? = nil
+    /// Holds back the app-wide alert this bar hosts (the screenshot
+    /// warning) while the root presents something over the layout (the
+    /// split layout's people popover, or its legacy-media consent dialog
+    /// once it shows): presenting it then would fail and leave its flag,
+    /// which root alerts wait on, set for good. It shows once that closes.
+    /// Asked each time rather than passed as a value: SwiftUI also runs
+    /// the bindings of earlier renders, and a value they captured would be
+    /// stale.
+    var defersAlerts: () -> Bool = { false }
 
     /// Courier envelopes this device is carrying for offline third parties.
     @State private var carriedMailCount = 0
@@ -44,80 +68,24 @@ struct ContentHeaderView: View {
         theme.usesGlassChrome ? 20 : 12
     }
 
+    /// The channel this bar shows: its pane's, or the selection. Every
+    /// channel-dependent part of the bar reads this, except the notices pin:
+    /// app chrome, it keeps the single column's scope (the mesh plus the
+    /// selection).
+    private var channel: ChannelID {
+        paneChannel ?? locationChannelsModel.selectedChannel
+    }
+
     /// The bridged-people count belongs to the mesh channel only.
     private var showBridgedPeerCount: Bool {
-        if case .location = locationChannelsModel.selectedChannel { return false }
+        if case .location = channel { return false }
         return bridgeService.bridgedPeerCount > 0
     }
 
     var body: some View {
         HStack(spacing: 0) {
-            Text(verbatim: "bitchat/")
-                .bitchatFont(size: 18, weight: .medium)
-                .lineLimit(1)
-                .foregroundColor(palette.primary)
-                // When icons crowd the header, squeeze the nickname first
-                // (priority 0) and the logo only as a last resort; the icon
-                // cluster at priority 3 never gives up width.
-                .layoutPriority(2)
-                .onTapGesture(count: 3) {
-                    // Confirm before destroying: the same logo is the single-tap
-                    // App Info entry point and sits beside the nickname field, so
-                    // a fumbled tap must never be able to wipe the device. The
-                    // dialog matches the Settings-pane panic button; under duress
-                    // it costs one extra tap.
-                    appChromeModel.requestPanicWipe()
-                }
-                .onTapGesture(count: 1) {
-                    appChromeModel.presentAppInfo()
-                }
-                // The confirmation dialog itself is hosted on ContentView
-                // (next to the failed-wipe banner), not on this Text: a host
-                // that can be covered or removed could take the pending
-                // dialog down with it.
-                // This is the only entry point to App Info, but it reads as
-                // static text; surface the tap. (The triple-tap panic wipe
-                // stays undiscoverable on purpose — it's destructive.)
-                .accessibilityAddTraits(.isButton)
-                .accessibilityHint(
-                    String(localized: "content.accessibility.app_info_hint", comment: "Accessibility hint on the bitchat/ logo explaining a tap opens app info")
-                )
-                .accessibilityAction {
-                    appChromeModel.presentAppInfo()
-                }
-
-            HStack(spacing: 0) {
-                Text(verbatim: "@")
-                    .bitchatFont(size: 14)
-                    .foregroundColor(palette.secondary)
-                    // Keep the sigil whole while the field beside it shrinks.
-                    .fixedSize()
-
-                TextField(
-                    "content.input.nickname_placeholder",
-                    text: Binding(
-                        get: { appChromeModel.nickname },
-                        set: { appChromeModel.setNickname($0) }
-                    )
-                )
-                .textFieldStyle(.plain)
-                .bitchatFont(size: 14)
-                .frame(maxWidth: 80)
-                .foregroundColor(palette.primary)
-                .focused(isNicknameFieldFocused)
-                .autocorrectionDisabled(true)
-                #if os(iOS)
-                .textInputAutocapitalization(.never)
-                #endif
-                .modifier(FocusEffectDisabledModifier())
-                .onChange(of: isNicknameFieldFocused.wrappedValue) { isFocused in
-                    if !isFocused {
-                        appChromeModel.validateAndSaveNickname()
-                    }
-                }
-                .onSubmit {
-                    appChromeModel.validateAndSaveNickname()
-                }
+            if carriesAppChrome {
+                appIdentity
             }
 
             Spacer()
@@ -125,7 +93,7 @@ struct ContentHeaderView: View {
             let countAndColor = channelPeopleCountAndColor()
             let headerCountColor = countAndColor.1
             let headerOtherPeersCount: Int = {
-                if case .location = locationChannelsModel.selectedChannel {
+                if case .location = channel {
                     return peerListModel.visibleGeohashPeerCount
                 }
                 // One number for the whole room: radio-reachable peers plus
@@ -135,96 +103,13 @@ struct ContentHeaderView: View {
             }()
 
             HStack(spacing: 2) {
-                if locationChannelsModel.gatewayEnabled {
-                    // The gateway toggle lives in the App Info settings pane
-                    // now, so the indicator deep-links there.
-                    Button(action: { appChromeModel.presentAppInfo() }) {
-                        Image(systemName: "globe")
-                            .font(.bitchatSystem(size: 12))
-                            .foregroundColor(palette.secondary.opacity(0.8))
-                            .headerTapTarget()
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(
-                        String(localized: "content.accessibility.gateway_active", defaultValue: "Internet gateway active, sharing your connection with the mesh", comment: "Accessibility label for the internet gateway indicator")
-                    )
-                    .accessibilityHint(
-                        String(localized: "content.accessibility.gateway_settings_hint", defaultValue: "Opens settings to turn the gateway on or off", comment: "Accessibility hint for the internet gateway indicator explaining a tap opens the settings sheet")
-                    )
-                    .help(
-                        String(localized: "content.header.gateway_active", defaultValue: "Sharing your internet connection with nearby mesh peers", comment: "Tooltip for the internet gateway indicator")
-                    )
+                if carriesAppChrome {
+                    appIndicators
                 }
 
-                if carriedMailCount > 0 {
-                    Image(systemName: "figure.walk")
-                        .font(.bitchatSystem(size: 12))
-                        .foregroundColor(palette.secondary.opacity(0.8))
-                        .headerTapTarget()
-                        .accessibilityLabel(
-                            String(
-                                format: String(localized: "content.accessibility.carrying_mail", defaultValue: "Carrying %lld sealed messages for friends", comment: "Accessibility label for the courier mail indicator"),
-                                locale: .current,
-                                carriedMailCount
-                            )
-                        )
-                        .help(
-                            String(localized: "content.header.carrying_mail", defaultValue: "Carrying sealed messages for friends to deliver", comment: "Tooltip for the courier mail indicator")
-                        )
-                }
-
-                if appChromeModel.hasUnreadPrivateMessages {
-                    Button(action: { appChromeModel.openMostRelevantPrivateChat() }) {
-                        Image(systemName: "envelope.fill")
-                            .font(.bitchatSystem(size: 12))
-                            .foregroundColor(Color.orange)
-                            .headerTapTarget()
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(
-                        String(localized: "content.accessibility.open_unread_private_chat", comment: "Accessibility label for the unread private chat button")
-                    )
-                }
-
-                Button(action: {
-                    var scopes: Set<String> = [""]
-                    if let geoScope = noticesGeoScope {
-                        scopes.insert(geoScope)
-                    }
-                    boardAlertsModel.markSeen(forScopes: scopes)
-                    appChromeModel.presentNotices()
-                }) {
-                    // Filled whenever the current scope has notices at all
-                    // (matching the orange tint); hollow means nothing here.
-                    Image(systemName: scopeHasNotices || unseenNoticesCount > 0 ? "pin.fill" : "pin")
-                        .font(.bitchatSystem(size: 12))
-                        .foregroundColor(
-                            scopeHasNotices || unseenNoticesCount > 0
-                                ? Color.orange.opacity(0.8)
-                                : palette.secondary.opacity(0.9)
-                        )
-                        .headerTapTarget()
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(
-                    String(localized: "content.accessibility.notices", defaultValue: "Notices", comment: "Accessibility label for the notices button")
-                )
-                .accessibilityValue(
-                    unseenNoticesCount > 0
-                        ? String(
-                            format: String(localized: "content.accessibility.notices_new", defaultValue: "%lld new", comment: "Accessibility value for the notices button when unseen pins arrived"),
-                            locale: .current,
-                            unseenNoticesCount
-                        )
-                        : ""
-                )
-                .help(
-                    String(localized: "content.header.notices", defaultValue: "Notices: pinned posts for this area and the mesh", comment: "Tooltip for the notices button")
-                )
-
-                if case .location(let channel) = locationChannelsModel.selectedChannel {
-                    Button(action: { locationChannelsModel.toggleBookmark(channel.geohash) }) {
-                        Image(systemName: locationChannelsModel.isBookmarked(channel.geohash) ? "bookmark.fill" : "bookmark")
+                if case .location(let location) = channel {
+                    Button(action: { locationChannelsModel.toggleBookmark(location.geohash) }) {
+                        Image(systemName: locationChannelsModel.isBookmarked(location.geohash) ? "bookmark.fill" : "bookmark")
                             .font(.bitchatSystem(size: 12))
                             .headerTapTarget()
                     }
@@ -233,11 +118,11 @@ struct ContentHeaderView: View {
                         String(
                             format: String(localized: "content.accessibility.toggle_bookmark", comment: "Accessibility label for toggling a geohash bookmark"),
                             locale: .current,
-                            channel.geohash
+                            location.geohash
                         )
                     )
 
-                    Button(action: { requestHeaderShare(forGeohash: channel.geohash) }) {
+                    Button(action: { requestHeaderShare(forGeohash: location.geohash) }) {
                         Image(systemName: "square.and.arrow.up")
                             .font(.bitchatSystem(size: 12))
                             .headerTapTarget()
@@ -248,40 +133,15 @@ struct ContentHeaderView: View {
                     )
                 }
 
-                Button(action: { appChromeModel.isLocationChannelsSheetPresented = true }) {
-                    let badgeText: String = {
-                        switch locationChannelsModel.selectedChannel {
-                        case .mesh: return "#mesh"
-                        case .location(let channel): return "#\(channel.geohash)"
-                        }
-                    }()
-                    let badgeColor: Color = {
-                        switch locationChannelsModel.selectedChannel {
-                        case .mesh:
-                            return Color(hue: 0.60, saturation: 0.85, brightness: 0.82)
-                        case .location:
-                            return palette.locationAccent
-                        }
-                    }()
-
-                    Text(badgeText)
-                        .bitchatFont(size: 14)
-                        .foregroundColor(badgeColor)
-                        .lineLimit(headerLineLimit)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .layoutPriority(2)
-                        .padding(.horizontal, 6)
-                        .frame(maxHeight: .infinity)
-                        .contentShape(Rectangle())
-                        .accessibilityLabel(
-                            String(localized: "content.accessibility.location_channels", comment: "Accessibility label for the location channels button")
-                        )
-                }
-                .buttonStyle(.plain)
+                channelBadge
 
                 Button(action: {
-                    withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                        showSidebar.toggle()
+                    if let onPeopleTap {
+                        onPeopleTap()
+                    } else {
+                        withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                            showSidebar.toggle()
+                        }
                     }
                 }) {
                     HStack(spacing: 4) {
@@ -324,7 +184,7 @@ struct ContentHeaderView: View {
                 )
             }
             .layoutPriority(3)
-            .sheet(isPresented: $showVerifySheet) {
+            .sheet(isPresented: hosted($showVerifySheet)) {
                 VerificationSheetView(isPresented: $showVerifySheet)
                     .environmentObject(verificationModel)
             }
@@ -345,19 +205,23 @@ struct ContentHeaderView: View {
             forReach: trailingCornerReach,
             contentInset: cornerContentInset
         ))
+        // The mail indicator and the notices pin are app chrome; a bar
+        // without them has nothing to redraw for.
         .onReceive(CourierStore.shared.$carriedCount) { count in
+            guard carriesAppChrome else { return }
             carriedMailCount = count
         }
         .onReceive(BoardStore.shared.$postsSnapshot) { posts in
+            guard carriesAppChrome else { return }
             boardPosts = posts
         }
-        .sheet(isPresented: $appChromeModel.isLocationChannelsSheetPresented) {
+        .sheet(isPresented: hosted($appChromeModel.isLocationChannelsSheetPresented)) {
             LocationChannelsSheet(isPresented: $appChromeModel.isLocationChannelsSheetPresented)
                 .environmentObject(locationChannelsModel)
                 .environmentObject(peerListModel)
         }
         .sheet(
-            isPresented: $appChromeModel.isNoticesSheetPresented,
+            isPresented: hosted($appChromeModel.isNoticesSheetPresented),
             onDismiss: { appChromeModel.noticesSheetPrefersGeoTab = false }
         ) {
             NoticesView(
@@ -367,16 +231,21 @@ struct ContentHeaderView: View {
             )
             .environmentObject(locationChannelsModel)
         }
+        // The building cell scopes the notices pin on #mesh: one ask, from
+        // the bar that carries the pin.
         .onAppear {
+            guard carriesAppChrome else { return }
             locationChannelsModel.refreshMeshChannelsIfNeeded()
         }
         .onChange(of: locationChannelsModel.selectedChannel) { _ in
+            guard carriesAppChrome else { return }
             locationChannelsModel.refreshMeshChannelsIfNeeded()
         }
         .onChange(of: locationChannelsModel.permissionState) { _ in
+            guard carriesAppChrome else { return }
             locationChannelsModel.refreshMeshChannelsIfNeeded()
         }
-        .alert("content.alert.screenshot.title", isPresented: $appChromeModel.showScreenshotPrivacyWarning) {
+        .alert("content.alert.screenshot.title", isPresented: screenshotWarningBinding) {
             Button("common.ok", role: .cancel) {}
         } message: {
             Text("content.alert.screenshot.message")
@@ -404,6 +273,267 @@ struct ContentHeaderView: View {
         .themedChromePanel(edge: .top)
     }
 
+    /// The logo (App Info; a triple tap asks for the panic wipe) and the
+    /// nickname field.
+    @ViewBuilder
+    private var appIdentity: some View {
+        Text(verbatim: "bitchat/")
+            .bitchatFont(size: 18, weight: .medium)
+            .lineLimit(1)
+            .foregroundColor(palette.primary)
+            // When icons crowd the header, squeeze the nickname first
+            // (priority 0) and the logo only as a last resort; the icon
+            // cluster at priority 3 never gives up width.
+            .layoutPriority(2)
+            .onTapGesture(count: 3) {
+                // Confirm before destroying: the same logo is the single-tap
+                // App Info entry point and sits beside the nickname field, so
+                // a fumbled tap must never be able to wipe the device. The
+                // dialog matches the Settings-pane panic button; under duress
+                // it costs one extra tap.
+                appChromeModel.requestPanicWipe()
+            }
+            .onTapGesture(count: 1) {
+                appChromeModel.presentAppInfo()
+            }
+            // The confirmation dialog itself is hosted on ContentView
+            // (next to the failed-wipe banner), not on this Text: a host
+            // that can be covered or removed could take the pending
+            // dialog down with it.
+            // This is the only entry point to App Info, but it reads as
+            // static text; surface the tap. (The triple-tap panic wipe
+            // stays undiscoverable on purpose — it's destructive.)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint(
+                String(localized: "content.accessibility.app_info_hint", comment: "Accessibility hint on the bitchat/ logo explaining a tap opens app info")
+            )
+            .accessibilityAction {
+                appChromeModel.presentAppInfo()
+            }
+
+        HStack(spacing: 0) {
+            Text(verbatim: "@")
+                .bitchatFont(size: 14)
+                .foregroundColor(palette.secondary)
+                // Keep the sigil whole while the field beside it shrinks.
+                .fixedSize()
+
+            TextField(
+                "content.input.nickname_placeholder",
+                text: Binding(
+                    get: { appChromeModel.nickname },
+                    set: { appChromeModel.setNickname($0) }
+                )
+            )
+            .textFieldStyle(.plain)
+            .bitchatFont(size: 14)
+            .frame(maxWidth: 80)
+            .foregroundColor(palette.primary)
+            .focused(isNicknameFieldFocused)
+            .autocorrectionDisabled(true)
+            #if os(iOS)
+            .textInputAutocapitalization(.never)
+            #endif
+            .modifier(FocusEffectDisabledModifier())
+            .onChange(of: isNicknameFieldFocused.wrappedValue) { isFocused in
+                if !isFocused {
+                    appChromeModel.validateAndSaveNickname()
+                }
+            }
+            .onSubmit {
+                appChromeModel.validateAndSaveNickname()
+            }
+        }
+    }
+
+    /// App-wide state: the internet gateway, courier mail, unread DMs and
+    /// the notices pin.
+    @ViewBuilder
+    private var appIndicators: some View {
+        if locationChannelsModel.gatewayEnabled {
+            // The gateway toggle lives in the App Info settings pane
+            // now, so the indicator deep-links there.
+            Button(action: { appChromeModel.presentAppInfo() }) {
+                Image(systemName: "globe")
+                    .font(.bitchatSystem(size: 12))
+                    .foregroundColor(palette.secondary.opacity(0.8))
+                    .headerTapTarget()
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(
+                String(localized: "content.accessibility.gateway_active", defaultValue: "Internet gateway active, sharing your connection with the mesh", comment: "Accessibility label for the internet gateway indicator")
+            )
+            .accessibilityHint(
+                String(localized: "content.accessibility.gateway_settings_hint", defaultValue: "Opens settings to turn the gateway on or off", comment: "Accessibility hint for the internet gateway indicator explaining a tap opens the settings sheet")
+            )
+            .help(
+                String(localized: "content.header.gateway_active", defaultValue: "Sharing your internet connection with nearby mesh peers", comment: "Tooltip for the internet gateway indicator")
+            )
+        }
+
+        if carriedMailCount > 0 {
+            Image(systemName: "figure.walk")
+                .font(.bitchatSystem(size: 12))
+                .foregroundColor(palette.secondary.opacity(0.8))
+                .headerTapTarget()
+                .accessibilityLabel(
+                    String(
+                        format: String(localized: "content.accessibility.carrying_mail", defaultValue: "Carrying %lld sealed messages for friends", comment: "Accessibility label for the courier mail indicator"),
+                        locale: .current,
+                        carriedMailCount
+                    )
+                )
+                .help(
+                    String(localized: "content.header.carrying_mail", defaultValue: "Carrying sealed messages for friends to deliver", comment: "Tooltip for the courier mail indicator")
+                )
+        }
+
+        if appChromeModel.hasUnreadPrivateMessages {
+            Button(action: { appChromeModel.openMostRelevantPrivateChat() }) {
+                Image(systemName: "envelope.fill")
+                    .font(.bitchatSystem(size: 12))
+                    .foregroundColor(Color.orange)
+                    .headerTapTarget()
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(
+                String(localized: "content.accessibility.open_unread_private_chat", comment: "Accessibility label for the unread private chat button")
+            )
+        }
+
+        Button(action: {
+            var scopes: Set<String> = [""]
+            if let geoScope = noticesGeoScope {
+                scopes.insert(geoScope)
+            }
+            boardAlertsModel.markSeen(forScopes: scopes)
+            appChromeModel.presentNotices()
+        }) {
+            // Filled whenever the current scope has notices at all
+            // (matching the orange tint); hollow means nothing here.
+            Image(systemName: scopeHasNotices || unseenNoticesCount > 0 ? "pin.fill" : "pin")
+                .font(.bitchatSystem(size: 12))
+                .foregroundColor(
+                    scopeHasNotices || unseenNoticesCount > 0
+                        ? Color.orange.opacity(0.8)
+                        : palette.secondary.opacity(0.9)
+                )
+                .headerTapTarget()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            String(localized: "content.accessibility.notices", defaultValue: "Notices", comment: "Accessibility label for the notices button")
+        )
+        .accessibilityValue(
+            unseenNoticesCount > 0
+                ? String(
+                    format: String(localized: "content.accessibility.notices_new", defaultValue: "%lld new", comment: "Accessibility value for the notices button when unseen pins arrived"),
+                    locale: .current,
+                    unseenNoticesCount
+                )
+                : ""
+        )
+        .help(
+            String(localized: "content.header.notices", defaultValue: "Notices: pinned posts for this area and the mesh", comment: "Tooltip for the notices button")
+        )
+    }
+
+    /// The badge is a label rather than a button: a pane's bar with no badge
+    /// action of its own (split layout, leading: the pane is #mesh,
+    /// whatever the selection).
+    private var isBadgeStatic: Bool {
+        paneChannel != nil && onBadgeTap == nil
+    }
+
+    /// The channel's name. A button to the location channels (or the bar's
+    /// own `onBadgeTap`), or a label where the pane's channel is fixed.
+    @ViewBuilder
+    private var channelBadge: some View {
+        if isBadgeStatic {
+            badgeLabel
+        } else {
+            Button(action: {
+                if let onBadgeTap {
+                    onBadgeTap()
+                } else {
+                    appChromeModel.isLocationChannelsSheetPresented = true
+                }
+            }) {
+                badgeLabel
+                    .accessibilityLabel(
+                        String(localized: "content.accessibility.location_channels", comment: "Accessibility label for the location channels button")
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var badgeLabel: some View {
+        let badgeText: String = {
+            switch channel {
+            case .mesh: return "#mesh"
+            case .location(let location): return "#\(location.geohash)"
+            }
+        }()
+        let badgeColor: Color = {
+            switch channel {
+            case .mesh:
+                return Color(hue: 0.60, saturation: 0.85, brightness: 0.82)
+            case .location:
+                return palette.locationAccent
+            }
+        }()
+
+        return Text(badgeText)
+            .bitchatFont(size: 14)
+            .foregroundColor(badgeColor)
+            .lineLimit(headerLineLimit)
+            .fixedSize(horizontal: true, vertical: false)
+            .layoutPriority(2)
+            .padding(.horizontal, 6)
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+    }
+
+    /// An app-wide presentation's flag: bound on the bar that carries the
+    /// app chrome, never presenting from any other.
+    private func hosted(_ isPresented: Binding<Bool>) -> Binding<Bool> {
+        carriesAppChrome ? isPresented : .constant(false)
+    }
+
+    /// The screenshot warning, hosted like the sheets and held back while
+    /// `defersAlerts`.
+    ///
+    /// Only a dismissal clears the flag: the alert's OK, or a presentation
+    /// SwiftUI couldn't make (a flag left set would hold every root alert
+    /// back). Never while the warning is held back, when SwiftUI also writes
+    /// false as it takes it down, and from an earlier render's instance of
+    /// this binding too: the warning must come back once that closes. The
+    /// flag and the deferral are read live, never from this binding's
+    /// capture; a flag already clear isn't written again; and the write
+    /// waits a hop, as SwiftUI can call this inside a view update, where
+    /// publishing is undefined.
+    private var screenshotWarningBinding: Binding<Bool> {
+        Binding(
+            get: {
+                carriesAppChrome
+                    && appChromeModel.showScreenshotPrivacyWarning
+                    && !defersAlerts()
+            },
+            set: { isPresented in
+                guard !isPresented,
+                      carriesAppChrome,
+                      appChromeModel.showScreenshotPrivacyWarning,
+                      !defersAlerts() else {
+                    return
+                }
+                Task { @MainActor in
+                    appChromeModel.showScreenshotPrivacyWarning = false
+                }
+            }
+        )
+    }
+
     private func requestHeaderShare(forGeohash geohash: String) {
         if ChannelShare.shouldWarn(forGeohash: geohash) {
             pendingShareGeohash = geohash
@@ -427,6 +557,11 @@ private extension ContentHeaderView {
     var headerLineLimit: Int? {
         dynamicTypeSize.isAccessibilitySize ? 2 : 1
     }
+
+    // The notices pin is app chrome: one pin, on the bar that carries it,
+    // scoped as in the single column to the mesh plus the selected location
+    // channel (in the split layout, the trailing pane's), whatever the
+    // bar's own pane.
 
     /// Open the notices sheet on the tab matching the current channel: the
     /// geohash channel's notices, or the mesh-local board in mesh chat. An
@@ -465,10 +600,10 @@ private extension ContentHeaderView {
         return meshCount + geoCount
     }
 
-    /// Whether anyone is actually reachable on the current channel — the
+    /// Whether anyone is actually reachable on the bar's channel — the
     /// state the count icon's color encodes visually.
     var headerPeersReachable: Bool {
-        switch locationChannelsModel.selectedChannel {
+        switch channel {
         case .location:
             return peerListModel.visibleGeohashPeerCount > 0
         case .mesh:
@@ -477,7 +612,7 @@ private extension ContentHeaderView {
     }
 
     func channelPeopleCountAndColor() -> (Int, Color) {
-        switch locationChannelsModel.selectedChannel {
+        switch channel {
         case .location:
             let count = peerListModel.visibleGeohashPeerCount
             return (count, count > 0 ? palette.locationAccent : palette.secondary)

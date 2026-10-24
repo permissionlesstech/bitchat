@@ -34,6 +34,8 @@ protocol ChatPeerIdentityContext: AnyObject {
     /// Signals that message state changed so observers refresh (e.g. `objectWillChange.send()`).
     func notifyUIChanged()
     func addSystemMessage(_ content: String)
+    /// A local line in `target`'s conversation, selected or not.
+    func addSystemMessage(_ content: String, to target: ConversationTarget)
 
     // MARK: Private chat session lifecycle
     /// Merges messages stored under alternate peer-ID representations into `peerID`'s chat.
@@ -105,7 +107,8 @@ extension ChatViewModel: ChatPeerIdentityContext {
     // `privateChats`, `unreadPrivateMessages`, `selectedPrivateChatPeer`,
     // `selectedPrivateChatFingerprint`, `myPeerID`,
     // `activeChannel`, `connectedPeers`, `geoNicknames`, `notifyUIChanged()`,
-    // `addSystemMessage(_:)`, `peerNickname(for:)`, `meshPeerNicknames()`,
+    // `addSystemMessage(_:)`, `addSystemMessage(_:to:)`,
+    // `peerNickname(for:)`, `meshPeerNicknames()`,
     // `ephemeralPeerID(forNoiseKey:)`, `unifiedPeer(for:)`,
     // `registerNostrKeyMapping(_:for:)`, `visibleGeohashPeople()`,
     // `markPrivateMessagesAsRead(from:)`, `sendFavoriteNotificationViaNostr`,
@@ -318,8 +321,11 @@ final class ChatPeerIdentityCoordinator {
         context.markPrivateChatRead(currentPeerID)
     }
 
+    /// - Parameter origin: Where a refusal lands (a blocked peer's DM
+    ///   doesn't open): the conversation whose list or composer the person
+    ///   started it from. Nil: the selected channel.
     @MainActor
-    func startPrivateChat(with peerID: PeerID) {
+    func startPrivateChat(with peerID: PeerID, from origin: ConversationTarget? = nil) {
         guard peerID != context.myPeerID else { return }
 
         // Group chats are virtual conversations: no peer identity, favorites,
@@ -334,16 +340,19 @@ final class ChatPeerIdentityCoordinator {
         let peerNickname = context.peerNickname(for: peerID) ?? "unknown"
 
         if context.unifiedIsBlocked(peerID) {
-            context.addSystemMessage(
-                String(
-                    format: String(
-                        localized: "system.chat.blocked",
-                        comment: "System message when starting chat fails because peer is blocked"
-                    ),
-                    locale: .current,
-                    peerNickname
-                )
+            let refusal = String(
+                format: String(
+                    localized: "system.chat.blocked",
+                    comment: "System message when starting chat fails because peer is blocked"
+                ),
+                locale: .current,
+                peerNickname
             )
+            if let origin {
+                context.addSystemMessage(refusal, to: origin)
+            } else {
+                context.addSystemMessage(refusal)
+            }
             return
         }
 

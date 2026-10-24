@@ -310,7 +310,7 @@ struct VoiceCaptureSessionTests {
         #expect(viewModel.state == .requestingPermission)
         #expect(viewModel.isHoldInFlight)
 
-        viewModel.cancel()
+        viewModel.cancelAnyHold()
         #expect(!viewModel.isHoldInFlight)
 
         session.answerPrompt(granted: true)
@@ -344,7 +344,7 @@ struct VoiceCaptureSessionTests {
         #expect(viewModel.isStartDeferred)
         #expect(viewModel.isHoldInFlight)
 
-        viewModel.cancel()
+        viewModel.cancelAnyHold()
         #expect(!viewModel.isStartDeferred)
         #expect(!viewModel.isHoldInFlight)
         oldSession.resolveFinish(with: nil)
@@ -362,7 +362,7 @@ struct VoiceCaptureSessionTests {
         await waitUntil { session.isStarting }
         #expect(viewModel.state == .preparing)
 
-        viewModel.cancel()
+        viewModel.cancelAnyHold()
         session.failStart(with: VoiceRecorder.RecorderError.recordingInProgress)
         // Once by the cancel, once by the failed start just before it
         // decides whether to stand down.
@@ -406,7 +406,7 @@ struct VoiceCaptureSessionTests {
 
         viewModel.pressChanged(shouldShow: true)
         await waitUntil { self.isRecording(viewModel.state) }
-        viewModel.cancel()
+        viewModel.cancelAnyHold()
         await waitUntil { session.cancelCount == 1 }
 
         viewModel.pressChanged(shouldShow: true)
@@ -533,7 +533,7 @@ struct VoiceCaptureSessionTests {
         await waitUntil { self.isRecording(viewModel.state) }
         viewModel.pressReleased()
         // What the composer does a hop later, the hold still in flight.
-        viewModel.cancel()
+        viewModel.cancelAnyHold()
         await waitUntil { first.cancelCount == 1 }
 
         viewModel.pressChanged(shouldShow: true)

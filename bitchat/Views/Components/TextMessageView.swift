@@ -161,13 +161,8 @@ struct TextMessageView: View {
         idBridge: NostrIdentityBridge(),
         identityManager: SecureIdentityStateManager(keychain)
     )
-    let privateConversationModel = PrivateConversationModel(
-        chatViewModel: viewModel,
-        conversations: viewModel.conversations
-    )
     let conversationUIModel = ConversationUIModel(
         chatViewModel: viewModel,
-        privateConversationModel: privateConversationModel,
         conversations: viewModel.conversations
     )
     

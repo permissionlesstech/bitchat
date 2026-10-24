@@ -9,10 +9,10 @@
 #if os(iOS)
 import SwiftUI
 
-/// Column widths for regular width: the public timeline leading, the people
-/// list or open DM trailing, split at the hinge so neither column straddles
-/// the fold (iPhone Duo's inner display). Nil keeps the single column, with
-/// people and DMs in the sheet.
+/// Column widths for regular width: #mesh leading, and the open DM, the
+/// selected geohash or the location-channel picker trailing, split at the
+/// hinge so neither column straddles the fold (iPhone Duo's inner display).
+/// Nil keeps the single column, with people and DMs in the sheet.
 struct ContentSplitLayout: Equatable {
     /// The people and DM views were built for ~375pt sheets; narrower than
     /// this, either column gets cramped.

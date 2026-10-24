@@ -229,9 +229,18 @@ final class ChatMessageFormatter {
                     let matchText = String(content[swiftRange])
                     if type == "mention" {
                         let (mentionBase, mentionSuffix) = matchText.splitSuffix()
+                        // The name the sender knows me by, chosen by the
+                        // sender's kind: a geohash sender (geochat or geo DM)
+                        // knows my identity in the selected geohash, everyone
+                        // else my mesh peer ID. Never by the selection alone:
+                        // a #mesh row renders beside a selected geohash in the
+                        // split layout, and the formatted text is cached
+                        // whatever channel it was first drawn under.
                         let mySuffix: String? = {
-                            if case .location(let channel) = viewModel.activeChannel,
-                               let identity = try? viewModel.idBridge.deriveIdentity(forGeohash: channel.geohash) {
+                            if let senderPeerID = message.senderPeerID,
+                               senderPeerID.isGeoChat || senderPeerID.isGeoDM,
+                               case .location(let channel) = viewModel.activeChannel,
+                               let identity = viewModel.geohashIdentity(for: channel.geohash) {
                                 return String(identity.publicKeyHex.suffix(4))
                             }
                             return String(viewModel.meshService.myPeerID.id.prefix(4))

@@ -140,8 +140,16 @@ struct MeshEmptyStateView: View {
 }
 
 private extension MeshEmptyStateView {
+    /// Never the selected geohash: the split layout already shows it beside
+    /// the #mesh pane, and choosing it again would only resubscribe it. In
+    /// compact this view shows while #mesh is selected, so nothing is
+    /// excluded.
     var nearbyConversation: NearbyConversation? {
-        activityTracker.mostActiveConversation(among: locationChannelsModel.availableChannels)
+        let candidates = locationChannelsModel.availableChannels.filter { channel in
+            guard case .location(let selected) = locationChannelsModel.selectedChannel else { return true }
+            return selected.geohash != channel.geohash
+        }
+        return activityTracker.mostActiveConversation(among: candidates)
     }
 
     /// Tap-to-reveal: the nearby-notes counter never subscribes on its own —

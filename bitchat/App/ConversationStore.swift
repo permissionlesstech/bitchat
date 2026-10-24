@@ -348,6 +348,14 @@ final class ConversationStore: ObservableObject {
     @Published private(set) var activeChannel: ChannelID = .mesh
     @Published private(set) var selectedPrivatePeerID: PeerID?
 
+    #if os(iOS)
+    /// Whether the split layout keeps #mesh on screen in a pane of its own,
+    /// beside the pane that shows the active channel (or the channel picker
+    /// while #mesh is the active channel). Mutate via
+    /// `setMeshPinnedOnScreen(_:)` only.
+    @Published private(set) var isMeshPinnedOnScreen = false
+    #endif
+
     private(set) var conversationsByID: [ConversationID: Conversation] = [:]
 
     /// Store-level message-ID → conversation-membership map for ID-only
@@ -567,6 +575,30 @@ final class ConversationStore: ObservableObject {
             selectedPrivatePeerID = peerID
         }
         refreshDerivedSelection()
+    }
+
+    #if os(iOS)
+    /// Pins #mesh on screen while the split layout shows it beside the
+    /// active channel. Selection is untouched: `activeChannel` keeps meaning
+    /// the selected location channel (the other pane).
+    func setMeshPinnedOnScreen(_ pinned: Bool) {
+        if isMeshPinnedOnScreen != pinned {
+            isMeshPinnedOnScreen = pinned
+        }
+    }
+    #endif
+
+    /// Public timelines a person can see right now, whose arrivals are worth
+    /// batching and content-deduplicating: the active channel's (still true
+    /// while a private chat covers it) plus #mesh while the split layout pins
+    /// it on screen.
+    func isPublicConversationOnScreen(_ id: ConversationID) -> Bool {
+        if id == ConversationID(channelID: activeChannel) { return true }
+        #if os(iOS)
+        return isMeshPinnedOnScreen && id == .mesh
+        #else
+        return false
+        #endif
     }
 
     private func refreshDerivedSelection() {
@@ -965,10 +997,19 @@ extension ConversationStore {
     /// conversation contains it. Returns the removed message, if any.
     @discardableResult
     func removePublicMessage(withID messageID: String) -> BitchatMessage? {
+        removePublicMessageReportingConversation(withID: messageID)?.message
+    }
+
+    /// `removePublicMessage(withID:)` that also names the conversation the
+    /// message left, which scopes anything recorded for it there (its
+    /// content-window marker).
+    func removePublicMessageReportingConversation(
+        withID messageID: String
+    ) -> (message: BitchatMessage, conversationID: ConversationID)? {
         for id in conversationIDs(forMessageID: messageID) {
             switch id {
             case .mesh, .geohash:
-                return removeMessage(withID: messageID, from: id)
+                return removeMessage(withID: messageID, from: id).map { ($0, id) }
             case .direct:
                 continue
             }

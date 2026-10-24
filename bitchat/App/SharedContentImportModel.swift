@@ -54,6 +54,14 @@ struct SharedContentOffer: Identifiable, Sendable, Equatable {
 final class SharedContentImportModel: ObservableObject {
     @Published private(set) var offer: SharedContentOffer?
 
+    /// Where the composer a share would fill sends, asked each time a share
+    /// is labelled. The root installs it while it is on screen: the runtime
+    /// that looks for shares knows only the selection, which on the split
+    /// layout need not be that composer's conversation. Labelling from it
+    /// directly, rather than relabelling once the runtime has labelled, can't
+    /// lose a race with the runtime's next look.
+    var destinationProvider: (@MainActor () -> SharedContentDestination)?
+
     private let store: SharedContentStore?
 
     init(store: SharedContentStore?) {
@@ -70,7 +78,7 @@ final class SharedContentImportModel: ObservableObject {
             return nil
         }
 
-        let nextOffer = SharedContentOffer(payload: payload, destination: destination)
+        let nextOffer = SharedContentOffer(payload: payload, destination: destinationProvider?() ?? destination)
         if offer != nextOffer {
             offer = nextOffer
         }

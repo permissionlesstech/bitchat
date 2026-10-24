@@ -123,6 +123,16 @@ final class PrivateConversationModel: ObservableObject {
     @Published private(set) var selectedPeerID: PeerID?
     @Published private(set) var selectedHeaderState: PrivateConversationHeaderState?
 
+    #if os(iOS)
+    /// A person opened a DM from a list of people: a people popover's row,
+    /// or a message list's "direct message". The DM already open counts
+    /// too, though opening it again changes no selection: the split layout
+    /// takes each as a DM opening (E1), which the selection alone can't
+    /// tell it. Refused opens (a blocked peer's) and the layout's own
+    /// reopenings don't fire.
+    let conversationChosen = PassthroughSubject<Void, Never>()
+    #endif
+
     private let chatViewModel: ChatViewModel
     private let conversations: ConversationStore
     private let locationChannelsModel: LocationChannelsModel
@@ -153,21 +163,73 @@ final class PrivateConversationModel: ObservableObject {
         refreshSelectedConversation()
     }
 
-    func openConversation(for peerID: PeerID) {
+    /// Opens the DM with a message's sender, from a message list showing
+    /// `origin`: the list's own conversation (its DM, or its timeline's
+    /// channel). A refusal (a blocked peer's DM doesn't open) lands there,
+    /// not in whatever is selected: on the split layout that can be the
+    /// other pane's conversation. A geohash participant's DM opens as
+    /// before; only the selected geohash's list shows one, and the
+    /// selection is its own.
+    func openConversation(for peerID: PeerID, from origin: ConversationTarget) {
         if peerID.isGeoChat {
             guard let full = chatViewModel.fullNostrHex(forSenderPeerID: peerID) else { return }
             chatViewModel.startGeohashDM(withPubkeyHex: full)
+            refreshSelectedConversation()
+            #if os(iOS)
+            reportChoice(of: PeerID(nostr_: full))
+            #endif
         } else {
-            chatViewModel.startPrivateChat(with: peerID)
+            chatViewModel.startPrivateChat(with: peerID, from: origin)
+            refreshSelectedConversation()
+            #if os(iOS)
+            reportChoice(of: peerID)
+            #endif
         }
-
-        refreshSelectedConversation()
     }
 
     func endConversation() {
         chatViewModel.endPrivateChat()
         refreshSelectedConversation()
     }
+
+    #if os(iOS)
+    /// Whether a DM a fold set aside can open again on unfold. While folded
+    /// a group can be left (or we removed from it) and a peer blocked;
+    /// reopening those would bring back an empty group chat where every
+    /// send fails, or post a refusal instead of a conversation.
+    func canReopenConversation(with peerID: PeerID) -> Bool {
+        if peerID.isGroup {
+            return chatViewModel.groupStore.group(for: peerID) != nil
+        }
+        return !chatViewModel.isPeerBlocked(peerID)
+    }
+
+    /// Whether two peer IDs name one DM: equal, or the same person across a
+    /// peer-ID handoff (the selection moving from a short mesh ID to the
+    /// Noise key's ID or to a new short ID). Compared the way drafts and
+    /// held mics are, so the split layout's panes treat a handoff as the
+    /// conversation they already show.
+    func isSameConversation(_ lhs: PeerID, _ rhs: PeerID) -> Bool {
+        chatViewModel.isSameDirectConversation(lhs, rhs)
+    }
+
+    /// Opens the DM with `peerID` from a list that lists `origin`'s people.
+    /// A refusal (a blocked peer's DM doesn't open) lands in `origin`, not
+    /// in whatever is selected: on the split layout that can be the other
+    /// pane's conversation.
+    func startConversation(with peerID: PeerID, from origin: ConversationTarget) {
+        chatViewModel.startPrivateChat(with: peerID, from: origin)
+        refreshSelectedConversation()
+        reportChoice(of: peerID)
+    }
+
+    /// A person's open of `peerID`'s DM went through: it is the one open
+    /// now (`conversationChosen`).
+    private func reportChoice(of peerID: PeerID) {
+        guard selectedPeerID == peerID else { return }
+        conversationChosen.send()
+    }
+    #endif
 
     func toggleFavorite(peerID: PeerID) {
         chatViewModel.toggleFavorite(peerID: peerID)

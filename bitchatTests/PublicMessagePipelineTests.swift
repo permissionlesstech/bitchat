@@ -26,8 +26,8 @@ private final class TestPipelineDelegate: PublicMessagePipelineDelegate {
         committed.filter { $0.conversationID == conversationID }.map(\.message)
     }
 
-    func pipeline(_: PublicMessagePipeline, normalizeContent content: String) -> String {
-        dedupService.normalizedContentKey(content)
+    func pipeline(_: PublicMessagePipeline, contentKeyFor content: String, in conversationID: ConversationID) -> String {
+        dedupService.contentKey(content, in: conversationID)
     }
 
     func pipeline(_: PublicMessagePipeline, contentTimestampForKey key: String) -> Date? {
@@ -92,6 +92,60 @@ struct PublicMessagePipelineTests {
         #expect(delegate.messages(in: .mesh).first?.content == "Same")
     }
 
+    /// The split layout shows #mesh beside a geohash: the same short text
+    /// arriving in both within the window is two messages, not a duplicate.
+    @Test @MainActor
+    func flush_sameContentInTwoConversationsWithinWindow_commitsBoth() async {
+        let pipeline = PublicMessagePipeline()
+        let delegate = TestPipelineDelegate()
+        pipeline.delegate = delegate
+
+        let now = Date()
+        pipeline.enqueue(makeMessage(id: "mesh-gm", content: "gm", timestamp: now), to: .mesh)
+        pipeline.enqueue(makeMessage(id: "geo-gm", content: "gm", timestamp: now.addingTimeInterval(0.2)), to: .geohash("u4pruydq"))
+        pipeline.flushIfNeeded()
+
+        #expect(delegate.messages(in: .mesh).map(\.id) == ["mesh-gm"])
+        #expect(delegate.messages(in: .geohash("u4pruydq")).map(\.id) == ["geo-gm"])
+    }
+
+    /// Within one conversation the window still holds, in a batch and
+    /// across flushes.
+    @Test @MainActor
+    func flush_sameContentTwiceInOneConversationWithinWindow_dedups() async {
+        let pipeline = PublicMessagePipeline()
+        let delegate = TestPipelineDelegate()
+        pipeline.delegate = delegate
+
+        let now = Date()
+        pipeline.enqueue(makeMessage(id: "gm-1", content: "gm", timestamp: now), to: .mesh)
+        pipeline.flushIfNeeded()
+        pipeline.enqueue(makeMessage(id: "gm-2", content: "GM", timestamp: now.addingTimeInterval(0.3)), to: .mesh)
+        pipeline.flushIfNeeded()
+
+        #expect(delegate.messages(in: .mesh).map(\.id) == ["gm-1"])
+    }
+
+    /// A marker committed for one conversation (e.g. the #mesh row of an
+    /// earlier flush) does not suppress the same text in another one.
+    @Test @MainActor
+    func flush_markerFromAnotherConversation_doesNotSuppressArrival() async {
+        let pipeline = PublicMessagePipeline()
+        let delegate = TestPipelineDelegate()
+        pipeline.delegate = delegate
+
+        let now = Date()
+        pipeline.enqueue(makeMessage(id: "mesh-wave", content: "👋", timestamp: now), to: .mesh)
+        pipeline.flushIfNeeded()
+        pipeline.enqueue(makeMessage(id: "geo-wave", content: "👋", timestamp: now.addingTimeInterval(0.5)), to: .geohash("u4pruydq"))
+        pipeline.flushIfNeeded()
+
+        #expect(delegate.messages(in: .mesh).map(\.id) == ["mesh-wave"])
+        #expect(delegate.messages(in: .geohash("u4pruydq")).map(\.id) == ["geo-wave"])
+        #expect(delegate.recordedContentKeys.count == 2)
+        #expect(Set(delegate.recordedContentKeys).count == 2)
+    }
+
     @Test @MainActor
     func flush_routesEachMessageToItsConversation() async {
         let pipeline = PublicMessagePipeline()
@@ -134,5 +188,29 @@ struct PublicMessagePipelineTests {
 
         #expect(delegate.committed.isEmpty)
         #expect(delegate.recordedContentKeys.isEmpty)
+    }
+
+    /// Panic: nothing buffered for either on-screen timeline survives to a
+    /// later flush, and the pipeline keeps working afterwards.
+    @Test @MainActor
+    func discardAll_dropsEveryBufferedMessage() {
+        let pipeline = PublicMessagePipeline()
+        let delegate = TestPipelineDelegate()
+        pipeline.delegate = delegate
+        let now = Date()
+
+        pipeline.enqueue(makeMessage(id: "mesh-1", content: "mesh hello", timestamp: now), to: .mesh)
+        pipeline.enqueue(makeMessage(id: "geo-1", content: "geo hello", timestamp: now), to: .geohash("u4pruydq"))
+        pipeline.discardAll()
+
+        #expect(!pipeline.containsMessage(withID: "mesh-1"))
+        #expect(!pipeline.containsMessage(withID: "geo-1"))
+        pipeline.flushIfNeeded()
+        #expect(delegate.committed.isEmpty)
+        #expect(delegate.recordedContentKeys.isEmpty)
+
+        pipeline.enqueue(makeMessage(id: "mesh-2", content: "after the wipe", timestamp: now), to: .mesh)
+        pipeline.flushIfNeeded()
+        #expect(delegate.messages(in: .mesh).map(\.id) == ["mesh-2"])
     }
 }

@@ -13,6 +13,15 @@ final class LocationChannelsModel: ObservableObject {
     @Published private(set) var userTorEnabled: Bool
     @Published private(set) var gatewayEnabled: Bool
 
+    #if os(iOS)
+    /// Fires whenever continuous updates end (`endLiveRefresh`: the location
+    /// sheet or the notices closing). Ending them stops CoreLocation's
+    /// updates, and that also cancels a one-shot fix still on its way, such
+    /// as the one the split layout's inline picker asked for as it appeared
+    /// while the sheet was still closing (E8). The picker asks again then.
+    let liveRefreshEnded = PassthroughSubject<Void, Never>()
+    #endif
+
     private let manager: LocationChannelManager
     private let network: NetworkActivationService
     private let gateway: GatewayService
@@ -74,6 +83,9 @@ final class LocationChannelsModel: ObservableObject {
 
     func endLiveRefresh() {
         manager.endLiveRefresh()
+        #if os(iOS)
+        liveRefreshEnded.send()
+        #endif
     }
 
     func select(_ channel: ChannelID) {

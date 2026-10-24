@@ -33,9 +33,13 @@ private final class MockChatPeerIdentityContext: ChatPeerIdentityContext {
     var activeChannel: ChannelID = .mesh
     private(set) var notifyUIChangedCount = 0
     private(set) var systemMessages: [String] = []
+    private(set) var targetedSystemMessages: [(content: String, target: ConversationTarget)] = []
 
     func notifyUIChanged() { notifyUIChangedCount += 1 }
     func addSystemMessage(_ content: String) { systemMessages.append(content) }
+    func addSystemMessage(_ content: String, to target: ConversationTarget) {
+        targetedSystemMessages.append((content, target))
+    }
 
     // Conversation store intents (mirror `ConversationStore` migrate
     // semantics: dedup by ID, timestamp order, unread carried, old chat
@@ -301,6 +305,30 @@ struct ChatPeerIdentityCoordinatorContextTests {
         #expect(context.begunChatSessions.isEmpty)
         #expect(context.consolidatedPeers.isEmpty)
         #expect(context.markedReadPeers.isEmpty)
+    }
+
+    /// Started from a list of one conversation's people (the split layout's
+    /// #mesh popover beside a selected geohash), the refusal lands in that
+    /// conversation, not the selected channel.
+    @Test @MainActor
+    func startPrivateChat_blockedPeersRefusalLandsWhereTheChatWasStarted() async {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        let peerID = PeerID(str: "1122334455667788")
+        context.blockedPeers = [peerID]
+        context.nicknamesByPeerID[peerID] = "mallory"
+        context.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pru"))
+
+        coordinator.startPrivateChat(with: peerID, from: .mesh)
+
+        #expect(context.systemMessages.isEmpty)
+        #expect(context.targetedSystemMessages.map(\.target) == [.mesh])
+        #expect(context.begunChatSessions.isEmpty)
+
+        // The same refusal the selection gets when the chat has no origin.
+        coordinator.startPrivateChat(with: peerID)
+        #expect(context.systemMessages.count == 1)
+        #expect(context.systemMessages == context.targetedSystemMessages.map(\.content))
     }
 
     @Test @MainActor

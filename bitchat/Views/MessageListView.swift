@@ -42,9 +42,97 @@ private struct TimelineSignature: Equatable {
     }
 }
 
+/// The one timeline model a message list observes: a public channel's
+/// model, or the private inbox for a DM list.
+@MainActor
+private protocol MessageListTimelineModel: ObservableObject {
+    /// The public channel the timeline belongs to, published together with
+    /// its messages; nil for private timelines.
+    var listChannel: ChannelID? { get }
+    /// The rows to show (`privatePeer` names the private conversation).
+    func listMessages(for privatePeer: PeerID?) -> [BitchatMessage]
+}
+
+extension PublicChatModel: MessageListTimelineModel {
+    fileprivate var listChannel: ChannelID? { channel }
+
+    fileprivate func listMessages(for _: PeerID?) -> [BitchatMessage] {
+        messages
+    }
+}
+
+extension PrivateInboxModel: MessageListTimelineModel {
+    fileprivate var listChannel: ChannelID? { nil }
+
+    fileprivate func listMessages(for privatePeer: PeerID?) -> [BitchatMessage] {
+        messages(for: privatePeer)
+    }
+}
+
+/// A conversation's message list. Each list observes exactly one timeline
+/// model, the one it renders: a public list its `PublicChatModel` (the split
+/// layout's #mesh pane is handed the pinned one), a DM list the private
+/// inbox. So a message in another timeline (the open DM beside the #mesh
+/// pane, a public channel under a DM) never re-renders the list.
+///
+/// Its actions act in its own conversation and type into its own composer
+/// (`MessageListActions`), never the selection's.
 struct MessageListView: View {
-    @EnvironmentObject private var publicChatModel: PublicChatModel
-    @EnvironmentObject private var privateInboxModel: PrivateInboxModel
+    /// The DM this list shows, as the target its actions act in (its owner
+    /// knows the DM's scope); nil for a public list, which shows the
+    /// timeline of the `PublicChatModel` it is handed and acts in that
+    /// model's channel.
+    let privateTarget: ConversationTarget?
+    @Binding var isAtBottom: Bool
+    /// The composer under this list, which a mention types into; held, not
+    /// observed, so typing never re-renders the list. Nil while that
+    /// composer isn't on screen: the list then offers no mention.
+    let composer: ComposerSession?
+    @Binding var selectedMessageSender: String?
+    @Binding var selectedMessageSenderID: PeerID?
+    @Binding var imagePreviewURL: URL?
+    @Binding var windowCountPublic: Int
+    @Binding var windowCountPrivate: [PeerID: Int]
+    @Binding var showSidebar: Bool
+
+    /// The composer with the keyboard; a mention hands it to `composer`.
+    var focusedComposer: FocusState<ComposerSlot?>.Binding
+
+    private var privatePeer: PeerID? {
+        privateTarget?.privatePeer
+    }
+
+    var body: some View {
+        if privatePeer == nil {
+            content(observing: PublicChatModel.self)
+        } else {
+            content(observing: PrivateInboxModel.self)
+        }
+    }
+
+    private func content<Timeline: MessageListTimelineModel>(
+        observing _: Timeline.Type
+    ) -> MessageListContent<Timeline> {
+        MessageListContent(
+            privatePeer: privatePeer,
+            privateTarget: privateTarget,
+            isAtBottom: $isAtBottom,
+            composer: composer,
+            selectedMessageSender: $selectedMessageSender,
+            selectedMessageSenderID: $selectedMessageSenderID,
+            imagePreviewURL: $imagePreviewURL,
+            windowCountPublic: $windowCountPublic,
+            windowCountPrivate: $windowCountPrivate,
+            showSidebar: $showSidebar,
+            focusedComposer: focusedComposer
+        )
+    }
+}
+
+/// `MessageListView` over its one timeline model.
+private struct MessageListContent<Timeline: MessageListTimelineModel>: View {
+    /// The timeline this list renders, and the only one it observes.
+    @EnvironmentObject private var timeline: Timeline
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
@@ -55,8 +143,9 @@ struct MessageListView: View {
     @Environment(\.appTheme) private var theme
 
     let privatePeer: PeerID?
+    let privateTarget: ConversationTarget?
     @Binding var isAtBottom: Bool
-    @Binding var messageText: String
+    let composer: ComposerSession?
     @Binding var selectedMessageSender: String?
     @Binding var selectedMessageSenderID: PeerID?
     @Binding var imagePreviewURL: URL?
@@ -64,7 +153,7 @@ struct MessageListView: View {
     @Binding var windowCountPrivate: [PeerID: Int]
     @Binding var showSidebar: Bool
 
-    var isTextFieldFocused: FocusState<Bool>.Binding
+    var focusedComposer: FocusState<ComposerSlot?>.Binding
 
     @State private var showMessageActions = false
     @State private var showClearConfirmation = false
@@ -124,17 +213,17 @@ struct MessageListView: View {
 
         VStack(spacing: 0) {
         // Notes pinned to this place stay visible while chatting — a
-        // conversation starting must not hide what's left here.
-        if privatePeer == nil,
-           case .mesh = locationChannelsModel.selectedChannel,
-           nearbyNotes.noteCount > 0 {
+        // conversation starting must not hide what's left here. Keyed on the
+        // timeline this list shows, not the selection: the split layout's
+        // #mesh list renders beside a selected geohash.
+        if channelPolicy.showsNotesStrip(noteCount: nearbyNotes.noteCount) {
             notesHereStrip
         }
         GeometryReader { geometry in
         ScrollViewReader { proxy in
             ScrollView {
-                if messageItems.isEmpty && privatePeer == nil {
-                    publicEmptyState(fillHeight: geometry.size.height)
+                if messageItems.isEmpty, let emptyState = channelPolicy.emptyState {
+                    publicEmptyState(emptyState, fillHeight: geometry.size.height)
                 }
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(messageItems) { item in
@@ -190,26 +279,26 @@ struct MessageListView: View {
                                     // mentioning the only other participant is noise, and "DM"
                                     // would just reopen the conversation that is already open.
                                     if privatePeer == nil {
-                                        if actionsTargetThisList {
+                                        if let actions, actions.canMention {
                                             Button("content.actions.mention") {
-                                                insertMention(message.sender)
+                                                actions.mention(message.sender)
                                             }
                                         }
                                         if let peerID = message.senderPeerID {
                                             Button("content.actions.direct_message") {
-                                                privateConversationModel.openConversation(for: peerID)
+                                                openConversation(with: peerID)
                                                 withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                                                     showSidebar = true
                                                 }
                                             }
                                         }
                                     }
-                                    if actionsTargetThisList {
+                                    if let actions {
                                         Button("content.actions.hug") {
-                                            conversationUIModel.sendHug(to: message.sender)
+                                            actions.hug(message.sender)
                                         }
                                         Button("content.actions.slap") {
-                                            conversationUIModel.sendSlap(to: message.sender)
+                                            actions.slap(message.sender)
                                         }
                                     }
                                 }
@@ -222,14 +311,14 @@ struct MessageListView: View {
                                     pb.setString(message.content, forType: .string)
                                     #endif
                                 }
-                                if isResendableFailedMessage(message) {
+                                if let actions, isResendableFailedMessage(message) {
                                     Button("content.actions.resend") {
-                                        conversationUIModel.resendFailedPrivateMessage(message)
+                                        actions.resend(message)
                                     }
                                 }
-                                if showsUserActions {
+                                if let actions, showsUserActions {
                                     Button("content.actions.block", role: .destructive) {
-                                        conversationUIModel.block(peerID: message.senderPeerID, displayName: message.sender)
+                                        actions.block(peerID: message.senderPeerID, displayName: message.sender)
                                     }
                                 }
                             }
@@ -245,7 +334,7 @@ struct MessageListView: View {
                 // Only carried history on screen: the ambient layer (radar,
                 // sightings, live hints) stays visible below it instead of
                 // vanishing the moment echoes exist.
-                if privatePeer == nil, showsAmbientFooter(messageItems: messageItems) {
+                if channelPolicy.showsAmbientFooter(below: messageItems.lazy.map(\.message)) {
                     MeshEmptyStateView(compact: true, bluetoothAvailable: bluetoothCanScan)
                         .padding(.horizontal, 12)
                         .padding(.top, 20)
@@ -257,16 +346,12 @@ struct MessageListView: View {
                     jumpToLatestPill(proxy: proxy)
                 }
             }
-            // External deep links (notifications, shared #geohash invites).
-            // Every list on screen receives them, so sender links, which only
-            // in-app text produces, are left to the list that drew them (see
-            // the openURL action below).
-            .onOpenURL { url in
-                guard url.host != "user" else { return }
-                handleOpenURL(url)
-            }
+            // No onOpenURL: every mounted list would receive each external
+            // link (two lists in the split layout, or a DM over the public
+            // timeline). AppRuntime opens external #geohash links once; the
+            // links a list draws act through the openURL action below.
             .onTapGesture(count: 3) {
-                if actionsTargetThisList {
+                if actions != nil {
                     showClearConfirmation = true
                 }
             }
@@ -276,7 +361,7 @@ struct MessageListView: View {
                 titleVisibility: .visible
             ) {
                 Button("content.clear.confirm_action", role: .destructive) {
-                    conversationUIModel.clearCurrentConversation()
+                    actions?.clear()
                 }
                 Button("common.cancel", role: .cancel) {}
             }
@@ -307,39 +392,39 @@ struct MessageListView: View {
                 isPresented: $showMessageActions,
                 titleVisibility: .visible
             ) {
-                if actionsTargetThisList {
+                if let actions, actions.canMention {
                     Button("content.actions.mention") {
                         if let sender = selectedMessageSender {
-                            insertMention(sender)
+                            actions.mention(sender)
                         }
                     }
                 }
 
                 Button("content.actions.direct_message") {
                     if let peerID = selectedMessageSenderID {
-                        privateConversationModel.openConversation(for: peerID)
+                        openConversation(with: peerID)
                         withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                             showSidebar = true
                         }
                     }
                 }
 
-                if actionsTargetThisList {
+                if let actions {
                     Button("content.actions.hug") {
                         if let sender = selectedMessageSender {
-                            conversationUIModel.sendHug(to: sender)
+                            actions.hug(sender)
                         }
                     }
 
                     Button("content.actions.slap") {
                         if let sender = selectedMessageSender {
-                            conversationUIModel.sendSlap(to: sender)
+                            actions.slap(sender)
                         }
                     }
-                }
 
-                Button("content.actions.block", role: .destructive) {
-                    conversationUIModel.block(peerID: selectedMessageSenderID, displayName: selectedMessageSender)
+                    Button("content.actions.block", role: .destructive) {
+                        actions.block(peerID: selectedMessageSenderID, displayName: selectedMessageSender)
+                    }
                 }
 
                 Button("common.cancel", role: .cancel) {}
@@ -367,7 +452,7 @@ struct MessageListView: View {
         }
         .onAppear { updateNotesCounterHold() }
         .onDisappear { releaseNotesCounterHold() }
-        .onChange(of: locationChannelsModel.selectedChannel) { _ in updateNotesCounterHold() }
+        .onChange(of: timeline.listChannel) { _ in updateNotesCounterHold() }
         .onChange(of: privatePeer) { _ in updateNotesCounterHold() }
         .environment(\.openURL, OpenURLAction { url in
             // Intercept custom cashu: links created in attributed text
@@ -380,10 +465,9 @@ struct MessageListView: View {
                 return .systemAction
                 #endif
             }
-            // Sender and #geohash links drawn by this list act here. Handed
-            // to the system they came back through every visible list's
-            // onOpenURL, so a name tapped in the public timeline could also
-            // raise the open DM's action dialog.
+            // Sender and #geohash links drawn by this list act here, in this
+            // list only, rather than leaving the app and coming back as
+            // external links.
             if url.scheme == "bitchat", url.host == "user" || url.host == "geohash" {
                 handleOpenURL(url)
                 return .handled
@@ -393,7 +477,7 @@ struct MessageListView: View {
     }
 }
 
-private extension MessageListView {
+private extension MessageListContent {
     /// Whether the radio could be scanning at all — the empty-state radar
     /// must not sweep over a switched-off or denied radio.
     var bluetoothCanScan: Bool {
@@ -405,15 +489,22 @@ private extension MessageListView {
 
     /// Context key of the timeline shown for `privatePeer` (the DM, or the
     /// public channel); also the prefix of its row IDs. The public key comes
-    /// from the channel PublicChatModel publishes together with its messages:
-    /// the selected channel switches one render or more before the timeline
-    /// does, and keying the old messages with the new channel re-keys (and
-    /// re-appears) every row.
+    /// from the channel this list's timeline model publishes together with
+    /// its messages, never from the selection: the selected channel switches
+    /// one render or more before the timeline does (keying the old messages
+    /// with the new channel re-keys, and re-appears, every row), and the split
+    /// layout's #mesh list renders beside a selected geohash.
     func timelineContextKey(for privatePeer: PeerID?) -> String {
         if let peer = privatePeer {
             return "dm:\(peer)"
         }
-        return publicChatModel.activeChannel.contextKey
+        // A private timeline without a peer has no rows to key.
+        return timeline.listChannel?.contextKey ?? "dm:"
+    }
+
+    /// The channel decisions of the timeline this list renders.
+    var channelPolicy: MessageListChannelPolicy {
+        MessageListChannelPolicy(channel: timeline.listChannel, privatePeer: privatePeer)
     }
 
     func windowCount(for privatePeer: PeerID?) -> Int {
@@ -460,12 +551,29 @@ private extension MessageListView {
         return MessageListScrollPolicy.isRow(rowID, inContext: landedContextKey)
     }
 
-    /// /clear, hug/slap and mentions act on the selected conversation (the
-    /// command processor and the shared composer draft), not on the list
-    /// they were triggered from. On the split layout the public timeline
-    /// sits beside an open DM, so it must not offer them while one is open.
-    var actionsTargetThisList: Bool {
-        privatePeer != nil || privateConversationModel.selectedPeerID == nil
+    /// "Direct message": the sender's DM, opened from this list's own
+    /// conversation, where a refusal (a blocked sender's DM doesn't open)
+    /// lands, never the selection, which can be the other pane's.
+    func openConversation(with peerID: PeerID) {
+        guard let origin = actions?.target else { return }
+        privateConversationModel.openConversation(for: peerID, from: origin)
+    }
+
+    /// The list's actions: in its own conversation (its DM, or its own
+    /// timeline's channel) and into its own composer. Nil only for a list
+    /// with neither, which offers none.
+    var actions: MessageListActions? {
+        guard let target = MessageListActions.target(
+            privateTarget: privateTarget,
+            timelineChannel: timeline.listChannel
+        ) else { return nil }
+        let focusedComposer = focusedComposer
+        return MessageListActions(
+            target: target,
+            composer: composer,
+            focusComposer: { focusedComposer.wrappedValue = $0 },
+            performer: conversationUIModel
+        )
     }
 
     /// Tappable strip above the mesh timeline while notes are pinned at this
@@ -499,12 +607,13 @@ private extension MessageListView {
         .buttonStyle(.plain)
     }
 
-    /// The nearby-notes counter is held whenever the mesh public timeline is
-    /// showing — the strip needs a live count before it can decide to exist.
-    /// Holding is not subscribing: nothing hits the relays until an explicit
-    /// act reveals the counter (tap-to-reveal).
+    /// The nearby-notes counter is held whenever this list shows the mesh
+    /// public timeline — the strip needs a live count before it can decide to
+    /// exist. Holding is not subscribing: nothing hits the relays until an
+    /// explicit act reveals the counter (tap-to-reveal). The counter is
+    /// ref-counted, so two lists showing #mesh hold it twice.
     func updateNotesCounterHold() {
-        let shouldHold = privatePeer == nil && locationChannelsModel.selectedChannel.isMesh
+        let shouldHold = channelPolicy.holdsNotesCounter
         guard shouldHold != holdsNotesCounter else { return }
         holdsNotesCounter = shouldHold
         if shouldHold {
@@ -520,34 +629,25 @@ private extension MessageListView {
         NearbyNotesCounter.shared.deactivate()
     }
 
-    /// True when the mesh timeline holds nothing but archived echoes and
-    /// system lines — no live conversation yet, so the ambient layer still
-    /// applies.
-    private func showsAmbientFooter(messageItems: [MessageDisplayItem]) -> Bool {
-        guard case .mesh = locationChannelsModel.selectedChannel,
-              !messageItems.isEmpty else { return false }
-        return messageItems.allSatisfy { $0.message.isArchivedEcho || $0.message.sender == "system" }
-    }
-
     /// Terminal-styled narration for an empty public timeline: says which
     /// channel this is, that the app is waiting for peers, and where to go
     /// next. Rendered inside the ScrollView; disappears with the first row.
     /// The mesh case fills the visible chat height so its radar can center
     /// in the space below the text.
-    func publicEmptyState(fillHeight: CGFloat) -> some View {
+    func publicEmptyState(_ emptyState: MessageListChannelPolicy.EmptyState, fillHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            switch locationChannelsModel.selectedChannel {
+            switch emptyState {
             case .mesh:
                 MeshEmptyStateView(
                     fillHeight: max(0, fillHeight - 24),
                     bluetoothAvailable: bluetoothCanScan
                 )
-            case .location(let channel):
+            case .location(let geohash):
                 emptyStateLine(
                     String(
                         format: String(localized: "content.empty.location_intro", comment: "First line of an empty geohash timeline naming the channel"),
                         locale: .current,
-                        channel.geohash
+                        geohash
                     )
                 )
                 emptyStateLine(String(localized: "content.empty.switch_hint", comment: "Empty timeline hint pointing at the channel switcher and the help screen"))
@@ -577,20 +677,6 @@ private extension MessageListView {
               case .failed = message.deliveryStatus
         else { return false }
         return true
-    }
-
-    /// Appends an @mention to the composer draft (never overwrites what the
-    /// user has already typed) and focuses the input field.
-    func insertMention(_ sender: String) {
-        let mention = "@\(sender) "
-        if messageText.isEmpty {
-            messageText = mention
-        } else if messageText.hasSuffix(" ") {
-            messageText += mention
-        } else {
-            messageText += " " + mention
-        }
-        isTextFieldFocused.wrappedValue = true
     }
 
     /// Floating pill shown while scrolled up: re-presents the isAtBottom /
@@ -870,10 +956,7 @@ private extension MessageListView {
     }
 
     func conversationMessages(for privatePeer: PeerID?) -> [BitchatMessage] {
-        if let privatePeer {
-            return privateInboxModel.messages(for: privatePeer)
-        }
-        return publicChatModel.messages
+        timeline.listMessages(for: privatePeer)
     }
 }
 

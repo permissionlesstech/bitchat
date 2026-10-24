@@ -660,14 +660,8 @@ struct AppArchitectureTests {
 
         locationManager.select(.mesh)
         let locationChannelsModel = LocationChannelsModel(manager: locationManager)
-        let privateConversationModel = PrivateConversationModel(
-            chatViewModel: viewModel,
-            conversations: viewModel.conversations,
-            locationChannelsModel: locationChannelsModel
-        )
         let uiModel = ConversationUIModel(
             chatViewModel: viewModel,
-            privateConversationModel: privateConversationModel,
             conversations: viewModel.conversations
         )
         let geohashChannel = ChannelID.location(GeohashChannel(level: .city, geohash: "9q8yy"))
@@ -675,34 +669,24 @@ struct AppArchitectureTests {
             locationManager.select(.mesh)
         }
         viewModel.nickname = "builder"
-        viewModel.autocompleteSuggestions = ["alice"]
-        viewModel.showAutocomplete = true
         locationChannelsModel.select(geohashChannel)
 
         await waitUntil {
             viewModel.activeChannel == geohashChannel &&
-            uiModel.currentNickname == "builder" &&
-            uiModel.showAutocomplete &&
-            uiModel.autocompleteSuggestions == ["alice"] &&
-            !uiModel.canSendMediaInCurrentContext
+            uiModel.currentNickname == "builder"
         }
 
         #expect(viewModel.activeChannel == geohashChannel)
         #expect(uiModel.currentNickname == "builder")
-        #expect(uiModel.showAutocomplete)
-        #expect(uiModel.autocompleteSuggestions == ["alice"])
-        #expect(!uiModel.canSendMediaInCurrentContext)
 
         locationChannelsModel.select(ChannelID.mesh)
         await waitUntil {
-            viewModel.activeChannel == ChannelID.mesh &&
-            uiModel.canSendMediaInCurrentContext
+            viewModel.activeChannel == ChannelID.mesh
         }
 
         #expect(viewModel.activeChannel == ChannelID.mesh)
-        #expect(uiModel.canSendMediaInCurrentContext)
 
-        uiModel.sendMessage("hello mesh")
+        uiModel.sendMessage("hello mesh", to: viewModel.selectionTarget)
 
         await waitUntil {
             transport.sentMessages.last?.content == "hello mesh"
@@ -715,37 +699,28 @@ struct AppArchitectureTests {
     @MainActor
     func conversationUIModelSkipsUnchangedComposerState() async {
         let viewModel = makeArchitectureViewModel()
-        let locationChannelsModel = LocationChannelsModel(manager: makeArchitectureLocationManager())
-        let privateConversationModel = PrivateConversationModel(
-            chatViewModel: viewModel,
-            conversations: viewModel.conversations,
-            locationChannelsModel: locationChannelsModel
-        )
         let uiModel = ConversationUIModel(
             chatViewModel: viewModel,
-            privateConversationModel: privateConversationModel,
             conversations: viewModel.conversations
         )
 
         // Bindings deliver on the main queue in FIFO order: once this change
         // lands, every initial value delivered before it has landed too.
-        viewModel.selectedAutocompleteIndex = 1
-        await waitUntil { uiModel.selectedAutocompleteIndex == 1 }
+        viewModel.activePublicVoiceTalker = "alice"
+        await waitUntil { uiModel.activeLiveVoiceTalker == "alice" }
 
         var publishCount = 0
         let cancellable = uiModel.objectWillChange.sink { publishCount += 1 }
         defer { cancellable.cancel() }
 
-        // Re-sent equal values (what every typing pause used to produce) ...
-        viewModel.showAutocomplete = viewModel.showAutocomplete
-        viewModel.autocompleteSuggestions = viewModel.autocompleteSuggestions
-        viewModel.selectedAutocompleteIndex = 1
+        // Re-sent equal values ...
         viewModel.activePublicVoiceTalker = viewModel.activePublicVoiceTalker
+        viewModel.activePublicVoiceTalker = "alice"
         // ... are dropped: only the real change queued behind them publishes.
-        viewModel.selectedAutocompleteIndex = 2
-        await waitUntil { uiModel.selectedAutocompleteIndex == 2 }
+        viewModel.activePublicVoiceTalker = "bob"
+        await waitUntil { uiModel.activeLiveVoiceTalker == "bob" }
 
-        #expect(uiModel.selectedAutocompleteIndex == 2)
+        #expect(uiModel.activeLiveVoiceTalker == "bob")
         #expect(publishCount == 1)
     }
 

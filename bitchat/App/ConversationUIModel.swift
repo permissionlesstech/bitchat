@@ -7,20 +7,14 @@ import UIKit
 
 @MainActor
 final class ConversationUIModel: ObservableObject {
-    @Published private(set) var showAutocomplete = false
-    @Published private(set) var autocompleteSuggestions: [String] = []
-    @Published private(set) var selectedAutocompleteIndex = 0
     @Published private(set) var currentNickname: String
-    @Published private(set) var canSendMediaInCurrentContext = true
     @Published private(set) var legacyPrivateMediaConsentRequest: LegacyPrivateMediaConsentRequest?
     /// Who is talking live in the public mesh channel right now (floor
     /// courtesy: the composer mic tints "busy" while someone holds the floor).
     @Published private(set) var activeLiveVoiceTalker: String?
 
     private let chatViewModel: ChatViewModel
-    private let privateConversationModel: PrivateConversationModel
     private let conversations: ConversationStore
-    private var activeChannel: ChannelID
     private var cancellables = Set<AnyCancellable>()
     /// My geochat sender ID for the location channel on screen, kept with the
     /// public key it was built from. `publicKeyHex` hex-encodes on every
@@ -34,18 +28,11 @@ final class ConversationUIModel: ObservableObject {
 
     init(
         chatViewModel: ChatViewModel,
-        privateConversationModel: PrivateConversationModel,
         conversations: ConversationStore
     ) {
         self.chatViewModel = chatViewModel
-        self.privateConversationModel = privateConversationModel
         self.conversations = conversations
-        self.activeChannel = conversations.activeChannel
         self.currentNickname = chatViewModel.nickname
-        self.showAutocomplete = chatViewModel.showAutocomplete
-        self.autocompleteSuggestions = chatViewModel.autocompleteSuggestions
-        self.selectedAutocompleteIndex = chatViewModel.selectedAutocompleteIndex
-        self.canSendMediaInCurrentContext = chatViewModel.canSendMediaInCurrentContext
 
         bind()
     }
@@ -58,31 +45,43 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.currentTheme = theme
     }
 
-    func sendMessage(_ message: String) {
-        chatViewModel.sendMessage(message)
+    // MARK: Sending and list actions
+    //
+    // Each takes the conversation the person acted in: the composer's or
+    // the list's own target, captured when they acted. None has a form
+    // without one, so no view can send, block or unblock in the selection
+    // instead.
+
+    /// Sends `message` (or runs it as a command) in `target`, whatever is
+    /// selected by the time it goes out.
+    func sendMessage(_ message: String, to target: ConversationTarget) {
+        chatViewModel.sendMessage(message, to: target)
     }
 
     /// Resends a failed private message through the normal send path,
     /// removing the failed original so the re-submission replaces it
     /// instead of stacking a duplicate under the red bubble.
-    func resendFailedPrivateMessage(_ message: BitchatMessage) {
+    func resendFailedPrivateMessage(_ message: BitchatMessage, in target: ConversationTarget) {
         chatViewModel.removePrivateMessage(withID: message.id)
-        chatViewModel.sendMessage(message.content)
+        chatViewModel.sendMessage(message.content, to: target)
     }
 
-    func clearCurrentConversation() {
-        chatViewModel.sendMessage("/clear")
+    /// Clears `target`: its DM, or its channel's timeline.
+    func clearConversation(_ target: ConversationTarget) {
+        chatViewModel.sendMessage("/clear", to: target)
     }
 
-    func sendHug(to sender: String) {
-        chatViewModel.sendMessage("/hug @\(sender)")
+    func sendHug(to sender: String, in target: ConversationTarget) {
+        chatViewModel.sendMessage("/hug @\(sender)", to: target)
     }
 
-    func sendSlap(to sender: String) {
-        chatViewModel.sendMessage("/slap @\(sender)")
+    func sendSlap(to sender: String, in target: ConversationTarget) {
+        chatViewModel.sendMessage("/slap @\(sender)", to: target)
     }
 
-    func block(peerID: PeerID?, displayName: String?) {
+    /// Blocks someone tapped in `target`'s list; a confirmation or failure
+    /// line lands in that conversation.
+    func block(peerID: PeerID?, displayName: String?, from target: ConversationTarget) {
         guard let displayName else { return }
 
         if let peerID, peerID.isGeoChat,
@@ -91,55 +90,40 @@ final class ConversationUIModel: ObservableObject {
         } else if let peerID, !peerID.isGeoDM, !peerID.isGeoChat {
             // Mesh: block the peer's stable Noise identity resolved from the
             // tapped peerID rather than re-resolving a display-name string.
-            chatViewModel.blockMeshPeer(peerID: peerID, displayName: displayName)
+            chatViewModel.blockMeshPeer(peerID: peerID, displayName: displayName, from: target)
         } else {
-            chatViewModel.sendMessage("/block \(displayName)")
+            chatViewModel.sendMessage("/block \(displayName)", to: target)
         }
     }
 
-    /// Mesh counterpart of `block(peerID:displayName:)`. Resolves the unblock by
-    /// the tapped peer's stable identity so the exact row is unblocked — this
-    /// also works for offline peers, which the `/unblock <displayName>` command
-    /// cannot resolve.
-    func unblock(peerID: PeerID, displayName: String) {
-        chatViewModel.unblockMeshPeer(peerID: peerID, displayName: displayName)
+    /// Unblocks someone toggled in `target`'s list; a confirmation or
+    /// failure line lands in that conversation. Mesh counterpart of
+    /// `block(peerID:displayName:from:)`: it resolves the unblock by the
+    /// tapped peer's stable identity, so the exact row is unblocked, offline
+    /// peers included, which the `/unblock <displayName>` command cannot
+    /// resolve.
+    func unblock(peerID: PeerID, displayName: String, from target: ConversationTarget) {
+        chatViewModel.unblockMeshPeer(peerID: peerID, displayName: displayName, from: target)
     }
 
     func getFingerprint(for peerID: PeerID) -> String? {
         chatViewModel.getFingerprint(for: peerID)
     }
 
-    func updateAutocomplete(for text: String, cursorPosition: Int) {
-        chatViewModel.updateAutocomplete(for: text, cursorPosition: cursorPosition)
+    /// Mention suggestions for `text` in `target`'s composer. The composer
+    /// keeps the returned state; nothing shared changes.
+    func autocomplete(
+        for text: String,
+        cursorPosition: Int,
+        in target: ConversationTarget
+    ) -> ComposerAutocompleteState {
+        chatViewModel.autocomplete(for: text, cursorPosition: cursorPosition, in: target)
     }
 
-    func completeNickname(_ nickname: String, in text: inout String) -> Int {
-        chatViewModel.completeNickname(nickname, in: &text)
-    }
-
-    /// Accept the currently highlighted mention suggestion, if any.
-    func completeSelectedSuggestion(in text: inout String) -> Bool {
-        guard showAutocomplete,
-              autocompleteSuggestions.indices.contains(selectedAutocompleteIndex)
-        else { return false }
-        _ = completeNickname(autocompleteSuggestions[selectedAutocompleteIndex], in: &text)
-        return true
-    }
-
-    /// Dismiss the mention suggestion panel without inserting (Escape).
-    func dismissAutocomplete() {
-        guard showAutocomplete else { return }
-        chatViewModel.showAutocomplete = false
-        chatViewModel.autocompleteSuggestions = []
-        chatViewModel.autocompleteRange = nil
-        chatViewModel.selectedAutocompleteIndex = 0
-    }
-
-    func moveAutocompleteSelection(by delta: Int) {
-        guard showAutocomplete, !autocompleteSuggestions.isEmpty else { return }
-        let count = min(4, autocompleteSuggestions.count)
-        let next = (selectedAutocompleteIndex + delta + count) % count
-        chatViewModel.selectedAutocompleteIndex = next
+    /// Applies a picked suggestion to the text `state` was computed for and
+    /// returns the cursor position after it.
+    func complete(_ suggestion: String, in text: inout String, state: ComposerAutocompleteState) -> Int {
+        chatViewModel.complete(suggestion, in: &text, state: state)
     }
 
     func formatMessage(_ message: BitchatMessage, colorScheme: ColorScheme, theme: AppTheme? = nil) -> AttributedString {
@@ -184,8 +168,8 @@ final class ConversationUIModel: ObservableObject {
     /// My geochat sender ID in the location channel on screen (nil on #mesh),
     /// memoized in `ownGeoChatSender`.
     private func ownGeoChatPeerID() -> PeerID? {
-        // The store's channel, not the mirrored `activeChannel`, which trails
-        // a switch by a runloop turn.
+        // The store's channel as it is now: the sink in `bind()` hears of a
+        // switch a run-loop turn later.
         guard case .location(let channel) = conversations.activeChannel,
               let identity = chatViewModel.geohashIdentity(for: channel.geohash)
         else { return nil }
@@ -220,22 +204,26 @@ final class ConversationUIModel: ObservableObject {
     }
 
     #if os(iOS)
-    func processSelectedImage(_ image: UIImage?) {
-        chatViewModel.processThenSendImage(image)
+    /// Sends a photo picked from `target`'s composer to that conversation.
+    /// Capture the target when the camera or library button is tapped.
+    func processSelectedImage(_ image: UIImage?, to target: ConversationTarget) {
+        chatViewModel.processThenSendImage(image, to: target)
     }
     #endif
 
-    func processSelectedImage(from url: URL?) {
-        #if os(macOS)
-        chatViewModel.processThenSendImage(from: url)
-        #endif
+    #if os(macOS)
+    /// Sends a photo file picked from `target`'s composer to that
+    /// conversation. Capture the target when the photo button is clicked.
+    func processSelectedImage(from url: URL?, to target: ConversationTarget) {
+        chatViewModel.processThenSendImage(from: url, to: target)
     }
+    #endif
 
-    /// Make this at the mic's release and pass it as the recorder's
-    /// completion: the voice note goes to the conversation on screen then,
-    /// even if the person leaves it before the file is finalized.
-    func makeVoiceNoteSender() -> (URL) -> Void {
-        chatViewModel.makeVoiceNoteSender()
+    /// The release completion for `target`'s composer: make it at the mic's
+    /// release and pass it to the recorder. The note goes to that
+    /// conversation, whatever is selected once the file is finalized.
+    func makeVoiceNoteSender(for target: ConversationTarget) -> (URL) -> Void {
+        chatViewModel.makeVoiceNoteSender(for: target)
     }
 
     func resolveLegacyPrivateMediaConsent(requestID: UUID, approved: Bool) {
@@ -245,10 +233,11 @@ final class ConversationUIModel: ObservableObject {
         )
     }
 
-    /// Capture backend for the mic gesture: live PTT when the current DM
-    /// peer can hear it now, classic voice note otherwise.
-    func makeVoiceCaptureSession() -> VoiceCaptureSession {
-        chatViewModel.makeVoiceCaptureSession()
+    /// Capture backend for a hold in `target`'s composer: live to that DM's
+    /// peer or to #mesh when they can hear it now, a classic note otherwise.
+    /// Never live to any conversation but the composer's own.
+    func makeVoiceCaptureSession(for target: ConversationTarget) -> VoiceCaptureSession {
+        chatViewModel.makeVoiceCaptureSession(for: target)
     }
 
     /// Whether this message is a live voice burst still streaming in.
@@ -272,21 +261,6 @@ final class ConversationUIModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .assign(to: &$currentNickname)
 
-        chatViewModel.$showAutocomplete
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$showAutocomplete)
-
-        chatViewModel.$autocompleteSuggestions
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$autocompleteSuggestions)
-
-        chatViewModel.$selectedAutocompleteIndex
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$selectedAutocompleteIndex)
-
         chatViewModel.$activePublicVoiceTalker
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
@@ -300,18 +274,9 @@ final class ConversationUIModel: ObservableObject {
         conversations.$activeChannel
             .receive(on: DispatchQueue.main)
             .sink { [weak self] channel in
-                self?.activeChannel = channel
                 if channel == .mesh {
                     self?.ownGeoChatSender = nil
                 }
-                self?.refreshComputedState()
-            }
-            .store(in: &cancellables)
-
-        privateConversationModel.$selectedPeerID
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.refreshComputedState()
             }
             .store(in: &cancellables)
 
@@ -323,27 +288,5 @@ final class ConversationUIModel: ObservableObject {
                 self?.objectWillChange.send()
             }
             .store(in: &cancellables)
-    }
-
-    private func refreshComputedState() {
-        let canSendMedia: Bool
-        if let selectedPeerID = privateConversationModel.selectedPeerID {
-            // Media transfer is not wired for groups in v1; keep it off so the
-            // composer can't strand a media placeholder that never sends.
-            canSendMedia = !(selectedPeerID.isGeoDM || selectedPeerID.isGeoChat || selectedPeerID.isGroup)
-        } else {
-            switch activeChannel {
-            case .mesh:
-                canSendMedia = true
-            case .location:
-                canSendMedia = false
-            }
-        }
-        // Every write republishes to every message row, and most triggers
-        // (each peer, favorite or status refresh of the selection) leave the
-        // value as it was.
-        if canSendMediaInCurrentContext != canSendMedia {
-            canSendMediaInCurrentContext = canSendMedia
-        }
     }
 }

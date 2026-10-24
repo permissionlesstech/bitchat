@@ -7,12 +7,14 @@
 
 import SwiftUI
 
+/// The commands matching what a composer has typed, for the composer's own
+/// conversation (`target`), which decides the commands that work there.
 struct CommandSuggestionsView: View {
-    @EnvironmentObject private var privateConversationModel: PrivateConversationModel
-    @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @ThemedPalette private var palette
 
     @Binding var messageText: String
+    /// The composer's conversation; nil offers nothing.
+    let target: ConversationTarget?
 
     /// The command already typed in full, once arguments have begun.
     private var typedCommandAlias: String? {
@@ -22,19 +24,11 @@ struct CommandSuggestionsView: View {
         return String(messageText[..<spaceIndex]).lowercased()
     }
 
+    /// While arguments are being typed, only the matched command's usage
+    /// row stays, instead of vanishing at the first space.
     private var filteredCommands: [CommandInfo] {
-        guard messageText.hasPrefix("/") else { return [] }
-        let isGeoPublic = locationChannelsModel.selectedChannel.isLocation
-        let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true
-        let commands = CommandInfo.all(isGeoPublic: isGeoPublic, isGeoDM: isGeoDM)
-        // While arguments are being typed, keep the matched command's usage
-        // row visible instead of vanishing at the first space.
-        if let typed = typedCommandAlias {
-            return commands.filter { $0.alias == typed && $0.placeholder != nil }
-        }
-        return commands.filter { command in
-            command.alias.starts(with: messageText.lowercased())
-        }
+        guard let target else { return [] }
+        return ChatComposerCoordinator.commandSuggestions(for: messageText, in: target)
     }
 
     var body: some View {
@@ -88,19 +82,6 @@ struct CommandSuggestionsView: View {
 @available(iOS 17, macOS 14, *)
 #Preview {
     @Previewable @State var messageText: String = "/"
-    let keychain = KeychainManager()
-    let viewModel = ChatViewModel(
-        keychain: keychain,
-        idBridge: NostrIdentityBridge(),
-        identityManager: SecureIdentityStateManager(keychain)
-    )
-    let privateConversationModel = PrivateConversationModel(
-        chatViewModel: viewModel,
-        conversations: viewModel.conversations
-    )
-    let locationChannelsModel = LocationChannelsModel()
-    
-    CommandSuggestionsView(messageText: $messageText)
-        .environmentObject(privateConversationModel)
-        .environmentObject(locationChannelsModel)
+
+    CommandSuggestionsView(messageText: $messageText, target: .mesh)
 }

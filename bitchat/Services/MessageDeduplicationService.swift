@@ -239,17 +239,39 @@ final class MessageDeduplicationService {
 
     /// Normalizes content to a deduplication key.
     /// - Parameter content: The raw content
-    /// - Returns: A normalized hash key
+    /// - Returns: A normalized hash key, the same for every conversation (the
+    ///   rate limiter's content buckets key on it)
     func normalizedContentKey(_ content: String) -> String {
         ContentNormalizer.normalizedKey(content)
+    }
+
+    /// The content-window key for `content` arriving in, or echoed into,
+    /// `scope`. Scoped per conversation, so the same short text on two
+    /// timelines on screen at once (#mesh beside a geohash) is never mistaken
+    /// for a duplicate of itself.
+    /// - Parameters:
+    ///   - content: The raw content
+    ///   - scope: The conversation the message lands in
+    /// - Returns: `"<scope>|h:<hash>"`, e.g. `"mesh|h:…"` or `"geo:u4pruy|h:…"`
+    func contentKey(_ content: String, in scope: ConversationID) -> String {
+        scope.contentKeyScope + "|" + ContentNormalizer.normalizedKey(content)
     }
 
     /// Removes the near-duplicate marker for a row that is being replaced,
     /// not merely deleted. Bridge-first/radio-second reconciliation needs the
     /// authenticated radio copy to pass the next pipeline flush after its
     /// unauthenticated bridge alias is removed.
+    func forgetContent(_ content: String, in scope: ConversationID, ifRecordedAt timestamp: Date) {
+        forgetContentKey(contentKey(content, in: scope), ifRecordedAt: timestamp)
+    }
+
+    /// Unscoped form of `forgetContent(_:in:ifRecordedAt:)`, for markers
+    /// recorded with `recordContent(_:timestamp:)`.
     func forgetContent(_ content: String, ifRecordedAt timestamp: Date) {
-        let key = ContentNormalizer.normalizedKey(content)
+        forgetContentKey(ContentNormalizer.normalizedKey(content), ifRecordedAt: timestamp)
+    }
+
+    private func forgetContentKey(_ key: String, ifRecordedAt timestamp: Date) {
         guard contentCache.value(for: key) == timestamp else { return }
         contentCache.remove(key)
     }
@@ -328,5 +350,20 @@ final class MessageDeduplicationService {
     func clearNostrCaches() {
         nostrEventCache.clear()
         nostrAckCache.clear()
+    }
+}
+
+private extension ConversationID {
+    /// Prefix that keeps one conversation's content-window keys apart from
+    /// every other conversation's.
+    var contentKeyScope: String {
+        switch self {
+        case .mesh:
+            return "mesh"
+        case .geohash(let geohash):
+            return "geo:\(geohash)"
+        case .direct(let handle):
+            return "dm:\(handle.id)"
+        }
     }
 }

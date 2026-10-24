@@ -123,6 +123,27 @@ struct SharedContentHandoffTests {
         #expect(context.store.pending(now: now) == nil)
     }
 
+    @Test("An installed destination provider labels every look, whatever the caller passes")
+    @MainActor
+    func destinationProviderLabelsEveryLook() throws {
+        let context = makeStore()
+        defer { context.defaults.removePersistentDomain(forName: context.suite) }
+        let now = Date(timeIntervalSince1970: 3_500_000)
+        let model = SharedContentImportModel(store: context.store)
+        try context.store.stage(.text("for the composer", createdAt: now), now: now)
+
+        model.destinationProvider = { .mesh }
+        model.refresh(destination: .geohash("u4pruy"), now: now)
+        #expect(model.offer?.destination == .mesh)
+        model.refresh(destination: .geohash("u4pruy"), now: now)
+        #expect(model.offer?.destination == .mesh)
+
+        // Without one, the caller's label stands.
+        model.destinationProvider = nil
+        model.refresh(destination: .geohash("u4pruy"), now: now)
+        #expect(model.offer?.destination == .geohash("u4pruy"))
+    }
+
     @Test("Confirmation consumes once and cancellation explicitly clears without producing composer text")
     @MainActor
     func oneTimeConfirmationAndCancellation() throws {

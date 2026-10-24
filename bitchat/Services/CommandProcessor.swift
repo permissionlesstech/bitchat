@@ -22,56 +22,58 @@ struct CommandGeoParticipant {
     let displayName: String
 }
 
-/// The conversation a command was typed into, captured when the command is
-/// issued so deferred output (e.g. an async /ping result, which can arrive
-/// many seconds later) lands there even if the user switches chats first.
-enum CommandOutputDestination: Equatable {
-    /// The #mesh public timeline. Commands that defer output (/ping) are
-    /// mesh-only, so a non-DM origin is always the mesh timeline.
-    case meshTimeline
-    /// The private chat that was open when the command was typed.
-    case privateChat(PeerID)
-}
-
 /// Protocol defining what CommandProcessor needs from its context.
 /// This breaks the circular dependency between CommandProcessor and ChatViewModel.
+///
+/// Every operation that acts on "a conversation" takes it explicitly: a
+/// command acts in the conversation it was typed into (its scope), which on
+/// a two-pane screen need not be the selected one.
 @MainActor
 protocol CommandContextProvider: AnyObject {
     // MARK: - State Properties
     var nickname: String { get }
-    var activeChannel: ChannelID { get }
-    var selectedPrivateChatPeer: PeerID? { get }
     var blockedUsers: Set<String> { get }
     var idBridge: NostrIdentityBridge { get }
 
     // MARK: - Peer Lookup
-    func getPeerIDForNickname(_ nickname: String) -> PeerID?
-    func getVisibleGeoParticipants() -> [CommandGeoParticipant]
-    func nostrPubkeyForDisplayName(_ displayName: String) -> String?
+    /// Resolves a name as `scope` sees people.
+    func getPeerIDForNickname(_ nickname: String, in scope: ChannelID) -> PeerID?
+    /// `scope`'s visible geohash participants: nobody unless it is the
+    /// selected geohash, the only one whose people are tracked.
+    func getVisibleGeoParticipants(in scope: ChannelID) -> [CommandGeoParticipant]
+    /// The geohash participant `scope` knows by `displayName`: nobody
+    /// unless it is the selected geohash, for the same reason.
+    func nostrPubkeyForDisplayName(_ displayName: String, in scope: ChannelID) -> String?
     /// A /block or /unblock by name changed which geohash participants are
     /// hidden; the roster re-filters instead of waiting for its timer.
     func geohashBlockListDidChange()
 
     // MARK: - Chat Actions
-    func startPrivateChat(with peerID: PeerID)
-    func sendPrivateMessage(_ content: String, to peerID: PeerID)
-    func clearCurrentPublicTimeline()
+    /// Opens the DM with `peerID` for a command typed into `origin`: a
+    /// refusal (a blocked peer's DM doesn't open) lands there, never in the
+    /// selection, which on a two-pane screen can be the other pane's.
+    func startPrivateChat(with peerID: PeerID, from origin: ConversationTarget)
+    /// `scope` is the DM's channel, whose identity signs a geohash DM.
+    func sendPrivateMessage(_ content: String, to peerID: PeerID, scope: ChannelID)
+    func clearPublicTimeline(_ channel: ChannelID)
     /// Empties the peer's chat (single-writer store intent for `/clear`).
     func clearPrivateChat(_ peerID: PeerID)
-    func sendPublicRaw(_ content: String)
-    /// Sends a normal public message (with local echo) to the active channel.
-    func sendPublicMessage(_ content: String)
+    /// Sends with no local echo. False when `channel` can't be sent to now
+    /// (a geohash that is no longer selected); the provider has said so in
+    /// that channel's timeline.
+    @discardableResult
+    func sendPublicRaw(_ content: String, to channel: ChannelID) -> Bool
+    /// Sends a normal public message (with local echo) to `channel`; false
+    /// as for `sendPublicRaw(_:to:)`.
+    @discardableResult
+    func sendPublicMessage(_ content: String, to channel: ChannelID) -> Bool
 
     // MARK: - System Messages
     func addLocalPrivateSystemMessage(_ content: String, to peerID: PeerID)
-    func addPublicSystemMessage(_ content: String)
-    /// The conversation the user is typing into right now. Commands that
-    /// finish asynchronously capture this BEFORE starting async work, so a
-    /// chat switch cannot misroute their deferred output.
-    func currentCommandDestination() -> CommandOutputDestination
+    func addPublicSystemMessage(_ content: String, to channel: ChannelID)
     /// Routes deferred command output (e.g. an async /ping result) into the
-    /// conversation captured when the command was issued.
-    func addCommandOutput(_ content: String, to destination: CommandOutputDestination)
+    /// conversation the command was typed into, captured when it was issued.
+    func addCommandOutput(_ content: String, to target: ConversationTarget)
 
     // MARK: - Favorites
     /// Toggles the favorite via the unified peer flow, which persists by the
@@ -80,11 +82,11 @@ protocol CommandContextProvider: AnyObject {
 
     // MARK: - Groups
     // Group logic lives in `ChatGroupCoordinator`; these forward the parsed
-    // /group subcommands.
+    // /group subcommands. `scope` names the group a command manages.
     func groupCreate(named name: String) -> CommandResult
-    func groupInvite(nickname: String) -> CommandResult
-    func groupRemove(nickname: String) -> CommandResult
-    func groupLeave() -> CommandResult
+    func groupInvite(nickname: String, in scope: ConversationTarget) -> CommandResult
+    func groupRemove(nickname: String, in scope: ConversationTarget) -> CommandResult
+    func groupLeave(in scope: ConversationTarget) -> CommandResult
     func groupList() -> CommandResult
 }
 
@@ -104,54 +106,52 @@ final class CommandProcessor {
         self.identityManager = identityManager
     }
     
-    /// Process a command string
+    /// Process a command typed into `scope`. Everything the command acts on
+    /// comes from the scope, never from the selection: whose names resolve,
+    /// which timeline it clears or posts to, which DM or group it acts in,
+    /// and where deferred output goes.
     @MainActor
-    func process(_ command: String) -> CommandResult {
+    func process(_ command: String, in scope: ConversationTarget) -> CommandResult {
         let parts = command.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
         guard let cmd = parts.first else { return .error(message: String(localized: "command.error.invalid", defaultValue: "invalid command", comment: "Error for an empty or unparseable slash command")) }
         let args = parts.count > 1 ? String(parts[1]) : ""
         
         // Geohash context: disable favoriting in public geohash or GeoDM
-        let inGeoPublic: Bool = {
-            switch contextProvider?.activeChannel ?? .mesh {
-            case .mesh: return false
-            case .location: return true
-            }
-        }()
-        let inGeoDM = contextProvider?.selectedPrivateChatPeer?.isGeoDM == true
+        let inGeoPublic = scope.channel.isLocation
+        let inGeoDM = scope.privatePeer?.isGeoDM == true
 
         switch cmd {
         case "/m", "/msg":
-            return handleMessage(args)
+            return handleMessage(args, in: scope)
         case "/w", "/who":
-            return handleWho()
+            return handleWho(in: scope)
         case "/clear":
-            return handleClear()
+            return handleClear(in: scope)
         case "/hug":
-            return handleEmote(args, command: "hug", action: "hugs", emoji: "🫂")
+            return handleEmote(args, command: "hug", action: "hugs", emoji: "🫂", in: scope)
         case "/slap":
-            return handleEmote(args, command: "slap", action: "slaps", emoji: "🐟", suffix: " around a bit with a large trout")
+            return handleEmote(args, command: "slap", action: "slaps", emoji: "🐟", suffix: " around a bit with a large trout", in: scope)
         case "/block":
-            return handleBlock(args)
+            return handleBlock(args, in: scope)
         case "/unblock":
-            return handleUnblock(args)
+            return handleUnblock(args, in: scope)
         case "/group":
             if inGeoPublic || inGeoDM { return .error(message: String(localized: "command.error.groups_mesh_only", defaultValue: "groups are only for mesh peers in #mesh", comment: "Error when a group command is used outside the mesh channel")) }
-            return handleGroup(args)
+            return handleGroup(args, in: scope)
         case "/fav":
             if inGeoPublic || inGeoDM { return .error(message: String(localized: "command.error.favorites_mesh_only", defaultValue: "favorites are only for mesh peers in #mesh", comment: "Error when a favorites command is used outside the mesh channel")) }
-            return handleFavorite(args, add: true)
+            return handleFavorite(args, add: true, in: scope)
         case "/unfav":
             if inGeoPublic || inGeoDM { return .error(message: String(localized: "command.error.favorites_mesh_only", defaultValue: "favorites are only for mesh peers in #mesh", comment: "Error when a favorites command is used outside the mesh channel")) }
-            return handleFavorite(args, add: false)
+            return handleFavorite(args, add: false, in: scope)
         case "/ping":
             if inGeoPublic || inGeoDM { return .error(message: String(localized: "command.error.ping_mesh_only", defaultValue: "ping only works for mesh peers in #mesh", comment: "Error when /ping is used outside the mesh channel")) }
-            return handlePing(args)
+            return handlePing(args, in: scope)
         case "/trace":
             if inGeoPublic || inGeoDM { return .error(message: String(localized: "command.error.trace_mesh_only", defaultValue: "trace only works for mesh peers in #mesh", comment: "Error when /trace is used outside the mesh channel")) }
-            return handleTrace(args)
+            return handleTrace(args, in: scope)
         case "/pay":
-            return handlePay(args)
+            return handlePay(args, in: scope)
         case "/drop":
             return handleDrop(args)
         case "/help":
@@ -200,7 +200,7 @@ final class CommandProcessor {
 
     // MARK: - Command Handlers
     
-    private func handleMessage(_ args: String) -> CommandResult {
+    private func handleMessage(_ args: String, in scope: ConversationTarget) -> CommandResult {
         let parts = args.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
         guard !parts.isEmpty else {
             return .error(message: String(localized: "command.msg.usage", defaultValue: "usage: /msg @nickname [message]", comment: "Usage hint for /msg"))
@@ -209,28 +209,30 @@ final class CommandProcessor {
         let targetName = String(parts[0])
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
         
-        guard let peerID = contextProvider?.getPeerIDForNickname(nickname) else {
+        guard let peerID = contextProvider?.getPeerIDForNickname(nickname, in: scope.channel) else {
             return .error(message: String(format: String(localized: "command.msg.not_found", defaultValue: "'%@' not found", comment: "Error when /msg can't resolve the nickname"), locale: .current, nickname))
         }
 
-        contextProvider?.startPrivateChat(with: peerID)
+        contextProvider?.startPrivateChat(with: peerID, from: scope)
 
         if parts.count > 1 {
             let message = String(parts[1])
-            contextProvider?.sendPrivateMessage(message, to: peerID)
+            // The new chat lives in the scope it was started from: a geohash
+            // participant's DM is signed with that geohash's identity.
+            contextProvider?.sendPrivateMessage(message, to: peerID, scope: scope.channel)
         }
         
         return .success(message: String(format: String(localized: "command.msg.started", defaultValue: "started private chat with %@", comment: "Confirmation after /msg opens a private chat"), locale: .current, nickname))
     }
     
-    private func handleWho() -> CommandResult {
+    private func handleWho(in scope: ConversationTarget) -> CommandResult {
         // Show geohash participants when in a geohash channel; otherwise mesh peers
-        switch contextProvider?.activeChannel ?? .mesh {
+        switch scope.channel {
         case .location(let ch):
             // Geohash context: show visible geohash participants (exclude self)
             guard let vm = contextProvider else { return .success(message: String(localized: "command.who.nobody", defaultValue: "nobody around", comment: "Reply to /who when no context is available")) }
             let myHex = (try? vm.idBridge.deriveIdentity(forGeohash: ch.geohash))?.publicKeyHex.lowercased()
-            let people = vm.getVisibleGeoParticipants().filter { person in
+            let people = vm.getVisibleGeoParticipants(in: scope.channel).filter { person in
                 if let me = myHex { return person.id.lowercased() != me }
                 return true
             }
@@ -247,16 +249,16 @@ final class CommandProcessor {
         }
     }
     
-    private func handleClear() -> CommandResult {
-        if let peerID = contextProvider?.selectedPrivateChatPeer {
+    private func handleClear(in scope: ConversationTarget) -> CommandResult {
+        if let peerID = scope.privatePeer {
             contextProvider?.clearPrivateChat(peerID)
         } else {
-            contextProvider?.clearCurrentPublicTimeline()
+            contextProvider?.clearPublicTimeline(scope.channel)
         }
         return .handled
     }
     
-    private func handleEmote(_ args: String, command: String, action: String, emoji: String, suffix: String = "") -> CommandResult {
+    private func handleEmote(_ args: String, command: String, action: String, emoji: String, suffix: String = "", in scope: ConversationTarget) -> CommandResult {
         let targetName = args.trimmed
         guard !targetName.isEmpty else {
             return .error(message: String(format: String(localized: "command.action.usage", defaultValue: "usage: /%@ <nickname>", comment: "Usage hint for a command that takes a nickname; placeholder is the command name"), locale: .current, command))
@@ -264,14 +266,14 @@ final class CommandProcessor {
         
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
         
-        guard let targetPeerID = contextProvider?.getPeerIDForNickname(nickname),
+        guard let targetPeerID = contextProvider?.getPeerIDForNickname(nickname, in: scope.channel),
               let myNickname = contextProvider?.nickname else {
             return .error(message: String(format: String(localized: "command.action.not_found", defaultValue: "cannot %1$@ %2$@: not found", comment: "Error when an action command can't resolve its target; placeholders are the command and the nickname"), locale: .current, command, nickname))
         }
         
         let emoteContent = "* \(emoji) \(myNickname) \(action) \(nickname)\(suffix) *"
         
-        if contextProvider?.selectedPrivateChatPeer != nil {
+        if scope.privatePeer != nil {
             // In private chat
             if let peerNickname = meshService?.peerNickname(peerID: targetPeerID) {
                 let personalMessage = "* \(emoji) \(myNickname) \(action) you\(suffix) *"
@@ -290,16 +292,20 @@ final class CommandProcessor {
                 contextProvider?.addLocalPrivateSystemMessage(localText, to: targetPeerID)
             }
         } else {
-            // In public chat: send to active public channel (mesh or geohash)
-            contextProvider?.sendPublicRaw(emoteContent)
+            // In public chat: send to the scope's channel (mesh or geohash).
+            // A geohash that is no longer selected sends nothing and says
+            // so, and gets no echo for an emote nobody received.
+            guard contextProvider?.sendPublicRaw(emoteContent, to: scope.channel) == true else {
+                return .handled
+            }
             let publicEcho = "\(emoji) \(myNickname) \(action) \(nickname)\(suffix)"
-            contextProvider?.addPublicSystemMessage(publicEcho)
+            contextProvider?.addPublicSystemMessage(publicEcho, to: scope.channel)
         }
         
         return .handled
     }
     
-    private func handleBlock(_ args: String) -> CommandResult {
+    private func handleBlock(_ args: String, in scope: ConversationTarget) -> CommandResult {
         let targetName = args.trimmed
         
         if targetName.isEmpty {
@@ -319,7 +325,7 @@ final class CommandProcessor {
             let geoBlocked = Array(identityManager.getBlockedNostrPubkeys())
             var geoNames: [String] = []
             if let vm = contextProvider {
-                let visible = vm.getVisibleGeoParticipants()
+                let visible = vm.getVisibleGeoParticipants(in: scope.channel)
                 let visibleIndex = Dictionary(uniqueKeysWithValues: visible.map { ($0.id.lowercased(), $0.displayName) })
                 for pk in geoBlocked {
                     if let name = visibleIndex[pk.lowercased()] {
@@ -338,7 +344,7 @@ final class CommandProcessor {
         
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
         
-        if let peerID = contextProvider?.getPeerIDForNickname(nickname),
+        if let peerID = contextProvider?.getPeerIDForNickname(nickname, in: scope.channel),
            let fingerprint = meshService?.getFingerprint(for: peerID) {
             if identityManager.isBlocked(fingerprint: fingerprint) {
                 return .success(message: String(format: String(localized: "command.block.already", defaultValue: "%@ is already blocked", comment: "Reply when /block targets an already-blocked nickname"), locale: .current, nickname))
@@ -365,8 +371,9 @@ final class CommandProcessor {
             meshArchive?.purgeArchivedPublicMessages(from: peerID)
             return .success(message: String(format: String(localized: "command.block.done", defaultValue: "blocked %@. you will no longer see their messages", comment: "Confirmation after blocking a mesh peer"), locale: .current, nickname))
         }
-        // Mesh lookup failed; try geohash (Nostr) participant by display name
-        if let pub = contextProvider?.nostrPubkeyForDisplayName(nickname) {
+        // Mesh lookup failed; try a participant of the scope's geohash by
+        // display name (never another channel's people).
+        if let pub = contextProvider?.nostrPubkeyForDisplayName(nickname, in: scope.channel) {
             if identityManager.isNostrBlocked(pubkeyHexLowercased: pub) {
                 return .success(message: String(format: String(localized: "command.block.already", defaultValue: "%@ is already blocked", comment: "Reply when /block targets an already-blocked nickname"), locale: .current, nickname))
             }
@@ -378,7 +385,7 @@ final class CommandProcessor {
         return .error(message: String(format: String(localized: "command.block.failed", defaultValue: "cannot block %@: not found or unable to verify identity", comment: "Error when /block can't resolve or verify the target"), locale: .current, nickname))
     }
     
-    private func handleUnblock(_ args: String) -> CommandResult {
+    private func handleUnblock(_ args: String, in scope: ConversationTarget) -> CommandResult {
         let targetName = args.trimmed
         guard !targetName.isEmpty else {
             return .error(message: String(localized: "command.unblock.usage", defaultValue: "usage: /unblock <nickname>", comment: "Usage hint for /unblock"))
@@ -386,7 +393,7 @@ final class CommandProcessor {
         
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
         
-        if let peerID = contextProvider?.getPeerIDForNickname(nickname),
+        if let peerID = contextProvider?.getPeerIDForNickname(nickname, in: scope.channel),
            let fingerprint = meshService?.getFingerprint(for: peerID) {
             if !identityManager.isBlocked(fingerprint: fingerprint) {
                 return .success(message: String(format: String(localized: "command.unblock.not_blocked", defaultValue: "%@ is not blocked", comment: "Reply when /unblock targets a nickname that isn't blocked"), locale: .current, nickname))
@@ -394,8 +401,8 @@ final class CommandProcessor {
             identityManager.setBlocked(fingerprint, isBlocked: false)
             return .success(message: String(format: String(localized: "command.unblock.done", defaultValue: "unblocked %@", comment: "Confirmation after unblocking a mesh peer"), locale: .current, nickname))
         }
-        // Try geohash unblock
-        if let pub = contextProvider?.nostrPubkeyForDisplayName(nickname) {
+        // Try geohash unblock, in the scope's geohash only
+        if let pub = contextProvider?.nostrPubkeyForDisplayName(nickname, in: scope.channel) {
             if !identityManager.isNostrBlocked(pubkeyHexLowercased: pub) {
                 return .success(message: String(format: String(localized: "command.unblock.not_blocked", defaultValue: "%@ is not blocked", comment: "Reply when /unblock targets a nickname that isn't blocked"), locale: .current, nickname))
             }
@@ -408,7 +415,7 @@ final class CommandProcessor {
     
     private static var groupUsage: String { String(localized: "command.group.usage", defaultValue: "usage: /group create <name> · invite @name · remove @name · leave · list", comment: "Usage hint for /group subcommands") }
 
-    private func handleGroup(_ args: String) -> CommandResult {
+    private func handleGroup(_ args: String, in scope: ConversationTarget) -> CommandResult {
         let parts = args.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
         guard let subcommand = parts.first else {
             return .error(message: Self.groupUsage)
@@ -420,11 +427,11 @@ final class CommandProcessor {
         case "create":
             return provider.groupCreate(named: rest)
         case "invite":
-            return provider.groupInvite(nickname: rest)
+            return provider.groupInvite(nickname: rest, in: scope)
         case "remove":
-            return provider.groupRemove(nickname: rest)
+            return provider.groupRemove(nickname: rest, in: scope)
         case "leave":
-            return provider.groupLeave()
+            return provider.groupLeave(in: scope)
         case "list":
             return provider.groupList()
         default:
@@ -441,32 +448,32 @@ final class CommandProcessor {
 
     /// Resolves a mesh peer for /ping and /trace. Geohash identities are
     /// rejected — diagnostics measure the BLE mesh, not Nostr.
-    private func resolveMeshPeer(_ args: String, command: String) -> MeshPeerResolution {
+    private func resolveMeshPeer(_ args: String, command: String, in scope: ConversationTarget) -> MeshPeerResolution {
         let targetName = args.trimmed
         guard !targetName.isEmpty else {
             return .failed(.error(message: String(format: String(localized: "command.action.usage", defaultValue: "usage: /%@ <nickname>", comment: "Usage hint for a command that takes a nickname; placeholder is the command name"), locale: .current, command)))
         }
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
-        guard let peerID = contextProvider?.getPeerIDForNickname(nickname),
+        guard let peerID = contextProvider?.getPeerIDForNickname(nickname, in: scope.channel),
               !peerID.isGeoDM, !peerID.isGeoChat else {
             return .failed(.error(message: String(format: String(localized: "command.action.not_found_mesh", defaultValue: "cannot %1$@ %2$@: not found on mesh", comment: "Error when a mesh-only command can't resolve its target; placeholders are the command and the nickname"), locale: .current, command, nickname)))
         }
         return .resolved(peerID: peerID, nickname: nickname)
     }
 
-    private func handlePing(_ args: String) -> CommandResult {
+    private func handlePing(_ args: String, in scope: ConversationTarget) -> CommandResult {
         let target: (peerID: PeerID, nickname: String)
-        switch resolveMeshPeer(args, command: "ping") {
+        switch resolveMeshPeer(args, command: "ping", in: scope) {
         case .resolved(let peerID, let nickname): target = (peerID, nickname)
         case .failed(let result): return result
         }
 
         let nickname = target.nickname
         let currentProvider = contextProvider
-        // Capture the origin conversation now: the pong can arrive up to
-        // meshPingTimeoutSeconds later, and reading the selected chat at
-        // callback time would misroute the result after a chat switch.
-        let destination = contextProvider?.currentCommandDestination() ?? .meshTimeline
+        // The result goes where the command was typed: the pong can arrive
+        // up to meshPingTimeoutSeconds later, and reading the selected chat
+        // at callback time would misroute it after a chat switch.
+        let destination = scope
         meshDiagnostics?.sendMeshPing(to: target.peerID) { [weak currentProvider] result in
             let provider = currentProvider
             guard let result else {
@@ -481,9 +488,9 @@ final class CommandProcessor {
         return .success(message: String(format: String(localized: "command.ping.started", defaultValue: "pinging %@…", comment: "Confirmation that /ping sent a probe"), locale: .current, nickname))
     }
 
-    private func handleTrace(_ args: String) -> CommandResult {
+    private func handleTrace(_ args: String, in scope: ConversationTarget) -> CommandResult {
         let target: (peerID: PeerID, nickname: String)
-        switch resolveMeshPeer(args, command: "trace") {
+        switch resolveMeshPeer(args, command: "trace", in: scope) {
         case .resolved(let peerID, let nickname): target = (peerID, nickname)
         case .failed(let result): return result
         }
@@ -511,7 +518,7 @@ final class CommandProcessor {
     /// instruments (whoever redeems first gets the funds), so posting one to
     /// a public channel requires an explicit `/pay <token> public` confirm.
     /// The app never contacts a mint; it only relays the string.
-    private func handlePay(_ args: String) -> CommandResult {
+    private func handlePay(_ args: String, in scope: ConversationTarget) -> CommandResult {
         var parts = args.trimmed.split(separator: " ").map(String.init)
         guard !parts.isEmpty else {
             return .success(message: String(localized: "command.pay.usage", defaultValue: "usage: /pay <token> — paste a cashu token: /pay cashuA…", comment: "Usage hint for /pay"))
@@ -529,8 +536,8 @@ final class CommandProcessor {
 
         let summary = info.displayAmount ?? "a cashu token"
 
-        if let peerID = contextProvider?.selectedPrivateChatPeer {
-            contextProvider?.sendPrivateMessage(token, to: peerID)
+        if let peerID = scope.privatePeer {
+            contextProvider?.sendPrivateMessage(token, to: peerID, scope: scope.channel)
             return .success(message: String(format: String(localized: "command.pay.sent_private", defaultValue: "sent %@ — cashu is a bearer token; whoever redeems it first gets the funds", comment: "Confirmation after sending a cashu token in a private chat; placeholder is the amount summary"), locale: .current, summary))
         }
 
@@ -538,11 +545,15 @@ final class CommandProcessor {
             return .error(message: String(localized: "command.pay.public_confirm", defaultValue: "this is a public channel — anyone reading it can redeem the token. send anyway: /pay <token> public", comment: "Confirmation gate before sending a cashu token to a public channel"))
         }
 
-        contextProvider?.sendPublicMessage(token)
+        guard contextProvider?.sendPublicMessage(token, to: scope.channel) == true else {
+            // Not sent: the scope is a geohash that is no longer selected,
+            // and its timeline already says so.
+            return .handled
+        }
         return .success(message: String(format: String(localized: "command.pay.sent_public", defaultValue: "sent %@ to the public channel — anyone here can redeem it", comment: "Confirmation after sending a cashu token to a public channel; placeholder is the amount summary"), locale: .current, summary))
     }
 
-    private func handleFavorite(_ args: String, add: Bool) -> CommandResult {
+    private func handleFavorite(_ args: String, add: Bool, in scope: ConversationTarget) -> CommandResult {
         let targetName = args.trimmed
         guard !targetName.isEmpty else {
             return .error(message: String(format: String(localized: "command.action.usage", defaultValue: "usage: /%@ <nickname>", comment: "Usage hint for a command that takes a nickname; placeholder is the command name"), locale: .current, (add ? "fav" : "unfav")))
@@ -550,7 +561,7 @@ final class CommandProcessor {
 
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
 
-        guard let peerID = contextProvider?.getPeerIDForNickname(nickname) else {
+        guard let peerID = contextProvider?.getPeerIDForNickname(nickname, in: scope.channel) else {
             return .error(message: String(format: String(localized: "command.fav.not_found", defaultValue: "can't find peer: %@", comment: "Error when /fav or /unfav can't resolve the nickname"), locale: .current, nickname))
         }
 
