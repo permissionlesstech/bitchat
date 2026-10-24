@@ -142,6 +142,13 @@ private func installSmokeEnvironment<V: View>(
         ))
 }
 
+/// A photo button that picks nothing.
+#if os(iOS)
+private let noMediaPick: MediaPickAction = { _ in }
+#else
+private let noMediaPick: MediaPickAction = {}
+#endif
+
 @MainActor
 private struct ContentPeopleSheetHarness: View {
     /// The open DM, as ContentView's secondary slot targets it.
@@ -159,7 +166,6 @@ private struct ContentPeopleSheetHarness: View {
     @State private var mediaPickRequest: MediaPickRequest?
 
     var body: some View {
-        #if os(iOS)
         ContentPeopleSheetView(
             showSidebar: $showSidebar,
             selectedMessageSender: $selectedMessageSender,
@@ -174,28 +180,9 @@ private struct ContentPeopleSheetHarness: View {
             voiceRecordingVM: voiceRecordingVM,
             headerHeight: 44,
             onSendMessage: {},
-            onPickMedia: { _ in },
+            onPickMedia: noMediaPick,
             mediaPickRequest: $mediaPickRequest
         )
-        #else
-        ContentPeopleSheetView(
-            showSidebar: $showSidebar,
-            selectedMessageSender: $selectedMessageSender,
-            selectedMessageSenderID: $selectedMessageSenderID,
-            imagePreviewURL: $imagePreviewURL,
-            windowCountPublic: $windowCountPublic,
-            windowCountPrivate: $windowCountPrivate,
-            isAtBottomPrivate: $isAtBottomPrivate,
-            composer: composers.secondary,
-            target: target,
-            focusedComposer: $focusedComposer,
-            voiceRecordingVM: voiceRecordingVM,
-            headerHeight: 44,
-            onSendMessage: {},
-            onPickMedia: {},
-            mediaPickRequest: $mediaPickRequest
-        )
-        #endif
     }
 }
 
@@ -207,23 +194,13 @@ private struct ComposerHarness: View {
     @FocusState private var focusedComposer: ComposerSlot?
 
     var body: some View {
-        #if os(iOS)
         ContentComposerView(
             session: session,
             focus: $focusedComposer,
             voiceRecordingVM: voiceRecordingVM,
             onSend: {},
-            onPickMedia: { _ in }
+            onPickMedia: noMediaPick
         )
-        #else
-        ContentComposerView(
-            session: session,
-            focus: $focusedComposer,
-            voiceRecordingVM: voiceRecordingVM,
-            onSend: {},
-            onPickMedia: {}
-        )
-        #endif
     }
 }
 

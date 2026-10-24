@@ -33,11 +33,7 @@ struct ContentComposerView: View {
     let onSend: () -> Void
     /// The photo button: the owner records the session's target with the
     /// source and presents the picker.
-    #if os(iOS)
-    let onPickMedia: (UIImagePickerController.SourceType) -> Void
-    #else
-    let onPickMedia: () -> Void
-    #endif
+    let onPickMedia: MediaPickAction
 
     private var slot: ComposerSlot { session.slot }
     /// Where this composer sends; nil while it has no conversation, when it

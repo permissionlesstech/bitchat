@@ -970,7 +970,7 @@ struct ContentView: View {
             HStack(spacing: 0) {
                 // The first child in both modes, so its bar, and the
                 // app-wide presentations the bar hosts, outlive a fold.
-                appChromePane(split: split, corners: corners)
+                appChromePane(isSplit: split != nil, leadingWidth: split?.leadingWidth, corners: corners)
                     // One container per pane, so VoiceOver reads one
                     // conversation at a time instead of across the hinge
                     // row by row. Unconditional: this pane keeps one
@@ -1007,28 +1007,7 @@ struct ContentView: View {
             }
         }
         #else
-        publicPane(
-            bar: {
-                appChromeBar(
-                    ContentHeaderView(
-                        showSidebar: $showSidebar,
-                        showVerifySheet: $showVerifySheet,
-                        isNicknameFieldFocused: $isNicknameFieldFocused,
-                        headerHeight: headerHeight,
-                        headerPeerIconSize: headerPeerIconSize,
-                        headerPeerCountFontSize: headerPeerCountFontSize
-                    )
-                )
-            },
-            timeline: {
-                followingTimelineList(composer: selectedPrivatePeerID == nil ? composers.primary : nil)
-            },
-            composer: {
-                if selectedPrivatePeerID == nil {
-                    composerView(for: .primary)
-                }
-            }
-        )
+        appChromePane(isSplit: false, leadingWidth: nil, corners: TopCornerClearance())
         #endif
     }
 
@@ -1151,6 +1130,71 @@ struct ContentView: View {
         )
     }
 
+    /// The single column, or the split layout's leading #mesh pane: its
+    /// own bar (the app chrome, a static #mesh badge, mesh people), the
+    /// pinned #mesh timeline and a composer that sends to #mesh. macOS has
+    /// only the single column.
+    /// - Parameter leadingWidth: Split, the pane's width, which its people
+    ///   popover stays within.
+    private func appChromePane(isSplit: Bool, leadingWidth: CGFloat?, corners: TopCornerClearance) -> some View {
+        publicPane(
+            bar: {
+                #if os(iOS)
+                let onPeopleTap = peopleTap(.leading)
+                #else
+                let onPeopleTap: (() -> Void)? = nil
+                #endif
+                appChromeBar(
+                    ContentHeaderView(
+                        showSidebar: $showSidebar,
+                        showVerifySheet: $showVerifySheet,
+                        isNicknameFieldFocused: $isNicknameFieldFocused,
+                        headerHeight: headerHeight,
+                        headerPeerIconSize: headerPeerIconSize,
+                        headerPeerCountFontSize: headerPeerCountFontSize,
+                        leadingCornerReach: corners.leading,
+                        // Split, the bar ends at the fold and the trailing
+                        // pane's top row meets the trailing corner instead.
+                        trailingCornerReach: isSplit ? 0 : corners.trailing,
+                        paneChannel: isSplit ? .mesh : nil,
+                        onPeopleTap: onPeopleTap,
+                        defersAlerts: { isPeoplePopoverPresented || isLegacyConsentShowingAtRoot }
+                    )
+                    #if os(iOS)
+                    // Anchored to the whole bar, so it centres in the pane,
+                    // off the hinge.
+                    .contentPeoplePopover(
+                        isPresented: peoplePopoverBinding(.leading),
+                        channel: .mesh,
+                        paneWidth: leadingWidth ?? 0,
+                        onClose: popoverClose(.leading)
+                    )
+                    #endif
+                )
+            },
+            timeline: {
+                #if os(iOS)
+                if isSplit, let meshPaneTimeline {
+                    meshPaneList(meshPaneTimeline)
+                } else {
+                    // Its composer is hidden while a DM is open: no
+                    // mention then.
+                    followingTimelineList(composer: selectedPrivatePeerID == nil ? composers.primary : nil)
+                }
+                #else
+                followingTimelineList(composer: selectedPrivatePeerID == nil ? composers.primary : nil)
+                #endif
+            },
+            composer: {
+                // The single column hides it under the DM sheet; the #mesh
+                // pane keeps it beside the trailing DM.
+                if isSplit || selectedPrivatePeerID == nil {
+                    composerView(for: .primary)
+                }
+            }
+        )
+    }
+
     #if os(iOS)
     /// What the split layout's trailing pane shows: the open DM, the
     /// selected geohash, or the picker (idle, or browsing from the
@@ -1166,58 +1210,6 @@ struct ContentView: View {
             openPeer: openPeer,
             timelineChannel: timelineChannel,
             selection: locationChannelsModel.selectedChannel
-        )
-    }
-
-    /// The single column, or the split layout's leading #mesh pane: its
-    /// own bar (the app chrome, a static #mesh badge, mesh people), the
-    /// pinned #mesh timeline and a composer that sends to #mesh.
-    private func appChromePane(split: ContentSplitLayout?, corners: TopCornerClearance) -> some View {
-        let isSplit = split != nil
-        return publicPane(
-            bar: {
-                appChromeBar(
-                    ContentHeaderView(
-                        showSidebar: $showSidebar,
-                        showVerifySheet: $showVerifySheet,
-                        isNicknameFieldFocused: $isNicknameFieldFocused,
-                        headerHeight: headerHeight,
-                        headerPeerIconSize: headerPeerIconSize,
-                        headerPeerCountFontSize: headerPeerCountFontSize,
-                        leadingCornerReach: corners.leading,
-                        // Split, the bar ends at the fold and the trailing
-                        // pane's top row meets the trailing corner instead.
-                        trailingCornerReach: isSplit ? 0 : corners.trailing,
-                        paneChannel: isSplit ? .mesh : nil,
-                        onPeopleTap: peopleTap(.leading),
-                        defersAlerts: { isPeoplePopoverPresented || isLegacyConsentShowingAtRoot }
-                    )
-                    // Anchored to the whole bar, so it centres in the pane,
-                    // off the hinge.
-                    .contentPeoplePopover(
-                        isPresented: peoplePopoverBinding(.leading),
-                        channel: .mesh,
-                        paneWidth: split?.leadingWidth ?? 0,
-                        onClose: popoverClose(.leading)
-                    )
-                )
-            },
-            timeline: {
-                if isSplit, let meshPaneTimeline {
-                    meshPaneList(meshPaneTimeline)
-                } else {
-                    // Its composer is hidden while a DM is open: no
-                    // mention then.
-                    followingTimelineList(composer: selectedPrivatePeerID == nil ? composers.primary : nil)
-                }
-            },
-            composer: {
-                // The single column hides it under the DM sheet; the #mesh
-                // pane keeps it beside the trailing DM.
-                if isSplit || selectedPrivatePeerID == nil {
-                    composerView(for: .primary)
-                }
-            }
         )
     }
 
@@ -1603,7 +1595,7 @@ struct ContentView: View {
     /// A composer's photo button: records the composer's conversation with
     /// the source and puts the picker up.
     #if os(iOS)
-    private func mediaPicker(for slot: ComposerSlot) -> (UIImagePickerController.SourceType) -> Void {
+    private func mediaPicker(for slot: ComposerSlot) -> MediaPickAction {
         { [composers] source in
             assertComposerIsCurrent(slot)
             guard let request = composers.mediaPickRequest(from: slot, source: source) else { return }
@@ -1611,7 +1603,7 @@ struct ContentView: View {
         }
     }
     #else
-    private func mediaPicker(for slot: ComposerSlot) -> () -> Void {
+    private func mediaPicker(for slot: ComposerSlot) -> MediaPickAction {
         { [composers] in
             assertComposerIsCurrent(slot)
             guard let request = composers.mediaPickRequest(from: slot) else { return }

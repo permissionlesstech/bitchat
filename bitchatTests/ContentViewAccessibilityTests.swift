@@ -51,7 +51,7 @@ struct ContentViewAccessibilityTests {
     @Test
     func bothPanesAreAccessibilityContainers() throws {
         let lines = try Self.contentViewLines()
-        for pane in ["appChromePane(split: split, corners: corners)", "trailingPane(width: split.trailingWidth"] {
+        for pane in ["appChromePane(isSplit: split != nil", "trailingPane(width: split.trailingWidth"] {
             let chain = try #require(Self.modifiers(of: pane, in: lines), "\(pane) not found")
             #expect(chain.contains(".accessibilityElement(children: .contain)"), "\(pane): \(chain)")
         }

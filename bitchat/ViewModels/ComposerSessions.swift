@@ -95,6 +95,15 @@ struct MediaPickRequest: Identifiable {
     #endif
 }
 
+#if os(iOS)
+/// A composer's photo button: the library on a tap, the camera on a long
+/// press.
+typealias MediaPickAction = (UIImagePickerController.SourceType) -> Void
+#else
+/// A composer's photo button (macOS has the one source).
+typealias MediaPickAction = () -> Void
+#endif
+
 /// Sends a composer's text to the conversation it was taken for. There is
 /// no form without a target: a composer never sends to the selection.
 /// `ConversationUIModel` is the app's.

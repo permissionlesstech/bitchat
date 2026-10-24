@@ -48,11 +48,7 @@ struct ContentPeopleSheetView: View {
 
     let headerHeight: CGFloat
     let onSendMessage: () -> Void
-    #if os(iOS)
-    let onPickMedia: (UIImagePickerController.SourceType) -> Void
-    #else
-    let onPickMedia: () -> Void
-    #endif
+    let onPickMedia: MediaPickAction
     /// A pick from the DM composer presents from this sheet, which the root
     /// can't present over.
     @Binding var mediaPickRequest: MediaPickRequest?
@@ -756,11 +752,7 @@ struct ContentPrivateChatSheetView: View {
 
     let headerHeight: CGFloat
     let onSendMessage: () -> Void
-    #if os(iOS)
-    let onPickMedia: (UIImagePickerController.SourceType) -> Void
-    #else
-    let onPickMedia: () -> Void
-    #endif
+    let onPickMedia: MediaPickAction
 
     /// Shown in the split layout's trailing pane rather than the sheet: the
     /// back chevron and swipe-to-leave bring the pane's channel or picker
