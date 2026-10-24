@@ -946,11 +946,18 @@ struct ContentView: View {
                 // The first child in both modes, so its bar, and the
                 // app-wide presentations the bar hosts, outlive a fold.
                 appChromePane(split: split, corners: corners)
+                    // One container per pane, so VoiceOver reads one
+                    // conversation at a time instead of across the hinge
+                    // row by row. Unconditional: this pane keeps one
+                    // identity across folds, and as the single column it
+                    // is the only container.
+                    .accessibilityElement(children: .contain)
                     .frame(width: split?.leadingWidth)
                     .background(PaneFrameReader(frame: $leadingPaneFrame))
                 if let split {
                     ContentColumnGap(width: split.gapWidth)
                     trailingPane(width: split.trailingWidth, trailingCornerReach: corners.trailing)
+                        .accessibilityElement(children: .contain)
                         .frame(width: split.trailingWidth)
                         .background(PaneFrameReader(frame: $trailingPaneFrame))
                 }
@@ -1356,7 +1363,10 @@ struct ContentView: View {
     }
 
     /// A touch went down in the window. A touch on something presented
-    /// over the panes, a popover included, touches neither pane.
+    /// over the panes, a popover included, touches neither pane. VoiceOver
+    /// navigation delivers no touches (`PaneTouchObserver`'s known
+    /// limitation): only its activations move the focus, through E1's
+    /// semantic overrides.
     private func paneTouched(at point: CGPoint) {
         guard isSplitLayout,
               !hasRootModalPresentation,

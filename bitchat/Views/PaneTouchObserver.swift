@@ -18,6 +18,18 @@ import UIKit.UIGestureRecognizerSubclass
 /// or a simultaneous gesture on a scroll view) competes with theirs, while
 /// the window's recognizer here fails at every touch-down, so it never
 /// blocks, delays or cancels any other gesture.
+///
+/// Known limitation: VoiceOver's navigation delivers no touches. Swiping
+/// from element to element, or a three-finger scroll, in a pane doesn't
+/// make it the last touched; what VoiceOver activates still moves the
+/// focus through E1's semantic overrides (a composer taking the keyboard
+/// or typed in, a people button, the trailing badge, a picker choice, a DM
+/// opening). VoiceOver's own focus changes
+/// (`UIAccessibility.elementFocusedNotification`) are deliberately not
+/// mapped onto the panes: VoiceOver also moves its cursor by itself, after
+/// content and layout changes and as presentations close, and nothing
+/// tells those moves from a person's swipe. A fold would then park the pane
+/// the person was in (E3).
 struct PaneTouchObserver: UIViewRepresentable {
     /// A touch went down at this point, in window coordinates.
     let onTouchDown: (CGPoint) -> Void
