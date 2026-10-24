@@ -336,6 +336,327 @@ struct BoardStoreTests {
         #expect(store.syncCandidates().count == cycles)
     }
 
+    // MARK: - Endorsements
+
+    private func makeEndorsement(
+        of post: BoardPostPacket,
+        endorser: Curve25519.Signing.PrivateKey,
+        endorsedAt: UInt64,
+        postAuthorKey: Data? = nil,
+        postDigest: Data? = nil
+    ) throws -> (wire: BoardWire, packet: BitchatPacket) {
+        let authorKey = postAuthorKey ?? post.authorSigningKey
+        let digest = postDigest ?? post.digest
+        let endorserKey = endorser.publicKey.rawRepresentation
+        let endorsement = BoardEndorsementPacket(
+            postID: post.postID,
+            postAuthorSigningKey: authorKey,
+            postDigest: digest,
+            endorserSigningKey: endorserKey,
+            endorsedAt: endorsedAt,
+            signature: try endorser.signature(for: BoardEndorsementPacket.signingBytes(
+                postID: post.postID,
+                postAuthorSigningKey: authorKey,
+                postDigest: digest,
+                endorserSigningKey: endorserKey,
+                endorsedAt: endorsedAt
+            ))
+        )
+        let wire = BoardWire.endorsement(endorsement)
+        return (wire, makePacket(payload: wire.encode(), timestamp: endorsedAt))
+    }
+
+    @Test func endorsementIsStoredAndDeduplicated() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let entry = try makePost(author: Curve25519.Signing.PrivateKey(), createdAt: baseMs)
+        store.ingest(entry.wire, packet: entry.packet)
+        let endorser = Curve25519.Signing.PrivateKey()
+        let endorsement = try makeEndorsement(of: entry.post, endorser: endorser, endorsedAt: baseMs + 1)
+
+        #expect(store.ingest(endorsement.wire, packet: endorsement.packet) == .accepted)
+        #expect(store.ingest(endorsement.wire, packet: endorsement.packet) == .duplicate)
+        #expect(store.endorserKeys(forPostID: entry.post.postID) == [endorser.publicKey.rawRepresentation])
+        #expect(store.syncCandidates().count == 2)
+    }
+
+    @Test func selfEndorsementIsRejected() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let author = Curve25519.Signing.PrivateKey()
+        let entry = try makePost(author: author, createdAt: baseMs)
+        store.ingest(entry.wire, packet: entry.packet)
+
+        let endorsement = try makeEndorsement(of: entry.post, endorser: author, endorsedAt: baseMs + 1)
+        #expect(store.ingest(endorsement.wire, packet: endorsement.packet) == .rejected)
+        #expect(store.endorserKeys(forPostID: entry.post.postID).isEmpty)
+    }
+
+    @Test func endorsementNamingWrongAuthorIsRejected() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let entry = try makePost(author: Curve25519.Signing.PrivateKey(), createdAt: baseMs)
+        store.ingest(entry.wire, packet: entry.packet)
+
+        let endorsement = try makeEndorsement(
+            of: entry.post,
+            endorser: Curve25519.Signing.PrivateKey(),
+            endorsedAt: baseMs + 1,
+            postAuthorKey: Curve25519.Signing.PrivateKey().publicKey.rawRepresentation
+        )
+        #expect(store.ingest(endorsement.wire, packet: endorsement.packet) == .rejected)
+    }
+
+    @Test func endorsementFromTheFutureIsRejected() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let entry = try makePost(author: Curve25519.Signing.PrivateKey(), createdAt: baseMs)
+        store.ingest(entry.wire, packet: entry.packet)
+
+        let tooEarly = baseMs + BoardStore.Limits.clockSkewMs + 1
+        let endorsement = try makeEndorsement(of: entry.post, endorser: Curve25519.Signing.PrivateKey(), endorsedAt: tooEarly)
+        #expect(store.ingest(endorsement.wire, packet: endorsement.packet) == .rejected)
+    }
+
+    @Test func endorsementArrivingBeforePostCountsOnceThePostLands() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let entry = try makePost(author: Curve25519.Signing.PrivateKey(), createdAt: baseMs)
+        let endorser = Curve25519.Signing.PrivateKey()
+        let endorsement = try makeEndorsement(of: entry.post, endorser: endorser, endorsedAt: baseMs + 1)
+
+        #expect(store.ingest(endorsement.wire, packet: endorsement.packet) == .accepted)
+        #expect(store.endorserKeys(forPostID: entry.post.postID).isEmpty)
+
+        #expect(store.ingest(entry.wire, packet: entry.packet) == .accepted)
+        #expect(store.endorserKeys(forPostID: entry.post.postID) == [endorser.publicKey.rawRepresentation])
+    }
+
+    @Test func orphanEndorsementForADifferentAuthorIsDroppedWhenThePostLands() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let entry = try makePost(author: Curve25519.Signing.PrivateKey(), createdAt: baseMs)
+        let misattributed = try makeEndorsement(
+            of: entry.post,
+            endorser: Curve25519.Signing.PrivateKey(),
+            endorsedAt: baseMs + 1,
+            postAuthorKey: Curve25519.Signing.PrivateKey().publicKey.rawRepresentation
+        )
+        #expect(store.ingest(misattributed.wire, packet: misattributed.packet) == .accepted)
+
+        store.ingest(entry.wire, packet: entry.packet)
+        #expect(store.endorserKeys(forPostID: entry.post.postID).isEmpty)
+        #expect(store.syncCandidates().count == 1)
+    }
+
+    @Test func tombstoneDropsThePostsEndorsements() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let author = Curve25519.Signing.PrivateKey()
+        let entry = try makePost(author: author, createdAt: baseMs)
+        store.ingest(entry.wire, packet: entry.packet)
+        let endorsement = try makeEndorsement(of: entry.post, endorser: Curve25519.Signing.PrivateKey(), endorsedAt: baseMs + 1)
+        store.ingest(endorsement.wire, packet: endorsement.packet)
+
+        let tombstone = try makeTombstone(for: entry.post, author: author, deletedAt: baseMs + 2)
+        store.ingest(tombstone.wire, packet: tombstone.packet)
+
+        #expect(store.endorserKeys(forPostID: entry.post.postID).isEmpty)
+        // Only the tombstone keeps syncing; a late copy of the endorsement is refused.
+        #expect(store.syncCandidates().count == 1)
+        #expect(store.ingest(endorsement.wire, packet: endorsement.packet) == .rejected)
+    }
+
+    @Test func endorsementsExpireWithTheirPost() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let entry = try makePost(author: Curve25519.Signing.PrivateKey(), createdAt: baseMs, lifetimeMs: 60 * 60 * 1000)
+        store.ingest(entry.wire, packet: entry.packet)
+        let endorsement = try makeEndorsement(of: entry.post, endorser: Curve25519.Signing.PrivateKey(), endorsedAt: baseMs + 1)
+        store.ingest(endorsement.wire, packet: endorsement.packet)
+
+        clock.now = baseDate.addingTimeInterval(2 * 60 * 60)
+        #expect(store.syncCandidates().isEmpty)
+    }
+
+    @Test func perPostCapKeepsTheFirstEndorsers() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let entry = try makePost(author: Curve25519.Signing.PrivateKey(), createdAt: baseMs)
+        store.ingest(entry.wire, packet: entry.packet)
+
+        var firstKeys: [Data] = []
+        for index in 0..<BoardStore.Limits.maxEndorsementsPerPost {
+            let endorser = Curve25519.Signing.PrivateKey()
+            firstKeys.append(endorser.publicKey.rawRepresentation)
+            let endorsement = try makeEndorsement(of: entry.post, endorser: endorser, endorsedAt: baseMs + UInt64(index))
+            #expect(store.ingest(endorsement.wire, packet: endorsement.packet) == .accepted)
+        }
+        // A burst of fresh keys still relays but cannot displace the endorsers
+        // that already count.
+        let late = try makeEndorsement(of: entry.post, endorser: Curve25519.Signing.PrivateKey(), endorsedAt: baseMs + 100)
+        #expect(store.ingest(late.wire, packet: late.packet) == .accepted)
+        #expect(store.endorserKeys(forPostID: entry.post.postID) == firstKeys)
+    }
+
+    @Test func trustedEndorserTakesTheNewestUntrustedSlotOnAFullPost() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let trustedEndorser = Curve25519.Signing.PrivateKey()
+        let trustedKey = trustedEndorser.publicKey.rawRepresentation
+        store.setTrustedEndorsers { [trustedKey] }
+        let entry = try makePost(author: Curve25519.Signing.PrivateKey(), createdAt: baseMs)
+        store.ingest(entry.wire, packet: entry.packet)
+
+        var flood: [Data] = []
+        for index in 0..<BoardStore.Limits.maxEndorsementsPerPost {
+            let endorser = Curve25519.Signing.PrivateKey()
+            flood.append(endorser.publicKey.rawRepresentation)
+            let endorsement = try makeEndorsement(of: entry.post, endorser: endorser, endorsedAt: baseMs + UInt64(index))
+            store.ingest(endorsement.wire, packet: endorsement.packet)
+        }
+
+        let trusted = try makeEndorsement(of: entry.post, endorser: trustedEndorser, endorsedAt: baseMs + 100)
+        #expect(store.ingest(trusted.wire, packet: trusted.packet) == .accepted)
+        let stored = store.endorserKeys(forPostID: entry.post.postID)
+        #expect(stored.count == BoardStore.Limits.maxEndorsementsPerPost)
+        #expect(stored == Array(flood.dropLast()) + [trustedKey])
+    }
+
+    @Test func trustedOrphanEndorsersAreAdoptedFirst() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let trustedEndorser = Curve25519.Signing.PrivateKey()
+        let trustedKey = trustedEndorser.publicKey.rawRepresentation
+        store.setTrustedEndorsers { [trustedKey] }
+        let entry = try makePost(author: Curve25519.Signing.PrivateKey(), createdAt: baseMs)
+
+        // More orphans than slots, the trusted one arriving last. The orphan
+        // global cap is larger than the per-post cap, so all of them wait.
+        for index in 0..<BoardStore.Limits.maxEndorsementsPerPost {
+            let endorsement = try makeEndorsement(of: entry.post, endorser: Curve25519.Signing.PrivateKey(), endorsedAt: baseMs + UInt64(index))
+            store.ingest(endorsement.wire, packet: endorsement.packet)
+        }
+        let trusted = try makeEndorsement(of: entry.post, endorser: trustedEndorser, endorsedAt: baseMs + 100)
+        store.ingest(trusted.wire, packet: trusted.packet)
+
+        store.ingest(entry.wire, packet: entry.packet)
+        let stored = store.endorserKeys(forPostID: entry.post.postID)
+        #expect(stored.count == BoardStore.Limits.maxEndorsementsPerPost)
+        #expect(stored.contains(trustedKey))
+    }
+
+    @Test func endorsementOfADifferentVersionOfThePostIsRejected() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let entry = try makePost(author: Curve25519.Signing.PrivateKey(), createdAt: baseMs)
+        store.ingest(entry.wire, packet: entry.packet)
+
+        // Signed for other content under the same ID and author.
+        let endorsement = try makeEndorsement(
+            of: entry.post,
+            endorser: Curve25519.Signing.PrivateKey(),
+            endorsedAt: baseMs + 1,
+            postDigest: Data(repeating: 0xAB, count: BoardWireConstants.postDigestLength)
+        )
+        #expect(store.ingest(endorsement.wire, packet: endorsement.packet) == .rejected)
+        #expect(store.endorserKeys(forPostID: entry.post.postID).isEmpty)
+    }
+
+    @Test func orphanEndorsementOfADifferentVersionIsDroppedWhenThePostLands() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let entry = try makePost(author: Curve25519.Signing.PrivateKey(), createdAt: baseMs)
+        let endorsement = try makeEndorsement(
+            of: entry.post,
+            endorser: Curve25519.Signing.PrivateKey(),
+            endorsedAt: baseMs + 1,
+            postDigest: Data(repeating: 0xAB, count: BoardWireConstants.postDigestLength)
+        )
+        #expect(store.ingest(endorsement.wire, packet: endorsement.packet) == .accepted)
+
+        store.ingest(entry.wire, packet: entry.packet)
+        #expect(store.endorserKeys(forPostID: entry.post.postID).isEmpty)
+        #expect(store.syncCandidates().count == 1)
+    }
+
+    @Test func orphanEndorsementPerEndorserCapEvictsOldest() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let endorser = Curve25519.Signing.PrivateKey()
+        var unseen: [(wire: BoardWire, packet: BitchatPacket, post: BoardPostPacket)] = []
+        for index in 0..<(BoardStore.Limits.maxOrphanEndorsementsPerEndorser + 1) {
+            let entry = try makePost(author: Curve25519.Signing.PrivateKey(), createdAt: baseMs + UInt64(index))
+            unseen.append(entry)
+            let endorsement = try makeEndorsement(of: entry.post, endorser: endorser, endorsedAt: baseMs + 1000)
+            #expect(store.ingest(endorsement.wire, packet: endorsement.packet) == .accepted)
+        }
+        #expect(store.syncCandidates().count == BoardStore.Limits.maxOrphanEndorsementsPerEndorser)
+
+        store.ingest(unseen[0].wire, packet: unseen[0].packet)
+        #expect(store.endorserKeys(forPostID: unseen[0].post.postID).isEmpty)
+        store.ingest(unseen[1].wire, packet: unseen[1].packet)
+        #expect(store.endorserKeys(forPostID: unseen[1].post.postID).count == 1)
+    }
+
+    @Test func orphanEndorsementGlobalCapHolds() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        for index in 0..<(BoardStore.Limits.maxOrphanEndorsements + 1) {
+            let entry = try makePost(author: Curve25519.Signing.PrivateKey(), createdAt: baseMs + UInt64(index))
+            let endorsement = try makeEndorsement(of: entry.post, endorser: Curve25519.Signing.PrivateKey(), endorsedAt: baseMs + 1000)
+            #expect(store.ingest(endorsement.wire, packet: endorsement.packet) == .accepted)
+        }
+        #expect(store.syncCandidates().count == BoardStore.Limits.maxOrphanEndorsements)
+    }
+
+    @Test func globalEndorsementCapHolds() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let postCount = BoardStore.Limits.maxEndorsements / BoardStore.Limits.maxEndorsementsPerPost + 1
+        var author = Curve25519.Signing.PrivateKey()
+        for postIndex in 0..<postCount {
+            if postIndex % BoardStore.Limits.maxPostsPerAuthor == 0 {
+                author = Curve25519.Signing.PrivateKey()
+            }
+            let entry = try makePost(author: author, createdAt: baseMs + UInt64(postIndex))
+            store.ingest(entry.wire, packet: entry.packet)
+            for index in 0..<BoardStore.Limits.maxEndorsementsPerPost {
+                let endorsement = try makeEndorsement(of: entry.post, endorser: Curve25519.Signing.PrivateKey(), endorsedAt: baseMs + UInt64(index))
+                store.ingest(endorsement.wire, packet: endorsement.packet)
+            }
+        }
+        #expect(store.syncCandidates().count == postCount + BoardStore.Limits.maxEndorsements)
+    }
+
+    @Test func endorsementsPersistAcrossRestart() throws {
+        let fileURL = tempFileURL()
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let clock = MutableClock(now: baseDate)
+        let first = makeStore(clock: clock, fileURL: fileURL)
+        let entry = try makePost(author: Curve25519.Signing.PrivateKey(), createdAt: baseMs)
+        first.ingest(entry.wire, packet: entry.packet)
+        let endorser = Curve25519.Signing.PrivateKey()
+        let endorsement = try makeEndorsement(of: entry.post, endorser: endorser, endorsedAt: baseMs + 1)
+        first.ingest(endorsement.wire, packet: endorsement.packet)
+
+        let second = makeStore(clock: clock, fileURL: fileURL)
+        #expect(second.endorserKeys(forPostID: entry.post.postID) == [endorser.publicKey.rawRepresentation])
+    }
+
+    @Test func wipeClearsEndorsements() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let entry = try makePost(author: Curve25519.Signing.PrivateKey(), createdAt: baseMs)
+        store.ingest(entry.wire, packet: entry.packet)
+        let endorsement = try makeEndorsement(of: entry.post, endorser: Curve25519.Signing.PrivateKey(), endorsedAt: baseMs + 1)
+        store.ingest(endorsement.wire, packet: endorsement.packet)
+
+        store.wipe()
+        #expect(store.endorserKeys(forPostID: entry.post.postID).isEmpty)
+        #expect(store.syncCandidates().isEmpty)
+    }
+
     // MARK: - Persistence and wipe
 
     @Test func persistsAcrossRestart() throws {

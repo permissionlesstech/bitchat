@@ -102,8 +102,10 @@ final class AppRuntime: ObservableObject {
             onPanicWipe: { sharedContentImportModel.discardAll() }
         )
         let chatViewModel = self.chatViewModel
+        let identityManager = chatViewModel.identityManager
         self.boardAlertsModel = BoardAlertsModel(
             arrivals: BoardStore.shared.postArrivals.eraseToAnyPublisher(),
+            endorsements: BoardStore.shared.endorsementArrivals.eraseToAnyPublisher(),
             wipes: BoardStore.shared.didWipe.eraseToAnyPublisher(),
             dependencies: BoardAlertsModel.Dependencies(
                 isOwnPost: { post in
@@ -116,6 +118,15 @@ final class AppRuntime: ObservableObject {
                     } else {
                         chatViewModel.addGeohashSystemMessage(content, geohash: geohash)
                     }
+                },
+                confirmation: { endorsement in
+                    guard let post = BoardStore.shared.post(withID: endorsement.postID) else { return nil }
+                    let count = BoardManager.trustedConfirmationCount(
+                        endorsers: BoardStore.shared.endorserKeys(forPostID: endorsement.postID),
+                        trusted: identityManager.trustedSigningKeys(),
+                        author: post.authorSigningKey
+                    )
+                    return (post, count)
                 }
             )
         )
