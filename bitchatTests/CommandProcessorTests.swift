@@ -48,7 +48,7 @@ struct CommandProcessorTests {
     @MainActor
     @Test func msgStartsPrivateChatAndSendsMessage() async {
         let identityManager = MockIdentityManager(MockKeychain())
-        let context = MockCommandContextProvider()
+        let context = MockScopedCommandContext()
         let peerID = PeerID(str: "abcd1234abcd1234")
         context.nicknameToPeerID["alice"] = peerID
         let processor = CommandProcessor(contextProvider: context, meshService: nil, identityManager: identityManager)
@@ -72,7 +72,7 @@ struct CommandProcessorTests {
     @MainActor
     @Test func whoInMeshListsSortedPeerNicknames() async {
         let identityManager = MockIdentityManager(MockKeychain())
-        let context = MockCommandContextProvider()
+        let context = MockScopedCommandContext()
         let transport = MockTransport()
         transport.peerNicknames = [
             PeerID(str: "b"): "bob",
@@ -96,7 +96,7 @@ struct CommandProcessorTests {
     @Test func whoInGeohashListsVisibleParticipantsExcludingSelf() async throws {
         let bridge = NostrIdentityBridge(keychain: MockKeychain())
         let identityManager = MockIdentityManager(MockKeychain())
-        let context = MockCommandContextProvider(idBridge: bridge)
+        let context = MockScopedCommandContext(idBridge: bridge)
         let geohash = "u4pruy"
         let selfPubkey = try bridge.deriveIdentity(forGeohash: geohash).publicKeyHex.lowercased()
         context.visibleGeoParticipants = [
@@ -121,7 +121,7 @@ struct CommandProcessorTests {
     @MainActor
     @Test func clearInPrivateChatRemovesOnlySelectedConversation() async {
         let identityManager = MockIdentityManager(MockKeychain())
-        let context = MockCommandContextProvider()
+        let context = MockScopedCommandContext()
         let activePeer = PeerID(str: "active")
         let otherPeer = PeerID(str: "other")
         context.selectedPrivateChatPeer = activePeer
@@ -148,7 +148,7 @@ struct CommandProcessorTests {
     @MainActor
     @Test func clearInPublicChatClearsTimeline() async {
         let identityManager = MockIdentityManager(MockKeychain())
-        let context = MockCommandContextProvider()
+        let context = MockScopedCommandContext()
         let processor = CommandProcessor(contextProvider: context, meshService: nil, identityManager: identityManager)
 
         let result = await withSelectedChannel(.mesh, context: context) {
@@ -161,13 +161,13 @@ struct CommandProcessorTests {
         default:
             Issue.record("Expected handled result")
         }
-        #expect(context.clearCurrentPublicTimelineCallCount == 1)
+        #expect(context.clearedPublicTimelines.count == 1)
     }
 
     @MainActor
     @Test func hugInPrivateChatSendsPersonalizedMessageAndLocalEcho() async {
         let identityManager = MockIdentityManager(MockKeychain())
-        let context = MockCommandContextProvider(nickname: "me")
+        let context = MockScopedCommandContext(nickname: "me")
         let transport = MockTransport()
         let peerID = PeerID(str: "abcd1234abcd1234")
         context.selectedPrivateChatPeer = peerID
@@ -194,7 +194,7 @@ struct CommandProcessorTests {
     @MainActor
     @Test func slapInPublicChatSendsPublicRawAndEcho() async {
         let identityManager = MockIdentityManager(MockKeychain())
-        let context = MockCommandContextProvider(nickname: "me")
+        let context = MockScopedCommandContext(nickname: "me")
         let peerID = PeerID(str: "abcd1234abcd1234")
         context.nicknameToPeerID["bob"] = peerID
         let processor = CommandProcessor(contextProvider: context, meshService: MockTransport(), identityManager: identityManager)
@@ -209,14 +209,14 @@ struct CommandProcessorTests {
         default:
             Issue.record("Expected handled result")
         }
-        #expect(context.sentPublicRawMessages == ["* 🐟 me slaps bob around a bit with a large trout *"])
-        #expect(context.publicSystemMessages == ["🐟 me slaps bob around a bit with a large trout"])
+        #expect(context.sentPublicRaw.map(\.content) == ["* 🐟 me slaps bob around a bit with a large trout *"])
+        #expect(context.publicSystemMessages.map(\.content) == ["🐟 me slaps bob around a bit with a large trout"])
     }
 
     @MainActor
     @Test func blockWithoutArgsListsMeshAndGeohashBlocks() async {
         let identityManager = MockIdentityManager(MockKeychain())
-        let context = MockCommandContextProvider()
+        let context = MockScopedCommandContext()
         let transport = MockTransport()
         let peerID = PeerID(str: "abcd1234abcd1234")
         transport.peerNicknames[peerID] = "bob"
@@ -243,7 +243,7 @@ struct CommandProcessorTests {
     @MainActor
     @Test func blockAndUnblockMeshPeerUpdateIdentityState() async {
         let identityManager = MockIdentityManager(MockKeychain())
-        let context = MockCommandContextProvider()
+        let context = MockScopedCommandContext()
         let transport = MockTransport()
         let peerID = PeerID(str: "abcd1234abcd1234")
         transport.peerFingerprints[peerID] = "fp-bob"
@@ -278,7 +278,7 @@ struct CommandProcessorTests {
     @MainActor
     @Test func blockAndUnblockGeohashPeerUseNostrBlockList() async {
         let identityManager = MockIdentityManager(MockKeychain())
-        let context = MockCommandContextProvider()
+        let context = MockScopedCommandContext()
         context.displayNameToNostrPubkey["carol"] = String(repeating: "d", count: 64)
         let processor = CommandProcessor(contextProvider: context, meshService: MockTransport(), identityManager: identityManager)
 
@@ -314,7 +314,7 @@ struct CommandProcessorTests {
     @MainActor
     @Test func favoriteCommandTogglesWithoutDirectStoreWrite() async {
         let identityManager = MockIdentityManager(MockKeychain())
-        let context = MockCommandContextProvider()
+        let context = MockScopedCommandContext()
         let processor = CommandProcessor(
             contextProvider: context,
             meshService: MockTransport(),
@@ -334,7 +334,6 @@ struct CommandProcessorTests {
             Issue.record("Expected success result")
         }
         #expect(context.toggledFavorites == [peerID])
-        #expect(context.favoriteNotifications.isEmpty)
         // The 8-byte routing ID must never be stored as a "noise key".
         let bogusKey = Data(hexString: peerID.id)!
         #expect(FavoritesPersistenceService.shared.getFavoriteStatus(for: bogusKey) == nil)
@@ -355,7 +354,7 @@ struct CommandProcessorTests {
     @MainActor
     @Test func favoriteCommandIsRejectedOutsideMesh() async {
         let identityManager = MockIdentityManager(MockKeychain())
-        let context = MockCommandContextProvider()
+        let context = MockScopedCommandContext()
         let processor = CommandProcessor(
             contextProvider: context,
             meshService: MockTransport(),
@@ -379,7 +378,7 @@ struct CommandProcessorTests {
 
     @MainActor
     @Test func payWithoutArgumentsPrintsUsage() {
-        let processor = makePayProcessor(context: MockCommandContextProvider())
+        let processor = makePayProcessor(context: MockScopedCommandContext())
         switch processor.process("/pay") {
         case .success(let message):
             #expect(message?.contains("usage: /pay") == true)
@@ -390,7 +389,7 @@ struct CommandProcessorTests {
 
     @MainActor
     @Test func payRejectsInvalidToken() {
-        let context = MockCommandContextProvider()
+        let context = MockScopedCommandContext()
         let processor = makePayProcessor(context: context)
         for bad in ["/pay nonsense", "/pay cashuAshort", "/pay cashuA!!!!!!!!!!!!!!!!"] {
             switch processor.process(bad) {
@@ -406,7 +405,7 @@ struct CommandProcessorTests {
 
     @MainActor
     @Test func paySendsBareTokenInPrivateChat() {
-        let context = MockCommandContextProvider()
+        let context = MockScopedCommandContext()
         let peerID = PeerID(str: "abcd1234abcd1234")
         context.selectedPrivateChatPeer = peerID
         let processor = makePayProcessor(context: context)
@@ -426,7 +425,7 @@ struct CommandProcessorTests {
 
     @MainActor
     @Test func payInPublicChannelRequiresExplicitConfirm() {
-        let context = MockCommandContextProvider()
+        let context = MockScopedCommandContext()
         let processor = makePayProcessor(context: context)
 
         switch processor.process("/pay \(Self.validV3Token)") {
@@ -443,13 +442,13 @@ struct CommandProcessorTests {
         default:
             Issue.record("Expected success with confirm")
         }
-        #expect(context.sentPublicMessages == [Self.validV3Token])
+        #expect(context.sentPublicMessages.map(\.content) == [Self.validV3Token])
         #expect(context.sentPrivateMessages.isEmpty)
     }
 
     @MainActor
     @Test func payRejectsTruncatedOrJunkV4Token() {
-        let context = MockCommandContextProvider()
+        let context = MockScopedCommandContext()
         context.selectedPrivateChatPeer = PeerID(str: "abcd1234abcd1234")
         let processor = makePayProcessor(context: context)
 
@@ -471,7 +470,7 @@ struct CommandProcessorTests {
 
     @MainActor
     @Test func paySendsValidDefiniteLengthV4Token() {
-        let context = MockCommandContextProvider()
+        let context = MockScopedCommandContext()
         let peerID = PeerID(str: "abcd1234abcd1234")
         context.selectedPrivateChatPeer = peerID
         let processor = makePayProcessor(context: context)
@@ -534,7 +533,7 @@ struct CommandProcessorTests {
     }()
 
     @MainActor
-    private func makePayProcessor(context: MockCommandContextProvider) -> CommandProcessor {
+    private func makePayProcessor(context: MockScopedCommandContext) -> CommandProcessor {
         CommandProcessor(
             contextProvider: context,
             meshService: MockTransport(),
@@ -545,7 +544,7 @@ struct CommandProcessorTests {
     @MainActor
     private func withSelectedChannel<T>(
         _ channel: ChannelID,
-        context: MockCommandContextProvider? = nil,
+        context: MockScopedCommandContext? = nil,
         perform work: @escaping () throws -> T
     ) async rethrows -> T {
         let originalChannel = LocationChannelManager.shared.selectedChannel
@@ -564,7 +563,7 @@ struct CommandProcessorTests {
     @MainActor
     private func setSelectedChannel(
         _ channel: ChannelID,
-        context: MockCommandContextProvider? = nil,
+        context: MockScopedCommandContext? = nil,
         explicitChannel: ChannelID? = nil
     ) async {
         context?.activeChannel = explicitChannel ?? channel
@@ -585,126 +584,5 @@ struct CommandProcessorTests {
             timestamp: Date(timeIntervalSince1970: 1_700_000_000),
             isRelay: false
         )
-    }
-}
-
-@MainActor
-private final class MockCommandContextProvider: CommandContextProvider {
-    var nickname: String
-    var activeChannel: ChannelID = .mesh
-    var selectedPrivateChatPeer: PeerID?
-    var blockedUsers: Set<String> = []
-    var privateChats: [PeerID: [BitchatMessage]] = [:]
-    let idBridge: NostrIdentityBridge
-
-    var nicknameToPeerID: [String: PeerID] = [:]
-    var visibleGeoParticipants: [CommandGeoParticipant] = []
-    var displayNameToNostrPubkey: [String: String] = [:]
-
-    private(set) var startedPrivateChats: [PeerID] = []
-    private(set) var sentPrivateMessages: [(content: String, peerID: PeerID)] = []
-    private(set) var clearCurrentPublicTimelineCallCount = 0
-    private(set) var sentPublicRawMessages: [String] = []
-    private(set) var localPrivateSystemMessages: [(content: String, peerID: PeerID)] = []
-    private(set) var publicSystemMessages: [String] = []
-    private(set) var commandOutputs: [String] = []
-    private(set) var commandOutputDestinations: [ConversationTarget] = []
-    private(set) var toggledFavorites: [PeerID] = []
-    private(set) var favoriteNotifications: [(peerID: PeerID, isFavorite: Bool)] = []
-    private(set) var geohashBlockListChangeCount = 0
-
-    init(nickname: String = "tester", idBridge: NostrIdentityBridge = NostrIdentityBridge(keychain: MockKeychain())) {
-        self.nickname = nickname
-        self.idBridge = idBridge
-    }
-
-    func getPeerIDForNickname(_ nickname: String, in scope: ChannelID) -> PeerID? {
-        nicknameToPeerID[nickname]
-    }
-
-    func getVisibleGeoParticipants(in scope: ChannelID) -> [CommandGeoParticipant] {
-        visibleGeoParticipants
-    }
-
-    func nostrPubkeyForDisplayName(_ displayName: String, in scope: ChannelID) -> String? {
-        displayNameToNostrPubkey[displayName]
-    }
-
-    func geohashBlockListDidChange() {
-        geohashBlockListChangeCount += 1
-    }
-
-    func startPrivateChat(with peerID: PeerID, from origin: ConversationTarget) {
-        startedPrivateChats.append(peerID)
-    }
-
-    func sendPrivateMessage(_ content: String, to peerID: PeerID, scope: ChannelID) {
-        sentPrivateMessages.append((content, peerID))
-    }
-
-    func clearPublicTimeline(_ channel: ChannelID) {
-        clearCurrentPublicTimelineCallCount += 1
-    }
-
-    private(set) var clearedPrivateChats: [PeerID] = []
-    func clearPrivateChat(_ peerID: PeerID) {
-        clearedPrivateChats.append(peerID)
-        privateChats[peerID] = []
-    }
-
-    func sendPublicRaw(_ content: String, to channel: ChannelID) -> Bool {
-        sentPublicRawMessages.append(content)
-        return true
-    }
-
-    private(set) var sentPublicMessages: [String] = []
-    func sendPublicMessage(_ content: String, to channel: ChannelID) -> Bool {
-        sentPublicMessages.append(content)
-        return true
-    }
-
-    func addLocalPrivateSystemMessage(_ content: String, to peerID: PeerID) {
-        localPrivateSystemMessages.append((content, peerID))
-    }
-
-    func addPublicSystemMessage(_ content: String, to channel: ChannelID) {
-        publicSystemMessages.append(content)
-    }
-
-    func addCommandOutput(_ content: String, to target: ConversationTarget) {
-        commandOutputs.append(content)
-        commandOutputDestinations.append(target)
-    }
-
-    func toggleFavorite(peerID: PeerID) {
-        toggledFavorites.append(peerID)
-    }
-
-    // Groups: record the parsed subcommand + argument the processor forwarded.
-    private(set) var groupCommands: [(subcommand: String, argument: String)] = []
-
-    func groupCreate(named name: String) -> CommandResult {
-        groupCommands.append(("create", name))
-        return .handled
-    }
-
-    func groupInvite(nickname: String, in scope: ConversationTarget) -> CommandResult {
-        groupCommands.append(("invite", nickname))
-        return .handled
-    }
-
-    func groupRemove(nickname: String, in scope: ConversationTarget) -> CommandResult {
-        groupCommands.append(("remove", nickname))
-        return .handled
-    }
-
-    func groupLeave(in scope: ConversationTarget) -> CommandResult {
-        groupCommands.append(("leave", ""))
-        return .handled
-    }
-
-    func groupList() -> CommandResult {
-        groupCommands.append(("list", ""))
-        return .handled
     }
 }

@@ -3,8 +3,9 @@
 // bitchatTests
 //
 // A `CommandContextProvider` that records which channel, peer or scope
-// every operation was handed, so scope tests can prove a command acts in
-// the conversation it was typed into rather than the selection.
+// every operation was handed, so tests can prove a command acts in the
+// conversation it was typed into rather than the selection. Every
+// `CommandProcessor` suite shares it.
 //
 // This is free and unencumbered software released into the public domain.
 // For more information, see <https://unlicense.org>
@@ -16,22 +17,38 @@ import BitFoundation
 
 @MainActor
 final class MockScopedCommandContext: CommandContextProvider {
-    var nickname = "me"
+    var nickname: String
     /// The selection. A scoped command must never read it.
     var activeChannel: ChannelID = .mesh
     var selectedPrivateChatPeer: PeerID?
     var blockedUsers: Set<String> = []
-    let idBridge = NostrIdentityBridge(keychain: MockKeychain())
+    let idBridge: NostrIdentityBridge
+    /// The private chats; `/clear` in a DM empties that one.
+    var privateChats: [PeerID: [BitchatMessage]] = [:]
 
-    /// Names that resolve, per channel the lookup is scoped to.
+    /// Names that resolve in every scope.
+    var nicknameToPeerID: [String: PeerID] = [:]
+    /// Names that resolve, per channel the lookup is scoped to, ahead of
+    /// `nicknameToPeerID`.
     var peersByChannel: [ChannelID: [String: PeerID]] = [:]
-    /// Participants reported per channel asked about.
+    /// Participants reported whatever channel is asked about.
+    var visibleGeoParticipants: [CommandGeoParticipant] = []
+    /// Participants reported per channel asked about, ahead of
+    /// `visibleGeoParticipants`.
     var geoParticipantsByChannel: [ChannelID: [CommandGeoParticipant]] = [:]
+    /// Geohash participants' pubkeys by display name, whatever channel is
+    /// asked about.
+    var displayNameToNostrPubkey: [String: String] = [:]
+    /// Geohash participants' pubkeys by display name, per channel asked
+    /// about, ahead of `displayNameToNostrPubkey`.
+    var geoPubkeysByChannel: [ChannelID: [String: String]] = [:]
     /// Channels `sendPublicRaw`/`sendPublicMessage` refuse (a stale geohash).
     var refusedPublicChannels: Set<ChannelID> = []
 
     private(set) var lookups: [(name: String, scope: ChannelID)] = []
     private(set) var participantQueries: [ChannelID] = []
+    private(set) var geoPubkeyLookups: [(name: String, scope: ChannelID)] = []
+    private(set) var geohashBlockListChangeCount = 0
     private(set) var startedPrivateChats: [PeerID] = []
     /// Where each started chat's refusal would land.
     private(set) var startedPrivateChatOrigins: [ConversationTarget] = []
@@ -42,30 +59,31 @@ final class MockScopedCommandContext: CommandContextProvider {
     private(set) var sentPublicMessages: [(content: String, channel: ChannelID)] = []
     private(set) var localPrivateSystemMessages: [(content: String, peerID: PeerID)] = []
     private(set) var publicSystemMessages: [(content: String, channel: ChannelID)] = []
-    private(set) var commandOutputs: [(content: String, target: ConversationTarget)] = []
+    private(set) var commandOutputs: [String] = []
+    private(set) var commandOutputDestinations: [ConversationTarget] = []
     private(set) var toggledFavorites: [PeerID] = []
     private(set) var groupCalls: [(subcommand: String, scope: ConversationTarget?)] = []
 
+    init(nickname: String = "me", idBridge: NostrIdentityBridge = NostrIdentityBridge(keychain: MockKeychain())) {
+        self.nickname = nickname
+        self.idBridge = idBridge
+    }
+
     func getPeerIDForNickname(_ nickname: String, in scope: ChannelID) -> PeerID? {
         lookups.append((nickname, scope))
-        return peersByChannel[scope]?[nickname]
+        return peersByChannel[scope]?[nickname] ?? nicknameToPeerID[nickname]
     }
 
     func getVisibleGeoParticipants(in scope: ChannelID) -> [CommandGeoParticipant] {
         participantQueries.append(scope)
-        return geoParticipantsByChannel[scope] ?? []
+        return geoParticipantsByChannel[scope] ?? visibleGeoParticipants
     }
-
-    /// Geohash participants' pubkeys by display name, per channel asked about.
-    var geoPubkeysByChannel: [ChannelID: [String: String]] = [:]
-    private(set) var geoPubkeyLookups: [(name: String, scope: ChannelID)] = []
 
     func nostrPubkeyForDisplayName(_ displayName: String, in scope: ChannelID) -> String? {
         geoPubkeyLookups.append((displayName, scope))
-        return geoPubkeysByChannel[scope]?[displayName]
+        return geoPubkeysByChannel[scope]?[displayName] ?? displayNameToNostrPubkey[displayName]
     }
 
-    private(set) var geohashBlockListChangeCount = 0
     func geohashBlockListDidChange() {
         geohashBlockListChangeCount += 1
     }
@@ -86,6 +104,7 @@ final class MockScopedCommandContext: CommandContextProvider {
 
     func clearPrivateChat(_ peerID: PeerID) {
         clearedPrivateChats.append(peerID)
+        privateChats[peerID] = []
     }
 
     func sendPublicRaw(_ content: String, to channel: ChannelID) -> Bool {
@@ -109,7 +128,8 @@ final class MockScopedCommandContext: CommandContextProvider {
     }
 
     func addCommandOutput(_ content: String, to target: ConversationTarget) {
-        commandOutputs.append((content, target))
+        commandOutputs.append(content)
+        commandOutputDestinations.append(target)
     }
 
     func toggleFavorite(peerID: PeerID) {

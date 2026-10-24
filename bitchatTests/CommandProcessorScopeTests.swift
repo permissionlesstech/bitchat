@@ -312,7 +312,7 @@ struct CommandProcessorScopeTests {
 
         let landed = await TestHelpers.waitUntil({ !context.commandOutputs.isEmpty }, timeout: TestConstants.settleTimeout)
         #expect(landed)
-        #expect(context.commandOutputs.map(\.target) == [origin])
+        #expect(context.commandOutputDestinations == [origin])
     }
 
     /// 21-sat single-mint V3 token (proofs of 1+4+16).

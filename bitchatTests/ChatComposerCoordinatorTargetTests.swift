@@ -22,8 +22,8 @@ struct ChatComposerCoordinatorTargetTests {
     private static let meshPeer = PeerID(str: "1111111111111111")
     private static let geoDM = PeerID(nostr_: String(repeating: "ab", count: 32))
 
-    private func makeContext() -> MockTargetedComposerContext {
-        let context = MockTargetedComposerContext()
+    private func makeContext() -> MockChatComposerContext {
+        let context = MockChatComposerContext()
         context.meshNicknamesByPeerID = [
             PeerID(str: "2222222222222222"): "alice",
             PeerID(str: "3333333333333333"): "bob"
@@ -41,7 +41,7 @@ struct ChatComposerCoordinatorTargetTests {
         // A mesh DM or group, even scoped to the selected geohash, is mesh too.
         _ = coordinator.autocomplete(for: "@", cursorPosition: 1, in: ConversationTarget(channel: Self.geoChannel, privatePeer: Self.meshPeer))
 
-        #expect(context.queriedCandidates == [["alice", "bob"], ["alice", "bob"]])
+        #expect(context.queriedPeerCandidates == [["alice", "bob"], ["alice", "bob"]])
     }
 
     @Test func geohashTargetsOfferTheLiveGeohashsPeopleOnly() {
@@ -53,7 +53,7 @@ struct ChatComposerCoordinatorTargetTests {
         context.activeChannel = Self.geoChannel
         _ = coordinator.autocomplete(for: "@", cursorPosition: 1, in: geohashTarget)
         _ = coordinator.autocomplete(for: "@", cursorPosition: 1, in: geohashDM)
-        #expect(context.queriedCandidates == [["carol#dddd"], ["carol#dddd"]])
+        #expect(context.queriedPeerCandidates == [["carol#dddd"], ["carol#dddd"]])
 
         // The nicknames on hand are the selected geohash's; another geohash
         // (or #mesh) being selected means nobody to offer, not the wrong people.
@@ -61,7 +61,7 @@ struct ChatComposerCoordinatorTargetTests {
         _ = coordinator.autocomplete(for: "@", cursorPosition: 1, in: geohashTarget)
         context.activeChannel = .mesh
         _ = coordinator.autocomplete(for: "@", cursorPosition: 1, in: geohashTarget)
-        #expect(context.queriedCandidates.suffix(2) == [[], []])
+        #expect(context.queriedPeerCandidates.suffix(2) == [[], []])
     }
 
     @Test func theResultIsTheComposersOwnValue() {
