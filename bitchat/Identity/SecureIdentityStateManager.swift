@@ -164,6 +164,14 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     // Cryptographic identities (including pinned signing keys) live inside
     // `cache` so they persist across app restarts; see IdentityCache.
     private var cache: IdentityCache = IdentityCache()
+    // Short peer ID (the first 16 hex characters of a fingerprint) -> the
+    // keys of `cache.cryptographicIdentities` whose fingerprint starts with
+    // it, so `getCryptoIdentitiesByPeerIDPrefix` is a hash lookup instead of
+    // a scan over every identity ever seen. Derived from `cache`, never
+    // persisted, and guarded by `queue` like it. Only `rebuildShortIDIndex`,
+    // `indexShortIDLocked` (the one place a crypto identity is inserted) and
+    // `clearAllIdentityData` touch it.
+    private var fingerprintsByShortID: [String: [String]] = [:]
     
     // Thread safety
     private let queue = DispatchQueue(label: "bitchat.identity.state", attributes: .concurrent)
@@ -295,6 +303,21 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
                 category: .security
             )
         }
+        rebuildShortIDIndex()
+    }
+
+    /// Rebuilds `fingerprintsByShortID` from `cache`. Runs in `init`, before
+    /// `self` escapes, so it needs no barrier.
+    private func rebuildShortIDIndex() {
+        fingerprintsByShortID = [:]
+        for (key, identity) in cache.cryptographicIdentities {
+            fingerprintsByShortID[String(identity.fingerprint.prefix(16)), default: []].append(key)
+        }
+    }
+
+    /// Requires `queue` (barrier). Indexes a crypto identity just inserted.
+    private func indexShortIDLocked(_ fingerprint: String) {
+        fingerprintsByShortID[String(fingerprint.prefix(16)), default: []].append(fingerprint)
     }
     
     /// Persists the cache. Always invoked on `queue` under a barrier (its
@@ -458,6 +481,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
                     firstSeen: now
                 )
                 self.cache.cryptographicIdentities[fingerprint] = entry
+                self.indexShortIDLocked(fingerprint)
                 changed = true
             }
 
@@ -494,7 +518,9 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         queue.sync {
             // Defensive: ensure hex and correct length
             guard peerID.isShort else { return [] }
-            return cache.cryptographicIdentities.values.filter { $0.fingerprint.hasPrefix(peerID.id) }
+            // `id` keeps any prefix (`nostr_`, `bridge:`), which no
+            // fingerprint starts with, so prefixed IDs still find nothing.
+            return (fingerprintsByShortID[peerID.id] ?? []).compactMap { cache.cryptographicIdentities[$0] }
         }
     }
 
@@ -715,6 +741,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         
         queue.sync(flags: .barrier) {
             self.cache = IdentityCache()
+            self.fingerprintsByShortID = [:]
             self.ephemeralSessions.removeAll()
             // Nothing is left to retry: the wipe deletes the keychain item.
             self.pendingSave = false

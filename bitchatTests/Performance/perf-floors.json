@@ -46,7 +46,9 @@
     "identity.upsertKnownPeer_before": 151,
     "identity.upsertKnownPeer": 1730092,
     "identity.vouchBatch_before": 9,
-    "identity.vouchBatch": 111
+    "identity.vouchBatch": 111,
+    "identity.lookupByPeerIDPrefix_before": 12350,
+    "identity.lookupByPeerIDPrefix": 939734
   },
   "floors": {
     "nostrInbound.fresh": 450,
@@ -66,7 +68,8 @@
     "geochat.formatMessage": 2500,
     "hex.encodePublicKey": 250000,
     "identity.upsertKnownPeer": 100000,
-    "identity.vouchBatch": 12
+    "identity.vouchBatch": 12,
+    "identity.lookupByPeerIDPrefix": 100000
   },
   "_slowest_observed_ci_numbers_2026_06": {
     "nostrInbound.fresh": 918,

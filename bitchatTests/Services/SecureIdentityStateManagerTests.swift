@@ -775,6 +775,64 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         XCTAssertEqual(cacheSaveCount(keychain), 4)
     }
 
+    // MARK: - Short peer ID lookup
+
+    func test_getCryptoIdentitiesByPeerIDPrefix_matchesLinearScanReference() {
+        let keychain = MockKeychain()
+        let manager = SecureIdentityStateManager(keychain)
+        var identities: Set<String> = []
+        func insert(_ fingerprint: String) {
+            manager.upsertCryptographicIdentity(
+                fingerprint: fingerprint,
+                noisePublicKey: Data(fingerprint.utf8.prefix(32)),
+                signingPublicKey: nil,
+                claimedNickname: nil
+            )
+            identities.insert(fingerprint)
+        }
+        for index in 0..<500 {
+            insert(IdentityCacheFixture.bytes(seed: 70_000 + index, count: 32).sha256Fingerprint())
+        }
+        // Two identities whose fingerprints share a short peer ID.
+        let sharedShortID = "0123456789abcdef"
+        insert(sharedShortID + String(repeating: "1", count: 48))
+        insert(sharedShortID + String(repeating: "2", count: 48))
+
+        let queries = identities.map { PeerID(str: $0.prefix(16)) } + [
+            PeerID(str: sharedShortID),
+            PeerID(str: sharedShortID.uppercased()),
+            PeerID(nostr_: sharedShortID),
+            PeerID(bridge: sharedShortID),
+            PeerID(str: "mesh:" + sharedShortID),
+            PeerID(str: sharedShortID + String(repeating: "1", count: 48)),
+            PeerID(str: sharedShortID.prefix(8)),
+            PeerID(str: "fedcba9876543210")
+        ]
+        // The old implementation: a prefix scan over every identity.
+        func assertMatchesReference(_ manager: SecureIdentityStateManager, line: UInt = #line) {
+            for peerID in queries {
+                let expected = identities.filter { peerID.isShort && $0.hasPrefix(peerID.id) }
+                let found = manager.getCryptoIdentitiesByPeerIDPrefix(peerID).map(\.fingerprint)
+                XCTAssertEqual(found.count, Set(found).count, "duplicates for \(peerID)", line: line)
+                XCTAssertEqual(Set(found), expected, "\(peerID)", line: line)
+            }
+        }
+
+        assertMatchesReference(manager)
+        XCTAssertEqual(manager.getCryptoIdentitiesByPeerIDPrefix(PeerID(str: sharedShortID)).count, 2)
+
+        // Rebuilt from the persisted cache on load.
+        assertMatchesReference(SecureIdentityStateManager(keychain))
+
+        // A wipe leaves nothing behind, so an identity seen again after it
+        // is found once.
+        manager.clearAllIdentityData()
+        identities = []
+        assertMatchesReference(manager)
+        insert(sharedShortID + String(repeating: "1", count: 48))
+        assertMatchesReference(manager)
+    }
+
     private static let cacheKey = "bitchat.identityCache.v2"
 
     private func cacheSaveCount(_ keychain: MockKeychain) -> Int {
