@@ -1658,6 +1658,7 @@ struct ViewSmokeTests {
         defer { split.close() }
         #expect(await split.select(.location(split.geohash)))
         split.chrome.isLocationChannelsSheetPresented = true
+        #expect(await split.settle { split.isPresenting }, "\(split.diagnostics)")
 
         #expect(await split.unfold())
         let browsing = await split.settle {
@@ -1667,6 +1668,12 @@ struct ViewSmokeTests {
         }
         #expect(browsing, "\(split.diagnostics)")
         #expect(split.channels.selectedChannel == .location(split.geohash))
+
+        // The sheet's live updates end as it goes, which cancels the fix the
+        // pane asked for as it appeared: the pane asks again.
+        #expect(await split.settle { !split.isPresenting && split.location.stopUpdatingLocationCallCount > 0 })
+        #expect(split.location.isFixPending, "the pane's fix died with the sheet's updates")
+        #expect(split.location.requestAuthorizationCallCount == 0)
     }
 
     /// E1 and E11: shared content goes to the last-touched pane's composer,

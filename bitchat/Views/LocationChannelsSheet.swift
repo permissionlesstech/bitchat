@@ -263,6 +263,9 @@ struct LocationChannelsPicker: View {
         .onChange(of: panicEpoch) { _ in
             wipe()
         }
+        .onReceive(locationChannelsModel.liveRefreshEnded) { _ in
+            perform(.liveRefreshEnded, permission: locationChannelsModel.permissionState)
+        }
         #endif
         .confirmationDialog(
             Strings.sharePrecisionTitle,
@@ -873,6 +876,9 @@ extension LocationChannelsPicker {
         case panicWipe
         /// The pane's retry, after a fix that never came.
         case retry
+        /// Continuous updates elsewhere ended (the sheet or the notices
+        /// closing), cancelling any one-shot fix still on its way.
+        case liveRefreshEnded
         #endif
     }
 
@@ -889,7 +895,9 @@ extension LocationChannelsPicker {
     /// sheet keeps its continuous refresh while it is up. The pane can sit on
     /// screen for hours, so it never starts one: it asks for a single fix as
     /// it appears, when permission arrives, after a panic wipe (whatever it
-    /// listed came from a fix taken before the wipe) and on its retry.
+    /// listed came from a fix taken before the wipe), on its retry, and when
+    /// continuous updates elsewhere end, which cancels a fix still on its way
+    /// (the location sheet closing as the device unfolds, E8).
     /// - Parameter permission: The permission state as of the event (after
     ///   the change, for `.permissionChange`).
     static func lifecycleActions(
@@ -915,6 +923,11 @@ extension LocationChannelsPicker {
             return []
         case (.retry, _):
             return refresh
+        case (.liveRefreshEnded, .pane):
+            return refresh
+        case (.liveRefreshEnded, .sheet):
+            // Its own, as it closes.
+            return []
         #endif
         case (.permissionChange, _):
             return refresh

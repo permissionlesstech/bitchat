@@ -62,6 +62,19 @@ struct LocationChannelsPickerTests {
         }
     }
 
+    /// E8: continuous updates ending elsewhere (the location sheet closing
+    /// as the device unfolds, or the notices) also cancel a one-shot fix
+    /// still on its way, so the pane asks for its fix again. The sheet's
+    /// own ending asks for nothing.
+    @Test
+    func liveUpdatesEndingElsewhereAskThePaneForItsFixAgain() {
+        for permission in Self.permissions {
+            #expect(Picker.lifecycleActions(for: .liveRefreshEnded, presentation: Self.pane, permission: permission)
+                == (permission == .authorized ? [.refreshChannels] : []))
+            #expect(Picker.lifecycleActions(for: .liveRefreshEnded, presentation: .sheet, permission: permission).isEmpty)
+        }
+    }
+
     // MARK: - Choices
 
     /// The sheet selects whatever is chosen and closes at once, as ever.

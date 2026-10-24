@@ -21,6 +21,10 @@ final class MockLocationStateManaging: LocationStateManaging {
     private(set) var requestLocationCallCount = 0
     private(set) var startUpdatingLocationCallCount = 0
     private(set) var stopUpdatingLocationCallCount = 0
+    /// A one-shot fix is on its way: `requestLocation` asked for one and no
+    /// `stopUpdatingLocation` has cancelled it since, as CoreLocation's
+    /// does. The mock never delivers one.
+    private(set) var isFixPending = false
 
     init(authorizationStatus: CLAuthorizationStatus = .denied) {
         self.authorizationStatus = authorizationStatus
@@ -32,6 +36,7 @@ final class MockLocationStateManaging: LocationStateManaging {
 
     func requestLocation() {
         requestLocationCallCount += 1
+        isFixPending = true
     }
 
     func startUpdatingLocation() {
@@ -40,6 +45,7 @@ final class MockLocationStateManaging: LocationStateManaging {
 
     func stopUpdatingLocation() {
         stopUpdatingLocationCallCount += 1
+        isFixPending = false
     }
 }
 
