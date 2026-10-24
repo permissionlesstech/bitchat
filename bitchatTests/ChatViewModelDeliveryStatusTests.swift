@@ -405,7 +405,7 @@ struct ChatViewModelDeliveryStatusTests {
 
         coordinator.sendVoiceNote(
             at: sourceURL,
-            to: coordinator.currentMediaDestination
+            to: .init(target: viewModel.selectionTarget)
         )
         #expect(await TestHelpers.waitUntil(
             {

@@ -18,7 +18,13 @@ final class AppRuntime: ObservableObject {
     /// (docs/CONVERSATION-STORE-DESIGN.md). Owned here; the feature models
     /// and `ChatViewModel` observe and mutate it through its intent API.
     let conversations: ConversationStore
+    /// The selected channel's timeline: the one compact timeline, and the
+    /// split layout's trailing pane.
     let publicChatModel: PublicChatModel
+    #if os(iOS)
+    /// The split layout's leading pane: #mesh, whatever is selected.
+    let meshPaneTimeline: PublicChatModel
+    #endif
     let privateInboxModel: PrivateInboxModel
     let privateConversationModel: PrivateConversationModel
     let verificationModel: VerificationModel
@@ -61,6 +67,9 @@ final class AppRuntime: ObservableObject {
             locationManager: locationManager
         )
         self.publicChatModel = PublicChatModel(conversations: conversations)
+        #if os(iOS)
+        self.meshPaneTimeline = PublicChatModel(conversations: conversations, pinnedTo: .mesh)
+        #endif
         self.privateInboxModel = PrivateInboxModel(conversations: conversations)
         self.locationChannelsModel = LocationChannelsModel(manager: locationManager)
         self.privateConversationModel = PrivateConversationModel(
@@ -76,7 +85,6 @@ final class AppRuntime: ObservableObject {
         )
         self.conversationUIModel = ConversationUIModel(
             chatViewModel: self.chatViewModel,
-            privateConversationModel: self.privateConversationModel,
             conversations: conversations
         )
         self.peerListModel = PeerListModel(
@@ -178,6 +186,22 @@ final class AppRuntime: ObservableObject {
         if url.scheme == "bitchat", url.host == "share" {
             checkForSharedContent()
         }
+
+        // External #geohash links (geo-activity notification taps, shared
+        // invites) open the channel here, once. Message lists only act on the
+        // links they draw: each mounted list (two in the split layout) would
+        // open, and switch to, the channel again.
+        if let geohash = Self.geohashLinkTarget(url), chatViewModel.networkActivationAllowed {
+            locationChannelsModel.openLocationChannel(for: geohash)
+        }
+    }
+
+    /// The geohash a `bitchat://geohash/<geohash>` link names, or nil for any
+    /// other URL. `openLocationChannel(for:)` validates it.
+    nonisolated static func geohashLinkTarget(_ url: URL) -> String? {
+        guard url.scheme == "bitchat", url.host == "geohash" else { return nil }
+        let geohash = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return geohash.isEmpty ? nil : geohash
     }
 
     func handleDidBecomeActiveNotification() {
@@ -429,9 +453,9 @@ private extension AppRuntime {
             return false
         }()
         #if os(iOS)
-        let isPublicTimelineBesideConversation = appChromeModel.isPublicTimelineBesideConversation
+        let splitLayoutShowsLocation = appChromeModel.splitLayoutShowsLocation
         #else
-        let isPublicTimelineBesideConversation = false
+        let splitLayoutShowsLocation: Bool? = nil
         #endif
 
         switch Self.resolveScreenshotResponse(
@@ -439,7 +463,7 @@ private extension AppRuntime {
             isAppInfoPresented: appChromeModel.isAppInfoPresented,
             hasPrivateChatOpen: chatViewModel.selectedPrivateChatPeer != nil,
             isLocationChannelActive: isLocationChannelActive,
-            isPublicTimelineBesideConversation: isPublicTimelineBesideConversation
+            splitLayoutShowsLocation: splitLayoutShowsLocation
         ) {
         case .warnLocally:
             appChromeModel.triggerScreenshotPrivacyWarning()
@@ -485,32 +509,37 @@ extension AppRuntime {
         /// warn about, and alerting on every screenshot would train people
         /// to dismiss the one alert that matters (the location one).
         case forwardToChat
-        /// Both of the above: the split layout shows a location timeline
-        /// beside an open DM, so the image reveals the place and the peer
-        /// still gets the DM's notice.
+        /// Both of the above: the image reveals a place and an open DM, so
+        /// the person gets the warning and the peer the DM's notice.
         case warnLocallyAndForwardToChat
     }
 
     /// Pure decision table so the screenshot routing is testable without a
     /// runtime.
-    /// - Parameter isPublicTimelineBesideConversation: The split layout
-    ///   shows the timeline beside an open DM rather than under its sheet.
+    /// - Parameter splitLayoutShowsLocation: The split layout's trailing
+    ///   pane shows a place (a geohash timeline or the location-channel
+    ///   picker) rather than a DM; nil for the single column, where the
+    ///   selection and the DM sheet decide.
     nonisolated static func resolveScreenshotResponse(
         isLocationChannelsSheetPresented: Bool,
         isAppInfoPresented: Bool,
         hasPrivateChatOpen: Bool,
         isLocationChannelActive: Bool,
-        isPublicTimelineBesideConversation: Bool = false
+        splitLayoutShowsLocation: Bool? = nil
     ) -> ScreenshotCaptureResponse {
         if isLocationChannelsSheetPresented { return .warnLocally }
         if isAppInfoPresented { return .ignore }
+        if let splitLayoutShowsLocation {
+            // Split, the panes say what is in the image. A DM covering the
+            // trailing pane reveals no place; the #mesh pane beside it
+            // reveals none either.
+            guard splitLayoutShowsLocation else { return .forwardToChat }
+            return hasPrivateChatOpen ? .warnLocallyAndForwardToChat : .warnLocally
+        }
         // A geohash timeline screenshot still reveals a place — warn the
         // person taking it, locally, with the same alert the channel sheet
-        // uses.
-        if isLocationChannelActive {
-            if !hasPrivateChatOpen { return .warnLocally }
-            if isPublicTimelineBesideConversation { return .warnLocallyAndForwardToChat }
-        }
+        // uses. The DM's sheet covers it.
+        if isLocationChannelActive, !hasPrivateChatOpen { return .warnLocally }
         return .forwardToChat
     }
 }

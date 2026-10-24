@@ -199,6 +199,25 @@ final class NearbyNotesCounterTests: XCTestCase {
         )
     }
 
+    /// The notices sheet's geo scope comes from the selection as it opens:
+    /// a location channel's geohash, which needs no device location, or the
+    /// device's building cell, which does and needs authorization.
+    func test_noticesGeoScope_isTheOpeningSelectionsAndOnlyDeviceScopeNeedsLocation() {
+        let channel = NoticesView.GeoScope(
+            selectedChannel: .location(GeohashChannel(level: .city, geohash: "9q8yy"))
+        )
+        XCTAssertEqual(channel, .channel("9q8yy"))
+        XCTAssertFalse(channel.needsDeviceLocation)
+        XCTAssertEqual(channel.geohash(permissionState: .denied, buildingGeohash: "u4pruydq"), "9q8yy")
+
+        let device = NoticesView.GeoScope(selectedChannel: .mesh)
+        XCTAssertEqual(device, .device)
+        XCTAssertTrue(device.needsDeviceLocation)
+        XCTAssertEqual(device.geohash(permissionState: .authorized, buildingGeohash: "u4pruydq"), "u4pruydq")
+        XCTAssertNil(device.geohash(permissionState: .denied, buildingGeohash: "u4pruydq"))
+        XCTAssertNil(device.geohash(permissionState: .authorized, buildingGeohash: nil))
+    }
+
     func test_noticesGeoSession_revocationEndsLiveRefreshAndReleasesDeviceScope() {
         let relays = SubscriptionRecorder()
         let manager = LocationNotesManager(geohash: "u4pruydq", dependencies: relays.dependencies)
@@ -347,8 +366,8 @@ final class NearbyNotesCounterTests: XCTestCase {
         }
         return LocationStateManager(
             storage: storage,
-            locationManager: MockLocationManager(authorizationStatus: .denied),
-            geocoder: MockLocationGeocoder(),
+            locationManager: MockLocationStateManaging(authorizationStatus: .denied),
+            geocoder: MockLocationStateGeocoder(),
             shouldInitializeCoreLocation: false
         )
     }
@@ -365,8 +384,8 @@ final class NearbyNotesCounterTests: XCTestCase {
 
         let manager = LocationStateManager(
             storage: storage,
-            locationManager: MockLocationManager(authorizationStatus: .authorizedAlways),
-            geocoder: MockLocationGeocoder(),
+            locationManager: MockLocationStateManaging(authorizationStatus: .authorizedAlways),
+            geocoder: MockLocationStateGeocoder(),
             shouldInitializeCoreLocation: true
         )
         let authorized = await waitUntil { manager.permissionState == .authorized }
@@ -445,32 +464,5 @@ private final class SubscriptionRecorder {
             deriveIdentity: { _ in try NostrIdentity.generate() },
             now: { Date() }
         )
-    }
-}
-
-private final class MockLocationManager: LocationStateManaging {
-    weak var delegate: CLLocationManagerDelegate?
-    var desiredAccuracy: CLLocationAccuracy = 0
-    var distanceFilter: CLLocationDistance = 0
-    var authorizationStatus: CLAuthorizationStatus
-
-    init(authorizationStatus: CLAuthorizationStatus) {
-        self.authorizationStatus = authorizationStatus
-    }
-
-    func requestWhenInUseAuthorization() {}
-    func requestLocation() {}
-    func startUpdatingLocation() {}
-    func stopUpdatingLocation() {}
-}
-
-private final class MockLocationGeocoder: LocationStateGeocoding {
-    func cancelGeocode() {}
-
-    func reverseGeocodeLocation(
-        _ location: CLLocation,
-        completionHandler: @escaping ([CLPlacemark]?, Error?) -> Void
-    ) {
-        completionHandler(nil, nil)
     }
 }

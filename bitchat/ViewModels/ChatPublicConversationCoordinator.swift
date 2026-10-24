@@ -26,6 +26,10 @@ protocol ChatPublicConversationContext: AnyObject {
     var myPeerID: PeerID { get }
     /// Signals that message state changed so observers refresh (e.g. `objectWillChange.send()`).
     func notifyUIChanged()
+    /// Whether a public conversation's timeline is on screen: the active
+    /// channel's, plus #mesh while the split layout pins it beside the
+    /// active channel. Arrivals for on-screen timelines are batched.
+    func isPublicConversationOnScreen(_ conversationID: ConversationID) -> Bool
 
     // MARK: Public conversation store (single-writer intents)
     /// Appends a public message in timestamp order. Returns `false` when a
@@ -87,7 +91,11 @@ protocol ChatPublicConversationContext: AnyObject {
     func cachedStablePeerID(for shortPeerID: PeerID) -> PeerID?
 
     // MARK: Content dedup & formatting
+    /// Unscoped content key: the rate limiter's content buckets.
     func normalizedContentKey(_ content: String) -> String
+    /// Content-window key for `content` in `conversationID` (scoped per
+    /// conversation; see `MessageDeduplicationService.contentKey(_:in:)`).
+    func contentKey(for content: String, in conversationID: ConversationID) -> String
     func contentTimestamp(forKey key: String) -> Date?
     func recordContentKey(_ key: String, timestamp: Date)
     /// Pre-renders the message so the formatting cache is warm before display.
@@ -142,8 +150,16 @@ extension ChatViewModel: ChatPublicConversationContext {
         publicMessagePipeline.enqueue(message, to: conversationID)
     }
 
+    func isPublicConversationOnScreen(_ conversationID: ConversationID) -> Bool {
+        conversations.isPublicConversationOnScreen(conversationID)
+    }
+
     func normalizedContentKey(_ content: String) -> String {
         deduplicationService.normalizedContentKey(content)
+    }
+
+    func contentKey(for content: String, in conversationID: ConversationID) -> String {
+        deduplicationService.contentKey(content, in: conversationID)
     }
 
     func contentTimestamp(forKey key: String) -> Date? {
@@ -166,9 +182,17 @@ extension ChatViewModel: ChatPublicConversationContext {
 @MainActor
 final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
     private unowned let context: any ChatPublicConversationContext
+    /// Erases the media we sent (see `wipeOutgoingMediaDirectories()`).
+    /// Injected so tests can see when a clear would erase it: the real wipe
+    /// never runs under tests.
+    private let wipeOutgoingMedia: () -> Void
 
-    init(context: any ChatPublicConversationContext) {
+    init(
+        context: any ChatPublicConversationContext,
+        wipeOutgoingMedia: @escaping () -> Void = ChatPublicConversationCoordinator.wipeOutgoingMediaDirectories
+    ) {
         self.context = context
+        self.wipeOutgoingMedia = wipeOutgoingMedia
     }
 
     func visibleGeohashPeople() -> [GeoPerson] {
@@ -287,20 +311,36 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
         context.notifyUIChanged()
     }
 
-    func clearCurrentPublicTimeline() {
-        context.clearPublicConversation(ConversationID(channelID: context.activeChannel))
+    /// Empties `channel`'s timeline, selected or not.
+    func clearPublicTimeline(_ channel: ChannelID) {
+        context.clearPublicConversation(ConversationID(channelID: channel))
+
+        // Everything else a clear erases belongs to #mesh. A geohash
+        // timeline is Nostr-backed: it has no mesh archive, and it never
+        // holds media we sent (media only posts to #mesh and mesh DMs). So
+        // clearing one must not reach for either: wiping the media would
+        // only delete the files #mesh and DMs still show, or a voice note
+        // being recorded in another composer.
+        guard case .mesh = channel else { return }
 
         // Clearing the mesh timeline also dismisses its archived echoes for
         // good: the watermark stops the next launch from re-seeding them, the
         // archive on disk is erased so the cleared history is actually gone
         // rather than merely hidden, and the dedup keys go so a cleared
         // message arriving live shows again.
-        if case .mesh = context.activeChannel {
-            MeshEchoSettings.clearedThrough = Date()
-            archivedEchoKeys.removeAll()
-            context.purgeArchivedPublicMessages()
-        }
+        MeshEchoSettings.clearedThrough = Date()
+        archivedEchoKeys.removeAll()
+        context.purgeArchivedPublicMessages()
 
+        // And the media we sent is erased, this session's and any earlier
+        // one's. (It is one store for #mesh and mesh DMs alike, so a DM's
+        // own photos and voice notes go with it, as they always have.)
+        wipeOutgoingMedia()
+    }
+
+    /// Empties the directories that hold the photos, voice notes and files
+    /// we sent. Detached; a no-op under tests.
+    nonisolated static func wipeOutgoingMediaDirectories() {
         // The SPM test process shares the real Application Support tree, so this
         // detached deletion can land mid-test under parallel scheduling and flake
         // a file-dependent test. Tests never need the on-disk media cleared.
@@ -343,34 +383,41 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
     }
 
     func addSystemMessage(_ content: String, timestamp: Date = Date()) {
+        addSystemMessage(content, to: context.activeChannel, timestamp: timestamp)
+    }
+
+    /// A local system line in `channel`'s timeline, selected or not.
+    func addSystemMessage(_ content: String, to channel: ChannelID, timestamp: Date = Date()) {
         let systemMessage = BitchatMessage(
             sender: "system",
             content: content,
             timestamp: timestamp,
             isRelay: false
         )
-        context.appendPublicMessage(systemMessage, to: ConversationID(channelID: context.activeChannel))
+        context.appendPublicMessage(systemMessage, to: ConversationID(channelID: channel))
     }
 
     func addMeshOnlySystemMessage(_ content: String) {
-        let systemMessage = BitchatMessage(
-            sender: "system",
-            content: content,
-            timestamp: Date(),
-            isRelay: false
-        )
-        context.appendPublicMessage(systemMessage, to: .mesh)
+        addSystemMessage(content, to: .mesh)
     }
 
     func addPublicSystemMessage(_ content: String) {
+        addPublicSystemMessage(content, to: context.activeChannel)
+    }
+
+    /// A system line in `channel`'s timeline that also records its content
+    /// key, so the same text arriving from the network right after (an
+    /// emote's own echo) is not shown twice.
+    func addPublicSystemMessage(_ content: String, to channel: ChannelID) {
+        let conversationID = ConversationID(channelID: channel)
         let systemMessage = BitchatMessage(
             sender: "system",
             content: content,
             timestamp: Date(),
             isRelay: false
         )
-        context.appendPublicMessage(systemMessage, to: ConversationID(channelID: context.activeChannel))
-        let contentKey = context.normalizedContentKey(systemMessage.content)
+        context.appendPublicMessage(systemMessage, to: conversationID)
+        let contentKey = context.contentKey(for: systemMessage.content, in: conversationID)
         context.recordContentKey(contentKey, timestamp: systemMessage.timestamp)
     }
 
@@ -382,8 +429,22 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
         }
     }
 
-    func sendPublicRaw(_ content: String) {
-        if case .location(let channel) = context.activeChannel {
+    /// Sends `content` to `channel` with no local echo (emotes add their own
+    /// system-style line). Returns false, after saying so in that channel's
+    /// timeline, when `channel` is a geohash that is no longer the selected
+    /// one: only the selected geohash is live, so a stale target sends
+    /// nothing.
+    @discardableResult
+    func sendPublicRaw(_ content: String, to channel: ChannelID) -> Bool {
+        guard channel.isLive(whileSelected: context.activeChannel) else {
+            SecureLogger.info("Geo: not sending a raw message to a channel that is no longer selected", category: .session)
+            addSystemMessage(
+                String(localized: "system.location.not_in_channel", comment: "System message when attempting to send without being in a location channel"),
+                to: channel
+            )
+            return false
+        }
+        if case .location(let channel) = channel {
             Task { @MainActor [weak context] in
                 guard let context else { return }
                 do {
@@ -405,7 +466,7 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
                     SecureLogger.error("❌ Failed to send geohash raw message: \(error)", category: .session)
                 }
             }
-            return
+            return true
         }
 
         context.sendMeshMessage(
@@ -414,6 +475,7 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
             messageID: UUID().uuidString,
             timestamp: Date()
         )
+        return true
     }
 
     /// - Parameter powBits: validated NIP-13 difficulty of the source Nostr
@@ -466,12 +528,13 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
         guard !finalMessage.content.trimmed.isEmpty else { return }
 
         // Resolve the destination conversation. System messages surface on
-        // the active channel (matching their old visible-only routing); geo
-        // messages require a current geohash, mesh messages always land in
-        // the mesh conversation.
+        // the active channel (matching their old visible-only routing),
+        // except a mesh or bridged peer's beside a pinned #mesh (see
+        // `systemLineDestination`); geo messages require a current geohash,
+        // mesh messages always land in the mesh conversation.
         let destination: ConversationID?
         if isSystem {
-            destination = ConversationID(channelID: context.activeChannel)
+            destination = systemLineDestination(for: finalMessage, isGeo: isGeo)
         } else if isGeo {
             destination = context.currentGeohash.map { .geohash($0.lowercased()) }
         } else {
@@ -490,17 +553,11 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
             if archivedEchoKeys.contains(key) { return }
         }
 
-        let channelMatches: Bool = {
-            switch context.activeChannel {
-            case .mesh: return !isGeo || isSystem
-            case .location: return isGeo || isSystem
-            }
-        }()
-
-        if channelMatches {
-            // Visible-channel arrivals are batched: the pipeline's ~80 ms
-            // flush commits them to the store (which dedups by ID), keeping
-            // the deliberate UI flush cadence.
+        if context.isPublicConversationOnScreen(destination) {
+            // On-screen arrivals are batched: the pipeline's ~80 ms flush
+            // commits them to the store (which dedups by ID), keeping the
+            // deliberate UI flush cadence, and content-dedups them per
+            // conversation. That covers both timelines of the split layout.
             guard !context.publicConversationContainsMessage(withID: finalMessage.id, in: destination) else { return }
             context.enqueuePublicMessage(finalMessage, to: destination)
         } else {
@@ -565,8 +622,8 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
         #endif
     }
 
-    func pipeline(_: PublicMessagePipeline, normalizeContent content: String) -> String {
-        context.normalizedContentKey(content)
+    func pipeline(_: PublicMessagePipeline, contentKeyFor content: String, in conversationID: ConversationID) -> String {
+        context.contentKey(for: content, in: conversationID)
     }
 
     func pipeline(_: PublicMessagePipeline, contentTimestampForKey key: String) -> Date? {
@@ -600,6 +657,21 @@ private extension ChatPublicConversationCoordinator {
             }
         }
         return "name:" + message.sender.lowercased()
+    }
+
+    /// Where an inbound system line lands. A peer's action line (a hug, a
+    /// slap, an old client's screenshot notice) arrives as a system line that
+    /// keeps its sender, and so does a peer whose nickname is "system". While
+    /// the split layout pins #mesh on screen beside the active channel, a mesh
+    /// or bridged sender's line lands in #mesh, where it was said, instead of
+    /// the geohash beside it. Any other system line lands on the active
+    /// channel, as before. Compact and macOS are unchanged: there #mesh is on
+    /// screen only while it is the active channel.
+    func systemLineDestination(for message: BitchatMessage, isGeo: Bool) -> ConversationID {
+        if message.senderPeerID != nil, !isGeo, context.isPublicConversationOnScreen(.mesh) {
+            return .mesh
+        }
+        return ConversationID(channelID: context.activeChannel)
     }
 
     /// Whether I wrote an inbound message (a gossip replay of my mesh text, or

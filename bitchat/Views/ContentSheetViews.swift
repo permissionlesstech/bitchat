@@ -30,45 +30,39 @@ struct ContentPeopleSheetView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     @Binding var showSidebar: Bool
-    @Binding var messageText: String
     @Binding var selectedMessageSender: String?
     @Binding var selectedMessageSenderID: PeerID?
     @Binding var imagePreviewURL: URL?
     @Binding var windowCountPublic: Int
     @Binding var windowCountPrivate: [PeerID: Int]
     @Binding var isAtBottomPrivate: Bool
-    var isTextFieldFocused: FocusState<Bool>.Binding
+    /// The DM composer's session (the secondary slot's).
+    let composer: ComposerSession
+    /// The open DM, scoped as its composer sends: the secondary slot's
+    /// target. Nil while no DM is open.
+    let target: ConversationTarget?
+    var focusedComposer: FocusState<ComposerSlot?>.Binding
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
-    @Binding var autocompleteDebounceTimer: Timer?
     @State private var showVerifySheet = false
     @ThemedPalette private var palette
 
     let headerHeight: CGFloat
     let onSendMessage: () -> Void
-
-    #if os(iOS)
-    @Binding var showImagePicker: Bool
-    @Binding var imagePickerSourceType: UIImagePickerController.SourceType
-    #else
-    @Binding var showMacImagePicker: Bool
-    #endif
+    let onPickMedia: MediaPickAction
+    /// A pick from the DM composer presents from this sheet, which the root
+    /// can't present over.
+    @Binding var mediaPickRequest: MediaPickRequest?
 
     private func modalPresentationState(
         includingVoiceAlert: Bool
     ) -> ContentPeopleSheetModalPresentationState {
-        #if os(iOS)
-        let isMediaPickerPresented = showImagePicker
-        #else
-        let isMediaPickerPresented = showMacImagePicker
-        #endif
-
-        return ContentPeopleSheetModalPresentationState(
+        ContentPeopleSheetModalPresentationState(
             isImagePreviewPresented: imagePreviewURL != nil,
             isVerificationSheetPresented: showVerifySheet,
             legacyPrivateMediaConsentRequest:
                 conversationUIModel.legacyPrivateMediaConsentRequest,
             isVoiceAlertPresented: includingVoiceAlert && voiceRecordingVM.showAlert,
-            isMediaPickerPresented: isMediaPickerPresented
+            isMediaPickerPresented: mediaPickRequest != nil
         )
     }
 
@@ -140,42 +134,22 @@ struct ContentPeopleSheetView: View {
         NavigationStack {
             Group {
                 if privateConversationModel.selectedPeerID != nil {
-                    #if os(iOS)
                     ContentPrivateChatSheetView(
                         showSidebar: $showSidebar,
-                        messageText: $messageText,
                         selectedMessageSender: $selectedMessageSender,
                         selectedMessageSenderID: $selectedMessageSenderID,
                         imagePreviewURL: $imagePreviewURL,
                         windowCountPublic: $windowCountPublic,
                         windowCountPrivate: $windowCountPrivate,
                         isAtBottomPrivate: $isAtBottomPrivate,
-                        isTextFieldFocused: isTextFieldFocused,
+                        composer: composer,
+                        target: target,
+                        focusedComposer: focusedComposer,
                         voiceRecordingVM: voiceRecordingVM,
-                        autocompleteDebounceTimer: $autocompleteDebounceTimer,
                         headerHeight: headerHeight,
                         onSendMessage: onSendMessage,
-                        showImagePicker: $showImagePicker,
-                        imagePickerSourceType: $imagePickerSourceType
+                        onPickMedia: onPickMedia
                     )
-                    #else
-                    ContentPrivateChatSheetView(
-                        showSidebar: $showSidebar,
-                        messageText: $messageText,
-                        selectedMessageSender: $selectedMessageSender,
-                        selectedMessageSenderID: $selectedMessageSenderID,
-                        imagePreviewURL: $imagePreviewURL,
-                        windowCountPublic: $windowCountPublic,
-                        windowCountPrivate: $windowCountPrivate,
-                        isAtBottomPrivate: $isAtBottomPrivate,
-                        isTextFieldFocused: isTextFieldFocused,
-                        voiceRecordingVM: voiceRecordingVM,
-                        autocompleteDebounceTimer: $autocompleteDebounceTimer,
-                        headerHeight: headerHeight,
-                        onSendMessage: onSendMessage,
-                        showMacImagePicker: $showMacImagePicker
-                    )
-                    #endif
                 } else {
                     ContentPeopleListView(
                         showSidebar: $showSidebar,
@@ -211,31 +185,32 @@ struct ContentPeopleSheetView: View {
         }
         .themedSheetBackground()
         .foregroundColor(palette.primary)
-        .modifier(LegacyPrivateMediaConsentDialog())
+        // The sheet presents it from its own tree, over whatever it shows.
+        .modifier(LegacyPrivateMediaConsentDialog(isDeferred: { false }))
         #if os(macOS)
         .frame(minWidth: 420, minHeight: 520)
         #endif
         #if os(iOS)
-        .fullScreenCover(isPresented: Binding(
-            get: { showImagePicker && (showSidebar || privateConversationModel.selectedPeerID != nil) },
+        .fullScreenCover(item: Binding(
+            get: { (showSidebar || privateConversationModel.selectedPeerID != nil) ? mediaPickRequest : nil },
             set: { newValue in
-                if !newValue {
-                    showImagePicker = false
+                if newValue == nil {
+                    mediaPickRequest = nil
                 }
             }
-        )) {
-            ImagePickerView(sourceType: imagePickerSourceType) { image in
-                showImagePicker = false
-                conversationUIModel.processSelectedImage(image)
+        )) { request in
+            ImagePickerView(sourceType: request.source) { image in
+                mediaPickRequest = nil
+                conversationUIModel.processSelectedImage(image, to: request.target)
             }
             .ignoresSafeArea()
         }
         #endif
         #if os(macOS)
-        .sheet(isPresented: $showMacImagePicker) {
+        .sheet(item: $mediaPickRequest) { request in
             MacImagePickerView { url in
-                showMacImagePicker = false
-                conversationUIModel.processSelectedImage(from: url)
+                mediaPickRequest = nil
+                conversationUIModel.processSelectedImage(from: url, to: request.target)
             }
         }
         #endif
@@ -282,79 +257,151 @@ struct ContentPeopleSheetView: View {
 }
 
 #if os(iOS)
-/// The people list or the open DM as a column beside the public timeline
-/// (regular width, e.g. the iPhone Duo's inner display). It lives in
-/// ContentView's own tree, so it inherits every environment object and
-/// presents through the root: none of the sheet's NavigationStack, close
-/// buttons, banner mirror, alert copies or backdrop come along.
-struct ContentPeopleColumnView: View {
-    @EnvironmentObject private var privateConversationModel: PrivateConversationModel
+/// A pane's people in the split layout, as a popover from the pane's bar:
+/// the people sheet's list for that pane's channel, with its own navigation
+/// for the fingerprint. Present it with `contentPeoplePopover(...)`.
+struct ContentPeoplePopoverView: View {
+    @EnvironmentObject private var verificationModel: VerificationModel
 
-    @Binding var showSidebar: Bool
-    @Binding var showVerifySheet: Bool
-    @Binding var messageText: String
-    @Binding var selectedMessageSender: String?
-    @Binding var selectedMessageSenderID: PeerID?
-    @Binding var imagePreviewURL: URL?
-    @Binding var windowCountPublic: Int
-    @Binding var windowCountPrivate: [PeerID: Int]
-    @Binding var isAtBottomPrivate: Bool
-    var isTextFieldFocused: FocusState<Bool>.Binding
-    @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
-    @Binding var autocompleteDebounceTimer: Timer?
-    @Binding var showImagePicker: Bool
-    @Binding var imagePickerSourceType: UIImagePickerController.SourceType
+    /// The pane's channel: #mesh, or the live geohash.
+    let channel: ChannelID
+    /// The width of the pane it opens over.
+    let paneWidth: CGFloat
+    /// Closes the popover (a row tap has opened a DM, or the close button).
+    let onClose: () -> Void
 
-    let headerHeight: CGFloat
-    /// How far a rounded display corner reaches into the top rows from the
-    /// trailing edge (TopCornerClearance); each row pads by what its own
-    /// content inset leaves uncovered.
-    let trailingCornerReach: CGFloat
-    let onSendMessage: () -> Void
+    @State private var showVerifySheet = false
+    /// The fingerprint pushed here. It is the popover's own, never the
+    /// root's (`AppChromeModel.showingFingerprintFor`), so it goes with the
+    /// popover however that closes (a fold, a panic, a DM opening) and can't
+    /// come back as the root's fingerprint sheet while the popover is still
+    /// on its way out (E13).
+    @State private var fingerprintPeerID: PeerID?
+
+    /// As wide as the people sheet on a phone, but 16pt clear of the pane's
+    /// edges on either side, so it never reaches across the hinge.
+    static func idealWidth(forPaneWidth paneWidth: CGFloat) -> CGFloat {
+        max(0, min(360, paneWidth - 32))
+    }
 
     var body: some View {
-        Group {
-            if privateConversationModel.selectedPeerID != nil {
-                ContentPrivateChatSheetView(
-                    showSidebar: $showSidebar,
-                    messageText: $messageText,
-                    selectedMessageSender: $selectedMessageSender,
-                    selectedMessageSenderID: $selectedMessageSenderID,
-                    imagePreviewURL: $imagePreviewURL,
-                    windowCountPublic: $windowCountPublic,
-                    windowCountPrivate: $windowCountPrivate,
-                    isAtBottomPrivate: $isAtBottomPrivate,
-                    isTextFieldFocused: isTextFieldFocused,
-                    voiceRecordingVM: voiceRecordingVM,
-                    autocompleteDebounceTimer: $autocompleteDebounceTimer,
-                    headerHeight: headerHeight,
-                    onSendMessage: onSendMessage,
-                    showImagePicker: $showImagePicker,
-                    imagePickerSourceType: $imagePickerSourceType,
-                    isInline: true,
-                    trailingCornerReach: trailingCornerReach
-                )
-            } else {
-                // Keeps hosting its own QR sheet, as in the people sheet.
-                ContentPeopleListView(
-                    showSidebar: $showSidebar,
-                    showVerifySheet: $showVerifySheet,
-                    isInline: true,
-                    headerHeight: headerHeight,
-                    trailingCornerReach: trailingCornerReach
-                )
+        NavigationStack {
+            ContentPeopleListView(
+                showSidebar: .constant(false),
+                showVerifySheet: $showVerifySheet,
+                presentation: .popover(
+                    onClose: onClose,
+                    onShowFingerprint: { fingerprintPeerID = $0 }
+                ),
+                channel: channel
+            )
+            .navigationDestination(isPresented: Binding(
+                get: { fingerprintPeerID != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        fingerprintPeerID = nil
+                    }
+                }
+            )) {
+                if let fingerprintPeerID {
+                    FingerprintView(peerID: fingerprintPeerID)
+                        .environmentObject(verificationModel)
+                }
             }
         }
-        .modifier(LegacyPrivateMediaConsentDialog())
+        .frame(idealWidth: Self.idealWidth(forPaneWidth: paneWidth), idealHeight: 480)
+        .modifier(PeoplePopoverPresentationStyle())
+    }
+}
+
+/// Keeps the popover a popover where iOS would turn it into a sheet (a
+/// compact size class), on the themed backdrop.
+private struct PeoplePopoverPresentationStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 16.4, *) {
+            content
+                .presentationCompactAdaptation(.popover)
+                .presentationBackground {
+                    ThemedRootBackground()
+                }
+        } else {
+            content
+                .background(ThemedRootBackground())
+        }
+    }
+}
+
+/// Presents `ContentPeoplePopoverView` from the view it modifies (a pane's
+/// whole bar, so the popover centres in its pane, off the hinge). The models
+/// the people tree reads are handed over explicitly, as the root does for
+/// its sheets: presentations can drop inherited environment objects (#1558).
+private struct ContentPeoplePopoverPresenter: ViewModifier {
+    @EnvironmentObject private var appChromeModel: AppChromeModel
+    @EnvironmentObject private var privateConversationModel: PrivateConversationModel
+    @EnvironmentObject private var verificationModel: VerificationModel
+    @EnvironmentObject private var conversationUIModel: ConversationUIModel
+    @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
+    @EnvironmentObject private var peerListModel: PeerListModel
+
+    @Binding var isPresented: Bool
+    let channel: ChannelID
+    let paneWidth: CGFloat
+    let onClose: () -> Void
+
+    func body(content: Content) -> some View {
+        // Only an arrow on the popover's top edge: it opens under its own
+        // bar, inside its pane (its width leaves the pane a margin). Left to
+        // the system, a bar at the window's trailing edge can get its
+        // popover sideways, across the hinge and over the other pane.
+        content.popover(isPresented: $isPresented, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
+            ContentPeoplePopoverView(channel: channel, paneWidth: paneWidth, onClose: onClose)
+                .environmentObject(appChromeModel)
+                .environmentObject(privateConversationModel)
+                .environmentObject(verificationModel)
+                .environmentObject(conversationUIModel)
+                .environmentObject(locationChannelsModel)
+                .environmentObject(peerListModel)
+        }
+    }
+}
+
+extension View {
+    /// Presents a pane's people popover, anchored to this view's bounds.
+    /// - Parameters:
+    ///   - channel: The pane's channel: #mesh, or the live geohash.
+    ///   - paneWidth: The pane's width, to keep the popover inside it.
+    ///   - onClose: Clears the popover state (`isPresented` reads false).
+    func contentPeoplePopover(
+        isPresented: Binding<Bool>,
+        channel: ChannelID,
+        paneWidth: CGFloat,
+        onClose: @escaping () -> Void
+    ) -> some View {
+        modifier(ContentPeoplePopoverPresenter(
+            isPresented: isPresented,
+            channel: channel,
+            paneWidth: paneWidth,
+            onClose: onClose
+        ))
     }
 }
 #endif
 
 /// Consent before one private-media send to a legacy client goes out in a
-/// clear signed envelope. Applied by the view that shows the DM, so a
-/// pending request always has a presenter; dismissing it denies the send.
-private struct LegacyPrivateMediaConsentDialog: ViewModifier {
+/// clear signed envelope. Applied by the people sheet and by the split
+/// layout's trailing pane, whatever either shows, so a pending request
+/// always has a presenter. Only its buttons answer it: Cancel, which iOS
+/// also runs for a tap outside the dialog, denies the send.
+struct LegacyPrivateMediaConsentDialog: ViewModifier {
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
+
+    /// Holds a pending request back while something else is presented
+    /// from the dialog's host (on the split layout, any other root
+    /// presentation: they all go first): presenting it then would fail. It
+    /// shows once that closes. Held back is not dismissed: the request
+    /// stays pending. Asked each time, never captured: SwiftUI also runs
+    /// the bindings of earlier renders.
+    let isDeferred: () -> Bool
 
     func body(content: Content) -> some View {
         let legacyConsentRequest = conversationUIModel.legacyPrivateMediaConsentRequest
@@ -366,15 +413,14 @@ private struct LegacyPrivateMediaConsentDialog: ViewModifier {
                     comment: "Title warning before sending private media to an older client in a clear signed envelope"
                 ),
                 isPresented: Binding(
-                    get: { legacyConsentRequest != nil },
-                    set: { isPresented in
-                        if !isPresented, let requestID = legacyConsentRequest?.id {
-                            conversationUIModel.resolveLegacyPrivateMediaConsent(
-                                requestID: requestID,
-                                approved: false
-                            )
-                        }
-                    }
+                    get: { legacyConsentRequest != nil && !isDeferred() },
+                    // SwiftUI writes false for every way the dialog goes:
+                    // a button (which has answered already), and also a
+                    // presentation it couldn't make (something else was
+                    // up) or a host taken down. Those are no answer: the
+                    // request stays pending and the dialog shows when it
+                    // can, rather than the send being denied unseen.
+                    set: { _ in }
                 ),
                 titleVisibility: .visible
             ) {
@@ -419,7 +465,23 @@ private struct LegacyPrivateMediaConsentDialog: ViewModifier {
     }
 }
 
-private struct ContentPeopleListView: View {
+/// Everyone on a channel: #mesh's peers, the bridge, groups and recent
+/// chats, or a geohash's participants and recent chats. A row tap opens
+/// the DM.
+struct ContentPeopleListView: View {
+    enum Presentation {
+        /// The people sheet (compact iOS, macOS): its close button also
+        /// leaves an open conversation.
+        case sheet
+        #if os(iOS)
+        /// A pane's people popover in the split layout. Closing it never
+        /// ends a conversation; a row tap opens the DM and closes the
+        /// popover once the DM is open, and a fingerprint shows in the
+        /// popover's own navigation.
+        case popover(onClose: () -> Void, onShowFingerprint: (PeerID) -> Void)
+        #endif
+    }
+
     @EnvironmentObject private var appChromeModel: AppChromeModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var verificationModel: VerificationModel
@@ -427,16 +489,19 @@ private struct ContentPeopleListView: View {
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var peerListModel: PeerListModel
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
     @Binding var showSidebar: Bool
     @Binding var showVerifySheet: Bool
-    /// Shown in the people column rather than the sheet: no close button,
-    /// and a title row as tall as the main header beside it.
-    var isInline = false
-    var headerHeight: CGFloat = 0
-    var trailingCornerReach: CGFloat = 0
+    var presentation: Presentation = .sheet
+    /// The channel whose people to list; nil follows the selection. #mesh
+    /// lists the mesh whatever is selected. A geohash's participants are
+    /// the live geohash's: only pass the selected one.
+    var channel: ChannelID? = nil
+
+    private var listChannel: ChannelID {
+        channel ?? locationChannelsModel.selectedChannel
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -446,7 +511,7 @@ private struct ContentPeopleListView: View {
                         .bitchatFont(size: 18)
                         .foregroundColor(palette.primary)
                     Spacer()
-                    if case .mesh = locationChannelsModel.selectedChannel {
+                    if case .mesh = listChannel {
                         Button(action: { showVerifySheet = true }) {
                             Image(systemName: "qrcode")
                                 .font(.bitchatSystem(size: 14))
@@ -461,38 +526,21 @@ private struct ContentPeopleListView: View {
                             String(localized: "content.help.verification", comment: "Help text for verification button")
                         )
                     }
-                    if !isInline {
-                        SheetCloseButton {
-                            withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                                dismiss()
-                                showSidebar = false
-                                showVerifySheet = false
-                                privateConversationModel.endConversation()
-                            }
-                        }
-                    }
+                    closeButton
                 }
-                .frame(minHeight: isInline ? headerHeight : nil)
 
                 // The mesh sheet titles its sections inline (#mesh / across
                 // the bridge / groups) — no subtitle or count up here.
                 // Location channels keep their geohash subtitle.
-                if case .location(let channel) = locationChannelsModel.selectedChannel {
+                if case .location(let channel) = listChannel {
                     Text(verbatim: "#\(channel.geohash.lowercased())")
                         .bitchatFont(size: 12)
                         .foregroundColor(palette.locationAccent)
                 }
             }
             .padding(.horizontal, 16)
-            // Inline, level with the main header, which glass floats as a
-            // panel 4pt below the top (themedChromePanel).
-            .padding(.top, isInline ? (theme.usesGlassChrome ? 4 : 0) : 16)
-            .padding(.bottom, isInline ? 0 : 12)
-            // The content sits 16pt in; themedSurface adds no inset.
-            .padding(.trailing, TopCornerClearance.padding(
-                forReach: trailingCornerReach,
-                contentInset: 16
-            ))
+            .padding(.top, 16)
+            .padding(.bottom, 12)
             .themedSurface()
 
             ScrollView {
@@ -500,10 +548,10 @@ private struct ContentPeopleListView: View {
                 // top 12 / bottom 4, rows vertical 4), so inter-child spacing
                 // here would make the first section's gap read differently.
                 VStack(alignment: .leading, spacing: 0) {
-                    if case .location = locationChannelsModel.selectedChannel {
+                    if case .location = listChannel {
                         GeohashPeopleList(
                             onTapPerson: {
-                                showSidebar = true
+                                didOpenGeohashConversation()
                             }
                         )
                         // Skip re-rendering the roster when this view
@@ -515,8 +563,7 @@ private struct ContentPeopleListView: View {
                         RecentChatList(
                             chats: peerListModel.recentChatRows,
                             onTapChat: { peerID in
-                                peerListModel.startConversation(with: peerID)
-                                showSidebar = true
+                                openConversation(with: peerID)
                             }
                         )
                     } else {
@@ -527,20 +574,26 @@ private struct ContentPeopleListView: View {
                         )
                         MeshPeerList(
                             onTapPeer: { peerID in
-                                peerListModel.startConversation(with: peerID)
-                                showSidebar = true
+                                openConversation(with: peerID)
                             },
                             onToggleFavorite: { peerID in
                                 peerListModel.toggleFavorite(peerID: peerID)
                             },
                             onShowFingerprint: { peerID in
-                                appChromeModel.showFingerprint(for: peerID)
+                                Self.showFingerprint(
+                                    for: peerID,
+                                    presentation: presentation,
+                                    appChromeModel: appChromeModel
+                                )
                             },
                             onToggleBlock: { peer in
+                                // The confirmation lands in #mesh, whose
+                                // people these are: the selection can be the
+                                // other pane's conversation.
                                 if peer.isBlocked {
-                                    conversationUIModel.unblock(peerID: peer.peerID, displayName: peer.displayName)
+                                    conversationUIModel.unblock(peerID: peer.peerID, displayName: peer.displayName, from: .mesh)
                                 } else {
-                                    conversationUIModel.block(peerID: peer.peerID, displayName: peer.displayName)
+                                    conversationUIModel.block(peerID: peer.peerID, displayName: peer.displayName, from: .mesh)
                                 }
                             }
                         )
@@ -550,8 +603,7 @@ private struct ContentPeopleListView: View {
                         GroupChatList(
                             groups: peerListModel.groupRows,
                             onTapGroup: { peerID in
-                                peerListModel.startConversation(with: peerID)
-                                showSidebar = true
+                                openConversation(with: peerID)
                             }
                         )
                         // Conversations with people no roster above lists
@@ -560,8 +612,7 @@ private struct ContentPeopleListView: View {
                         RecentChatList(
                             chats: peerListModel.recentChatRows,
                             onTapChat: { peerID in
-                                peerListModel.startConversation(with: peerID)
-                                showSidebar = true
+                                openConversation(with: peerID)
                             }
                         )
                     }
@@ -572,11 +623,12 @@ private struct ContentPeopleListView: View {
                 // the ScrollView centers it — headers and empty states
                 // floated mid-screen on iPhone.
                 .frame(maxWidth: .infinity, alignment: .leading)
-                // Keyed by channel only. Rows are keyed by person, so roster
-                // updates diff in place; a key derived from the rows rebuilds
-                // the whole list on every heartbeat and resets its stable
-                // ordering.
-                .id(ConversationID(channelID: locationChannelsModel.selectedChannel))
+                // Keyed by the listed channel only. Rows are keyed by
+                // person, so roster updates diff in place; a key derived
+                // from the rows rebuilds the whole list on every heartbeat
+                // and resets its stable ordering. A mesh popover's list
+                // stays put while the selected geohash changes.
+                .id(ConversationID(channelID: listChannel))
             }
         }
         .sheet(isPresented: $showVerifySheet) {
@@ -584,6 +636,94 @@ private struct ContentPeopleListView: View {
                 .environmentObject(verificationModel)
         }
     }
+
+    @ViewBuilder
+    private var closeButton: some View {
+        switch presentation {
+        case .sheet:
+            SheetCloseButton {
+                withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                    dismiss()
+                    showSidebar = false
+                    showVerifySheet = false
+                    privateConversationModel.endConversation()
+                }
+            }
+        #if os(iOS)
+        case .popover(let onClose, _):
+            // A DM open beside the popover stays open.
+            SheetCloseButton(action: onClose)
+        #endif
+        }
+    }
+
+    private func openConversation(with peerID: PeerID) {
+        switch presentation {
+        case .sheet:
+            peerListModel.startConversation(with: peerID)
+            showSidebar = true
+        #if os(iOS)
+        case .popover(let onClose, _):
+            // The popover stays when no DM opened (a blocked peer's): it
+            // would otherwise close on nothing. The refusal lands in the
+            // listed channel, which need not be the selected one.
+            if Self.openConversationFromPopover(
+                with: peerID,
+                from: .publicChannel(listChannel),
+                in: privateConversationModel
+            ) {
+                onClose()
+            }
+        #endif
+        }
+    }
+
+    /// A geohash row has opened its DM (GeohashPeopleList opens it itself).
+    private func didOpenGeohashConversation() {
+        switch presentation {
+        case .sheet:
+            showSidebar = true
+        #if os(iOS)
+        case .popover(let onClose, _):
+            onClose()
+        #endif
+        }
+    }
+
+    /// Where a fingerprint asked for from the list shows: the people sheet
+    /// pushes the app-wide one; a popover pushes its own, which can't
+    /// outlive it (E13).
+    static func showFingerprint(
+        for peerID: PeerID,
+        presentation: Presentation,
+        appChromeModel: AppChromeModel
+    ) {
+        switch presentation {
+        case .sheet:
+            appChromeModel.showFingerprint(for: peerID)
+        #if os(iOS)
+        case .popover(_, let onShowFingerprint):
+            onShowFingerprint(peerID)
+        #endif
+        }
+    }
+
+    #if os(iOS)
+    /// Opens the DM with `peerID` from a popover row and says whether it
+    /// opened: a blocked peer's doesn't, and its refusal lands in `origin`,
+    /// the conversation whose people the popover lists. Through the
+    /// conversation model, which takes the selection at once, so the
+    /// answer is known before the tap returns.
+    static func openConversationFromPopover(
+        with peerID: PeerID,
+        from origin: ConversationTarget,
+        in model: PrivateConversationModel
+    ) -> Bool {
+        model.startConversation(with: peerID, from: origin)
+        return model.selectedPeerID == peerID
+    }
+    #endif
+
 }
 
 private extension ContentPeopleListView {
@@ -593,36 +733,38 @@ private extension ContentPeopleListView {
 
 }
 
-private struct ContentPrivateChatSheetView: View {
+/// The open DM: the people sheet's, or the split layout's trailing pane
+/// (`isInline`).
+struct ContentPrivateChatSheetView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
 
     @Binding var showSidebar: Bool
-    @Binding var messageText: String
     @Binding var selectedMessageSender: String?
     @Binding var selectedMessageSenderID: PeerID?
     @Binding var imagePreviewURL: URL?
     @Binding var windowCountPublic: Int
     @Binding var windowCountPrivate: [PeerID: Int]
     @Binding var isAtBottomPrivate: Bool
-    var isTextFieldFocused: FocusState<Bool>.Binding
+    /// The DM composer's session; its list's mentions type into it too.
+    let composer: ComposerSession
+    /// The DM, scoped as its composer sends: what its list acts in.
+    let target: ConversationTarget?
+    var focusedComposer: FocusState<ComposerSlot?>.Binding
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
-    @Binding var autocompleteDebounceTimer: Timer?
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
     let headerHeight: CGFloat
     let onSendMessage: () -> Void
+    let onPickMedia: MediaPickAction
 
-    #if os(iOS)
-    @Binding var showImagePicker: Bool
-    @Binding var imagePickerSourceType: UIImagePickerController.SourceType
-    #else
-    @Binding var showMacImagePicker: Bool
-    #endif
-
-    /// Shown in the people column rather than the sheet: the back chevron
-    /// and swipe-to-leave return to the list there, so there is no close
-    /// button, and the header lines up with the main header beside it.
+    /// Shown in the split layout's trailing pane rather than the sheet: the
+    /// back chevron and swipe-to-leave bring the pane's channel or picker
+    /// back, so there is no close button, and the header lines up with the
+    /// #mesh bar beside it. The pane lives in ContentView's own tree, so it
+    /// inherits every environment object and presents through the root:
+    /// none of the sheet's navigation, banner mirror or alert copies come
+    /// along, and the pane around it hosts the legacy-media consent dialog.
     var isInline = false
     var trailingCornerReach: CGFloat = 0
 
@@ -633,6 +775,17 @@ private struct ContentPrivateChatSheetView: View {
     }
 
     var body: some View {
+        // Inline, the pane outlasts its DM by the removal animation the
+        // back chevron and the swipe start (both end the DM inside
+        // withAnimation). Emptied at once, its composer, on the `.secondary`
+        // focus slot, never coexists with the incoming geohash composer on
+        // that same slot. The sheet only mounts this with a DM open.
+        if !isInline || privateConversationModel.selectedPeerID != nil {
+            chat
+        }
+    }
+
+    private var chat: some View {
         VStack(spacing: 0) {
             if let headerState = privateConversationModel.selectedHeaderState {
                 HStack(spacing: 12) {
@@ -715,16 +868,16 @@ private struct ContentPrivateChatSheetView: View {
             }
 
             MessageListView(
-                privatePeer: privateConversationModel.selectedPeerID,
+                privateTarget: target,
                 isAtBottom: $isAtBottomPrivate,
-                messageText: $messageText,
+                composer: composer,
                 selectedMessageSender: $selectedMessageSender,
                 selectedMessageSenderID: $selectedMessageSenderID,
                 imagePreviewURL: $imagePreviewURL,
                 windowCountPublic: $windowCountPublic,
                 windowCountPrivate: $windowCountPrivate,
                 showSidebar: $showSidebar,
-                isTextFieldFocused: isTextFieldFocused
+                focusedComposer: focusedComposer
             )
             .themedSurface()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -740,30 +893,17 @@ private struct ContentPrivateChatSheetView: View {
 
             privacyCaption
 
-            #if os(iOS)
             ContentComposerView(
-                messageText: $messageText,
-                isTextFieldFocused: isTextFieldFocused,
+                session: composer,
+                focus: focusedComposer,
                 voiceRecordingVM: voiceRecordingVM,
-                autocompleteDebounceTimer: $autocompleteDebounceTimer,
-                onSendMessage: onSendMessage,
-                showImagePicker: $showImagePicker,
-                imagePickerSourceType: $imagePickerSourceType
+                onSend: onSendMessage,
+                onPickMedia: onPickMedia
             )
-            #else
-            ContentComposerView(
-                messageText: $messageText,
-                isTextFieldFocused: isTextFieldFocused,
-                voiceRecordingVM: voiceRecordingVM,
-                autocompleteDebounceTimer: $autocompleteDebounceTimer,
-                onSendMessage: onSendMessage,
-                showMacImagePicker: $showMacImagePicker
-            )
-            #endif
         }
         .background {
-            // Inline, the root backdrop already spans both columns; a second
-            // glass gradient would restart its glows at the column edge.
+            // Inline, the root backdrop already spans both panes; a second
+            // glass gradient would restart its glows at the pane's edge.
             if !isInline {
                 ThemedRootBackground()
             }

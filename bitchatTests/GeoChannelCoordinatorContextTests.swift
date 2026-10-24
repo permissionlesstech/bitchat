@@ -35,35 +35,6 @@ private final class MockGeoChannelContext: GeoChannelContext {
     func endGeohashSampling() { endSamplingCount += 1 }
 }
 
-// MARK: - CoreLocation Seams
-
-private final class StubLocationManaging: LocationStateManaging {
-    weak var delegate: CLLocationManagerDelegate?
-    var desiredAccuracy: CLLocationAccuracy = 0
-    var distanceFilter: CLLocationDistance = 0
-    var authorizationStatus: CLAuthorizationStatus
-    private(set) var stopUpdatingLocationCallCount = 0
-
-    init(authorizationStatus: CLAuthorizationStatus = .denied) {
-        self.authorizationStatus = authorizationStatus
-    }
-
-    func requestWhenInUseAuthorization() {}
-    func requestLocation() {}
-    func startUpdatingLocation() {}
-    func stopUpdatingLocation() { stopUpdatingLocationCallCount += 1 }
-}
-
-private final class StubLocationGeocoder: LocationStateGeocoding {
-    func cancelGeocode() {}
-    func reverseGeocodeLocation(
-        _ location: CLLocation,
-        completionHandler: @escaping ([CLPlacemark]?, Error?) -> Void
-    ) {
-        completionHandler(nil, nil)
-    }
-}
-
 // MARK: - Helpers
 
 @MainActor
@@ -79,8 +50,8 @@ private func makeLocationManager(
     }
     return LocationStateManager(
         storage: defaults,
-        locationManager: StubLocationManaging(authorizationStatus: authorizationStatus),
-        geocoder: StubLocationGeocoder(),
+        locationManager: MockLocationStateManaging(authorizationStatus: authorizationStatus),
+        geocoder: MockLocationStateGeocoder(),
         shouldInitializeCoreLocation: shouldInitializeCoreLocation
     )
 }

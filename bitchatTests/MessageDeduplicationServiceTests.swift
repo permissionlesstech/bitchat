@@ -8,6 +8,7 @@
 
 import Testing
 import Foundation
+import BitFoundation
 @testable import bitchat
 
 // MARK: - LRU Deduplication Cache Tests
@@ -344,6 +345,64 @@ struct MessageDeduplicationServiceTests {
         let normalizerKey = ContentNormalizer.normalizedKey(content)
 
         #expect(serviceKey == normalizerKey)
+    }
+
+    // MARK: - Conversation-Scoped Content Keys
+
+    @Test func contentKey_differsPerConversation() {
+        let service = MessageDeduplicationService(contentCapacity: 100, nostrEventCapacity: 100)
+        let mesh = service.contentKey("gm", in: .mesh)
+        let geohash = service.contentKey("gm", in: .geohash("u4pruy"))
+        let otherGeohash = service.contentKey("gm", in: .geohash("u4pruz"))
+        let direct = service.contentKey("gm", in: .directPeer(PeerID(str: "0102030405060708")))
+
+        #expect(Set([mesh, geohash, otherGeohash, direct]).count == 4)
+        #expect(mesh == "mesh|" + ContentNormalizer.normalizedKey("gm"))
+        #expect(geohash == "geo:u4pruy|" + ContentNormalizer.normalizedKey("gm"))
+        // Normalization still applies inside a scope.
+        #expect(service.contentKey("  GM ", in: .mesh) == mesh)
+    }
+
+    @Test func contentKey_recordedInOneConversation_isUnseenInAnother() {
+        let service = MessageDeduplicationService(contentCapacity: 100, nostrEventCapacity: 100)
+        let now = Date()
+
+        service.recordContentKey(service.contentKey("same text", in: .mesh), timestamp: now)
+
+        #expect(service.contentTimestamp(forKey: service.contentKey("same text", in: .mesh)) == now)
+        #expect(service.contentTimestamp(forKey: service.contentKey("same text", in: .geohash("u4pruy"))) == nil)
+        // The unscoped key the rate limiter buckets on is a different key.
+        #expect(service.contentTimestamp(forKey: service.normalizedContentKey("same text")) == nil)
+    }
+
+    @Test func forgetContentInScope_allowsAuthenticatedReplacementThroughNextBatch() {
+        let service = MessageDeduplicationService(contentCapacity: 100, nostrEventCapacity: 100)
+        let content = "bridge alias payload"
+        let timestamp = Date()
+        let meshKey = service.contentKey(content, in: .mesh)
+        let geohashKey = service.contentKey(content, in: .geohash("u4pruy"))
+        service.recordContentKey(meshKey, timestamp: timestamp)
+        service.recordContentKey(geohashKey, timestamp: timestamp)
+
+        service.forgetContent(content, in: .mesh, ifRecordedAt: timestamp)
+
+        #expect(service.contentTimestamp(forKey: meshKey) == nil)
+        // Only the named conversation's marker goes.
+        #expect(service.contentTimestamp(forKey: geohashKey) == timestamp)
+    }
+
+    @Test func forgetContentInScope_doesNotEraseNewerSameContentMarker() {
+        let service = MessageDeduplicationService(contentCapacity: 100, nostrEventCapacity: 100)
+        let content = "repeated payload"
+        let old = Date(timeIntervalSince1970: 1_000)
+        let newer = Date(timeIntervalSince1970: 2_000)
+        let key = service.contentKey(content, in: .mesh)
+        service.recordContentKey(key, timestamp: old)
+        service.recordContentKey(key, timestamp: newer)
+
+        service.forgetContent(content, in: .mesh, ifRecordedAt: old)
+
+        #expect(service.contentTimestamp(forKey: key) == newer)
     }
 
     // MARK: - Nostr Event Deduplication

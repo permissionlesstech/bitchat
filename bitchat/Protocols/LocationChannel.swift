@@ -95,7 +95,7 @@ struct GeohashChannel: Codable, Equatable, Hashable, Identifiable {
 }
 
 /// Identifier for current public chat channel (mesh or a location geohash).
-enum ChannelID: Equatable, Codable {
+enum ChannelID: Hashable, Codable {
     case mesh
     case location(GeohashChannel)
 

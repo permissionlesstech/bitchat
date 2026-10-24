@@ -47,7 +47,7 @@ struct ChatViewModelRefactoringTests {
         #expect(didResolve)
         
         // Action: User types /msg command
-        viewModel.sendMessage("/msg @alice Hello Private World")
+        viewModel.sendMessage("/msg @alice Hello Private World", to: viewModel.selectionTarget)
 
         let didSend = await TestHelpers.waitUntil({ transport.sentPrivateMessages.count == 1 },
                                                   timeout: TestConstants.settleTimeout)
@@ -78,7 +78,7 @@ struct ChatViewModelRefactoringTests {
         #expect(didResolve)
         
         // Action
-        viewModel.sendMessage("/block @troll")
+        viewModel.sendMessage("/block @troll", to: viewModel.selectionTarget)
         
         // Assert
         // Verify identity manager was called to block "fingerprint_123"

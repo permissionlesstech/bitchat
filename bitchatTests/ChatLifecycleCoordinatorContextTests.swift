@@ -355,7 +355,7 @@ struct ChatLifecycleCoordinatorContextTests {
 
 /// Pins `AppRuntime`'s screenshot decision table: the geohash warn path,
 /// the App Info exemption, the deliberate mesh silence, and the split
-/// layout's timeline beside a DM. Combined with
+/// layout's trailing pane (a place, or a DM over it). Combined with
 /// `handleScreenshotCaptured_publicChannel_staysSilent` above, this proves
 /// location + screenshot → local privacy alert, and nothing sent anywhere.
 struct ScreenshotCaptureRoutingTests {
@@ -407,42 +407,92 @@ struct ScreenshotCaptureRoutingTests {
         ) == .forwardToChat)
     }
 
-    @Test("The split layout's location timeline beside a DM warns and forwards")
-    func splitLayoutScreenshotsShowTheTimelineBesideTheConversation() {
-        // Both are in the image: warn about the place, notify the peer.
-        #expect(AppRuntime.resolveScreenshotResponse(
-            isLocationChannelsSheetPresented: false,
-            isAppInfoPresented: false,
-            hasPrivateChatOpen: true,
-            isLocationChannelActive: true,
-            isPublicTimelineBesideConversation: true
-        ) == .warnLocallyAndForwardToChat)
-
-        // In compact width the DM's sheet covers the timeline.
-        #expect(AppRuntime.resolveScreenshotResponse(
-            isLocationChannelsSheetPresented: false,
-            isAppInfoPresented: false,
-            hasPrivateChatOpen: true,
-            isLocationChannelActive: true,
-            isPublicTimelineBesideConversation: false
-        ) == .forwardToChat)
-
-        // Mesh beside a DM reveals no place.
-        #expect(AppRuntime.resolveScreenshotResponse(
-            isLocationChannelsSheetPresented: false,
-            isAppInfoPresented: false,
-            hasPrivateChatOpen: true,
-            isLocationChannelActive: false,
-            isPublicTimelineBesideConversation: true
-        ) == .forwardToChat)
-
-        // Beside the people list there is no DM to notify.
+    @Test("Split: the trailing pane's place warns; a DM over it only forwards")
+    func splitLayoutScreenshotsFollowTheTrailingPane() {
+        // A geohash timeline or the picker in the trailing pane, #mesh beside
+        // it: warn about the place, tell no one.
         #expect(AppRuntime.resolveScreenshotResponse(
             isLocationChannelsSheetPresented: false,
             isAppInfoPresented: false,
             hasPrivateChatOpen: false,
             isLocationChannelActive: true,
-            isPublicTimelineBesideConversation: true
+            splitLayoutShowsLocation: true
         ) == .warnLocally)
+
+        // The idle picker shows nearby places with #mesh selected.
+        #expect(AppRuntime.resolveScreenshotResponse(
+            isLocationChannelsSheetPresented: false,
+            isAppInfoPresented: false,
+            hasPrivateChatOpen: false,
+            isLocationChannelActive: false,
+            splitLayoutShowsLocation: true
+        ) == .warnLocally)
+
+        // A DM covering the trailing geohash: today's DM notice, and no
+        // location warning even though a geohash is selected under it.
+        #expect(AppRuntime.resolveScreenshotResponse(
+            isLocationChannelsSheetPresented: false,
+            isAppInfoPresented: false,
+            hasPrivateChatOpen: true,
+            isLocationChannelActive: true,
+            splitLayoutShowsLocation: false
+        ) == .forwardToChat)
+
+        // A place on screen beside an open DM: both.
+        #expect(AppRuntime.resolveScreenshotResponse(
+            isLocationChannelsSheetPresented: false,
+            isAppInfoPresented: false,
+            hasPrivateChatOpen: true,
+            isLocationChannelActive: true,
+            splitLayoutShowsLocation: true
+        ) == .warnLocallyAndForwardToChat)
+
+        // Nothing placed on screen and no DM: the chat layer stays silent.
+        #expect(AppRuntime.resolveScreenshotResponse(
+            isLocationChannelsSheetPresented: false,
+            isAppInfoPresented: false,
+            hasPrivateChatOpen: false,
+            isLocationChannelActive: true,
+            splitLayoutShowsLocation: false
+        ) == .forwardToChat)
+    }
+
+    @Test("The sheet and App Info decide first; the single column keeps its table")
+    func screenshotTableIsTotal() {
+        for sheet in [false, true] {
+            for appInfo in [false, true] {
+                for dm in [false, true] {
+                    for location in [false, true] {
+                        for split in [Bool?.none, false, true] {
+                            let response = AppRuntime.resolveScreenshotResponse(
+                                isLocationChannelsSheetPresented: sheet,
+                                isAppInfoPresented: appInfo,
+                                hasPrivateChatOpen: dm,
+                                isLocationChannelActive: location,
+                                splitLayoutShowsLocation: split
+                            )
+                            let expected: AppRuntime.ScreenshotCaptureResponse
+                            if sheet {
+                                expected = .warnLocally
+                            } else if appInfo {
+                                expected = .ignore
+                            } else if let split {
+                                // The selection under a DM no longer counts.
+                                expected = split
+                                    ? (dm ? .warnLocallyAndForwardToChat : .warnLocally)
+                                    : .forwardToChat
+                            } else {
+                                // Compact: unchanged.
+                                expected = location && !dm ? .warnLocally : .forwardToChat
+                            }
+                            #expect(
+                                response == expected,
+                                "sheet \(sheet), appInfo \(appInfo), dm \(dm), location \(location), split \(String(describing: split))"
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }

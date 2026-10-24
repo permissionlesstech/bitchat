@@ -28,10 +28,21 @@ final class AppChromeModel: ObservableObject {
     /// triggered it needs to know data may remain on the device.
     @Published private(set) var panicWipeBlocked = false
     #if os(iOS)
-    /// The split layout keeps the public timeline on screen beside an open
-    /// DM instead of under its sheet. ContentView mirrors its layout here;
-    /// only screenshot routing reads it, so it isn't published.
-    var isPublicTimelineBesideConversation = false
+    /// Whether a screenshot of the split layout shows a place: a geohash
+    /// timeline or the location-channel picker, rather than a DM. Nil while
+    /// the single column is up. Asked of the panes each time
+    /// (`setSplitLayoutScreenshotProbe`), so it is never a copy one of
+    /// SwiftUI's change callbacks has to keep current: SwiftUI skips those
+    /// past a couple of changes in one frame. Only screenshot routing reads
+    /// it, so it isn't published.
+    var splitLayoutShowsLocation: Bool? {
+        splitLayoutScreenshotProbe?()
+    }
+    private var splitLayoutScreenshotProbe: (@MainActor () -> Bool?)?
+    /// Goes up with every panic wipe. The wipe closes the sheets, which takes
+    /// what they hold with them; inline views outlive it (the split layout's
+    /// location-channel picker) and drop what they hold when this changes.
+    @Published private(set) var panicEpoch: UInt64 = 0
     #endif
 
     private let chatViewModel: ChatViewModel
@@ -122,6 +133,20 @@ final class AppChromeModel: ObservableObject {
         showScreenshotPrivacyWarning = true
     }
 
+    #if os(iOS)
+    /// Whether the split layout's leading pane keeps #mesh on screen beside
+    /// the selection: arrivals there batch like the selected timeline's.
+    func setMeshPinnedOnScreen(_ pinned: Bool) {
+        chatViewModel.conversations.setMeshPinnedOnScreen(pinned)
+    }
+
+    /// ContentView's answer to `splitLayoutShowsLocation`, read from the
+    /// panes as they are at that moment; nil while it is off screen.
+    func setSplitLayoutScreenshotProbe(_ probe: (@MainActor () -> Bool?)?) {
+        splitLayoutScreenshotProbe = probe
+    }
+    #endif
+
     func setPanicPreparation(_ preparation: (@MainActor () -> Void)?) {
         prepareForPanic = preparation
     }
@@ -143,6 +168,9 @@ final class AppChromeModel: ObservableObject {
         isLocationChannelsSheetPresented = false
         isNoticesSheetPresented = false
         showingFingerprintFor = nil
+        #if os(iOS)
+        panicEpoch &+= 1
+        #endif
 
         prepareForPanic?()
         onPanicWipe()

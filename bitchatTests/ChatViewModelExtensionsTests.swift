@@ -51,7 +51,7 @@ struct ChatViewModelPrivateChatExtensionTests {
         transport.connectedPeers.insert(peerID)
         transport.peerNicknames[peerID] = "MeshUser"
         
-        viewModel.sendPrivateMessage("Hello Mesh", to: peerID)
+        viewModel.sendPrivateMessage("Hello Mesh", to: peerID, scope: viewModel.activeChannel)
         
         // Verify transport was called
         // Note: MockTransport stores sent messages
@@ -80,7 +80,7 @@ struct ChatViewModelPrivateChatExtensionTests {
         let validHex = "0102030405060708090a0b0c0d0e0f100102030405060708090a0b0c0d0e0f10"
         let peerID = PeerID(str: validHex)
 
-        viewModel.sendPrivateMessage("Hello", to: peerID)
+        viewModel.sendPrivateMessage("Hello", to: peerID, scope: viewModel.activeChannel)
 
         #expect(viewModel.privateChats[peerID]?.count == 1)
         #expect(viewModel.privateChats[peerID]?.last?.deliveryStatus == .sending)
@@ -979,7 +979,7 @@ struct ChatViewModelMediaTransferTests {
         try Data("voice".utf8).write(to: url)
         viewModel.switchLocationChannel(to: .location(GeohashChannel(level: .city, geohash: geohash)))
 
-        viewModel.makeVoiceNoteSender()(url)
+        viewModel.makeVoiceNoteSender(for: viewModel.selectionTarget)(url)
 
         #expect(!FileManager.default.fileExists(atPath: url.path))
         #expect(viewModel.messages.contains(where: { $0.sender == "system" }))
@@ -995,7 +995,7 @@ struct ChatViewModelMediaTransferTests {
         let coordinator = viewModel.mediaTransferCoordinator
         coordinator.sendImage(
             from: URL(fileURLWithPath: "/tmp/ignored.jpg"),
-            to: coordinator.currentMediaDestination
+            to: .init(target: viewModel.selectionTarget)
         ) {
             cleanupCalled = true
         }
@@ -1015,7 +1015,7 @@ struct ChatViewModelMediaTransferTests {
         defer { try? FileManager.default.removeItem(at: url) }
 
         viewModel.selectedPrivateChatPeer = peerID
-        let sendVoiceNote = viewModel.makeVoiceNoteSender()
+        let sendVoiceNote = viewModel.makeVoiceNoteSender(for: viewModel.selectionTarget)
         viewModel.selectedPrivateChatPeer = nil
         sendVoiceNote(url)
 
@@ -1124,7 +1124,7 @@ struct ChatViewModelMediaTransferTests {
         try Data(repeating: 0x55, count: FileTransferLimits.maxVoiceNoteBytes + 1).write(to: url, options: .atomic)
 
         viewModel.selectedPrivateChatPeer = peerID
-        viewModel.makeVoiceNoteSender()(url)
+        viewModel.makeVoiceNoteSender(for: viewModel.selectionTarget)(url)
 
         let didFail = await TestHelpers.waitUntil({
             isFailed(status: viewModel.privateChats[peerID]?.last?.deliveryStatus)
@@ -1143,7 +1143,7 @@ struct ChatViewModelMediaTransferTests {
 
         viewModel.selectedPrivateChatPeer = peerID
         let coordinator = viewModel.mediaTransferCoordinator
-        coordinator.sendImage(from: sourceURL, to: coordinator.currentMediaDestination)
+        coordinator.sendImage(from: sourceURL, to: .init(target: viewModel.selectionTarget))
 
         let didSend = await TestHelpers.waitUntil({ transport.sentPrivateFiles.count == 1 }, timeout: TestConstants.settleTimeout)
         #expect(didSend)
@@ -1153,6 +1153,8 @@ struct ChatViewModelMediaTransferTests {
         #expect(viewModel.messageIDToTransferId.count == 1)
     }
 
+    /// A photo for a DM that can't be prepared says so in that DM's thread,
+    /// where it was picked, not in the public timeline under it.
     @Test @MainActor
     func sendImage_invalidSourceAddsFailureSystemMessage() async throws {
         let (viewModel, transport) = makeTestableViewModel()
@@ -1163,14 +1165,16 @@ struct ChatViewModelMediaTransferTests {
 
         viewModel.selectedPrivateChatPeer = peerID
         let coordinator = viewModel.mediaTransferCoordinator
-        coordinator.sendImage(from: url, to: coordinator.currentMediaDestination)
+        coordinator.sendImage(from: url, to: .init(target: viewModel.selectionTarget))
 
         let didNotify = await TestHelpers.waitUntil({
-            viewModel.messages.contains(where: { $0.sender == "system" && $0.content.contains("Failed to prepare image") })
+            viewModel.privateChats[peerID]?.contains(where: {
+                $0.sender == "system" && $0.content.contains("Failed to prepare image")
+            }) == true
         }, timeout: TestConstants.settleTimeout)
         #expect(didNotify)
         #expect(transport.sentPrivateFiles.isEmpty)
-        #expect(viewModel.privateChats[peerID]?.isEmpty != false)
+        #expect(!viewModel.messages.contains(where: { $0.content.contains("Failed to prepare image") }))
     }
 
     @Test @MainActor

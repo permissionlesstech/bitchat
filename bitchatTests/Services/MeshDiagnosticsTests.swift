@@ -19,7 +19,7 @@ struct MeshDiagnosticsTests {
 
     @MainActor
     private func makeProcessor(
-        context: DiagnosticsMockContext,
+        context: MockScopedCommandContext,
         transport: MockTransport
     ) -> CommandProcessor {
         CommandProcessor(
@@ -31,7 +31,7 @@ struct MeshDiagnosticsTests {
 
     /// Waits for the async ping completion (MainActor hop) to land.
     @MainActor
-    private func waitForCommandOutput(_ context: DiagnosticsMockContext) async {
+    private func waitForCommandOutput(_ context: MockScopedCommandContext) async {
         for _ in 0..<100 {
             if !context.commandOutputs.isEmpty { return }
             await Task.yield()
@@ -43,9 +43,9 @@ struct MeshDiagnosticsTests {
 
     @MainActor
     @Test func pingWithoutArgumentShowsUsage() {
-        let context = DiagnosticsMockContext()
+        let context = MockScopedCommandContext()
         let processor = makeProcessor(context: context, transport: MockTransport())
-        let result = processor.process("/ping")
+        let result = processor.process("/ping", in: context.selectionTarget)
         switch result {
         case .error(let message):
             #expect(message == "usage: /ping <nickname>")
@@ -56,9 +56,9 @@ struct MeshDiagnosticsTests {
 
     @MainActor
     @Test func pingUnknownPeerFails() {
-        let context = DiagnosticsMockContext()
+        let context = MockScopedCommandContext()
         let processor = makeProcessor(context: context, transport: MockTransport())
-        let result = processor.process("/ping @ghost")
+        let result = processor.process("/ping @ghost", in: context.selectionTarget)
         switch result {
         case .error(let message):
             #expect(message == "cannot ping ghost: not found on mesh")
@@ -69,10 +69,10 @@ struct MeshDiagnosticsTests {
 
     @MainActor
     @Test func pingGeoDMPeerIsRejected() {
-        let context = DiagnosticsMockContext()
+        let context = MockScopedCommandContext()
         context.nicknameToPeerID["alice"] = PeerID(nostr_: "aabbccddeeff00112233445566778899")
         let processor = makeProcessor(context: context, transport: MockTransport())
-        let result = processor.process("/ping @alice")
+        let result = processor.process("/ping @alice", in: context.selectionTarget)
         switch result {
         case .error(let message):
             #expect(message == "cannot ping alice: not found on mesh")
@@ -83,14 +83,14 @@ struct MeshDiagnosticsTests {
 
     @MainActor
     @Test func pingSuccessReportsRttAndHops() async {
-        let context = DiagnosticsMockContext()
+        let context = MockScopedCommandContext()
         let peerID = PeerID(str: "abcd1234abcd1234")
         context.nicknameToPeerID["alice"] = peerID
         let transport = MockTransport()
         transport.meshPingResult = MeshPingResult(rttMs: 42, hops: 2)
         let processor = makeProcessor(context: context, transport: transport)
 
-        let result = processor.process("/ping @alice")
+        let result = processor.process("/ping @alice", in: context.selectionTarget)
         switch result {
         case .success(let message):
             #expect(message == "pinging alice…")
@@ -105,33 +105,33 @@ struct MeshDiagnosticsTests {
 
     @MainActor
     @Test func pingDirectPeerReportsSingleHop() async {
-        let context = DiagnosticsMockContext()
+        let context = MockScopedCommandContext()
         context.nicknameToPeerID["alice"] = PeerID(str: "abcd1234abcd1234")
         let transport = MockTransport()
         transport.meshPingResult = MeshPingResult(rttMs: 8, hops: 1)
         let processor = makeProcessor(context: context, transport: transport)
 
-        _ = processor.process("/ping alice")
+        _ = processor.process("/ping alice", in: context.selectionTarget)
         await waitForCommandOutput(context)
         #expect(context.commandOutputs == ["pong from alice: 8 ms · direct (1 hop)"])
     }
 
     @MainActor
     @Test func pingTimeoutReportsNoReply() async {
-        let context = DiagnosticsMockContext()
+        let context = MockScopedCommandContext()
         context.nicknameToPeerID["alice"] = PeerID(str: "abcd1234abcd1234")
         let transport = MockTransport()
         transport.meshPingResult = nil
         let processor = makeProcessor(context: context, transport: transport)
 
-        _ = processor.process("/ping @alice")
+        _ = processor.process("/ping @alice", in: context.selectionTarget)
         await waitForCommandOutput(context)
         #expect(context.commandOutputs == ["no reply from alice"])
     }
 
     @MainActor
     @Test func pingOutputRoutesToConversationWhereCommandWasIssued() async {
-        let context = DiagnosticsMockContext()
+        let context = MockScopedCommandContext()
         let alice = PeerID(str: "abcd1234abcd1234")
         let bob = PeerID(str: "b0b0b0b0b0b0b0b0")
         context.nicknameToPeerID["alice"] = alice
@@ -143,42 +143,42 @@ struct MeshDiagnosticsTests {
         // result lands. The output must follow the origin conversation, not
         // whatever is selected at callback time.
         context.selectedPrivateChatPeer = bob
-        _ = processor.process("/ping @alice")
+        _ = processor.process("/ping @alice", in: context.selectionTarget)
         context.selectedPrivateChatPeer = nil
 
         await waitForCommandOutput(context)
-        #expect(context.commandOutputDestinations == [.privateChat(bob)])
+        #expect(context.commandOutputDestinations == [ConversationTarget(channel: .mesh, privatePeer: bob)])
     }
 
     @MainActor
     @Test func pingIssuedFromPublicTimelineRoutesToMeshTimeline() async {
-        let context = DiagnosticsMockContext()
+        let context = MockScopedCommandContext()
         let alice = PeerID(str: "abcd1234abcd1234")
         context.nicknameToPeerID["alice"] = alice
         let transport = MockTransport()
         transport.meshPingResult = MeshPingResult(rttMs: 7, hops: 1)
         let processor = makeProcessor(context: context, transport: transport)
 
-        _ = processor.process("/ping @alice")
+        _ = processor.process("/ping @alice", in: context.selectionTarget)
         // Opening a DM afterwards must not swallow the public-timeline result.
         context.selectedPrivateChatPeer = alice
 
         await waitForCommandOutput(context)
-        #expect(context.commandOutputDestinations == [.meshTimeline])
+        #expect(context.commandOutputDestinations == [.mesh])
     }
 
     // MARK: - /trace
 
     @MainActor
     @Test func traceDirectPeerShowsOneHop() {
-        let context = DiagnosticsMockContext()
+        let context = MockScopedCommandContext()
         let bob = PeerID(str: "b0b0b0b0b0b0b0b0")
         context.nicknameToPeerID["bob"] = bob
         let transport = MockTransport()
         transport.meshPaths[bob] = []
         let processor = makeProcessor(context: context, transport: transport)
 
-        let result = processor.process("/trace @bob")
+        let result = processor.process("/trace @bob", in: context.selectionTarget)
         switch result {
         case .success(let message):
             #expect(message == "estimated path: you → bob (1 hop)")
@@ -189,7 +189,7 @@ struct MeshDiagnosticsTests {
 
     @MainActor
     @Test func traceMultiHopUsesNicknamesWithShortIDFallback() {
-        let context = DiagnosticsMockContext()
+        let context = MockScopedCommandContext()
         let bob = PeerID(str: "b0b0b0b0b0b0b0b0")
         let alice = PeerID(str: "a11cea11cea11cea")
         let unknown = PeerID(str: "dead00beef001234")
@@ -199,7 +199,7 @@ struct MeshDiagnosticsTests {
         transport.meshPaths[bob] = [alice, unknown]
         let processor = makeProcessor(context: context, transport: transport)
 
-        let result = processor.process("/trace bob")
+        let result = processor.process("/trace bob", in: context.selectionTarget)
         switch result {
         case .success(let message):
             #expect(message == "estimated path: you → alice → dead00be… → bob (3 hops)")
@@ -210,11 +210,11 @@ struct MeshDiagnosticsTests {
 
     @MainActor
     @Test func traceWithoutPathReportsNoKnownPath() {
-        let context = DiagnosticsMockContext()
+        let context = MockScopedCommandContext()
         context.nicknameToPeerID["bob"] = PeerID(str: "b0b0b0b0b0b0b0b0")
         let processor = makeProcessor(context: context, transport: MockTransport())
 
-        let result = processor.process("/trace @bob")
+        let result = processor.process("/trace @bob", in: context.selectionTarget)
         switch result {
         case .success(let message):
             #expect(message == "no known path to bob")
@@ -248,54 +248,5 @@ struct MeshDiagnosticsTests {
         let radiusB = hypot((positions["b"]?.x ?? 0) - 100, (positions["b"]?.y ?? 0) - 100)
         #expect(abs(radiusA - radiusB) < 0.001)
         #expect(radiusA > 0)
-    }
-}
-
-/// Minimal CommandContextProvider for diagnostics tests; records deferred
-/// command output so async /ping results can be asserted.
-@MainActor
-private final class DiagnosticsMockContext: CommandContextProvider {
-    var nickname: String = "tester"
-    var activeChannel: ChannelID = .mesh
-    var selectedPrivateChatPeer: PeerID?
-    var blockedUsers: Set<String> = []
-    let idBridge = NostrIdentityBridge(keychain: MockKeychain())
-
-    var nicknameToPeerID: [String: PeerID] = [:]
-    private(set) var commandOutputs: [String] = []
-    private(set) var commandOutputDestinations: [CommandOutputDestination] = []
-
-    func getPeerIDForNickname(_ nickname: String) -> PeerID? {
-        nicknameToPeerID[nickname]
-    }
-
-    func getVisibleGeoParticipants() -> [CommandGeoParticipant] { [] }
-    func nostrPubkeyForDisplayName(_ displayName: String) -> String? { nil }
-    func geohashBlockListDidChange() {}
-    func startPrivateChat(with peerID: PeerID) {}
-    func sendPrivateMessage(_ content: String, to peerID: PeerID) {}
-    func clearCurrentPublicTimeline() {}
-    func clearPrivateChat(_ peerID: PeerID) {}
-    func sendPublicRaw(_ content: String) {}
-    func sendPublicMessage(_ content: String) {}
-    func groupCreate(named name: String) -> CommandResult { .handled }
-    func groupInvite(nickname: String) -> CommandResult { .handled }
-    func groupRemove(nickname: String) -> CommandResult { .handled }
-    func groupLeave() -> CommandResult { .handled }
-    func groupList() -> CommandResult { .handled }
-    func addLocalPrivateSystemMessage(_ content: String, to peerID: PeerID) {}
-    func addPublicSystemMessage(_ content: String) {}
-    func toggleFavorite(peerID: PeerID) {}
-
-    func currentCommandDestination() -> CommandOutputDestination {
-        if let peerID = selectedPrivateChatPeer {
-            return .privateChat(peerID)
-        }
-        return .meshTimeline
-    }
-
-    func addCommandOutput(_ content: String, to destination: CommandOutputDestination) {
-        commandOutputs.append(content)
-        commandOutputDestinations.append(destination)
     }
 }

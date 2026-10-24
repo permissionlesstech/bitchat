@@ -25,7 +25,6 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
     var unreadPrivateMessages: Set<PeerID> = []
     var selectedPrivateChatPeer: PeerID?
     var nickname = "me"
-    var activeChannel: ChannelID = .mesh
     var nostrKeyMapping: [PeerID: String] = [:]
     private(set) var notifyUIChangedCount = 0
 
@@ -1183,7 +1182,7 @@ struct ChatPrivateConversationCoordinatorContextTests {
             theyFavoritedUs: true
         )
 
-        coordinator.sendPrivateMessage("hello bob", to: peerID)
+        coordinator.sendPrivateMessage("hello bob", to: peerID, scope: .mesh)
 
         // Offline but mutual favorite with a Nostr key: routed, marked sent,
         // and the nickname falls back to the favorite relationship.
@@ -1210,7 +1209,7 @@ struct ChatPrivateConversationCoordinatorContextTests {
             theyFavoritedUs: true
         )
 
-        coordinator.sendPrivateMessage("hello again", to: shortID)
+        coordinator.sendPrivateMessage("hello again", to: shortID, scope: .mesh)
 
         #expect(context.routedPrivateMessages.map(\.content) == ["hello again"])
         #expect(context.privateChats[shortID]?.first?.deliveryStatus == .sent)
@@ -1228,7 +1227,7 @@ struct ChatPrivateConversationCoordinatorContextTests {
         let coordinator = ChatPrivateConversationCoordinator(context: context)
         let peerID = PeerID(hexData: Data(repeating: 0xCD, count: 32))
 
-        coordinator.sendPrivateMessage("hello?", to: peerID)
+        coordinator.sendPrivateMessage("hello?", to: peerID, scope: .mesh)
 
         #expect(context.routedPrivateMessages.map(\.content) == ["hello?"])
         #expect(context.privateChats[peerID]?.first?.deliveryStatus == .sending)

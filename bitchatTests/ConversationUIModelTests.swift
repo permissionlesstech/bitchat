@@ -43,14 +43,8 @@ private func makeChatViewModel(nickname: String) -> (viewModel: ChatViewModel, t
 /// a helper that compares names.
 @MainActor
 private func makeUIModel(for viewModel: ChatViewModel) -> ConversationUIModel {
-    let privateConversationModel = PrivateConversationModel(
+    ConversationUIModel(
         chatViewModel: viewModel,
-        conversations: viewModel.conversations,
-        locationChannelsModel: LocationChannelsModel(manager: viewModel.locationManager)
-    )
-    return ConversationUIModel(
-        chatViewModel: viewModel,
-        privateConversationModel: privateConversationModel,
         conversations: viewModel.conversations
     )
 }
@@ -97,16 +91,20 @@ struct ConversationUIModelTests {
     /// location manager, which the view model follows a few hops later.
     /// Tests that await must switch this way, since the view model re-applies
     /// the manager's selection on a later turn and would undo a direct
-    /// `activeChannel` write. Returns once the UI model has mirrored the
-    /// switch (media is off in location channels), so no channel update
-    /// queued before it can still reach the memo.
+    /// `activeChannel` write. Returns once the UI model has heard of the
+    /// switch: its channel sink runs a main-queue hop after the store
+    /// changes, so one hop after the store shows the channel no channel
+    /// update queued before it can still reach the memo.
     @MainActor
-    private static func switchAndSettle(to channel: ChannelID, in viewModel: ChatViewModel, uiModel: ConversationUIModel) async -> Bool {
+    private static func switchAndSettle(to channel: ChannelID, in viewModel: ChatViewModel) async -> Bool {
         viewModel.locationManager.select(channel)
-        let mediaAllowed = channel == .mesh
-        return await TestHelpers.waitUntil({
-            viewModel.activeChannel == channel && uiModel.canSendMediaInCurrentContext == mediaAllowed
+        let switched = await TestHelpers.waitUntil({
+            viewModel.activeChannel == channel
         }, timeout: TestConstants.settleTimeout)
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+        return switched
     }
 
     @MainActor
@@ -311,14 +309,14 @@ struct ConversationUIModelTests {
     func switchingToMeshDropsMyMemoizedGeochatSender() async throws {
         let (viewModel, _) = makeChatViewModel(nickname: "alice")
         let uiModel = makeUIModel(for: viewModel)
-        #expect(await Self.switchAndSettle(to: Self.locationChannel, in: viewModel, uiModel: uiModel))
+        #expect(await Self.switchAndSettle(to: Self.locationChannel, in: viewModel))
         let myHex = try Self.myGeoHex(viewModel)
         #expect(uiModel.isSentByCurrentUser(row("alice#\(myHex.suffix(4))", PeerID(nostr: myHex))))
         #expect(uiModel.ownGeoChatSender?.peerID == PeerID(nostr: myHex))
 
         // No row on #mesh reads it, so it goes with the switch rather than
         // whenever a geochat row next renders.
-        #expect(await Self.switchAndSettle(to: .mesh, in: viewModel, uiModel: uiModel))
+        #expect(await Self.switchAndSettle(to: .mesh, in: viewModel))
         #expect(uiModel.ownGeoChatSender == nil)
     }
 
@@ -326,7 +324,7 @@ struct ConversationUIModelTests {
     func panicWipeRetiresTheOldGeochatIdentity() async throws {
         let (viewModel, _) = makeChatViewModel(nickname: "alice")
         let uiModel = makeUIModel(for: viewModel)
-        #expect(await Self.switchAndSettle(to: Self.locationChannel, in: viewModel, uiModel: uiModel))
+        #expect(await Self.switchAndSettle(to: Self.locationChannel, in: viewModel))
         let oldHex = try Self.myGeoHex(viewModel)
         let beforeWipe = row("alice#\(oldHex.suffix(4))", PeerID(nostr: oldHex))
         #expect(uiModel.isSentByCurrentUser(beforeWipe))
@@ -348,9 +346,9 @@ struct ConversationUIModelTests {
 
     // With no nickname fallback, a send path that forgets to stamp the sender
     // ID turns my own row into a stranger's. Each test below sends the way the
-    // composer does, through the UI model's `sendMessage(_:)` and
-    // `makeVoiceNoteSender()`, and asks the UI model about the row that send
-    // produced.
+    // composer does, through the UI model's `sendMessage(_:to:)` and
+    // `makeVoiceNoteSender(for:)` with the selection as the target, and asks
+    // the UI model about the row that send produced.
 
     @MainActor
     private static func publicRow(_ content: String, in channel: ChannelID, of viewModel: ChatViewModel) -> BitchatMessage? {
@@ -376,7 +374,7 @@ struct ConversationUIModelTests {
         let (viewModel, transport) = makeChatViewModel(nickname: "alice")
         let uiModel = makeUIModel(for: viewModel)
 
-        uiModel.sendMessage("hello mesh")
+        uiModel.sendMessage("hello mesh", to: viewModel.selectionTarget)
 
         #expect(transport.sentMessages.map(\.content) == ["hello mesh"])
         let sent = try #require(Self.publicRow("hello mesh", in: .mesh, of: viewModel))
@@ -391,7 +389,7 @@ struct ConversationUIModelTests {
         transport.peerNicknames[Self.peerID] = "bob"
 
         viewModel.startPrivateChat(with: Self.peerID)
-        uiModel.sendMessage("hi bob")
+        uiModel.sendMessage("hi bob", to: viewModel.selectionTarget)
 
         #expect(transport.sentPrivateMessages.map(\.content) == ["hi bob"])
         let sent = try #require(Self.privateRow("hi bob", with: Self.peerID, of: viewModel))
@@ -402,13 +400,13 @@ struct ConversationUIModelTests {
     func myGeoDMIsMine() async throws {
         let (viewModel, _) = makeChatViewModel(nickname: "alice")
         let uiModel = makeUIModel(for: viewModel)
-        #expect(await Self.switchAndSettle(to: Self.locationChannel, in: viewModel, uiModel: uiModel))
+        #expect(await Self.switchAndSettle(to: Self.locationChannel, in: viewModel))
         let stranger = try NostrIdentity.generate()
         let conversation = PeerID(nostr_: stranger.publicKeyHex)
         viewModel.registerNostrKeyMapping(stranger.publicKeyHex, for: conversation)
 
         viewModel.startPrivateChat(with: conversation)
-        uiModel.sendMessage("hi stranger")
+        uiModel.sendMessage("hi stranger", to: viewModel.selectionTarget)
 
         let sent = try #require(Self.privateRow("hi stranger", with: conversation, of: viewModel))
         // Handed to the Nostr transport, not failed on the way there.
@@ -420,10 +418,10 @@ struct ConversationUIModelTests {
     func myGeochatPublicSendIsMine() async throws {
         let (viewModel, _) = makeChatViewModel(nickname: "alice")
         let uiModel = makeUIModel(for: viewModel)
-        #expect(await Self.switchAndSettle(to: Self.locationChannel, in: viewModel, uiModel: uiModel))
+        #expect(await Self.switchAndSettle(to: Self.locationChannel, in: viewModel))
         let myHex = try Self.myGeoHex(viewModel)
 
-        uiModel.sendMessage("hello geohash")
+        uiModel.sendMessage("hello geohash", to: viewModel.selectionTarget)
 
         // The echo lands once its NIP-13 nonce is mined off the main actor.
         #expect(await TestHelpers.waitUntil(
@@ -442,7 +440,7 @@ struct ConversationUIModelTests {
         let note = try Self.makeVoiceNote()
         defer { try? FileManager.default.removeItem(at: note) }
 
-        uiModel.makeVoiceNoteSender()(note)
+        uiModel.makeVoiceNoteSender(for: viewModel.selectionTarget)(note)
 
         // The row is enqueued at once; wait out the detached preparation so
         // the send has finished before the test does.
@@ -461,7 +459,7 @@ struct ConversationUIModelTests {
         defer { try? FileManager.default.removeItem(at: note) }
 
         viewModel.startPrivateChat(with: Self.peerID)
-        uiModel.makeVoiceNoteSender()(note)
+        uiModel.makeVoiceNoteSender(for: viewModel.selectionTarget)(note)
 
         #expect(await TestHelpers.waitUntil({ transport.sentPrivateFiles.count == 1 }, timeout: TestConstants.settleTimeout))
         let sent = try #require(Self.privateRow("[voice] \(note.lastPathComponent)", with: Self.peerID, of: viewModel))

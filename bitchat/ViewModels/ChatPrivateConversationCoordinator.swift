@@ -21,7 +21,6 @@ protocol ChatPrivateConversationContext: AnyObject {
     var sentReadReceipts: Set<String> { get }
     var selectedPrivateChatPeer: PeerID? { get }
     var nickname: String { get }
-    var activeChannel: ChannelID { get }
     var nostrKeyMapping: [PeerID: String] { get }
 
     // MARK: Conversation store intents
@@ -315,7 +314,9 @@ final class ChatPrivateConversationCoordinator {
         return targetPeerID
     }
 
-    func sendPrivateMessage(_ content: String, to peerID: PeerID) {
+    /// `scope` is the channel the conversation lives in; only a geohash DM
+    /// uses it, to sign with that geohash's identity.
+    func sendPrivateMessage(_ content: String, to peerID: PeerID, scope: ChannelID) {
         guard !content.isEmpty else { return }
 
         if context.isPeerBlocked(peerID) {
@@ -332,7 +333,7 @@ final class ChatPrivateConversationCoordinator {
         }
 
         if peerID.isGeoDM {
-            sendGeohashDM(content, to: peerID)
+            sendGeohashDM(content, to: peerID, scope: scope)
             return
         }
 
@@ -393,8 +394,11 @@ final class ChatPrivateConversationCoordinator {
         // acks, or failed when the outbox TTL expires.
     }
 
-    func sendGeohashDM(_ content: String, to peerID: PeerID) {
-        guard case .location(let channel) = context.activeChannel else {
+    /// Signs with `scope`'s geohash identity: the one this DM was started
+    /// under, which the recipient knows. Signing with whatever geohash is
+    /// selected by now would link two of our geohash identities for them.
+    func sendGeohashDM(_ content: String, to peerID: PeerID, scope: ChannelID) {
+        guard case .location(let channel) = scope else {
             // The failure happened inside a geoDM thread — surface it there,
             // not on the public timeline (matches the sibling blocked/unknown
             // errors routed into the thread by #1415).
