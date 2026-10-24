@@ -47,7 +47,13 @@ struct SplitPaneStateTests {
             .resolve(conversation: openPeer, channel: timeline, isBrowsing: state.isBrowsing)
         }
 
-        /// A selection that lands in the timeline, as `select` does.
+        /// The split layout's composer targets, as ContentView builds them.
+        var targets: ComposerTargets {
+            state.composerTargets(trailing: trailing, openPeer: openPeer)
+        }
+
+        /// A selection that lands in the timeline, as `select` does, with
+        /// what its landing asks for (a geohash DM left behind ends).
         mutating func land(_ channel: ChannelID) {
             selection = channel
             if !isSplit {
@@ -55,13 +61,15 @@ struct SplitPaneStateTests {
             }
             let old = timeline
             timeline = channel
-            state.timelineChannelChanged(from: old, to: channel)
+            if state.timelineChannelChanged(from: old, to: channel).endsConversation {
+                open(nil)
+            }
         }
 
         mutating func open(_ peer: PeerID?) {
             openPeer = peer
             let people = people
-            state.conversationChanged(to: peer, isSplit: isSplit) { lhs, rhs in
+            state.conversationChanged(to: peer, isSplit: isSplit, timelineChannel: timeline) { lhs, rhs in
                 lhs == rhs || people.contains { $0.contains(lhs) && $0.contains(rhs) }
             }
         }
@@ -181,7 +189,7 @@ struct SplitPaneStateTests {
         #expect(state.parked == .init(channel: geohash))
 
         // Its landing hands the single column back to the timeline.
-        state.timelineChannelChanged(from: .location(geohash), to: .mesh)
+        #expect(state.timelineChannelChanged(from: .location(geohash), to: .mesh) == .init())
         #expect(state.foldChannel == nil)
     }
 
@@ -286,6 +294,116 @@ struct SplitPaneStateTests {
         idle.unfold()
         #expect(!idle.state.isBrowsing)
         #expect(idle.trailing == .picker(returnTo: nil))
+    }
+
+    /// E4 with E3's exception mirrored: a geohash DM opened while folded on
+    /// #mesh unfolds over the idle picker, scoped to #mesh as the single
+    /// column had it, where its sends fail into the thread. The parked
+    /// geohash isn't selected under it: that would sign the DM with that
+    /// geohash's identity, which nobody chose for it.
+    @Test
+    func anUnfoldUnderAGeohashDMOpenedWhileFoldedKeepsMesh() {
+        var world = World()
+        world.land(.location(geohash))
+        world.state.touched(.leading)
+        world.fold()
+        #expect(world.state.parked == .init(channel: geohash))
+
+        world.open(geoDM)
+        let effects = world.unfold()
+
+        #expect(effects == .init())
+        #expect(world.selection == .mesh)
+        #expect(world.trailing == .conversation(geoDM))
+        #expect(world.targets.secondary == ConversationTarget(channel: .mesh, privatePeer: geoDM))
+        #expect(world.state.parked == .none)
+    }
+
+    /// A geohash DM folded with its geohash (E3's exception) unfolds over
+    /// it, scoped to it as the single column had it.
+    @Test
+    func aGeohashDMUnfoldsScopedToTheGeohashItFoldedWith() {
+        var world = World()
+        world.land(.location(geohash))
+        world.open(geoDM)
+        world.state.touched(.leading)
+        world.fold()
+        #expect(world.state.conversationGeohash == nil)
+
+        #expect(world.unfold() == .init())
+        #expect(world.state.conversationGeohash == geohash)
+        #expect(world.targets.secondary == ConversationTarget(channel: .location(geohash), privatePeer: geoDM))
+    }
+
+    // MARK: - Geohash DM scope
+
+    /// A geohash DM signs with the geohash it was opened over. A selection
+    /// made beside it (a #geohash link or the nearby hint in #mesh) never
+    /// moves it onto the new geohash's identity: once the timeline leaves
+    /// its geohash the DM ends, and until that lands its target falls back
+    /// to #mesh, where sends fail closed, never to the new geohash.
+    @Test
+    func aTimelineMoveUnderAGeohashDMNeverRescopesIt() {
+        for peer in [geoDM, PeerID(nostr: String(repeating: "12", count: 32))] {
+            var world = World()
+            world.land(.location(geohash))
+            world.open(peer)
+            #expect(world.state.conversationGeohash == geohash)
+            #expect(world.targets.secondary == ConversationTarget(channel: .location(geohash), privatePeer: peer))
+
+            // The timeline lands on the other geohash; the DM's end is on
+            // its way.
+            let old = world.timeline
+            world.timeline = .location(otherGeohash)
+            world.selection = world.timeline
+            let effects = world.state.timelineChannelChanged(from: old, to: world.timeline)
+            #expect(effects == .init(endsConversation: true))
+            #expect(world.targets.secondary?.channel != .location(otherGeohash))
+            #expect(world.targets.secondary == ConversationTarget(channel: .mesh, privatePeer: peer))
+
+            world.open(nil)
+            #expect(world.trailing == .channel(otherGeohash))
+            #expect(world.targets.secondary == .publicChannel(.location(otherGeohash)))
+        }
+    }
+
+    /// The scope comes from the geohash the DM opened over: a geohash DM
+    /// opened over the idle picker stays on #mesh, failing closed, even once
+    /// a geohash is selected beside it; a mesh DM never ends with a move.
+    @Test
+    func onlyAGeohashDMOpenedOverAGeohashIsScopedToIt() {
+        var overIdle = World()
+        overIdle.open(geoDM)
+        #expect(overIdle.state.conversationGeohash == nil)
+        overIdle.land(.location(geohash))
+        #expect(overIdle.openPeer == geoDM)
+        #expect(overIdle.targets.secondary == ConversationTarget(channel: .mesh, privatePeer: geoDM))
+
+        var mesh = World()
+        mesh.land(.location(geohash))
+        mesh.open(meshPeer)
+        #expect(mesh.state.conversationGeohash == nil)
+        mesh.land(.location(otherGeohash))
+        #expect(mesh.openPeer == meshPeer)
+        #expect(mesh.targets.secondary == ConversationTarget(channel: .mesh, privatePeer: meshPeer))
+
+        // Choosing the same geohash again moves nothing.
+        var same = World()
+        same.land(.location(geohash))
+        same.open(geoDM)
+        same.land(.location(geohash))
+        #expect(same.openPeer == geoDM)
+        #expect(same.state.conversationGeohash == geohash)
+    }
+
+    /// I4: a wipe forgets the scope with everything else.
+    @Test
+    func aPanicForgetsAGeohashDMsScope() {
+        var world = World()
+        world.land(.location(geohash))
+        world.open(geoDM)
+        world.state.panic(timelineChannel: world.timeline)
+        #expect(world.state.conversationGeohash == nil)
     }
 
     // MARK: - While folded (E5)

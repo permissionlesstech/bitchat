@@ -1633,6 +1633,28 @@ struct ViewSmokeTests {
         #expect(!moved, "\(split.diagnostics)")
     }
 
+    /// A geohash DM is scoped to the geohash it was opened over. A selection
+    /// made beside it (a #geohash link or the nearby hint in the #mesh pane)
+    /// ends it rather than moving it onto the new geohash's identity, and
+    /// the trailing pane shows the channel that was asked for.
+    @Test
+    func contentView_aGeohashDMEndsWhenTheSelectionLeavesItsGeohash() async throws {
+        let split = try await SplitContentHost.make()
+        defer { split.close() }
+        let geoDM = PeerID(nostr_: String(repeating: "ef", count: 32))
+        let other = GeohashChannel(level: .neighborhood, geohash: "9q8yyk")
+        try await split.select(.location(split.geohash))
+        try await split.open(geoDM)
+
+        split.channels.select(.location(other))
+
+        try await split.require("the DM ended, the new geohash on screen") {
+            split.timelineChannel == .location(other)
+                && split.openPeer == nil
+                && split.trailingPrompts.contains { $0.contains("#\(other.geohash)") }
+        }
+    }
+
     /// E5: choosing a location channel while folded drops what was parked,
     /// for good: back on #mesh before unfolding, neither the parked geohash
     /// nor the parked DM returns, and the trailing pane is the idle picker.

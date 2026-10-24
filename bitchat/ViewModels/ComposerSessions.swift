@@ -38,9 +38,13 @@ struct ComposerTargets: Equatable {
     #if os(iOS)
     /// The split layout: #mesh in the leading pane, and in the trailing pane
     /// the DM covering it, else its geohash, else nothing (the picker).
-    /// A DM's scope is its own network: a geohash DM signs with the trailing
-    /// geohash's identity (#mesh, where its sends fail into the thread, if
-    /// none is selected); mesh DMs and groups live on #mesh.
+    /// A DM's scope is its own network: a geohash DM signs with the identity
+    /// of the geohash it was opened over (#mesh, where its sends fail into
+    /// the thread, if none); mesh DMs and groups live on #mesh.
+    /// - Parameter trailingChannel: The geohash the trailing composer works
+    ///   in (`TrailingPaneContent.composerGeohash`): the one on screen or,
+    ///   under a DM, the one that DM was opened over, never the timeline
+    ///   under it.
     static func split(trailingChannel: GeohashChannel?, privatePeer: PeerID?) -> ComposerTargets {
         let trailing: ConversationTarget?
         if let peer = privatePeer {

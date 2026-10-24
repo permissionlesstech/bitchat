@@ -85,31 +85,34 @@ struct ContentPanePolicyTests {
         }
     }
 
-    /// The trailing composer works in the geohash on screen, or the one a
-    /// DM covers, which scopes a geohash DM; the picker has no composer.
+    /// The trailing composer works in the geohash on screen or, under a
+    /// DM, the geohash that DM was opened over, which scopes a geohash DM;
+    /// the picker has no composer.
     @Test
-    func trailingComposerWorksInTheGeohashOnScreenOrUnderTheDM() {
-        #expect(TrailingPaneContent.channel(geohash).composerGeohash(timelineChannel: .location(geohash)) == geohash)
-        #expect(TrailingPaneContent.conversation(geoDM).composerGeohash(timelineChannel: .location(geohash)) == geohash)
-        #expect(TrailingPaneContent.conversation(meshPeer).composerGeohash(timelineChannel: .location(geohash)) == geohash)
-        #expect(TrailingPaneContent.conversation(geoDM).composerGeohash(timelineChannel: .mesh) == nil)
-        #expect(TrailingPaneContent.picker(returnTo: geohash).composerGeohash(timelineChannel: .location(geohash)) == nil)
-        #expect(TrailingPaneContent.picker(returnTo: nil).composerGeohash(timelineChannel: .mesh) == nil)
+    func trailingComposerWorksInTheGeohashOnScreenOrTheOneTheDMOpenedOver() {
+        #expect(TrailingPaneContent.channel(geohash).composerGeohash(conversationGeohash: nil) == geohash)
+        #expect(TrailingPaneContent.conversation(geoDM).composerGeohash(conversationGeohash: otherGeohash) == otherGeohash)
+        #expect(TrailingPaneContent.conversation(geoDM).composerGeohash(conversationGeohash: nil) == nil)
+        #expect(TrailingPaneContent.picker(returnTo: geohash).composerGeohash(conversationGeohash: nil) == nil)
+        #expect(TrailingPaneContent.picker(returnTo: nil).composerGeohash(conversationGeohash: nil) == nil)
 
         // As the split layout's composer targets: the picker leaves the
         // trailing composer without a conversation; a geohash DM signs
-        // with the geohash it covers, a mesh DM lives on #mesh.
-        func targets(_ content: TrailingPaneContent, _ timeline: ChannelID, _ peer: PeerID?) -> ComposerTargets {
-            .split(trailingChannel: content.composerGeohash(timelineChannel: timeline), privatePeer: peer)
+        // with the geohash it was opened over, else fails closed on #mesh;
+        // a mesh DM lives on #mesh.
+        func targets(_ content: TrailingPaneContent, opened: GeohashChannel?, _ peer: PeerID?) -> ComposerTargets {
+            .split(trailingChannel: content.composerGeohash(conversationGeohash: opened), privatePeer: peer)
         }
-        #expect(targets(.picker(returnTo: geohash), .location(geohash), nil).secondary == nil)
-        #expect(targets(.channel(geohash), .location(geohash), nil).secondary == .publicChannel(.location(geohash)))
-        #expect(targets(.conversation(geoDM), .location(geohash), geoDM).secondary
+        #expect(targets(.picker(returnTo: geohash), opened: nil, nil).secondary == nil)
+        #expect(targets(.channel(geohash), opened: nil, nil).secondary == .publicChannel(.location(geohash)))
+        #expect(targets(.conversation(geoDM), opened: geohash, geoDM).secondary
             == ConversationTarget(channel: .location(geohash), privatePeer: geoDM))
-        #expect(targets(.conversation(meshPeer), .location(geohash), meshPeer).secondary
+        #expect(targets(.conversation(geoDM), opened: nil, geoDM).secondary
+            == ConversationTarget(channel: .mesh, privatePeer: geoDM))
+        #expect(targets(.conversation(meshPeer), opened: nil, meshPeer).secondary
             == ConversationTarget(channel: .mesh, privatePeer: meshPeer))
         for content in [TrailingPaneContent.picker(returnTo: nil), .channel(geohash), .conversation(meshPeer)] {
-            #expect(targets(content, .location(geohash), nil).primary == .mesh)
+            #expect(targets(content, opened: nil, nil).primary == .mesh)
         }
     }
 
@@ -285,8 +288,9 @@ struct ContentPanePolicyTests {
     }
 
     /// E4 over every input: a compact geohash moves across with nothing
-    /// restored; from #mesh, the parked geohash returns and the parked DM
-    /// reopens unless one is open already.
+    /// restored; from #mesh, the parked geohash returns (unless a geohash
+    /// DM was opened while folded) and the parked DM reopens unless one is
+    /// open already.
     @Test
     func everyUnfoldConsumesWhatWasParked() {
         let parkedStates: [PaneFoldPolicy.Parked] = [
@@ -303,7 +307,8 @@ struct ContentPanePolicyTests {
                     if compact.isLocation {
                         #expect(unfold == .init(reselect: nil, reopenConversation: nil, focus: .trailing), "\(label)")
                     } else {
-                        #expect(unfold.reselect == parked.channel, "\(label)")
+                        let keepsMesh = openPeer.map(PaneFoldPolicy.isGeohashConversation) == true
+                        #expect(unfold.reselect == (keepsMesh ? nil : parked.channel), "\(label)")
                         #expect(unfold.reopenConversation == (openPeer == nil ? parked.conversation : nil), "\(label)")
                         #expect(unfold.focus == (openPeer == nil ? .leading : .trailing), "\(label)")
                     }
@@ -325,6 +330,23 @@ struct ContentPanePolicyTests {
                 openPeer: otherMeshPeer,
                 parked: parked
             ) == PaneFoldPolicy.Unfold(reselect: parked.channel, reopenConversation: nil, focus: .trailing))
+        }
+    }
+
+    /// E4 with E3's exception mirrored: a geohash DM opened while folded on
+    /// #mesh moves into the trailing pane over the idle picker, scoped to
+    /// #mesh as the single column had it, and the parked geohash isn't
+    /// selected under it: that would sign it with the geohash's identity.
+    @Test
+    func unfoldUnderAGeohashDMOpenedWhileFoldedSelectsNothing() {
+        for peer in [geoDM, geoChatPeer] {
+            for parked in [PaneFoldPolicy.Parked.none, .init(channel: geohash)] {
+                #expect(PaneFoldPolicy.unfold(
+                    compactChannel: .mesh,
+                    openPeer: peer,
+                    parked: parked
+                ) == PaneFoldPolicy.Unfold(reselect: nil, reopenConversation: nil, focus: .trailing))
+            }
         }
     }
 

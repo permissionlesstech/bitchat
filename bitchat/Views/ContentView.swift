@@ -324,10 +324,9 @@ struct ContentView: View {
     private func composerTargets(openPeer: PeerID?) -> ComposerTargets {
         #if os(iOS)
         if isSplitLayout {
-            return .split(
-                trailingChannel: trailingContent(openPeer: openPeer).composerGeohash(timelineChannel: timelineChannel),
-                privatePeer: openPeer
-            )
+            // A geohash DM is scoped to the geohash it was opened over,
+            // never to the timeline under it.
+            return panes.composerTargets(trailing: trailingContent(openPeer: openPeer), openPeer: openPeer)
         }
         // A fold's selection names the channel the single column is about
         // to show; until it lands, the composer already sends there.
@@ -1309,6 +1308,7 @@ struct ContentView: View {
         panes.conversationChanged(
             to: selectedPrivatePeerID,
             isSplit: toSplit,
+            timelineChannel: timelineChannel,
             isSameConversation: privateConversationModel.isSameConversation
         )
 
@@ -1365,6 +1365,7 @@ struct ContentView: View {
         panes.conversationChanged(
             to: peer,
             isSplit: isSplitLayout,
+            timelineChannel: timelineChannel,
             isSameConversation: privateConversationModel.isSameConversation
         )
         panesChanged(openPeer: peer, trailingBefore: before)
@@ -1414,7 +1415,8 @@ struct ContentView: View {
         changePanes {
             let previous = timelineChannel
             publicTimelineChannel = channel
-            panes.timelineChannelChanged(from: previous, to: channel)
+            // A geohash DM whose geohash this leaves ends.
+            apply(panes.timelineChannelChanged(from: previous, to: channel))
         }
         #else
         publicTimelineChannel = channel
