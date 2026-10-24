@@ -4330,7 +4330,22 @@ extension BLEService {
         #endif
         sendPendingMessagesAfterHandshake(for: normalizedPeerID)
         sendPendingNoisePayloadsAfterHandshake(for: normalizedPeerID)
-        sendAnnounce(forceSend: true)
+        handOverCourierMailOnAuthenticatedLink(to: normalizedPeerID, fingerprint: fingerprint)
+    }
+
+    /// The forced announce that used to end a fresh authentication had one
+    /// real job: give a courier carrying mail for this peer a verified
+    /// announce on the freshly authenticated link (handleAnnounce's
+    /// authenticated branch). Do that directly instead of flooding the mesh
+    /// to trigger it. The key comes from the session the handshake proved,
+    /// so the peer's announce need not have been handled first.
+    private func handOverCourierMailOnAuthenticatedLink(to peerID: PeerID, fingerprint: String) {
+        guard !courierStore.isEmpty,
+              hasCurrentNoiseAuthenticatedLink(to: peerID),
+              let noiseKey = noiseService.getPeerPublicKeyData(peerID),
+              noiseKey.sha256Fingerprint() == fingerprint else { return }
+        deliverCourierMail(to: peerID, noiseKey: noiseKey)
+        sprayCourierMail(to: peerID, noiseKey: noiseKey, isVerifiedPeer: true)
     }
 
     private func sendAuthenticatedPeerState(to peerID: PeerID, echo: Bool) {
