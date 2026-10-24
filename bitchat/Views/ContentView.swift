@@ -1113,13 +1113,12 @@ struct ContentView: View {
         #endif
     }
 
-    /// The composer of `slot`: that slot's session, conversation, send and
-    /// photo button together, so no composer can type into one
-    /// conversation and record or pick for another (I1).
+    /// The composer of `slot`: that slot's session (its text and
+    /// conversation), send and photo button together, so no composer can
+    /// type into one conversation and record or pick for another (I1).
     private func composerView(for slot: ComposerSlot) -> some View {
         ContentComposerView(
             session: composers[slot],
-            target: composerTargets[slot],
             focus: $focusedComposer,
             voiceRecordingVM: voiceRecordingVM,
             onSend: { send(from: slot) },

@@ -149,8 +149,10 @@ final class ComposerSession: ObservableObject {
     /// This composer's own mention suggestions, for its own text and target.
     @Published var autocomplete = ComposerAutocompleteState()
     /// Where this composer sends; nil while it has no conversation. Set only
-    /// by `ComposerSessions.retarget`.
-    fileprivate(set) var target: ConversationTarget?
+    /// by `ComposerSessions.retarget`. Its composer view reads its
+    /// conversation here alone, so the text, the photos and the voice it
+    /// sends can't go to different conversations (I1).
+    @Published fileprivate(set) var target: ConversationTarget?
     /// The key `text` belongs to. Set only by `ComposerSessions.retarget`.
     fileprivate(set) var draftKey: ComposerDraftStore.Key?
     private var autocompleteTimer: Timer?
@@ -325,7 +327,10 @@ final class ComposerSessions: ObservableObject {
         }
 
         for session in sessions {
-            session.target = targets[session.slot]
+            // Each write re-renders the composer: write only a change.
+            if session.target != targets[session.slot] {
+                session.target = targets[session.slot]
+            }
             session.draftKey = newKeys[session.slot]
             guard let text = incomingTexts[session.slot] else { continue }
             if session.text != text {
@@ -433,7 +438,9 @@ final class ComposerSessions: ObservableObject {
             session.text = ""
             session.cancelAutocomplete()
             session.draftKey = nil
-            session.target = nil
+            if session.target != nil {
+                session.target = nil
+            }
         }
     }
 

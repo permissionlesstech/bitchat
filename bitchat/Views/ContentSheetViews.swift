@@ -806,8 +806,7 @@ private struct ContentPrivateChatSheetView: View {
     @Binding var isAtBottomPrivate: Bool
     /// The DM composer's session; its list's mentions type into it too.
     let composer: ComposerSession
-    /// The DM, scoped as it sends: what its list acts in and its composer
-    /// sends to.
+    /// The DM, scoped as its composer sends: what its list acts in.
     let target: ConversationTarget?
     var focusedComposer: FocusState<ComposerSlot?>.Binding
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
@@ -945,7 +944,6 @@ private struct ContentPrivateChatSheetView: View {
 
             ContentComposerView(
                 session: composer,
-                target: target,
                 focus: focusedComposer,
                 voiceRecordingVM: voiceRecordingVM,
                 onSend: onSendMessage,

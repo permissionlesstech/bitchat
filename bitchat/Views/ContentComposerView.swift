@@ -7,11 +7,11 @@ import AppKit
 #endif
 
 /// A composer: the text field, its suggestions, the mic and the photo
-/// button. Everything it does goes to `target`, the conversation of the
-/// timeline it sits under, never to whatever is selected: its text through
-/// `onSend` (which takes the session's text and target), a photo through
-/// `onPickMedia`, a voice note or a live hold through the mic. Its slot is
-/// its session's.
+/// button. Everything it does goes to its session's target, the
+/// conversation of the timeline it sits under, never to whatever is
+/// selected: its text through `onSend` (which takes the session's text and
+/// target), a photo through `onPickMedia`, a voice note or a live hold
+/// through the mic. Its slot is its session's too.
 struct ContentComposerView: View {
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
@@ -19,11 +19,9 @@ struct ContentComposerView: View {
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
-    /// This composer's text and suggestions; observed here only.
+    /// This composer's text, suggestions and conversation; observed here
+    /// only.
     @ObservedObject var session: ComposerSession
-    /// Where this composer sends; nil while it has no conversation, when it
-    /// can only hold text.
-    let target: ConversationTarget?
     /// The composer with the keyboard, shared by every composer on screen.
     var focus: FocusState<ComposerSlot?>.Binding
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
@@ -33,8 +31,8 @@ struct ContentComposerView: View {
 
     /// Sends this slot's text (`ComposerSessions.takeOutgoing(from:)`).
     let onSend: () -> Void
-    /// The photo button: the owner records `target` with the source and
-    /// presents the picker.
+    /// The photo button: the owner records the session's target with the
+    /// source and presents the picker.
     #if os(iOS)
     let onPickMedia: (UIImagePickerController.SourceType) -> Void
     #else
@@ -42,6 +40,9 @@ struct ContentComposerView: View {
     #endif
 
     private var slot: ComposerSlot { session.slot }
+    /// Where this composer sends; nil while it has no conversation, when it
+    /// can only hold text.
+    private var target: ConversationTarget? { session.target }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -134,7 +135,7 @@ struct ContentComposerView: View {
                 }
                 // A new conversation under the same text (a DM's scope
                 // following the channel, say) has its own people to suggest.
-                .onChange(of: target) { _ in
+                .onChange(of: session.target) { _ in
                     scheduleAutocomplete()
                 }
 

@@ -210,6 +210,29 @@ struct ComposerSessionsTests {
         #expect(drafts.drafts[Self.meshPeerKey] == nil)
     }
 
+    /// A composer reads its conversation from its session alone, so the
+    /// session publishes its target: a DM's scope following the channel
+    /// reaches the DM composer (its placeholder, its mic) though its text
+    /// and key stay. A retarget leaving a slot's target as it was publishes
+    /// nothing for it.
+    @Test func aSessionPublishesOnlyATargetChange() {
+        let sessions = makeSessions(InMemoryComposerDraftStore())
+        let meshDM = ComposerTargets.single(activeChannel: .mesh, privatePeer: Self.meshPeer)
+        sessions.retarget(meshDM, fingerprint: Self.noFingerprint)
+        var published: [ConversationTarget?] = []
+        let subscription = sessions.secondary.$target.dropFirst().sink { published.append($0) }
+        defer { subscription.cancel() }
+
+        sessions.retarget(meshDM, fingerprint: Self.noFingerprint)
+        #expect(published.isEmpty)
+
+        sessions.retarget(
+            .single(activeChannel: .location(Self.geohash), privatePeer: Self.meshPeer),
+            fingerprint: Self.noFingerprint
+        )
+        #expect(published == [ConversationTarget(channel: .location(Self.geohash), privatePeer: Self.meshPeer)])
+    }
+
     /// A peer-ID handoff to the 64-hex Noise key is the same person: with
     /// the fingerprint known both IDs give one key, so nothing moves.
     @Test func aPeerIDHandoffKeepsTheDraftAndTheHold() {

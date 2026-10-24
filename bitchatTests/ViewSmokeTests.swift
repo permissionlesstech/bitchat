@@ -237,11 +237,10 @@ private struct ContentConversationColumnHarness: View {
 }
 #endif
 
-/// One composer on the session and target a slot would give it.
+/// One composer on a slot's session, pointed at its conversation.
 @MainActor
 private struct ComposerHarness: View {
     @ObservedObject var session: ComposerSession
-    let target: ConversationTarget?
     @StateObject private var voiceRecordingVM = VoiceRecordingViewModel()
     @FocusState private var focusedComposer: ComposerSlot?
 
@@ -249,7 +248,6 @@ private struct ComposerHarness: View {
         #if os(iOS)
         ContentComposerView(
             session: session,
-            target: target,
             focus: $focusedComposer,
             voiceRecordingVM: voiceRecordingVM,
             onSend: {},
@@ -258,7 +256,6 @@ private struct ComposerHarness: View {
         #else
         ContentComposerView(
             session: session,
-            target: target,
             focus: $focusedComposer,
             voiceRecordingVM: voiceRecordingVM,
             onSend: {},
@@ -1374,16 +1371,20 @@ struct ViewSmokeTests {
         let featureModels = makeSmokeFeatureModels(for: viewModel)
         let peerID = PeerID(str: "7172737475767778")
         let geohash = ChannelID.location(GeohashChannel(level: .city, geohash: "u4pru"))
-        let cases: [(ComposerSlot, ConversationTarget?, String)] = [
-            (.primary, .mesh, ""),
-            (.primary, .publicChannel(geohash), "/f"),
-            (.secondary, ConversationTarget(channel: .mesh, privatePeer: peerID), "hi @al"),
-            (.secondary, ConversationTarget(channel: geohash, privatePeer: peerID), "/"),
-            (.secondary, nil, "left behind")
+        // Each slot's conversation, as the single column points the slots:
+        // #mesh or a geohash, a DM in either scope, and no DM (no target).
+        let cases: [(ComposerSlot, ComposerTargets, String)] = [
+            (.primary, .single(activeChannel: .mesh, privatePeer: nil), ""),
+            (.primary, .single(activeChannel: geohash, privatePeer: nil), "/f"),
+            (.secondary, .single(activeChannel: .mesh, privatePeer: peerID), "hi @al"),
+            (.secondary, .single(activeChannel: geohash, privatePeer: peerID), "/"),
+            (.secondary, .single(activeChannel: .mesh, privatePeer: nil), "left behind")
         ]
 
-        for (slot, target, text) in cases {
-            let session = ComposerSession(slot: slot)
+        for (slot, targets, text) in cases {
+            let composers = ComposerSessions(drafts: InMemoryComposerDraftStore())
+            composers.retarget(targets, fingerprint: { _ in nil })
+            let session = composers[slot]
             session.text = text
             if text.contains("@") {
                 session.autocomplete = ComposerAutocompleteState(
@@ -1392,9 +1393,10 @@ struct ViewSmokeTests {
                 )
             }
             _ = mount(installSmokeEnvironment(
-                ComposerHarness(session: session, target: target),
+                ComposerHarness(session: session),
                 featureModels: featureModels
             ))
+            #expect(session.target == targets[slot])
             #expect(session.text == text, "mounting changed \(slot)'s text")
         }
     }
