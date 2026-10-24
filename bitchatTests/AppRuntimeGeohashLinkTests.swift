@@ -33,7 +33,7 @@ struct AppRuntimeGeohashLinkTests {
             "bitchat://geohash/",
             "bitchat://user/0102030405060708",
             "bitchat://share",
-            "https://geohash/u4pruy",
+            "https://geohash/u4pruy"
         ] {
             let url = try #require(URL(string: string))
             #expect(AppRuntime.geohashLinkTarget(url) == nil, "\(string)")

@@ -72,7 +72,7 @@ struct MessageListChannelPolicyTests {
         for policy in [
             MessageListChannelPolicy(channel: .mesh, privatePeer: peer),
             MessageListChannelPolicy(channel: nil, privatePeer: peer),
-            MessageListChannelPolicy(channel: nil, privatePeer: nil),
+            MessageListChannelPolicy(channel: nil, privatePeer: nil)
         ] {
             #expect(!policy.holdsNotesCounter)
             #expect(!policy.showsNotesStrip(noteCount: 2))
