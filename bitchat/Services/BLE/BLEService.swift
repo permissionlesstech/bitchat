@@ -339,7 +339,10 @@ final class BLEService: NSObject {
     
     // Simple announce throttling
     private let announceThrottle = BLEAnnounceThrottle()
-    
+    // While an owed announce's retry is scheduled: the broadcast count it
+    // must see change (engine-confined; see sendOwedAnnounce).
+    private var owedAnnounceRetrySince: UInt64?
+
     // Application state tracking (thread-safe)
     #if os(iOS)
     var isAppActive: Bool = true  // Assume active initially
@@ -2832,7 +2835,9 @@ final class BLEService: NSObject {
             SecureLogger.error("❌ Failed to sign announce packet", category: .security)
             return
         }
-        
+
+        // Before the broadcast reads link state (see noteBroadcast).
+        announceThrottle.noteBroadcast(claimingNeighbors: connectedPeerIDs)
         broadcastPacket(signedPacket)
         // Ensure our own announce is included in sync state
         gossipSyncManager?.onPublicPacketSeen(signedPacket)
@@ -2840,6 +2845,37 @@ final class BLEService: NSObject {
         // Keep our prekey bundle riding alongside presence (throttled; the
         // send is a no-op when the bundle was refreshed recently).
         sendPrekeyBundle()
+    }
+
+    /// A forced announce that must reach the mesh: sent now, or — if the
+    /// forced throttle refuses it — once more after the window, unless
+    /// another announce is broadcast first (any announce built later carries
+    /// the same information). Engine-confined.
+    private func sendOwedAnnounce() {
+        guard !isPanicSuspended else { return }
+        let broadcastsBefore = announceThrottle.broadcastCount
+        sendAnnounceNow(forceSend: true)
+        guard announceThrottle.broadcastCount == broadcastsBefore else { return }
+        let retryScheduled = owedAnnounceRetrySince != nil
+        owedAnnounceRetrySince = broadcastsBefore
+        guard !retryScheduled else { return }
+        engineScheduler.schedule(after: TransportConfig.bleForceAnnounceRetryDelaySeconds) { [weak self] in
+            guard let self, let since = self.owedAnnounceRetrySince else { return }
+            self.owedAnnounceRetrySince = nil
+            guard self.announceThrottle.broadcastCount == since else { return }
+            self.sendAnnounceNow(forceSend: true)
+        }
+    }
+
+    /// Re-announces when `peerID` is connected but our last announce did
+    /// not list it. Source routes use only edges both endpoints claim, and
+    /// the first announce either side sends on a new link predates the
+    /// other side, so it cannot list it. Engine-confined.
+    private func announceIfNeighborUnclaimed(_ peerID: PeerID) {
+        guard peerRegistry.isConnected(peerID),
+              let neighbor = peerID.routingData,
+              announceThrottle.lastBroadcastOmits(neighbor) else { return }
+        sendOwedAnnounce()
     }
 
     // MARK: QR Verification over Noise
@@ -6197,6 +6233,15 @@ extension BLEService {
             retireRedundantPeripheralLinks(packet, to: result.peerID)
         }
 
+        // No announce is ever answered: each one floods the whole mesh, so
+        // answering them made every node in flood range answer every
+        // newcomer. We announce again only when this announce (or the
+        // rebind above) made a peer connected that our last announce did
+        // not list.
+        if let result, result.isVerified {
+            announceIfNeighborUnclaimed(result.peerID)
+        }
+
         // Bridge courier watch: a verified announce may add a peer whose
         // relay-parked drops we should start watching for.
         if let result, result.isVerified {
@@ -6601,12 +6646,6 @@ extension BLEService {
                     claimedNickname: announcement.nickname
                 )
             },
-            dedupContains: { [weak self] id in
-                self?.messageDeduplicator.contains(id) ?? true
-            },
-            dedupMarkProcessed: { [weak self] id in
-                self?.messageDeduplicator.markProcessed(id)
-            },
             deliverAnnounceUIEvents: { [weak self] peerID, notifyPeerConnected, scheduleInitialSync in
                 // Single main-actor hop so event order is guaranteed:
                 // .peerConnected → initial sync scheduling → .peerListUpdated.
@@ -6626,14 +6665,6 @@ extension BLEService {
             },
             trackPacketSeen: { [weak self] packet in
                 self?.gossipSyncManager?.onPublicPacketSeen(packet)
-            },
-            sendAnnounceBack: { [weak self] in
-                self?.sendAnnounce(forceSend: true)
-            },
-            scheduleAfterglow: { [weak self] delay in
-                self?.engineScheduler.schedule(after: delay) { [weak self] in
-                    self?.sendAnnounce(forceSend: true)
-                }
             }
         )
     }

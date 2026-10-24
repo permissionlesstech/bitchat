@@ -1,0 +1,363 @@
+import BitFoundation
+import Foundation
+import Testing
+@testable import bitchat
+
+/// Announce budgets over the real engine. Every announce floods the whole
+/// mesh, so these pin how many announces a node may originate per event —
+/// counts that used to grow with the size of the mesh. Each test prints a
+/// `BUDGET[...]` line with what it measured.
+///
+/// Topologies keep every node within five hops of every flood's origin:
+/// dense nodes clamp a relayed TTL, and five hops is the reach that clamp
+/// still guarantees, so discovery assertions hold on every run.
+@Suite(.serialized)
+struct SimulatedMeshAnnounceBudgetTests {
+    /// Interior anchors of the 6×6 king grid: every node is within three
+    /// king moves of one of them.
+    private static let anchors = [14, 15]
+    /// A phone joining a dense 36-node mesh. Every node used to answer the
+    /// newcomer's announces, and each answer was itself a mesh-wide flood.
+    /// Now only the link's endpoints announce: the joiner's link-up, one
+    /// announce from each neighbour listing the joiner, and one more from
+    /// the joiner listing its neighbours (its link-up predates them).
+    @Test
+    func joinCostsTwoAnnouncesPlusOnePerNeighbor() {
+        let mesh = SimulatedMesh.grid(width: 6, height: 6, kingMoves: true)
+        let joiner = mesh.launch(nickname: "joiner")
+        let before = originations(mesh)
+        let framesBefore = mesh.floodFrameCount(ofType: .announce)
+
+        mesh.join(joiner, linkingTo: Self.anchors)
+
+        let spent = delta(originations(mesh), before)
+        report("join 6x6 king", spent, frames: mesh.floodFrameCount(ofType: .announce) - framesBefore)
+        #expect(spent[joiner] == 2)
+        for anchor in Self.anchors {
+            // Plus its own peripheral link-up announce, until that is
+            // skipped once an announce already reached the link.
+            #expect(spent[anchor] <= 2)
+        }
+        #expect(othersSpentNothing(spent, except: Set(Self.anchors + [joiner])))
+        // Every node learned the joiner from its announces.
+        for node in 0..<joiner {
+            #expect(mesh.knows(node, joiner))
+        }
+        // The joiner learned the rest through initial sync with its two
+        // neighbours. A sync request's GCS filter hides each announce it
+        // lacks with probability ~1/128, so a node is rarely missed by both
+        // replies; the joiner learns it from that node's next periodic
+        // announce.
+        let missed = (0..<joiner).filter { !mesh.knows(joiner, $0) }
+        #expect(missed.count < 3)
+        for node in missed {
+            mesh.nodes[node].service._test_forceAnnounce()
+        }
+        mesh.settle()
+        for node in 0..<joiner {
+            #expect(mesh.knows(joiner, node))
+        }
+    }
+
+    /// The joiner's new edges are claimed from both ends straight away, so
+    /// a node across the mesh can source-route to it without waiting for a
+    /// periodic announce.
+    @Test
+    func joinerIsSourceRoutableAsSoonAsItJoins() {
+        let mesh = SimulatedMesh.grid(width: 6, height: 6, kingMoves: true)
+        let joiner = mesh.launch(nickname: "joiner")
+        mesh.join(joiner, linkingTo: Self.anchors)
+
+        let joinerID = mesh.nodes[joiner].service.myPeerID
+        #expect(mesh.nodes[35].service._test_hasConfirmedRoute(to: joinerID))
+    }
+
+    /// A new link between two nodes that already knew each other through
+    /// relays: one announce per side, plus the central's second announce
+    /// listing the peripheral it had not seen when its link-up went out.
+    @Test
+    func linkBetweenKnownPeersCostsThreeAnnounces() {
+        let mesh = SimulatedMesh.grid(width: 6, height: 6, kingMoves: true)
+        // Two king moves apart: known to each other through relays only.
+        let (central, peripheral) = (7, 21)
+        #expect(mesh.knows(central, peripheral) && mesh.knows(peripheral, central))
+        let before = originations(mesh)
+        let framesBefore = mesh.floodFrameCount(ofType: .announce)
+
+        mesh.join(central, linkingTo: [peripheral])
+
+        let spent = delta(originations(mesh), before)
+        report("link 6x6 king", spent, frames: mesh.floodFrameCount(ofType: .announce) - framesBefore)
+        #expect(spent[central] == 2)
+        #expect(spent[peripheral] <= 2)
+        #expect(othersSpentNothing(spent, except: [central, peripheral]))
+        let centralID = mesh.nodes[central].service.myPeerID
+        #expect(mesh.nodes[peripheral].service.getConnectedPeers().contains(centralID))
+        #expect(mesh.nodes[35].service._test_hasConfirmedRoute(to: centralID))
+    }
+
+    /// One periodic announce round in a busy mesh costs one announce per
+    /// node. Ordinary traffic churns the packet deduplicator, which is where
+    /// the old per-peer "already answered" markers lived, so nodes answered
+    /// each other's relayed periodic announces again: up to N² floods per
+    /// round instead of N.
+    @Test
+    func periodicRoundInABusyMeshCostsOneAnnouncePerNode() {
+        let mesh = SimulatedMesh.grid(width: 4, height: 4, kingMoves: false)
+        for node in mesh.nodes {
+            node.service._test_churnDeduplicator(count: 1_200)
+        }
+        let before = originations(mesh)
+        let framesBefore = mesh.floodFrameCount(ofType: .announce)
+
+        // Maintenance timers are not aligned: stagger the round.
+        for node in mesh.nodes {
+            node.service._test_forceAnnounce()
+            mesh.advanceTime(by: 0.5, inStepsOf: 0.05)
+        }
+        mesh.settle()
+
+        let spent = delta(originations(mesh), before)
+        report("periodic round 4x4 busy", spent, frames: mesh.floodFrameCount(ofType: .announce) - framesBefore)
+        #expect(spent.allSatisfy { $0 == 1 })
+    }
+
+    /// A hub with more neighbours than an announce can list (the encoder
+    /// keeps 10) owes nothing for the ones left out: the record of what it
+    /// claimed holds every connected neighbour, so their periodic announces
+    /// never make it re-announce.
+    @Test
+    func highDegreeNodeOwesNothingForNeighborsTheListCapLeftOut() {
+        let mesh = SimulatedMesh(announceAccounting: true)
+        let hub = 0
+        mesh.addNode(nickname: "hub")
+        for spoke in 1...12 {
+            mesh.addNode(nickname: "spoke\(spoke)")
+            mesh.connect(hub, spoke)
+        }
+        mesh.announceAll()
+        mesh.settle()
+        let before = mesh.announceOriginations(from: hub)
+
+        for spoke in 1...12 {
+            mesh.nodes[spoke].service._test_forceAnnounce()
+            mesh.advanceTime(by: 0.5, inStepsOf: 0.05)
+        }
+        mesh.settle()
+
+        #expect(mesh.announceOriginations(from: hub) - before == 0)
+    }
+
+    /// Relayed announces are never answered, however much ordinary traffic
+    /// passes. The old "already answered" marker lived in the packet
+    /// deduplicator's FIFO, so churn evicted it and re-armed the answer.
+    @Test
+    func relayedAnnouncesAreNeverAnsweredEvenAfterDeduplicatorChurn() {
+        let mesh = SimulatedMesh(announceAccounting: true)
+        for name in ["alice", "bob", "carol"] {
+            mesh.addNode(nickname: name)
+        }
+        mesh.connect(0, 1)
+        mesh.connect(1, 2)
+        mesh.announceAll()
+        mesh.settle()
+        let before = mesh.announceOriginations(from: 0)
+
+        for _ in 0..<3 {
+            mesh.nodes[0].service._test_churnDeduplicator(count: 1_200)
+            mesh.nodes[2].service._test_forceAnnounce()
+            mesh.settle()
+        }
+
+        let spent = mesh.announceOriginations(from: 0) - before
+        print("BUDGET[relayed announces after churn]: originations=\(spent)")
+        #expect(spent == 0)
+    }
+
+    /// A fresh identity costs microseconds to mint, so a verified announce
+    /// alone proves nothing. Twenty fresh identities announced directly on
+    /// one link get at most one announce in return — the one the link's
+    /// rebind permits (rebinds are limited per link) — not one each.
+    @Test
+    func freshIdentitiesOnOneLinkGetAtMostOneAnnounce() throws {
+        let mesh = SimulatedMesh(announceAccounting: true)
+        mesh.addNode(nickname: "alice")
+        mesh.addNode(nickname: "mallory")
+        mesh.connect(0, 1)
+        mesh.announceAll()
+        mesh.settle()
+        let before = mesh.announceOriginations(from: 0)
+        let malloryLink = BLEIngressLinkID.central(mesh.linkUUID(from: 1, at: 0))
+
+        for index in 0..<20 {
+            let identity = NoiseEncryptionService(keychain: MockKeychain())
+            let packet = try #require(makeDirectAnnounce(
+                nickname: "sybil\(index)",
+                noisePublicKey: identity.getStaticPublicKeyData(),
+                signingPublicKey: identity.getSigningPublicKeyData()
+            ).flatMap { identity.signPacket($0) })
+            mesh.nodes[0].service._test_ingestFrame(packet, link: malloryLink)
+            // Past the forced throttle window, so nothing coalesces.
+            mesh.advanceTime(by: 0.2)
+        }
+        mesh.settle()
+
+        let spent = mesh.announceOriginations(from: 0) - before
+        print("BUDGET[20 fresh signed identities on one link]: originations=\(spent)")
+        #expect(spent <= 1)
+    }
+
+    /// Unsigned announces never make a peer connected, so they never earn
+    /// an announce (they used to be answered one for one).
+    @Test
+    func unsignedAnnouncesNeverEarnAnAnnounce() throws {
+        let mesh = SimulatedMesh(announceAccounting: true)
+        mesh.addNode(nickname: "alice")
+        mesh.addNode(nickname: "mallory")
+        mesh.connect(0, 1)
+        mesh.announceAll()
+        mesh.settle()
+        let before = mesh.announceOriginations(from: 0)
+        let malloryLink = BLEIngressLinkID.central(mesh.linkUUID(from: 1, at: 0))
+
+        for index in 0..<100 {
+            // Any 32 bytes satisfy the sender binding of an unsigned announce.
+            let noiseKey = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
+            let packet = try #require(makeDirectAnnounce(
+                nickname: "junk\(index)",
+                noisePublicKey: noiseKey,
+                signingPublicKey: Data(repeating: 0x5A, count: 32)
+            ))
+            mesh.nodes[0].service._test_ingestFrame(packet, link: malloryLink)
+            mesh.advanceTime(by: 0.2)
+        }
+        mesh.settle()
+
+        let spent = mesh.announceOriginations(from: 0) - before
+        print("BUDGET[100 unsigned identities on one link]: originations=\(spent)")
+        #expect(spent == 0)
+    }
+
+    /// A panic rotation on a live link: the survivor's link is still bound
+    /// to the old ID, so the rotated announce is stored disconnected until
+    /// the containment-checked rebind promotes it — and that promotion is
+    /// what earns the rotated phone exactly one announce from the survivor.
+    @Test
+    func rotatedPeerGetsOneAnnounceAfterTheRebind() {
+        let mesh = SimulatedMesh(announceAccounting: true)
+        let alice = mesh.addNode(nickname: "alice")
+        let bob = mesh.addNode(nickname: "bob")
+        mesh.connect(0, 1)
+        mesh.announceAll()
+        mesh.settle()
+
+        bob.service.suspendForPanicReset()
+        bob.service.resetIdentityForPanic(currentNickname: "anon", restartServices: false)
+        bob.service.completePanicReset(restartServices: false)
+        mesh.pump()
+        let before = mesh.announceOriginations(from: 0)
+
+        mesh.forceAnnounce(from: 1)
+        mesh.settle()
+
+        let spent = mesh.announceOriginations(from: 0) - before
+        print("BUDGET[rotation answer]: originations=\(spent)")
+        #expect(spent == 1)
+        #expect(alice.service._test_centralBinding(mesh.linkUUID(from: 1, at: 0)) == bob.service.myPeerID)
+        // The rotated phone learned the survivor from that one announce.
+        #expect(bob.service.getConnectedPeers().contains(alice.service.myPeerID))
+    }
+
+    /// Two settled 3-node lines meet over one new link. Each line learns the
+    /// link's far endpoint from its announces at once and the endpoints
+    /// learn the far side through initial sync; the rest of each line learns
+    /// the far side from the far side's next periodic announce. (Every node
+    /// used to answer every relayed announce, which spread full knowledge
+    /// within a second at the cost of a mesh-wide storm.)
+    @Test
+    func meetingGroupsLearnTheFarSideWithinOnePeriodicAnnounceRound() {
+        let mesh = SimulatedMesh(announceAccounting: true)
+        for name in ["a0", "a1", "a2", "b0", "b1", "b2"] {
+            mesh.addNode(nickname: name)
+        }
+        mesh.connect(0, 1)
+        mesh.connect(1, 2)
+        mesh.connect(3, 4)
+        mesh.connect(4, 5)
+        mesh.announceAll()
+        mesh.settle()
+
+        mesh.join(2, linkingTo: [3])
+
+        // Each line learned the far endpoint of the link from its announces.
+        // (The endpoints learn the far side through initial sync, which a
+        // GCS false positive can delay to the next periodic announce.)
+        for node in [0, 1] { #expect(mesh.knows(node, 3)) }
+        for node in [4, 5] { #expect(mesh.knows(node, 2)) }
+        print("BUDGET[groups meet]: known pairs before periodic round=\(knownPairs(mesh))/30")
+
+        // One periodic announce from every node — what the maintenance
+        // timer sends within one announce interval — completes discovery.
+        let everyone = 0..<6
+        for node in everyone {
+            mesh.nodes[node].service._test_forceAnnounce()
+        }
+        mesh.settle()
+        print("BUDGET[groups meet]: known pairs after periodic round=\(knownPairs(mesh))/30")
+        for a in everyone {
+            for b in everyone where a != b {
+                #expect(mesh.knows(a, b))
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func originations(_ mesh: SimulatedMesh) -> [Int] {
+        (0..<mesh.nodes.count).map { mesh.announceOriginations(from: $0) }
+    }
+
+    /// Per-node difference; nodes added after `before` count from zero.
+    private func delta(_ after: [Int], _ before: [Int]) -> [Int] {
+        after.indices.map { after[$0] - (before.indices.contains($0) ? before[$0] : 0) }
+    }
+
+    private func othersSpentNothing(_ spent: [Int], except endpoints: Set<Int>) -> Bool {
+        spent.indices.allSatisfy { endpoints.contains($0) || spent[$0] == 0 }
+    }
+
+    private func knownPairs(_ mesh: SimulatedMesh) -> Int {
+        let nodes = mesh.nodes.indices
+        return nodes.reduce(0) { total, a in
+            total + nodes.filter { $0 != a && mesh.knows(a, $0) }.count
+        }
+    }
+
+    private func report(_ name: String, _ spent: [Int], frames: Int) {
+        print("BUDGET[\(name)]: originations=\(spent.reduce(0, +)) maxPerNode=\(spent.max() ?? 0) announceFrames(ttl>0)=\(frames)")
+    }
+
+    /// A direct (TTL 7) announce for an identity the mesh has never seen.
+    private func makeDirectAnnounce(
+        nickname: String,
+        noisePublicKey: Data,
+        signingPublicKey: Data
+    ) -> BitchatPacket? {
+        let announcement = AnnouncementPacket(
+            nickname: nickname,
+            noisePublicKey: noisePublicKey,
+            signingPublicKey: signingPublicKey,
+            directNeighbors: nil
+        )
+        guard let payload = announcement.encode() else { return nil }
+        return BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: Data(hexString: PeerID(publicKey: noisePublicKey).id) ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: TransportConfig.messageTTLDefault
+        )
+    }
+}

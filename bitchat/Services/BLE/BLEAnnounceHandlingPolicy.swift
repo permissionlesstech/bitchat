@@ -117,24 +117,19 @@ enum BLEAnnounceTrustPolicy {
 struct BLEAnnounceResponsePlan: Equatable {
     let shouldNotifyPeerConnected: Bool
     let shouldScheduleInitialSync: Bool
-    let shouldSendAnnounceBack: Bool
-    let shouldScheduleAfterglow: Bool
 }
 
 enum BLEAnnounceResponsePolicy {
     static func plan(
         isDirectAnnounce: Bool,
         isNewPeer: Bool,
-        isReconnectedPeer: Bool,
-        shouldSendAnnounceBack: Bool
+        isReconnectedPeer: Bool
     ) -> BLEAnnounceResponsePlan {
         let shouldNotifyPeerConnected = isDirectAnnounce && (isNewPeer || isReconnectedPeer)
 
         return BLEAnnounceResponsePlan(
             shouldNotifyPeerConnected: shouldNotifyPeerConnected,
-            shouldScheduleInitialSync: shouldNotifyPeerConnected,
-            shouldSendAnnounceBack: shouldSendAnnounceBack,
-            shouldScheduleAfterglow: isNewPeer
+            shouldScheduleInitialSync: shouldNotifyPeerConnected
         )
     }
 }

@@ -14,7 +14,6 @@ struct BLEAnnounceHandlerTests {
         var linkState: (hasPeripheral: Bool, hasCentral: Bool) = (false, false)
         var linkBoundToOtherPeer = false
         var upsertResult: BLEPeerAnnounceUpdate? = BLEPeerAnnounceUpdate(isNewPeer: false, wasDisconnected: false, previousNickname: nil)
-        var dedupSeenIDs: Set<String> = []
         var shouldEmitReconnectLogResult = true
 
         var verifySignatureCalls: [(packet: BitchatPacket, signingPublicKey: Data)] = []
@@ -23,12 +22,8 @@ struct BLEAnnounceHandlerTests {
         var reconnectLogQueries: [PeerID] = []
         var topologyUpdates: [(peerID: PeerID, neighbors: [Data])] = []
         var persistedIdentities: [AnnouncementPacket] = []
-        var dedupContainsQueries: [String] = []
-        var dedupMarkedIDs: [String] = []
         var uiEventDeliveries: [(peerID: PeerID, notifyPeerConnected: Bool, scheduleInitialSync: Bool)] = []
         var trackedPackets: [BitchatPacket] = []
-        var announceBacks = 0
-        var afterglowDelays: [TimeInterval] = []
     }
 
     private func makeHandler(
@@ -70,31 +65,18 @@ struct BLEAnnounceHandlerTests {
             persistIdentity: { announcement in
                 recorder.persistedIdentities.append(announcement)
             },
-            dedupContains: { id in
-                recorder.dedupContainsQueries.append(id)
-                return recorder.dedupSeenIDs.contains(id)
-            },
-            dedupMarkProcessed: { id in
-                recorder.dedupMarkedIDs.append(id)
-            },
             deliverAnnounceUIEvents: { peerID, notifyPeerConnected, scheduleInitialSync in
                 recorder.uiEventDeliveries.append((peerID, notifyPeerConnected, scheduleInitialSync))
             },
             trackPacketSeen: { packet in
                 recorder.trackedPackets.append(packet)
-            },
-            sendAnnounceBack: {
-                recorder.announceBacks += 1
-            },
-            scheduleAfterglow: { delay in
-                recorder.afterglowDelays.append(delay)
             }
         )
         return BLEAnnounceHandler(environment: environment)
     }
 
     @Test
-    func verifiedNewPeerAnnounceUpsertsNotifiesSyncsAndAnnouncesBack() throws {
+    func verifiedNewPeerAnnounceUpsertsNotifiesAndSyncs() throws {
         let now = Date(timeIntervalSince1970: 1_000)
         let noiseKey = Data(repeating: 0x11, count: 32)
         let peerID = PeerID(publicKey: noiseKey)
@@ -130,35 +112,6 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == true)
         #expect(recorder.uiEventDeliveries.first?.scheduleInitialSync == true)
         #expect(recorder.trackedPackets.count == 1)
-        #expect(recorder.dedupMarkedIDs == ["announce-back-\(peerID)"])
-        #expect(recorder.announceBacks == 1)
-        #expect(recorder.afterglowDelays.count == 1)
-    }
-
-    @Test
-    func afterglowDelayStaysWithinConfiguredRange() throws {
-        let now = Date(timeIntervalSince1970: 1_000)
-        let noiseKey = Data(repeating: 0x12, count: 32)
-        let peerID = PeerID(publicKey: noiseKey)
-        let packet = try makeAnnouncePacket(
-            noisePublicKey: noiseKey,
-            peerID: peerID,
-            timestamp: timestamp(now),
-            signature: Data(repeating: 0xEE, count: 64)
-        )
-
-        let recorder = Recorder()
-        recorder.upsertResult = BLEPeerAnnounceUpdate(isNewPeer: true, wasDisconnected: false, previousNickname: nil)
-        let handler = makeHandler(recorder: recorder, now: now)
-
-        for _ in 0..<8 {
-            handler.handle(packet, from: peerID)
-        }
-
-        #expect(recorder.afterglowDelays.count == 8)
-        for delay in recorder.afterglowDelays {
-            #expect(delay >= 0.3 && delay <= 0.6)
-        }
     }
 
     @Test
@@ -185,9 +138,7 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.barrierCount == 1)
         #expect(recorder.upsertCalls.isEmpty)
         #expect(recorder.topologyUpdates.isEmpty)
-        #expect(recorder.afterglowDelays.isEmpty)
-        // Original behavior: list refresh and announce-back still occur for
-        // unverified announces.
+        // The list refresh still occurs for unverified announces.
         #expect(recorder.uiEventDeliveries.count == 1)
         #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
         #expect(recorder.uiEventDeliveries.first?.scheduleInitialSync == false)
@@ -198,7 +149,6 @@ struct BLEAnnounceHandlerTests {
         // Nor gossip tracking: an unsigned announce is free to mint, so
         // tracking it let junk identities fill the sync store and filter.
         #expect(recorder.trackedPackets.isEmpty)
-        #expect(recorder.announceBacks == 1)
     }
 
     @Test
@@ -294,7 +244,7 @@ struct BLEAnnounceHandlerTests {
     }
 
     @Test
-    func reconnectedPeerNotifiesConnectionWithoutAfterglow() throws {
+    func reconnectedPeerNotifiesConnection() throws {
         let now = Date(timeIntervalSince1970: 1_000)
         let noiseKey = Data(repeating: 0x55, count: 32)
         let peerID = PeerID(publicKey: noiseKey)
@@ -316,11 +266,10 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == true)
         #expect(recorder.uiEventDeliveries.first?.scheduleInitialSync == true)
         #expect(recorder.reconnectLogQueries == [peerID])
-        #expect(recorder.afterglowDelays.isEmpty)
     }
 
     @Test
-    func relayedNewPeerSchedulesAfterglowWithoutConnectNotify() throws {
+    func relayedNewPeerIsStoredDisconnectedWithoutConnectNotify() throws {
         let now = Date(timeIntervalSince1970: 1_000)
         let noiseKey = Data(repeating: 0x66, count: 32)
         let peerID = PeerID(publicKey: noiseKey)
@@ -345,7 +294,6 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.uiEventDeliveries.count == 1)
         #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
         #expect(recorder.uiEventDeliveries.first?.scheduleInitialSync == false)
-        #expect(recorder.afterglowDelays.count == 1)
     }
 
     /// TTL is unsigned, so a replayed announce with its TTL restored looks
@@ -445,29 +393,6 @@ struct BLEAnnounceHandlerTests {
         // … and the absent victim reads as connected: the residual gap.
         #expect(recorder.upsertCalls.count == 2)
         #expect(recorder.upsertCalls.last?.isConnected == true)
-    }
-
-    @Test
-    func announceBackIsSkippedWhenAlreadyMarked() throws {
-        let now = Date(timeIntervalSince1970: 1_000)
-        let noiseKey = Data(repeating: 0x77, count: 32)
-        let peerID = PeerID(publicKey: noiseKey)
-        let packet = try makeAnnouncePacket(
-            noisePublicKey: noiseKey,
-            peerID: peerID,
-            timestamp: timestamp(now),
-            signature: Data(repeating: 0xEE, count: 64)
-        )
-
-        let recorder = Recorder()
-        recorder.dedupSeenIDs = ["announce-back-\(peerID)"]
-        let handler = makeHandler(recorder: recorder, now: now)
-
-        handler.handle(packet, from: peerID)
-
-        #expect(recorder.dedupContainsQueries == ["announce-back-\(peerID)"])
-        #expect(recorder.dedupMarkedIDs.isEmpty)
-        #expect(recorder.announceBacks == 0)
     }
 
     @Test
@@ -655,7 +580,6 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.topologyUpdates.isEmpty)
         #expect(recorder.uiEventDeliveries.count == 1)
         #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
-        #expect(recorder.afterglowDelays.isEmpty)
     }
 
     @Test
@@ -732,12 +656,8 @@ struct BLEAnnounceHandlerTests {
             persistIdentity: { announcement in
                 box.persistedIdentities.append(announcement)
             },
-            dedupContains: { _ in true },
-            dedupMarkProcessed: { _ in },
             deliverAnnounceUIEvents: { _, _, _ in },
-            trackPacketSeen: { _ in },
-            sendAnnounceBack: {},
-            scheduleAfterglow: { _ in }
+            trackPacketSeen: { _ in }
         )
         let handler = BLEAnnounceHandler(environment: environment)
 
@@ -852,12 +772,8 @@ struct BLEAnnounceHandlerTests {
                         claimedNickname: announcement.nickname
                     )
                 },
-                dedupContains: { _ in true },
-                dedupMarkProcessed: { _ in },
                 deliverAnnounceUIEvents: { _, _, _ in },
-                trackPacketSeen: { _ in },
-                sendAnnounceBack: {},
-                scheduleAfterglow: { _ in }
+                trackPacketSeen: { _ in }
             )
         }
         let handler = BLEAnnounceHandler(environment: makeEnvironment(identityManager: identityManager))
@@ -936,11 +852,8 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.upsertCalls.isEmpty)
         #expect(recorder.topologyUpdates.isEmpty)
         #expect(recorder.persistedIdentities.isEmpty)
-        #expect(recorder.dedupMarkedIDs.isEmpty)
         #expect(recorder.uiEventDeliveries.isEmpty)
         #expect(recorder.trackedPackets.isEmpty)
-        #expect(recorder.announceBacks == 0)
-        #expect(recorder.afterglowDelays.isEmpty)
     }
 
     private func makeAnnouncePacket(
