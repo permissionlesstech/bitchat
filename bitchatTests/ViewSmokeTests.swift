@@ -608,12 +608,23 @@ private final class SplitContentHost {
     ///     present. Off by default: the simulator's Bluetooth state can
     ///     raise the Bluetooth alert on its own, and a presentation left up
     ///     when a test closes its window stalls the windows after it.
+    /// - Throws: When the host can't show the layout: the test host is in
+    ///   the background (its windows stop catching up with their views),
+    ///   the window isn't key, or the setup never settles. The failure
+    ///   says which, with the host's diagnostics, at once: every later
+    ///   step would only run its own deadline out.
     static func make(
         compact: Bool = false,
         theme: AppTheme = .matrix,
         sharedContentStore: SharedContentStore? = nil,
-        sceneIsActive: Bool = false
-    ) async -> SplitContentHost {
+        sceneIsActive: Bool = false,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async throws -> SplitContentHost {
+        try #require(
+            UIApplication.shared.applicationState != .background,
+            "the test host is in the background, where its windows don't render",
+            sourceLocation: sourceLocation
+        )
         let suiteName = "ViewSmokeTests.split.\(UUID().uuidString)"
         let storage = UserDefaults(suiteName: suiteName) ?? .standard
         storage.removePersistentDomain(forName: suiteName)
@@ -630,10 +641,11 @@ private final class SplitContentHost {
             sharedContentStore: sharedContentStore,
             locationManager: manager
         )
-        _ = await TestHelpers.waitUntil(
+        let authorized = await TestHelpers.waitUntil(
             { models.locationChannelsModel.permissionState == .authorized },
             timeout: TestConstants.settleTimeout
         )
+        try #require(authorized, "location permission never reached the model", sourceLocation: sourceLocation)
         let sizeClass = SmokeSizeClass()
         sizeClass.value = compact ? .compact : .regular
         let split = SplitContentHost(
@@ -645,14 +657,27 @@ private final class SplitContentHost {
             sharedContentStore: sharedContentStore,
             sceneIsActive: sceneIsActive
         )
-        transport.updatePeerSnapshots([
-            makeSnapshot(peerID: split.bob, nickname: "Bob", noiseByte: 0xB0)
-        ])
-        _ = await TestHelpers.waitUntil(
-            { models.peerListModel.meshRows.contains { $0.peerID == split.bob } },
-            timeout: TestConstants.settleTimeout
-        )
-        _ = await split.settle { split.chrome.splitLayoutShowsLocation != nil || compact }
+        // A failed setup closes its window: the test never gets to.
+        do {
+            try #require(
+                split.host.window.isKeyWindow,
+                "the host window isn't key: \(split.diagnostics)",
+                sourceLocation: sourceLocation
+            )
+            transport.updatePeerSnapshots([
+                makeSnapshot(peerID: split.bob, nickname: "Bob", noiseByte: 0xB0)
+            ])
+            try await split.require(
+                "Bob in the people list",
+                sourceLocation: sourceLocation
+            ) { models.peerListModel.meshRows.contains { $0.peerID == split.bob } }
+            try await split.require("the layout", sourceLocation: sourceLocation) {
+                split.chrome.splitLayoutShowsLocation != nil || compact
+            }
+        } catch {
+            split.close()
+            throw error
+        }
         return split
     }
 
@@ -680,19 +705,39 @@ private final class SplitContentHost {
     var leadingPrompts: [String] { host.placeholders(in: Self.leadingRegion) }
     var trailingPrompts: [String] { host.placeholders(in: Self.trailingRegion) }
 
+    /// Waits until `condition` holds, up to the settle deadline. A test host
+    /// in the background stops rendering its windows, so a wait on what
+    /// they show would only run the deadline out: it gives up at once
+    /// instead, and the diagnostics say the app isn't active.
     func settle(_ condition: @escaping () -> Bool) async -> Bool {
-        await TestHelpers.waitUntil(condition, timeout: TestConstants.settleTimeout)
+        _ = await TestHelpers.waitUntil(
+            { condition() || UIApplication.shared.applicationState == .background },
+            timeout: TestConstants.settleTimeout
+        )
+        return condition()
+    }
+
+    /// `settle`, as a step the test needs: one that never settles stops the
+    /// test there, with the host's diagnostics, rather than leave every
+    /// later step to wait out its own deadline.
+    func require(
+        _ step: String,
+        sourceLocation: SourceLocation = #_sourceLocation,
+        _ condition: @escaping () -> Bool
+    ) async throws {
+        let settled = await settle(condition)
+        try #require(settled, "\(step): \(diagnostics)", sourceLocation: sourceLocation)
     }
 
     /// Selects `channel` and waits until the timeline renders it.
-    func select(_ channel: ChannelID) async -> Bool {
+    func select(_ channel: ChannelID, sourceLocation: SourceLocation = #_sourceLocation) async throws {
         channels.select(channel)
-        return await settle { self.timelineChannel == channel }
+        try await require("select \(channel)", sourceLocation: sourceLocation) { self.timelineChannel == channel }
     }
 
-    func open(_ peer: PeerID) async -> Bool {
+    func open(_ peer: PeerID, sourceLocation: SourceLocation = #_sourceLocation) async throws {
         models.privateConversationModel.startConversation(with: peer)
-        return await settle { self.openPeer == peer }
+        try await require("open \(peer)", sourceLocation: sourceLocation) { self.openPeer == peer }
     }
 
     /// A touch going down in the middle of `pane`.
@@ -760,14 +805,14 @@ private final class SplitContentHost {
         return settled
     }
 
-    func fold() async -> Bool {
+    func fold(sourceLocation: SourceLocation = #_sourceLocation) async throws {
         sizeClass.value = .compact
-        return await settle { self.chrome.splitLayoutShowsLocation == nil }
+        try await require("fold", sourceLocation: sourceLocation) { self.chrome.splitLayoutShowsLocation == nil }
     }
 
-    func unfold() async -> Bool {
+    func unfold(sourceLocation: SourceLocation = #_sourceLocation) async throws {
         sizeClass.value = .regular
-        return await settle { self.chrome.splitLayoutShowsLocation != nil }
+        try await require("unfold", sourceLocation: sourceLocation) { self.chrome.splitLayoutShowsLocation != nil }
     }
 
     func close() {
@@ -1473,40 +1518,36 @@ struct ViewSmokeTests {
     /// conversation, and the screenshot flag follows what the trailing pane
     /// shows as each selection lands (E10). In either theme's layout.
     @Test(arguments: AppTheme.allCases)
-    func contentView_splitShowsEachTrailingPane(theme: AppTheme) async {
-        let split = await SplitContentHost.make(theme: theme)
+    func contentView_splitShowsEachTrailingPane(theme: AppTheme) async throws {
+        let split = try await SplitContentHost.make(theme: theme)
         defer { split.close() }
 
-        let idle = await split.settle {
+        try await split.require("idle picker beside #mesh") {
             split.isMeshPinned
                 && split.chrome.splitLayoutShowsLocation == true
                 && split.leadingPrompts.contains { $0.contains("#mesh") }
                 && split.trailingPrompts == ["geohash"]
         }
-        #expect(idle, "idle picker beside #mesh: \(split.diagnostics)")
 
-        #expect(await split.select(.location(split.geohash)))
-        let channel = await split.settle {
+        try await split.select(.location(split.geohash))
+        try await split.require("geohash pane") {
             split.trailingPrompts.contains { $0.contains("#\(split.geohash.geohash)") }
                 && split.chrome.splitLayoutShowsLocation == true
         }
-        #expect(channel, "geohash pane: \(split.diagnostics)")
 
-        #expect(await split.open(split.bob))
-        let conversation = await split.settle {
+        try await split.open(split.bob)
+        try await split.require("DM pane") {
             split.trailingPrompts.contains { $0.contains("Bob") }
                 && split.chrome.splitLayoutShowsLocation == false
         }
-        #expect(conversation, "DM pane: \(split.diagnostics)")
         // #mesh keeps its composer beside the DM.
         #expect(split.leadingPrompts.contains { $0.contains("#mesh") })
 
         split.models.privateConversationModel.endConversation()
-        let back = await split.settle {
+        try await split.require("geohash again") {
             split.trailingPrompts.contains { $0.contains("#\(split.geohash.geohash)") }
                 && split.chrome.splitLayoutShowsLocation == true
         }
-        #expect(back, "geohash again: \(split.diagnostics)")
         // The picker never prompted, nor kept location running (I3).
         #expect(split.location.requestAuthorizationCallCount == 0)
         #expect(split.location.startUpdatingLocationCallCount == 0)
@@ -1516,162 +1557,159 @@ struct ViewSmokeTests {
     /// (#mesh selected, the DM ended, #mesh unpinned); unfolding brings both
     /// back, the DM over the geohash.
     @Test
-    func contentView_foldFromMeshParksTheGeohashAndDMUntilUnfold() async {
-        let split = await SplitContentHost.make()
+    func contentView_foldFromMeshParksTheGeohashAndDMUntilUnfold() async throws {
+        let split = try await SplitContentHost.make()
         defer { split.close() }
-        #expect(await split.select(.location(split.geohash)))
-        #expect(await split.open(split.bob))
-        #expect(split.touch(.leading))
+        try await split.select(.location(split.geohash))
+        try await split.open(split.bob)
+        try #require(split.touch(.leading))
 
-        #expect(await split.fold())
-        let parked = await split.settle {
+        try await split.fold()
+        try await split.require("parked") {
             split.timelineChannel == .mesh
                 && split.channels.selectedChannel == .mesh
                 && split.openPeer == nil
         }
-        #expect(parked)
         #expect(!split.isMeshPinned)
 
-        #expect(await split.unfold())
-        let restored = await split.settle {
+        try await split.unfold()
+        try await split.require("restored") {
             split.timelineChannel == .location(split.geohash)
                 && split.openPeer == split.bob
                 && split.chrome.splitLayoutShowsLocation == false
         }
-        #expect(restored)
         #expect(split.isMeshPinned)
     }
 
     /// E2: folding from the trailing pane keeps the geohash and the DM
     /// (into the sheet); nothing is selected away or ended.
     @Test
-    func contentView_foldFromTheTrailingPaneKeepsEverything() async {
-        let split = await SplitContentHost.make()
+    func contentView_foldFromTheTrailingPaneKeepsEverything() async throws {
+        let split = try await SplitContentHost.make()
         defer { split.close() }
-        #expect(await split.select(.location(split.geohash)))
+        try await split.select(.location(split.geohash))
         // Opening the DM gives the trailing pane the focus.
-        #expect(await split.open(split.bob))
+        try await split.open(split.bob)
 
-        #expect(await split.fold())
+        try await split.fold()
         let moved = await TestHelpers.waitUntil(
             { split.channels.selectedChannel != .location(split.geohash) || split.openPeer != split.bob },
             timeout: TestConstants.negativeWaitWindow
         )
-        #expect(!moved)
+        #expect(!moved, "\(split.diagnostics)")
     }
 
     /// E3's exception: a geohash DM needs its geohash live, so even a fold
     /// from #mesh keeps both.
     @Test
-    func contentView_foldKeepsAGeohashDMWithItsGeohash() async {
-        let split = await SplitContentHost.make()
+    func contentView_foldKeepsAGeohashDMWithItsGeohash() async throws {
+        let split = try await SplitContentHost.make()
         defer { split.close() }
         let geoDM = PeerID(nostr_: String(repeating: "ef", count: 32))
-        #expect(await split.select(.location(split.geohash)))
-        #expect(await split.open(geoDM))
-        #expect(split.touch(.leading))
+        try await split.select(.location(split.geohash))
+        try await split.open(geoDM)
+        try #require(split.touch(.leading))
 
-        #expect(await split.fold())
+        try await split.fold()
         let moved = await TestHelpers.waitUntil(
             { split.channels.selectedChannel != .location(split.geohash) || split.openPeer != geoDM },
             timeout: TestConstants.negativeWaitWindow
         )
-        #expect(!moved)
+        #expect(!moved, "\(split.diagnostics)")
     }
 
     /// E5: choosing a location channel while folded drops what was parked,
     /// for good: back on #mesh before unfolding, neither the parked geohash
     /// nor the parked DM returns, and the trailing pane is the idle picker.
     @Test
-    func contentView_compactLocationChoiceDropsWhatWasParked() async {
-        let split = await SplitContentHost.make()
+    func contentView_compactLocationChoiceDropsWhatWasParked() async throws {
+        let split = try await SplitContentHost.make()
         defer { split.close() }
         let other = GeohashChannel(level: .neighborhood, geohash: "9q8yyk")
-        #expect(await split.select(.location(split.geohash)))
-        #expect(await split.open(split.bob))
-        #expect(split.touch(.leading))
-        #expect(await split.fold())
-        #expect(await split.settle { split.timelineChannel == .mesh && split.openPeer == nil })
+        try await split.select(.location(split.geohash))
+        try await split.open(split.bob)
+        try #require(split.touch(.leading))
+        try await split.fold()
+        try await split.require("parked") { split.timelineChannel == .mesh && split.openPeer == nil }
 
-        #expect(await split.select(.location(other)))
-        #expect(await split.select(.mesh))
-        #expect(await split.unfold())
-        let idle = await split.settle { split.trailingPrompts == ["geohash"] }
-        #expect(idle, "\(split.diagnostics)")
+        try await split.select(.location(other))
+        try await split.select(.mesh)
+        try await split.unfold()
+        try await split.require("idle picker") { split.trailingPrompts == ["geohash"] }
         let restored = await TestHelpers.waitUntil(
             { split.channels.selectedChannel != .mesh || split.openPeer != nil },
             timeout: TestConstants.negativeWaitWindow
         )
-        #expect(!restored)
+        #expect(!restored, "\(split.diagnostics)")
     }
 
     /// I4/E6: a panic wipe while folded leaves nothing for the unfold to
     /// rejoin or reopen: the trailing pane comes back as the idle picker.
     @Test
-    func contentView_panicWhileFoldedLeavesNothingToRestore() async {
-        let split = await SplitContentHost.make()
+    func contentView_panicWhileFoldedLeavesNothingToRestore() async throws {
+        let split = try await SplitContentHost.make()
         defer { split.close() }
-        #expect(await split.select(.location(split.geohash)))
-        #expect(await split.open(split.bob))
-        #expect(split.touch(.leading))
-        #expect(await split.fold())
-        #expect(await split.settle { split.timelineChannel == .mesh && split.openPeer == nil })
+        try await split.select(.location(split.geohash))
+        try await split.open(split.bob)
+        try #require(split.touch(.leading))
+        try await split.fold()
+        try await split.require("parked") { split.timelineChannel == .mesh && split.openPeer == nil }
 
         split.chrome.panicClearAllData()
 
-        #expect(await split.unfold())
-        let idle = await split.settle { split.trailingPrompts == ["geohash"] }
-        #expect(idle, "\(split.diagnostics)")
+        try await split.unfold()
+        try await split.require("idle picker") { split.trailingPrompts == ["geohash"] }
         let restored = await TestHelpers.waitUntil(
             { split.channels.selectedChannel != .mesh || split.openPeer != nil },
             timeout: TestConstants.negativeWaitWindow
         )
-        #expect(!restored)
+        #expect(!restored, "\(split.diagnostics)")
     }
 
     /// I4: a wipe in the split layout takes the trailing geohash with it:
     /// the pane goes back to the idle picker once #mesh lands.
     @Test
-    func contentView_panicReturnsTheTrailingPaneToThePicker() async {
-        let split = await SplitContentHost.make()
+    func contentView_panicReturnsTheTrailingPaneToThePicker() async throws {
+        let split = try await SplitContentHost.make()
         defer { split.close() }
-        #expect(await split.select(.location(split.geohash)))
-        let channel = await split.settle { split.trailingPrompts.contains { $0.contains("#\(split.geohash.geohash)") } }
-        #expect(channel, "\(split.diagnostics)")
+        try await split.select(.location(split.geohash))
+        try await split.require("geohash pane") {
+            split.trailingPrompts.contains { $0.contains("#\(split.geohash.geohash)") }
+        }
 
         split.chrome.panicClearAllData()
 
-        let idle = await split.settle {
+        try await split.require("idle picker") {
             split.timelineChannel == .mesh
                 && split.trailingPrompts == ["geohash"]
                 && split.chrome.splitLayoutShowsLocation == true
         }
-        #expect(idle, "\(split.diagnostics)")
     }
 
     /// E8: the location sheet up at unfold closes, and the trailing pane
     /// shows the picker in its place, browsing from the selected geohash
     /// rather than showing it.
     @Test
-    func contentView_unfoldTurnsTheLocationSheetIntoThePicker() async {
-        let split = await SplitContentHost.make(compact: true)
+    func contentView_unfoldTurnsTheLocationSheetIntoThePicker() async throws {
+        let split = try await SplitContentHost.make(compact: true)
         defer { split.close() }
-        #expect(await split.select(.location(split.geohash)))
+        try await split.select(.location(split.geohash))
         split.chrome.isLocationChannelsSheetPresented = true
-        #expect(await split.settle { split.isPresenting }, "\(split.diagnostics)")
+        try await split.require("location sheet") { split.isPresenting }
 
-        #expect(await split.unfold())
-        let browsing = await split.settle {
+        try await split.unfold()
+        try await split.require("browsing picker") {
             !split.chrome.isLocationChannelsSheetPresented
                 && split.trailingPrompts == ["geohash"]
                 && split.chrome.splitLayoutShowsLocation == true
         }
-        #expect(browsing, "\(split.diagnostics)")
         #expect(split.channels.selectedChannel == .location(split.geohash))
 
         // The sheet's live updates end as it goes, which cancels the fix the
         // pane asked for as it appeared: the pane asks again.
-        #expect(await split.settle { !split.isPresenting && split.location.stopUpdatingLocationCallCount > 0 })
+        try await split.require("the sheet's updates end") {
+            !split.isPresenting && split.location.stopUpdatingLocationCallCount > 0
+        }
         #expect(split.location.isFixPending, "the pane's fix died with the sheet's updates")
         #expect(split.location.requestAuthorizationCallCount == 0)
     }
@@ -1687,7 +1725,7 @@ struct ViewSmokeTests {
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let store = SharedContentStore(defaults: defaults)
-        let split = await SplitContentHost.make(sharedContentStore: store)
+        let split = try await SplitContentHost.make(sharedContentStore: store)
         defer {
             split.models.sharedContentImportModel.discardAll()
             split.close()
@@ -1695,15 +1733,15 @@ struct ViewSmokeTests {
         let geohash = SharedContentDestination.geohash(split.geohash.geohash)
 
         // The picker has no composer: #mesh takes it, whichever pane.
-        #expect(split.touch(.trailing))
-        #expect(await split.share(labelled: geohash, settlesOn: .mesh))
+        try #require(split.touch(.trailing))
+        try #require(await split.share(labelled: geohash, settlesOn: .mesh), "\(split.diagnostics)")
 
-        #expect(await split.select(.location(split.geohash)))
-        #expect(split.touch(.trailing))
-        #expect(await split.share(labelled: .mesh, settlesOn: geohash))
+        try await split.select(.location(split.geohash))
+        try #require(split.touch(.trailing))
+        try #require(await split.share(labelled: .mesh, settlesOn: geohash), "\(split.diagnostics)")
 
-        #expect(split.touch(.leading))
-        #expect(await split.share(labelled: geohash, settlesOn: .mesh))
+        try #require(split.touch(.leading))
+        try #require(await split.share(labelled: geohash, settlesOn: .mesh), "\(split.diagnostics)")
     }
 
     /// E11: the share review names the composer the share would fill. The
@@ -1760,14 +1798,14 @@ struct ViewSmokeTests {
     /// E13: a people popover holds the root's alerts back (the Bluetooth
     /// alert here), and a fold closes it; the alert shows then.
     @Test
-    func contentView_aPeoplePopoverHoldsRootAlertsBackUntilAFoldClosesIt() async {
-        let split = await SplitContentHost.make(sceneIsActive: true)
+    func contentView_aPeoplePopoverHoldsRootAlertsBackUntilAFoldClosesIt() async throws {
+        let split = try await SplitContentHost.make(sceneIsActive: true)
         defer {
             split.chrome.showBluetoothAlert = false
             split.close()
         }
         split.tap(.peopleButton(.leading))
-        #expect(await split.settle { split.isPresentingPopover }, "\(split.diagnostics)")
+        try await split.require("popover") { split.isPresentingPopover }
 
         split.chrome.showBluetoothAlert = true
         let presented = await TestHelpers.waitUntil(
@@ -1777,11 +1815,11 @@ struct ViewSmokeTests {
         #expect(!presented, "\(split.diagnostics)")
         #expect(split.isPresentingPopover)
 
-        #expect(await split.fold())
-        #expect(await split.settle { split.presentedAlert?.preferredStyle == .alert }, "\(split.diagnostics)")
+        try await split.fold()
+        try await split.require("the alert after the fold") { split.presentedAlert?.preferredStyle == .alert }
 
         split.chrome.showBluetoothAlert = false
-        #expect(await split.settle { !split.isPresenting }, "\(split.diagnostics)")
+        try await split.require("the alert dismissed") { !split.isPresenting }
     }
 
     /// E13 and I5: while a people popover is up nothing else presents from
@@ -1794,7 +1832,7 @@ struct ViewSmokeTests {
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let store = SharedContentStore(defaults: defaults)
-        let split = await SplitContentHost.make(sharedContentStore: store)
+        let split = try await SplitContentHost.make(sharedContentStore: store)
         let shares = split.models.sharedContentImportModel
         defer {
             shares.discardAll()
@@ -1809,9 +1847,9 @@ struct ViewSmokeTests {
             present: () -> Void,
             isShown: @escaping () -> Bool,
             dismiss: () -> Void
-        ) async {
+        ) async throws {
             split.tap(.peopleButton(.leading))
-            #expect(await split.settle { split.isPresentingPopover }, "\(name): \(split.diagnostics)")
+            try await split.require("\(name): the popover") { split.isPresentingPopover }
             present()
             let shownOver = await TestHelpers.waitUntil(
                 { !split.isPresentingPopover || isShown() },
@@ -1819,24 +1857,24 @@ struct ViewSmokeTests {
             )
             #expect(!shownOver, "\(name) over the popover: \(split.diagnostics)")
             split.tap(.popoverCloseButton)
-            #expect(await split.settle { isShown() }, "\(name) after the popover: \(split.diagnostics)")
+            try await split.require("\(name) after the popover") { isShown() }
             dismiss()
-            #expect(await split.settle { !split.isPresenting }, "\(name) dismissed: \(split.diagnostics)")
+            try await split.require("\(name) dismissed") { !split.isPresenting }
         }
 
-        await waitsForThePopover(
+        try await waitsForThePopover(
             "screenshot warning",
             present: { split.chrome.showScreenshotPrivacyWarning = true },
             isShown: { split.presentedAlert?.preferredStyle == .alert },
             dismiss: { split.chrome.showScreenshotPrivacyWarning = false }
         )
-        await waitsForThePopover(
+        try await waitsForThePopover(
             "fingerprint sheet",
             present: { split.chrome.showFingerprint(for: split.bob) },
             isShown: { split.isPresenting && !split.isPresentingPopover && split.presentedAlert == nil },
             dismiss: { split.chrome.clearFingerprint() }
         )
-        await waitsForThePopover(
+        try await waitsForThePopover(
             "share review",
             present: {
                 let now = Date()
@@ -1853,29 +1891,28 @@ struct ViewSmokeTests {
     /// in use stays up, and a fold from #mesh still parks the geohash and
     /// the DM (E3) rather than keeping both (E2).
     @Test
-    func contentView_aPeerIDHandoffOfTheOpenDMOpensNothing() async {
-        let split = await SplitContentHost.make()
+    func contentView_aPeerIDHandoffOfTheOpenDMOpensNothing() async throws {
+        let split = try await SplitContentHost.make()
         defer { split.close() }
-        #expect(await split.select(.location(split.geohash)))
-        #expect(await split.open(split.bob))
+        try await split.select(.location(split.geohash))
+        try await split.open(split.bob)
         split.tap(.peopleButton(.leading))
-        #expect(await split.settle { split.isPresentingPopover }, "\(split.diagnostics)")
+        try await split.require("popover") { split.isPresentingPopover }
 
         split.handOffDM(to: split.bobStableID)
-        #expect(await split.settle { split.openPeer == split.bobStableID })
+        try await split.require("handed off") { split.openPeer == split.bobStableID }
         let closed = await TestHelpers.waitUntil(
             { !split.isPresentingPopover },
             timeout: TestConstants.negativeWaitWindow
         )
         #expect(!closed, "the popover closed under the handoff")
 
-        #expect(await split.fold())
-        let parked = await split.settle {
+        try await split.fold()
+        try await split.require("parked") {
             split.channels.selectedChannel == .mesh
                 && split.timelineChannel == .mesh
                 && split.openPeer == nil
         }
-        #expect(parked, "\(split.diagnostics)")
     }
 
     /// Brief item 6: the trailing pane hosts the legacy-media consent dialog
@@ -1883,32 +1920,32 @@ struct ViewSmokeTests {
     /// has a presenter, so the root alerts waiting on it can't wait for
     /// good.
     @Test
-    func contentView_splitPresentsAPendingLegacyConsentRequest() async {
-        let split = await SplitContentHost.make()
+    func contentView_splitPresentsAPendingLegacyConsentRequest() async throws {
+        let split = try await SplitContentHost.make()
         defer {
             split.viewModel.cancelAllLegacyPrivateMediaConsents()
             split.close()
         }
-        #expect(await split.settle { split.trailingPrompts == ["geohash"] }, "\(split.diagnostics)")
+        try await split.require("idle picker") { split.trailingPrompts == ["geohash"] }
 
         split.requestLegacyConsent()
-        #expect(await split.settle { split.presentedAlert?.preferredStyle == .actionSheet }, "\(split.diagnostics)")
+        try await split.require("the dialog") { split.presentedAlert?.preferredStyle == .actionSheet }
 
         split.viewModel.cancelAllLegacyPrivateMediaConsents()
-        #expect(await split.settle { !split.isPresenting }, "\(split.diagnostics)")
+        try await split.require("the dialog dismissed") { !split.isPresenting }
     }
 
     /// I5: a consent request arriving while a people popover is up waits
     /// for it, still pending, and shows once the popover closes.
     @Test
-    func contentView_aPeoplePopoverHoldsTheConsentDialogBack() async {
-        let split = await SplitContentHost.make()
+    func contentView_aPeoplePopoverHoldsTheConsentDialogBack() async throws {
+        let split = try await SplitContentHost.make()
         defer {
             split.viewModel.cancelAllLegacyPrivateMediaConsents()
             split.close()
         }
         split.tap(.peopleButton(.leading))
-        #expect(await split.settle { split.isPresentingPopover }, "\(split.diagnostics)")
+        try await split.require("popover") { split.isPresentingPopover }
 
         split.requestLegacyConsent()
         let presented = await TestHelpers.waitUntil(
@@ -1920,21 +1957,21 @@ struct ViewSmokeTests {
         #expect(split.models.conversationUIModel.legacyPrivateMediaConsentRequest != nil)
 
         split.tap(.popoverCloseButton)
-        #expect(await split.settle { split.presentedAlert?.preferredStyle == .actionSheet }, "\(split.diagnostics)")
+        try await split.require("the dialog after the popover") { split.presentedAlert?.preferredStyle == .actionSheet }
     }
 
     /// I5: the screenshot warning (the leading bar's) waits for a consent
     /// request the trailing pane is showing, and shows once it is answered.
     @Test
-    func contentView_aPendingConsentRequestHoldsTheScreenshotWarningBack() async {
-        let split = await SplitContentHost.make()
+    func contentView_aPendingConsentRequestHoldsTheScreenshotWarningBack() async throws {
+        let split = try await SplitContentHost.make()
         defer {
             split.viewModel.cancelAllLegacyPrivateMediaConsents()
             split.chrome.showScreenshotPrivacyWarning = false
             split.close()
         }
         split.requestLegacyConsent()
-        #expect(await split.settle { split.presentedAlert?.preferredStyle == .actionSheet }, "\(split.diagnostics)")
+        try await split.require("the dialog") { split.presentedAlert?.preferredStyle == .actionSheet }
 
         split.chrome.showScreenshotPrivacyWarning = true
         let replaced = await TestHelpers.waitUntil(
@@ -1944,7 +1981,7 @@ struct ViewSmokeTests {
         #expect(!replaced, "\(split.diagnostics)")
 
         split.viewModel.cancelAllLegacyPrivateMediaConsents()
-        #expect(await split.settle { split.presentedAlert?.preferredStyle == .alert }, "\(split.diagnostics)")
+        try await split.require("the warning") { split.presentedAlert?.preferredStyle == .alert }
     }
 
     /// E1: a composer taking the keyboard makes its pane the last touched,
@@ -1956,22 +1993,22 @@ struct ViewSmokeTests {
         let suite = "ViewSmokeTests.split.focus.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        let split = await SplitContentHost.make(sharedContentStore: SharedContentStore(defaults: defaults))
+        let split = try await SplitContentHost.make(sharedContentStore: SharedContentStore(defaults: defaults))
         defer {
             split.models.sharedContentImportModel.discardAll()
             split.close()
         }
         let geohash = SharedContentDestination.geohash(split.geohash.geohash)
-        #expect(await split.select(.location(split.geohash)))
-        #expect(split.touch(.leading))
-        #expect(await split.share(labelled: geohash, settlesOn: .mesh))
+        try await split.select(.location(split.geohash))
+        try #require(split.touch(.leading))
+        try #require(await split.share(labelled: geohash, settlesOn: .mesh), "\(split.diagnostics)")
 
         let trailingField = split.composerField(in: .trailing)
         let field = try #require(trailingField, "\(split.diagnostics)")
-        #expect(field.becomeFirstResponder())
-        #expect(await split.share(labelled: .mesh, settlesOn: geohash), "\(split.diagnostics)")
+        try #require(field.becomeFirstResponder())
+        try #require(await split.share(labelled: .mesh, settlesOn: geohash), "\(split.diagnostics)")
 
-        #expect(await split.fold())
+        try await split.fold()
         let parked = await TestHelpers.waitUntil(
             { split.channels.selectedChannel != .location(split.geohash) },
             timeout: TestConstants.negativeWaitWindow
@@ -1986,19 +2023,19 @@ struct ViewSmokeTests {
     /// half-typed text (E3).
     @Test
     func contentView_typingTakesTheComposersPaneBack() async throws {
-        let split = await SplitContentHost.make()
+        let split = try await SplitContentHost.make()
         defer { split.close() }
-        #expect(await split.select(.location(split.geohash)))
+        try await split.select(.location(split.geohash))
         let trailingField = split.composerField(in: .trailing)
         let field = try #require(trailingField, "\(split.diagnostics)")
-        #expect(field.becomeFirstResponder())
+        try #require(field.becomeFirstResponder())
         // The keyboard's focus reaches the panes before the touch.
-        #expect(await split.settleFrames())
-        #expect(split.touch(.leading))
+        try #require(await split.settleFrames(), "\(split.diagnostics)")
+        try #require(split.touch(.leading))
 
         field.insertText("still typing here")
 
-        #expect(await split.fold())
+        try await split.fold()
         let parked = await TestHelpers.waitUntil(
             { split.channels.selectedChannel != .location(split.geohash) },
             timeout: TestConstants.negativeWaitWindow
