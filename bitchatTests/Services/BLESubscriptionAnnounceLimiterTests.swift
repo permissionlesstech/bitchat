@@ -58,4 +58,64 @@ struct BLESubscriptionAnnounceLimiterTests {
         #expect(limiter.decision(for: freshCentralID, now: afterWindow) == .allowed)
         #expect(limiter.trackedCentralCount == 1)
     }
+
+    @Test("a central that keeps resubscribing recovers once the backoff elapses")
+    func flappingCentralRecoversAfterBackoff() {
+        // A legitimate central whose BLE link flaps resubscribes faster than the
+        // maximum backoff. Every rejection used to refresh `lastAnnounceTime`,
+        // which is the reference for both the backoff and `pruneStaleEntries`,
+        // so the elapsed time never grew: the central stayed suppressed for as
+        // long as it kept trying. It must instead be re-admitted once the
+        // capped backoff has passed since its last *allowed* announce.
+        var limiter = BLESubscriptionAnnounceLimiter()
+        let centralID = "central-flapping"
+        let start = Date(timeIntervalSince1970: 1_000)
+
+        #expect(limiter.decision(for: centralID, now: start) == .allowed)
+
+        let maxBackoff = TransportConfig.bleSubscriptionRateLimitMaxBackoffSeconds
+        var admittedAt: Double?
+        for step in stride(from: 1.0, through: maxBackoff * 2, by: 1.0) {
+            if limiter.decision(for: centralID, now: start.addingTimeInterval(step)) == .allowed {
+                admittedAt = step
+                break
+            }
+        }
+
+        #expect(admittedAt == maxBackoff, "re-admission must occur exactly at the capped backoff")
+    }
+
+    @Test("a hammering central is still held off for the whole backoff")
+    func flappingCentralIsNotAdmittedEarly() {
+        // The counterpart: relaxing the reference timestamp must not let a
+        // hammering central back in before the capped backoff has elapsed.
+        var limiter = BLESubscriptionAnnounceLimiter()
+        let centralID = "central-flapping"
+        let start = Date(timeIntervalSince1970: 2_000)
+        let maxBackoff = TransportConfig.bleSubscriptionRateLimitMaxBackoffSeconds
+
+        #expect(limiter.decision(for: centralID, now: start) == .allowed)
+
+        for step in stride(from: 1.0, to: maxBackoff, by: 1.0) {
+            let decision = limiter.decision(for: centralID, now: start.addingTimeInterval(step))
+            #expect(decision != .allowed, "admitted early at +\(step)s")
+        }
+    }
+
+    @Test("continuous retries admit exactly once per capped backoff")
+    func continuousRetriesPreserveSteadyStateRate() {
+        var limiter = BLESubscriptionAnnounceLimiter()
+        let start = Date(timeIntervalSince1970: 3_000)
+        var admissions: [Int] = []
+
+        #expect(TransportConfig.bleSubscriptionRateLimitMaxBackoffSeconds
+            < TransportConfig.bleSubscriptionRateLimitWindowSeconds)
+        for second in 0..<90 {
+            if limiter.decision(for: "central-flapping", now: start.addingTimeInterval(Double(second))) == .allowed {
+                admissions.append(second)
+            }
+        }
+        #expect(admissions == [0, 30, 60])
+    }
+
 }

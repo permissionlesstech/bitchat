@@ -292,6 +292,8 @@ enum TransportConfig {
     // Prevents rapid enumeration attacks by rate-limiting announce responses
     static let bleSubscriptionRateLimitMinSeconds: TimeInterval = 2.0       // Minimum interval between announces per central
     static let bleSubscriptionRateLimitBackoffFactor: Double = 2.0          // Exponential backoff multiplier
+    // Keep the maximum backoff below the tracking window: otherwise pruning
+    // resets the budget before the capped backoff can elapse.
     static let bleSubscriptionRateLimitMaxBackoffSeconds: TimeInterval = 30.0  // Maximum backoff period
     static let bleSubscriptionRateLimitWindowSeconds: TimeInterval = 60.0   // Window for tracking subscription attempts
     static let bleSubscriptionRateLimitMaxAttempts: Int = 5                 // Max attempts before extended cooldown
