@@ -128,19 +128,6 @@ enum PaneRole: Hashable {
     case following
 }
 
-/// Screenshot routing's view of the layout: `AppChromeModel
-/// .splitLayoutShowsLocation` (E10), whether a screenshot of the split layout
-/// shows a place. Nil for the single column, where the selection and the DM
-/// sheet decide.
-enum SplitLayoutScreenshotPolicy {
-    /// The panes: #mesh leads and shows no place, so the trailing pane
-    /// decides. Re-read on every change of what it shows, the landing of an
-    /// asynchronous selection included.
-    static func panesShowLocation(isSplit: Bool, trailing: TrailingPaneContent) -> Bool? {
-        isSplit ? trailing.showsLocation : nil
-    }
-}
-
 /// Fold and unfold between the split layout and the single column (E2-E5).
 /// Folding shows the last-touched pane; unfolding restores the other one
 /// from what the fold set aside.
@@ -177,18 +164,16 @@ enum PaneFoldPolicy {
 
     /// - Parameters:
     ///   - focus: The last-touched pane (E1).
-    ///   - trailing: What the trailing pane shows. It names the geohash on
-    ///     screen, or the one a person is browsing away from.
-    ///   - selectedChannel: The selected location channel: the channel
-    ///     under an open DM.
+    ///   - selectedChannel: The location channel the trailing pane stands
+    ///     for: the one it shows, browses away from or is about to show, or
+    ///     the one under an open DM.
     ///   - openPeer: The open DM, if any.
     static func fold(
         focus: ContentPane,
-        trailing: TrailingPaneContent,
         selectedChannel: ChannelID,
         openPeer: PeerID?
     ) -> Fold {
-        let geohash = trailingGeohash(trailing, selectedChannel: selectedChannel)
+        let geohash = selectedChannel.geohashChannel
         // A geohash DM needs its geohash live, so a fold from #mesh keeps
         // it as a fold from the trailing pane would (E3's exception).
         let keepsTrailing = focus == .trailing
@@ -269,51 +254,6 @@ enum PaneFoldPolicy {
     static func isGeohashConversation(_ peer: PeerID) -> Bool {
         peer.isGeoDM || peer.isGeoChat
     }
-
-    /// The geohash on screen in the trailing pane, the one being browsed
-    /// away from, or, under a DM, the selected one.
-    private static func trailingGeohash(
-        _ trailing: TrailingPaneContent,
-        selectedChannel: ChannelID
-    ) -> GeohashChannel? {
-        switch trailing {
-        case .channel(let geohash), .landing(let geohash):
-            return geohash
-        case .picker(let returnTo):
-            return returnTo
-        case .conversation:
-            guard case .location(let geohash) = selectedChannel else { return nil }
-            return geohash
-        }
-    }
-}
-
-/// When the split layout's people popovers close (E13). SwiftUI dismisses a
-/// popover whose anchor leaves without writing its binding back, which
-/// would keep the root's alerts deferred for good; each of these events
-/// clears the state instead.
-enum PeoplePopoverPolicy {
-    enum Event: Equatable {
-        /// The device folded or unfolded.
-        case layoutChange
-        case panic
-        /// A DM opened, from anywhere.
-        case conversationOpened
-        /// The trailing pane's content changed; its bar may have gone.
-        case trailingContentChange(from: TrailingPaneContent, to: TrailingPaneContent)
-    }
-
-    /// The pane whose popover stays open after `event`, if any.
-    static func pane(_ open: ContentPane?, after event: Event) -> ContentPane? {
-        switch event {
-        case .layoutChange, .panic, .conversationOpened:
-            return nil
-        case .trailingContentChange(let from, let to):
-            // #mesh's bar never leaves the split layout; the trailing bar
-            // comes and goes with the trailing content.
-            return open == .trailing && from != to ? nil : open
-        }
-    }
 }
 
 /// The split layout's own state, and how each event moves it: the
@@ -328,7 +268,12 @@ struct SplitPaneState: Equatable {
     /// The trailing pane shows the picker over the selected geohash: the
     /// person tapped the trailing #geohash badge to switch channels.
     private(set) var isBrowsing = false
-    /// The pane whose people popover is up.
+    /// The pane whose people popover is up (E13). SwiftUI dismisses a
+    /// popover whose anchor leaves without writing its binding back, which
+    /// would keep the root's alerts deferred for good, so every event that
+    /// takes a popover's bar away, or covers it, closes it here: a fold or
+    /// an unfold, a panic, a DM opening, and the trailing content changing
+    /// under the trailing bar.
     private(set) var popover: ContentPane?
     /// What a fold from #mesh set aside for the next unfold. In memory
     /// only, and wiped by panic (E6).
@@ -381,26 +326,29 @@ struct SplitPaneState: Equatable {
     /// pane, and a fold from #mesh parks the trailing pane. Browsing ends
     /// and the popovers close.
     /// - Parameters:
-    ///   - trailing: What the trailing pane showed.
     ///   - timelineChannel: The channel the trailing timeline rendered.
     ///   - selection: The selected channel, which can be a hop ahead of the
     ///     timeline. Selecting it again would resubscribe it.
     ///   - openPeer: The open DM, if any.
     mutating func fold(
-        trailing: TrailingPaneContent,
         timelineChannel: ChannelID,
         selection: ChannelID,
         openPeer: PeerID?
     ) -> Effects {
-        let fold = PaneFoldPolicy.fold(
-            focus: focus,
-            trailing: trailing,
-            selectedChannel: timelineChannel,
-            openPeer: openPeer
-        )
+        // A geohash still landing folds, and parks, as the geohash the pane
+        // is about to show; otherwise the pane stands for the timeline's
+        // channel.
+        let trailing = trailingContent(openPeer: openPeer, timelineChannel: timelineChannel, selection: selection)
+        let paneChannel: ChannelID
+        if case .landing(let geohash) = trailing {
+            paneChannel = .location(geohash)
+        } else {
+            paneChannel = timelineChannel
+        }
+        let fold = PaneFoldPolicy.fold(focus: focus, selectedChannel: paneChannel, openPeer: openPeer)
         parked = fold.parked
         isBrowsing = false
-        popover = PeoplePopoverPolicy.pane(popover, after: .layoutChange)
+        popover = nil
         foldChannel = fold.channel == timelineChannel ? nil : fold.channel
         // The single column scopes a DM by its selection.
         conversationGeohash = nil
@@ -455,7 +403,7 @@ struct SplitPaneState: Equatable {
         // it: a geohash DM over the geohash on screen keeps that geohash,
         // one over #mesh stays there. (A parked DM is never a geohash DM.)
         conversationGeohash = openPeer.flatMap { peer in
-            PaneFoldPolicy.isGeohashConversation(peer) ? Self.geohash(of: compactChannel) : nil
+            PaneFoldPolicy.isGeohashConversation(peer) ? compactChannel.geohashChannel : nil
         }
         // E8 over E4: a reopened DM would cover the picker the sheet turns
         // into, and take the focus it has.
@@ -467,7 +415,7 @@ struct SplitPaneState: Equatable {
         focus = unfold.focus
         parked = .none
         foldChannel = nil
-        popover = PeoplePopoverPolicy.pane(popover, after: .layoutChange)
+        popover = nil
         isBrowsing = false
         if locationSheetIsUp {
             effects.closesLocationSheet = true
@@ -509,14 +457,14 @@ struct SplitPaneState: Equatable {
         }
         conversation = peer
         let isGeohashConversation = peer.map(PaneFoldPolicy.isGeohashConversation) == true
-        conversationGeohash = isSplit && isGeohashConversation ? Self.geohash(of: timelineChannel) : nil
+        conversationGeohash = isSplit && isGeohashConversation ? timelineChannel.geohashChannel : nil
         guard isSplit else {
             parked = PaneFoldPolicy.parked(parked, afterCompactConversationChange: peer)
             return
         }
         guard peer != nil else { return }
         focus = .trailing
-        popover = PeoplePopoverPolicy.pane(popover, after: .conversationOpened)
+        popover = nil
         isBrowsing = false
     }
 
@@ -529,7 +477,7 @@ struct SplitPaneState: Equatable {
     /// unfold's own reopening, which leaves E4's focus.
     mutating func conversationChosen() {
         focus = .trailing
-        popover = PeoplePopoverPolicy.pane(popover, after: .conversationOpened)
+        popover = nil
         isBrowsing = false
     }
 
@@ -576,9 +524,13 @@ struct SplitPaneState: Equatable {
     }
 
     /// What the trailing pane shows changed: its bar may have gone with it
-    /// (E13).
+    /// (E13). #mesh's bar never leaves the split layout. Reported from
+    /// every handler that changes the panes, so the same content again
+    /// closes nothing.
     mutating func trailingContentChanged(from old: TrailingPaneContent, to new: TrailingPaneContent) {
-        popover = PeoplePopoverPolicy.pane(popover, after: .trailingContentChange(from: old, to: new))
+        if popover == .trailing, old != new {
+            popover = nil
+        }
     }
 
     // MARK: Touches and controls
@@ -641,7 +593,7 @@ struct SplitPaneState: Equatable {
     ///   renders.
     mutating func panic(timelineChannel: ChannelID) {
         focus = .leading
-        popover = PeoplePopoverPolicy.pane(popover, after: .panic)
+        popover = nil
         parked = .none
         foldChannel = nil
         conversationGeohash = nil
@@ -686,9 +638,12 @@ struct SplitPaneState: Equatable {
             privatePeer: openPeer
         )
     }
+}
 
-    private static func geohash(of channel: ChannelID) -> GeohashChannel? {
-        guard case .location(let geohash) = channel else { return nil }
+private extension ChannelID {
+    /// A location channel's geohash; nil for #mesh.
+    var geohashChannel: GeohashChannel? {
+        guard case .location(let geohash) = self else { return nil }
         return geohash
     }
 }

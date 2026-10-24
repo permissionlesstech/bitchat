@@ -599,9 +599,12 @@ struct ContentView: View {
                     #endif
                 }
                 #if os(iOS)
-                // Screenshot routing asks the panes as they are (E10).
+                // Screenshot routing asks the panes as they are (E10): #mesh
+                // leads and shows no place, so the trailing pane decides.
+                // Nil for the single column, where the selection and the DM
+                // sheet decide.
                 appChromeModel.setSplitLayoutScreenshotProbe {
-                    SplitLayoutScreenshotPolicy.panesShowLocation(isSplit: isSplitLayout, trailing: trailingContent)
+                    isSplitLayout ? trailingContent.showsLocation : nil
                 }
                 #endif
                 #if os(macOS)
@@ -1434,7 +1437,6 @@ struct ContentView: View {
                 canReopen: { privateConversationModel.canReopenConversation(with: $0) }
             )
             : panes.fold(
-                trailing: trailing,
                 timelineChannel: timelineChannel,
                 selection: locationChannelsModel.selectedChannel,
                 openPeer: openPeer

@@ -85,7 +85,6 @@ struct SplitPaneStateTests {
         @discardableResult
         mutating func fold() -> SplitPaneState.Effects {
             let effects = state.fold(
-                trailing: trailing,
                 timelineChannel: timeline,
                 selection: selection,
                 openPeer: openPeer
@@ -135,7 +134,6 @@ struct SplitPaneStateTests {
         world.state.touched(.leading)
 
         let effects = world.state.fold(
-            trailing: world.trailing,
             timelineChannel: world.timeline,
             selection: world.selection,
             openPeer: world.openPeer
@@ -207,7 +205,6 @@ struct SplitPaneStateTests {
         state.touched(.leading)
         // #mesh is already selected; the timeline still shows the geohash.
         let effects = state.fold(
-            trailing: .channel(geohash),
             timelineChannel: .location(geohash),
             selection: .mesh,
             openPeer: nil
@@ -219,6 +216,31 @@ struct SplitPaneStateTests {
         // Its landing hands the single column back to the timeline.
         #expect(state.timelineChannelChanged(from: .location(geohash), to: .mesh) == .init())
         #expect(state.foldChannel == nil)
+    }
+
+    /// A geohash still landing (an unfold's re-selection, a launch with a
+    /// persisted geohash, a choice on its way) folds, and parks, as the
+    /// geohash the pane is about to show, not as the #mesh the timeline
+    /// still renders.
+    @Test
+    func aGeohashOnItsWayFoldsAsThatGeohash() {
+        var fromTrailing = World()
+        fromTrailing.select(.location(geohash))
+        #expect(fromTrailing.trailing == .landing(geohash))
+        fromTrailing.state.touched(.trailing)
+        let kept = fromTrailing.fold()
+        // Already selected: nothing to select again; the single column's
+        // composer works in it until it lands.
+        #expect(kept == .init())
+        #expect(fromTrailing.state.foldChannel == .location(geohash))
+        #expect(fromTrailing.state.parked == .none)
+
+        var fromMesh = World()
+        fromMesh.select(.location(geohash))
+        fromMesh.state.touched(.leading)
+        let parked = fromMesh.fold()
+        #expect(parked.select == .mesh)
+        #expect(fromMesh.state.parked == .init(channel: geohash))
     }
 
     @Test
@@ -818,6 +840,12 @@ struct SplitPaneStateTests {
         state.trailingContentChanged(from: .channel(geohash), to: .conversation(meshPeer))
         #expect(state.popover == nil)
 
+        // The same content reported again (every pane change reports it)
+        // leaves its bar, and its popover, up.
+        state.openPopover(.trailing)
+        state.trailingContentChanged(from: .channel(geohash), to: .channel(geohash))
+        #expect(state.popover == .trailing)
+
         state.openPopover(.leading)
         state.trailingContentChanged(from: .channel(geohash), to: .picker(returnTo: geohash))
         #expect(state.popover == .leading)
@@ -884,7 +912,6 @@ struct SplitPaneStateTests {
     func aPanicDropsAFoldsPendingChannel() {
         var state = SplitPaneState()
         _ = state.fold(
-            trailing: .channel(geohash),
             timelineChannel: .location(geohash),
             selection: .location(geohash),
             openPeer: nil
