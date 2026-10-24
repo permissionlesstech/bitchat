@@ -334,6 +334,11 @@ struct ContentView: View {
     @State private var trailingPaneFrame: CGRect = .zero
     /// The leading #mesh list's own scroll state: never the trailing list's.
     @State private var isAtBottomMeshPane = true
+    /// The trailing geohash list's own bottom flag. A fold or unfold tears
+    /// down the list it leaves after the other host has landed, and that
+    /// list's departing bottom row reports "not at bottom": into a flag the
+    /// new host shared, it raised a stale jump-to-latest pill.
+    @State private var isAtBottomTrailing = true
     @State private var windowCountMeshPane = TransportConfig.uiWindowInitialCountPublic
     /// Set when unfolding moves a focused DM composer out of the sheet: the
     /// conversation whose composer the sheet's dismissal hands focus to.
@@ -1099,10 +1104,13 @@ struct ContentView: View {
     /// layout's trailing geohash.
     /// - Parameter composer: The composer under it, which its mentions
     ///   type into; nil while that composer isn't on screen.
-    private func followingTimelineList(composer: ComposerSession?) -> some View {
+    private func followingTimelineList(
+        composer: ComposerSession?,
+        isAtBottom: Binding<Bool>
+    ) -> some View {
         MessageListView(
             privateTarget: nil,
-            isAtBottom: $isAtBottomPublic,
+            isAtBottom: isAtBottom,
             composer: composer,
             selectedMessageSender: $selectedMessageSender,
             selectedMessageSenderID: $selectedMessageSenderID,
@@ -1179,10 +1187,16 @@ struct ContentView: View {
                 } else {
                     // Its composer is hidden while a DM is open: no
                     // mention then.
-                    followingTimelineList(composer: selectedPrivatePeerID == nil ? composers.primary : nil)
+                    followingTimelineList(
+                        composer: selectedPrivatePeerID == nil ? composers.primary : nil,
+                        isAtBottom: $isAtBottomPublic
+                    )
                 }
                 #else
-                followingTimelineList(composer: selectedPrivatePeerID == nil ? composers.primary : nil)
+                followingTimelineList(
+                    composer: selectedPrivatePeerID == nil ? composers.primary : nil,
+                    isAtBottom: $isAtBottomPublic
+                )
                 #endif
             },
             composer: {
@@ -1265,7 +1279,7 @@ struct ContentView: View {
                         trailingChannelBar(geohash, paneWidth: width, trailingCornerReach: trailingCornerReach)
                     },
                     timeline: {
-                        followingTimelineList(composer: composers.secondary)
+                        followingTimelineList(composer: composers.secondary, isAtBottom: $isAtBottomTrailing)
                     },
                     composer: {
                         composerView(for: .secondary)
