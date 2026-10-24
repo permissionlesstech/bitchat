@@ -113,15 +113,6 @@ struct ContentPanePolicyTests {
         }
     }
 
-    /// E13: only the channel has a bar to anchor the trailing popover.
-    @Test
-    func onlyTheChannelHostsAChannelBar() {
-        #expect(TrailingPaneContent.channel(geohash).hostsChannelHeader)
-        #expect(!TrailingPaneContent.picker(returnTo: nil).hostsChannelHeader)
-        #expect(!TrailingPaneContent.picker(returnTo: geohash).hostsChannelHeader)
-        #expect(!TrailingPaneContent.conversation(meshPeer).hostsChannelHeader)
-    }
-
     // MARK: - Fold (E2, E3)
 
     /// E2: the selected channel, with an open DM as the sheet; nothing parked.

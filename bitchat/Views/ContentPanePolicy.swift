@@ -81,13 +81,6 @@ enum TrailingPaneContent: Hashable {
         return true
     }
 
-    /// Whether the pane has a channel bar (E13): the trailing people
-    /// popover's anchor, so the popover can't outlive it.
-    var hostsChannelHeader: Bool {
-        if case .channel = self { return true }
-        return false
-    }
-
     /// The geohash the trailing composer works in
     /// (`ComposerTargets.split`): the channel on screen, or the one a DM
     /// covers, which scopes a geohash DM. Nil for the picker, which has no
