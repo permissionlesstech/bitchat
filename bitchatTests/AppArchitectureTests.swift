@@ -648,6 +648,155 @@ struct AppArchitectureTests {
         #expect(conversationModel.selectedHeaderState == nil)
     }
 
+    @Test("The peer-list encryption sweep republishes only statuses that changed")
+    @MainActor
+    func encryptionSweepRepublishesOnlyChangedStatuses() async {
+        let viewModel = makeArchitectureViewModel()
+        guard let transport = viewModel.meshService as? MockTransport else {
+            Issue.record("Expected ChatViewModel meshService to be a MockTransport in architecture tests")
+            return
+        }
+        let securedPeer = PeerID(str: "0011223344556677")
+        let otherPeer = PeerID(str: "8899aabbccddeeff")
+        transport.connectedPeers = [securedPeer, otherPeer]
+        transport.peerNoiseStates[securedPeer] = .established
+        // The sweep covers the roster's connected peers.
+        transport.updatePeerSnapshots([
+            makeArchitectureSnapshot(peerID: securedPeer, nickname: "alice", connected: true, noisePublicKey: Data(repeating: 0x01, count: 32)),
+            makeArchitectureSnapshot(peerID: otherPeer, nickname: "bob", connected: true, noisePublicKey: Data(repeating: 0x02, count: 32))
+        ])
+        await waitUntil { viewModel.connectedPeers == [securedPeer, otherPeer] }
+        viewModel.updateEncryptionStatusForPeers()
+        #expect(viewModel.peerIdentityStore.encryptionStatus(for: securedPeer) == .noiseSecured)
+
+        var emissions = 0
+        let cancellable = viewModel.peerIdentityStore.$encryptionStatuses.dropFirst().sink { _ in emissions += 1 }
+        defer { cancellable.cancel() }
+
+        // Five peer-list updates over unchanged sessions publish nothing,
+        // but every swept peer's cached status is still dropped.
+        for _ in 0..<5 {
+            viewModel.peerIdentityStore.setCachedEncryptionStatus(.noHandshake, for: securedPeer)
+            viewModel.updateEncryptionStatusForPeers()
+            #expect(viewModel.peerIdentityStore.cachedEncryptionStatus(for: securedPeer) == nil)
+        }
+        #expect(emissions == 0)
+
+        // A real change publishes once.
+        transport.peerNoiseStates[otherPeer] = .handshaking
+        viewModel.updateEncryptionStatusForPeers()
+        #expect(emissions == 1)
+        #expect(viewModel.peerIdentityStore.encryptionStatus(for: otherPeer) == .noiseHandshaking)
+    }
+
+    /// The stored status is a refresh trigger, not a mirror of the session:
+    /// the DM header recomputes the live status and caches it. When a
+    /// re-handshake ends with the same value the store already held, the
+    /// authentication write must still republish, or the header keeps the
+    /// handshaking state it cached mid-handshake.
+    @Test("Authentication republishes even when the stored status is unchanged")
+    @MainActor
+    func authenticationRepublishesEvenWhenStoredStatusIsUnchanged() async {
+        let viewModel = makeArchitectureViewModel()
+        guard let transport = viewModel.meshService as? MockTransport else {
+            Issue.record("Expected ChatViewModel meshService to be a MockTransport in architecture tests")
+            return
+        }
+        let conversationModel = PrivateConversationModel(
+            chatViewModel: viewModel,
+            conversations: viewModel.conversations,
+            locationChannelsModel: LocationChannelsModel(manager: makeArchitectureLocationManager())
+        )
+        let peerID = PeerID(str: "0011223344556677")
+        transport.peerNicknames[peerID] = "alice"
+        transport.connectedPeers = [peerID]
+        viewModel.allPeers = [
+            BitchatPeer(
+                peerID: peerID,
+                noisePublicKey: Data((0..<32).map(UInt8.init)),
+                nickname: "alice",
+                isConnected: true,
+                isReachable: true
+            )
+        ]
+
+        // An earlier session left the store at secured; the peer is
+        // re-handshaking (its app relaunched while the link survived).
+        viewModel.peerIdentityStore.setEncryptionStatus(.noiseSecured, for: peerID)
+        transport.peerNoiseStates[peerID] = .handshaking
+        conversationModel.startConversation(with: peerID)
+        await waitUntil { conversationModel.selectedHeaderState?.encryptionStatus == .noiseHandshaking }
+        #expect(conversationModel.selectedHeaderState?.encryptionStatus == .noiseHandshaking)
+
+        var storePublishes = 0
+        let cancellable = viewModel.peerIdentityStore.$encryptionStatuses.dropFirst().sink { _ in storePublishes += 1 }
+        defer { cancellable.cancel() }
+
+        // The handshake completes; the authentication callback writes the
+        // value the store already holds. That write is the header's refresh
+        // trigger, so it must publish.
+        transport.peerNoiseStates[peerID] = .established
+        viewModel.setEncryptionStatus(.noiseSecured, for: peerID)
+        viewModel.invalidateEncryptionCache(for: peerID)
+        #expect(storePublishes == 1)
+
+        await waitUntil { conversationModel.selectedHeaderState?.encryptionStatus == .noiseSecured }
+        #expect(conversationModel.selectedHeaderState?.encryptionStatus == .noiseSecured)
+    }
+
+    @Test("PrivateConversationModel republishes only a changed selection or header")
+    @MainActor
+    func privateConversationModelRepublishesOnlyChangedSelection() async {
+        let viewModel = makeArchitectureViewModel()
+        guard let transport = viewModel.meshService as? MockTransport else {
+            Issue.record("Expected ChatViewModel meshService to be a MockTransport in architecture tests")
+            return
+        }
+        let conversationModel = PrivateConversationModel(
+            chatViewModel: viewModel,
+            conversations: viewModel.conversations,
+            locationChannelsModel: LocationChannelsModel(manager: makeArchitectureLocationManager())
+        )
+        let peerID = PeerID(str: "0011223344556677")
+        transport.peerNicknames[peerID] = "alice"
+        transport.connectedPeers = [peerID]
+        viewModel.allPeers = [
+            BitchatPeer(
+                peerID: peerID,
+                noisePublicKey: Data((0..<32).map(UInt8.init)),
+                nickname: "alice",
+                isConnected: true,
+                isReachable: true
+            )
+        ]
+        conversationModel.startConversation(with: peerID)
+        await waitUntil { conversationModel.selectedHeaderState?.encryptionStatus == .noHandshake }
+        // Bindings deliver on the main queue in FIFO order: once this
+        // marker runs, every refresh queued before it has run too.
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+
+        var publishCount = 0
+        let cancellable = conversationModel.objectWillChange.sink { publishCount += 1 }
+        defer { cancellable.cancel() }
+
+        // What every peer-list update used to do to an open DM: the same
+        // roster reassigned and the same status rewritten. Each still
+        // triggers a refresh; none changes what the header shows.
+        for _ in 0..<5 {
+            viewModel.allPeers = viewModel.allPeers
+            viewModel.setEncryptionStatus(nil, for: peerID)
+        }
+        // One real change: the session comes up.
+        transport.peerNoiseStates[peerID] = .established
+        viewModel.setEncryptionStatus(.noiseSecured, for: peerID)
+        await waitUntil { conversationModel.selectedHeaderState?.encryptionStatus == .noiseSecured }
+
+        #expect(conversationModel.selectedHeaderState?.encryptionStatus == .noiseSecured)
+        #expect(publishCount == 1)
+    }
+
     @Test("ConversationUIModel mirrors composer state and forwards sends")
     @MainActor
     func conversationUIModelMirrorsComposerStateAndForwardsSends() async {
@@ -823,7 +972,7 @@ struct AppArchitectureTests {
         )
 
         // PrivateConversationModel happens to observe the same notification
-        // and re-assign its published selection, which would ripple into
+        // and refresh its published selection, which could ripple into
         // VerificationModel; release it so this test pins VerificationModel's
         // own subscription rather than that incidental chain.
         privateConversationModel = nil

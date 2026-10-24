@@ -76,6 +76,9 @@ protocol ChatPeerIdentityContext: AnyObject {
     /// falling back to `fallback` when none was stored. Returns the migrated fingerprint.
     func migrateFingerprintMapping(from oldPeerID: PeerID, to newPeerID: PeerID, fallback: String?) -> String?
     func isVerifiedFingerprint(_ fingerprint: String) -> Bool
+    /// The status last written to the identity store (what
+    /// `$encryptionStatuses` observers were told), not the live session.
+    func storedEncryptionStatus(for peerID: PeerID) -> EncryptionStatus?
     func setEncryptionStatus(_ status: EncryptionStatus?, for peerID: PeerID)
     func cachedEncryptionStatus(for peerID: PeerID) -> EncryptionStatus?
     func setCachedEncryptionStatus(_ status: EncryptionStatus, for peerID: PeerID)
@@ -178,6 +181,10 @@ extension ChatViewModel: ChatPeerIdentityContext {
 
     func isVerifiedFingerprint(_ fingerprint: String) -> Bool {
         peerIdentityStore.isVerified(fingerprint)
+    }
+
+    func storedEncryptionStatus(for peerID: PeerID) -> EncryptionStatus? {
+        peerIdentityStore.encryptionStatus(for: peerID)
     }
 
     func setEncryptionStatus(_ status: EncryptionStatus?, for peerID: PeerID) {
@@ -414,21 +421,33 @@ final class ChatPeerIdentityCoordinator {
         }
     }
 
+    /// The per-peer-list-update sweep. It republishes only statuses that
+    /// changed: every `$encryptionStatuses` write re-renders the people
+    /// list, the DM header and the fingerprint sheet, and in a steady mesh
+    /// nothing changed. Caches are still invalidated for every swept peer.
     @MainActor
     func updateEncryptionStatusForPeers() {
         for peerID in context.connectedPeers {
-            updateEncryptionStatus(for: peerID)
+            updateEncryptionStatus(for: peerID, republishUnchanged: false)
         }
     }
 
+    /// `republishUnchanged` stays true for event-driven callers (verify,
+    /// unverify, QR): the stored value is only a refresh trigger, and views
+    /// may have cached a different live status since it was written, so an
+    /// event must reach them even when the value matches.
     @MainActor
-    func updateEncryptionStatus(for peerID: PeerID) {
+    func updateEncryptionStatus(for peerID: PeerID, republishUnchanged: Bool = true) {
+        let status: EncryptionStatus?
         if context.hasEstablishedNoiseSession(with: peerID) {
-            context.setEncryptionStatus(verifiedEncryptionStatus(for: peerID), for: peerID)
+            status = verifiedEncryptionStatus(for: peerID)
         } else if context.hasNoiseSession(with: peerID) {
-            context.setEncryptionStatus(.noiseHandshaking, for: peerID)
+            status = .noiseHandshaking
         } else {
-            context.setEncryptionStatus(nil, for: peerID)
+            status = nil
+        }
+        if republishUnchanged || context.storedEncryptionStatus(for: peerID) != status {
+            context.setEncryptionStatus(status, for: peerID)
         }
 
         invalidateEncryptionCache(for: peerID)

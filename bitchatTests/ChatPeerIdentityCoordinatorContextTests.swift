@@ -124,6 +124,7 @@ private final class MockChatPeerIdentityContext: ChatPeerIdentityContext {
     var socialIdentitiesByFingerprint: [String: SocialIdentity] = [:]
     private(set) var storedFingerprints: [(fingerprint: String, peerID: PeerID)] = []
     private(set) var encryptionStatuses: [PeerID: EncryptionStatus?] = [:]
+    private(set) var setEncryptionStatusCount = 0
     private(set) var cachedEncryptionStatuses: [PeerID: EncryptionStatus] = [:]
     private(set) var invalidatedEncryptionCachePeers: [PeerID?] = []
 
@@ -144,7 +145,12 @@ private final class MockChatPeerIdentityContext: ChatPeerIdentityContext {
         verifiedFingerprintSet.contains(fingerprint)
     }
 
+    func storedEncryptionStatus(for peerID: PeerID) -> EncryptionStatus? {
+        encryptionStatuses[peerID] ?? nil
+    }
+
     func setEncryptionStatus(_ status: EncryptionStatus?, for peerID: PeerID) {
+        setEncryptionStatusCount += 1
         encryptionStatuses[peerID] = status
     }
 
@@ -358,6 +364,43 @@ struct ChatPeerIdentityCoordinatorContextTests {
         coordinator.updateEncryptionStatus(for: peerID)
         #expect(context.encryptionStatuses[peerID] == .noiseVerified)
         #expect(context.cachedEncryptionStatuses[peerID] == nil)
+    }
+
+    /// The per-update sweep writes only statuses that changed, but still
+    /// invalidates every swept peer's cached status. Event-driven updates
+    /// (verify, unverify, QR) keep writing unconditionally: views may have
+    /// cached a different live status since the stored one was written.
+    @Test @MainActor
+    func updateEncryptionStatusForPeers_writesOnlyChangedStatuses() async {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        let secured = PeerID(str: "1122334455667788")
+        let handshaking = PeerID(str: "8877665544332211")
+        let noSession = PeerID(str: "aabbccddeeff0011")
+        context.connectedPeers = [secured, handshaking, noSession]
+        context.establishedNoiseSessions = [secured]
+        context.activeNoiseSessions = [secured, handshaking]
+
+        coordinator.updateEncryptionStatusForPeers()
+        #expect(context.setEncryptionStatusCount == 2)
+        #expect(context.storedEncryptionStatus(for: secured) == .noiseSecured)
+        #expect(context.storedEncryptionStatus(for: handshaking) == .noiseHandshaking)
+        #expect(context.storedEncryptionStatus(for: noSession) == nil)
+
+        for _ in 0..<5 {
+            context.setCachedEncryptionStatus(.noHandshake, for: secured)
+            coordinator.updateEncryptionStatusForPeers()
+            #expect(context.cachedEncryptionStatus(for: secured) == nil)
+        }
+        #expect(context.setEncryptionStatusCount == 2)
+
+        coordinator.updateEncryptionStatus(for: secured)
+        #expect(context.setEncryptionStatusCount == 3)
+
+        context.establishedNoiseSessions = [secured, handshaking]
+        coordinator.updateEncryptionStatusForPeers()
+        #expect(context.setEncryptionStatusCount == 4)
+        #expect(context.storedEncryptionStatus(for: handshaking) == .noiseSecured)
     }
 
     @Test @MainActor
