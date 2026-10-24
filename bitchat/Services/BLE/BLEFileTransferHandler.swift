@@ -61,6 +61,9 @@ struct BLEFileTransferHandlerEnvironment {
         _ completion: @escaping () -> Void,
         _ finalization: @escaping (TransportEventDeliveryOutcome) -> Void
     ) -> Void
+    /// Surfaces a local-only system line when authenticated private media
+    /// fails validation on this device (Android interop debugging, #1518).
+    let reportPrivateMediaDecodeFailure: (_ reason: PrivateMediaDecodeFailureReason, _ peerID: PeerID) -> Void
 }
 
 /// Process-lifetime reservation cache for stable private-media IDs.
@@ -155,7 +158,12 @@ final class BLEFileTransferHandler {
         // Once authenticated, a local decode/quota/save failure is not proof
         // that downstream nodes should be denied the valid signed packet, so
         // every exit below still relays.
-        guard let acceptance = validatedFile(packet.payload, from: peerID) else {
+        guard let acceptance = validatedFile(
+            packet.payload,
+            from: peerID,
+            isPrivate: deliveryPlan.isPrivateMessage,
+            env: env
+        ) else {
             return true
         }
 
@@ -185,8 +193,10 @@ final class BLEFileTransferHandler {
     @discardableResult
     func handlePrivatePayload(_ payload: Data, from peerID: PeerID, timestamp: Date) -> Bool {
         let env = environment
-        guard let acceptance = validatedFile(payload, from: peerID) else {
-            return false
+        guard let acceptance = validatedFile(payload, from: peerID, isPrivate: true, env: env) else {
+            // Blocked-peer decode failures report handled (true) so callers
+            // don't treat a deliberate drop as a transport failure.
+            return env.isPrivateMediaSenderBlocked(peerID)
         }
         let peers = env.peersSnapshot()
         let senderNickname = BLEPeerSenderDisplayName.resolveKnownPeer(
@@ -213,21 +223,46 @@ final class BLEFileTransferHandler {
     }
 
     /// Decodes and validates a file payload (size, MIME allow-list, magic
-    /// bytes), logging the reason for any rejection.
-    private func validatedFile(_ payload: Data, from peerID: PeerID) -> BLEIncomingFileAcceptance? {
+    /// bytes). Private failures surface a rate-limited DM system line;
+    /// public mesh transfers keep security logging only.
+    private func validatedFile(
+        _ payload: Data,
+        from peerID: PeerID,
+        isPrivate: Bool,
+        env: BLEFileTransferHandlerEnvironment
+    ) -> BLEIncomingFileAcceptance? {
         switch BLEIncomingFileValidator.validate(payload: payload) {
         case .success(let acceptance):
             return acceptance
-        case .failure(.malformedPayload):
-            SecureLogger.error("❌ Failed to decode file transfer payload", category: .session)
-        case .failure(.payloadTooLarge(let bytes)):
-            SecureLogger.warning("🚫 Dropping file transfer exceeding size cap (\(bytes) bytes)", category: .security)
-        case .failure(.unsupportedMime(let mimeType, let bytes)):
-            SecureLogger.warning("🚫 MIME REJECT: '\(mimeType ?? "<empty>")' not supported. Size=\(bytes)b from \(peerID.id.prefix(8))...", category: .security)
-        case .failure(.magicMismatch(let mime, let bytes, let prefixHex)):
-            SecureLogger.warning("🚫 MAGIC REJECT: MIME='\(mime)' size=\(bytes)b prefix=[\(prefixHex)] from \(peerID.id.prefix(8))...", category: .security)
+        case .failure(let rejection):
+            if isPrivate, env.isPrivateMediaSenderBlocked(peerID) {
+                SecureLogger.debug(
+                    "🚫 Dropping private media from blocked peer \(peerID.id.prefix(8))… before decode failure UX",
+                    category: .security
+                )
+                return nil
+            }
+            if isPrivate {
+                let reason = PrivateMediaDecodeFailureReason.from(rejection)
+                SecureLogger.error(
+                    "❌ Private media decode failed [\(reason.logLabel)] from \(peerID.id.prefix(8))…",
+                    category: .session
+                )
+                env.reportPrivateMediaDecodeFailure(reason, peerID)
+            } else {
+                switch rejection {
+                case .malformedPayload:
+                    SecureLogger.error("❌ Failed to decode file transfer payload", category: .session)
+                case .payloadTooLarge(let bytes):
+                    SecureLogger.warning("🚫 Dropping file transfer exceeding size cap (\(bytes) bytes)", category: .security)
+                case .unsupportedMime(let mimeType, let bytes):
+                    SecureLogger.warning("🚫 MIME REJECT: '\(mimeType ?? "<empty>")' not supported. Size=\(bytes)b from \(peerID.id.prefix(8))...", category: .security)
+                case .magicMismatch(let mime, let bytes, let prefixHex):
+                    SecureLogger.warning("🚫 MAGIC REJECT: MIME='\(mime)' size=\(bytes)b prefix=[\(prefixHex)] from \(peerID.id.prefix(8))...", category: .security)
+                }
+            }
+            return nil
         }
-        return nil
     }
 
     private func storeIncomingFile(
