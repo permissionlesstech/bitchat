@@ -184,7 +184,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
     }
 
     private func refreshReachablePeers() {
-        Task { @MainActor in
+        Task { @MainActor [self] in
             let favorites = dependencies.loadFavorites()
             let reachable = favorites.values
                 .filter { $0.peerNostrPublicKey != nil }

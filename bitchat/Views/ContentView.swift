@@ -598,7 +598,7 @@ struct ContentView: View {
 
     var body: some View {
         adaptiveContent
-            .onAppear {
+            .onAppear { [conversationUIModel, voiceRecordingVM] in
                 conversationUIModel.setCurrentColorScheme(colorScheme)
                 conversationUIModel.setCurrentTheme(appTheme)
                 appChromeModel.setPanicPreparation { [weak voiceRecordingVM] in
