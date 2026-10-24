@@ -8,7 +8,7 @@ import UIKit
 import AppKit
 #endif
 
-/// Placeholder view to display the user's verification QR payload as text.
+/// Displays the user's verification QR payload as an image and selectable text.
 struct MyQRView: View {
     let qrString: String
     @Environment(\.colorScheme) var colorScheme
@@ -462,13 +462,13 @@ struct VerificationSheetView: View {
             VStack(spacing: 10) {
                 if showingScanner {
                     Button(action: { showingScanner = false }) {
-                        Label("show my qr", systemImage: "qrcode")
+                        Label("verification.sheet.show_my_qr", systemImage: "qrcode")
                             .bitchatFont(size: 13)
                     }
                     .buttonStyle(.bordered)
                 } else {
                     Button(action: { showingScanner = true }) {
-                        Label("scan someone else's qr", systemImage: "camera.viewfinder")
+                        Label("verification.sheet.scan_other_qr", systemImage: "camera.viewfinder")
                             .bitchatFont(size: 13, weight: .medium)
                     }
                     .buttonStyle(.bordered)
@@ -479,7 +479,7 @@ struct VerificationSheetView: View {
                 if let peerID = verificationModel.selectedPeerID,
                    verificationModel.isVerified(peerID: peerID) {
                     Button(action: { verificationModel.unverifyFingerprint(for: peerID) }) {
-                        Label("remove verification", systemImage: "minus.circle")
+                        Label("verification.sheet.remove_verification", systemImage: "minus.circle")
                             .bitchatFont(size: 12)
                     }
                     .buttonStyle(.bordered)
