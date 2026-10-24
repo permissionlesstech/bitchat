@@ -430,7 +430,9 @@ struct SplitPaneState: Equatable {
     ///   - openPeer: The DM open in the sheet, if any.
     ///   - locationSheetIsUp: The location channels sheet is up. It closes,
     ///     and the trailing pane shows the picker in its place: browsing
-    ///     if a geohash is selected, idle if not (E8).
+    ///     if a geohash is selected, idle if not (E8). A DM the fold parked
+    ///     doesn't reopen over it: it goes with the rest of what was
+    ///     parked.
     ///   - canReopen: Whether a parked DM can open again: not a group left
     ///     (or removed from) while folded, nor a peer blocked meanwhile.
     mutating func unfold(
@@ -455,7 +457,9 @@ struct SplitPaneState: Equatable {
         conversationGeohash = openPeer.flatMap { peer in
             PaneFoldPolicy.isGeohashConversation(peer) ? Self.geohash(of: compactChannel) : nil
         }
-        if let peer = unfold.reopenConversation, canReopen(peer) {
+        // E8 over E4: a reopened DM would cover the picker the sheet turns
+        // into, and take the focus it has.
+        if !locationSheetIsUp, let peer = unfold.reopenConversation, canReopen(peer) {
             // The unfold's own: it doesn't take the focus (E4).
             effects.reopensConversation = peer
             conversation = peer

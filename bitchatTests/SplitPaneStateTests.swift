@@ -516,6 +516,42 @@ struct SplitPaneStateTests {
         #expect(world.trailing == .channel(geohash))
     }
 
+    /// E8 over E4: a DM the fold parked doesn't reopen over the picker the
+    /// location sheet turns into; it goes with the rest of what was
+    /// parked, and the picker keeps the trailing focus. Over a parked
+    /// geohash the picker browses from it; over none it is idle.
+    @Test
+    func anUnfoldTurnsTheLocationSheetIntoThePickerOverAParkedDM() {
+        var world = World()
+        world.land(.location(geohash))
+        world.open(meshPeer)
+        world.state.touched(.leading)
+        world.fold()
+        #expect(world.state.parked == .init(channel: geohash, conversation: meshPeer))
+        world.isLocationSheetUp = true
+
+        let effects = world.unfold()
+
+        #expect(effects.reopensConversation == nil)
+        #expect(effects.closesLocationSheet)
+        #expect(world.openPeer == nil)
+        #expect(world.state.conversation == nil)
+        #expect(world.trailing == .picker(returnTo: geohash))
+        #expect(world.state.focus == .trailing)
+        #expect(world.state.parked == .none)
+
+        var idle = World()
+        idle.open(meshPeer)
+        idle.state.touched(.leading)
+        idle.fold()
+        #expect(idle.state.parked == .init(conversation: meshPeer))
+        idle.isLocationSheetUp = true
+        idle.unfold()
+        #expect(idle.openPeer == nil)
+        #expect(idle.trailing == .picker(returnTo: nil))
+        #expect(idle.state.focus == .trailing)
+    }
+
     // MARK: - While folded (E5)
 
     @Test
