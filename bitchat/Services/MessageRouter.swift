@@ -35,10 +35,10 @@ final class MessageRouter {
     typealias QueuedMessage = MessageOutboxStore.QueuedMessage
 
     private struct PeerMessageKey: Hashable {
-        // periphery:ignore - read only via the synthesized Hashable
-        // conformance (dictionary-key identity), which the indexer
-        // cannot attribute; see retain_codable_properties in .periphery.yml
-        // for the same class of false positive.
+        // Both properties are read directly now — `peerID` by the alias-scoped
+        // sweep in `flushOutbox(forAliases:)`, `messageID` throughout — so the
+        // ignore directive this once carried (for reads visible only through
+        // the synthesized Hashable conformance) would itself be flagged.
         let peerID: PeerID
         let messageID: String
     }
@@ -48,6 +48,9 @@ final class MessageRouter {
     private let courierDirectory: CourierDirectory
     private let outboxStore: MessageOutboxStore?
     private let metrics: StoreAndForwardMetrics?
+    // Stamps our npub onto favorite notifications so the recipient can learn
+    // our Nostr identity. Optional so tests can omit it.
+    private let idBridge: NostrIdentityBridge?
 
     /// Invoked whenever a retained private message is dropped without a
     /// delivery ack (attempt cap, TTL expiry, or per-peer overflow eviction)
@@ -141,9 +144,11 @@ final class MessageRouter {
         now: @escaping () -> Date = Date.init,
         courierDirectory: CourierDirectory? = nil,
         outboxStore: MessageOutboxStore? = nil,
-        metrics: StoreAndForwardMetrics? = nil
+        metrics: StoreAndForwardMetrics? = nil,
+        idBridge: NostrIdentityBridge? = nil
     ) {
         self.transports = transports
+        self.idBridge = idBridge
         self.now = now
         self.courierDirectory = courierDirectory ?? .favoritesBacked()
         self.outboxStore = outboxStore
@@ -574,11 +579,19 @@ final class MessageRouter {
     }
 
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
-        if let transport = connectedTransport(for: peerID) {
-            transport.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
-        } else if let transport = reachableTransport(for: peerID) {
-            transport.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
+        // Route favorites through the outbox instead of fire-and-forget: a
+        // toggle sent while the peer is offline or mid-handshake used to be
+        // silently dropped, which for mesh-only peers meant a missed npub
+        // exchange. The outbox retains until an ack, and the alias flush
+        // drains the queue on reconnect/authentication no matter which PeerID
+        // form the toggle was keyed under. The payload is the same
+        // [FAVORITED]:<npub> content the transports built internally — the
+        // receiver parses the prefix from PM content and never displays it.
+        var content = isFavorite ? "[FAVORITED]" : "[UNFAVORITED]"
+        if let identity = try? idBridge?.getCurrentNostrIdentity() {
+            content += ":" + identity.npub
         }
+        sendPrivate(content, to: peerID, recipientNickname: "", messageID: UUID().uuidString)
     }
 
     /// Retries only messages that the router previously transmitted through
@@ -589,13 +602,37 @@ final class MessageRouter {
     /// undecryptable remotely. Normal pre-handshake sends are intentionally
     /// absent from `secureTransmissions` because BLE already queues
     /// and drains them when authentication completes.
+    /// One retained message paired with the alias whose queue holds it, plus
+    /// the tie-breakers that make a merge across aliases deterministic.
+    private typealias OutboxCandidate = (
+        peerID: PeerID,
+        message: QueuedMessage,
+        aliasOrder: Int,
+        queueOrder: Int
+    )
+
+    /// Merge candidates drawn from several alias queues into one chronological
+    /// stream, so the order the aliases happen to arrive in cannot send newer
+    /// mail ahead of older mail for the same conversation.
+    private static func chronologically(
+        _ candidates: [OutboxCandidate]
+    ) -> [OutboxCandidate] {
+        candidates.sorted { lhs, rhs in
+            if lhs.message.timestamp != rhs.message.timestamp {
+                return lhs.message.timestamp < rhs.message.timestamp
+            }
+            if lhs.aliasOrder != rhs.aliasOrder {
+                return lhs.aliasOrder < rhs.aliasOrder
+            }
+            if lhs.queueOrder != rhs.queueOrder {
+                return lhs.queueOrder < rhs.queueOrder
+            }
+            return lhs.message.messageID < rhs.message.messageID
+        }
+    }
+
     func retrySecurePrivateMessagesAfterAuthentication(for peerIDAliases: [PeerID]) {
-        typealias Candidate = (
-            peerID: PeerID,
-            message: QueuedMessage,
-            aliasOrder: Int,
-            queueOrder: Int
-        )
+        typealias Candidate = OutboxCandidate
 
         var visitedPeerIDs = Set<PeerID>()
         var retriedMessageIDs = Set<String>()
@@ -627,28 +664,22 @@ final class MessageRouter {
         // ephemeral and stable outbox keys. Merge both queues into one
         // chronological stream so callback alias order cannot send newer mail
         // ahead of older mail.
-        candidates.sort { lhs, rhs in
-            if lhs.message.timestamp != rhs.message.timestamp {
-                return lhs.message.timestamp < rhs.message.timestamp
-            }
-            if lhs.aliasOrder != rhs.aliasOrder {
-                return lhs.aliasOrder < rhs.aliasOrder
-            }
-            if lhs.queueOrder != rhs.queueOrder {
-                return lhs.queueOrder < rhs.queueOrder
-            }
-            return lhs.message.messageID < rhs.message.messageID
-        }
+        candidates = Self.chronologically(candidates)
 
         for candidate in candidates {
             let peerID = candidate.peerID
             let message = candidate.message
             let key = PeerMessageKey(peerID: peerID, messageID: message.messageID)
-            guard retriedMessageIDs.insert(message.messageID).inserted,
-                  secureTransmissions.contains(key),
+            // Claim the ID last. A synchronous ack from an earlier send in
+            // this loop is peer-scoped, so it can clear this copy while the
+            // twin under the other alias stays live and eligible — and a
+            // claim made before these checks would let the dead candidate
+            // suppress that twin, silently skipping a retry that was due.
+            guard secureTransmissions.contains(key),
                   queuedMessage(message.messageID, for: peerID) != nil,
                   let transport = connectedTransport(for: peerID),
-                  transport.canDeliverSecurely(to: peerID) else {
+                  transport.canDeliverSecurely(to: peerID),
+                  retriedMessageIDs.insert(message.messageID).inserted else {
                 continue
             }
 
@@ -699,82 +730,187 @@ final class MessageRouter {
         var outboxChanged = false
 
         for message in queued {
-            // A synchronous ack from an earlier send in this flush may have
-            // removed an entry from the live outbox. The snapshot is only an
-            // iteration order; never use it to recreate removed messages.
-            guard queuedMessage(message.messageID, for: peerID) != nil else { continue }
-
-            // Skip expired messages (TTL exceeded)
-            if now.timeIntervalSince(message.timestamp) > Self.messageTTLSeconds {
-                SecureLogger.debug("⏰ Expired queued message for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))… (age: \(Int(now.timeIntervalSince(message.timestamp)))s)", category: .session)
-                if removeQueuedMessage(message.messageID, for: peerID) {
-                    dropMessage(message.messageID, for: peerID)
-                    outboxChanged = true
-                }
-                continue
-            }
-
-            if let transport = connectedTransport(for: peerID), transport.canDeliverSecurely(to: peerID) {
-                // A secure session is meaningful enough to retry, but not
-                // proof that this particular ciphertext reached the peer: the
-                // remote app may have restarted while our old session still
-                // looked established. Retain until an ack, while bounding
-                // actual secure transmissions for peers that never ack.
-                guard message.sendAttempts < Self.maxSendAttempts else {
-                    SecureLogger.warning("📤 Dropping unacked PM for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))… after \(message.sendAttempts) attempts", category: .session)
-                    if removeQueuedMessage(message.messageID, for: peerID) {
-                        dropMessage(message.messageID, for: peerID)
-                        outboxChanged = true
-                    }
-                    continue
-                }
-                SecureLogger.debug("Outbox -> \(type(of: transport)) (connected) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
-                secureTransmissions.insert(
-                    PeerMessageKey(peerID: peerID, messageID: message.messageID)
-                )
-                transport.sendPrivateMessage(message.content, to: peerID, recipientNickname: message.nickname, messageID: message.messageID)
-                metrics?.record(.outboxResent)
-                outboxChanged = incrementSendAttemptsIfQueued(message.messageID, for: peerID) || outboxChanged
-            } else if let transport = connectedTransport(for: peerID) {
-                // "Connected" without a secure session — possibly a stolen
-                // binding from a replayed announce: send (a genuine link
-                // finishes the handshake and delivers) but keep retaining
-                // until an ack clears it. These flushes do NOT count toward
-                // the attempt-cap drop: the message was transmitted over a
-                // live link, so a peer whose handshake stalls across
-                // reconnect flapping must not burn through the cap and lose
-                // the store-and-forward copy this retention exists to
-                // preserve. Retention stays bounded by the 24h outbox TTL
-                // and the per-peer FIFO cap.
-                SecureLogger.debug("Outbox -> \(type(of: transport)) (connected, no secure session) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
-                secureTransmissions.remove(
-                    PeerMessageKey(peerID: peerID, messageID: message.messageID)
-                )
-                transport.sendPrivateMessage(message.content, to: peerID, recipientNickname: message.nickname, messageID: message.messageID)
-                metrics?.record(.outboxResent)
-            } else if let transport = reachableTransport(for: peerID) {
-                // Reachability without a connection is a freshness heuristic,
-                // so the send can silently go nowhere: send but keep retaining
-                // until an ack clears it, bounded by attempt count for peers
-                // that never ack.
-                guard message.sendAttempts < Self.maxSendAttempts else {
-                    SecureLogger.warning("📤 Dropping unacked PM for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))… after \(message.sendAttempts) attempts", category: .session)
-                    if removeQueuedMessage(message.messageID, for: peerID) {
-                        dropMessage(message.messageID, for: peerID)
-                        outboxChanged = true
-                    }
-                    continue
-                }
-                SecureLogger.debug("Outbox -> \(type(of: transport)) (reachable) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
-                transport.sendPrivateMessage(message.content, to: peerID, recipientNickname: message.nickname, messageID: message.messageID)
-                metrics?.record(.outboxResent)
-                outboxChanged = incrementSendAttemptsIfQueued(message.messageID, for: peerID) || outboxChanged
-            }
+            outboxChanged = flushQueuedMessage(message, for: peerID, now: now) || outboxChanged
         }
 
         if outboxChanged {
             persistOutbox()
         }
+    }
+
+    /// Flush several outbox keys belonging to the same peer as one
+    /// chronological stream.
+    ///
+    /// A conversation can leave retained mail split across the ephemeral BLE
+    /// ID and the stable Noise-key ID: a DM composed while the recipient was
+    /// an offline favorite is queued under the stable key, while mail composed
+    /// after they appeared is queued under the short one. `flushOutbox(for:)`
+    /// is keyed by exactly the ID it is handed, so draining the two keys one
+    /// after another would let newer mail on the first key go out ahead of
+    /// older mail on the second. Merge them the way
+    /// `retrySecurePrivateMessagesAfterAuthentication` already does, and send
+    /// each message ID once no matter how many keys hold a copy.
+    ///
+    /// Pass `skippingSecurelyTransmitted` when a caller has just run
+    /// `retrySecurePrivateMessagesAfterAuthentication` over the same aliases.
+    /// That retry covers exactly the entries in `secureTransmissions`, and on
+    /// an authenticated link this flush would otherwise be a strict superset
+    /// of it — re-sending every message the retry just put on the air and
+    /// burning a second attempt against the cap. Skipping that set makes the
+    /// two passes disjoint by construction rather than by comment.
+    func flushOutbox(forAliases peerIDAliases: [PeerID], skippingSecurelyTransmitted: Bool) {
+        typealias Candidate = OutboxCandidate
+
+        let aliasSet = Set(peerIDAliases)
+
+        // The retry that precedes a skipping flush covers a message ID once,
+        // under whichever alias holds the securely-transmitted copy. So the
+        // skip has to be by message ID across the whole alias set, not by
+        // peer/message pair: the same ID can also sit under the *other* alias
+        // without being in `secureTransmissions`, and filtering per pair would
+        // let that copy sail through and put the message on the air twice —
+        // precisely the double-send this flag exists to prevent.
+        var retriedMessageIDs = Set<String>()
+        if skippingSecurelyTransmitted {
+            for key in secureTransmissions where aliasSet.contains(key.peerID) {
+                retriedMessageIDs.insert(key.messageID)
+            }
+        }
+
+        var visitedPeerIDs = Set<PeerID>()
+        var candidates: [Candidate] = []
+
+        for (aliasOrder, peerID) in peerIDAliases.enumerated() {
+            guard visitedPeerIDs.insert(peerID).inserted else { continue }
+            guard let queued = outbox[peerID], !queued.isEmpty else { continue }
+            for (queueOrder, message) in queued.enumerated() {
+                guard !retriedMessageIDs.contains(message.messageID) else { continue }
+                candidates.append((
+                    peerID: peerID,
+                    message: message,
+                    aliasOrder: aliasOrder,
+                    queueOrder: queueOrder
+                ))
+            }
+        }
+
+        guard !candidates.isEmpty else { return }
+
+        candidates = Self.chronologically(candidates)
+
+        SecureLogger.debug(
+            "Flushing merged outbox for \(peerIDAliases.count) alias(es) count=\(candidates.count)",
+            category: .session
+        )
+
+        let now = now()
+        var outboxChanged = false
+        var flushedMessageIDs = Set<String>()
+
+        for candidate in candidates {
+            // Claim the ID only for a candidate that is still live. Marking it
+            // flushed first would let a copy removed by a synchronous ack
+            // earlier in this loop suppress the live copy under the other
+            // alias, which would silently drop mail rather than dedup it.
+            guard queuedMessage(candidate.message.messageID, for: candidate.peerID) != nil else {
+                continue
+            }
+            guard flushedMessageIDs.insert(candidate.message.messageID).inserted else { continue }
+            outboxChanged = flushQueuedMessage(
+                candidate.message,
+                for: candidate.peerID,
+                now: now
+            ) || outboxChanged
+        }
+
+        if outboxChanged {
+            persistOutbox()
+        }
+    }
+
+    /// Send one queued message, or drop it if it is past TTL or the attempt
+    /// cap. Returns whether the outbox changed and needs persisting; the
+    /// caller owns the `persistOutbox()` so a whole flush costs one write.
+    private func flushQueuedMessage(
+        _ message: QueuedMessage,
+        for peerID: PeerID,
+        now: Date
+    ) -> Bool {
+        var outboxChanged = false
+
+        // A synchronous ack from an earlier send in this flush may have
+        // removed an entry from the live outbox. The snapshot is only an
+        // iteration order; never use it to recreate removed messages.
+        guard queuedMessage(message.messageID, for: peerID) != nil else { return false }
+
+        // Skip expired messages (TTL exceeded)
+        if now.timeIntervalSince(message.timestamp) > Self.messageTTLSeconds {
+            SecureLogger.debug("⏰ Expired queued message for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))… (age: \(Int(now.timeIntervalSince(message.timestamp)))s)", category: .session)
+            if removeQueuedMessage(message.messageID, for: peerID) {
+                dropMessage(message.messageID, for: peerID)
+                outboxChanged = true
+            }
+            return outboxChanged
+        }
+
+        if let transport = connectedTransport(for: peerID), transport.canDeliverSecurely(to: peerID) {
+            // A secure session is meaningful enough to retry, but not
+            // proof that this particular ciphertext reached the peer: the
+            // remote app may have restarted while our old session still
+            // looked established. Retain until an ack, while bounding
+            // actual secure transmissions for peers that never ack.
+            guard message.sendAttempts < Self.maxSendAttempts else {
+                SecureLogger.warning("📤 Dropping unacked PM for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))… after \(message.sendAttempts) attempts", category: .session)
+                if removeQueuedMessage(message.messageID, for: peerID) {
+                    dropMessage(message.messageID, for: peerID)
+                    outboxChanged = true
+                }
+                return outboxChanged
+            }
+            SecureLogger.debug("Outbox -> \(type(of: transport)) (connected) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
+            secureTransmissions.insert(
+                PeerMessageKey(peerID: peerID, messageID: message.messageID)
+            )
+            transport.sendPrivateMessage(message.content, to: peerID, recipientNickname: message.nickname, messageID: message.messageID)
+            metrics?.record(.outboxResent)
+            outboxChanged = incrementSendAttemptsIfQueued(message.messageID, for: peerID) || outboxChanged
+        } else if let transport = connectedTransport(for: peerID) {
+            // "Connected" without a secure session — possibly a stolen
+            // binding from a replayed announce: send (a genuine link
+            // finishes the handshake and delivers) but keep retaining
+            // until an ack clears it. These flushes do NOT count toward
+            // the attempt-cap drop: the message was transmitted over a
+            // live link, so a peer whose handshake stalls across
+            // reconnect flapping must not burn through the cap and lose
+            // the store-and-forward copy this retention exists to
+            // preserve. Retention stays bounded by the 24h outbox TTL
+            // and the per-peer FIFO cap.
+            SecureLogger.debug("Outbox -> \(type(of: transport)) (connected, no secure session) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
+            secureTransmissions.remove(
+                PeerMessageKey(peerID: peerID, messageID: message.messageID)
+            )
+            transport.sendPrivateMessage(message.content, to: peerID, recipientNickname: message.nickname, messageID: message.messageID)
+            metrics?.record(.outboxResent)
+        } else if let transport = reachableTransport(for: peerID) {
+            // Reachability without a connection is a freshness heuristic,
+            // so the send can silently go nowhere: send but keep retaining
+            // until an ack clears it, bounded by attempt count for peers
+            // that never ack.
+            guard message.sendAttempts < Self.maxSendAttempts else {
+                SecureLogger.warning("📤 Dropping unacked PM for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))… after \(message.sendAttempts) attempts", category: .session)
+                if removeQueuedMessage(message.messageID, for: peerID) {
+                    dropMessage(message.messageID, for: peerID)
+                    outboxChanged = true
+                }
+                return outboxChanged
+            }
+            SecureLogger.debug("Outbox -> \(type(of: transport)) (reachable) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
+            transport.sendPrivateMessage(message.content, to: peerID, recipientNickname: message.nickname, messageID: message.messageID)
+            metrics?.record(.outboxResent)
+            outboxChanged = incrementSendAttemptsIfQueued(message.messageID, for: peerID) || outboxChanged
+        }
+
+        return outboxChanged
     }
 
     func flushAllOutbox() {

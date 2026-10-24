@@ -33,7 +33,8 @@ struct ChatViewModelServiceBundle {
         let messageRouter = MessageRouter(
             transports: [meshService, nostrTransport],
             outboxStore: outboxStore,
-            metrics: sfMetrics
+            metrics: sfMetrics,
+            idBridge: idBridge
         )
 
         self.commandProcessor = commandProcessor
