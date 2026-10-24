@@ -79,58 +79,96 @@ struct FingerprintView: View {
             }
             .padding()
             
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    if let icon = fingerprintState.encryptionStatus.icon {
-                        Image(systemName: icon)
-                            .font(.bitchatSystem(size: 20))
-                            .foregroundColor(fingerprintState.encryptionStatus == .noiseVerified ? Color.green : textColor)
-                    }
+            // Only the details scroll, so the close button stays in reach:
+            // with an alias, vouches and both fingerprints they outgrow
+            // short sheets (iPhone Duo's displays, SE-class phones).
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        if let icon = fingerprintState.encryptionStatus.icon {
+                            Image(systemName: icon)
+                                .font(.bitchatSystem(size: 20))
+                                .foregroundColor(fingerprintState.encryptionStatus == .noiseVerified ? Color.green : textColor)
+                        }
                     
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(fingerprintState.peerNickname)
-                            .bitchatFont(size: 18, weight: .semibold)
-                            .foregroundColor(textColor)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(fingerprintState.peerNickname)
+                                .bitchatFont(size: 18, weight: .semibold)
+                                .foregroundColor(textColor)
                         
-                        Text(fingerprintState.encryptionStatus.description)
-                            .bitchatFont(size: 12)
-                            .foregroundColor(textColor.opacity(0.7))
-                    }
+                            Text(fingerprintState.encryptionStatus.description)
+                                .bitchatFont(size: 12)
+                                .foregroundColor(textColor.opacity(0.7))
+                        }
                     
-                    Spacer()
-                }
-                .padding()
-                .background(palette.secondary.opacity(0.1))
-                .cornerRadius(8)
+                        Spacer()
+                    }
+                    .padding()
+                    .background(palette.secondary.opacity(0.1))
+                    .cornerRadius(8)
 
-                if fingerprintState.canEditLocalAlias {
+                    if fingerprintState.canEditLocalAlias {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(verbatim: Strings.localAlias)
+                                .bitchatFont(size: 12, weight: .bold)
+                                .foregroundColor(textColor.opacity(0.7))
+
+                            TextField(Strings.localAliasPlaceholder, text: $aliasDraft)
+                                .bitchatFont(size: 14)
+                                .foregroundColor(textColor)
+                                .padding(10)
+                                .background(palette.secondary.opacity(0.1))
+                                .cornerRadius(8)
+                                .onSubmit { commitAlias() }
+
+                            Text(verbatim: Strings.localAliasHint)
+                                .bitchatFont(size: 11)
+                                .foregroundColor(textColor.opacity(0.6))
+                        }
+                    }
+                
+                    // Their fingerprint
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(verbatim: Strings.localAlias)
+                        Text(Strings.theirFingerprint)
                             .bitchatFont(size: 12, weight: .bold)
                             .foregroundColor(textColor.opacity(0.7))
-
-                        TextField(Strings.localAliasPlaceholder, text: $aliasDraft)
-                            .bitchatFont(size: 14)
-                            .foregroundColor(textColor)
-                            .padding(10)
-                            .background(palette.secondary.opacity(0.1))
-                            .cornerRadius(8)
-                            .onSubmit { commitAlias() }
-
-                        Text(verbatim: Strings.localAliasHint)
-                            .bitchatFont(size: 11)
-                            .foregroundColor(textColor.opacity(0.6))
-                    }
-                }
-                
-                // Their fingerprint
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(Strings.theirFingerprint)
-                        .bitchatFont(size: 12, weight: .bold)
-                        .foregroundColor(textColor.opacity(0.7))
                     
-                    if let fingerprint = fingerprintState.theirFingerprint {
-                        Text(formatFingerprint(fingerprint))
+                        if let fingerprint = fingerprintState.theirFingerprint {
+                            Text(formatFingerprint(fingerprint))
+                                .bitchatFont(size: 14)
+                                .foregroundColor(textColor)
+                                .multilineTextAlignment(.leading)
+                                .lineLimit(nil)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding()
+                                .frame(maxWidth: .infinity)
+                                .background(palette.secondary.opacity(0.1))
+                                .cornerRadius(8)
+                                .contextMenu {
+                                    Button(Strings.copy) {
+                                        #if os(iOS)
+                                        UIPasteboard.general.string = fingerprint
+                                        #else
+                                        NSPasteboard.general.clearContents()
+                                        NSPasteboard.general.setString(fingerprint, forType: .string)
+                                        #endif
+                                    }
+                                }
+                        } else {
+                            Text(Strings.handshakePending)
+                                .bitchatFont(size: 14)
+                                .foregroundColor(Color.orange)
+                                .padding()
+                        }
+                    }
+
+                    // My fingerprint
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(Strings.yourFingerprint)
+                            .bitchatFont(size: 12, weight: .bold)
+                            .foregroundColor(textColor.opacity(0.7))
+                    
+                        Text(formatFingerprint(fingerprintState.myFingerprint))
                             .bitchatFont(size: 14)
                             .foregroundColor(textColor)
                             .multilineTextAlignment(.leading)
@@ -143,146 +181,113 @@ struct FingerprintView: View {
                             .contextMenu {
                                 Button(Strings.copy) {
                                     #if os(iOS)
-                                    UIPasteboard.general.string = fingerprint
+                                    UIPasteboard.general.string = fingerprintState.myFingerprint
                                     #else
                                     NSPasteboard.general.clearContents()
-                                    NSPasteboard.general.setString(fingerprint, forType: .string)
+                                    NSPasteboard.general.setString(fingerprintState.myFingerprint, forType: .string)
                                     #endif
                                 }
                             }
-                    } else {
-                        Text(Strings.handshakePending)
-                            .bitchatFont(size: 14)
-                            .foregroundColor(Color.orange)
-                            .padding()
                     }
-                }
-
-                // My fingerprint
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(Strings.yourFingerprint)
-                        .bitchatFont(size: 12, weight: .bold)
-                        .foregroundColor(textColor.opacity(0.7))
-                    
-                    Text(formatFingerprint(fingerprintState.myFingerprint))
-                        .bitchatFont(size: 14)
-                        .foregroundColor(textColor)
-                        .multilineTextAlignment(.leading)
-                        .lineLimit(nil)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(palette.secondary.opacity(0.1))
-                        .cornerRadius(8)
-                        .contextMenu {
-                            Button(Strings.copy) {
-                                #if os(iOS)
-                                UIPasteboard.general.string = fingerprintState.myFingerprint
-                                #else
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(fingerprintState.myFingerprint, forType: .string)
-                                #endif
-                            }
-                        }
-                }
                 
-                // Vouched (transitively verified) status: shown whenever the
-                // peer isn't explicitly verified but people I verified vouch
-                // for them, independent of the current session state.
-                if fingerprintState.isVouched && !fingerprintState.isVerified {
-                    VStack(spacing: 8) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "checkmark.seal")
-                                .font(.bitchatSystem(size: 14))
-                                .foregroundColor(.teal)
-                            Text(Strings.vouchedBadge)
-                                .bitchatFont(size: 14, weight: .bold)
-                                .foregroundColor(.teal)
-                        }
-                        .frame(maxWidth: .infinity)
-
-                        Text(Strings.vouchedBy(fingerprintState.voucherCount))
-                            .bitchatFont(size: 12)
-                            .foregroundColor(textColor.opacity(0.7))
-                            .multilineTextAlignment(.center)
+                    // Vouched (transitively verified) status: shown whenever the
+                    // peer isn't explicitly verified but people I verified vouch
+                    // for them, independent of the current session state.
+                    if fingerprintState.isVouched && !fingerprintState.isVerified {
+                        VStack(spacing: 8) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "checkmark.seal")
+                                    .font(.bitchatSystem(size: 14))
+                                    .foregroundColor(.teal)
+                                Text(Strings.vouchedBadge)
+                                    .bitchatFont(size: 14, weight: .bold)
+                                    .foregroundColor(.teal)
+                            }
                             .frame(maxWidth: .infinity)
 
-                        if !fingerprintState.voucherNames.isEmpty {
-                            Text(fingerprintState.voucherNames.joined(separator: ", "))
+                            Text(Strings.vouchedBy(fingerprintState.voucherCount))
+                                .bitchatFont(size: 12)
+                                .foregroundColor(textColor.opacity(0.7))
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: .infinity)
+
+                            if !fingerprintState.voucherNames.isEmpty {
+                                Text(fingerprintState.voucherNames.joined(separator: ", "))
+                                    .bitchatFont(size: 12)
+                                    .foregroundColor(textColor.opacity(0.7))
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(nil)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .padding(.top, 8)
+                        .accessibilityElement(children: .combine)
+                    }
+
+                    // Verification status
+                    if fingerprintState.canToggleVerification {
+                        VStack(spacing: 12) {
+                            Text(fingerprintState.isVerified ? Strings.verifiedBadge : Strings.notVerifiedBadge)
+                                .bitchatFont(size: 14, weight: .bold)
+                                .foregroundColor(fingerprintState.isVerified ? Color.green : Color.orange)
+                                .frame(maxWidth: .infinity)
+                        
+                            Group {
+                                if fingerprintState.isVerified {
+                                    Text(Strings.verifiedMessage)
+                                } else {
+                                    Text(Strings.verifyHint(fingerprintState.peerNickname))
+                                }
+                            }
                                 .bitchatFont(size: 12)
                                 .foregroundColor(textColor.opacity(0.7))
                                 .multilineTextAlignment(.center)
                                 .lineLimit(nil)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .padding(.top, 8)
-                    .accessibilityElement(children: .combine)
-                }
-
-                // Verification status
-                if fingerprintState.canToggleVerification {
-                    VStack(spacing: 12) {
-                        Text(fingerprintState.isVerified ? Strings.verifiedBadge : Strings.notVerifiedBadge)
-                            .bitchatFont(size: 14, weight: .bold)
-                            .foregroundColor(fingerprintState.isVerified ? Color.green : Color.orange)
-                            .frame(maxWidth: .infinity)
                         
-                        Group {
-                            if fingerprintState.isVerified {
-                                Text(Strings.verifiedMessage)
+                            if !fingerprintState.isVerified {
+                                Button(action: {
+                                    verificationModel.verifyFingerprint(for: peerID)
+                                    dismiss()
+                                }) {
+                                    Text(Strings.markVerified)
+                                        .bitchatFont(size: 14, weight: .bold)
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 20)
+                                        .padding(.vertical, 10)
+                                        .background(Color.green)
+                                        .cornerRadius(8)
+                                }
+                                .buttonStyle(PlainButtonStyle())
                             } else {
-                                Text(Strings.verifyHint(fingerprintState.peerNickname))
+                                Button(action: {
+                                    verificationModel.unverifyFingerprint(for: peerID)
+                                    dismiss()
+                                }) {
+                                    Text(Strings.removeVerification)
+                                        .bitchatFont(size: 14, weight: .bold)
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 20)
+                                        .padding(.vertical, 10)
+                                        .background(Color.red)
+                                        .cornerRadius(8)
+                                }
+                                .buttonStyle(PlainButtonStyle())
                             }
                         }
-                            .bitchatFont(size: 12)
-                            .foregroundColor(textColor.opacity(0.7))
-                            .multilineTextAlignment(.center)
-                            .lineLimit(nil)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity)
-                        
-                        if !fingerprintState.isVerified {
-                            Button(action: {
-                                verificationModel.verifyFingerprint(for: peerID)
-                                dismiss()
-                            }) {
-                                Text(Strings.markVerified)
-                                    .bitchatFont(size: 14, weight: .bold)
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 20)
-                                    .padding(.vertical, 10)
-                                    .background(Color.green)
-                                    .cornerRadius(8)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        } else {
-                            Button(action: {
-                                verificationModel.unverifyFingerprint(for: peerID)
-                                dismiss()
-                            }) {
-                                Text(Strings.removeVerification)
-                                    .bitchatFont(size: 14, weight: .bold)
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 20)
-                                    .padding(.vertical, 10)
-                                    .background(Color.red)
-                                    .cornerRadius(8)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
+                        .padding(.top)
+                        .frame(maxWidth: .infinity)
                     }
-                    .padding(.top)
-                    .frame(maxWidth: .infinity)
                 }
+                .padding()
+                .frame(maxWidth: 500) // Constrain max width for better readability
+                .frame(maxWidth: .infinity)
             }
-            .padding()
-            .frame(maxWidth: 500) // Constrain max width for better readability
-            
-            Spacer()
+            .scrollDismissesKeyboard(.interactively)
         }
-        .padding()
+        .padding([.horizontal, .top])
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .themedSheetBackground()
         .onAppear {

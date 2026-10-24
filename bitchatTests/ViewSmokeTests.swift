@@ -183,6 +183,48 @@ private struct ContentPeopleSheetHarness: View {
     }
 }
 
+#if os(iOS)
+@MainActor
+private struct ContentPeopleColumnHarness: View {
+    @State private var showSidebar = false
+    @State private var showVerifySheet = false
+    @State private var messageText = ""
+    @State private var selectedMessageSender: String?
+    @State private var selectedMessageSenderID: PeerID?
+    @State private var imagePreviewURL: URL?
+    @State private var windowCountPublic = 300
+    @State private var windowCountPrivate: [PeerID: Int] = [:]
+    @State private var isAtBottomPrivate = true
+    @State private var autocompleteDebounceTimer: Timer?
+    @StateObject private var voiceRecordingVM = VoiceRecordingViewModel()
+    @FocusState private var isTextFieldFocused: Bool
+    @State private var showImagePicker = false
+    @State private var imagePickerSourceType: UIImagePickerController.SourceType = .photoLibrary
+
+    var body: some View {
+        ContentPeopleColumnView(
+            showSidebar: $showSidebar,
+            showVerifySheet: $showVerifySheet,
+            messageText: $messageText,
+            selectedMessageSender: $selectedMessageSender,
+            selectedMessageSenderID: $selectedMessageSenderID,
+            imagePreviewURL: $imagePreviewURL,
+            windowCountPublic: $windowCountPublic,
+            windowCountPrivate: $windowCountPrivate,
+            isAtBottomPrivate: $isAtBottomPrivate,
+            isTextFieldFocused: $isTextFieldFocused,
+            voiceRecordingVM: voiceRecordingVM,
+            autocompleteDebounceTimer: $autocompleteDebounceTimer,
+            showImagePicker: $showImagePicker,
+            imagePickerSourceType: $imagePickerSourceType,
+            headerHeight: 44,
+            trailingCornerReach: 0,
+            onSendMessage: {}
+        )
+    }
+}
+#endif
+
 @MainActor
 @discardableResult
 private func mount<V: View>(_ view: V) -> AnyObject {
@@ -557,6 +599,29 @@ struct ViewSmokeTests {
         #expect(featureModels.privateConversationModel.selectedHeaderState?.headerPeerID == peerID)
     }
 
+    #if os(iOS)
+    @Test
+    func peopleColumn_rendersListAndConversation() async {
+        let (viewModel, transport, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let peerID = PeerID(str: "6162636465666768")
+
+        transport.updatePeerSnapshots([
+            makeSnapshot(peerID: peerID, nickname: "Bob", noiseByte: 0x77)
+        ])
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        // Unlike the sheet, the column gets no re-injected models: it must
+        // mount on exactly the environment ContentView's own tree provides.
+        _ = mount(installSmokeEnvironment(ContentPeopleColumnHarness(), featureModels: featureModels))
+
+        featureModels.privateConversationModel.startConversation(with: peerID)
+        #expect(featureModels.privateConversationModel.selectedPeerID == peerID)
+
+        _ = mount(installSmokeEnvironment(ContentPeopleColumnHarness(), featureModels: featureModels))
+    }
+    #endif
+
     @Test("Root Bluetooth alert waits for location and notices sheets")
     func rootBluetoothAlertGuard_includesHeaderSheets() {
         #expect(!ContentRootModalPresentationState().hasPresentation)
@@ -570,6 +635,33 @@ struct ViewSmokeTests {
                 isNoticesSheetPresented: true
             ).hasPresentation
         )
+    }
+
+    @Test("Root alerts wait for the legacy media consent dialog")
+    func rootAlertGuards_includeLegacyMediaConsent() {
+        #expect(
+            ContentRootModalPresentationState(
+                isLegacyMediaConsentPresented: true
+            ).hasPresentation
+        )
+    }
+
+    @Test("Only the people column's consent dialog holds back root alerts")
+    func rootAlertGuards_legacyConsentDefersOnlyOnSplitLayout() {
+        #expect(ContentRootModalPresentationState.legacyConsentDefersRoot(
+            isSplitLayout: true,
+            hasPendingRequest: true
+        ))
+        // Compact: the people sheet hosts the dialog and defers the root on
+        // its own; a request left behind once it closed has no presenter.
+        #expect(!ContentRootModalPresentationState.legacyConsentDefersRoot(
+            isSplitLayout: false,
+            hasPendingRequest: true
+        ))
+        #expect(!ContentRootModalPresentationState.legacyConsentDefersRoot(
+            isSplitLayout: true,
+            hasPendingRequest: false
+        ))
     }
 
     @Test("People-sheet Bluetooth alert waits for local verification sheet")

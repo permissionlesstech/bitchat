@@ -59,6 +59,25 @@ final class VoiceRecordingViewModel: ObservableObject {
     /// composer switches its recording HUD to the LIVE treatment.
     @Published private(set) var isLiveStreaming = false
 
+    /// A press between start() and finish()/cancel(): waiting on the
+    /// microphone permission prompt, spinning up, recording, or standing by
+    /// for the previous note to finalize. Wider than `state.isActive`
+    /// because a hold abandoned at the permission prompt would otherwise
+    /// start recording once access is granted, and one standing by would
+    /// start again from the finger still down.
+    var isHoldInFlight: Bool {
+        state.isActive || state == .requestingPermission || isStartDeferred
+    }
+
+    /// The latest start stood down because the recorder was still
+    /// finalizing the previous classic note. `pressChanged` lets that press
+    /// start again, unlike one whose hold was ended or cancelled.
+    private(set) var isStartDeferred = false
+
+    /// Set once the current mic press has started its hold. Cleared only
+    /// when that press is over: lifted, cancelled, or its mic gone.
+    private var pressStartedHold = false
+
     /// Supplies the capture backend per press. `ChatViewModel` swaps in a
     /// live push-to-talk session when the current DM peer can hear it now.
     var sessionProvider: () -> VoiceCaptureSession = { VoiceNoteCaptureSession() }
@@ -67,6 +86,16 @@ final class VoiceRecordingViewModel: ObservableObject {
     /// older hold may still deliver its file, but it must never mutate the UI
     /// state of a newer hold.
     private var holdGeneration: UInt64 = 0
+    /// Bumped only by a panic. A note released before one must never be
+    /// delivered after it; a newer hold is no reason to drop it.
+    private var panicEpoch: UInt64 = 0
+    /// Times a hold for the minimum-length check; tests inject one so a
+    /// valid note doesn't take a second of real time.
+    private let now: () -> Date
+
+    init(now: @escaping () -> Date = Date.init) {
+        self.now = now
+    }
 
     func formattedDuration(for date: Date) -> String {
         let clamped = max(0, state.duration(for: date))
@@ -77,8 +106,51 @@ final class VoiceRecordingViewModel: ObservableObject {
         return String(format: "%02d:%02d.%02d", minutes, seconds, centiseconds)
     }
 
+    // MARK: - The mic press
+    //
+    // The composer's press-and-hold forwards its events here, so one press
+    // starting at most one hold is decided in one place. The VoiceOver
+    // toggle has no press and calls start/finish directly.
+
+    /// The press moved, its touch-down included. One press, one hold: when
+    /// something ends the hold under a finger still down (a conversation or
+    /// layout change, the HUD's cancel, a panic), the next movement must not
+    /// start another aimed at whatever is selected now. A start that only
+    /// stood down while the previous note finalizes may try again.
+    func pressChanged(shouldShow: Bool) {
+        guard !pressStartedHold || isStartDeferred else { return }
+        pressStartedHold = true
+        start(shouldShow: shouldShow)
+    }
+
+    /// The finger lifted. Make `completion` at the release, so the note goes
+    /// where it was recorded even if the person leaves before the file is
+    /// finalized.
+    func pressEnded(completion: ((URL) -> Void)?) {
+        pressStartedHold = false
+        finish(completion: completion)
+    }
+
+    /// The press is over, lifted or cancelled. A cancelled touch never
+    /// reaches `pressEnded`, so the composer still ends a hold it leaves in
+    /// flight.
+    func pressReleased() {
+        pressStartedHold = false
+    }
+
+    /// The mic left the screen. A hold must not outlive its control, and the
+    /// end of the press and the toggle that would end it went away with it.
+    /// The finger still down can't move a removed control, so the next press
+    /// needs a fresh touch-down and may start a hold again.
+    func controlRemoved() {
+        pressStartedHold = false
+        guard isHoldInFlight else { return }
+        cancel()
+    }
+
     func start(shouldShow: Bool) {
         guard shouldShow, state == .idle else { return }
+        isStartDeferred = false
         holdGeneration &+= 1
         let generation = holdGeneration
         let session = sessionProvider()
@@ -106,7 +178,7 @@ final class VoiceRecordingViewModel: ObservableObject {
                     await session.cancel()
                     return
                 }
-                state = .recording(startDate: Date())
+                state = .recording(startDate: now())
                 isLiveStreaming = session.isLive
             } catch VoiceRecorder.RecorderError.recordingInProgress {
                 // The previous classic hold may still be in its intentional
@@ -121,6 +193,7 @@ final class VoiceRecordingViewModel: ObservableObject {
                       activeSession === session
                 else { return }
                 activeSession = nil
+                isStartDeferred = true
                 state = .idle
             } catch {
                 SecureLogger.error("Voice recording failed to start: \(error)", category: .session)
@@ -146,7 +219,7 @@ final class VoiceRecordingViewModel: ObservableObject {
                             return
                         }
                         SecureLogger.warning("PTT: live capture failed — fell back to classic voice note", category: .session)
-                        state = .recording(startDate: Date())
+                        state = .recording(startDate: now())
                         isLiveStreaming = false
                         return
                     } catch {
@@ -173,8 +246,10 @@ final class VoiceRecordingViewModel: ObservableObject {
 
         state = .idle
         isLiveStreaming = false
+        isStartDeferred = false
         let session = activeSession
         let generation = holdGeneration
+        let epoch = panicEpoch
         activeSession = nil
 
         guard case .recording(let startDate) = previousState, let completion, let session else {
@@ -187,11 +262,14 @@ final class VoiceRecordingViewModel: ObservableObject {
         }
 
         Task {
-            let finalDuration = Date().timeIntervalSince(startDate)
+            let finalDuration = now().timeIntervalSince(startDate)
             if let url = await session.finish() {
-                // Panic and a newer hold both invalidate this completion.
-                // Never route an old recording using a post-panic target.
-                guard generation == holdGeneration else {
+                // Only a panic withholds a released note: nothing recorded
+                // before one may leave after it. A newer hold, even a tap
+                // during this finalize padding, is no reason to. The
+                // completion was made at the release and carries its
+                // destination, so dropping the note would only lose it.
+                guard epoch == panicEpoch else {
                     try? FileManager.default.removeItem(at: url)
                     return
                 }
@@ -199,7 +277,10 @@ final class VoiceRecordingViewModel: ObservableObject {
                     at: url,
                     duration: finalDuration
                 ) else {
-                    guard state == .idle else { return }
+                    // The alert is this hold's to raise. Over a newer press
+                    // it would also block that press's retry, since start()
+                    // needs idle.
+                    guard generation == holdGeneration, state == .idle else { return }
                     state = .error(
                         message: finalDuration < VoiceRecorder.minRecordingDuration
                         ? String(localized: "voice.error.too_short", defaultValue: "recording is too short.", comment: "Alert message when a voice note is released too quickly to save")
@@ -225,12 +306,16 @@ final class VoiceRecordingViewModel: ObservableObject {
 
     /// Invalidates in-flight permission/start/finalize callbacks and tears
     /// down an active microphone before the panic transaction continues.
+    /// A press still down stays latched: the panic ended its hold, and its
+    /// next movement must not open the microphone again after the wipe.
     func panicWipe() {
         holdGeneration &+= 1
+        panicEpoch &+= 1
         let session = activeSession
         activeSession = nil
         state = .idle
         isLiveStreaming = false
+        isStartDeferred = false
         session?.panicCancelSynchronously()
     }
 

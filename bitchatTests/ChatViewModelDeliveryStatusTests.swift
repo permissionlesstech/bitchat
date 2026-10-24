@@ -403,7 +403,10 @@ struct ChatViewModelDeliveryStatusTests {
         try content.write(to: sourceURL)
         defer { try? FileManager.default.removeItem(at: directory) }
 
-        coordinator.sendVoiceNote(at: sourceURL)
+        coordinator.sendVoiceNote(
+            at: sourceURL,
+            to: coordinator.currentMediaDestination
+        )
         #expect(await TestHelpers.waitUntil(
             {
                 transport.sentPrivateFiles.count == 1

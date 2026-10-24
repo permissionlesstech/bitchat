@@ -27,6 +27,12 @@ final class AppChromeModel: ObservableObject {
     /// that did not commit must be visible, not just logged — the person who
     /// triggered it needs to know data may remain on the device.
     @Published private(set) var panicWipeBlocked = false
+    #if os(iOS)
+    /// The split layout keeps the public timeline on screen beside an open
+    /// DM instead of under its sheet. ContentView mirrors its layout here;
+    /// only screenshot routing reads it, so it isn't published.
+    var isPublicTimelineBesideConversation = false
+    #endif
 
     private let chatViewModel: ChatViewModel
     private let onPanicWipe: () -> Void
