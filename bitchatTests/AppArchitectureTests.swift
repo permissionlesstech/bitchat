@@ -126,6 +126,28 @@ struct AppArchitectureTests {
         #expect(store.stablePeerID(forShortID: shortPeerID) == nil)
     }
 
+    @Test("PeerIdentityStore bumps the stable-ID revision only when a mapping changes")
+    @MainActor
+    func stablePeerIDRevisionMovesOnlyOnChange() {
+        let store = PeerIdentityStore()
+        let shortPeerID = PeerID(str: "peer-short")
+        let initial = store.stablePeerIDRevision
+
+        store.setStablePeerID(PeerID(str: "peer-stable"), forShortID: shortPeerID)
+        let afterSet = store.stablePeerIDRevision
+        #expect(afterSet != initial)
+
+        store.setStablePeerID(PeerID(str: "peer-stable"), forShortID: shortPeerID)
+        #expect(store.stablePeerIDRevision == afterSet)
+
+        store.setStablePeerID(PeerID(str: "peer-stable-2"), forShortID: shortPeerID)
+        let afterChange = store.stablePeerIDRevision
+        #expect(afterChange != afterSet)
+
+        store.clearAll()
+        #expect(store.stablePeerIDRevision != afterChange)
+    }
+
     @Test("LocationPresenceStore normalizes and resets geohash presence state")
     @MainActor
     func locationPresenceStoreNormalizesPresenceState() {

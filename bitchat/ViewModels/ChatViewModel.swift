@@ -222,7 +222,19 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     // Computed properties for compatibility
     @MainActor
     var connectedPeers: Set<PeerID> { unifiedPeerService.connectedPeerIDs }
-    @Published var allPeers: [BitchatPeer] = []
+    @Published var allPeers: [BitchatPeer] = [] {
+        didSet {
+            let memberIDs = Set(allPeers.map(\.peerID))
+            guard memberIDs != allPeersMemberIDs else { return }
+            allPeersMemberIDs = memberIDs
+            allPeersMembershipRevision &+= 1
+        }
+    }
+    /// Bumps whenever the set of peer IDs in `allPeers` changes, so derived
+    /// per-roster state (the mesh color palette) is rebuilt on membership
+    /// changes only — not on every republish, reorder or attribute change.
+    private(set) var allPeersMembershipRevision: UInt64 = 0
+    private var allPeersMemberIDs: Set<PeerID> = []
     /// Nickname of whoever is talking live in the public mesh channel right
     /// now (floor-courtesy indicator on the composer mic), nil when nobody.
     @Published var activePublicVoiceTalker: String?
