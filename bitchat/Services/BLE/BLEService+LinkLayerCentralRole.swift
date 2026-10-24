@@ -407,13 +407,10 @@ extension BLEService: CBPeripheralDelegate {
         if let error = error {
             SecureLogger.error("❌ Error updating notification state: \(error.localizedDescription)", category: .session)
         } else {
+            // No announce here: ours reach the peer as writes, which never
+            // depended on our subscription, and the link-up announce
+            // scheduled with setNotifyValue (its only call site) covers it.
             SecureLogger.debug("🔔 Notification state updated for \(peripheral.name ?? peripheral.identifier.uuidString): \(characteristic.isNotifying ? "ON" : "OFF")", category: .session)
-            
-            // If notifications are now on, send an announce to ensure this peer knows about us
-            if characteristic.isNotifying {
-                // Sending announce after subscription
-                self.sendAnnounce(forceSend: true)
-            }
         }
     }
 

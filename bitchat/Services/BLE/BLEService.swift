@@ -2769,12 +2769,22 @@ final class BLEService: NSObject {
 
     /// Link-layer bootstrap for a link that just became usable (central: our
     /// copy of the peer's characteristic is stored; peripheral: the central
-    /// subscribed). Called on bleQueue once the link is registered.
+    /// subscribed). Called on bleQueue once the link is registered. Makes
+    /// sure at least one of our announces reaches the link:
+    /// - skipped when an announce is broadcast after this call: our own
+    ///   announces go on every live link, so it already reached this one
+    ///   (typically the announce we owed the neighbour this link connected);
+    /// - owed when the forced throttle refuses it, since the announce that
+    ///   tripped the throttle predates the link.
     func scheduleLinkUpAnnounce(after delay: TimeInterval) {
+        let broadcastsBeforeLinkUp = announceThrottle.broadcastCount
         engineScheduler.schedule(after: delay) { [weak self] in
-            self?.sendAnnounce(forceSend: true)
+            guard let self else { return }
+            if self.announceThrottle.broadcastCount == broadcastsBeforeLinkUp {
+                self.sendOwedAnnounce()
+            }
             // Try flushing any spooled directed packets now that we have a link
-            self?.flushDirectedSpool()
+            self.flushDirectedSpool()
         }
     }
 

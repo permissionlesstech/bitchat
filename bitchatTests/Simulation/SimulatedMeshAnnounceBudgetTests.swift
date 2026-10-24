@@ -34,9 +34,7 @@ struct SimulatedMeshAnnounceBudgetTests {
         report("join 6x6 king", spent, frames: mesh.floodFrameCount(ofType: .announce) - framesBefore)
         #expect(spent[joiner] == 2)
         for anchor in Self.anchors {
-            // Plus its own peripheral link-up announce, until that is
-            // skipped once an announce already reached the link.
-            #expect(spent[anchor] <= 2)
+            #expect(spent[anchor] == 1)
         }
         #expect(othersSpentNothing(spent, except: Set(Self.anchors + [joiner])))
         // Every node learned the joiner from its announces.
@@ -89,11 +87,87 @@ struct SimulatedMeshAnnounceBudgetTests {
         let spent = delta(originations(mesh), before)
         report("link 6x6 king", spent, frames: mesh.floodFrameCount(ofType: .announce) - framesBefore)
         #expect(spent[central] == 2)
-        #expect(spent[peripheral] <= 2)
+        #expect(spent[peripheral] == 1)
         #expect(othersSpentNothing(spent, except: [central, peripheral]))
         let centralID = mesh.nodes[central].service.myPeerID
         #expect(mesh.nodes[peripheral].service.getConnectedPeers().contains(centralID))
         #expect(mesh.nodes[35].service._test_hasConfirmedRoute(to: centralID))
+    }
+
+    /// The peripheral's own link-up announce is skipped: the announce it
+    /// owed the central (listing it) already went out on every live link,
+    /// this one included, before its link-up fired.
+    @Test
+    func peripheralLinkUpIsSkippedOnceAnAnnounceReachedTheLink() {
+        let mesh = SimulatedMesh(announceAccounting: true)
+        let central = mesh.launch(nickname: "central")
+        let peripheral = mesh.launch(nickname: "peripheral")
+        let before = originations(mesh)
+
+        mesh.linkUp(central: central, peripheral: peripheral)
+        mesh.settle()
+
+        let spent = delta(originations(mesh), before)
+        #expect(spent[peripheral] == 1)
+        #expect(spent[central] == 2)
+        #expect(mesh.nodes[central].service._test_centralBinding(mesh.linkUUID(from: peripheral, at: central))
+            == mesh.nodes[peripheral].service.myPeerID)
+        #expect(mesh.nodes[peripheral].service._test_centralBinding(mesh.linkUUID(from: central, at: peripheral))
+            == mesh.nodes[central].service.myPeerID)
+    }
+
+    /// A link-up announce the forced throttle refuses is not lost: the
+    /// announce that tripped the throttle went out before the link existed,
+    /// so the link-up is retried once the window has passed.
+    @Test
+    func throttledLinkUpAnnounceIsRetriedAfterTheForcedWindow() {
+        let mesh = SimulatedMesh(announceAccounting: true)
+        let central = mesh.launch(nickname: "central")
+        let peripheral = mesh.launch(nickname: "peripheral")
+        // An announce a moment before the link exists reaches nobody.
+        mesh.nodes[central].service._test_forceAnnounce()
+        mesh.pump()
+        let before = mesh.announceOriginations(from: central)
+
+        // Production order: the link is registered, then its link-up is
+        // scheduled; nothing is broadcast in between.
+        mesh.connect(central, peripheral)
+        mesh.nodes[central].service.scheduleLinkUpAnnounce(
+            after: TransportConfig.blePostSubscribeAnnounceDelaySeconds
+        )
+        mesh.advanceTime(by: 0.3, inStepsOf: 0.05)
+
+        #expect(mesh.announceOriginations(from: central) - before == 1)
+        #expect(mesh.nodes[peripheral].service._test_centralBinding(mesh.linkUUID(from: central, at: peripheral))
+            == mesh.nodes[central].service.myPeerID)
+    }
+
+    /// Phones usually hold two links to each other, one per role, formed at
+    /// different times. The second link costs one link-up announce per side
+    /// (each must reach and bind it) and nothing else: both sides already
+    /// claim each other.
+    @Test
+    func secondLinkOfADualRolePairCostsOneAnnouncePerSide() {
+        let mesh = SimulatedMesh(announceAccounting: true)
+        let a = mesh.launch(nickname: "a")
+        let b = mesh.launch(nickname: "b")
+        mesh.linkUp(central: a, peripheral: b)
+        mesh.settle()
+        let before = originations(mesh)
+
+        // B connects to A's peripheral role a moment later.
+        mesh.connectDuplicateLinks(a, b)
+        mesh.nodes[b].service.scheduleLinkUpAnnounce(after: TransportConfig.blePostSubscribeAnnounceDelaySeconds)
+        mesh.nodes[a].service.scheduleLinkUpAnnounce(after: TransportConfig.blePostAnnounceDelaySeconds)
+        mesh.settle()
+
+        let spent = delta(originations(mesh), before)
+        #expect(spent[a] == 1)
+        #expect(spent[b] == 1)
+        #expect(mesh.nodes[a].service._test_linkBinding(.central(mesh.duplicateLinkUUID(from: b, at: a)))
+            == mesh.nodes[b].service.myPeerID)
+        #expect(mesh.nodes[b].service._test_linkBinding(.central(mesh.duplicateLinkUUID(from: a, at: b)))
+            == mesh.nodes[a].service.myPeerID)
     }
 
     /// One periodic announce round in a busy mesh costs one announce per
