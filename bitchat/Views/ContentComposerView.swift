@@ -10,6 +10,7 @@ struct ContentComposerView: View {
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
+    @EnvironmentObject private var publicChatModel: PublicChatModel
     @ObservedObject private var bridgeService = BridgeService.shared
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
@@ -28,8 +29,20 @@ struct ContentComposerView: View {
     @Binding var showMacImagePicker: Bool
     #endif
 
+    @State private var meshPlaintextNoticeDismissed = MeshPlaintextNoticeSettings.isDismissed
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            if showsMeshPlaintextNotice {
+                MeshPlaintextNoticeView(
+                    bridgeEnabled: bridgeService.isEnabled,
+                    nearbyOnly: bridgeService.nearbyOnly
+                ) {
+                    meshPlaintextNoticeDismissed = true
+                    MeshPlaintextNoticeSettings.isDismissed = true
+                }
+            }
+
             if conversationUIModel.showAutocomplete && !conversationUIModel.autocompleteSuggestions.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(conversationUIModel.autocompleteSuggestions.prefix(4).enumerated()), id: \.element) { index, suggestion in
@@ -145,10 +158,28 @@ struct ContentComposerView: View {
         .onDisappear {
             autocompleteDebounceTimer?.invalidate()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .meshPlaintextNoticeSettingsChanged)) { _ in
+            meshPlaintextNoticeDismissed = MeshPlaintextNoticeSettings.isDismissed
+        }
     }
 }
 
 private extension ContentComposerView {
+    var showsMeshPlaintextNotice: Bool {
+        let onPublicMesh: Bool
+        if privateConversationModel.selectedHeaderState == nil,
+           case .mesh = locationChannelsModel.selectedChannel {
+            onPublicMesh = true
+        } else {
+            onPublicMesh = false
+        }
+        return MeshPlaintextNoticeSettings.shouldShow(
+            dismissed: meshPlaintextNoticeDismissed,
+            isPublicMesh: onPublicMesh,
+            timelineEmpty: publicChatModel.messages.isEmpty
+        )
+    }
+
     /// The nearby-only scope toggle appears only where it means something:
     /// the public mesh channel with the bridge on.
     var showsNearbyOnlyToggle: Bool {
