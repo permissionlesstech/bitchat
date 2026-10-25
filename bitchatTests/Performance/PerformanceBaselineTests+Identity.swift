@@ -10,8 +10,12 @@
 // - every vouch batch rewrote it once per vouch, up to 16 times, on main;
 // - every short peer ID lookup scanned every identity.
 //
-// The write-count assertions are the real gate. perf-floors.json keeps
-// loose floors that still sit far above the regression values.
+// The write-count assertions are the real gate. The upsert benchmark checks
+// its warm-up before measuring, so a write regression fails in seconds
+// instead of running `measure` past CI's perf-step timeout. perf-floors.json
+// keeps loose tripwire floors: far above the regression values for the
+// upsert and the lookup, but only about 1.3x above it for the vouch batch,
+// whose one write per batch caps the possible speedup at 16x.
 //
 
 import XCTest
@@ -38,10 +42,16 @@ extension PerformanceBaselineTests {
                 claimedNickname: stranger.nickname
             )
         }
+        let writesBefore = fixture.cacheSaveCount
         for index in strangers.indices {
             upsert(index)
         }
-        let writesBefore = fixture.cacheSaveCount
+        // Under a write regression each upsert costs milliseconds, and the
+        // passes below would take about half an hour: fail on the warm-up.
+        guard fixture.cacheSaveCount == writesBefore else {
+            XCTFail("unchanged re-announces must not rewrite the identity cache")
+            return
+        }
         var samples: [TimeInterval] = []
 
         measure {

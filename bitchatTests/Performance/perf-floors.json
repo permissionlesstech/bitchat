@@ -46,9 +46,9 @@
     "identity.upsertKnownPeer_before": 151,
     "identity.upsertKnownPeer": 1730092,
     "identity.vouchBatch_before": 9,
-    "identity.vouchBatch": 111,
+    "identity.vouchBatch": 151,
     "identity.lookupByPeerIDPrefix_before": 12350,
-    "identity.lookupByPeerIDPrefix": 939734
+    "identity.lookupByPeerIDPrefix": 1174536
   },
   "floors": {
     "nostrInbound.fresh": 450,
