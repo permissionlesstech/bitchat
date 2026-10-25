@@ -43,8 +43,8 @@
     "geochat.formatMessage": 18006,
     "hex.encodePublicKey_before": 64366,
     "hex.encodePublicKey": 1194627,
-    "mesh.joinAnnounce_before": 0.27,
-    "mesh.joinAnnounce": 16
+    "mesh.joinAnnounce_before": 0.5,
+    "mesh.joinAnnounce": 20
   },
   "floors": {
     "nostrInbound.fresh": 450,

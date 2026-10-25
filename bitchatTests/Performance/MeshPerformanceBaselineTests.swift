@@ -35,7 +35,6 @@ final class MeshPerformanceBaselineTests: XCTestCase {
     func testMeshJoinAnnounceExchange() async throws {
         let width = 8
         let mesh = SimulatedMesh.grid(width: width, height: width, kingMoves: true)
-        let established = width * width
         var samples: [TimeInterval] = []
 
         for pass in 0..<10 {
@@ -43,8 +42,11 @@ final class MeshPerformanceBaselineTests: XCTestCase {
             // to fail the floor without stretching the CI step.
             if samples.count >= 3, samples.reduce(0, +) > 10 { break }
             let joiner = mesh.launch(nickname: "joiner\(pass)")
-            // A different spot of the mesh each pass.
-            let anchors = [(pass * 7) % established, (pass * 7 + 1) % established]
+            // A different spot of the mesh each pass: two nodes side by side
+            // in one row, as one phone can reach.
+            let column = pass % (width - 1)
+            let row = (pass * 3) % width
+            let anchors = [row * width + column, row * width + column + 1]
             let start = Date()
             mesh.join(joiner, linkingTo: anchors)
             samples.append(Date().timeIntervalSince(start))

@@ -53,9 +53,12 @@ final class PerformanceBaselineTests: XCTestCase {
         guard !samples.isEmpty else { return }
         let avg = samples.reduce(0, +) / Double(samples.count)
         let opsPerSec = avg > 0 ? Double(operations) / avg : .infinity
+        // The floor gate compares the printed value: below 10/sec, a whole
+        // number would let 1.5 pass a floor of 2.
+        let throughput = String(format: opsPerSec < 10 ? "%.1f" : "%.0f", opsPerSec)
         let line = String(
-            format: "PERF[%@]: %.0f %@/sec (avg %.3f ms per pass of %d, %d passes)",
-            name, opsPerSec, unit, avg * 1000, operations, samples.count
+            format: "PERF[%@]: %@ %@/sec (avg %.3f ms per pass of %d, %d passes)",
+            name, throughput, unit, avg * 1000, operations, samples.count
         )
         print(line)
         appendToPerfLog(line)
