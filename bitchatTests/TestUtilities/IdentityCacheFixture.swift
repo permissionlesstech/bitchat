@@ -19,6 +19,7 @@ struct IdentityCacheFixture {
     /// `SecureIdentityStateManager`'s keychain item names.
     static let encryptionKeyName = "identityCacheEncryptionKey"
     static let cacheKey = "bitchat.identityCache.v2"
+    private static let encryptionKey = bytes(seed: 0x5EED, count: 32)
 
     struct Stranger {
         let fingerprint: String
@@ -42,7 +43,7 @@ struct IdentityCacheFixture {
         lastSeen: Date? = nil,
         configure: (_ cache: inout IdentityCache, _ strangers: [Stranger]) -> Void = { _, _ in }
     ) throws {
-        let keyData = Self.bytes(seed: 0x5EED, count: 32)
+        let keyData = Self.encryptionKey
         _ = keychain.saveIdentityKey(keyData, forKey: Self.encryptionKeyName)
 
         var cache = IdentityCache()
@@ -83,6 +84,15 @@ struct IdentityCacheFixture {
     /// Identity-cache writes the keychain has seen, the fixture's own included.
     var cacheSaveCount: Int {
         keychain.identityKeySaveCounts[Self.cacheKey, default: 0]
+    }
+
+    /// The JSON of the identity cache the keychain holds now, unsealed: what
+    /// the next launch, or an older build, decodes.
+    func storedCacheJSON() throws -> Data {
+        guard let combined = keychain.getIdentityKey(forKey: Self.cacheKey) else {
+            throw CocoaError(.fileReadNoSuchFile)
+        }
+        return try AES.GCM.open(AES.GCM.SealedBox(combined: combined), using: SymmetricKey(data: Self.encryptionKey))
     }
 
     /// Deterministic pseudo-random bytes (xorshift64).

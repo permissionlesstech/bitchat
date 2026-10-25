@@ -154,12 +154,6 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
         clearedFingerprints.append(peerID)
     }
 
-    private(set) var directMessageHistoryPeerIDs: [PeerID] = []
-
-    func recordDirectMessageHistory(with peerID: PeerID) {
-        directMessageHistoryPeerIDs.append(peerID)
-    }
-
     // Nostr identity
     var blockedNostrPubkeys: Set<String> = []
     var displayNamesByPubkey: [String: String] = [:]
@@ -1080,60 +1074,6 @@ struct ChatPrivateConversationCoordinatorContextTests {
         #expect(context.meshReadReceipts.map(\.messageID) == ["pm-2"])
         #expect(context.sentReadReceipts.contains("pm-2"))
         #expect(context.privateMessageNotifications.count == 1)
-    }
-
-    @Test @MainActor
-    func directMessagesRecordHistoryButFavoriteMarkersDoNot() async {
-        let context = MockChatPrivateConversationContext()
-        let coordinator = ChatPrivateConversationCoordinator(context: context)
-        let peerID = PeerID(str: "0102030405060708")
-
-        // A [FAVORITED] marker is protocol traffic, not a conversation.
-        coordinator.handlePrivateMessage(
-            makeIncomingMessage(id: "fav-1", content: "[FAVORITED]:npub1alice", senderPeerID: peerID)
-        )
-        #expect(context.directMessageHistoryPeerIDs.isEmpty)
-
-        coordinator.handlePrivateMessage(makeIncomingMessage(id: "pm-1", senderPeerID: peerID))
-        #expect(context.directMessageHistoryPeerIDs == [peerID])
-
-        coordinator.sendPrivateMessage("hi back", to: peerID)
-        #expect(context.directMessageHistoryPeerIDs == [peerID, peerID])
-
-        // Nothing is sent to a blocked peer, so nothing is recorded.
-        let blockedPeerID = PeerID(str: "1112131415161718")
-        context.blockedPeers.insert(blockedPeerID)
-        coordinator.sendPrivateMessage("hello?", to: blockedPeerID)
-        #expect(context.directMessageHistoryPeerIDs == [peerID, peerID])
-    }
-
-    /// A mesh peer's account DM over Nostr is a direct message too: the
-    /// favorite-transport path must mark it like the mesh path does.
-    @Test @MainActor
-    func accountDMOverNostrRecordsDirectMessageHistory() async {
-        let context = MockChatPrivateConversationContext()
-        let coordinator = ChatPrivateConversationCoordinator(context: context)
-        let stablePeerID = PeerID(hexData: Data(repeating: 0xB3, count: 32))
-        let senderPubkey = "feedface00112233"
-        context.displayNamesByPubkey[senderPubkey] = "bob"
-        func deliver(_ messageID: String, _ content: String) {
-            coordinator.handlePrivateMessage(
-                NoisePayload(type: .privateMessage, data: PrivateMessagePacket(messageID: messageID, content: content).encode()!),
-                senderPubkey: senderPubkey,
-                convKey: stablePeerID,
-                id: MockChatPrivateConversationContext.dummyIdentity,
-                messageTimestamp: Date()
-            )
-        }
-
-        deliver("account-1", "hi over nostr")
-        #expect(context.directMessageHistoryPeerIDs == [stablePeerID])
-
-        // A favorite marker is protocol traffic, and a redelivery is not a
-        // second message.
-        deliver("account-fav", "[FAVORITED]:npub1bob")
-        deliver("account-1", "hi over nostr")
-        #expect(context.directMessageHistoryPeerIDs == [stablePeerID])
     }
 
     @Test @MainActor

@@ -81,9 +81,6 @@ protocol ChatMediaTransferContext: AnyObject {
     /// Appends a private message via the single-writer store intent.
     @discardableResult
     func appendPrivateMessage(_ message: BitchatMessage, to peerID: PeerID) -> Bool
-    /// Marks the person behind `peerID` as a direct-message partner, whom
-    /// identity-cache retention keeps for a while after the last message.
-    func recordDirectMessageHistory(with peerID: PeerID)
     /// Appends a public message via the single-writer store intent
     /// (immediate: outgoing media placeholders must render without batching).
     @discardableResult
@@ -804,7 +801,6 @@ final class ChatMediaTransferCoordinator {
                 deliveryStatus: .sending
             )
             context.appendPrivateMessage(message, to: peerID)
-            context.recordDirectMessageHistory(with: peerID)
         } else {
             let (displayName, senderPeerID) = context.currentPublicSender()
             message = BitchatMessage(

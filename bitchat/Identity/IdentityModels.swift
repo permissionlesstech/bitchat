@@ -190,13 +190,13 @@ struct IdentityCache: Codable {
     // Verified fingerprints (cryptographic proof)
     var verifiedFingerprints: Set<String> = []
 
-    // Direct-message partners: fingerprint -> UTC day of the latest private
-    // message or file exchanged, rewritten at most weekly. Only
-    // `SecureIdentityStateManager.recordDirectMessageHistory` writes it;
-    // retention keeps these identities until the marker expires
-    // (`RetentionPolicy.directMessageRetention`), and clearing the chat
-    // removes it. Builds from mid-2025 wrote an exact time here for every
-    // peer whose key they registered; those entries are long expired.
+    // Retired: nothing writes or reads it. Builds from mid-2025 wrote a
+    // timestamp here for every peer whose key they registered, a record of
+    // whom this device met. `SecureIdentityStateManager` empties it at load,
+    // and its next write removes those entries from the keychain. The
+    // key stays, always empty, because v1.7.0 and earlier decode the cache
+    // with a synthesized decoder that requires it: without it they would
+    // discard the whole cache after a downgrade.
     var lastInteractions: [String: Date] = [:]
 
     // Blocked Nostr pubkeys (lowercased hex) for geohash chats

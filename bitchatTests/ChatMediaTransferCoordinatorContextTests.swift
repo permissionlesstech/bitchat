@@ -56,12 +56,6 @@ private final class MockChatMediaTransferContext: ChatMediaTransferContext {
         return true
     }
 
-    private(set) var directMessageHistoryPeerIDs: [PeerID] = []
-
-    func recordDirectMessageHistory(with peerID: PeerID) {
-        directMessageHistoryPeerIDs.append(peerID)
-    }
-
     private(set) var appendedPublicMessages: [(message: BitchatMessage, conversationID: ConversationID)] = []
     private(set) var removedMessages: [(messageID: String, cleanupFile: Bool)] = []
     private(set) var untombstonedMediaRemovals: [String] = []
@@ -392,19 +386,6 @@ struct ChatMediaTransferCoordinatorContextTests {
         #expect(context.recordedContentKeys == ["[voice] note.m4a"])
         #expect(context.notifyUIChangedCount == 1)
         #expect(context.appendedPublicMessages.isEmpty)
-    }
-
-    @Test @MainActor
-    func enqueueMediaMessage_privateChatRecordsDirectMessageHistory() async {
-        let context = MockChatMediaTransferContext()
-        let coordinator = ChatMediaTransferCoordinator(context: context)
-        let peerID = PeerID(str: "1122334455667788")
-
-        _ = coordinator.enqueueMediaMessage(content: "[image] pic.jpg", targetPeer: nil)
-        #expect(context.directMessageHistoryPeerIDs.isEmpty)
-
-        _ = coordinator.enqueueMediaMessage(content: "[voice] note.m4a", targetPeer: peerID)
-        #expect(context.directMessageHistoryPeerIDs == [peerID])
     }
 
     @Test @MainActor

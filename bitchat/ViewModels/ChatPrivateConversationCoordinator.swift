@@ -74,9 +74,6 @@ protocol ChatPrivateConversationContext: AnyObject {
     func getFingerprint(for peerID: PeerID) -> String?
     func storedFingerprint(for peerID: PeerID) -> String?
     func clearStoredFingerprint(for peerID: PeerID)
-    /// Marks the person behind `peerID` as a direct-message partner, whom
-    /// identity-cache retention keeps for a while after the last message.
-    func recordDirectMessageHistory(with peerID: PeerID)
 
     // MARK: Nostr identity
     func isNostrBlocked(pubkeyHexLowercased: String) -> Bool
@@ -373,7 +370,6 @@ final class ChatPrivateConversationCoordinator {
         )
 
         context.appendPrivateMessage(message, to: peerID)
-        context.recordDirectMessageHistory(with: peerID)
         context.notifyUIChanged()
 
         // Always hand the message to the router — it owns delivery. A live
@@ -553,7 +549,6 @@ final class ChatPrivateConversationCoordinator {
         )
 
         context.appendPrivateMessage(message, to: conversationPeerID)
-        context.recordDirectMessageHistory(with: conversationPeerID)
 
         let isViewing = context.selectedPrivateChatPeer == conversationPeerID
         let wasReadBefore = context.sentReadReceipts.contains(messageId)
@@ -689,7 +684,6 @@ final class ChatPrivateConversationCoordinator {
         }
 
         addMessageToPrivateChatsIfNeeded(message, targetPeerID: peerID)
-        context.recordDirectMessageHistory(with: peerID)
         let noiseKey = peerID.noiseKey ?? context.noisePublicKey(for: peerID)
         mirrorToEphemeralIfNeeded(message, targetPeerID: peerID, key: noiseKey)
 

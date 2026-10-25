@@ -47,11 +47,8 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
         upsertLock.withLock { recordedAuthenticatedPeerUpserts.append(fingerprint) }
     }
 
-    /// What `getCryptoIdentitiesByPeerIDPrefix` returns for each peer ID.
-    var cryptoIdentitiesByPeerIDPrefix: [PeerID: [CryptographicIdentity]] = [:]
-
     func getCryptoIdentitiesByPeerIDPrefix(_ peerID: PeerID) -> [CryptographicIdentity] {
-        cryptoIdentitiesByPeerIDPrefix[peerID] ?? []
+        []
     }
     
     func updateSocialIdentity(_ identity: SocialIdentity) {
@@ -190,18 +187,8 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
     // MARK: Retention
 
     private(set) var retentionProtectedFingerprints: Set<String>?
-    private(set) var directMessageHistoryFingerprints: [String] = []
-    private(set) var forgottenDirectMessageFingerprints: [String] = []
 
     func setRetentionProtectedFingerprints(_ fingerprints: Set<String>) {
         retentionProtectedFingerprints = fingerprints
-    }
-
-    func recordDirectMessageHistory(fingerprint: String) {
-        directMessageHistoryFingerprints.append(fingerprint)
-    }
-
-    func forgetDirectMessageHistory(fingerprint: String) {
-        forgottenDirectMessageFingerprints.append(fingerprint)
     }
 }

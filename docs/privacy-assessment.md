@@ -49,12 +49,13 @@ Residual risk: private-message metadata such as timing, radio adjacency, ciphert
 ## Peer Identity Cache
 
 - Verified announces add a peer's Noise and signing public keys and claimed nickname to the identity cache, an AES-GCM-sealed keychain item. Its signing-key pins stop a later announce from pairing a known peer's Noise key with another signing key.
-- Strangers, meaning peers with no favorite, verification, block, petname, notes, trust level, vouch link, or recent private conversation, are forgotten 30 to 37 days after they were last seen; at most 2,000 are kept, and past that the least recently seen go first. For each stranger the cache stores the UTC day it was last seen, refreshed weekly.
-- A direct-message partner is kept for 90 to 97 days after the last private message or file, so the cache stores the day of the latest one, refreshed weekly. Clearing the chat removes that record.
+- Strangers, meaning peers with no favorite, verification, block, petname, notes, trust level, or vouch link, are forgotten 32 to 38 days after they were last seen, at the next retention pass. Passes run at most daily, and only when a verified announce arrives. At most 2,000 strangers are kept, and past that the least recently seen go first. For each stranger the cache stores the UTC day it was last seen, refreshed weekly.
+- Private conversations protect no one, and the cache records none of them: no message, time, or list of partners. A peer the owner only exchanged messages or files with is a stranger. Once it is forgotten, its keys are learned again, as a first contact, from its next announce.
+- Builds from mid-2025 recorded a timestamp for every peer whose key they learned. The current build empties that field when it loads the cache and writes it back empty.
 - Ages follow the wall clock, but a stamp never moves backwards and a single wrong clock reading forgets nothing.
 - Panic wipe deletes the cache.
 
-Residual risk: a seized unlocked device shows which nearby strangers it verified in about the last month, whom its owner exchanged private messages with in about the last three months and roughly when, and every favorite, verified, blocked, or named peer.
+Residual risk: a seized unlocked device shows which strangers it heard from in about the last five weeks and roughly when it last saw each, and every favorite, verified, blocked, or named peer. The cache does not list whom its owner messaged. Until a stranger is forgotten, though, it keeps the signing key that stranger proved in an encrypted session. Sessions start on their own with most directly connected peers, but with more distant peers they mostly carry private traffic, so for those a stored key hints that some was exchanged.
 
 ## Public Gossip, Boards, and Media
 

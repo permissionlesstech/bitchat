@@ -388,7 +388,8 @@ final class SecureIdentityStateManagerTests: XCTestCase {
     }
 
     func test_ephemeralSessionLifecycle_tracksHandshakeProgress() async {
-        let manager = SecureIdentityStateManager(MockKeychain())
+        let keychain = MockKeychain()
+        let manager = SecureIdentityStateManager(keychain)
         let peerID = PeerID(str: "1234567890abcdef")
         let fingerprint = String(repeating: "90", count: 32)
 
@@ -418,9 +419,9 @@ final class SecureIdentityStateManagerTests: XCTestCase {
             return false
         }
         XCTAssertTrue(completed)
-        // A handshake is not direct-message history (which protects an
-        // identity from retention): every nearby iOS peer completes one.
+        // A completed handshake stays in memory: this path writes nothing.
         XCTAssertNil(manager.debugLastInteraction(for: fingerprint))
+        XCTAssertEqual(keychain.identityKeySaveCounts["bitchat.identityCache.v2", default: 0], 0)
 
         manager.removeEphemeralSession(peerID: peerID)
         let removed = await waitUntil {

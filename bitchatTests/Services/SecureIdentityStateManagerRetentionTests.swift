@@ -16,7 +16,6 @@ import BitFoundation
 /// water 10, low water 6), and runs synchronously.
 final class SecureIdentityStateManagerRetentionTests: XCTestCase {
     private static let day: TimeInterval = 24 * 60 * 60
-    private static let cacheKey = "bitchat.identityCache.v2"
     /// A UTC midnight, and midday that day: day arithmetic never straddles
     /// midnight.
     private let today = Date(timeIntervalSince1970: 1_760_054_400)
@@ -56,8 +55,8 @@ final class SecureIdentityStateManagerRetentionTests: XCTestCase {
     func test_retention_keepsEveryProtectedRelationship() throws {
         let names = [
             "favorite", "verified", "verifiedAt", "socialFavorite", "blocked", "petname", "notes",
-            "casual", "trusted", "vouchee", "voucher", "vouchedTo", "directMessages",
-            "stranger", "noiseAuthenticatedStranger"
+            "casual", "trusted", "vouchee", "voucher", "vouchedTo",
+            "stranger", "noiseAuthenticatedStranger", "lastInteraction"
         ]
         func fingerprint(_ name: String, in strangers: [IdentityCacheFixture.Stranger]) -> String {
             strangers[names.firstIndex(of: name) ?? 0].fingerprint
@@ -75,12 +74,14 @@ final class SecureIdentityStateManagerRetentionTests: XCTestCase {
             cache.socialIdentities[fp("trusted")]?.trustLevel = .trusted
             cache.vouchesByVouchee = [fp("vouchee"): [VouchRecord(voucherFingerprint: fp("voucher"), timestamp: daysAgo(90))]]
             cache.vouchBatchSentAt = [fp("vouchedTo"): daysAgo(90)]
-            cache.lastInteractions[fp("directMessages")] = daysAgo(90)
             // A Noise session alone is no relationship: every nearby iOS
             // peer completes one.
             cache.authenticatedSigningKeysByFingerprint = [fp("noiseAuthenticatedStranger"): Data(repeating: 0x91, count: 32)]
             cache.privateMediaCapableFingerprints = [fp("noiseAuthenticatedStranger")]
             cache.nicknameIndex["stranger"] = [fp("stranger")]
+            // Nor is an entry an older build left in `lastInteractions`: a
+            // peer this device only met or messaged is a stranger.
+            cache.lastInteractions = [fp("lastInteraction"): daysAgo(90)]
         }
         let strangers = fixture.strangers
         let manager = SecureIdentityStateManager(fixture.keychain, retentionPolicy: policy)
@@ -88,7 +89,7 @@ final class SecureIdentityStateManagerRetentionTests: XCTestCase {
 
         announce(Data(repeating: 0x82, count: 32), to: manager, at: now)
 
-        let evicted = ["stranger", "noiseAuthenticatedStranger"]
+        let evicted = ["stranger", "noiseAuthenticatedStranger", "lastInteraction"]
         for loaded in [manager, SecureIdentityStateManager(fixture.keychain, retentionPolicy: policy)] {
             for name in names where !evicted.contains(name) {
                 let protected = fingerprint(name, in: strangers)
@@ -312,19 +313,15 @@ final class SecureIdentityStateManagerRetentionTests: XCTestCase {
     }
 
     func test_retention_aClockSteppedForwardForgetsNothingUntilTwoPassesAgree() throws {
-        // Five strangers seen yesterday, by the pass that ran then, and a
-        // partner messaged 60 days ago.
-        let fixture = try IdentityCacheFixture(count: 6, lastSeen: daysAgo(1)) { cache, strangers in
+        // Five strangers seen yesterday, by the pass that ran then.
+        let fixture = try IdentityCacheFixture(count: 5, lastSeen: daysAgo(1)) { cache, _ in
             cache.retentionPassDay = daysAgo(1)
-            cache.cryptographicIdentities[strangers[5].fingerprint]?.lastSeen = nil
-            cache.lastInteractions[strangers[5].fingerprint] = daysAgo(60)
         }
-        let strangers = Array(fixture.strangers.prefix(5))
-        let partner = fixture.strangers[5].fingerprint
+        let strangers = fixture.strangers
         let manager = SecureIdentityStateManager(fixture.keychain, retentionPolicy: policy)
         manager.setRetentionProtectedFingerprints([])
         func keptEveryone(_ manager: SecureIdentityStateManager) -> Bool {
-            strangers.allSatisfy { knows($0, manager) } && manager.debugLastInteraction(for: partner) != nil
+            strangers.allSatisfy { knows($0, manager) }
         }
 
         // The clock jumps 40 days ahead: a date set forward, or a spoofed
@@ -445,77 +442,42 @@ final class SecureIdentityStateManagerRetentionTests: XCTestCase {
         XCTAssertFalse(fixture.strangers.contains { knows($0, manager) })
     }
 
-    // MARK: - Direct-message markers
+    // MARK: - Legacy lastInteractions
 
-    func test_recordDirectMessageHistory_refreshesTheMarkerAtMostWeekly() {
-        let keychain = MockKeychain()
-        let manager = SecureIdentityStateManager(keychain, retentionPolicy: policy)
-        let partner = String(repeating: "c4", count: 32)
-        func writes() -> Int { keychain.identityKeySaveCounts[Self.cacheKey, default: 0] }
-
-        manager.recordDirectMessageHistory(fingerprint: partner, now: now)
-        XCTAssertEqual(writes(), 1)
-        XCTAssertEqual(manager.debugLastInteraction(for: partner), today)
-
-        // Every message checks the marker; only a week-old one is rewritten.
-        manager.recordDirectMessageHistory(fingerprint: partner, now: now.addingTimeInterval(6 * Self.day))
-        XCTAssertEqual(writes(), 1)
-        manager.recordDirectMessageHistory(fingerprint: partner, now: now.addingTimeInterval(7 * Self.day))
-        XCTAssertEqual(writes(), 2)
-        // A clock stepped back does not move it back.
-        manager.recordDirectMessageHistory(fingerprint: partner, now: now.addingTimeInterval(-30 * Self.day))
-        XCTAssertEqual(writes(), 2)
-
-        let reloaded = SecureIdentityStateManager(keychain)
-        XCTAssertEqual(reloaded.debugLastInteraction(for: partner), today.addingTimeInterval(7 * Self.day))
-    }
-
-    func test_retention_keepsDirectMessagePartnersUntilTheirMarkerExpires() throws {
-        // Partners unseen for months: protected identities keep no stamp.
-        // Markers 97 and 98 days old, and one a 2025 build wrote at an exact
-        // time for a peer it merely registered.
-        let orphan = String(repeating: "e5", count: 32)
-        let fixture = try IdentityCacheFixture(count: 3) { cache, strangers in
-            cache.lastInteractions[strangers[0].fingerprint] = daysAgo(97)
-            cache.lastInteractions[strangers[1].fingerprint] = daysAgo(98)
-            cache.lastInteractions[strangers[2].fingerprint] = daysAgo(400).addingTimeInterval(12_345)
-            // And one for someone whose identity is already gone.
-            cache.lastInteractions[orphan] = daysAgo(98)
+    func test_load_purgesLegacyLastInteractionsAndKeepsTheKeyOlderBuildsRequire() throws {
+        // Builds from mid-2025 wrote an exact time here for every peer whose
+        // key they registered: a record of whom this device met.
+        let gone = String(repeating: "e5", count: 32)
+        let fixture = try IdentityCacheFixture(count: 2, lastSeen: today) { cache, strangers in
+            cache.lastInteractions = [
+                strangers[0].fingerprint: daysAgo(400).addingTimeInterval(12_345),
+                gone: daysAgo(380)
+            ]
         }
-        let partners = fixture.strangers
+        let strangers = fixture.strangers
         let manager = SecureIdentityStateManager(fixture.keychain, retentionPolicy: policy)
-        manager.setRetentionProtectedFingerprints([])
+        XCTAssertNil(manager.debugLastInteraction(for: strangers[0].fingerprint))
+        XCTAssertNil(manager.debugLastInteraction(for: gone))
+        let writes = fixture.cacheSaveCount
 
-        announce(Data(repeating: 0x98, count: 32), to: manager, at: now)
+        // The keychain still holds them, so the next upsert writes even
+        // though it changes nothing (a peer stamped today, and no favorites
+        // snapshot, so no pass), and only that one does.
+        announce(strangers[1], to: manager, at: now)
+        XCTAssertEqual(fixture.cacheSaveCount, writes + 1)
+        announce(strangers[1], to: manager, at: now.addingTimeInterval(60))
+        XCTAssertEqual(fixture.cacheSaveCount, writes + 1)
 
-        for loaded in [manager, SecureIdentityStateManager(fixture.keychain, retentionPolicy: policy)] {
-            // 90 + 7 days is a lower bound, like 30 + 7 for strangers.
-            XCTAssertNotNil(loaded.debugLastInteraction(for: partners[0].fingerprint))
-            XCTAssertNil(lastSeen(of: partners[0].fingerprint, in: loaded))
-            // An expired marker goes, and its partner becomes a stranger
-            // with a full grace period in the same pass.
-            for partner in partners.dropFirst() {
-                XCTAssertNil(loaded.debugLastInteraction(for: partner.fingerprint))
-                XCTAssertTrue(knows(partner, loaded))
-                XCTAssertEqual(lastSeen(of: partner.fingerprint, in: loaded), today)
-            }
-            XCTAssertNil(loaded.debugLastInteraction(for: orphan))
-        }
-    }
+        // What is stored now has no entries, and keeps the key: v1.7.0 and
+        // earlier decode the cache with a synthesized decoder, which requires
+        // every non-optional field and discards a cache it cannot decode.
+        let stored = try JSONDecoder().decode(SynthesizedIdentityCache.self, from: fixture.storedCacheJSON())
+        XCTAssertTrue(stored.lastInteractions.isEmpty)
+        XCTAssertEqual(Set(stored.socialIdentities.keys), Set(strangers.map(\.fingerprint)))
 
-    func test_forgetDirectMessageHistory_removesTheMarker() {
-        let keychain = MockKeychain()
-        let manager = SecureIdentityStateManager(keychain)
-        let partner = String(repeating: "c5", count: 32)
-        manager.recordDirectMessageHistory(fingerprint: partner)
-        let writes = keychain.identityKeySaveCounts[Self.cacheKey, default: 0]
-
-        manager.forgetDirectMessageHistory(fingerprint: partner)
-        XCTAssertEqual(keychain.identityKeySaveCounts[Self.cacheKey, default: 0], writes + 1)
-        manager.forgetDirectMessageHistory(fingerprint: partner)
-        XCTAssertEqual(keychain.identityKeySaveCounts[Self.cacheKey, default: 0], writes + 1, "nothing left to forget")
-
-        XCTAssertNil(SecureIdentityStateManager(keychain).debugLastInteraction(for: partner))
+        // The purge drops nothing else.
+        let reloaded = SecureIdentityStateManager(fixture.keychain, retentionPolicy: policy)
+        XCTAssertTrue(strangers.allSatisfy { knows($0, reloaded) })
     }
 
     func test_identityCacheWithLastSeen_decodesWithThePreviousEntryShape() throws {
@@ -546,6 +508,19 @@ final class SecureIdentityStateManagerRetentionTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    /// The identity cache as v1.7.0 and earlier decode it: synthesized
+    /// `Decodable`, so every non-optional field must be present.
+    private struct SynthesizedIdentityCache: Decodable {
+        let socialIdentities: [String: SocialIdentity]
+        let nicknameIndex: [String: Set<String>]
+        let verifiedFingerprints: Set<String>
+        let lastInteractions: [String: Date]
+        let blockedNostrPubkeys: Set<String>
+        let vouchesByVouchee: [String: [VouchRecord]]?
+        let vouchBatchSentAt: [String: Date]?
+        let verifiedAt: [String: Date]?
+    }
 
     private func daysAgo(_ days: Double) -> Date {
         today.addingTimeInterval(-days * Self.day)

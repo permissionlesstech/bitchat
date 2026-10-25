@@ -154,8 +154,6 @@ protocol SecureIdentityStateManagerProtocol {
 
     // MARK: Retention
     func setRetentionProtectedFingerprints(_ fingerprints: Set<String>)
-    func recordDirectMessageHistory(fingerprint: String)
-    func forgetDirectMessageHistory(fingerprint: String)
 }
 
 /// Singleton manager for secure identity state persistence and retrieval.
@@ -170,14 +168,12 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     /// we have no relationship with. It never evicts favorites (the
     /// `setRetentionProtectedFingerprints` snapshot), verified peers, peers
     /// with local social state (petname, notes, block, trust level), or
-    /// peers in a vouch. It keeps direct-message partners
-    /// (`recordDirectMessageHistory`) for `directMessageRetention` after the
-    /// last private message or file, or until the chat is cleared; the
-    /// marker that records this is itself a record of whom the owner
-    /// messaged, so it is bounded too. Inbound messages count, so a peer
-    /// that completes a handshake and sends one is kept that long. It runs
-    /// only on the verified-announce path, and only after the favorites
-    /// snapshot has arrived.
+    /// peers in a vouch. A private conversation is no relationship here, and
+    /// this cache records none: bitchat keeps conversations in memory only.
+    /// A peer the owner only messaged is a stranger like any other;
+    /// favoriting or verifying it protects it. Retention runs only on the
+    /// verified-announce path, and only after the favorites snapshot has
+    /// arrived.
     ///
     /// Trade-off: evicting a stranger forgets everything pinned for it: the
     /// TOFU signing key, the Noise-authenticated binding and the
@@ -196,9 +192,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     /// Noise key first; the real peer is then refused on this device for
     /// good, since pins cannot be reset. Each minted identity costs a signed
     /// announce and one full write here. While a peer is in range,
-    /// `BLEPeerRegistry` still holds its pin. Direct-message partners from
-    /// before this policy cannot be told apart (conversations are not
-    /// persisted), so they get the same 30-day grace as everyone else.
+    /// `BLEPeerRegistry` still holds its pin.
     ///
     /// Ages come from the wall clock. A stamp never moves backwards and one
     /// wrong clock reading forgets nothing (see `agingDayLocked`), but a
@@ -213,12 +207,6 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         /// `strangerRetention + lastSeenRefreshInterval`, which keeps
         /// "unseen for `strangerRetention`" a lower bound.
         var lastSeenRefreshInterval: TimeInterval = 7 * 24 * 60 * 60
-        /// A direct-message partner stays protected this long after the
-        /// last private message or file. The marker is refreshed like
-        /// `lastSeen` and expires `directMessageRetention +
-        /// lastSeenRefreshInterval` after its last refresh; the partner is
-        /// then a stranger with a fresh grace period.
-        var directMessageRetention: TimeInterval = 90 * 24 * 60 * 60
         /// More unprotected identities than this trims them, least recently
         /// seen first...
         var strangerHighWater = 2_000
@@ -269,15 +257,16 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     // Writes are also change-only (see `upsertCryptographicIdentity`), so the
     // next announce no longer repairs a failed write by accident. `pendingSave`
     // is true while the keychain does not hold the in-memory state: the last
-    // write failed, and because `KeychainManager.saveData` deletes the item
+    // write failed (and because `KeychainManager.saveData` deletes the item
     // before adding the new one, the keychain may hold no identity cache at
-    // all. The next mutation's own write carries the pending state. An upsert
-    // that changes nothing retries at once after a first failure, which keeps
-    // that window as short as it was when every announce wrote; once writes
-    // have failed twice in a row it retries at most once per
-    // `failedSaveRetryInterval` after `lastFailedSaveAt`, so a keychain that
-    // keeps failing is not sent a full re-encoded cache on every announce.
-    // `forceSave` (termination) and `deinit` always retry.
+    // all), or the load dropped legacy `lastInteractions` entries (see
+    // `loadIdentityCache`). The next mutation's own write carries the pending
+    // state. An upsert that changes nothing retries at once after a first
+    // failure, which keeps that window as short as it was when every announce
+    // wrote; once writes have failed twice in a row it retries at most once
+    // per `failedSaveRetryInterval` after `lastFailedSaveAt`, so a keychain
+    // that keeps failing is not sent a full re-encoded cache on every
+    // announce. `forceSave` (termination) and `deinit` always retry.
     private var pendingSave = false
     private var consecutiveFailedSaves = 0
     private var lastFailedSaveAt: Date?
@@ -385,6 +374,14 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
             let sealedBox = try AES.GCM.SealedBox(combined: encryptedData)
             let decryptedData = try AES.GCM.open(sealedBox, using: encryptionKey)
             cache = try JSONDecoder().decode(IdentityCache.self, from: decryptedData)
+            // Older builds wrote `lastInteractions`, and nothing reads it now:
+            // drop what they left, and leave the write pending so the next
+            // upsert, or the flush at termination, removes it from the
+            // keychain too.
+            if !cache.lastInteractions.isEmpty {
+                cache.lastInteractions = [:]
+                pendingSave = true
+            }
         } catch {
             cache = IdentityCache()
             let deleted = keychain.deleteIdentityKey(forKey: cacheKey)
@@ -429,10 +426,10 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         }
     }
 
-    /// Requires `queue`. Whether an upsert that changed nothing should retry
-    /// a failed write now: at once after a first failure, then once per
-    /// `failedSaveRetryInterval`. `abs` keeps a clock stepped backwards from
-    /// postponing the retry indefinitely.
+    /// Requires `queue`. Whether an upsert that changed nothing should write
+    /// pending state now: at once after a first failure (or the load's purge),
+    /// then once per `failedSaveRetryInterval`. `abs` keeps a clock stepped
+    /// backwards from postponing the retry indefinitely.
     private func failedSaveRetryIsDueLocked(now: Date) -> Bool {
         guard pendingSave else { return false }
         guard consecutiveFailedSaves > 1, let lastFailedSaveAt else { return true }
@@ -677,49 +674,6 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         }
     }
 
-    /// Marks `fingerprint` as someone we sent a private message or file to,
-    /// or received one from: retention keeps them for
-    /// `RetentionPolicy.directMessageRetention` after the last one.
-    /// `lastInteractions` holds the marker, the UTC day of the latest
-    /// message, and nothing else writes it. Like `lastSeen` it is rewritten
-    /// only once it is `lastSeenRefreshInterval` old, and never moved back,
-    /// so a conversation costs one write a week. The view model calls this
-    /// on the main thread for every private message, so a current marker is
-    /// found with a concurrent read instead of a barrier.
-    func recordDirectMessageHistory(fingerprint: String) {
-        recordDirectMessageHistory(fingerprint: fingerprint, now: Date())
-    }
-
-    func recordDirectMessageHistory(fingerprint: String, now: Date) {
-        guard !fingerprint.isEmpty else { return }
-        let today = Self.retentionDay(now)
-        guard queue.sync(execute: { self.directMessageMarkerIsDueLocked(fingerprint, today: today) }) else {
-            return
-        }
-        queue.sync(flags: .barrier) {
-            guard self.directMessageMarkerIsDueLocked(fingerprint, today: today) else { return }
-            self.cache.lastInteractions[fingerprint] = today
-            self.saveIdentityCache(now: now)
-        }
-    }
-
-    /// Forgets that we exchanged private messages with `fingerprint`: the
-    /// chat was cleared. Retention then treats them like anyone else.
-    func forgetDirectMessageHistory(fingerprint: String) {
-        guard !fingerprint.isEmpty else { return }
-        queue.sync(flags: .barrier) {
-            guard self.cache.lastInteractions.removeValue(forKey: fingerprint) != nil else { return }
-            self.saveIdentityCache()
-        }
-    }
-
-    /// Requires `queue`. Whether `fingerprint`'s direct-message marker is
-    /// missing or at least `lastSeenRefreshInterval` older than `today`.
-    private func directMessageMarkerIsDueLocked(_ fingerprint: String, today: Date) -> Bool {
-        guard let marker = cache.lastInteractions[fingerprint] else { return true }
-        return today.timeIntervalSince(marker) >= retentionPolicy.lastSeenRefreshInterval
-    }
-
     /// Start of the UTC day containing `date`, by plain arithmetic: this
     /// runs on every verified announce, and a `Calendar` call would cost more
     /// than the rest of an unchanged upsert.
@@ -729,14 +683,13 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     }
 
     /// Requires `queue`. Whether we have a relationship with `fingerprint`
-    /// that a few lookups can see: a favorite, a verification, local social
-    /// state or direct-message history. Vouch links, the other protection,
-    /// need a scan and are checked by the pass.
+    /// that a few lookups can see: a favorite, a verification or local social
+    /// state. Vouch links, the other protection, need a scan and are checked
+    /// by the pass.
     private func hasRelationshipLocked(_ fingerprint: String) -> Bool {
         if retentionProtectedFingerprints?.contains(fingerprint) == true
             || cache.verifiedFingerprints.contains(fingerprint)
-            || cache.verifiedAt?[fingerprint] != nil
-            || cache.lastInteractions[fingerprint] != nil {
+            || cache.verifiedAt?[fingerprint] != nil {
             return true
         }
         guard let social = cache.socialIdentities[fingerprint] else { return false }
@@ -802,9 +755,6 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     }
 
     /// Requires `queue` (barrier). The retention pass:
-    /// 0. removes direct-message markers that expired (see
-    ///    `directMessageRetention`), counting like stranger ages; their
-    ///    partners are strangers from here on;
     /// 1. clears `lastSeen` on identities we have a relationship with: they
     ///    need no stamp, so none is kept as co-presence metadata;
     /// 2. stamps strangers that have no stamp (caches written before
@@ -833,22 +783,6 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         let passDayChanged = cache.retentionPassDay != today
         cache.retentionPassDay = today
         var heldBack = 0
-
-        // A marker ahead of the clock counts as today, like a stamp.
-        let markerAge = retentionPolicy.directMessageRetention + retentionPolicy.lastSeenRefreshInterval
-        let markersExpireBefore = agingDay?.addingTimeInterval(-markerAge)
-        var expiredMarkers: [String] = []
-        for (fingerprint, marker) in cache.lastInteractions {
-            let markedDay = min(marker, today)
-            if let markersExpireBefore, markedDay < markersExpireBefore {
-                expiredMarkers.append(fingerprint)
-            } else if markedDay < today.addingTimeInterval(-markerAge) {
-                heldBack += 1
-            }
-        }
-        for fingerprint in expiredMarkers {
-            cache.lastInteractions.removeValue(forKey: fingerprint)
-        }
 
         let vouchLinked = vouchLinkedFingerprintsLocked()
         var clearedStamps: [String] = []
@@ -908,9 +842,9 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         evictLocked(evicted)
         lastRetentionProtectedCount = protectedCount
 
-        if !evicted.isEmpty || !expiredMarkers.isEmpty {
+        if !evicted.isEmpty {
             SecureLogger.info(
-                "Identity retention forgot \(unseen.count) long-unseen and \(evicted.count - unseen.count) excess stranger(s) and \(expiredMarkers.count) expired direct-message marker(s); kept \(strangerCount - evicted.count) stranger(s) and \(protectedCount) protected",
+                "Identity retention forgot \(unseen.count) long-unseen and \(evicted.count - unseen.count) excess stranger(s); kept \(strangerCount - evicted.count) stranger(s) and \(protectedCount) protected",
                 category: .security
             )
         }
@@ -923,7 +857,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
                 category: .security
             )
         }
-        let changed = !(clearedStamps.isEmpty && newStamps.isEmpty && evicted.isEmpty && expiredMarkers.isEmpty)
+        let changed = !(clearedStamps.isEmpty && newStamps.isEmpty && evicted.isEmpty)
         return changed || confirmsLater
     }
 
@@ -1171,8 +1105,8 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     
     func updateHandshakeState(peerID: PeerID, state: HandshakeState) {
         queue.sync(flags: .barrier) {
-            // A completed handshake is not direct-message history: only
-            // `recordDirectMessageHistory` writes `lastInteractions`.
+            // Memory only: a completed handshake is not written down (see
+            // `IdentityCache.lastInteractions`).
             self.ephemeralSessions[peerID]?.handshakeState = state
         }
     }

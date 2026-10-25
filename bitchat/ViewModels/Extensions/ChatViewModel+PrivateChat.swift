@@ -196,36 +196,4 @@ extension ChatViewModel {
     func isMessageBlocked(_ message: BitchatMessage) -> Bool {
         privateConversationCoordinator.isMessageBlocked(message)
     }
-
-    /// Marks the person behind `peerID` as a direct-message partner, whom
-    /// identity-cache retention keeps for a while after the last message
-    /// (see `SecureIdentityStateManager.RetentionPolicy`).
-    @MainActor
-    func recordDirectMessageHistory(with peerID: PeerID) {
-        guard let fingerprint = directMessagePartnerFingerprint(for: peerID) else { return }
-        identityManager.recordDirectMessageHistory(fingerprint: fingerprint)
-    }
-
-    /// Forgets that we exchanged private messages with the person behind
-    /// `peerID`, because the chat was cleared.
-    @MainActor
-    func forgetDirectMessageHistory(with peerID: PeerID) {
-        guard let fingerprint = directMessagePartnerFingerprint(for: peerID) else { return }
-        identityManager.forgetDirectMessageHistory(fingerprint: fingerprint)
-    }
-
-    /// The mesh identity behind a private conversation's peer ID. Noise-key
-    /// IDs hash directly and short IDs resolve through the peer service; an
-    /// absent peer known only from the identity cache, such as a courier
-    /// delivery, resolves to its one persisted candidate, and an ambiguous
-    /// short ID to nothing. Geohash DMs and groups have no mesh identity.
-    @MainActor
-    private func directMessagePartnerFingerprint(for peerID: PeerID) -> String? {
-        guard !peerID.isGeoDM, !peerID.isGroup else { return nil }
-        if let fingerprint = peerID.noiseKey?.sha256Fingerprint() ?? getFingerprint(for: peerID) {
-            return fingerprint
-        }
-        let persisted = identityManager.getCryptoIdentitiesByPeerIDPrefix(peerID)
-        return persisted.count == 1 ? persisted[0].fingerprint : nil
-    }
 }
