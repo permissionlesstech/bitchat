@@ -50,7 +50,6 @@ final class SpamFilter: @unchecked Sendable {
         let time: TimeInterval
         let text: [Int]
         let trigrams: [Int]
-        let positions: [Int: [Int]]
     }
 
     private struct SharedEntry {
@@ -72,6 +71,11 @@ final class SpamFilter: @unchecked Sendable {
     private var activity: UInt64 = 0
     /// Recent texts from every sender, for the cross-user repeat check.
     private var recentTexts: [SharedEntry] = []
+    /// Sequence number of `recentTexts[0]`; entries are numbered in arrival order.
+    private var recentTextsStart = 0
+    /// Trigram hash to the sequence numbers of the recent texts containing it,
+    /// oldest first, so a message only meets the texts it shares trigrams with.
+    private var recentTrigrams: [Int: [Int]] = [:]
     private var verdicts: [String: SpamVerdict] = [:]
     private var verdictOrder: [String] = []
     private var verdictHead = 0
@@ -146,7 +150,8 @@ final class SpamFilter: @unchecked Sendable {
         let now = clock().timeIntervalSince1970
         let oldestTrusted = now - config.maxBackdate
         let time = min(max(timestamp.timeIntervalSince1970, oldestTrusted), now)
-        var state = senders[senderKey] ?? SenderState(
+        // Taken out while it changes, so its arrays aren't copied on write.
+        var state = senders.removeValue(forKey: senderKey) ?? SenderState(
             rate: TokenBucketSchedule(buckets: [config.messageBucket, config.characterBucket, config.linkBucket]),
             lastActive: 0
         )
@@ -175,10 +180,7 @@ final class SpamFilter: @unchecked Sendable {
                 state.history.removeFirst(state.history.count - repetition.historySize)
             }
             if text.count >= repetition.crossUserMinLength {
-                recentTexts.append(SharedEntry(senderKey: senderKey, fingerprint: fingerprint))
-                if recentTexts.count > repetition.crossUserHistorySize {
-                    recentTexts.removeFirst(recentTexts.count - repetition.crossUserHistorySize)
-                }
+                rememberRecentText(SharedEntry(senderKey: senderKey, fingerprint: fingerprint), limit: repetition.crossUserHistorySize)
             }
         } else {
             verdict = admitRate(&state, content: content, time: time, isText: isText)
@@ -214,6 +216,8 @@ final class SpamFilter: @unchecked Sendable {
     private func clearLocked() {
         senders.removeAll()
         recentTexts.removeAll()
+        recentTextsStart = 0
+        recentTrigrams.removeAll()
         verdicts.removeAll()
         verdictOrder.removeAll()
         verdictHead = 0
@@ -222,7 +226,7 @@ final class SpamFilter: @unchecked Sendable {
 
     private func hasRepeatedCharacters(_ text: [Int], config: RepetitionConfig) -> Bool {
         text.count >= config.minRepeatedCharactersLength &&
-            RepetitionDetector.selfSimilarity(text) >= config.repeatedCharactersThreshold
+            RepetitionDetector.selfSimilarity(text, reaches: config.repeatedCharactersThreshold)
     }
 
     private func makeFingerprint(_ text: [Int], time: TimeInterval, config: RepetitionConfig) -> Fingerprint {
@@ -230,8 +234,7 @@ final class SpamFilter: @unchecked Sendable {
         return Fingerprint(
             time: time,
             text: compared,
-            trigrams: RepetitionDetector.trigrams(compared),
-            positions: RepetitionDetector.positions(compared)
+            trigrams: RepetitionDetector.trigrams(compared)
         )
     }
 
@@ -239,7 +242,10 @@ final class SpamFilter: @unchecked Sendable {
         guard length >= config.minRepeatedMessageLength else { return false }
         // At most `historySize` comparisons, so no budget is needed.
         var budget = ComparisonBudget(comparisons: .max, alignments: .max)
-        let copies = state.history.filter { isNearCopy($0, message, config: config, budget: &budget) }.count
+        let copies = state.history.filter { earlier in
+            let overlap = RepetitionDetector.trigramOverlap(earlier.trigrams, message.trigrams)
+            return isNearCopy(earlier, message, sharedTrigrams: overlap, config: config, budget: &budget)
+        }.count
         return copies > config.allowedRepeats
     }
 
@@ -252,13 +258,44 @@ final class SpamFilter: @unchecked Sendable {
             comparisons: config.crossUserMaxComparisons,
             alignments: config.crossUserMaxAlignments
         )
-        for entry in recentTexts.reversed() where entry.senderKey != senderKey {
+        // Shared distinct trigrams per recent text (by position), from the
+        // index: the same counts `trigramOverlap` would find, without visiting
+        // unrelated texts.
+        var shared = [Int](repeating: 0, count: recentTexts.count)
+        shared.withUnsafeMutableBufferPointer { shared in
+            for trigram in message.trigrams {
+                guard let sequences = recentTrigrams[trigram] else { continue }
+                for sequence in sequences { shared[sequence - recentTextsStart] += 1 }
+            }
+        }
+        // Newest first. A zero threshold admits texts that share nothing.
+        for index in shared.indices.reversed() where shared[index] > 0 || config.minSharedTrigrams <= 0 {
+            let entry = recentTexts[index]
+            guard entry.senderKey != senderKey else { continue }
             guard !budget.isSpent else { break }
-            guard isNearCopy(entry.fingerprint, message, config: config, budget: &budget) else { continue }
+            let larger = max(entry.fingerprint.trigrams.count, message.trigrams.count)
+            let overlap = larger == 0 ? 1 : Double(shared[index]) / Double(larger)
+            guard isNearCopy(entry.fingerprint, message, sharedTrigrams: overlap, config: config, budget: &budget) else { continue }
             copies += 1
             if copies > config.crossUserAllowedRepeats { return true }
         }
         return false
+    }
+
+    private func rememberRecentText(_ entry: SharedEntry, limit: Int) {
+        let sequence = recentTextsStart + recentTexts.count
+        recentTexts.append(entry)
+        for trigram in entry.fingerprint.trigrams { recentTrigrams[trigram, default: []].append(sequence) }
+        while recentTexts.count > limit {
+            let oldest = recentTexts.removeFirst()
+            // The oldest text holds the smallest sequence number in each of its lists.
+            for trigram in oldest.fingerprint.trigrams {
+                guard var sequences = recentTrigrams[trigram] else { continue }
+                sequences.removeFirst()
+                recentTrigrams[trigram] = sequences.isEmpty ? nil : sequences
+            }
+            recentTextsStart += 1
+        }
     }
 
     /// Work left for comparing one message: pairs that get past the trigram
@@ -266,28 +303,35 @@ final class SpamFilter: @unchecked Sendable {
     private struct ComparisonBudget {
         var comparisons: Int
         var alignments: Int
+        /// The message's character positions, built when a bound first needs them.
+        var positions: [Int: [Int]]?
 
         var isSpent: Bool { comparisons <= 0 || alignments <= 0 }
     }
 
-    /// The cheap checks (time, length, shared trigrams) cost nothing from
-    /// `budget`; the diagonal bound spends a comparison and `align` an alignment.
+    /// The cheap checks (time, length, `sharedTrigrams`, their
+    /// `trigramOverlap`) cost nothing from `budget`; the diagonal bound spends
+    /// a comparison and `align` an alignment.
     private func isNearCopy(
         _ earlier: Fingerprint,
         _ message: Fingerprint,
+        sharedTrigrams: Double,
         config: RepetitionConfig,
         budget: inout ComparisonBudget
     ) -> Bool {
         let longer = max(earlier.text.count, message.text.count)
         guard abs(earlier.time - message.time) <= config.historyWindow,
               lengthsCanMatch(earlier.text.count, message.text.count, config: config),
-              RepetitionDetector.trigramOverlap(earlier.trigrams, message.trigrams) >= config.minSharedTrigrams
+              sharedTrigrams >= config.minSharedTrigrams
         else { return false }
         budget.comparisons -= 1
+        let positions = budget.positions ?? RepetitionDetector.positions(message.text)
+        budget.positions = positions
+        // The bound is symmetric, so it indexes the message, not each earlier text.
         guard Double(RepetitionDetector.alignmentUpperBound(
-                  message.text,
                   earlier.text,
-                  positionsInB: earlier.positions,
+                  message.text,
+                  positionsInB: positions,
                   maxPeaks: config.maxAlignmentPeaks
               )) / Double(longer) >= config.repeatedMessageSimilarity
         else { return false }

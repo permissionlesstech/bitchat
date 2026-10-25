@@ -449,6 +449,60 @@ import Testing
         }
     }
 
+    @Test func bucketShortcutForInOrderMessagesMatchesAFullReplay() {
+        // Reference: replay every admitted message from full buckets each time.
+        let configs = [TokenBucketConfig(capacity: 3, refillPerSecond: 0.2), TokenBucketConfig(capacity: 50, refillPerSecond: 2)]
+        func replayAdmits(_ admitted: [(TimeInterval, [Double])], _ time: TimeInterval, _ costs: [Double]) -> Int? {
+            let timeline = (admitted + [(time, costs)]).enumerated().sorted { a, b in
+                a.element.0 != b.element.0 ? a.element.0 < b.element.0 : a.offset < b.offset
+            }.map(\.element)
+            var tokens = configs.map(\.capacity)
+            var last: TimeInterval?
+            for (t, c) in timeline {
+                if let last, t > last {
+                    for b in configs.indices { tokens[b] = min(configs[b].capacity, tokens[b] + (t - last) * configs[b].refillPerSecond) }
+                }
+                last = t
+                for b in configs.indices {
+                    tokens[b] -= c[b]
+                    if tokens[b] < -1e-9 { return b }
+                }
+            }
+            return nil
+        }
+        var rng = SplitMix64(seed: 9)
+        for _ in 0..<40 {
+            var schedule = TokenBucketSchedule(buckets: configs)
+            var admitted: [(TimeInterval, [Double])] = []
+            var clock: TimeInterval = 0
+            for _ in 0..<40 {
+                clock += Double(Int.random(in: 0...6, using: &rng))
+                // Mostly live traffic, sometimes a backfilled message from earlier.
+                let time = Bool.random(using: &rng) && Int.random(in: 0..<4, using: &rng) == 0
+                    ? max(0, clock - Double(Int.random(in: 1...20, using: &rng)))
+                    : clock
+                let costs: [Double] = [1, Double(Int.random(in: 1...30, using: &rng))]
+                let expected = replayAdmits(admitted, time, costs)
+                #expect(schedule.tryAdmit(at: time, costs: costs) == expected)
+                if expected == nil { admitted.append((time, costs)) }
+            }
+        }
+    }
+
+    @Test func earlyExitSelfSimilarityAgreesWithTheFullScore() {
+        var rng = SplitMix64(seed: 5)
+        for alphabet in [1, 2, 3, 26] {
+            for _ in 0..<80 {
+                let length: Int = Int.random(in: 0...90, using: &rng)
+                let text: [Int] = (0..<length).map { _ -> Int in 97 + Int.random(in: 0..<alphabet, using: &rng) }
+                for threshold in [0.5, 0.85, 1.0] {
+                    let full = RepetitionDetector.selfSimilarity(text) >= threshold
+                    #expect(RepetitionDetector.selfSimilarity(text, reaches: threshold) == full)
+                }
+            }
+        }
+    }
+
     @Test func recentCopiesAreCaughtBehindAFloodOfLookAlikes() {
         let now = Date(timeIntervalSince1970: 1_000_000)
         var config = SpamFilterConfig()

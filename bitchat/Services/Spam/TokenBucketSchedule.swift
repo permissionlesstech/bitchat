@@ -33,10 +33,15 @@ struct TokenBucketSchedule {
     private var entries: [Entry] = []
     private var checkpoint: TimeInterval?
     private var checkpointTokens: [Double]
+    /// Tokens left after the newest entry, as a replay would compute them, so
+    /// an in-order message (live traffic) is checked without a replay.
+    private var tailTokens: [Double]
+    private var tailTime: TimeInterval?
 
     init(buckets: [TokenBucketConfig]) {
         self.buckets = buckets
         self.checkpointTokens = buckets.map(\.capacity)
+        self.tailTokens = checkpointTokens
     }
 
     /// Admits and records the message when every bucket can pay `costs` at `time`.
@@ -47,6 +52,19 @@ struct TokenBucketSchedule {
         var insertAt = entries.count
         while insertAt > 0 && entries[insertAt - 1].time > time { insertAt -= 1 }
         let candidate = Entry(time: time, costs: costs)
+
+        if insertAt == entries.count {
+            var tokens = tailTokens
+            refill(&tokens, from: tailTime, to: time)
+            for b in buckets.indices {
+                tokens[b] -= costs[b]
+                if tokens[b] < -Self.epsilon { return b }
+            }
+            entries.append(candidate)
+            tailTokens = tokens
+            tailTime = time
+            return nil
+        }
 
         var tokens = checkpointTokens
         var last = checkpoint
@@ -67,6 +85,10 @@ struct TokenBucketSchedule {
             }
         }
         entries.insert(candidate, at: insertAt)
+        // The replay ran through the newest entry; folding old entries into the
+        // checkpoint later repeats the same steps, so this stays exact.
+        tailTokens = tokens
+        tailTime = last
         return nil
     }
 

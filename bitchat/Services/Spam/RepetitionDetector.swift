@@ -86,6 +86,36 @@ enum RepetitionDetector {
         return best
     }
 
+    /// Whether `selfSimilarity(text) >= threshold`, giving up on each shift as
+    /// soon as its mismatches rule it out. Ordinary text fails within a few
+    /// characters per shift, where `selfSimilarity` scans every one.
+    static func selfSimilarity(_ text: [Int], reaches threshold: Double) -> Bool {
+        let n = text.count
+        guard n >= 2 else { return threshold <= 0 }
+        // Runs for every incoming message, so it reads the buffer directly.
+        return text.withUnsafeBufferPointer { text in
+            for lag in 1...(n / 2) {
+                let overlap = n - lag
+                var mismatches = 0
+                var possible = true
+                var i = 0
+                while i < overlap {
+                    if text[i] != text[i + lag] {
+                        mismatches += 1
+                        // The best this shift can still score, compared as the score itself is.
+                        if Double(overlap - mismatches) / Double(overlap) < threshold {
+                            possible = false
+                            break
+                        }
+                    }
+                    i += 1
+                }
+                if possible { return true }
+            }
+            return false
+        }
+    }
+
     /// One diagonal of the cross-correlation: `b[j]` lined up under `a[j + shift]`.
     struct Peak: Equatable {
         let shift: Int
@@ -220,12 +250,44 @@ enum RepetitionDetector {
     /// Distinct character trigrams as sorted hashes, for a cheap pre-check before `align`.
     static func trigrams(_ text: [Int]) -> [Int] {
         guard text.count >= 3 else { return [] }
-        var hashes = Set<Int>()
-        for i in 0..<(text.count - 2) {
-            let pair: Int = text[i] * 31 + text[i + 1]
-            hashes.insert(pair * 31 + text[i + 2])
+        let count = text.count - 2
+        var hashes = [Int](unsafeUninitializedCapacity: count) { hashes, initialized in
+            text.withUnsafeBufferPointer { text in
+                for i in 0..<count {
+                    let pair: Int = text[i] &* 31 &+ text[i + 1]
+                    hashes[i] = pair &* 31 &+ text[i + 2]
+                }
+            }
+            initialized = count
         }
-        return hashes.sorted()
+        // Runs for every incoming message: an insertion sort over the buffer
+        // beats the generic sort on chat-length lists, above all in debug builds.
+        if count <= 64 {
+            hashes.withUnsafeMutableBufferPointer { hashes in
+                for i in 1..<max(1, hashes.count) {
+                    let value = hashes[i]
+                    var j = i - 1
+                    while j >= 0 && hashes[j] > value {
+                        hashes[j + 1] = hashes[j]
+                        j -= 1
+                    }
+                    hashes[j + 1] = value
+                }
+            }
+        } else {
+            hashes.sort()
+        }
+        // Drop repeats in place; sorting brought them together.
+        let unique: Int = hashes.withUnsafeMutableBufferPointer { hashes in
+            var unique = 0
+            for i in 0..<hashes.count where unique == 0 || hashes[unique - 1] != hashes[i] {
+                hashes[unique] = hashes[i]
+                unique += 1
+            }
+            return unique
+        }
+        hashes.removeLast(hashes.count - unique)
+        return hashes
     }
 
     /// Shared trigrams over the larger trigram set. Near-copies share most of

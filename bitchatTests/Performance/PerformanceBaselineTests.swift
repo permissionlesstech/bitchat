@@ -469,17 +469,23 @@ final class PerformanceBaselineTests: XCTestCase {
         reportThroughput("pipeline.publicIngest", samples: samples, operations: messageCount, unit: "messages")
     }
 
-    /// A deterministic sentence of unrelated words, different for every `seed`.
+    /// A deterministic sentence of made-up words, different for every `seed`.
+    /// Like real chat between different people, two of them rarely share
+    /// enough trigrams to need the spam filter's full comparison; words drawn
+    /// from one small list would, which measures the filter's worst case
+    /// rather than ordinary ingest.
     private static func perfSentence(_ seed: Int) -> String {
-        let words = ["market", "river", "lantern", "bicycle", "orange", "window", "garden", "quiet", "station",
-                     "morning", "paper", "copper", "valley", "thunder", "pocket", "silver", "harbor", "candle",
-                     "meadow", "button", "ladder", "violet", "engine", "basket", "cloud", "pepper", "forest",
-                     "mirror", "saddle", "tunnel", "anchor", "biscuit", "canyon", "dragon", "ember", "falcon"]
         var state = UInt64(seed) &* 0x9E37_79B9_7F4A_7C15 &+ 1
-        return (0..<7).map { _ in
+        func next(_ bound: Int) -> Int {
             state = state &* 6364136223846793005 &+ 1442695040888963407
-            return words[Int((state >> 33) % UInt64(words.count))]
-        }.joined(separator: " ")
+            return Int((state >> 33) % UInt64(bound))
+        }
+        let words: [String] = (0..<7).map { _ in
+            let length = 2 + next(6)
+            let letters: [Character] = (0..<length).map { _ in Character(Unicode.Scalar(UInt8(97 + next(26)))) }
+            return String(letters)
+        }
+        return words.joined(separator: " ")
     }
 
     // MARK: - 7. ConversationStore append (to-be architecture)
