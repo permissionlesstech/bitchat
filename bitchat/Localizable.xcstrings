@@ -97238,7 +97238,7 @@
         }
       }
     },
-    "verification.tab.picker" : {
+    "verification.tab.picker_label" : {
       "comment" : "Accessibility label for the my QR / scan segmented control in the verification sheet",
       "extractionState" : "manual",
       "localizations" : {

@@ -9,8 +9,8 @@ import AppKit
 #endif
 
 /// The user's verification QR on a white card, with their nickname under it.
-/// The raw payload stays off-screen; long-press copies it for the macOS
-/// paste fallback.
+/// The raw payload stays off-screen; the card's context menu copies it for
+/// the macOS paste fallback.
 struct MyQRView: View {
     let qrString: String
     let nickname: String
@@ -172,6 +172,9 @@ struct QRScanView: View {
             defaultValue: "Camera unavailable — paste a QR below.",
             comment: "Shown over the scanner preview when no camera is available or permission was denied"
         )
+        // iOS-only: macOS keeps the paste hint above, and CI's Periphery
+        // scan (macOS scheme) would report these as dead code.
+        #if os(iOS)
         static let cameraPermission = String(
             localized: "verification.scan.camera_permission",
             defaultValue: "allow camera access to scan a friend's QR",
@@ -182,6 +185,7 @@ struct QRScanView: View {
             defaultValue: "no camera available",
             comment: "Shown in place of the scanner preview when the device has no usable camera"
         )
+        #endif
         static func requested(_ nickname: String) -> String {
             String(
                 format: String(localized: "verification.scan.status.requested", comment: "Status text when verification is requested for a nickname"),
@@ -282,7 +286,7 @@ struct QRScanView: View {
             if camera == .denied {
                 Button(Strings.openSettings, action: SystemSettings.camera.open)
                     .bitchatFont(size: 15, weight: .medium)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.bordered)
                     .tint(palette.accent)
             }
         }
@@ -533,10 +537,22 @@ struct VerificationSheetView: View {
 
     private enum Strings {
         static let title: LocalizedStringKey = "verification.sheet.title"
-        static let tabPicker: LocalizedStringKey = "verification.tab.picker"
-        static let myQRTab: LocalizedStringKey = "verification.tab.my_qr"
-        static let scanTab: LocalizedStringKey = "verification.tab.scan"
         static let removeVerification: LocalizedStringKey = "fingerprint.action.remove_verification"
+        static let tabPickerLabel = String(
+            localized: "verification.tab.picker_label",
+            defaultValue: "verification mode",
+            comment: "Accessibility label for the my QR / scan segmented control in the verification sheet"
+        )
+        static let tabMyQR = String(
+            localized: "verification.tab.my_qr",
+            defaultValue: "my QR",
+            comment: "Segment in the verification sheet that shows the user's own QR code"
+        )
+        static let tabScan = String(
+            localized: "verification.tab.scan",
+            defaultValue: "scan",
+            comment: "Segment in the verification sheet that opens the QR scanner"
+        )
     }
 
     private var accentColor: Color { palette.accent }
@@ -558,33 +574,30 @@ struct VerificationSheetView: View {
             .padding(.top, 12)
             .padding(.bottom, 8)
 
-            Picker(Strings.tabPicker, selection: $tab) {
-                Text(Strings.myQRTab).tag(Tab.myQR)
-                Text(Strings.scanTab).tag(Tab.scan)
+            Picker(Strings.tabPickerLabel, selection: $tab) {
+                Text(Strings.tabMyQR).tag(Tab.myQR)
+                Text(Strings.tabScan).tag(Tab.scan)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             .padding(.horizontal, 16)
             .padding(.top, 4)
 
-            ZStack {
+            Group {
                 switch tab {
                 case .myQR:
                     MyQRView(
                         qrString: verificationModel.myQRString(),
                         nickname: verificationModel.currentNickname
                     )
-                    .transition(.opacity)
                 case .scan:
                     // A successful scan lands back on my QR, so both sides
                     // can finish the exchange.
                     QRScanView(isActive: tab == .scan, onSuccess: { tab = .myQR })
                         .padding(16)
-                        .transition(.opacity)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .animation(.easeInOut(duration: 0.2), value: tab)
 
             if let peerID = verificationModel.selectedPeerID,
                verificationModel.isVerified(peerID: peerID) {
