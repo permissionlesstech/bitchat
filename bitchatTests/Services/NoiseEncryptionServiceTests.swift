@@ -715,8 +715,7 @@ struct NoiseEncryptionServiceTests {
             // setup handshake below, where bob is the responder. At 0.06 a
             // preempted runner could fire it mid-setup, tear down the half-open
             // responder, and make message 3 be answered as a fresh initiation.
-            ordinaryResponderHandshakeTimeout: 1.0,
-            ordinaryReconnectRollbackCooldown: 0.3
+            ordinaryResponderHandshakeTimeout: 1.0
         )
         let mallory = NoiseEncryptionService(keychain: MockKeychain())
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())

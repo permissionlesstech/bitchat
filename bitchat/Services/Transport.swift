@@ -65,6 +65,15 @@ struct MeshTopologySnapshot: Equatable {
     let edges: [MeshTopologyEdge]
 }
 
+/// Capability proof carried inside one exact authenticated Noise generation.
+/// Public announce capabilities are discovery hints and must never authorize
+/// generation-sensitive payloads such as double-ratchet bootstrap.
+struct AuthenticatedPeerTransportState: Equatable {
+    let capabilities: PeerCapabilities
+    let sessionGeneration: UUID
+    let noisePublicKey: Data
+}
+
 enum TransportEvent: @unchecked Sendable {
     case messageReceived(BitchatMessage)
     case publicMessageReceived(peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?)
@@ -81,6 +90,9 @@ enum TransportEvent: @unchecked Sendable {
     case peerSnapshotsUpdated([TransportPeerSnapshot])
     case messageDeliveryStatusUpdated(messageID: String, status: DeliveryStatus)
     case bluetoothStateUpdated(CBManagerState)
+    /// A new authenticated peer-state proof was accepted for the current
+    /// Noise generation. Identical echo packets do not re-emit this event.
+    case authenticatedPeerTransportStateUpdated(PeerID)
 }
 
 /// Downgrade-safe decision for a private-media recipient. Callers ask before
@@ -300,12 +312,15 @@ extension BitchatDelegate {
             didUpdateMessageDeliveryStatus(messageID, status: status)
         case .bluetoothStateUpdated(let state):
             didUpdateBluetoothState(state)
+        case .authenticatedPeerTransportStateUpdated:
+            break
         }
     }
 }
 
 extension BLEService: Transport {}
 extension BLEService: MeshFileTransferring {}
+extension BLEService: MeshDoubleRatchetTransporting {}
 extension BLEService: MeshVoiceStreaming {}
 extension BLEService: MeshCourierTransporting {}
 extension BLEService: MeshGroupMessaging {}

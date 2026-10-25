@@ -53,12 +53,20 @@ struct BLENoisePacketHandlerEnvironment {
         _ payload: Data,
         _ sessionGeneration: UUID
     ) -> Void
+    /// Authorizes generation-sensitive application payloads against the
+    /// exact session generation that decrypted them.
+    let authorizeNoisePayload: (
+        _ peerID: PeerID,
+        _ type: NoisePayloadType,
+        _ sessionGeneration: UUID
+    ) -> Bool
     /// Delivers `.noisePayloadReceived` to the UI as one main-actor hop.
     let deliverNoisePayload: (
         _ peerID: PeerID,
         _ type: NoisePayloadType,
         _ payload: Data,
-        _ timestamp: Date
+        _ timestamp: Date,
+        _ sessionGeneration: UUID
     ) -> Void
 }
 
@@ -238,8 +246,26 @@ final class BLENoisePacketHandler {
                 return
             }
 
+            guard env.authorizeNoisePayload(
+                peerID,
+                noisePayloadType,
+                decryption.sessionGeneration
+            ) else {
+                SecureLogger.warning(
+                    "Dropping Noise payload without capability proof for its decrypting generation",
+                    category: .security
+                )
+                return
+            }
+
             let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
-            env.deliverNoisePayload(peerID, noisePayloadType, Data(payloadData), ts)
+            env.deliverNoisePayload(
+                peerID,
+                noisePayloadType,
+                Data(payloadData),
+                ts,
+                decryption.sessionGeneration
+            )
         } catch NoiseEncryptionError.transportGenerationNotReady {
             if isDeferredRetry {
                 SecureLogger.warning(

@@ -1,8 +1,8 @@
 import BitFoundation
 
 extension PeerCapabilities {
-    /// Capabilities this build advertises in its announce packets.
-    /// Each feature adds its bit here when it ships.
+    /// Base capabilities, combined with transport-specific runtime bits.
+    /// BLEService adds NDR according to its configured feature gate.
     static let localSupported: PeerCapabilities = [
         .vouch,
         .prekeys,
