@@ -123,8 +123,8 @@ final class SecureIdentityStateManagerRetentionTests: XCTestCase {
 
         announce(strangers[0], to: manager, at: now)
 
-        // Strangers not seen for over a week go first, least recently seen
-        // first: 1 and 2 (the newer arrival first), then 3. Stamps are
+        // Strangers stamped over a week ago go first, oldest stamp first: 1
+        // and 2 (the newer arrival first), then 3. Stamps are
         // refreshed weekly, so everyone stamped within the week may have been
         // seen today: they rank equal, and the newest arrivals (later
         // firstSeen) go first, 10 and then 9.
@@ -247,6 +247,28 @@ final class SecureIdentityStateManagerRetentionTests: XCTestCase {
 
         announce(Data(repeating: 0x87, count: 32), to: manager, at: now.addingTimeInterval(38 * Self.day))
         XCTAssertFalse(strangers.contains { knows($0, manager) })
+    }
+
+    func test_retention_givesAFullPeriodWhenProtectionLapses() throws {
+        // A favorite seen yesterday. The pass drops its stamp.
+        let fixture = try IdentityCacheFixture(count: 1, lastSeen: daysAgo(1))
+        let friend = fixture.strangers[0]
+        let manager = SecureIdentityStateManager(fixture.keychain, retentionPolicy: policy)
+        manager.setRetentionProtectedFingerprints([friend.fingerprint])
+        announce(Data(repeating: 0x8D, count: 32), to: manager, at: now)
+        XCTAssertNil(lastSeen(of: friend.fingerprint, in: manager))
+
+        // Unfavorited 100 days later, unseen all that time: the next pass
+        // stamps it with its own day, and it is kept 37 days from then.
+        manager.setRetentionProtectedFingerprints([])
+        let lapsed = now.addingTimeInterval(100 * Self.day)
+        announce(Data(repeating: 0x8E, count: 32), to: manager, at: lapsed)
+        XCTAssertEqual(lastSeen(of: friend.fingerprint, in: manager), today.addingTimeInterval(100 * Self.day))
+        announce(Data(repeating: 0x8F, count: 32), to: manager, at: lapsed.addingTimeInterval(36 * Self.day))
+        announce(Data(repeating: 0x9B, count: 32), to: manager, at: lapsed.addingTimeInterval(37 * Self.day))
+        XCTAssertTrue(knows(friend, manager))
+        announce(Data(repeating: 0x9C, count: 32), to: manager, at: lapsed.addingTimeInterval(38 * Self.day))
+        XCTAssertFalse(knows(friend, manager))
     }
 
     // MARK: - Clock steps

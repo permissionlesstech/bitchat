@@ -219,8 +219,9 @@ struct IdentityCache: Codable {
 
     // Stable Noise fingerprints that proved encrypted private-media support
     // inside an authenticated Noise session. Optional for decoding caches
-    // written before this migration. Entries are monotonic until a panic wipe
-    // so an old/replayed announce cannot silently downgrade a peer.
+    // written before this migration. Entries stay until retention evicts the
+    // stranger (see `SecureIdentityStateManager.RetentionPolicy`) or a panic
+    // wipe, so an old/replayed announce cannot silently downgrade a peer.
     var privateMediaCapableFingerprints: Set<String>? = nil
 
     // Noise-fingerprint -> Ed25519 announcement key, learned only from the

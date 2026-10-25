@@ -39,8 +39,9 @@
 /// - Persistence is optional (user-controlled)
 /// - Minimal data retention
 /// - No cloud sync or backup
-/// - Strangers unseen for 30 days are forgotten; the cache holds at most
-///   2,000 of them (see `RetentionPolicy`)
+/// - Strangers are forgotten about five weeks after they were last seen
+///   (30 + 7 days by a weekly stamp), and the cache holds about 2,000 of
+///   them at most (see `RetentionPolicy`)
 ///
 /// ### Thread Safety
 /// - Concurrent read access via GCD barriers
@@ -168,7 +169,10 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     /// we have no relationship with. It never evicts favorites (the
     /// `setRetentionProtectedFingerprints` snapshot), verified peers, peers
     /// with local social state (petname, notes, block, trust level), or
-    /// peers in a vouch. A private conversation is no relationship here, and
+    /// peers in a vouch. Removing a verification leaves the `casual` trust
+    /// level, and vouch records never expire, so a peer once verified,
+    /// and a peer vouched for by someone we verified, stay until a panic
+    /// wipe. A private conversation is no relationship here, and
     /// this cache records none: bitchat keeps conversations in memory only.
     /// A peer the owner only messaged is a stranger like any other;
     /// favoriting or verifying it protects it. Retention runs only on the
@@ -185,14 +189,17 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     /// files, public voice frames, leaves, prekey bundles) are checked
     /// against this cache, so they are dropped and not relayed. That is the
     /// exposure of a peer never seen before, limited to strangers unseen for
-    /// 30 days or, past the cap, the least recently seen ones. A stranger
-    /// seen within the last `lastSeenRefreshInterval` ranks behind every
-    /// newer arrival, but someone who mints enough identities to pass the cap
-    /// can push out a chosen stranger not seen for longer and replay its
-    /// Noise key first; the real peer is then refused on this device for
-    /// good, since pins cannot be reset. Each minted identity costs a signed
-    /// announce and one full write here. While a peer is in range,
-    /// `BLEPeerRegistry` still holds its pin.
+    /// over 30 days or, past the cap, the least recently seen ones. A
+    /// stranger stamped within the last `lastSeenRefreshInterval` (anyone
+    /// seen today or yesterday, and some seen earlier) ranks behind every
+    /// newer arrival, but someone who mints enough identities to pass the
+    /// cap can push out a chosen stranger with an older stamp and replay its
+    /// Noise key first. The real peer's announces are then refused here
+    /// until that pin goes: refused announces refresh nothing, so it ages
+    /// out once the impostor stops announcing, and a Noise session with the
+    /// real peer rebinds the key (`bindAuthenticatedSigningPublicKey`). Each
+    /// minted identity costs a signed announce and one full write here.
+    /// While a peer is in range, `BLEPeerRegistry` still holds its pin.
     ///
     /// Ages come from the wall clock. A stamp never moves backwards and one
     /// wrong clock reading forgets nothing (see `agingDayLocked`), but a
@@ -200,7 +207,8 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     /// everyone by it, and an identity first stamped while the clock is
     /// behind carries that earlier day.
     struct RetentionPolicy {
-        /// An unprotected identity not seen for this long is evicted.
+        /// An unprotected identity not seen for at least this long is
+        /// evicted (see `lastSeenRefreshInterval`).
         var strangerRetention: TimeInterval = 30 * 24 * 60 * 60
         /// `lastSeen` is rewritten at most this often, so a peer seen every
         /// day costs one write a week. Eviction waits for
@@ -212,7 +220,9 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         var strangerHighWater = 2_000
         /// ...down to this many.
         var strangerLowWater = 1_500
-        /// The age pass runs at most this often.
+        /// A pass is due this long after the previous one in this session.
+        /// The first verified announce after a launch runs one too, and so
+        /// does passing `strangerHighWater`.
         var passInterval: TimeInterval = 24 * 60 * 60
 
         static let standard = RetentionPolicy()
@@ -352,8 +362,9 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         //
         // A flush here is normally redundant: every mutating API already
         // persists inline within its own barrier, so the keychain is already
-        // up to date unless a write failed. As a queue-free best-effort
-        // retry, only flush if a write is still pending. This is a direct read of
+        // up to date unless a write failed or the load dropped legacy
+        // `lastInteractions` entries. As a queue-free best-effort write,
+        // only flush if a write is still pending. This is a direct read of
         // in-hand state — safe because a deallocating object has no other
         // live references, so nothing can be mutating `cache` concurrently.
         if pendingSave {
@@ -475,8 +486,9 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     // `deinit`, which persists inline; see the deinit note). Every mutating
     // API already persists inline inside its own barrier via
     // `saveIdentityCache`, so by the time this is called the keychain is
-    // normally up to date and this is a no-op; it retries a write that
-    // failed (`pendingSave`).
+    // normally up to date and this is a no-op; it writes what is still
+    // pending (`pendingSave`): a write that failed, or the load's removal of
+    // legacy `lastInteractions` entries.
     //
     // Runs synchronously inside a `queue.sync(flags: .barrier)`: the barrier
     // makes the `cache` read race-free (a plain off-queue read races in-flight
@@ -510,11 +522,15 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     /// mirrors `BLEPeerRegistry.upsertVerifiedAnnounce` — without it, an
     /// attacker replaying a victim's noiseKey/peerID with their own signing
     /// key could overwrite the victim's persisted identity while the victim is
-    /// offline or after an app restart. The refusal is permanent: there is
-    /// currently no targeted in-app way to reset the pin (`setVerified` does
-    /// not touch it). Recovering from a legitimate signing re-key requires the
-    /// peer to establish a new noise identity (new peerID) or the local user
-    /// to wipe all identity data (`clearAllIdentityData`, e.g. panic wipe).
+    /// offline or after an app restart. The refusal lasts as long as the pin,
+    /// and there is no targeted in-app way to reset it (`setVerified` does
+    /// not touch it). The pin changes only when a Noise session binds the
+    /// key the peer proved (`bindAuthenticatedSigningPublicKey`), and goes
+    /// when retention evicts an unprotected stranger (a refused update
+    /// refreshes nothing, so a pin only an impostor announces ages out once
+    /// they stop) or when all identity data is wiped (`clearAllIdentityData`,
+    /// e.g. panic wipe). So a legitimate signing re-key is accepted after the
+    /// peer's next Noise session, or as a new noise identity (new peerID).
     ///
     /// Writes the cache only when the call changes it (a new identity, a
     /// first signing-key pin, a Noise key change or a nickname change).
@@ -769,8 +785,12 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     ///    seen down to `strangerLowWater`. Stamps are refreshed only every
     ///    `lastSeenRefreshInterval`, so a stranger stamped within that
     ///    interval may have been seen today and ranks as seen today; among
-    ///    those the newest arrivals go first, so a burst of new identities
-    ///    cannot push out a stranger seen recently.
+    ///    those the newest arrivals go first. A burst of new identities
+    ///    therefore reaches such a stranger only after every newer arrival,
+    ///    and only when more than `strangerLowWater` strangers carry such a
+    ///    stamp. An older stamp ranks first even when its stranger was seen
+    ///    as recently as two days ago, since a stamp lags the last sighting
+    ///    by up to six days.
     /// The identity being announced is never evicted by its own announce.
     private func applyRetentionLocked(now: Date, keeping announced: String) -> Bool {
         let today = Self.retentionDay(now)
