@@ -247,6 +247,66 @@ struct AppInfoView: View {
             }
         }
 
+        /// A defensive OpSec guide for people using bitchat under
+        /// surveillance. Every claim here is grounded in the actual
+        /// implementation and deliberately states the limits of each
+        /// protection — false confidence is the dangerous failure mode.
+        enum Sensitive {
+            static let title = String(localized: "app_info.sensitive.title", defaultValue: "SENSITIVE AREAS", comment: "Section header (uppercase) for the safety/OpSec guide aimed at users in hostile surveillance environments")
+            static let intro = String(localized: "app_info.sensitive.intro", defaultValue: "bitchat reduces risk; it does not make you invisible. if you're somewhere hostile, read this before you post — assume public channels are watched, and act like it.", comment: "Intro paragraph for the sensitive-areas safety guide, setting an honest, non-alarmist tone")
+
+            static let entries: [AppInfoFeatureInfo] = [
+                AppInfoFeatureInfo(
+                    id: "sensitive.public_channels",
+                    icon: "eye.slash",
+                    resolvedTitle: String(localized: "app_info.sensitive.public_channels.title", defaultValue: "public means watched", comment: "Guide entry title: public channels should be treated as monitored"),
+                    resolvedDescription: String(localized: "app_info.sensitive.public_channels.body", defaultValue: "anyone can join any mesh or geohash channel, and channel messages are signed but not encrypted — readable verbatim by any nearby radio or relay. treat every public channel as monitored. keep sensitive talk in verified private messages, never in channels.", comment: "Guide entry body explaining public channels are unencrypted and joinable by anyone")
+                ),
+                AppInfoFeatureInfo(
+                    id: "sensitive.precision",
+                    icon: "mappin.and.ellipse",
+                    resolvedTitle: String(localized: "app_info.sensitive.precision.title", defaultValue: "your location shows before you post", comment: "Guide entry title: location activity is visible before anyone posts"),
+                    resolvedDescription: String(localized: "app_info.sensitive.precision.body", defaultValue: "with location access on, while bitchat is open it asks relays about the areas around you and tells the channels for the area you're really in that you're nearby — even if you never post, and whatever channel you're viewing. turning location access off stops both. not everyone reading a channel shows up in it, so you can't count who's watching. every post also pins you to that channel's area, so when your location is sensitive, post only in wide-area channels.", comment: "Guide entry body: with location access on and the app open, bitchat samples nearby areas from relays and announces presence to the channels for the real area; turning location access off stops both; every post pins the poster to that channel's area")
+                ),
+                AppInfoFeatureInfo(
+                    id: "sensitive.verify",
+                    icon: "checkmark.shield",
+                    resolvedTitle: String(localized: "app_info.sensitive.verify.title", defaultValue: "verify before you trust", comment: "Guide entry title: verify a contact's identity out of band before trusting them"),
+                    resolvedDescription: String(localized: "app_info.sensitive.verify.body", defaultValue: "private messages are end-to-end encrypted, but encrypted isn't identified. marking someone verified by hand checks nothing — compare the full fingerprint, or scan the qr code, with the real person. it binds a key, not a human.", comment: "Guide entry body explaining that encrypted is not identified, and how to verify a fingerprint in person")
+                ),
+                AppInfoFeatureInfo(
+                    id: "sensitive.identity",
+                    icon: "antenna.radiowaves.left.and.right",
+                    resolvedTitle: String(localized: "app_info.sensitive.identity.title", defaultValue: "minimize what you leak", comment: "Guide entry title: reduce identifying information broadcast over Bluetooth"),
+                    resolvedDescription: String(localized: "app_info.sensitive.identity.body", defaultValue: "with bluetooth on, anyone nearby can tell you're running bitchat — that can't be hidden. encryption hides what you say, not who you talk to. never use a real name or a handle people know as your nickname.", comment: "Guide entry body explaining what identifying information Bluetooth broadcasts reveal")
+                ),
+                AppInfoFeatureInfo(
+                    id: "sensitive.elicitation",
+                    icon: "person.crop.circle.badge.questionmark",
+                    resolvedTitle: String(localized: "app_info.sensitive.elicitation.title", defaultValue: "watch for elicitation", comment: "Guide entry title: beware strangers fishing for identifying information"),
+                    resolvedDescription: String(localized: "app_info.sensitive.elicitation.body", defaultValue: "display names are freely chosen and unverifiable — a friendly stranger probing for who, where, when, or who-else is the cheapest attack there is. don't disclose real names, locations, or plans on the strength of a nickname, and verify out-of-band before moving sensitive talk to dm.", comment: "Guide entry body warning about social-engineering and elicitation in chats")
+                ),
+                AppInfoFeatureInfo(
+                    id: "sensitive.blocking",
+                    icon: "nosign",
+                    resolvedTitle: String(localized: "app_info.sensitive.blocking.title", defaultValue: "block is a local filter, not a shield", comment: "Guide entry title: blocking only hides messages locally"),
+                    resolvedDescription: String(localized: "app_info.sensitive.blocking.body", defaultValue: "blocking drops a peer's messages on your device after they arrive and decrypt; it doesn't stop them transmitting, and doesn't notify them. it's per-identity, so a fresh keypair walks right past it.", comment: "Guide entry body explaining the limits of blocking")
+                ),
+                AppInfoFeatureInfo(
+                    id: "sensitive.panic",
+                    icon: "flame",
+                    resolvedTitle: String(localized: "app_info.sensitive.panic.title", defaultValue: "panic wipe is local and irreversible", comment: "Guide entry title: the panic wipe erases local data and cannot be undone"),
+                    resolvedDescription: String(localized: "app_info.sensitive.panic.body", defaultValue: "settings has a panic wipe button. it deletes bitchat's messages, media, keys, and identity from this device. if it reports it didn't finish, quit and reopen bitchat to complete it. it can't recall anything already sent, doesn't shred forensically, and leaves any icloud or finder backups untouched.", comment: "Guide entry body explaining what the panic wipe does and its limits")
+                ),
+                AppInfoFeatureInfo(
+                    id: "sensitive.help",
+                    icon: "lifepreserver",
+                    resolvedTitle: String(localized: "app_info.sensitive.help.title", defaultValue: "get real training", comment: "Guide entry title: seek dedicated digital-security resources"),
+                    resolvedDescription: String(localized: "app_info.sensitive.help.body", defaultValue: "this guide lowers risk; it doesn't make you invisible, and no app replaces an operational security plan. for threat modeling and incident response, see eff surveillance self-defense and the access now digital security helpline.", comment: "Guide entry body pointing to external digital-security resources (EFF Surveillance Self-Defense, Access Now Digital Security Helpline)")
+                )
+            ]
+        }
+
     }
 
     var body: some View {
@@ -766,6 +826,21 @@ struct AppInfoView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            // Guide for users in sensitive areas — an honest OpSec primer
+            // for people using bitchat under surveillance.
+            VStack(alignment: .leading, spacing: 16) {
+                SectionHeader(verbatim: Strings.Sensitive.title)
+
+                Text(verbatim: Strings.Sensitive.intro)
+                    .bitchatFont(size: 13)
+                    .foregroundColor(secondaryTextColor)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                ForEach(Strings.Sensitive.entries) { info in
+                    FeatureRow(info: info)
+                }
+            }
+
             // Network diagnostics
             if topologyProvider != nil {
                 VStack(alignment: .leading, spacing: 16) {
@@ -843,21 +918,28 @@ struct AppInfoView: View {
     }
 }
 
-struct AppInfoFeatureInfo {
+struct AppInfoFeatureInfo: Identifiable {
+    /// Stable identity for ForEach: icons are visuals, not identities, and
+    /// two entries may legitimately share an SF Symbol.
+    let id: String
     let icon: String
     let title: Text
     let description: Text
 
     /// Catalog-backed strings (existing keys).
     init(icon: String, title: LocalizedStringKey, description: LocalizedStringKey) {
+        self.id = icon
         self.icon = icon
         self.title = Text(title)
         self.description = Text(description)
     }
 
     /// Pre-resolved strings — new keys that carry their English defaultValue
-    /// inline until the i18n pass adds them to the catalog.
-    init(icon: String, resolvedTitle: String, resolvedDescription: String) {
+    /// inline until the i18n pass adds them to the catalog. Pass `id` when
+    /// the list may repeat icons; it defaults to the icon for callers that
+    /// predate it.
+    init(id: String? = nil, icon: String, resolvedTitle: String, resolvedDescription: String) {
+        self.id = id ?? icon
         self.icon = icon
         self.title = Text(resolvedTitle)
         self.description = Text(resolvedDescription)

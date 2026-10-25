@@ -98274,6 +98274,3354 @@
           }
         }
       }
+    },
+    "app_info.sensitive.blocking.body" : {
+      "comment" : "Guide entry body explaining the limits of blocking",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الحظر يُسقِط رسائل النظير على جهازك بعد وصولها وفكّ تشفيرها؛ فهو لا يمنعه من الإرسال، ولا يُخطِره. وهو لكل هوية على حِدة، لذا فإن زوج مفاتيح جديدًا يتجاوزه مباشرة."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ব্লক করলে কোনো পিয়ারের বার্তা আপনার ডিভাইসে পৌঁছে ডিক্রিপ্ট হওয়ার পর সেগুলো বাদ দেওয়া হয়; এটি তাদের সম্প্রচার বন্ধ করে না, এবং তাদের কোনো বিজ্ঞপ্তি দেয় না। এটি পরিচয়-ভিত্তিক, তাই একটি নতুন কী-জোড়া সহজেই এটি পেরিয়ে যায়।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "blockieren verwirft die nachrichten eines peers auf deinem gerät, nachdem sie angekommen und entschlüsselt sind; es hindert ihn nicht am senden und benachrichtigt ihn nicht. es gilt pro identität, sodass ein neues schlüsselpaar einfach daran vorbeikommt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "blocking drops a peer's messages on your device after they arrive and decrypt; it doesn't stop them transmitting, and doesn't notify them. it's per-identity, so a fresh keypair walks right past it."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bloquear descarta los mensajes de un peer en tu dispositivo después de que llegan y se descifran; no impide que transmitan ni les avisa. es por identidad, así que un par de claves nuevo lo esquiva sin problema."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مسدود کردن، پیام‌های یک همتا را روی دستگاه شما، پس از رسیدن و رمزگشایی آن‌ها، حذف می‌کند؛ آن همتا را از ارسال بازنمی‌دارد، و به او اطلاع نمی‌دهد. این کار برای هر هویت جداگانه است، پس یک جفت کلید جدید به‌راحتی از کنار آن رد می‌شود."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "itinatapon ng pag-block ang mga mensahe ng isang peer sa iyong device pagkatapos itong dumating at ma-decrypt; hindi nito pinipigilan ang kanilang pagpapadala at hindi sila inaabisuhan. ito ay per-identity, kaya ang isang bagong key pair ay basta makakalusot dito."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bloquer supprime les messages d'un pair sur votre appareil après leur arrivée et leur déchiffrement ; cela ne l'empêche pas d'émettre et ne le prévient pas. c'est par identité, donc une nouvelle paire de clés le contourne sans problème."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "חסימה משליכה את הודעות העמית במכשיר שלך לאחר שהן מגיעות ומפוענחות; היא אינה מונעת ממנו לשדר, ואינה מודיעה לו. היא פועלת לפי זהות, כך שצמד מפתחות חדש עוקף אותה בקלות."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ब्लॉक करने से किसी peer के संदेश आपके डिवाइस पर पहुंचने और डिक्रिप्ट होने के बाद हटा दिए जाते हैं; यह उन्हें प्रसारित करने से नहीं रोकता, और उन्हें सूचित नहीं करता। यह प्रति-पहचान होता है, इसलिए एक नई कुंजी-जोड़ी इसे आसानी से पार कर जाती है।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "memblokir membuang pesan seorang peer di perangkatmu setelah pesan itu tiba dan didekripsi; ini tidak menghentikan mereka mengirim dan tidak memberi tahu mereka. ini bersifat per-identitas, jadi pasangan kunci baru bisa langsung melewatinya begitu saja."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "il blocco scarta i messaggi di un peer sul tuo dispositivo dopo che sono arrivati e sono stati decifrati; non impedisce loro di trasmettere e non li avvisa. è legato alla singola identità, quindi una nuova coppia di chiavi lo aggira senza problemi."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ブロックは、相手のメッセージが届いて復号された後に、あなたの端末上でそれを破棄します。相手の送信を止めることはなく、相手に通知することもありません。ブロックは身元（鍵）単位なので、新しい鍵ペアを作れば簡単にすり抜けられます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "차단은 상대의 메시지가 당신의 기기에 도착해 복호화된 후에 그 메시지를 버린다; 상대의 전송을 막지 못하고, 상대에게 알리지도 않는다. 차단은 신원별로 적용되므로, 새 키쌍(keypair)은 이를 그대로 우회한다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "menyekat menggugurkan mesej peer pada peranti anda selepas mesej itu tiba dan dinyahsulit; ia tidak menghentikan mereka daripada memancarkan dan tidak memberitahu mereka. ia mengikut identiti, jadi pasangan kunci baharu terus melepasinya."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ब्लक गर्दा peer का सन्देशहरू आइपुगेर decrypt भइसकेपछि तपाईंको यन्त्रमा हटाइन्छ; यसले तिनीहरूलाई प्रसारण गर्नबाट रोक्दैन, र तिनीहरूलाई सूचित पनि गर्दैन। यो प्रति-पहिचान हो, त्यसैले नयाँ कुञ्जी-जोडीले यसलाई सजिलै छल्छ।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "blokkeren gooit de berichten van een peer weg op je apparaat nadat ze zijn binnengekomen en ontsleuteld; het weerhoudt hen niet van verzenden, en het waarschuwt hen niet. het is per identiteit, dus een nieuw sleutelpaar omzeilt het moeiteloos."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "blokowanie odrzuca wiadomości rozmówcy na twoim urządzeniu po tym, jak dotrą i zostaną odszyfrowane; nie powstrzymuje go od nadawania i nie powiadamia go. działa per tożsamość, więc nowa para kluczy przechodzi obok blokady bez przeszkód."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bloquear descarta as mensagens de um par no teu dispositivo depois de chegarem e serem desencriptadas; não os impede de transmitir nem os notifica. é por identidade, por isso um novo par de chaves passa-lhe à frente sem problema."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bloquear descarta as mensagens de um par no seu dispositivo depois que elas chegam e são descriptografadas; não impede que ele transmita nem o notifica. é por identidade, então um novo par de chaves passa direto por ele."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "блокировка отбрасывает сообщения собеседника на вашем устройстве уже после того, как они пришли и расшифровались; она не мешает ему передавать и не уведомляет его. она привязана к личности, поэтому новая пара ключей легко её обходит."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "blockering slänger en motparts meddelanden på din enhet efter att de anlänt och dekrypterats; det hindrar dem inte från att sända och meddelar dem inte. det är per identitet, så ett nytt nyckelpar går rakt förbi det."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "தடுப்பது (block) ஒரு peer-இன் செய்திகள் வந்து மறைநீக்கம் செய்யப்பட்ட பிறகு அவற்றை உங்கள் சாதனத்தில் நிராகரிக்கிறது; அது அவர்கள் அனுப்புவதை நிறுத்தாது, மேலும் அவர்களுக்கு அறிவிக்காது. இது ஒவ்வொரு அடையாளத்திற்கும் தனித்தனியானது, எனவே ஒரு புதிய விசை-இணை அதைக் கடந்து நேராகச் செல்கிறது."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "การบล็อกจะทิ้งข้อความของเพียร์บนอุปกรณ์ของคุณหลังจากข้อความมาถึงและถอดรหัสแล้ว มันไม่ได้หยุดไม่ให้พวกเขาส่งข้อมูล และไม่ได้แจ้งเตือนพวกเขา มันทำงานแบบต่อหนึ่งตัวตน ดังนั้นคู่กุญแจใหม่จึงเดินผ่านมันไปได้เลย"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "engelleme, bir kişinin mesajlarını cihazınıza ulaşıp şifresi çözüldükten sonra düşürür; onların iletim yapmasını engellemez ve onlara bildirim göndermez. kimlik bazlıdır, bu yüzden yeni bir anahtar çifti onu kolayca aşar."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "блокування відкидає повідомлення учасника на твоєму пристрої після того, як вони надійшли й розшифрувалися; воно не заважає йому передавати і не сповіщає його. воно діє окремо для кожної особистості, тож нова пара ключів легко його обходить."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بلاک کرنا کسی ساتھی کے پیغامات کو آپ کے آلے پر اس وقت گرا دیتا ہے جب وہ پہنچ کر ڈی کرپٹ ہو چکے ہوتے ہیں؛ یہ انہیں بھیجنے سے نہیں روکتا، اور نہ ہی انہیں مطلع کرتا ہے۔ یہ فی شناخت ہوتا ہے، اس لیے ایک نیا کلیدی جوڑا (keypair) سیدھا اس کے پاس سے گزر جاتا ہے۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "việc chặn sẽ loại bỏ tin nhắn của một người trên thiết bị của bạn sau khi chúng đã đến và được giải mã; nó không ngăn họ phát tin và không thông báo cho họ. nó áp dụng theo từng danh tính, nên một cặp khóa mới có thể đi thẳng qua nó."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "屏蔽会在对方的消息到达并解密之后，在你的设备上把它们丢弃；它并不能阻止对方发送，也不会通知对方。它是按身份生效的，所以换一个新的密钥对就能轻松绕过它。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "封鎖是在對方訊息抵達並解密之後，才在你的裝置上將其丟棄；它不會阻止對方發送訊息，也不會通知對方。它是以身分為單位的，所以只要換一組新的金鑰對，就能輕易繞過它。"
+          }
+        }
+      }
+    },
+    "app_info.sensitive.blocking.title" : {
+      "comment" : "Guide entry title: blocking only hides messages locally",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الحظر مرشّح محلي، لا درع"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ব্লক একটি স্থানীয় ফিল্টার, কোনো ঢাল নয়"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "blockieren ist ein lokaler filter, kein schutzschild"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "block is a local filter, not a shield"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bloquear es un filtro local, no un escudo"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مسدود کردن یک فیلتر محلی است، نه یک سپر"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ang block ay lokal na filter, hindi kalasag"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bloquer est un filtre local, pas un bouclier"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "חסימה היא מסנן מקומי, לא מגן"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "block एक स्थानीय फ़िल्टर है, कवच नहीं"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "blokir adalah filter lokal, bukan perisai"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "il blocco è un filtro locale, non uno scudo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ブロックはローカルなフィルターであり、盾ではない"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "차단은 로컬 필터일 뿐, 방패가 아니다"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sekat ialah penapis setempat, bukan perisai"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "block एउटा स्थानीय फिल्टर हो, ढाल होइन"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "blokkeren is een lokaal filter, geen schild"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "blokada to lokalny filtr, nie tarcza"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bloquear é um filtro local, não um escudo"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bloquear é um filtro local, não um escudo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "блокировка — локальный фильтр, а не щит"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "blockering är ett lokalt filter, inte en sköld"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "block என்பது ஒரு உள்ளூர் வடிகட்டி, ஒரு கவசம் அல்ல"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "บล็อกคือตัวกรองในเครื่อง ไม่ใช่โล่ป้องกัน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "engelleme yerel bir filtredir, bir kalkan değil"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "блокування — це локальний фільтр, а не щит"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بلاک ایک مقامی فلٹر ہے، ڈھال نہیں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chặn là một bộ lọc cục bộ, không phải một tấm khiên"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拉黑是本地过滤，而非防护盾"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "封鎖是本機端的過濾，而非防護盾"
+          }
+        }
+      }
+    },
+    "app_info.sensitive.elicitation.body" : {
+      "comment" : "Guide entry body warning about social-engineering and elicitation in chats",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أسماء العرض تُختار بحرية ولا يمكن التحقق منها — فالغريب الودود الذي يستقصي عن مَن، وأين، ومتى، ومَن غيرك، هو أرخص هجوم على الإطلاق. لا تُفصح عن أسماء حقيقية أو مواقع أو خطط بناءً على اسم مستعار، وتحقّق خارج النطاق قبل نقل الحديث الحساس إلى رسالة مباشرة."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ডিসপ্লে নাম ইচ্ছেমতো বেছে নেওয়া যায় এবং যাচাই করা যায় না — কে, কোথায়, কখন, বা আর কে — এসব জানতে চাওয়া একজন বন্ধুভাবাপন্ন অপরিচিত ব্যক্তিই সবচেয়ে সস্তা আক্রমণ। কোনো নিকনেমের ভরসায় আসল নাম, অবস্থান, বা পরিকল্পনা প্রকাশ করবেন না, এবং সংবেদনশীল কথাবার্তা ডিএম-এ নেওয়ার আগে আউট-অব-ব্যান্ড যাচাই করুন।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "anzeigenamen sind frei wählbar und nicht überprüfbar — ein freundlicher fremder, der nach wer, wo, wann oder wer-noch fragt, ist der billigste angriff, den es gibt. gib keine echten namen, orte oder pläne allein aufgrund eines spitznamens preis, und verifiziere über einen unabhängigen weg, bevor du sensible gespräche in eine dm verlagerst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "display names are freely chosen and unverifiable — a friendly stranger probing for who, where, when, or who-else is the cheapest attack there is. don't disclose real names, locations, or plans on the strength of a nickname, and verify out-of-band before moving sensitive talk to dm."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "los nombres visibles se eligen libremente y no se pueden verificar: un desconocido amable que indaga sobre quién, dónde, cuándo o quién más es el ataque más barato que existe. no reveles nombres reales, ubicaciones ni planes solo por confiar en un apodo, y verifica fuera de banda antes de pasar una conversación sensible a un mensaje directo."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نام‌های نمایشی آزادانه انتخاب می‌شوند و قابل تأیید نیستند — یک غریبهٔ خوش‌برخورد که دربارهٔ «چه کسی، کجا، کِی یا چه کسان دیگری» کاوش می‌کند، ارزان‌ترین حملهٔ موجود است. بر پایهٔ یک نام مستعار، نام‌های واقعی، موقعیت‌ها یا برنامه‌ها را فاش نکنید، و پیش از انتقال گفت‌وگوی حساس به پیام خصوصی، هویت طرف مقابل را از راهی جز همین گفت‌وگو تأیید کنید."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ang mga display name ay malayang pinipili at hindi mapapatunayan — ang isang mabait na estranghero na nag-uungkat kung sino, saan, kailan, o sino-pa ang pinakamurang atake na mayroon. huwag ibunyag ang tunay na mga pangalan, lokasyon, o mga plano dahil lamang sa isang nickname, at mag-verify nang out-of-band bago ilipat ang sensitibong usapan sa dm."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "les noms affichés sont choisis librement et invérifiables — un inconnu amical qui cherche à savoir qui, où, quand ou qui d'autre est l'attaque la moins coûteuse qui soit. ne divulguez pas de vrais noms, de lieux ou de projets sur la foi d'un pseudo, et vérifiez hors bande avant de déplacer un échange sensible vers un message privé."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שמות תצוגה נבחרים בחופשיות ואינם ניתנים לאימות — זר ידידותי שמתחקר אחר מי, היכן, מתי, או מי-עוד הוא ההתקפה הזולה ביותר שקיימת. אל תחשוף שמות אמיתיים, מיקומים, או תוכניות על סמך כינוי, ואמת בערוץ חיצוני (out-of-band) לפני שאתה מעביר שיחה רגישה להודעה פרטית."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "डिस्प्ले नाम स्वतंत्र रूप से चुने जाते हैं और असत्यापनीय होते हैं — एक मित्रवत अजनबी जो कौन, कहाँ, कब, या और-कौन के बारे में टटोलता है, सबसे सस्ता हमला यही है। किसी निकनेम के भरोसे असली नाम, स्थान, या योजनाएं उजागर न करें, और संवेदनशील बातचीत को dm पर ले जाने से पहले out-of-band सत्यापित करें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nama tampilan dipilih secara bebas dan tidak bisa diverifikasi — orang asing yang ramah yang mengorek soal siapa, di mana, kapan, atau siapa-lagi adalah serangan termurah yang ada. jangan ungkapkan nama asli, lokasi, atau rencana hanya berdasarkan sebuah nama panggilan, dan verifikasi secara out-of-band sebelum memindahkan pembicaraan sensitif ke dm."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "i nomi visualizzati sono scelti liberamente e non verificabili — uno sconosciuto amichevole che sonda per sapere chi, dove, quando o chi altro è l'attacco più economico che esista. non rivelare nomi reali, luoghi o piani sulla base di un nickname, e verifica fuori banda prima di spostare le conversazioni sensibili in dm."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "表示名は自由に選べて検証できません。誰が・どこで・いつ・他に誰が、を探ろうとするフレンドリーな見知らぬ相手は、最も安上がりな攻撃です。ニックネームを信用しただけで、本名・居場所・計画を明かさないでください。機密性の高い会話を DM に移す前に、アプリ外（out-of-band）で確認してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "표시 이름은 자유롭게 정할 수 있고 확인이 불가능하다 — 누가, 어디서, 언제, 또 누가 있는지를 캐묻는 친절한 낯선 사람은 가장 값싼 공격이다. 닉네임만 믿고 실명, 위치, 계획을 밝히지 말고, 민감한 대화를 DM으로 옮기기 전에 대역 외로 인증하라."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nama paparan dipilih secara bebas dan tidak boleh disahkan — orang asing yang mesra menyiasat tentang siapa, di mana, bila, atau siapa lagi ialah serangan paling murah yang wujud. jangan dedahkan nama sebenar, lokasi, atau rancangan hanya kerana sesuatu nama samaran, dan sahkan secara luar-jalur sebelum memindahkan perbualan sensitif ke dm."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "प्रदर्शन नामहरू स्वतन्त्र रूपमा छानिन्छन् र प्रमाणित गर्न सकिँदैन — को, कहाँ, कहिले, वा अरू को भनी सोधखोज गर्ने मित्रवत् अपरिचित व्यक्ति नै सबैभन्दा सस्तो आक्रमण हो। उपनामको भरमा वास्तविक नाम, स्थान, वा योजनाहरू खुलासा नगर्नुहोस्, र संवेदनशील कुराकानी dm मा सार्नुअघि out-of-band प्रमाणित गर्नुहोस्।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "weergavenamen worden vrij gekozen en zijn niet te verifiëren — een vriendelijke vreemde die peilt naar wie, waar, wanneer of wie-nog-meer is de goedkoopste aanval die er is. geef geen echte namen, locaties of plannen prijs op basis van een bijnaam, en verifieer out-of-band voordat je gevoelige gesprekken naar dm verplaatst."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nazwy wyświetlane są dowolnie wybierane i niemożliwe do zweryfikowania — przyjazny nieznajomy wypytujący o to, kto, gdzie, kiedy lub kto jeszcze, to najtańszy możliwy atak. nie ujawniaj prawdziwych imion, lokalizacji ani planów na podstawie samego pseudonimu i zweryfikuj poza pasmem, zanim przeniesiesz wrażliwą rozmowę do wiadomości prywatnych."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "os nomes visíveis são escolhidos livremente e não podem ser verificados — um estranho simpático que sonda quem, onde, quando ou quem-mais é o ataque mais barato que existe. não reveles nomes reais, localizações ou planos com base num apelido, e verifica fora de banda antes de passar conversas sensíveis para mensagem direta."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "os nomes de exibição são escolhidos livremente e não são verificáveis — um estranho amigável sondando quem, onde, quando, ou quem-mais é o ataque mais barato que existe. não revele nomes reais, localizações ou planos com base em um apelido, e verifique fora de banda antes de levar conversas sensíveis para a dm."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "отображаемые имена выбираются свободно и не поддаются проверке — дружелюбный незнакомец, выспрашивающий кто, где, когда или кто ещё, — это самая дешёвая атака из существующих. не раскрывайте настоящие имена, местоположения или планы, полагаясь лишь на никнейм, и проверяйте собеседника по независимому каналу, прежде чем переносить важный разговор в личные сообщения."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "visningsnamn väljs fritt och kan inte verifieras — en vänlig främling som frågar ut om vem, var, när, eller vilka andra är den billigaste attacken som finns. avslöja inte riktiga namn, platser eller planer på grundval av ett smeknamn, och verifiera out-of-band innan du flyttar känsliga samtal till dm."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "காட்சிப் பெயர்கள் சுதந்திரமாகத் தேர்ந்தெடுக்கப்படுகின்றன மற்றும் சரிபார்க்க முடியாதவை — யார், எங்கே, எப்போது, அல்லது வேறு யார் என்று துருவித் துருவிக் கேட்கும் ஒரு நட்பான அந்நியர் தான் இருக்கும் மிக மலிவான தாக்குதல். ஒரு புனைப்பெயரின் அடிப்படையில் உண்மையான பெயர்கள், இருப்பிடங்கள் அல்லது திட்டங்களை வெளிப்படுத்த வேண்டாம், மேலும் உணர்திறன் வாய்ந்த உரையாடலை dm-க்கு நகர்த்தும் முன் out-of-band வழியில் சரிபார்க்கவும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ชื่อที่แสดงเลือกได้อย่างอิสระและตรวจสอบยืนยันไม่ได้ — คนแปลกหน้าที่ดูเป็นมิตรซึ่งคอยสืบว่าใคร ที่ไหน เมื่อไร หรือมีใครอีก คือการโจมตีที่ต้นทุนต่ำที่สุดเท่าที่มี อย่าเปิดเผยชื่อจริง ตำแหน่ง หรือแผนการเพียงเพราะเชื่อชื่อเล่น และให้ยืนยันนอกช่องทางก่อนย้ายบทสนทนาอ่อนไหวไปที่ข้อความส่วนตัว"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "görünen adlar serbestçe seçilir ve doğrulanamaz — kim olduğunuzu, nerede, ne zaman ve başka kimlerin olduğunu araştıran güler yüzlü bir yabancı, var olan en ucuz saldırıdır. bir takma ada güvenerek gerçek isimleri, konumları veya planları açıklamayın ve hassas konuşmaları özel mesaja taşımadan önce bant dışı doğrulayın."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "видимі імена обираються довільно й не піддаються перевірці — доброзичливий незнайомець, який випитує хто, де, коли або хто ще, — це найдешевша атака, яка існує. не розкривай справжні імена, місцезнаходження чи плани, покладаючись лише на нік, і перевіряй через окремий канал, перш ніж переносити чутливу розмову в dm."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ڈسپلے نام آزادانہ طور پر چنے جاتے ہیں اور ان کی تصدیق ممکن نہیں — ایک دوستانہ اجنبی جو یہ کریدتا رہے کہ کون، کہاں، کب، یا اور کون، وہ سب سے سستا حملہ ہے۔ کسی عرفی نام کے بھروسے پر اصل نام، مقامات، یا منصوبے ظاہر نہ کریں، اور حساس گفتگو کو dm پر منتقل کرنے سے پہلے بیرونی ذرائع (out-of-band) سے تصدیق کریں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tên hiển thị do mỗi người tự chọn và không thể xác minh — một người lạ thân thiện dò hỏi ai, ở đâu, khi nào, hay còn ai khác là kiểu tấn công rẻ tiền nhất. đừng tiết lộ tên thật, vị trí, hay kế hoạch chỉ vì dựa vào một biệt danh, và hãy xác minh ngoài luồng trước khi chuyển những trao đổi nhạy cảm sang tin nhắn riêng (dm)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示名称可以随意设定且无法核实——一个友善的陌生人打探是谁、在哪、何时、还有谁，这是成本最低的一种攻击手段。不要仅凭一个昵称就透露真名、位置或计划；在把敏感对话转到私信之前，先进行带外验证。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示名稱可以任意取用且無法驗證——一個友善的陌生人打探「是誰、在哪、何時、還有誰」，就是成本最低的攻擊手法。不要只憑一個暱稱就透露真名、位置或計畫，並在把敏感對話轉到私訊之前，先透過帶外方式驗證。"
+          }
+        }
+      }
+    },
+    "app_info.sensitive.elicitation.title" : {
+      "comment" : "Guide entry title: beware strangers fishing for identifying information",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "احذر استدراج المعلومات"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "তথ্য আদায়ের চেষ্টা থেকে সতর্ক থাকুন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "achte auf ausforschung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "watch for elicitation"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cuidado con el sonsacamiento"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مراقب بیرون کشیدن اطلاعات باشید"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mag-ingat sa pag-uungkat ng impormasyon"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "attention au soutirage d'informations"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "היזהר מחילוץ מידע"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "जानकारी निकलवाने से सावधान रहें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "waspadai pengorekan informasi"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "attenzione all'elicitazione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "聞き出しに注意"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "정보 유도를 경계하라"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "berwaspada terhadap pemancingan maklumat"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सूचना निकाल्ने प्रयासदेखि सतर्क रहनुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "let op uithoren"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "uważaj na wyciąganie informacji"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cuidado com a extração de informação"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cuidado com a sondagem"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "остерегайтесь выведывания"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "se upp för utfrågning"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "தகவல் பிடுங்குதலைக் கவனியுங்கள்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ระวังการล้วงข้อมูล"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bilgi çekme girişimlerine dikkat edin"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "остерігайся вивідування"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "معلومات اگلوانے کی کوششوں سے خبردار رہیں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cảnh giác với thủ đoạn moi thông tin"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "警惕套取信息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "當心套話"
+          }
+        }
+      }
+    },
+    "app_info.sensitive.help.body" : {
+      "comment" : "Guide entry body pointing to external digital-security resources (EFF Surveillance Self-Defense, Access Now Digital Security Helpline)",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "هذا الدليل يقلّل الخطر؛ لكنه لا يجعلك خفيًّا، ولا يوجد تطبيق يحل محل خطة أمن تشغيلي. لنمذجة التهديدات والاستجابة للحوادث، راجِع «الدفاع عن النفس ضد المراقبة» من EFF (EFF Surveillance Self-Defense) وخط المساعدة للأمن الرقمي من Access Now (Access Now Digital Security Helpline)."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "এই গাইড ঝুঁকি কমায়; এটি আপনাকে অদৃশ্য করে না, এবং কোনো অ্যাপ একটি অপারেশনাল সিকিউরিটি পরিকল্পনার বিকল্প নয়। থ্রেট মডেলিং এবং ইনসিডেন্ট রেসপন্সের জন্য, EFF Surveillance Self-Defense এবং Access Now Digital Security Helpline দেখুন।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dieser leitfaden senkt das risiko; er macht dich nicht unsichtbar, und keine app ersetzt einen plan für operative sicherheit. für bedrohungsmodellierung und reaktion auf vorfälle siehe eff surveillance self-defense und die access now digital security helpline."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "this guide lowers risk; it doesn't make you invisible, and no app replaces an operational security plan. for threat modeling and incident response, see eff surveillance self-defense and the access now digital security helpline."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "esta guía reduce el riesgo; no te vuelve invisible, y ninguna app sustituye a un plan de seguridad operacional. para modelado de amenazas y respuesta a incidentes, consulta EFF Surveillance Self-Defense y la Access Now Digital Security Helpline."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "این راهنما خطر را کاهش می‌دهد؛ اما شما را نامرئی نمی‌کند، و هیچ برنامه‌ای جایگزین یک طرح امنیت عملیاتی نمی‌شود. برای مدل‌سازی تهدید و پاسخ به رخداد، به «دفاع شخصی در برابر نظارتِ» بنیاد EFF (EFF Surveillance Self-Defense) و «خط کمک امنیت دیجیتالِ» Access Now (Access Now Digital Security Helpline) مراجعه کنید."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "binababaan ng gabay na ito ang panganib; hindi ka nito ginagawang di-nakikita, at walang app ang papalit sa isang operational security plan. para sa threat modeling at incident response, tingnan ang eff surveillance self-defense at ang access now digital security helpline."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ce guide réduit le risque ; il ne vous rend pas invisible, et aucune application ne remplace un plan de sécurité opérationnelle. pour la modélisation des menaces et la réponse aux incidents, consultez eff surveillance self-defense et la access now digital security helpline."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מדריך זה מפחית סיכון; הוא לא הופך אותך לבלתי נראה, ושום אפליקציה אינה מחליפה תוכנית אבטחה מבצעית. עבור מידול איומים ותגובה לאירועים, ראה את EFF Surveillance Self-Defense ואת Access Now Digital Security Helpline."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "यह गाइड जोखिम कम करती है; यह आपको अदृश्य नहीं बनाती, और कोई भी ऐप किसी परिचालन सुरक्षा योजना की जगह नहीं ले सकता। खतरे की मॉडलिंग और घटना प्रतिक्रिया के लिए, EFF Surveillance Self-Defense और Access Now Digital Security Helpline देखें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "panduan ini menurunkan risiko; ini tidak membuatmu tak terlihat, dan tidak ada aplikasi yang bisa menggantikan rencana keamanan operasional. untuk pemodelan ancaman dan respons insiden, lihat eff surveillance self-defense dan access now digital security helpline."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "questa guida riduce il rischio; non ti rende invisibile, e nessuna app sostituisce un piano di sicurezza operativa. per la modellazione delle minacce e la risposta agli incidenti, consulta eff surveillance self-defense e la access now digital security helpline."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このガイドはリスクを下げますが、あなたを不可視にするわけではなく、どんなアプリも運用上のセキュリティ計画（オペセック）の代わりにはなりません。脅威モデリングとインシデント対応については、EFF Surveillance Self-Defense（EFF 監視自己防衛）と Access Now Digital Security Helpline（Access Now デジタルセキュリティヘルプライン）を参照してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 안내서는 위험을 낮출 뿐, 당신을 보이지 않게 만들지 않으며, 어떤 앱도 운영 보안(operational security) 계획을 대신할 수 없다. 위협 모델링과 사고 대응에 관해서는 EFF Surveillance Self-Defense와 Access Now Digital Security Helpline을 참고하라."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "panduan ini mengurangkan risiko; ia tidak menjadikan anda halimunan, dan tiada aplikasi menggantikan pelan keselamatan operasi. untuk pemodelan ancaman dan tindak balas insiden, lihat eff surveillance self-defense dan access now digital security helpline."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "यो मार्गदर्शनले जोखिम घटाउँछ; यसले तपाईंलाई अदृश्य बनाउँदैन, र कुनै पनि एपले सञ्चालनगत सुरक्षा योजनालाई प्रतिस्थापन गर्दैन। threat modeling र incident response का लागि, EFF Surveillance Self-Defense र Access Now Digital Security Helpline हेर्नुहोस्।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "deze gids verlaagt het risico; hij maakt je niet onzichtbaar, en geen enkele app vervangt een operationeel beveiligingsplan. voor dreigingsmodellering en incidentrespons, zie EFF Surveillance Self-Defense en de Access Now Digital Security Helpline."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ten przewodnik zmniejsza ryzyko; nie czyni cię niewidzialnym, a żadna aplikacja nie zastąpi planu bezpieczeństwa operacyjnego. w kwestii modelowania zagrożeń i reagowania na incydenty zobacz eff surveillance self-defense oraz access now digital security helpline."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "este guia reduz o risco; não te torna invisível, e nenhuma app substitui um plano de segurança operacional. para modelação de ameaças e resposta a incidentes, consulta o eff surveillance self-defense e o access now digital security helpline."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "este guia reduz o risco; ele não te torna invisível, e nenhum app substitui um plano de segurança operacional. para modelagem de ameaças e resposta a incidentes, consulte o eff surveillance self-defense e a access now digital security helpline."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "это руководство снижает риск, но не делает вас невидимым, и ни одно приложение не заменит план операционной безопасности. для моделирования угроз и реагирования на инциденты обратитесь к eff surveillance self-defense и к access now digital security helpline."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "den här guiden minskar risken; den gör dig inte osynlig, och ingen app ersätter en operativ säkerhetsplan. för hotmodellering och incidenthantering, se eff surveillance self-defense och access now digital security helpline."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இந்த வழிகாட்டி ஆபத்தைக் குறைக்கிறது; அது உங்களை கண்ணுக்குத் தெரியாதவராக்காது, மேலும் எந்த பயன்பாடும் ஒரு செயல்பாட்டு பாதுகாப்புத் திட்டத்திற்குப் பதிலாக இருக்க முடியாது. அச்சுறுத்தல் மாதிரியாக்கம் மற்றும் சம்பவ பதிலுக்கு, EFF Surveillance Self-Defense மற்றும் Access Now Digital Security Helpline ஐப் பார்க்கவும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "คู่มือนี้ช่วยลดความเสี่ยง แต่ไม่ได้ทำให้คุณล่องหน และไม่มีแอปใดมาแทนแผนความปลอดภัยเชิงปฏิบัติการได้ สำหรับการสร้างแบบจำลองภัยคุกคาม (threat modeling) และการรับมือเหตุการณ์ ดูที่ EFF Surveillance Self-Defense และ Access Now Digital Security Helpline"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bu kılavuz riski azaltır; sizi görünmez yapmaz ve hiçbir uygulama operasyonel güvenlik planının yerini tutmaz. tehdit modelleme ve olay müdahalesi için eff surveillance self-defense (eff gözetime karşı öz savunma) ve access now digital security helpline (access now dijital güvenlik yardım hattı) kaynaklarına bakın."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "цей посібник знижує ризик; він не робить тебе невидимим, і жоден застосунок не замінить плану операційної безпеки. для моделювання загроз і реагування на інциденти дивись EFF Surveillance Self-Defense та Access Now Digital Security Helpline."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "یہ رہنما خطرہ کم کرتا ہے؛ یہ آپ کو پوشیدہ نہیں بناتا، اور کوئی ایپ آپریشنل سیکیورٹی منصوبے کا نعم البدل نہیں۔ خطرے کی ماڈلنگ اور واقعے کے ردعمل کے لیے، EFF Surveillance Self-Defense اور Access Now Digital Security Helpline دیکھیں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hướng dẫn này giảm rủi ro; nó không khiến bạn trở nên vô hình, và không có ứng dụng nào thay thế được một kế hoạch an ninh vận hành. để lập mô hình mối đe dọa và ứng phó sự cố, hãy xem eff surveillance self-defense (tự vệ trước giám sát của eff) và access now digital security helpline (đường dây trợ giúp an ninh số của access now)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本指南能降低风险，但不能让你隐身，也没有任何应用能替代一套完整的行动安全计划。关于威胁建模与事件响应，请参阅 EFF Surveillance Self-Defense（电子前哨基金会\"监控自卫\"指南）与 Access Now Digital Security Helpline（Access Now 数字安全求助热线）。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本指南能降低風險，但無法讓你隱形，而且沒有任何 app 能取代一套作業安全（opsec）計畫。關於威脅建模與事件應變，請參閱 EFF Surveillance Self-Defense（電子前哨基金會監控自衛指南）以及 Access Now Digital Security Helpline（Access Now 數位安全求助熱線）。"
+          }
+        }
+      }
+    },
+    "app_info.sensitive.help.title" : {
+      "comment" : "Guide entry title: seek dedicated digital-security resources",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "احصل على تدريب حقيقي"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "প্রকৃত প্রশিক্ষণ নিন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hol dir echtes training"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "get real training"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "consigue formación real"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "آموزش واقعی ببینید"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kumuha ng tunay na pagsasanay"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "suivez une vraie formation"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "קבל הכשרה אמיתית"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "असली प्रशिक्षण लें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dapatkan pelatihan sungguhan"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cerca una vera formazione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本物のトレーニングを受ける"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "제대로 된 훈련을 받아라"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dapatkan latihan sebenar"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "वास्तविक तालिम लिनुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "zorg voor echte training"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "zdobądź prawdziwe szkolenie"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "obtém formação a sério"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "busque treinamento de verdade"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "пройдите настоящее обучение"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "skaffa riktig utbildning"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "உண்மையான பயிற்சி பெறுங்கள்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "หาการฝึกอบรมจริงจัง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gerçek eğitim alın"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "отримай справжню підготовку"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حقیقی تربیت حاصل کریں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hãy được huấn luyện thực sự"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "接受真正的培训"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "接受真正的訓練"
+          }
+        }
+      }
+    },
+    "app_info.sensitive.identity.body" : {
+      "comment" : "Guide entry body explaining what identifying information Bluetooth broadcasts reveal",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عند تشغيل البلوتوث، يمكن لأي شخص قريب أن يعرف أنك تشغّل bitchat — ولا يمكن إخفاء ذلك. التشفير يخفي ما تقوله، لا مَن تتحدث إليه. لا تستخدم أبدًا اسمًا حقيقيًّا أو معرّفًا يعرفه الناس كلقبٍ لك."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ব্লুটুথ চালু থাকলে কাছাকাছি যে কেউ বুঝতে পারে যে আপনি bitchat চালাচ্ছেন — এটি লুকানো যায় না। এনক্রিপশন আপনি কী বলেন তা লুকায়, কার সাথে কথা বলেন তা নয়। কখনো আপনার ডাকনাম হিসেবে আসল নাম বা লোকে চেনে এমন কোনো হ্যান্ডেল ব্যবহার করবেন না।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mit eingeschaltetem bluetooth können alle in der nähe erkennen, dass du bitchat verwendest — das lässt sich nicht verbergen. verschlüsselung verbirgt, was du sagst, nicht aber, mit wem du sprichst. verwende niemals einen echten namen oder einen handle, den leute kennen, als nickname."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "with bluetooth on, anyone nearby can tell you're running bitchat — that can't be hidden. encryption hides what you say, not who you talk to. never use a real name or a handle people know as your nickname."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "con el Bluetooth activado, cualquiera que esté cerca puede saber que estás usando bitchat — eso no se puede ocultar. el cifrado oculta lo que dices, no con quién hablas. nunca uses como apodo un nombre real ni un alias que la gente conozca."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "با روشن بودن بلوتوث، هر کسی در نزدیکی می‌تواند تشخیص دهد که bitchat را اجرا می‌کنید — این را نمی‌توان پنهان کرد. رمزنگاری آنچه را می‌گویید پنهان می‌کند، نه اینکه با چه کسی صحبت می‌کنید. هرگز از یک نام واقعی یا شناسه‌ای که دیگران می‌شناسند به‌عنوان نام مستعار خود استفاده نکنید."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kapag naka-on ang bluetooth, kayang malaman ng sinumang nasa malapit na nagpapatakbo ka ng bitchat — hindi ito maitatago. itinatago ng pag-encrypt ang sinasabi mo, hindi kung sino ang kausap mo. huwag kailanman gumamit ng tunay na pangalan o kilalang handle bilang iyong palayaw."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "avec le bluetooth activé, n'importe qui à proximité peut savoir que vous utilisez bitchat — impossible de le cacher. le chiffrement cache ce que vous dites, pas à qui vous parlez. n'utilisez jamais un vrai nom ou un identifiant connu comme pseudo."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כאשר bluetooth מופעל, כל מי שנמצא בסביבה יכול להבחין שאתה מריץ bitchat — ואת זה אי אפשר להסתיר. הצפנה מסתירה את מה שאתה אומר, לא עם מי אתה מדבר. לעולם אל תשתמש בשם אמיתי או בשם מקוון שאנשים מכירים ככינוי שלך."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth चालू होने पर आसपास का कोई भी पता लगा सकता है कि आप bitchat चला रहे हैं — इसे छिपाया नहीं जा सकता। एन्क्रिप्शन यह छिपाता है कि आप क्या कहते हैं, यह नहीं कि आप किससे बात करते हैं। अपने उपनाम के रूप में कभी असली नाम या ऐसे handle का उपयोग न करें जिसे लोग जानते हों।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dengan bluetooth aktif, siapa pun di sekitarmu bisa tahu bahwa kamu menjalankan bitchat — itu tidak bisa disembunyikan. enkripsi menyembunyikan apa yang kamu katakan, bukan dengan siapa kamu berbicara. jangan pernah gunakan nama asli atau handle yang dikenal orang sebagai nama panggilanmu."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "con il bluetooth attivo, chiunque nelle vicinanze può capire che stai usando bitchat — non si può nascondere. la cifratura nasconde ciò che dici, non con chi parli. non usare mai un nome reale o un handle conosciuto come nickname."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bluetooth がオンだと、近くにいる人は誰でも、あなたが bitchat を使っていることがわかります — これは隠すことができません。暗号化が隠すのは、あなたが話す内容であって、誰と話しているかではありません。本名や知られたハンドルネームを、決してニックネームに使わないでください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "블루투스가 켜져 있으면 근처에 있는 누구든 당신이 bitchat을 쓰고 있다는 것을 알 수 있다 — 이는 숨길 수 없다. 암호화는 당신이 하는 말을 숨길 뿐, 누구와 대화하는지는 숨기지 않는다. 실명이나 알려진 핸들을 닉네임으로 절대 쓰지 마라."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dengan bluetooth dihidupkan, sesiapa sahaja yang berdekatan dapat mengetahui bahawa anda menjalankan bitchat — perkara itu tidak dapat disembunyikan. penyulitan menyembunyikan apa yang anda katakan, bukan dengan siapa anda bercakap. jangan sekali-kali gunakan nama sebenar atau nama akaun yang dikenali orang sebagai nama samaran anda."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth सक्रिय हुँदा नजिकैको जो कोहीले पनि तपाईंले bitchat चलाइरहनुभएको छ भनी थाहा पाउन सक्छ — यो लुकाउन सकिँदैन। इन्क्रिप्शनले तपाईं के भन्नुहुन्छ भन्ने कुरा लुकाउँछ, तपाईं कोसँग कुरा गर्नुहुन्छ भन्ने होइन। उपनामको रूपमा कहिल्यै वास्तविक नाम वा मानिसहरूले चिनेको ह्यान्डल प्रयोग नगर्नुहोस्।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "met bluetooth aan kan iedereen in de buurt zien dat je bitchat draait — dat valt niet te verbergen. versleuteling verbergt wat je zegt, niet met wie je praat. gebruik als bijnaam nooit een echte naam of een handle die mensen kennen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "przy włączonym bluetooth każdy w pobliżu może stwierdzić, że masz uruchomiony bitchat — tego nie da się ukryć. szyfrowanie ukrywa to, co mówisz, a nie to, z kim rozmawiasz. nigdy nie używaj jako pseudonimu prawdziwego imienia ani nicka, pod którym znają cię ludzie."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "com o bluetooth ligado, qualquer pessoa por perto consegue saber que estás a usar o bitchat — isso não se pode esconder. a encriptação esconde o que dizes, não com quem falas. nunca uses como apelido um nome real ou um identificador que as pessoas conheçam."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "com o bluetooth ligado, qualquer pessoa por perto consegue saber que você está usando o bitchat — isso não dá para esconder. a criptografia esconde o que você diz, não com quem você fala. nunca use como apelido um nome real ou um identificador que as pessoas conheçam."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "при включённом bluetooth любой поблизости может определить, что у вас запущен bitchat, — скрыть это нельзя. шифрование скрывает то, что вы говорите, но не то, с кем вы общаетесь. никогда не используйте в качестве никнейма настоящее имя или псевдоним, под которым вас знают."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "med bluetooth på kan vem som helst i närheten se att du kör bitchat — det går inte att dölja. kryptering döljer vad du säger, inte vem du pratar med. som smeknamn ska du aldrig använda ett riktigt namn eller ett alias som folk känner till."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth இயக்கத்தில் இருக்கும்போது, நீங்கள் bitchat இயக்குகிறீர்கள் என்பதை அருகிலுள்ள எவராலும் அறிய முடியும் — அதை மறைக்க முடியாது. மறையாக்கம் நீங்கள் என்ன சொல்கிறீர்கள் என்பதை மறைக்கிறது, நீங்கள் யாருடன் பேசுகிறீர்கள் என்பதை அல்ல. உண்மையான பெயரையோ, மக்களுக்குத் தெரிந்த handle-ஐயோ உங்கள் புனைப்பெயராக ஒருபோதும் பயன்படுத்த வேண்டாம்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เมื่อเปิด bluetooth ใครก็ตามที่อยู่ใกล้ๆ สามารถรู้ได้ว่าคุณกำลังใช้ bitchat — เรื่องนี้ซ่อนไม่ได้ การเข้ารหัสซ่อนสิ่งที่คุณพูด แต่ไม่ได้ซ่อนว่าคุณคุยกับใคร อย่าใช้ชื่อจริงหรือชื่อบัญชีที่คนอื่นรู้จักเป็นชื่อเล่นเด็ดขาด"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bluetooth açıkken yakınınızdaki herhangi biri bitchat kullandığınızı anlayabilir — bu gizlenemez. şifreleme ne söylediğinizi gizler, kiminle konuştuğunuzu değil. takma adınız olarak asla gerçek bir isim veya insanların bildiği bir hesap adı kullanmayın."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "коли bluetooth увімкнено, будь-хто поблизу може визначити, що в тебе запущено bitchat, — це неможливо приховати. шифрування приховує те, що ти кажеш, але не те, з ким ти спілкуєшся. ніколи не використовуй як свій нік справжнє ім'я чи псевдонім, під яким тебе знають."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بلوٹوتھ آن ہونے کی صورت میں، قریب موجود کوئی بھی شخص جان سکتا ہے کہ آپ bitchat چلا رہے ہیں — یہ چھپایا نہیں جا سکتا۔ انکرپشن یہ چھپاتی ہے کہ آپ کیا کہتے ہیں، یہ نہیں کہ آپ کس سے بات کرتے ہیں۔ کبھی بھی اپنے عرفی نام کے طور پر اصل نام یا کوئی ایسا ہینڈل استعمال نہ کریں جسے لوگ جانتے ہوں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "khi bật bluetooth, bất kỳ ai ở gần bạn cũng có thể biết bạn đang chạy bitchat — điều đó không thể che giấu. mã hóa che giấu những gì bạn nói, chứ không che giấu bạn nói chuyện với ai. đừng bao giờ dùng tên thật hoặc một tên định danh mà người khác biết làm biệt danh của bạn."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开蓝牙后，附近的任何人都能看出你在用 bitchat——这一点无法隐藏。加密隐藏的是你说的内容，而不是你在与谁交谈。绝不要用真名或别人知道的账号名作为昵称。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "開啟藍牙時，附近的任何人都能看出你在用 bitchat——這一點無法隱藏。加密隱藏的是你說的內容，而不是你在和誰對話。絕不要用真名或別人知道的帳號代號當暱稱。"
+          }
+        }
+      }
+    },
+    "app_info.sensitive.identity.title" : {
+      "comment" : "Guide entry title: reduce identifying information broadcast over Bluetooth",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قلّل ما تسرّبه"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "আপনি যা ফাঁস করেন তা সর্বনিম্ন রাখুন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "minimiere, was du preisgibst"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "minimize what you leak"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "minimiza lo que filtras"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "آنچه را که فاش می‌کنید به حداقل برسانید"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bawasan ang iyong itinatagas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "minimisez ce que vous divulguez"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מזער את מה שאתה מדליף"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "जो आप लीक करते हैं उसे कम से कम करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "minimalkan apa yang kamu bocorkan"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "riduci al minimo ciò che riveli"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "漏らす情報を最小限に"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "새어 나가는 정보를 최소화하라"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "minimumkan apa yang anda bocorkan"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "तपाईंले चुहाउने कुरा न्यूनतम बनाउनुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "beperk wat je lekt"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ograniczaj to, co ujawniasz"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "minimiza o que revelas"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "minimize o que você vaza"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "минимизируйте утечки"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "minimera vad du läcker"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "நீங்கள் கசியவிடுவதைக் குறைக்கவும்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ลดสิ่งที่คุณรั่วไหลให้น้อยที่สุด"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sızdırdığınızı en aza indirin"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "мінімізуй те, що ти розкриваєш"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جو کچھ آپ ظاہر کرتے ہیں اسے کم سے کم رکھیں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "giảm thiểu những gì bạn để lộ"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尽量减少你泄露的信息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "盡量減少你洩露的資訊"
+          }
+        }
+      }
+    },
+    "app_info.sensitive.intro" : {
+      "comment" : "Intro paragraph for the sensitive-areas safety guide, setting an honest, non-alarmist tone",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat يقلّل الخطر؛ لكنه لا يجعلك خفيًّا. إذا كنت في مكان معادٍ، فاقرأ هذا قبل أن تنشر — افترض أن القنوات العامة مراقَبة، وتصرّف على هذا الأساس."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat ঝুঁকি কমায়; এটি আপনাকে অদৃশ্য করে না। আপনি যদি কোনো বৈরী জায়গায় থাকেন, পোস্ট করার আগে এটি পড়ুন — ধরে নিন পাবলিক চ্যানেলগুলো নজরদারিতে আছে, এবং সেই অনুযায়ী আচরণ করুন।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat verringert das risiko; es macht dich nicht unsichtbar. wenn du an einem feindlichen ort bist, lies das, bevor du etwas postest — geh davon aus, dass öffentliche kanäle beobachtet werden, und handle danach."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat reduces risk; it does not make you invisible. if you're somewhere hostile, read this before you post — assume public channels are watched, and act like it."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat reduce el riesgo; no te vuelve invisible. si estás en un lugar hostil, lee esto antes de publicar: da por hecho que los canales públicos están vigilados, y actúa en consecuencia."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat خطر را کاهش می‌دهد؛ اما شما را نامرئی نمی‌کند. اگر در جایی خطرناک هستید، پیش از ارسال پیام این را بخوانید — فرض کنید کانال‌های عمومی تحت نظر هستند و بر همین اساس رفتار کنید."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "binabawasan ng bitchat ang panganib; hindi ka nito ginagawang di-nakikita. kung nasa mapanganib kang lugar, basahin ito bago ka mag-post — ipagpalagay na binabantayan ang mga public channel, at kumilos nang naaayon."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat réduit le risque ; il ne vous rend pas invisible. si vous êtes en territoire hostile, lisez ceci avant de publier — partez du principe que les canaux publics sont surveillés, et agissez en conséquence."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat מפחית סיכון; הוא לא הופך אותך לבלתי נראה. אם אתה נמצא במקום עוין, קרא זאת לפני שאתה מפרסם — הנח שערוצים ציבוריים נמצאים במעקב, ופעל בהתאם."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat जोखिम कम करता है; यह आपको अदृश्य नहीं बनाता। अगर आप किसी शत्रुतापूर्ण जगह पर हैं, तो पोस्ट करने से पहले इसे पढ़ें — मान लें कि सार्वजनिक चैनलों पर निगरानी है, और उसी के अनुसार व्यवहार करें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat mengurangi risiko; ini tidak membuatmu tak terlihat. jika kamu berada di lingkungan yang berbahaya, baca ini sebelum kamu memposting — anggap kanal publik diawasi, dan bertindaklah sesuai itu."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat riduce il rischio; non ti rende invisibile. se ti trovi in un luogo ostile, leggi questo prima di pubblicare — dai per scontato che i canali pubblici siano sorvegliati, e comportati di conseguenza."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat はリスクを減らしますが、あなたを不可視にするわけではありません。敵対的な場所にいるなら、投稿する前にこれを読んでください。公開チャンネルは監視されていると想定し、そのように行動してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat은 위험을 줄여줄 뿐, 당신을 보이지 않게 만들어 주지는 않는다. 적대적인 곳에 있다면 글을 올리기 전에 이 내용을 읽어라 — 공개 채널은 감시받고 있다고 가정하고, 그에 맞게 행동하라."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat mengurangkan risiko; ia tidak menjadikan anda halimunan. jika anda berada di tempat yang bermusuhan, baca ini sebelum anda menghantar mesej — anggap saluran awam diperhatikan, dan bertindaklah seolah-olah begitu."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat ले जोखिम घटाउँछ; यसले तपाईंलाई अदृश्य बनाउँदैन। यदि तपाईं कुनै शत्रुतापूर्ण ठाउँमा हुनुहुन्छ भने, पोस्ट गर्नुअघि यो पढ्नुहोस् — सार्वजनिक च्यानलहरू निगरानीमा छन् भनी मान्नुहोस्, र त्यसै अनुसार व्यवहार गर्नुहोस्।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat verkleint het risico; het maakt je niet onzichtbaar. als je op een vijandige plek bent, lees dit dan voordat je iets plaatst — ga ervan uit dat openbare kanalen in de gaten worden gehouden, en gedraag je daarnaar."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat zmniejsza ryzyko; nie czyni cię niewidzialnym. jeśli jesteś we wrogim otoczeniu, przeczytaj to, zanim coś opublikujesz — zakładaj, że kanały publiczne są obserwowane, i tak postępuj."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "o bitchat reduz o risco; não te torna invisível. se estás num local hostil, lê isto antes de publicar — parte do princípio de que os canais públicos são vigiados e age como tal."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "o bitchat reduz o risco; ele não te torna invisível. se você está em um lugar hostil, leia isto antes de publicar — presuma que os canais públicos estão sendo vigiados, e aja como tal."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat снижает риск, но не делает вас невидимым. если вы в опасном месте, прочитайте это перед публикацией — считайте, что публичные каналы под наблюдением, и ведите себя соответственно."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat minskar risken; det gör dig inte osynlig. om du befinner dig på en fientlig plats, läs detta innan du postar — utgå från att offentliga kanaler övervakas, och agera därefter."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat ஆபத்தைக் குறைக்கிறது; ஆனால் அது உங்களை கண்ணுக்குத் தெரியாதவராக்காது. நீங்கள் விரோதமான இடத்தில் இருந்தால், பதிவிடும் முன் இதைப் படியுங்கள் — பொது சேனல்கள் கண்காணிக்கப்படுகின்றன என்று கருதி, அதற்கேற்ப நடந்து கொள்ளுங்கள்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat ช่วยลดความเสี่ยง แต่ไม่ได้ทำให้คุณล่องหน หากคุณอยู่ในพื้นที่ที่เป็นอันตราย อ่านสิ่งนี้ก่อนโพสต์ — ให้ถือว่าช่องสาธารณะถูกจับตามองอยู่ และปฏิบัติตัวเช่นนั้น"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat riski azaltır; sizi görünmez yapmaz. düşman bir bölgedeyseniz, paylaşım yapmadan önce bunu okuyun — herkese açık kanalların izlendiğini varsayın ve buna göre hareket edin."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat знижує ризик; він не робить тебе невидимим. якщо ти у ворожому середовищі, прочитай це, перш ніж писати — вважай, що публічні канали під наглядом, і поводься відповідно."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat خطرہ کم کرتا ہے؛ یہ آپ کو پوشیدہ نہیں بناتا۔ اگر آپ کسی معاندانہ جگہ پر ہیں تو کچھ پوسٹ کرنے سے پہلے یہ پڑھیں — یہ فرض کریں کہ عوامی چینلز کی نگرانی ہو رہی ہے، اور اسی کے مطابق عمل کریں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat giảm rủi ro; nó không khiến bạn trở nên vô hình. nếu bạn đang ở nơi thù địch, hãy đọc phần này trước khi đăng — hãy cho rằng các kênh công khai đang bị theo dõi, và hành động đúng như vậy."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat 能降低风险，但不能让你隐身。如果你身处敌对或危险的环境，在发布任何内容前请先读这一段——请假定公共频道正被监视，并据此行事。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bitchat 能降低風險，但無法讓你隱形。若你身處敵對環境，發文前請先閱讀本文——假設公開頻道正被監看，並照此行事。"
+          }
+        }
+      }
+    },
+    "app_info.sensitive.panic.body" : {
+      "comment" : "Guide entry body explaining what the panic wipe does and its limits",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يوجد في الإعدادات زر «مسح الذعر». يحذف رسائل bitchat ووسائطه ومفاتيحه وهويته من هذا الجهاز. إذا أفاد بأنه لم يكتمل، فأغلق bitchat وأعد فتحه لإكماله. لا يمكنه استعادة أي شيء تم إرساله بالفعل، ولا يمحو البيانات محوًا يقاوم التحليل الجنائي، ويترك أي نسخ احتياطية على iCloud أو Finder دون مساس."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "সেটিংসে একটি প্যানিক ওয়াইপ বোতাম আছে। এটি এই ডিভাইস থেকে bitchat-এর বার্তা, মিডিয়া, কী, এবং পরিচয় মুছে ফেলে। যদি এটি জানায় যে মুছে ফেলা শেষ হয়নি, তাহলে তা সম্পূর্ণ করতে bitchat বন্ধ করে আবার খুলুন। এটি ইতিমধ্যে পাঠানো কিছু ফিরিয়ে আনতে পারে না, ফরেনসিকভাবে ধ্বংস করে না, এবং কোনো iCloud বা Finder ব্যাকআপ অক্ষত রেখে দেয়।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "in den einstellungen gibt es einen knopf für die panik-löschung. sie löscht die nachrichten, medien, schlüssel und identität von bitchat auf diesem gerät. wenn sie meldet, dass sie nicht fertig geworden ist, beende bitchat und öffne es erneut, um sie abzuschließen. sie kann bereits gesendetes nicht zurückholen, löscht nicht forensisch sicher und lässt etwaige icloud-/finder-backups unangetastet."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "settings has a panic wipe button. it deletes bitchat's messages, media, keys, and identity from this device. if it reports it didn't finish, quit and reopen bitchat to complete it. it can't recall anything already sent, doesn't shred forensically, and leaves any icloud or finder backups untouched."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "en ajustes hay un botón de borrado de pánico. el borrado elimina de este dispositivo los mensajes, archivos multimedia, claves e identidad de bitchat. si avisa de que no ha terminado, cierra y vuelve a abrir bitchat para completarlo. no puede retirar nada de lo ya enviado, no hace un borrado a prueba de análisis forense, y deja intactas las copias de seguridad de iCloud o Finder."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "در تنظیمات یک دکمهٔ پاک‌سازی اضطراری هست. این دکمه پیام‌ها، رسانه‌ها، کلیدها و هویت bitchat را از این دستگاه حذف می‌کند. اگر گزارش دهد که کارش تمام نشده است، bitchat را ببندید و دوباره باز کنید تا کامل شود. این کار نمی‌تواند چیزی را که قبلاً ارسال شده پس بگیرد، داده‌ها را طوری نابود نمی‌کند که با ابزارهای تخصصی قابل بازیابی نباشند، و هرگونه نسخهٔ پشتیبانِ icloud یا finder را دست‌نخورده باقی می‌گذارد."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "may panic wipe button sa settings. binubura nito ang mga mensahe, media, susi, at pagkakakilanlan ng bitchat mula sa device na ito. kung iulat nitong hindi natapos ang pagbura, isara at buksan muli ang bitchat para makumpleto ito. hindi nito maibabalik ang anumang naipadala na, hindi ito nag-shred nang forensic, at iniiwang hindi nagagalaw ang anumang icloud o finder na mga backup."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "les réglages proposent un bouton d'effacement panique. il supprime de cet appareil les messages, médias, clés et identité de bitchat. si l'effacement signale qu'il ne s'est pas terminé, quittez et rouvrez bitchat pour l'achever. cela ne peut rien rappeler de ce qui a déjà été envoyé, ne procède pas à un effacement sécurisé anti-forensique, et laisse intactes les éventuelles sauvegardes icloud ou finder."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בהגדרות יש כפתור \"מחיקת בהלה\". היא מוחקת מהמכשיר הזה את ההודעות, המדיה, המפתחות והזהות של bitchat. אם היא מדווחת שלא הושלמה, סגור ופתח מחדש את bitchat כדי להשלים אותה. היא אינה יכולה לשלוף בחזרה דבר שכבר נשלח, אינה מבצעת מחיקה פורנזית מאובטחת, ומשאירה גיבויי icloud או finder כלשהם ללא נגיעה."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सेटिंग्स में एक पैनिक वाइप बटन है। यह इस डिवाइस से bitchat के संदेश, मीडिया, कुंजियाँ, और पहचान मिटा देता है। अगर यह बताए कि मिटाना पूरा नहीं हुआ, तो इसे पूरा करने के लिए bitchat बंद करके दोबारा खोलें। यह पहले से भेजी गई किसी भी चीज़ को वापस नहीं ला सकता, फोरेंसिक रूप से नष्ट नहीं करता, और किसी भी icloud या finder बैकअप को अछूता छोड़ देता है।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "di pengaturan ada tombol hapus panik. tombol ini menghapus pesan, media, kunci, dan identitas bitchat dari perangkat ini. jika penghapusan dilaporkan belum selesai, tutup dan buka kembali bitchat untuk menyelesaikannya. ini tidak bisa menarik kembali apa pun yang sudah terkirim, tidak menghancurkan data secara forensik, dan membiarkan cadangan icloud atau finder apa pun tetap utuh."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nelle impostazioni c'è un pulsante di cancellazione panico. elimina da questo dispositivo messaggi, media, chiavi e identità di bitchat. se la cancellazione segnala che non è terminata, chiudi e riapri bitchat per completarla. non può richiamare nulla che sia già stato inviato, non esegue una cancellazione sicura a prova di analisi forense, e lascia intatti eventuali backup su icloud o finder."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設定には「パニック消去」ボタンがあります。このボタンは、この端末から bitchat のメッセージ、メディア、鍵、アイデンティティを消去します。消去が完了しなかったと表示されたら、bitchat を終了して開き直し、完了させてください。すでに送信したものを取り消すことはできず、フォレンジックに耐える完全消去（シュレッド）は行わず、iCloud や Finder のバックアップには一切手を付けません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "설정에는 \"패닉 삭제\" 버튼이 있다. 이 버튼은 이 기기에서 bitchat의 메시지, 미디어, 키, 신원을 지운다. 삭제가 완료되지 않았다고 표시되면, bitchat을 종료했다가 다시 열어 완료하라. 이미 보낸 것은 되돌릴 수 없고, 포렌식 수준으로 완전히 파쇄하지는 않으며, iCloud/Finder 백업은 손대지 않고 그대로 남겨 둔다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "terdapat butang hapus panik dalam tetapan. ia memadam mesej, media, kunci, dan identiti bitchat daripada peranti ini. jika ia melaporkan bahawa pemadaman tidak lengkap, tutup dan buka semula bitchat untuk melengkapkannya. ia tidak boleh menarik semula apa-apa yang telah dihantar, tidak memusnahkan data secara forensik, dan membiarkan sebarang sandaran icloud atau finder tidak tersentuh."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सेटिङमा घबराहट मेटाइ (panic wipe) बटन छ। यसले यस यन्त्रबाट bitchat का सन्देशहरू, मिडिया, कुञ्जीहरू, र पहिचान मेटाउँछ। मेटाउने काम पूरा भएन भनी यसले जनाएमा, त्यसलाई पूरा गर्न bitchat बन्द गरेर फेरि खोल्नुहोस्। यसले पहिले नै पठाइसकेको कुनै पनि कुरा फिर्ता ल्याउन सक्दैन, फोरेन्सिक रूपमा नष्ट गर्दैन, र कुनै पनि icloud वा Finder ब्याकअपलाई अछुतो छोड्छ।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "instellingen heeft een knop voor paniekwissen. het wist de berichten, media, sleutels en identiteit van bitchat op dit apparaat. als het meldt dat het niet is voltooid, sluit bitchat dan en open het opnieuw om het af te ronden. het kan niets terughalen wat al is verzonden, wist gegevens niet forensisch onherstelbaar, en laat eventuele icloud-/finder-back-ups ongemoeid."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "w ustawieniach jest przycisk awaryjnego wymazania. wymazanie usuwa z tego urządzenia wiadomości, multimedia, klucze i tożsamość bitchat. jeśli zgłosi, że się nie zakończyło, zamknij i otwórz bitchat ponownie, aby je dokończyć. nie może odwołać niczego, co już zostało wysłane, nie niszczy danych w sposób odporny na analizę śledczą i nie narusza żadnych kopii zapasowych icloud ani finder."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nas definições há um botão de limpeza de pânico. a limpeza apaga deste dispositivo as mensagens, ficheiros multimédia, chaves e identidade do bitchat. se indicar que não terminou, fecha e reabre o bitchat para a concluir. não consegue recuperar nada que já tenha sido enviado, não faz uma destruição forense dos dados, e deixa intactas quaisquer cópias de segurança do icloud ou do finder."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "em ajustes há um botão de limpeza de pânico. a limpeza apaga deste dispositivo as mensagens, mídia, chaves e identidade do bitchat. se ela avisar que não terminou, feche e reabra o bitchat para concluí-la. ela não consegue trazer de volta nada que já foi enviado, não faz uma destruição de nível forense, e deixa intactos quaisquer backups do icloud ou do finder."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "в настройках есть кнопка экстренного стирания. стирание удаляет с этого устройства сообщения, медиафайлы, ключи и личность bitchat. если оно сообщит, что не завершилось, закройте и снова откройте bitchat, чтобы завершить стирание. оно не может отозвать то, что уже отправлено, не уничтожает данные с криминалистической надёжностью и оставляет нетронутыми любые резервные копии в icloud или finder."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "i inställningar finns en knapp för panikradering. den raderar meddelanden, media, nycklar och identitet i bitchat från den här enheten. om den rapporterar att den inte blev klar, avsluta och öppna bitchat igen för att slutföra den. den kan inte återkalla något som redan skickats, förstör inte data forensiskt, och lämnar eventuella icloud/finder-säkerhetskopior orörda."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "அமைப்புகளில் ஒரு பதற்ற அழிப்பு (panic wipe) பொத்தான் உள்ளது. இது இந்தச் சாதனத்திலிருந்து bitchat-இன் செய்திகள், ஊடகம், விசைகள் மற்றும் அடையாளத்தை அழிக்கிறது. அழித்தல் முழுமையடையவில்லை என்று அது தெரிவித்தால், அதை முடிக்க bitchat ஐ மூடி மீண்டும் திறக்கவும். ஏற்கனவே அனுப்பப்பட்ட எதையும் இது திரும்பப் பெற முடியாது, தடயவியல் ரீதியாக நசுக்காது (shred), மேலும் எந்த icloud அல்லது finder காப்புப் பிரதிகளையும் தொடாமல் விட்டுவிடுகிறது."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ในการตั้งค่ามีปุ่มล้างข้อมูลฉุกเฉิน มันจะลบข้อความ สื่อ กุญแจ และตัวตนของ bitchat ออกจากอุปกรณ์นี้ หากมันแจ้งว่าการล้างข้อมูลไม่สมบูรณ์ ให้ปิดแล้วเปิด bitchat ใหม่เพื่อให้การล้างข้อมูลเสร็จสมบูรณ์ มันเรียกคืนสิ่งที่ส่งไปแล้วไม่ได้ ไม่ได้ทำลายข้อมูลแบบกันการกู้คืนทางนิติวิทยาศาสตร์ และไม่ได้แตะต้องข้อมูลสำรองบน icloud หรือ finder ใดๆ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ayarlarda bir panik silme düğmesi var. bu düğme, bitchat'in mesajlarını, medyasını, anahtarlarını ve kimliğini bu cihazdan siler. silmenin tamamlanmadığını bildirirse, tamamlamak için bitchat'i kapatıp tekrar açın. gönderilmiş hiçbir şeyi geri çağıramaz, adli düzeyde güvenli silme yapmaz ve varsa icloud veya finder yedeklerine dokunmaz."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "у налаштуваннях є кнопка екстреного стирання. стирання видаляє з цього пристрою повідомлення, медіа, ключі та особистість bitchat. якщо воно повідомить, що не завершилося, закрий і знову відкрий bitchat, щоб завершити стирання. воно не може відкликати вже надіслане, не знищує дані способом, стійким до криміналістичного відновлення, і залишає будь-які резервні копії icloud або finder недоторканими."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سیٹنگز میں پینک وائپ کا بٹن ہے۔ یہ اس آلے سے bitchat کے پیغامات، میڈیا، کلیدیں اور شناخت حذف کر دیتا ہے۔ اگر یہ بتائے کہ مٹانا مکمل نہیں ہوا، تو اسے مکمل کرنے کے لیے bitchat بند کر کے دوبارہ کھولیں۔ یہ پہلے سے بھیجی گئی کسی بھی چیز کو واپس نہیں بلا سکتا، فرانزک طور پر (forensically) نہیں مٹاتا، اور کسی بھی icloud یا finder بیک اپ کو نہیں چھیڑتا۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "trong phần cài đặt có nút xóa khẩn cấp. nó xóa tin nhắn, phương tiện, khóa, và danh tính của bitchat khỏi thiết bị này. nếu nó báo xóa chưa hoàn tất, hãy thoát và mở lại bitchat để hoàn tất việc xóa. nó không thể thu hồi bất cứ thứ gì đã gửi, không xóa dữ liệu triệt để đến mức chống được điều tra pháp y, và không đụng đến bất kỳ bản sao lưu icloud hay finder nào."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置中有一个\"紧急抹除\"按钮。它会从本设备上删除 bitchat 的消息、媒体、密钥和身份。如果它提示未能完成，请退出并重新打开 bitchat 以完成抹除。它无法收回任何已发送的内容，不做取证级的粉碎擦除，也不会触及任何 icloud 或 finder 备份。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設定裡有一個「緊急抹除」按鈕。它會從本裝置刪除 bitchat 的訊息、媒體、金鑰與身分。如果它顯示未能完成，請結束並重新開啟 bitchat，以完成抹除。它無法收回任何已送出的內容，不會進行防鑑識層級的粉碎抹除，也不會動到任何 icloud 或 finder 備份。"
+          }
+        }
+      }
+    },
+    "app_info.sensitive.panic.title" : {
+      "comment" : "Guide entry title: the panic wipe erases local data and cannot be undone",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مسح الطوارئ محلي ولا يمكن التراجع عنه"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "প্যানিক ওয়াইপ স্থানীয় এবং অপরিবর্তনীয়"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "die panik-löschung ist lokal und unwiderruflich"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "panic wipe is local and irreversible"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "el borrado de pánico es local e irreversible"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پاک‌سازی اضطراری محلی و برگشت‌ناپذیر است"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ang panic wipe ay lokal at hindi na mababawi"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "l'effacement d'urgence est local et irréversible"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מחיקת חירום היא מקומית ובלתי הפיכה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "panic वाइप स्थानीय और अपरिवर्तनीय है"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hapus panik bersifat lokal dan tidak bisa dibatalkan"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "la cancellazione di emergenza è locale e irreversibile"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "パニックワイプはローカルで、取り消せない"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "패닉 삭제는 로컬에서 이뤄지고 되돌릴 수 없다"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pemadaman panik adalah setempat dan tidak boleh dibatalkan"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "panic wipe स्थानीय र अपरिवर्तनीय हो"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "paniekwissen is lokaal en onomkeerbaar"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "awaryjne wymazanie jest lokalne i nieodwracalne"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "a limpeza de pânico é local e irreversível"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "a limpeza de pânico é local e irreversível"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "экстренное стирание — локальное и необратимое"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "panikradering är lokal och oåterkallelig"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "panic wipe உள்ளூர்தன்மை கொண்டது மற்றும் மீளமுடியாதது"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ล้างข้อมูลฉุกเฉินทำในเครื่องและย้อนกลับไม่ได้"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "panik silme yereldir ve geri alınamaz"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "екстрене стирання — локальне й незворотне"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پینک وائپ مقامی اور ناقابلِ واپسی ہوتا ہے"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "xóa khẩn cấp là cục bộ và không thể hoàn tác"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "紧急擦除在本地完成，且不可撤销"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "緊急清除是本機端且無法復原的"
+          }
+        }
+      }
+    },
+    "app_info.sensitive.precision.body" : {
+      "comment" : "Guide entry body: with location access on and the app open, bitchat samples nearby areas from relays and announces presence to the channels for the real area; turning location access off stops both; every post pins the poster to that channel's area",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مع تفعيل إذن الموقع، وما دام bitchat مفتوحًا، فإنه يسأل المرحّلات عن المناطق المحيطة بك ويُخبر قنوات المنطقة التي أنت فيها فعلًا بأنك قريب — حتى لو لم تنشر شيئًا أبدًا، وأيًّا كانت القناة التي تتصفحها. تعطيل إذن الموقع يوقف الأمرين كليهما. ليس كل من يقرأ قناةً يظهر فيها، فلا يمكنك إحصاء من يراقبها. وكل رسالة تنشرها تثبّتك أيضًا في منطقة تلك القناة، لذا حين يكون موقعك حساسًا، لا تنشر إلا في القنوات التي تغطي منطقة واسعة."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "লোকেশন অ্যাক্সেস চালু থাকলে, bitchat খোলা থাকাকালীন এটি রিলেগুলোর কাছে আপনার চারপাশের এলাকাগুলো সম্পর্কে জানতে চায় এবং আপনি আসলে যে এলাকায় আছেন সেই এলাকার চ্যানেলগুলোকে জানিয়ে দেয় যে আপনি কাছাকাছি আছেন — আপনি কখনো পোস্ট না করলেও, এবং যে চ্যানেলই দেখুন না কেন। লোকেশন অ্যাক্সেস বন্ধ করলে দুটোই বন্ধ হয়ে যায়। যারা কোনো চ্যানেল পড়ছে, তাদের সবাইকে সেখানে দেখা যায় না, তাই কে কে নজর রাখছে তা আপনি গুনতে পারবেন না। এ ছাড়া প্রতিটি পোস্ট আপনাকে সেই চ্যানেলের এলাকায় গেঁথে দেয়, তাই আপনার অবস্থান স্পর্শকাতর হলে শুধু বিস্তৃত এলাকার চ্যানেলে পোস্ট করুন।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bei aktivem standortzugriff fragt bitchat, solange es geöffnet ist, relays nach den gebieten um dich herum und meldet den kanälen für das gebiet, in dem du dich tatsächlich befindest, dass du in der nähe bist — auch wenn du nie postest und egal, welchen kanal du gerade ansiehst. schaltest du den standortzugriff aus, hört beides auf. nicht alle, die einen kanal lesen, tauchen darin auf; du kannst also nicht abzählen, wer zusieht. jede nachricht, die du postest, heftet dich außerdem an das gebiet dieses kanals; wenn dein standort heikel ist, poste deshalb nur in kanälen, die ein großes gebiet abdecken."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "with location access on, while bitchat is open it asks relays about the areas around you and tells the channels for the area you're really in that you're nearby — even if you never post, and whatever channel you're viewing. turning location access off stops both. not everyone reading a channel shows up in it, so you can't count who's watching. every post also pins you to that channel's area, so when your location is sensitive, post only in wide-area channels."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "con el acceso a la ubicación activado, mientras está abierto, bitchat pregunta a los relays por las zonas que te rodean y les dice a los canales de la zona donde realmente estás que estás cerca — aunque nunca publiques, y sea cual sea el canal que estés viendo. desactivar el acceso a la ubicación detiene ambas cosas. no todos los que leen un canal aparecen en él, así que no puedes saber cuántos están mirando. cada mensaje que publicas también te fija a la zona de ese canal; por eso, cuando tu ubicación sea sensible, publica solo en canales que cubran una zona amplia."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "با روشن بودن دسترسی موقعیت، bitchat تا وقتی باز است از رله‌ها دربارهٔ محدوده‌های اطرافتان پرس‌وجو می‌کند و به کانال‌های محدوده‌ای که واقعاً در آن حضور دارید خبر می‌دهد که در نزدیکی هستید — حتی اگر هرگز پیامی نفرستید، و صرف‌نظر از اینکه کدام کانال را مشاهده می‌کنید. خاموش کردن دسترسی موقعیت هر دو را متوقف می‌کند. ممکن است کسانی یک کانال را بخوانند بی‌آنکه در آن دیده شوند، پس نمی‌توانید کسانی را که آن را زیر نظر دارند بشمارید. هر پیامی هم که می‌فرستید شما را به محدودهٔ همان کانال سنجاق می‌کند، پس وقتی موقعیتتان حساس است، فقط در کانال‌هایی پیام بفرستید که محدودهٔ وسیعی را پوشش می‌دهند."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kapag naka-on ang access sa lokasyon, habang bukas ang bitchat, nagtatanong ito sa mga relay tungkol sa mga lugar sa paligid mo at ipinapaalam nito sa mga channel ng lugar kung nasaan ka talaga na nasa malapit ka — kahit hindi ka kailanman mag-post, at kahit anong channel ang tinitingnan mo. kapag in-off mo ang access sa lokasyon, hihinto ang dalawang ito. hindi lahat ng nagbabasa ng isang channel ay lumalabas dito, kaya hindi mo mabibilang kung sino ang nanonood. bawat mensaheng ipinopost mo ay nagkakabit din sa iyo sa lugar ng channel na iyon, kaya kapag sensitibo ang iyong lokasyon, mag-post lamang sa mga channel na malawak ang saklaw."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "avec l'accès à la position activé, bitchat, tant qu'il est ouvert, interroge les relais sur les zones autour de vous et signale aux canaux de la zone où vous vous trouvez réellement que vous êtes à proximité — même si vous ne publiez jamais, et quel que soit le canal que vous consultez. désactiver l'accès à la position arrête les deux. les personnes qui lisent un canal n'y apparaissent pas toutes, vous ne pouvez donc pas compter qui regarde. chaque message que vous publiez vous épingle aussi à la zone de ce canal, alors quand votre position est sensible, publiez uniquement dans des canaux qui couvrent une grande zone."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כשגישת המיקום פעילה, כל עוד bitchat פתוח, הוא שואל ממסרים על האזורים שסביבך ומודיע שאתה בסביבה לערוצים של האזור שבו אתה נמצא באמת — גם אם לעולם לא תפרסם, ולא משנה באיזה ערוץ אתה צופה. כיבוי גישת המיקום עוצר את שניהם. לא כל מי שקורא ערוץ מופיע בו, כך שאי אפשר לספור מי צופה בו. כל הודעה שאתה מפרסם גם מצמידה אותך לאזור של אותו ערוץ, לכן כשהמיקום שלך רגיש, פרסם רק בערוצים שמכסים אזור רחב."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "लोकेशन एक्सेस चालू होने पर, जब तक bitchat खुला है, यह रिले से आपके आसपास के क्षेत्रों के बारे में पूछता है और आप असल में जिस क्षेत्र में हैं, उसके चैनलों को बताता है कि आप पास में हैं — भले ही आप कभी पोस्ट न करें, और चाहे आप कोई भी चैनल देख रहे हों। लोकेशन एक्सेस बंद करने से ये दोनों रुक जाते हैं। किसी चैनल को पढ़ने वाले सभी लोग उसमें दिखाई नहीं देते, इसलिए आप यह नहीं गिन सकते कि कौन-कौन देख रहा है। साथ ही, हर पोस्ट आपको उस चैनल के क्षेत्र से बाँध देती है, इसलिए जब आपकी लोकेशन संवेदनशील हो, तो केवल बड़े क्षेत्र वाले चैनलों में पोस्ट करें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dengan akses lokasi aktif, selama bitchat terbuka, aplikasi ini bertanya ke relay tentang area di sekitarmu dan memberi tahu kanal untuk area tempatmu benar-benar berada bahwa kamu ada di dekat situ — bahkan jika kamu tidak pernah memposting, dan tak peduli kanal mana yang sedang kamu lihat. mematikan akses lokasi menghentikan keduanya. tidak semua orang yang membaca sebuah kanal muncul di kanal itu, jadi kamu tidak bisa menghitung siapa saja yang sedang mengawasi. setiap pesan yang kamu kirim juga menyematkanmu ke area kanal itu, jadi saat lokasimu sensitif, hanya posting di kanal yang mencakup area luas."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "con l'accesso alla posizione attivo, bitchat, mentre è aperto, interroga i relay sulle aree intorno a te e comunica ai canali dell'area in cui ti trovi davvero che sei nelle vicinanze — anche se non pubblichi mai, e qualunque canale tu stia guardando. disattivare l'accesso alla posizione interrompe entrambe le cose. non tutti quelli che leggono un canale vi compaiono, quindi non puoi contare chi sta guardando. ogni messaggio che pubblichi ti fissa anche all'area di quel canale, perciò quando la tua posizione è sensibile, pubblica solo in canali che coprono un'area ampia."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "位置アクセスがオンだと、bitchat は開いている間、あなたの周りのエリアについてリレーに問い合わせ、あなたが実際にいるエリアのチャンネルに、近くにいることを知らせます — 一度も投稿しなくても、どのチャンネルを見ていても同じです。位置アクセスをオフにすると、その両方が止まります。チャンネルを読んでいる人が全員そこに表示されるわけではないので、誰が見ているかを数えることはできません。また、投稿するたびにそのチャンネルのエリアに自分が結び付くので、居場所が知られると困るときは、広い範囲をカバーするチャンネルでのみ投稿してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "위치 접근이 켜져 있으면, bitchat은 열려 있는 동안 당신 주변 영역에 대해 릴레이에 묻고, 당신이 실제로 있는 영역의 채널에는 당신이 근처에 있다고 알린다 — 한 번도 게시하지 않아도, 어떤 채널을 보고 있든 마찬가지다. 위치 접근을 끄면 둘 다 멈춘다. 채널을 읽는 사람이 모두 그 채널에 표시되는 것은 아니므로, 누가 지켜보고 있는지 셀 수 없다. 또한 게시하는 모든 메시지는 당신을 그 채널의 영역에 고정하므로, 위치가 민감하다면 넓은 영역을 다루는 채널에서만 게시하라."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dengan akses lokasi dihidupkan, semasa bitchat dibuka, ia bertanya kepada relay tentang kawasan di sekeliling anda dan memberitahu saluran bagi kawasan tempat anda sebenarnya berada bahawa anda ada berdekatan — walaupun anda tidak pernah menyiarkan apa-apa, dan tidak kira saluran mana yang sedang anda lihat. mematikan akses lokasi menghentikan kedua-duanya. bukan semua orang yang membaca sesuatu saluran muncul di dalamnya, jadi anda tidak dapat mengira siapa yang sedang memerhati. setiap mesej yang anda siarkan juga memakukan anda pada kawasan saluran itu, jadi apabila lokasi anda sensitif, siarkan mesej hanya dalam saluran yang meliputi kawasan luas."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "स्थान पहुँच सक्रिय हुँदा, bitchat खुला रहेसम्म यसले रिलेहरूलाई तपाईंको वरिपरिका क्षेत्रहरूबारे सोध्छ र तपाईं वास्तवमै रहेको क्षेत्रका च्यानलहरूलाई तपाईं नजिकै हुनुहुन्छ भनी बताउँछ — तपाईंले कहिल्यै पोस्ट नगरे पनि, र जुनसुकै च्यानल हेरिरहनुभएको भए पनि। स्थान पहुँच बन्द गर्दा दुवै रोकिन्छन्। च्यानल पढ्ने सबैजना त्यसमा देखिन्छन् भन्ने छैन, त्यसैले को-को हेरिरहेका छन् भनी तपाईं गन्न सक्नुहुन्न। साथै, हरेक पोस्टले तपाईंलाई त्यो च्यानलको क्षेत्रमा टाँस्छ, त्यसैले तपाईंको स्थान संवेदनशील छ भने फराकिलो क्षेत्रका च्यानलहरूमा मात्र पोस्ट गर्नुहोस्।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "zolang bitchat open is en locatietoegang aanstaat, vraagt het relays naar de gebieden om je heen en vertelt het de kanalen voor het gebied waar je werkelijk bent, dat je in de buurt bent — ook als je nooit iets plaatst, en welk kanaal je ook bekijkt. locatietoegang uitzetten stopt beide. niet iedereen die een kanaal leest, is daarin zichtbaar, dus je kunt niet tellen wie er meekijkt. elk bericht dat je plaatst pint je ook vast aan het gebied van dat kanaal, dus wanneer je locatie gevoelig ligt, plaats dan alleen berichten in kanalen die een groot gebied dekken."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "przy włączonym dostępie do lokalizacji, gdy bitchat jest otwarty, aplikacja pyta przekaźniki o obszary wokół ciebie i informuje kanały obszaru, w którym faktycznie przebywasz, że jesteś w pobliżu — nawet jeśli nigdy nic nie publikujesz i niezależnie od tego, jaki kanał przeglądasz. wyłączenie dostępu do lokalizacji zatrzymuje jedno i drugie. nie każdy, kto czyta kanał, jest w nim widoczny, dlatego nie możesz policzyć, kto go obserwuje. każda opublikowana wiadomość przypina cię też do obszaru tego kanału, więc gdy twoja lokalizacja jest wrażliwa, publikuj tylko w kanałach obejmujących duży obszar."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "com o acesso à localização ativo, enquanto está aberto, o bitchat pergunta aos relés sobre as áreas à tua volta e diz aos canais da área onde realmente estás que estás por perto — mesmo que nunca publiques, e seja qual for o canal que estejas a ver. desligar o acesso à localização interrompe as duas coisas. nem todos os que leem um canal aparecem nele, por isso não consegues saber quantos estão a observar. cada mensagem que publicas também te prende à área desse canal; portanto, quando a tua localização for sensível, publica só em canais de área ampla."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "com o acesso à localização ligado, enquanto o bitchat está aberto, ele pergunta aos relays sobre as áreas em volta de você e diz aos canais da área onde você realmente está que você está por perto — mesmo que você nunca poste, e seja qual for o canal que você estiver vendo. desligar o acesso à localização interrompe as duas coisas. nem todo mundo que lê um canal aparece nele, então você não tem como saber quantas pessoas estão observando. cada mensagem que você posta também te prende à área daquele canal; por isso, quando sua localização for sensível, poste só em canais de área ampla."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "при включённом доступе к локации, пока bitchat открыт, он запрашивает у релеев данные о зонах вокруг вас и сообщает каналам той зоны, где вы на самом деле находитесь, что вы рядом, — даже если вы никогда ничего не публикуете и какой бы канал вы ни просматривали. отключение доступа к локации прекращает и то и другое. не все, кто читает канал, в нём видны, поэтому вы не можете сосчитать, кто за ним наблюдает. каждое опубликованное сообщение также привязывает вас к зоне этого канала, так что, когда ваше местоположение чувствительно, пишите только в каналах, охватывающих большую территорию."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "medan bitchat är öppet med platsåtkomst på, frågar det reläer om områdena runt dig och meddelar kanalerna för det område du faktiskt befinner dig i att du är i närheten — även om du aldrig postar, och oavsett vilken kanal du tittar på. stänger du av platsåtkomsten stoppas båda delarna. inte alla som läser en kanal syns i den, så du kan inte räkna hur många som tittar. varje meddelande du postar fäster dig dessutom vid den kanalens område, så posta bara i kanaler som täcker ett stort område när din plats är känslig."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இட அணுகல் இயக்கத்தில் இருந்தால், bitchat திறந்திருக்கும்போது அது உங்களைச் சுற்றியுள்ள பகுதிகளைப் பற்றி ரிலேகளிடம் கேட்கிறது, மேலும் நீங்கள் உண்மையில் இருக்கும் பகுதிக்கான சேனல்களுக்கு நீங்கள் அருகில் இருப்பதாகத் தெரிவிக்கிறது — நீங்கள் ஒருபோதும் பதிவிடாவிட்டாலும், எந்தச் சேனலைப் பார்த்துக்கொண்டிருந்தாலும். இட அணுகலை அணைத்தால் இவை இரண்டும் நின்றுவிடும். ஒரு சேனலைப் படிப்பவர்கள் எல்லோரும் அதில் தெரிவார்கள் என்பதில்லை, எனவே யார் யார் கண்காணிக்கிறார்கள் என்று உங்களால் எண்ண முடியாது. மேலும், ஒவ்வொரு பதிவும் அந்தச் சேனலின் பகுதியில் உங்களைப் பொருத்துகிறது, ஆகவே உங்கள் இருப்பிடம் உணர்திறன் வாய்ந்ததாக இருந்தால், பரந்த பகுதியை உள்ளடக்கும் சேனல்களில் மட்டுமே பதிவிடுங்கள்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เมื่อเปิดการเข้าถึงตำแหน่ง ขณะที่ bitchat เปิดอยู่ มันจะถามรีเลย์เกี่ยวกับพื้นที่รอบตัวคุณ และบอกช่องต่างๆ ของพื้นที่ที่คุณอยู่จริงว่าคุณอยู่ใกล้ๆ — แม้คุณจะไม่เคยโพสต์เลย และไม่ว่าคุณกำลังดูช่องไหนอยู่ก็ตาม การปิดการเข้าถึงตำแหน่งจะหยุดทั้งสองอย่าง ไม่ใช่ทุกคนที่อ่านช่องหนึ่งจะปรากฏอยู่ในช่องนั้น คุณจึงนับไม่ได้ว่ามีใครกำลังจับตามองอยู่บ้าง ทุกข้อความที่คุณโพสต์ยังปักหมุดคุณไว้กับพื้นที่ของช่องนั้นด้วย ดังนั้นเมื่อตำแหน่งของคุณอ่อนไหว ให้โพสต์เฉพาะในช่องที่ครอบคลุมพื้นที่กว้าง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "konum erişimi açıkken bitchat, açık olduğu sürece çevrenizdeki bölgeleri rölelere sorar ve gerçekte bulunduğunuz bölgenin kanallarına yakınlarda olduğunuzu bildirir — hiç paylaşım yapmasanız bile ve hangi kanalı görüntülüyor olursanız olun. konum erişimini kapatmak ikisini de durdurur. bir kanalda görünenler, o kanalı okuyanların hepsi değildir; bu yüzden izleyenleri sayamazsınız. gönderdiğiniz her mesaj da sizi o kanalın bölgesine sabitler, o yüzden konumunuz hassasken yalnızca geniş bir bölgeyi kapsayan kanallarda paylaşım yapın."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "з увімкненим доступом до локації, поки bitchat відкритий, він запитує релеї про зони навколо тебе й повідомляє каналам тієї зони, де ти насправді перебуваєш, що ти поруч, — навіть якщо ти ніколи нічого не публікуєш і незалежно від того, який канал переглядаєш. відключення доступу до локації зупиняє і те, і інше. не всіх, хто читає канал, у ньому видно, тож ти не можеш порахувати, хто за ним стежить. кожне опубліковане повідомлення також прив'язує тебе до зони цього каналу, тому, коли твоє місцеположення чутливе, пиши лише в каналах, що охоплюють велику територію."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لوکیشن رسائی آن ہونے پر، جب تک bitchat کھلا ہے، یہ ریلے سے آپ کے آس پاس کے علاقوں کے بارے میں پوچھتا ہے اور اس علاقے کے چینلز کو، جہاں آپ واقعی موجود ہیں، بتاتا ہے کہ آپ قریب ہیں — چاہے آپ کبھی پوسٹ نہ کریں، اور چاہے آپ کوئی بھی چینل دیکھ رہے ہوں۔ لوکیشن رسائی بند کرنے سے یہ دونوں کام رک جاتے ہیں۔ کسی چینل کو پڑھنے والا ہر شخص اس میں نظر نہیں آتا، اس لیے آپ یہ نہیں گن سکتے کہ کون کون دیکھ رہا ہے۔ آپ کی ہر پوسٹ بھی آپ کو اسی چینل کے علاقے سے نتھی کر دیتی ہے، اس لیے جب آپ کا مقام حساس ہو تو صرف وسیع علاقے کا احاطہ کرنے والے چینلز میں پوسٹ کریں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "khi quyền truy cập vị trí bật, trong lúc bitchat đang mở, nó hỏi các relay về những khu vực quanh bạn và báo cho các kênh của khu vực bạn thực sự đang ở rằng bạn đang ở gần — kể cả khi bạn không bao giờ đăng gì, và bất kể bạn đang xem kênh nào. tắt quyền truy cập vị trí sẽ dừng cả hai việc này. không phải ai đọc một kênh cũng xuất hiện trong kênh đó, nên bạn không thể đếm được những ai đang theo dõi. mỗi tin nhắn bạn đăng cũng ghim bạn vào khu vực của kênh đó, nên khi vị trí của bạn nhạy cảm, hãy chỉ đăng trong các kênh phủ một khu vực rộng."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只要位置权限开着，bitchat 在打开期间就会向中继查询你周围的区域，并让你真正所在区域的各个频道知道你就在附近——即使你从不发帖，也不论你正在查看哪个频道。关闭位置权限，这两者都会停止。并非每个阅读频道的人都会出现在频道中，所以你无法数清有谁在看。你发布的每条消息也都会把你钉在那个频道的区域上，所以当你的位置敏感时，只在覆盖范围大的频道中发帖。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只要位置權限開著，bitchat 在開啟期間就會向中繼查詢你周圍的區域，並讓你真正所在區域的各個頻道知道你就在附近——即使你從不發文，也不論你正在查看哪個頻道。關閉位置權限，這兩者都會停止。並非每個閱讀頻道的人都會出現在頻道中，所以你無法數清有誰在看。你發布的每條訊息也都會把你釘在那個頻道的區域上，所以當你的位置敏感時，只在覆蓋範圍大的頻道中發文。"
+          }
+        }
+      }
+    },
+    "app_info.sensitive.precision.title" : {
+      "comment" : "Guide entry title: location activity is visible before anyone posts",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "موقعك يظهر قبل أن تنشر"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "আপনার অবস্থান পোস্ট করার আগেই দেখা যায়"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dein standort ist sichtbar, bevor du postest"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "your location shows before you post"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tu ubicación se ve antes de que publiques"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "موقعیت شما پیش از ارسال پیام دیده می‌شود"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nakikita ang iyong lokasyon bago ka mag-post"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "votre position est visible avant que vous publiiez"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "המיקום שלך נחשף לפני שאתה מפרסם"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "आपकी लोकेशन पोस्ट करने से पहले ही दिख जाती है"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lokasimu terlihat sebelum kamu memposting"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "la tua posizione è visibile prima che tu pubblichi"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "居場所は投稿する前から見えている"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "게시하기 전부터 위치가 드러난다"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lokasi anda kelihatan sebelum anda menyiarkan mesej"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "तपाईंको स्थान पोस्ट गर्नुअघि नै देखिन्छ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "je locatie is zichtbaar voordat je iets plaatst"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "twoją lokalizację widać, zanim coś opublikujesz"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "a tua localização vê-se antes de publicares"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sua localização aparece antes de você postar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ваше местоположение видно ещё до публикации"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "din plats syns innan du postar"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "நீங்கள் பதிவிடும் முன்பே உங்கள் இருப்பிடம் தெரிகிறது"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ตำแหน่งของคุณถูกเปิดเผยก่อนคุณโพสต์"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "konumunuz siz paylaşmadan önce görünür"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "твоє місцеположення видно ще до публікації"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "آپ کا مقام پوسٹ کرنے سے پہلے ہی ظاہر ہو جاتا ہے"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vị trí của bạn lộ ra trước khi bạn đăng"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的位置在发帖前就会暴露"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的位置在發文前就會暴露"
+          }
+        }
+      }
+    },
+    "app_info.sensitive.public_channels.body" : {
+      "comment" : "Guide entry body explaining public channels are unencrypted and joinable by anyone",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يمكن لأي شخص الانضمام إلى أي قناة شبكية (mesh) أو قناة geohash، ورسائل القنوات موقَّعة لكنها غير مشفَّرة — يمكن قراءتها حرفيًّا بواسطة أي جهاز راديو أو مُرحِّل (relay) قريب. عامِل كل قناة عامة على أنها مراقَبة. أبقِ الحديث الحساس في رسائل خاصة موثَّقة، ولا تضعه أبدًا في القنوات."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "যে কেউ যেকোনো mesh বা geohash চ্যানেলে যোগ দিতে পারে, এবং চ্যানেলের বার্তাগুলো সাইন করা থাকে কিন্তু এনক্রিপ্ট করা নয় — কাছাকাছি যেকোনো রেডিও বা রিলে সেগুলো হুবহু পড়তে পারে। প্রতিটি পাবলিক চ্যানেলকে নজরদারিতে থাকা হিসেবে গণ্য করুন। সংবেদনশীল কথাবার্তা verified প্রাইভেট বার্তায় রাখুন, কখনো চ্যানেলে নয়।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "jede und jeder kann jedem mesh- oder geohash-kanal beitreten, und kanalnachrichten sind signiert, aber nicht verschlüsselt — für jedes funkgerät oder relay in der nähe wörtlich lesbar. behandle jeden öffentlichen kanal als überwacht. führe sensible gespräche in verifizierten privaten nachrichten, niemals in kanälen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "anyone can join any mesh or geohash channel, and channel messages are signed but not encrypted — readable verbatim by any nearby radio or relay. treat every public channel as monitored. keep sensitive talk in verified private messages, never in channels."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cualquiera puede unirse a cualquier canal mesh o geohash, y los mensajes de canal están firmados pero no cifrados: legibles al pie de la letra por cualquier radio o repetidor cercano. trata todo canal público como monitorizado. mantén las conversaciones sensibles en mensajes privados verificados, nunca en canales."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "هر کسی می‌تواند به هر کانال مش (mesh) یا geohash بپیوندد، و پیام‌های کانال امضا می‌شوند اما رمزنگاری نمی‌شوند — هر رادیو یا رلهٔ نزدیک می‌تواند آن‌ها را واژه‌به‌واژه بخواند. با هر کانال عمومی مانند فضایی تحت نظارت رفتار کنید. گفت‌وگوهای حساس را در پیام‌های خصوصی تأییدشده نگه دارید، هرگز در کانال‌ها."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kahit sino ay maaaring sumali sa anumang mesh o geohash channel, at ang mga mensahe sa channel ay nilagdaan ngunit hindi naka-encrypt — mababasa nang salita-sa-salita ng sinumang malapit na radyo o relay. ituring na binabantayan ang bawat public channel. panatilihin ang sensitibong usapan sa verified na private messages, hindi kailanman sa mga channel."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "n'importe qui peut rejoindre n'importe quel canal mesh ou geohash, et les messages de canal sont signés mais pas chiffrés — lisibles mot pour mot par toute radio ou tout relais à proximité. considérez chaque canal public comme surveillé. gardez les échanges sensibles dans des messages privés vérifiés, jamais dans les canaux."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כל אחד יכול להצטרף לכל ערוץ mesh או geohash, והודעות בערוץ חתומות אך אינן מוצפנות — ניתנות לקריאה מילה במילה על ידי כל רדיו או ממסר סמוך. התייחס לכל ערוץ ציבורי כאל ערוץ שנמצא בניטור. שמור שיחות רגישות בהודעות פרטיות מאומתות, לעולם לא בערוצים."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "कोई भी किसी भी mesh या geohash चैनल में शामिल हो सकता है, और चैनल संदेश हस्ताक्षरित होते हैं लेकिन एन्क्रिप्टेड नहीं — पास के किसी भी रेडियो या रिले द्वारा हूबहू पढ़े जा सकते हैं। हर सार्वजनिक चैनल को निगरानी में मानें। संवेदनशील बातचीत सत्यापित निजी संदेशों में रखें, कभी चैनलों में नहीं।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "siapa pun bisa bergabung ke kanal mesh atau geohash mana pun, dan pesan kanal ditandatangani tapi tidak dienkripsi — bisa dibaca kata demi kata oleh radio atau relay terdekat mana pun. perlakukan setiap kanal publik sebagai kanal yang dipantau. simpan pembicaraan sensitif dalam pesan pribadi terverifikasi, jangan pernah di kanal."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chiunque può entrare in qualsiasi canale mesh o geohash, e i messaggi dei canali sono firmati ma non cifrati — leggibili parola per parola da qualsiasi radio o relay nelle vicinanze. considera ogni canale pubblico come monitorato. tieni le conversazioni sensibili nei messaggi privati verificati, mai nei canali."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "誰でもあらゆるメッシュや geohash チャンネルに参加でき、チャンネルのメッセージは署名されていますが暗号化されていません。近くの無線機やリレーがそのまま読み取れます。すべての公開チャンネルは監視されているものとして扱ってください。機密性の高い会話は検証済みのプライベートメッセージで行い、チャンネルでは決して行わないでください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "누구나 어떤 메시(mesh)나 geohash 채널에도 들어올 수 있고, 채널 메시지는 서명은 되지만 암호화되지는 않는다 — 근처의 어떤 무선 기기나 릴레이든 원문 그대로 읽을 수 있다. 모든 공개 채널을 감시받는 것으로 취급하라. 민감한 대화는 인증된 개인 메시지에서만 하고, 채널에서는 절대 하지 마라."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sesiapa sahaja boleh menyertai mana-mana saluran mesh atau geohash, dan mesej saluran ditandatangani tetapi tidak disulitkan — boleh dibaca kata demi kata oleh mana-mana radio atau geganti berdekatan. anggap setiap saluran awam sebagai diawasi. simpan perbualan sensitif dalam mesej peribadi yang disahkan, jangan sekali-kali dalam saluran."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "जो कोहीले पनि कुनै पनि mesh वा geohash च्यानलमा सामेल हुन सक्छ, र च्यानलका सन्देशहरू हस्ताक्षरित छन् तर इन्क्रिप्टेड छैनन् — नजिकैको कुनै पनि रेडियो वा relay ले शब्दशः पढ्न सक्छ। हरेक सार्वजनिक च्यानललाई निगरानीमा रहेको ठान्नुहोस्। संवेदनशील कुराकानी प्रमाणित निजी सन्देशहरूमा राख्नुहोस्, कहिल्यै च्यानलहरूमा नराख्नुहोस्।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iedereen kan elk mesh- of geohash-kanaal binnenkomen, en kanaalberichten zijn ondertekend maar niet versleuteld — letterlijk leesbaar voor elke radio of relay in de buurt. beschouw elk openbaar kanaal als gemonitord. houd gevoelige gesprekken in geverifieerde privéberichten, nooit in kanalen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "każdy może dołączyć do dowolnego kanału mesh lub geohash, a wiadomości w kanałach są podpisane, ale nie zaszyfrowane — czytelne dosłownie dla każdego pobliskiego radia lub przekaźnika. traktuj każdy kanał publiczny jako monitorowany. wrażliwe rozmowy prowadź w zweryfikowanych wiadomościach prywatnych, nigdy w kanałach."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "qualquer pessoa pode entrar em qualquer canal mesh ou geohash, e as mensagens de canal são assinadas mas não encriptadas — legíveis palavra por palavra por qualquer rádio ou relay próximo. trata cada canal público como monitorizado. mantém as conversas sensíveis em mensagens privadas verificadas, nunca em canais."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "qualquer um pode entrar em qualquer canal de mesh ou geohash, e as mensagens de canal são assinadas, mas não criptografadas — legíveis palavra por palavra por qualquer rádio ou relay próximo. trate todo canal público como monitorado. mantenha conversas sensíveis em mensagens privadas verificadas, nunca em canais."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "любой может присоединиться к любому mesh- или geohash-каналу, а сообщения в каналах подписаны, но не зашифрованы — их дословно может прочитать любое находящееся рядом радиоустройство или релей. считайте каждый публичный канал прослушиваемым. держите важные разговоры в проверенных личных сообщениях, никогда — в каналах."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vem som helst kan gå med i vilken mesh- eller geohash-kanal som helst, och kanalmeddelanden är signerade men inte krypterade — läsbara ordagrant av vilken närliggande radio eller relä som helst. behandla varje offentlig kanal som övervakad. håll känsliga samtal i verifierade privata meddelanden, aldrig i kanaler."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "எந்த mesh அல்லது geohash சேனலிலும் யார் வேண்டுமானாலும் சேரலாம், மேலும் சேனல் செய்திகள் கையொப்பமிடப்பட்டவை ஆனால் மறையாக்கம் செய்யப்படவில்லை — அருகிலுள்ள எந்த ரேடியோ அல்லது ரிலே மூலமும் அப்படியே படிக்கக்கூடியவை. ஒவ்வொரு பொது சேனலையும் கண்காணிக்கப்படுவதாகக் கருதுங்கள். உணர்திறன் வாய்ந்த உரையாடல்களை சரிபார்க்கப்பட்ட தனிப்பட்ட செய்திகளில் மட்டும் வைத்திருங்கள், சேனல்களில் ஒருபோதும் வேண்டாம்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ใครก็เข้าร่วมช่อง mesh หรือ geohash ใดก็ได้ และข้อความในช่องถูกลงลายเซ็นแต่ไม่ได้เข้ารหัส — อ่านได้แบบคำต่อคำโดยวิทยุหรือรีเลย์ที่อยู่ใกล้เคียง ให้ถือว่าทุกช่องสาธารณะถูกเฝ้าติดตาม เก็บบทสนทนาอ่อนไหวไว้ในข้อความส่วนตัวที่ยืนยันแล้ว อย่าไว้ในช่องเด็ดขาด"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "herhangi biri herhangi bir mesh veya geohash kanalına katılabilir ve kanal mesajları imzalanır ama şifrelenmez — yakındaki herhangi bir radyo veya röle tarafından olduğu gibi okunabilir. her herkese açık kanalı izleniyor kabul edin. hassas konuşmaları doğrulanmış özel mesajlarda tutun, asla kanallarda değil."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "будь-хто може приєднатися до будь-якого mesh- чи geohash-каналу, а повідомлення в каналах підписані, але не зашифровані — їх дослівно може прочитати будь-який радіоприймач або реле поблизу. вважай кожен публічний канал таким, що прослуховується. тримай чутливі розмови в перевірених приватних повідомленнях, ніколи в каналах."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "کوئی بھی کسی بھی میش یا geohash چینل میں شامل ہو سکتا ہے، اور چینل کے پیغامات پر دستخط ہوتے ہیں لیکن وہ انکرپٹڈ نہیں ہوتے — قریب موجود کوئی بھی ریڈیو یا ریلے انہیں لفظ بہ لفظ پڑھ سکتا ہے۔ ہر عوامی چینل کو زیرِ نگرانی سمجھیں۔ حساس گفتگو ہمیشہ تصدیق شدہ نجی پیغامات میں رکھیں، کبھی چینلز میں نہیں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bất kỳ ai cũng có thể tham gia bất kỳ kênh mesh hay geohash nào, và tin nhắn trong kênh được ký nhưng không được mã hóa — bất kỳ thiết bị vô tuyến hay relay nào ở gần đều đọc được nguyên văn. hãy coi mọi kênh công khai là đang bị giám sát. giữ những trao đổi nhạy cảm trong tin nhắn riêng đã được xác minh, không bao giờ trong các kênh."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "任何人都能加入任意 mesh 或 geohash 频道，频道消息经过签名但并未加密——附近任何电台或中继都能逐字读取。请把每一个公共频道都当作正被监控。敏感对话只放在已验证的私信里，绝不放在频道中。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "任何人都能加入任何 mesh 或 geohash 頻道，且頻道訊息有簽章但未加密——附近任何無線電或中繼站都能逐字讀取。請把每個公開頻道都當作正被監控。敏感對話只在已驗證的私訊中進行，絕不放在頻道裡。"
+          }
+        }
+      }
+    },
+    "app_info.sensitive.public_channels.title" : {
+      "comment" : "Guide entry title: public channels should be treated as monitored",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "العام يعني مراقَبًا"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "পাবলিক মানে নজরদারিতে"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "öffentlich heißt beobachtet"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "public means watched"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "público significa vigilado"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عمومی یعنی تحت نظر"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ang public ay binabantayan"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "public signifie surveillé"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ציבורי פירושו במעקב"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सार्वजनिक का मतलब निगरानी में"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "publik berarti diawasi"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pubblico significa sorvegliato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "公開は監視されている"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "공개는 감시받는다는 뜻"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "awam bermakna diperhatikan"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सार्वजनिक भनेको निगरानीमा"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "openbaar wordt in de gaten gehouden"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "publiczne znaczy obserwowane"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "público significa vigiado"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "público significa vigiado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "публичное значит под наблюдением"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "offentligt betyder övervakat"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "பொது என்றால் கண்காணிக்கப்படுகிறது"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "สาธารณะหมายถึงถูกจับตามอง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "herkese açık, izleniyor demektir"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "публічне означає під наглядом"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عوامی یعنی زیرِ نگرانی"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "công khai nghĩa là bị theo dõi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "公开即被监视"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "公開就代表被監看"
+          }
+        }
+      }
+    },
+    "app_info.sensitive.title" : {
+      "comment" : "Section header (uppercase) for the safety/OpSec guide aimed at users in hostile surveillance environments",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المناطق الحساسة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "সংবেদনশীল এলাকা"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SENSIBLE BEREICHE"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SENSITIVE AREAS"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ZONAS SENSIBLES"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مناطق حساس"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MGA SENSITIBONG LUGAR"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ZONES SENSIBLES"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אזורים רגישים"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "संवेदनशील क्षेत्र"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AREA SENSITIF"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AREE SENSIBILI"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要注意エリア"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "민감 지역"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "KAWASAN SENSITIF"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "संवेदनशील क्षेत्रहरू"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GEVOELIGE GEBIEDEN"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OBSZARY WRAŻLIWE"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ÁREAS SENSÍVEIS"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ÁREAS SENSÍVEIS"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ОПАСНЫЕ ЗОНЫ"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "KÄNSLIGA OMRÅDEN"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "உணர்திறன் வாய்ந்த பகுதிகள்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "พื้นที่อ่อนไหว"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HASSAS BÖLGELER"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ВРАЗЛИВІ ЗОНИ"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حساس علاقے"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "KHU VỰC NHẠY CẢM"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "敏感区域"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "敏感區域"
+          }
+        }
+      }
+    },
+    "app_info.sensitive.verify.body" : {
+      "comment" : "Guide entry body explaining that encrypted is not identified, and how to verify a fingerprint in person",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الرسائل الخاصة مشفَّرة من طرف إلى طرف، لكن التشفير لا يعني التحقق من الهوية. وضع علامة «تم التحقق» على شخص يدويًا لا يتحقق من أي شيء — قارِن البصمة الكاملة، أو امسح رمز QR، مع الشخص الحقيقي. إنها تربط مفتاحًا، لا إنسانًا."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ব্যক্তিগত বার্তাগুলো এন্ড-টু-এন্ড এনক্রিপ্টেড, কিন্তু এনক্রিপ্ট করা মানে শনাক্ত করা নয়। নিজে হাতে কাউকে যাচাইকৃত হিসেবে চিহ্নিত করলে কিছুই পরীক্ষা হয় না — আসল ব্যক্তির সাথে সম্পূর্ণ ফিঙ্গারপ্রিন্ট মিলিয়ে নিন, বা তার সাথে qr কোড স্ক্যান করুন। এটি একটি কী-কে আবদ্ধ করে, কোনো মানুষকে নয়।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "private nachrichten sind ende-zu-ende-verschlüsselt, aber verschlüsselt heißt nicht identifiziert. jemanden von hand als verifiziert zu markieren, prüft nichts — vergleiche den vollständigen fingerabdruck oder scanne den qr-code, in beiden fällen mit der echten person. es bindet einen schlüssel, keinen menschen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "private messages are end-to-end encrypted, but encrypted isn't identified. marking someone verified by hand checks nothing — compare the full fingerprint, or scan the qr code, with the real person. it binds a key, not a human."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "los mensajes privados están cifrados de extremo a extremo, pero cifrado no significa identificado. marcar a alguien como verificado a mano no comprueba nada: compara la huella completa, o escanea el código QR, con la persona real. la verificación vincula una clave, no a un humano."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پیام‌های خصوصی به‌صورت سرتاسری رمزنگاری می‌شوند، اما رمزنگاری‌شده به معنای شناسایی‌شده نیست. علامت‌گذاری دستیِ کسی به‌عنوان تأییدشده هیچ چیزی را بررسی نمی‌کند — با شخص واقعی، اثرانگشت کامل را مقایسه کنید یا کد qr را اسکن کنید. این تأیید به یک کلید گره می‌خورد، نه به یک انسان."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ang mga pribadong mensahe ay end-to-end encrypted, ngunit ang naka-encrypt ay hindi nangangahulugang na-identify. walang sinusuri ang mano-manong pagmamarka sa isang tao bilang beripikado — ikumpara ang buong fingerprint, o i-scan ang qr code, kasama ang tunay na tao. nagbubuklod ito ng susi, hindi ng tao."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "les messages privés sont chiffrés de bout en bout, mais chiffré ne signifie pas identifié. marquer manuellement quelqu'un comme vérifié ne vérifie rien — comparez l'empreinte complète, ou scannez le code qr, avec la vraie personne. cela lie une clé, pas un humain."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הודעות פרטיות מוצפנות מקצה לקצה, אך הצפנה אינה זיהוי. סימון ידני של מישהו כמאומת אינו בודק דבר — השווה את טביעת האצבע המלאה, או סרוק את קוד ה-qr, עם האדם האמיתי. הוא קושר מפתח, לא בן אדם."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "निजी संदेश एंड-टू-एंड एन्क्रिप्टेड होते हैं, लेकिन एन्क्रिप्टेड का मतलब पहचाना गया नहीं है। किसी को हाथ से सत्यापित के रूप में चिह्नित करना कुछ भी नहीं जाँचता — असली व्यक्ति के साथ पूरा फिंगरप्रिंट मिलाएँ, या उनके साथ qr कोड स्कैन करें। यह एक कुंजी को बांधता है, किसी इंसान को नहीं।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pesan pribadi dienkripsi ujung ke ujung, tapi terenkripsi bukan berarti teridentifikasi. menandai seseorang sebagai terverifikasi secara manual tidak memeriksa apa pun — bandingkan sidik jari lengkap, atau pindai kode qr, bersama orang yang sebenarnya. ini mengikat sebuah kunci, bukan seorang manusia."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "i messaggi privati sono cifrati end-to-end, ma cifrato non significa identificato. segnare a mano qualcuno come verificato non controlla nulla — confronta l'impronta completa, o scansiona il codice qr, con la persona reale. lega una chiave, non una persona."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プライベートメッセージはエンドツーエンドで暗号化されていますが、暗号化は身元の確認ではありません。手動で相手を「検証済み」にしても、何も確認されません — 本人と、完全なフィンガープリントを比較するか、QR コードをスキャンしてください。これは鍵を結び付けるものであって、人間を結び付けるものではありません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "비공개 메시지는 종단 간 암호화되지만, 암호화되었다고 신원이 확인된 것은 아니다. 누군가를 수동으로 \"인증됨\"으로 표시해도 아무것도 확인되지 않는다 — 실제 상대와 함께 전체 지문을 비교하거나 QR 코드를 스캔하라. 그것은 사람이 아니라 키를 묶는 것이다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesej peribadi disulitkan hujung ke hujung, tetapi disulitkan tidak bermakna dikenal pasti. menandakan seseorang sebagai disahkan secara manual tidak menyemak apa-apa — bandingkan cap jari penuh, atau imbas kod qr, bersama orang sebenar. ia mengikat kunci, bukan manusia."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "निजी सन्देशहरू end-to-end इन्क्रिप्टेड छन्, तर इन्क्रिप्टेड भनेको पहिचान गरिएको होइन। कसैलाई हातैले प्रमाणित भनी चिन्ह लगाउँदा केही पनि जाँच हुँदैन — वास्तविक व्यक्तिसँग पूरा फिङ्गरप्रिन्ट मिलाउनुहोस्, वा उनीसँगै qr कोड स्क्यान गर्नुहोस्। यसले एउटा कुञ्जी (key) बाँध्छ, मानिस होइन।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "privéberichten zijn end-to-end-versleuteld, maar versleuteld betekent niet geïdentificeerd. iemand handmatig als geverifieerd markeren controleert niets — vergelijk de volledige fingerprint of scan de qr-code, in beide gevallen met de echte persoon. het bindt een sleutel, geen mens."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wiadomości prywatne są szyfrowane end-to-end, ale „zaszyfrowane” nie znaczy „zidentyfikowane”. ręczne oznaczenie kogoś jako zweryfikowanego niczego nie sprawdza — porównaj pełny odcisk lub zeskanuj kod qr z prawdziwą osobą. wiąże klucz, a nie człowieka."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "as mensagens privadas são encriptadas de ponta a ponta, mas encriptado não significa identificado. marcar alguém como verificado manualmente não confere nada — compara a impressão digital completa, ou lê o código qr, com a pessoa real. a verificação vincula uma chave, não uma pessoa."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "as mensagens privadas são criptografadas de ponta a ponta, mas criptografado não significa identificado. marcar alguém como verificado manualmente não confere nada — compare a impressão digital completa, ou escaneie o código qr, com a pessoa real. a verificação vincula uma chave, não um humano."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "личные сообщения защищены сквозным шифрованием, но «зашифровано» не значит «личность подтверждена». ручная пометка «проверено» ничего не проверяет — сверьте полный отпечаток или отсканируйте qr-код вместе с реальным человеком. она привязывает ключ, а не человека."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "privata meddelanden är ände-till-ände-krypterade, men krypterad betyder inte identifierad. att för hand markera någon som verifierad kontrollerar ingenting — jämför hela fingeravtrycket eller skanna qr-koden, i båda fallen med den verkliga personen. det binder en nyckel, inte en människa."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "தனிப்பட்ட செய்திகள் முனை-முதல்-முனை வரை மறையாக்கம் செய்யப்பட்டவை, ஆனால் மறையாக்கம் செய்யப்பட்டது என்பது அடையாளம் காணப்பட்டது என்று அர்த்தமல்ல. ஒருவரைக் கைமுறையாகச் சரிபார்க்கப்பட்டதாகக் குறிப்பது எதையும் சரிபார்ப்பதில்லை — உண்மையான நபருடன் முழுக் கைரேகையை ஒப்பிடுங்கள், அல்லது அவருடன் qr குறியீட்டை ஸ்கேன் செய்யுங்கள். இது ஒரு விசையைப் பிணைக்கிறது, ஒரு மனிதனை அல்ல."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ข้อความส่วนตัวเข้ารหัสแบบ end-to-end แต่เข้ารหัสแล้วไม่ได้แปลว่าระบุตัวตนได้แล้ว การทำเครื่องหมายว่ายืนยันแล้วให้ใครสักคนด้วยตัวเองไม่ได้ตรวจสอบอะไรเลย — ให้เทียบลายนิ้วมือแบบเต็ม หรือสแกนรหัส qr กับตัวจริง มันผูกกับกุญแจ ไม่ใช่กับคน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "özel mesajlar uçtan uca şifrelidir, ama şifreli olmak kimliğin belli olduğu anlamına gelmez. birini elle doğrulandı olarak işaretlemek hiçbir şeyi kontrol etmez — gerçek kişiyle birlikte tam parmak izini karşılaştırın ya da qr kodunu tarayın. bir anahtarı bağlar, bir insanı değil."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "приватні повідомлення мають наскрізне шифрування, але «зашифровано» не означає «ідентифіковано». позначка «перевірено», поставлена вручну, нічого не перевіряє — порівняй повний відбиток або скануй qr-код з реальною людиною. це прив'язує ключ, а не людину."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نجی پیغامات اینڈ ٹو اینڈ انکرپٹڈ ہوتے ہیں، لیکن انکرپٹڈ ہونے کا مطلب شناخت شدہ ہونا نہیں۔ کسی کو دستی طور پر تصدیق شدہ نشان زد کرنے سے کسی چیز کی جانچ نہیں ہوتی — اصل شخص کے ساتھ یا تو مکمل فنگرپرنٹ ملائیں یا qr کوڈ اسکین کریں۔ یہ ایک کلید (key) کو باندھتا ہے، کسی انسان کو نہیں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tin nhắn riêng được mã hóa đầu cuối, nhưng đã mã hóa không có nghĩa là đã xác định danh tính. việc tự tay đánh dấu ai đó là đã xác thực không kiểm tra được gì cả — hãy đối chiếu toàn bộ dấu vân tay, hoặc quét mã qr, với đúng người thật. nó ràng buộc một khóa, không phải một con người."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "私信是端到端加密的，但已加密不等于已确认身份。手动把某人标记为已验证，并不会核对任何东西——要与本人比对完整指纹，或扫描其 qr 码。它绑定的是一把密钥，而不是一个人。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "私訊是端對端加密的，但「已加密」不等於「已確認身分」。手動將某人標記為已驗證，並不會核對任何資訊——請與本人比對完整指紋，或掃描其 qr 碼。它綁定的是一把金鑰，而不是一個人。"
+          }
+        }
+      }
+    },
+    "app_info.sensitive.verify.title" : {
+      "comment" : "Guide entry title: verify a contact's identity out of band before trusting them",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تحقّق قبل أن تثق"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "বিশ্বাস করার আগে যাচাই করুন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "verifiziere, bevor du vertraust"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "verify before you trust"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "verifica antes de confiar"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پیش از اعتماد، تأیید کنید"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mag-verify bago magtiwala"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vérifiez avant de faire confiance"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אמת לפני שאתה נותן אמון"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "भरोसा करने से पहले सत्यापित करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "verifikasi sebelum kamu percaya"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "verifica prima di fidarti"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "信頼する前に検証する"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "믿기 전에 인증하라"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sahkan sebelum anda percaya"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "विश्वास गर्नुअघि प्रमाणित गर्नुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "verifieer voordat je vertrouwt"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "zweryfikuj, zanim zaufasz"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "verifica antes de confiar"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "verifique antes de confiar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "проверяйте, прежде чем доверять"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "verifiera innan du litar på någon"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "நம்பும் முன் சரிபார்க்கவும்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ยืนยันก่อนไว้ใจ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "güvenmeden önce doğrulayın"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "перевіряй, перш ніж довіряти"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بھروسہ کرنے سے پہلے تصدیق کریں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "xác minh trước khi tin tưởng"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "先验证，再信任"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "先驗證，再信任"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"
