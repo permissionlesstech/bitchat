@@ -29,6 +29,7 @@ struct BLEAnnounceHandlerTests {
         var trackedPackets: [BitchatPacket] = []
         var announceBacks = 0
         var afterglowDelays: [TimeInterval] = []
+        var identityMismatches: [(peerID: PeerID, reason: PeerIdentityMismatchReason, offendingKey: Data)] = []
     }
 
     private func makeHandler(
@@ -88,6 +89,9 @@ struct BLEAnnounceHandlerTests {
             },
             scheduleAfterglow: { delay in
                 recorder.afterglowDelays.append(delay)
+            },
+            notifyIdentityMismatch: { peerID, reason, offendingKey in
+                recorder.identityMismatches.append((peerID, reason, offendingKey))
             }
         )
         return BLEAnnounceHandler(environment: environment)
@@ -547,6 +551,38 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
         // The impersonation announce is not carried for sync either.
         #expect(recorder.trackedPackets.isEmpty)
+        #expect(recorder.identityMismatches.count == 1)
+        #expect(recorder.identityMismatches.first?.peerID == peerID)
+        #expect(recorder.identityMismatches.first?.reason == .signingKeyMismatch)
+        #expect(recorder.identityMismatches.first?.offendingKey == Data(repeating: 0x99, count: 32))
+    }
+
+    @Test
+    func authenticatedSigningKeyMismatchWithPinnedKeyEmitsIdentityMismatch() throws {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let noiseKey = Data(repeating: 0x9B, count: 32)
+        let peerID = PeerID(publicKey: noiseKey)
+        let packet = try makeAnnouncePacket(
+            noisePublicKey: noiseKey,
+            peerID: peerID,
+            timestamp: timestamp(now),
+            signature: Data(repeating: 0xEE, count: 64)
+        )
+
+        let recorder = Recorder()
+        recorder.existingNoisePublicKey = noiseKey
+        recorder.authenticatedSigningPublicKey = Data(repeating: 0x77, count: 32) // Noise-authenticated key
+        recorder.signatureValid = true
+        let handler = makeHandler(recorder: recorder, now: now)
+
+        handler.handle(packet, from: peerID)
+
+        #expect(recorder.upsertCalls.isEmpty)
+        #expect(recorder.persistedIdentities.isEmpty)
+        #expect(recorder.identityMismatches.count == 1)
+        #expect(recorder.identityMismatches.first?.peerID == peerID)
+        #expect(recorder.identityMismatches.first?.reason == .authenticatedSigningKeyMismatch)
+        #expect(recorder.identityMismatches.first?.offendingKey == Data(repeating: 0x99, count: 32))
     }
 
     @Test
@@ -737,7 +773,8 @@ struct BLEAnnounceHandlerTests {
             deliverAnnounceUIEvents: { _, _, _ in },
             trackPacketSeen: { _ in },
             sendAnnounceBack: {},
-            scheduleAfterglow: { _ in }
+            scheduleAfterglow: { _ in },
+            notifyIdentityMismatch: { _, _, _ in }
         )
         let handler = BLEAnnounceHandler(environment: environment)
 
@@ -857,7 +894,8 @@ struct BLEAnnounceHandlerTests {
                 deliverAnnounceUIEvents: { _, _, _ in },
                 trackPacketSeen: { _ in },
                 sendAnnounceBack: {},
-                scheduleAfterglow: { _ in }
+                scheduleAfterglow: { _ in },
+                notifyIdentityMismatch: { _, _, _ in }
             )
         }
         let handler = BLEAnnounceHandler(environment: makeEnvironment(identityManager: identityManager))

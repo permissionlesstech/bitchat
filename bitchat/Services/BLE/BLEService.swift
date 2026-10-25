@@ -6558,6 +6558,11 @@ extension BLEService {
                 self?.engineScheduler.schedule(after: delay) { [weak self] in
                     self?.sendAnnounce(forceSend: true)
                 }
+            },
+            notifyIdentityMismatch: { [weak self] peerID, reason, offendingKey in
+                self?.notifyUI { [weak self] in
+                    self?.deliverTransportEvent(.peerIdentityMismatch(peerID: peerID, reason: reason, offendingKey: offendingKey))
+                }
             }
         )
     }

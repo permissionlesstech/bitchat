@@ -65,7 +65,14 @@ struct MeshTopologySnapshot: Equatable {
     let edges: [MeshTopologyEdge]
 }
 
+/// Reason why an inbound peer identity announcement was refused.
+enum PeerIdentityMismatchReason: Sendable, Equatable {
+    case signingKeyMismatch
+    case authenticatedSigningKeyMismatch
+}
+
 enum TransportEvent: @unchecked Sendable {
+    case peerIdentityMismatch(peerID: PeerID, reason: PeerIdentityMismatchReason, offendingKey: Data)
     case messageReceived(BitchatMessage)
     case publicMessageReceived(peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?)
     case noisePayloadReceived(peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date)
@@ -290,6 +297,8 @@ extension BitchatDelegate {
             didReceivePublicVoiceFrame(from: peerID, nickname: nickname, payload: payload, timestamp: timestamp)
         case .peerConnected(let peerID):
             didConnectToPeer(peerID)
+        case let .peerIdentityMismatch(peerID, reason, offendingKey):
+            didDetectPeerIdentityMismatch(for: peerID, reason: reason, offendingKey: offendingKey)
         case .peerDisconnected(let peerID):
             didDisconnectFromPeer(peerID)
         case .peerListUpdated(let peers):

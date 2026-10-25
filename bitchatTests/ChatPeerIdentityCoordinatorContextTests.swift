@@ -46,6 +46,19 @@ private final class MockChatPeerIdentityContext: ChatPeerIdentityContext {
         unreadPrivateMessages.remove(peerID)
     }
 
+    func markPrivateChatUnread(_ peerID: PeerID) {
+        unreadPrivateMessages.insert(peerID)
+    }
+
+    @discardableResult
+    func appendPrivateMessage(_ message: BitchatMessage, to peerID: PeerID) -> Bool {
+        var chat = privateChats[peerID] ?? []
+        guard !chat.contains(where: { $0.id == message.id }) else { return false }
+        chat.append(message)
+        privateChats[peerID] = chat
+        return true
+    }
+
     func migratePrivateChat(from oldPeerID: PeerID, to newPeerID: PeerID) {
         migratedChats.append((oldPeerID, newPeerID))
         guard oldPeerID != newPeerID, let source = privateChats[oldPeerID] else { return }
@@ -501,6 +514,88 @@ struct ChatPeerIdentityCoordinatorContextTests {
         coordinator.toggleFavorite(peerID: peerID)
         #expect(context.removedFavorites == [noiseKey])
         #expect(context.nostrFavoriteNotifications.map(\.isFavorite) == [true, false])
+    }
+
+    @Test @MainActor
+    func handleIdentityMismatch_warnsInExistingThreadAndMarksUnread() async {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        let peerID = PeerID(str: "1111111111111111")
+        let offendingKey = Data(repeating: 0x99, count: 32)
+        context.nicknamesByPeerID[peerID] = "alice"
+        context.privateChats[peerID] = [makePrivateMessage(id: "m1")]
+
+        coordinator.handleIdentityMismatch(for: peerID, reason: .signingKeyMismatch, offendingKey: offendingKey)
+
+        let messages = context.privateChats[peerID] ?? []
+        #expect(messages.count == 2)
+        let notice = messages.last
+        #expect(notice?.sender == "system")
+        #expect(notice?.isPrivate == true)
+        #expect(notice?.content.contains("alice") == true)
+        #expect(context.unreadPrivateMessages.contains(peerID))
+        #expect(context.notifyUIChangedCount == 1)
+    }
+
+    @Test @MainActor
+    func handleIdentityMismatch_whenThreadSelected_warnsWithoutMarkingUnread() async {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        let peerID = PeerID(str: "1111111111111111")
+        let offendingKey = Data(repeating: 0x99, count: 32)
+        context.nicknamesByPeerID[peerID] = "alice"
+        context.privateChats[peerID] = [makePrivateMessage(id: "m1")]
+        context.selectedPrivateChatPeer = peerID
+
+        coordinator.handleIdentityMismatch(for: peerID, reason: .authenticatedSigningKeyMismatch, offendingKey: offendingKey)
+
+        let messages = context.privateChats[peerID] ?? []
+        #expect(messages.count == 2)
+        let notice = messages.last
+        #expect(notice?.sender == "system")
+        #expect(notice?.content.contains("alice") == true)
+        // Chat is open, so it must not be marked unread
+        #expect(!context.unreadPrivateMessages.contains(peerID))
+        #expect(context.notifyUIChangedCount == 1)
+    }
+
+    @Test @MainActor
+    func handleIdentityMismatch_deduplicatesPerOffendingKey() async {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        let peerID = PeerID(str: "1111111111111111")
+        let offendingKey1 = Data(repeating: 0x99, count: 32)
+        let offendingKey2 = Data(repeating: 0x88, count: 32)
+        context.nicknamesByPeerID[peerID] = "alice"
+        context.privateChats[peerID] = [makePrivateMessage(id: "m1")]
+
+        // First announce with offendingKey1 warns
+        coordinator.handleIdentityMismatch(for: peerID, reason: .signingKeyMismatch, offendingKey: offendingKey1)
+        #expect(context.privateChats[peerID]?.count == 2)
+
+        // Repeated announce with the SAME offendingKey1 is deduplicated (no second warning)
+        coordinator.handleIdentityMismatch(for: peerID, reason: .signingKeyMismatch, offendingKey: offendingKey1)
+        #expect(context.privateChats[peerID]?.count == 2)
+
+        // New announce with a DIFFERENT offendingKey2 warns
+        coordinator.handleIdentityMismatch(for: peerID, reason: .signingKeyMismatch, offendingKey: offendingKey2)
+        #expect(context.privateChats[peerID]?.count == 3)
+    }
+
+    @Test @MainActor
+    func handleIdentityMismatch_noExistingThreadAndNotSelected_doesNotWarn() async {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        let peerID = PeerID(str: "1111111111111111")
+        let offendingKey = Data(repeating: 0x99, count: 32)
+        context.nicknamesByPeerID[peerID] = "alice"
+        // No existing messages and thread not selected
+
+        coordinator.handleIdentityMismatch(for: peerID, reason: .signingKeyMismatch, offendingKey: offendingKey)
+
+        #expect(context.privateChats[peerID] == nil)
+        #expect(!context.unreadPrivateMessages.contains(peerID))
+        #expect(context.notifyUIChangedCount == 0)
     }
 
 }

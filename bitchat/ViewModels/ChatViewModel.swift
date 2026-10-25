@@ -2097,6 +2097,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
                 timestamp: timestamp
             )
 
+        case let .peerIdentityMismatch(peerID, reason, offendingKey):
+            peerIdentityCoordinator.handleIdentityMismatch(
+                for: peerID,
+                reason: reason,
+                offendingKey: offendingKey
+            )
+
         case .peerConnected(let peerID):
             transportEventCoordinator.didConnectToPeerSynchronously(peerID)
             mediaTransferCoordinator.peerDidReconnect(peerID)
@@ -2187,6 +2194,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     }
 
     // MARK: - Peer Connection Events
+
+    func didDetectPeerIdentityMismatch(for peerID: PeerID, reason: PeerIdentityMismatchReason, offendingKey: Data) {
+        peerIdentityCoordinator.handleIdentityMismatch(
+            for: peerID,
+            reason: reason,
+            offendingKey: offendingKey
+        )
+    }
 
     func didConnectToPeer(_ peerID: PeerID) {
         transportEventCoordinator.didConnectToPeer(peerID)

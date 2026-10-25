@@ -91489,6 +91489,192 @@
         }
       }
     },
+    "system.identity.key_refused" : {
+      "comment" : "Private-chat system warning when a peer announcement presents a different signing key than the one pinned for this contact",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم تقديم مفتاح مختلف لـ %@ ورفضه bitchat."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@-এর জন্য একটি ভিন্ন চাবি উপস্থাপন করা হয়েছিল এবং bitchat এটি প্রত্যাখ্যান করেছে।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "jemand hat einen anderen schlüssel für %@ vorgelegt und bitchat hat ihn abgelehnt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "someone presented a different key for %@ and bitchat refused it."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alguien presentó una clave diferente para %@ y bitchat la rechazó."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "شخصی کلید متفاوتی برای %@ ارائه داد و bitchat آن را رد کرد."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "may nagpresenta ng ibang key para kay %@ at tinanggihan ito ng bitchat."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "quelqu'un a présenté une clé différente pour %@ et bitchat l'a refusée."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מישהו הציג מפתח שונה עבור %@ ו-bitchat דחה אותו."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "किसी ने %@ के लिए एक अलग कुंजी प्रस्तुत की और bitchat ने इसे अस्वीकार कर दिया।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "seseorang memberikan kunci yang berbeda untuk %@ dan bitchat menolaknya."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "qualcuno ha presentato una chiave diversa per %@ e bitchat l'ha rifiutata."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@の異なるキーが提示されたため、bitchatは拒否しました。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "누군가 %@에 대해 다른 키를 제시하여 bitchat에서 거부했습니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "seseorang membentangkan kunci yang berbeza untuk %@ dan bitchat telah menolaknya."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "कसैले %@ को लागि फरक कुञ्जी प्रस्तुत गर्‍यो र bitchat ले अस्वीकार गर्‍यो।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iemand presenteerde een andere sleutel voor %@ en bitchat heeft deze geweigerd."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ktoś przedstawił inny klucz dla %@ i bitchat go odrzucił."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alguém apresentou uma chave diferente para %@ e o bitchat recusou-a."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alguém apresentou uma chave diferente para %@ e o bitchat a recusou."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "кто-то предоставил другой ключ для %@, и bitchat отклонил его."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "någon presenterade en annan nyckel för %@ och bitchat avvisade den."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@-க்கு வேறு விசை வழங்கப்பட்டது, bitchat அதை நிராகரித்தது."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "มีคนแสดงคีย์อื่นสำหรับ %@ และ bitchat ปฏิเสธคีย์ดังกล่าว"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "biri %@ için farklı bir anahtar sundu ve bitchat bunu reddetti."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "хтось надав інший ключ для %@, і bitchat відхилив його."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "کسی نے %@ کے لیے مختلف کلید پیش کی اور bitchat نے اسے مسترد कर دیا۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ai đó đã xuất trình một khóa khác cho %@ và bitchat đã từ chối."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有人为%@出示了不同的密钥，bitchat已将其拒绝。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有人為%@出示了不同的金鑰，bitchat已將其拒絕。"
+          }
+        }
+      }
+    },
     "system.location.not_in_channel" : {
       "extractionState" : "manual",
       "localizations" : {
