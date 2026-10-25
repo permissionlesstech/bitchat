@@ -144,6 +144,12 @@ private final class MockChatPeerIdentityContext: ChatPeerIdentityContext {
         verifiedFingerprintSet.contains(fingerprint)
     }
 
+    var renamedSinceTrust: Set<String> = []
+
+    func trustedNicknameMismatch(_ fingerprint: String) -> Bool {
+        renamedSinceTrust.contains(fingerprint)
+    }
+
     func setEncryptionStatus(_ status: EncryptionStatus?, for peerID: PeerID) {
         encryptionStatuses[peerID] = status
     }
@@ -329,6 +335,52 @@ struct ChatPeerIdentityCoordinatorContextTests {
         #expect(context.selectedPrivateChatPeer == newPeerID)
         // Unread moved to the new peer, then cleared for the now-open chat.
         #expect(context.unreadPrivateMessages.isEmpty)
+    }
+
+    @Test @MainActor
+    func getEncryptionStatus_demotesToSecuredWhenTheKeyRenamedSinceTrust() async {
+        // `.noiseVerified` renders the same filled seal as the verified badge,
+        // and for a CONNECTED peer it is the only thing that draws one. A
+        // verified key that renames itself onto a trusted name must therefore
+        // lose it here too, or the live impersonation keeps its seal.
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        let peerID = PeerID(str: "1122334455667788")
+
+        context.noiseSessionStates[peerID] = .established
+        context.fingerprintsByPeerID[peerID] = "fp"
+        context.verifiedFingerprintSet = ["fp"]
+        #expect(coordinator.getEncryptionStatus(for: peerID) == .noiseVerified)
+
+        // The rename lands. Nothing invalidates the encryption cache on a
+        // nickname change, so the demotion has to survive the cached value.
+        context.renamedSinceTrust = ["fp"]
+        #expect(coordinator.getEncryptionStatus(for: peerID) == .noiseSecured,
+                "still encrypted, no longer a claim about who")
+        #expect(context.cachedEncryptionStatuses[peerID] == .noiseVerified,
+                "the demotion is computed on read, never written into the cache")
+
+        // Re-verifying under the new name restores it.
+        context.renamedSinceTrust = []
+        #expect(coordinator.getEncryptionStatus(for: peerID) == .noiseVerified)
+    }
+
+    @Test @MainActor
+    func getEncryptionStatus_leavesUnverifiedStatusesAlone() async {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        let peerID = PeerID(str: "1122334455667788")
+
+        // A secured-but-unverified session has no seal to lose, and a rename
+        // must not disturb the lock it does show.
+        context.noiseSessionStates[peerID] = .established
+        context.fingerprintsByPeerID[peerID] = "fp"
+        context.renamedSinceTrust = ["fp"]
+        #expect(coordinator.getEncryptionStatus(for: peerID) == .noiseSecured)
+
+        coordinator.invalidateEncryptionCache(for: peerID)
+        context.noiseSessionStates[peerID] = .handshaking
+        #expect(coordinator.getEncryptionStatus(for: peerID) == .noiseHandshaking)
     }
 
     @Test @MainActor

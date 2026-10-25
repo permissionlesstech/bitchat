@@ -223,14 +223,33 @@ struct FingerprintView: View {
 
                 // Verification status
                 if fingerprintState.canToggleVerification {
+                    // The seal is withheld when this key now presents a name it
+                    // was not verified under — and the WORD goes with the glyph.
+                    //
+                    // An earlier revision kept "✓ VERIFIED" here on the grounds
+                    // that the key genuinely is verified. Review put the
+                    // objection better than I had: this badge sits a few lines
+                    // under `peerNickname`, so it is not a claim about a bare
+                    // key, it is a claim about THIS NAME — and that claim is
+                    // false. Worse, this sheet is the screen someone opens
+                    // *because* a seal vanished from a row, so the one surface
+                    // they consult to resolve the doubt was the one endorsing
+                    // the rename.
+                    //
+                    // No new string: the existing not-verified copy names the
+                    // current nickname and offers to verify it, which is the
+                    // recovery — re-verifying re-pins the baseline to the name
+                    // on screen. The key's stored verified state is untouched.
+                    let sealApplies = fingerprintState.isVerified
+                        && !fingerprintState.nameChangedSinceVerification
                     VStack(spacing: 12) {
-                        Text(fingerprintState.isVerified ? Strings.verifiedBadge : Strings.notVerifiedBadge)
+                        Text(sealApplies ? Strings.verifiedBadge : Strings.notVerifiedBadge)
                             .bitchatFont(size: 14, weight: .bold)
-                            .foregroundColor(fingerprintState.isVerified ? Color.green : Color.orange)
+                            .foregroundColor(sealApplies ? Color.green : Color.orange)
                             .frame(maxWidth: .infinity)
                         
                         Group {
-                            if fingerprintState.isVerified {
+                            if sealApplies {
                                 Text(Strings.verifiedMessage)
                             } else {
                                 Text(Strings.verifyHint(fingerprintState.peerNickname))
@@ -243,7 +262,7 @@ struct FingerprintView: View {
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity)
                         
-                        if !fingerprintState.isVerified {
+                        if !sealApplies {
                             Button(action: {
                                 verificationModel.verifyFingerprint(for: peerID)
                                 dismiss()
