@@ -87,8 +87,14 @@ struct AppInfoView: View {
             // setting as location-channels-only. It covers private messages and
             // relay-directory refreshes too, and said nothing about the cost of
             // switching it off.
-            static let torSubtitle = String(localized: "app_info.settings.tor.subtitle", defaultValue: "sends internet traffic through tor, so relay operators see tor's address instead of yours. covers location channels and private messages delivered over the internet. recommended: on.", comment: "Subtitle for the tor routing toggle in settings, explaining what it covers")
+            //
+            // No longer says "recommended: on": torNoBridgesNote below states,
+            // while tor is on, that this build cannot back that advice up
+            // everywhere. An unconditional recommendation two lines above a
+            // caption qualifying it read as the screen contradicting itself.
+            static let torSubtitle = String(localized: "app_info.settings.tor.subtitle", defaultValue: "sends internet traffic through tor, so relay operators see tor's address instead of yours. covers location channels and private messages delivered over the internet.", comment: "Subtitle for the tor routing toggle in settings, explaining what it covers")
             static let torOffWarning = String(localized: "app_info.settings.tor.off_warning", defaultValue: "tor is off: every relay you connect to can see your IP address, including relays carrying your private messages.", comment: "Warning shown under the tor toggle while tor is switched off, stating that relay operators can see the device IP address")
+            static let torNoBridgesNote = String(localized: "app_info.settings.tor.no_bridges_note", defaultValue: "no bridges or pluggable transports yet: a network operator can see that you use tor, though not what you send. take care where using tor is itself risky.", comment: "Caption shown under the tor toggle while tor is on, disclosing that the bundled tor client ships without bridges or pluggable transports, so a network operator can identify the connection as tor")
 
             static let relaysTitle = String(localized: "app_info.settings.relays.title", defaultValue: "private message relays", comment: "Title of the relay list editor in settings")
             static let relaysSubtitle = String(localized: "app_info.settings.relays.subtitle", defaultValue: "when the mesh can't reach someone, private messages travel through these relays. the built-in ones are well-known addresses that a network filter can block, so you can add your own — including .onion addresses.", comment: "Subtitle explaining what the relay list is for and why someone would add a relay")
@@ -455,6 +461,19 @@ struct AppInfoView: View {
                         Text(verbatim: Strings.Settings.torOffWarning)
                             .bitchatFont(size: 11)
                             .foregroundColor(palette.alertRed)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        // Issue #1549: the vendored arti is built without
+                        // pt-client or bridge-client, so the connection is
+                        // identifiable as tor even though its contents are
+                        // not. Someone deciding whether to rely on this in a
+                        // country that blocks tor has to know that here, not
+                        // only in docs/TOR-INTEGRATION.md. Not red: this is a
+                        // standing limitation of what is on, not a warning
+                        // that something is wrong.
+                        Text(verbatim: Strings.Settings.torNoBridgesNote)
+                            .bitchatFont(size: 11)
+                            .foregroundColor(secondaryTextColor)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
