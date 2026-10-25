@@ -33922,7 +33922,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "bitchat의 #%1$@ 채널에 참여하세요: bitchat://geohash/%1$@ — bitchat이 처음이신가요? %2$@에서 받은 뒤 위치 채널에서 #%1$@을(를) 입력하세요."
+            "value" : "bitchat의 #%1$@ 채널에 참여하세요: bitchat://geohash/%1$@ — bitchat이 처음이신가요? %2$@ 에서 받은 뒤 위치 채널에서 #%1$@을(를) 입력하세요."
           }
         },
         "ms" : {
