@@ -74,6 +74,12 @@ struct BLEAnnounceHandlerEnvironment {
     let sendAnnounceBack: () -> Void
     /// Schedules a delayed re-announce (afterglow) after the given delay.
     let scheduleAfterglow: (TimeInterval) -> Void
+    /// Notifies that an announce presented an unverified signing key for an already-pinned identity.
+    let notifyIdentityMismatch: (
+        _ peerID: PeerID,
+        _ reason: PeerIdentityMismatchReason,
+        _ offendingSigningPublicKey: Data
+    ) -> Void
 }
 
 /// Outcome of an accepted announce, surfaced so the service can run
@@ -162,12 +168,14 @@ final class BLEAnnounceHandler {
         }
         if case .reject(.signingKeyMismatch) = trustDecision {
             SecureLogger.warning("🚨 Announce signing-key mismatch for \(peerID.id.prefix(8))… — refusing to replace pinned signing key (possible impersonation attempt)", category: .security)
+            env.notifyIdentityMismatch(peerID, .signingKeyMismatch, announcement.signingPublicKey)
         }
         if case .reject(.authenticatedSigningKeyMismatch) = trustDecision {
             SecureLogger.warning(
                 "⚠️ Announce signing-key replacement rejected for Noise-authenticated peer \(peerID.id.prefix(8))…",
                 category: .security
             )
+            env.notifyIdentityMismatch(peerID, .authenticatedSigningKeyMismatch, announcement.signingPublicKey)
         }
         var verifiedAnnounce = trustDecision.isVerified
 

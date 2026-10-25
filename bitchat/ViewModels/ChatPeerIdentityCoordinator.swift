@@ -24,7 +24,14 @@ protocol ChatPeerIdentityContext: AnyObject {
     var unreadPrivateMessages: Set<PeerID> { get }
     /// Clears the peer's unread flag (single-writer store intent).
     func markPrivateChatRead(_ peerID: PeerID)
+    /// Sets the peer's unread flag (shared requirement with the inbound DM paths; witness on `ChatViewModel`).
+    func markPrivateChatUnread(_ peerID: PeerID)
     /// Moves all messages from `oldPeerID`'s chat into `newPeerID`'s chat
+    /// (dedup by ID, order preserved, unread carried, old chat removed).
+    func migratePrivateChat(from oldPeerID: PeerID, to newPeerID: PeerID)
+    /// Appends a private message via the single-writer store intent (shared requirement with `ChatLifecycleContext`).
+    @discardableResult
+    func appendPrivateMessage(_ message: BitchatMessage, to peerID: PeerID) -> Bool
     /// (dedup by ID, order preserved, unread carried, old chat removed).
     func migratePrivateChat(from oldPeerID: PeerID, to newPeerID: PeerID)
     var selectedPrivateChatPeer: PeerID? { get set }
@@ -227,9 +234,53 @@ extension ChatViewModel: ChatPeerIdentityContext {
 
 final class ChatPeerIdentityCoordinator {
     private unowned let context: any ChatPeerIdentityContext
+    /// Offending signing keys for which a warning has already been posted to the conversation.
+    /// Deduped per peer so repeated announces do not spam the thread.
+    private var warnedOffendingKeys: [PeerID: Set<Data>] = [:]
 
     init(context: any ChatPeerIdentityContext) {
         self.context = context
+    }
+
+    @MainActor
+    func handleIdentityMismatch(for peerID: PeerID, reason: PeerIdentityMismatchReason, offendingKey: Data) {
+        if warnedOffendingKeys[peerID]?.contains(offendingKey) == true {
+            return
+        }
+        warnedOffendingKeys[peerID, default: []].insert(offendingKey)
+
+        let wasSelected = context.selectedPrivateChatPeer == peerID
+        guard wasSelected || !context.privateMessages(for: peerID).isEmpty else {
+            return
+        }
+
+        let favoriteNickname = peerID.noiseKey
+            .flatMap { context.favoriteRelationship(forNoiseKey: $0)?.peerNickname }
+            .flatMap { $0.isEmpty ? nil : $0 }
+        let displayName = favoriteNickname ?? resolveNickname(for: peerID)
+        let notice = BitchatMessage(
+            sender: "system",
+            content: String(
+                format: String(
+                    localized: "system.identity.key_refused",
+                    defaultValue: "someone presented a different key for %@ and bitchat refused it.",
+                    comment: "Private-chat system warning when a peer announcement presents a different signing key than the one pinned for this contact"
+                ),
+                locale: .current,
+                displayName
+            ),
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: true,
+            recipientNickname: context.peerNickname(for: peerID),
+            senderPeerID: context.myPeerID
+        )
+        context.appendPrivateMessage(notice, to: peerID)
+        if !wasSelected {
+            context.markPrivateChatUnread(peerID)
+        }
+        context.notifyUIChanged()
     }
 
     @MainActor

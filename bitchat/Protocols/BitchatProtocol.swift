@@ -155,6 +155,7 @@ protocol BitchatDelegate: AnyObject {
 
     // Low-level events for better separation of concerns
     func didReceiveNoisePayload(from peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date)
+    func didDetectPeerIdentityMismatch(for peerID: PeerID, reason: PeerIdentityMismatchReason, offendingKey: Data)
 
     // Encrypted group broadcast (opaque envelope; decrypted by the group coordinator)
     func didReceiveGroupMessage(payload: Data, timestamp: Date)
@@ -169,6 +170,8 @@ protocol BitchatDelegate: AnyObject {
 
 // Provide default implementation to make it effectively optional
 extension BitchatDelegate {
+    func didDetectPeerIdentityMismatch(for peerID: PeerID, reason: PeerIdentityMismatchReason, offendingKey: Data) {}
+
     func isFavorite(fingerprint: String) -> Bool {
         return false
     }
