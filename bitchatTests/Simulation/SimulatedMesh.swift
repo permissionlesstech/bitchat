@@ -25,6 +25,13 @@ final class SimulatedMesh {
         let scheduler: BLEEngineManualScheduler
     }
 
+    private let packetTransform: (BitchatPacket) -> BitchatPacket?
+
+    // Tests can round-trip packets through the wire codec before ingress.
+    init(packetTransform: @escaping (BitchatPacket) -> BitchatPacket? = { $0 }) {
+        self.packetTransform = packetTransform
+    }
+
     private let lock = NSLock()
     private var pendingDeliveries: [(from: Int, packet: BitchatPacket)] = []
     /// Total (packet, receiving-node) deliveries pumped — the storm bound.
@@ -165,6 +172,7 @@ final class SimulatedMesh {
             }
 
             for (from, packet) in batch {
+                guard let packet = packetTransform(packet) else { continue }
                 for receiver in neighbors[from] {
                     for link in links(from: from, at: receiver) {
                         deliveredFrameCount += 1

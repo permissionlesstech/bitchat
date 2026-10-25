@@ -1859,6 +1859,7 @@ final class BLEService: NSObject {
             return
         }
         let payload = BLENoisePayloadFactory.readReceipt(originalMessageID: receipt.originalMessageID)
+        let peerID = peerID.toShort()
 
         if noiseService.hasEstablishedSession(with: peerID) {
             SecureLogger.debug("📤 Sending READ receipt id=\(receipt.originalMessageID.prefix(8))… to \(peerID.id.prefix(8))…", category: .session)
@@ -2670,6 +2671,7 @@ final class BLEService: NSObject {
             return
         }
         let payload = BLENoisePayloadFactory.delivered(messageID: messageID)
+        let peerID = peerID.toShort()
 
         if noiseService.hasEstablishedSession(with: peerID) {
             do {
