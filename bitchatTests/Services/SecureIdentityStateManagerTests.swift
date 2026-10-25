@@ -729,17 +729,23 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         upsertStranger(second, into: manager, now: start)
         keychain.failingIdentityKeySaves = []
 
-        // An unchanged re-announce after the retry interval writes the
-        // pending state.
-        upsertStranger(
-            first,
-            into: manager,
-            now: start.addingTimeInterval(SecureIdentityStateManager.failedSaveRetryInterval)
-        )
+        // The failed write may have left no identity cache in the keychain at
+        // all, so the next unchanged re-announce writes the pending state at
+        // once.
+        upsertStranger(first, into: manager, now: start)
 
         let reloaded = SecureIdentityStateManager(keychain)
         XCTAssertNotNil(reloaded.signingPublicKey(forFingerprint: first.sha256Fingerprint()))
         XCTAssertNotNil(reloaded.signingPublicKey(forFingerprint: second.sha256Fingerprint()))
+
+        // That success ends the failure streak: a later lone failure is again
+        // retried by the next announce.
+        let third = Data(repeating: 0x2A, count: 32)
+        keychain.failingIdentityKeySaves = [Self.cacheKey]
+        upsertStranger(third, into: manager, now: start)
+        keychain.failingIdentityKeySaves = []
+        upsertStranger(first, into: manager, now: start)
+        XCTAssertNotNil(SecureIdentityStateManager(keychain).signingPublicKey(forFingerprint: third.sha256Fingerprint()))
     }
 
     func test_upsertCryptographicIdentity_backsOffRetryingFailedWriteOnUnchangedAnnounces() {
@@ -753,8 +759,12 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         upsertStranger(noisePublicKey, into: manager, now: start)
         XCTAssertEqual(cacheSaveCount(keychain), 1)
 
-        // A keychain that keeps failing is not re-encoded and rewritten by
-        // every unchanged announce...
+        // The first retry runs on the next announce...
+        upsertStranger(noisePublicKey, into: manager, now: start)
+        XCTAssertEqual(cacheSaveCount(keychain), 2)
+
+        // ...but a keychain that keeps failing is not re-encoded and
+        // rewritten by every unchanged announce...
         for step in 0..<100 {
             upsertStranger(
                 noisePublicKey,
@@ -762,17 +772,59 @@ final class SecureIdentityStateManagerTests: XCTestCase {
                 now: start.addingTimeInterval(interval * Double(step) / 100)
             )
         }
-        XCTAssertEqual(cacheSaveCount(keychain), 1)
+        XCTAssertEqual(cacheSaveCount(keychain), 2)
 
         // ...only once the retry interval has passed.
         upsertStranger(noisePublicKey, into: manager, now: start.addingTimeInterval(interval))
-        XCTAssertEqual(cacheSaveCount(keychain), 2)
+        XCTAssertEqual(cacheSaveCount(keychain), 3)
 
         // A real change, and termination, always try again.
         upsertStranger(noisePublicKey, nickname: "renamed", into: manager, now: start.addingTimeInterval(interval))
-        XCTAssertEqual(cacheSaveCount(keychain), 3)
-        manager.forceSave()
         XCTAssertEqual(cacheSaveCount(keychain), 4)
+        manager.forceSave()
+        XCTAssertEqual(cacheSaveCount(keychain), 5)
+    }
+
+    func test_upsertCryptographicIdentity_retriesFailedWriteAfterTheClockStepsBack() {
+        let keychain = MockKeychain()
+        let manager = SecureIdentityStateManager(keychain)
+        let noisePublicKey = Data(repeating: 0x1E, count: 32)
+        let start = Date(timeIntervalSince1970: 1_760_000_000)
+        keychain.failingIdentityKeySaves = [Self.cacheKey]
+        upsertStranger(noisePublicKey, into: manager, now: start)
+        upsertStranger(noisePublicKey, into: manager, now: start)
+        XCTAssertEqual(cacheSaveCount(keychain), 2, "two failures in a row: backing off")
+        keychain.failingIdentityKeySaves = []
+
+        // A clock stepped back an hour does not postpone the retry until it
+        // catches up again.
+        upsertStranger(noisePublicKey, into: manager, now: start.addingTimeInterval(-60 * 60))
+        XCTAssertEqual(cacheSaveCount(keychain), 3)
+        XCTAssertNotNil(SecureIdentityStateManager(keychain).signingPublicKey(forFingerprint: noisePublicKey.sha256Fingerprint()))
+    }
+
+    func test_clearAllIdentityData_dropsAPendingFailedWrite() {
+        let keychain = MockKeychain()
+        let manager = SecureIdentityStateManager(keychain)
+        let start = Date(timeIntervalSince1970: 1_760_000_000)
+        keychain.failingIdentityKeySaves = [Self.cacheKey]
+        upsertStranger(Data(repeating: 0x1F, count: 32), into: manager, now: start)
+        upsertStranger(Data(repeating: 0x1F, count: 32), into: manager, now: start)
+
+        manager.clearAllIdentityData()
+        let writes = cacheSaveCount(keychain)
+        manager.forceSave()
+        XCTAssertEqual(cacheSaveCount(keychain), writes, "a wipe leaves nothing to retry")
+        XCTAssertNil(keychain.getIdentityKey(forKey: Self.cacheKey))
+
+        // The wipe also resets the failure streak: the next failure gets its
+        // immediate retry again.
+        let next = Data(repeating: 0x20, count: 32)
+        upsertStranger(next, into: manager, now: start)
+        keychain.failingIdentityKeySaves = []
+        upsertStranger(next, into: manager, now: start)
+        XCTAssertEqual(cacheSaveCount(keychain), writes + 2)
+        XCTAssertNotNil(SecureIdentityStateManager(keychain).signingPublicKey(forFingerprint: next.sha256Fingerprint()))
     }
 
     // MARK: - Short peer ID lookup

@@ -196,15 +196,18 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     // is true while the keychain does not hold the in-memory state: the last
     // write failed, and because `KeychainManager.saveData` deletes the item
     // before adding the new one, the keychain may hold no identity cache at
-    // all. The next mutation's own write carries the pending state; an upsert
-    // that changes nothing retries at most once per `failedSaveRetryInterval`
-    // after `lastFailedSaveAt`, so a keychain that keeps failing is not sent a
-    // full re-encoded cache on every announce; `forceSave` (termination) and
-    // `deinit` always retry.
+    // all. The next mutation's own write carries the pending state. An upsert
+    // that changes nothing retries at once after a first failure, which keeps
+    // that window as short as it was when every announce wrote; once writes
+    // have failed twice in a row it retries at most once per
+    // `failedSaveRetryInterval` after `lastFailedSaveAt`, so a keychain that
+    // keeps failing is not sent a full re-encoded cache on every announce.
+    // `forceSave` (termination) and `deinit` always retry.
     private var pendingSave = false
+    private var consecutiveFailedSaves = 0
     private var lastFailedSaveAt: Date?
     /// Minimum spacing between retries of a failed write by upserts that
-    /// changed nothing.
+    /// changed nothing, once writes have failed twice in a row.
     static let failedSaveRetryInterval: TimeInterval = 30
 
     // Encryption key
@@ -330,19 +333,22 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         // On the barrier context already: snapshot is trivially consistent.
         if persist(snapshot: cache) {
             pendingSave = false
+            consecutiveFailedSaves = 0
             lastFailedSaveAt = nil
         } else {
             pendingSave = true
+            consecutiveFailedSaves += 1
             lastFailedSaveAt = now
         }
     }
 
     /// Requires `queue`. Whether an upsert that changed nothing should retry
-    /// a failed write now. `abs` keeps a clock stepped backwards from
+    /// a failed write now: at once after a first failure, then once per
+    /// `failedSaveRetryInterval`. `abs` keeps a clock stepped backwards from
     /// postponing the retry indefinitely.
     private func failedSaveRetryIsDueLocked(now: Date) -> Bool {
         guard pendingSave else { return false }
-        guard let lastFailedSaveAt else { return true }
+        guard consecutiveFailedSaves > 1, let lastFailedSaveAt else { return true }
         return abs(now.timeIntervalSince(lastFailedSaveAt)) >= Self.failedSaveRetryInterval
     }
 
@@ -745,6 +751,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
             self.ephemeralSessions.removeAll()
             // Nothing is left to retry: the wipe deletes the keychain item.
             self.pendingSave = false
+            self.consecutiveFailedSaves = 0
             self.lastFailedSaveAt = nil
 
             // Delete from keychain
