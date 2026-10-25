@@ -61,6 +61,12 @@ private final class MockChatLifecycleContext: ChatLifecycleContext {
         sentReadReceipts.insert(messageID).inserted
     }
 
+    private(set) var readDMIDs: [String] = []
+
+    func recordDMRead(_ messageID: String) {
+        readDMIDs.append(messageID)
+    }
+
     func markPrivateMessagesAsRead(from peerID: PeerID) {
         ownerLevelReadPasses.append(peerID)
     }
@@ -220,6 +226,28 @@ struct ChatLifecycleCoordinatorContextTests {
         #expect(coordinator.getMessages(for: nil).map(\.id) == ["pub"])
     }
 
+    /// Reading a geohash chat records every inbound DM as read, including
+    /// ones already acked, so a relaunch cannot bring them back unread.
+    @Test @MainActor
+    func markPrivateMessagesAsRead_geoDM_recordsEveryInboundDMAsRead() async {
+        let context = MockChatLifecycleContext()
+        let coordinator = ChatLifecycleCoordinator(context: context)
+        let convKey = PeerID(nostr_: "feedface00112233")
+        context.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pruy"))
+        context.nostrKeyMapping[convKey] = "feedface00112233"
+        context.sentReadReceipts = ["already-acked"]
+        context.privateChats[convKey] = [
+            makePrivateMessage(id: "m1", senderPeerID: convKey),
+            makePrivateMessage(id: "already-acked", senderPeerID: convKey),
+            makePrivateMessage(id: "relay", senderPeerID: convKey, isRelay: true),
+            makePrivateMessage(id: "mine", sender: "me", senderPeerID: context.myPeerID)
+        ]
+
+        coordinator.markPrivateMessagesAsRead(from: convKey)
+
+        #expect(context.readDMIDs == ["m1", "already-acked"])
+    }
+
     @Test @MainActor
     func markPrivateMessagesAsRead_geoDM_sendsReadReceiptsOnce() async {
         let context = MockChatLifecycleContext()
@@ -314,6 +342,34 @@ struct ChatLifecycleCoordinatorContextTests {
         #expect(context.scheduledDelays == [TransportConfig.uiAnimationMediumSeconds])
         #expect(context.ownerLevelReadPasses == [peerID])
     }
+    /// A favorite's DMs can arrive over Nostr with the same lookback as
+    /// geohash DMs, so reading that chat records them too.
+    @Test @MainActor
+    func markPrivateMessagesAsRead_favorite_recordsInboundDMsAsRead() {
+        let context = MockChatLifecycleContext()
+        let coordinator = ChatLifecycleCoordinator(context: context)
+        let noiseKey = Data(repeating: 0xAB, count: 32)
+        let peerID = PeerID(hexData: noiseKey)
+        context.favoriteRelationshipsByNoiseKey[noiseKey] = makeFavoriteRelationship(
+            noiseKey: noiseKey,
+            nostrPublicKey: "npub1alice"
+        )
+        context.sentReadReceipts = ["in-acked"]
+        context.privateChats[peerID] = [
+            makePrivateMessage(id: "in-1", senderPeerID: peerID),
+            makePrivateMessage(id: "in-acked", senderPeerID: peerID),
+            makePrivateMessage(id: "in-relay", senderPeerID: peerID, isRelay: true),
+            makePrivateMessage(id: "mine", sender: "me", senderPeerID: context.myPeerID)
+        ]
+
+        coordinator.markPrivateMessagesAsRead(from: peerID)
+
+        // getPrivateChatMessages merges stable and ephemeral copies; its order
+        // is not part of the contract.
+        #expect(Set(context.readDMIDs) == ["in-1", "in-acked"])
+        #expect(context.readDMIDs.count == 2)
+    }
+
     @Test @MainActor
     func markPrivateMessagesAsRead_routesReceiptsForFavoritesAndNonFavorites() {
         let context = MockChatLifecycleContext()
