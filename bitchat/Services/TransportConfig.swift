@@ -287,6 +287,11 @@ enum TransportConfig {
     static let blePostSubscribeAnnounceDelaySeconds: TimeInterval = 0.05
     static let blePostAnnounceDelaySeconds: TimeInterval = 0.4
     static let bleForceAnnounceMinIntervalSeconds: TimeInterval = 0.15
+    // An announce that must not be lost (one we owe a new neighbour, a
+    // link-up, a rename) is retried once after the forced window when the
+    // throttle refuses it. Comfortably past the window: the throttle admits
+    // only at or after the exact interval.
+    static let bleForceAnnounceRetryDelaySeconds: TimeInterval = 0.2
 
     // BCH-01-004: Rate-limiting for subscription-triggered announces
     // Prevents rapid enumeration attacks by rate-limiting announce responses

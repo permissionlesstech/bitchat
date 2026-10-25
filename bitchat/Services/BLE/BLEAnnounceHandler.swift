@@ -5,8 +5,8 @@ import Foundation
 /// Narrow environment for `BLEAnnounceHandler`.
 ///
 /// All queue hops (collections barrier, BLE-queue link-state reads, main-actor
-/// UI notification, delayed re-announce) live inside the closures supplied by
-/// `BLEService`, keeping the handler queue-agnostic and synchronously testable.
+/// UI notification) live inside the closures supplied by `BLEService`, keeping
+/// the handler queue-agnostic and synchronously testable.
 struct BLEAnnounceHandlerEnvironment {
     /// Local peer identity at the time the announce is handled.
     let localPeerID: () -> PeerID
@@ -54,10 +54,6 @@ struct BLEAnnounceHandlerEnvironment {
     let updateTopology: (_ peerID: PeerID, _ neighbors: [Data]) -> Void
     /// Persists the announced cryptographic identity for offline verification.
     let persistIdentity: (AnnouncementPacket) -> Void
-    /// Announce-back dedup check.
-    let dedupContains: (String) -> Bool
-    /// Announce-back dedup marking.
-    let dedupMarkProcessed: (String) -> Void
     /// Delivers the announce UI events as one ordered main-actor hop:
     /// `.peerConnected` (if flagged) → initial gossip sync scheduling (if
     /// flagged) → peer-ID snapshot + data publish + `.peerListUpdated`.
@@ -70,10 +66,6 @@ struct BLEAnnounceHandlerEnvironment {
     ) -> Void
     /// Tracks the announce packet for gossip sync.
     let trackPacketSeen: (BitchatPacket) -> Void
-    /// Reciprocates the announce for bidirectional discovery.
-    let sendAnnounceBack: () -> Void
-    /// Schedules a delayed re-announce (afterglow) after the given delay.
-    let scheduleAfterglow: (TimeInterval) -> Void
 }
 
 /// Outcome of an accepted announce, surfaced so the service can run
@@ -87,7 +79,12 @@ struct BLEAnnounceHandlingResult {
 
 /// Orchestrates inbound announce packets: preflight validation, signature
 /// trust, registry/topology updates, identity persistence, UI notification,
-/// gossip tracking, and the reciprocal announce response.
+/// and gossip tracking.
+///
+/// It never answers an announce. Every announce floods the whole mesh, so
+/// answering them made every node in flood range answer every newcomer, and
+/// each answer was itself an announce. `BLEService` re-announces only when
+/// its own neighbour set grows (`announceIfNeighborUnclaimed`).
 final class BLEAnnounceHandler {
     private let environment: BLEAnnounceHandlerEnvironment
 
@@ -253,16 +250,10 @@ final class BLEAnnounceHandler {
             env.persistIdentity(announcement)
         }
 
-        let announceBackID = "announce-back-\(peerID)"
-        let shouldSendBack = !env.dedupContains(announceBackID)
-        if shouldSendBack {
-            env.dedupMarkProcessed(announceBackID)
-        }
         let responsePlan = BLEAnnounceResponsePolicy.plan(
             isDirectAnnounce: isDirectAnnounce,
             isNewPeer: isNewPeer,
-            isReconnectedPeer: isReconnectedPeer,
-            shouldSendAnnounceBack: shouldSendBack
+            isReconnectedPeer: isReconnectedPeer
         )
 
         // Only notify of connection for new or reconnected peers when it is a
@@ -280,18 +271,6 @@ final class BLEAnnounceHandler {
         // junk identities that every peer then re-serves.
         if verifiedAnnounce {
             env.trackPacketSeen(packet)
-        }
-
-        if responsePlan.shouldSendAnnounceBack {
-            // Reciprocate announce for bidirectional discovery
-            // Force send to ensure the peer receives our announce
-            env.sendAnnounceBack()
-        }
-
-        // Afterglow: on first-seen peers, schedule a short re-announce to push presence one more hop
-        if responsePlan.shouldScheduleAfterglow {
-            let delay = Double.random(in: 0.3...0.6)
-            env.scheduleAfterglow(delay)
         }
 
         return BLEAnnounceHandlingResult(

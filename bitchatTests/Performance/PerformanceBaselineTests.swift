@@ -44,18 +44,27 @@ final class PerformanceBaselineTests: XCTestCase {
     /// so the CI floor gate (scripts/check-perf-floors.sh) reads the file.
     /// Internal so benchmark extensions in other files report the same way.
     func reportThroughput(_ name: String, samples: [TimeInterval], operations: Int, unit: String) {
+        Self.reportThroughputLine(name, samples: samples, operations: operations, unit: unit)
+    }
+
+    /// `reportThroughput` for benchmarks that must keep the main actor free
+    /// (see MeshPerformanceBaselineTests).
+    nonisolated static func reportThroughputLine(_ name: String, samples: [TimeInterval], operations: Int, unit: String) {
         guard !samples.isEmpty else { return }
         let avg = samples.reduce(0, +) / Double(samples.count)
         let opsPerSec = avg > 0 ? Double(operations) / avg : .infinity
+        // The floor gate compares the printed value: below 10/sec, a whole
+        // number would let 1.5 pass a floor of 2.
+        let throughput = String(format: opsPerSec < 10 ? "%.1f" : "%.0f", opsPerSec)
         let line = String(
-            format: "PERF[%@]: %.0f %@/sec (avg %.3f ms per pass of %d, %d passes)",
-            name, opsPerSec, unit, avg * 1000, operations, samples.count
+            format: "PERF[%@]: %@ %@/sec (avg %.3f ms per pass of %d, %d passes)",
+            name, throughput, unit, avg * 1000, operations, samples.count
         )
         print(line)
-        Self.appendToPerfLog(line)
+        appendToPerfLog(line)
     }
 
-    private static var perfLogPath: String? {
+    private nonisolated static var perfLogPath: String? {
         let path = ProcessInfo.processInfo.environment["BITCHAT_PERF_LOG"]
         return (path?.isEmpty ?? true) ? nil : path
     }
@@ -64,7 +73,7 @@ final class PerformanceBaselineTests: XCTestCase {
     /// class across worker processes that write concurrently. The file is
     /// append-only (CI workspaces start fresh); delete it between local runs
     /// if you reuse a path.
-    private static func appendToPerfLog(_ line: String) {
+    private nonisolated static func appendToPerfLog(_ line: String) {
         guard let path = perfLogPath else { return }
         let fd = open(path, O_WRONLY | O_APPEND | O_CREAT, 0o644)
         guard fd >= 0 else { return }

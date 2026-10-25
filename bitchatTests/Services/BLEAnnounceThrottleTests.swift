@@ -83,6 +83,43 @@ struct BLEAnnounceThrottleTests {
         throttle.reset()
         #expect(throttle.shouldSend(force: true, now: now.addingTimeInterval(0.3)))
     }
+
+    @Test
+    func broadcastCountIsMonotonicAndSurvivesReset() {
+        let throttle = BLEAnnounceThrottle(normalMinimumInterval: 10, forcedMinimumInterval: 2)
+        #expect(throttle.broadcastCount == 0)
+
+        throttle.noteBroadcast(claimingNeighbors: [])
+        throttle.noteBroadcast(claimingNeighbors: [])
+        #expect(throttle.broadcastCount == 2)
+
+        // A panic reset must never make "nothing broadcast since this
+        // snapshot" true for a snapshot taken before it.
+        throttle.reset()
+        #expect(throttle.broadcastCount == 2)
+    }
+
+    @Test
+    func lastBroadcastOmitsOnlyNeighborsItDidNotClaim() {
+        let throttle = BLEAnnounceThrottle()
+        let alice = Data(repeating: 0xA1, count: 8)
+        let bob = Data(repeating: 0xB0, count: 8)
+        // Nothing broadcast yet: no neighbour is claimed.
+        #expect(throttle.lastBroadcastOmits(alice))
+
+        throttle.noteBroadcast(claimingNeighbors: [alice])
+        #expect(!throttle.lastBroadcastOmits(alice))
+        #expect(throttle.lastBroadcastOmits(bob))
+
+        // Each broadcast replaces the claim.
+        throttle.noteBroadcast(claimingNeighbors: [bob])
+        #expect(throttle.lastBroadcastOmits(alice))
+        #expect(!throttle.lastBroadcastOmits(bob))
+
+        // A rotated identity has claimed no neighbours.
+        throttle.reset()
+        #expect(throttle.lastBroadcastOmits(bob))
+    }
 }
 
 private final class LockedCounter: @unchecked Sendable {

@@ -20,6 +20,11 @@ final class BLEEngineManualScheduler: BLEEngineScheduling, @unchecked Sendable {
         lock.withLock { pending.append((now + delay, work)) }
     }
 
+    /// Virtual seconds since this scheduler was created.
+    var currentTime: TimeInterval {
+        lock.withLock { now }
+    }
+
     var pendingCount: Int {
         lock.withLock { pending.count }
     }

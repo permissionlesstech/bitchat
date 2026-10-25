@@ -142,12 +142,17 @@ extension BLEService: CBPeripheralManagerDelegate {
         let centralUUID = central.identifier.uuidString
         SecureLogger.debug("📥 Central subscribed: \(centralUUID.prefix(8))…", category: .session)
         linkStateStore.addSubscribedCentral(central)
+        scheduleSubscriptionLinkUpAnnounce(forCentral: centralUUID, now: Date())
+    }
 
+    /// The link-up announce a subscription earns. Called on bleQueue once
+    /// the central is registered.
+    func scheduleSubscriptionLinkUpAnnounce(forCentral centralUUID: String, now: Date) {
         // BCH-01-004: Rate-limit subscription-triggered announces to prevent enumeration attacks
-        let now = Date()
         switch subscriptionAnnounceLimiter.decision(for: centralUUID, now: now) {
         case .allowed:
-            break
+            // Send announce to the newly subscribed central after a small delay
+            scheduleLinkUpAnnounce(after: TransportConfig.blePostAnnounceDelaySeconds)
         case let .rateLimited(backoffSeconds, attemptCount, suppressAnnounce):
             SecureLogger.warning("🛡️ BCH-01-004: Rate-limited announce for central \(centralUUID.prefix(8))... (backoff: \(Int(backoffSeconds))s, attempts: \(attemptCount))", category: .security)
             if suppressAnnounce {
@@ -159,14 +164,12 @@ extension BLEService: CBPeripheralManagerDelegate {
             engineScheduler.schedule(after: TransportConfig.blePostAnnounceDelaySeconds) { [weak self] in
                 self?.flushDirectedSpool()
             }
-            return
-        }
-
-        // Send announce to the newly subscribed central after a small delay
-        engineScheduler.schedule(after: TransportConfig.blePostAnnounceDelaySeconds) { [weak self] in
-            self?.sendAnnounce(forceSend: true)
-            // Flush any spooled directed packets now that we have a central subscribed
-            self?.flushDirectedSpool()
+            // Deferred to the end of the backoff, not dropped: a central
+            // resubscribing right after its link dropped (a flapping link)
+            // can bind the new link only once one of our announces reaches
+            // it, and nothing else sends one, since announces are never
+            // answered. Skipped if one goes out before then.
+            scheduleLinkUpAnnounce(after: backoffSeconds)
         }
     }
     
