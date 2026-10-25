@@ -1,0 +1,128 @@
+{
+  "description": "Wire Format test vectors (spec/01-wire-format.md). For each packet: encoded_unpadded is the \u00a72\u2013\u00a74 frame; encoded_padded is that frame after the \u00a76 algorithm; signing_transcript is the \u00a75 canonical bytes an Ed25519 signature is computed over. Where ed25519 is present, packet.signature is the RFC 8032 signature of signing_transcript under private_key_seed. Hex is lowercase, no separators.",
+  "spec_version": "0.1.0",
+  "generator": "generate_wire_format_vectors.py",
+  "vectors": [
+    {
+      "name": "v1-announce-broadcast",
+      "notes": "Minimal v1 frame: no recipient, no signature, no route. The transmitted frame for a non-Noise type is the unpadded one (\u00a76); padded is given so the \u00a76 algorithm can be checked on a frame that lands in the 256 block.",
+      "packet": {
+        "version": 1,
+        "type": 1,
+        "ttl": 7,
+        "timestamp": 1700000000000,
+        "sender_id": "0102030405060708",
+        "recipient_id": null,
+        "route": null,
+        "payload": "62697463686174",
+        "signature": null,
+        "is_rsr": false
+      },
+      "encoded_unpadded": "0101070000018bcfe56800000007010203040506070862697463686174",
+      "encoded_padded": "0101070000018bcfe56800000007010203040506070862697463686174e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3",
+      "signing_transcript": "0101000000018bcfe56800000007010203040506070862697463686174e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3"
+    },
+    {
+      "name": "v1-directed-signed-rsr",
+      "notes": "Directed, signed, isRSR set. The signing transcript has ttl=0, isRSR cleared, no signature section, and is padded (\u00a75) even though the transmitted frame for type 0x02 is unpadded (\u00a76). The signature is Ed25519 over that transcript.",
+      "ed25519": {
+        "private_key_seed": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+        "public_key": "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7"
+      },
+      "packet": {
+        "version": 1,
+        "type": 2,
+        "ttl": 3,
+        "timestamp": 1700000000000,
+        "sender_id": "0102030405060708",
+        "recipient_id": "1112131415161718",
+        "route": null,
+        "payload": "7369676e656420626f6479",
+        "signature": "c846eb98426d17e4054f87578d9c84cbb98ae341ee0b78a1db3e0c12062696ac10af11176160fad96f546178d9f35ea21d01790fa7fd7b14ea9bbd09d06c1a0d",
+        "is_rsr": true
+      },
+      "encoded_unpadded": "0102030000018bcfe5680013000b010203040506070811121314151617187369676e656420626f6479c846eb98426d17e4054f87578d9c84cbb98ae341ee0b78a1db3e0c12062696ac10af11176160fad96f546178d9f35ea21d01790fa7fd7b14ea9bbd09d06c1a0d",
+      "encoded_padded": "0102030000018bcfe5680013000b010203040506070811121314151617187369676e656420626f6479c846eb98426d17e4054f87578d9c84cbb98ae341ee0b78a1db3e0c12062696ac10af11176160fad96f546178d9f35ea21d01790fa7fd7b14ea9bbd09d06c1a0d97979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797979797",
+      "signing_transcript": "0102000000018bcfe5680001000b010203040506070811121314151617187369676e656420626f6479d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7"
+    },
+    {
+      "name": "v2-route-two-hops",
+      "notes": "v2 header (4-byte payloadLength) with a two-hop source route. payloadLength counts only the payload; the 17 route bytes are outside it (\u00a74.2).",
+      "packet": {
+        "version": 2,
+        "type": 33,
+        "ttl": 5,
+        "timestamp": 1700000000000,
+        "sender_id": "0102030405060708",
+        "recipient_id": "1112131415161718",
+        "route": [
+          "2122232425262728",
+          "3132333435363738"
+        ],
+        "payload": "deadbeef",
+        "signature": null,
+        "is_rsr": false
+      },
+      "encoded_unpadded": "0221050000018bcfe568000900000004010203040506070811121314151617180221222324252627283132333435363738deadbeef",
+      "encoded_padded": "0221050000018bcfe568000900000004010203040506070811121314151617180221222324252627283132333435363738deadbeefcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcb",
+      "signing_transcript": "0221000000018bcfe568000900000004010203040506070811121314151617180221222324252627283132333435363738deadbeefcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcb"
+    },
+    {
+      "name": "v1-noise-handshake-padded-to-256",
+      "notes": "A 54-byte frame: 54 + 16 <= 256, so it is padded with 202 bytes of 0xCA to 256 (\u00a76). Noise types are transmitted padded.",
+      "packet": {
+        "version": 1,
+        "type": 16,
+        "ttl": 7,
+        "timestamp": 1700000000000,
+        "sender_id": "0102030405060708",
+        "recipient_id": null,
+        "route": null,
+        "payload": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+        "signature": null,
+        "is_rsr": false
+      },
+      "encoded_unpadded": "0110070000018bcfe568000000200102030405060708a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      "encoded_padded": "0110070000018bcfe568000000200102030405060708a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfcacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacaca",
+      "signing_transcript": "0110000000018bcfe568000000200102030405060708a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfcacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacaca"
+    },
+    {
+      "name": "v1-noise-encrypted-padded-to-512",
+      "notes": "A 262-byte frame: 262 + 16 > 256 so the target is 512; 250 bytes of padding fit in one byte, so it is padded.",
+      "packet": {
+        "version": 1,
+        "type": 17,
+        "ttl": 7,
+        "timestamp": 1700000000000,
+        "sender_id": "0102030405060708",
+        "recipient_id": null,
+        "route": null,
+        "payload": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeef",
+        "signature": null,
+        "is_rsr": false
+      },
+      "encoded_unpadded": "0111070000018bcfe568000000f00102030405060708000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeef",
+      "encoded_padded": "0111070000018bcfe568000000f00102030405060708000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeffafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafa",
+      "signing_transcript": "0111000000018bcfe568000000f00102030405060708000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeffafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafa"
+    },
+    {
+      "name": "v1-noise-encrypted-padding-overflow-unpadded",
+      "notes": "A 250-byte frame: 250 + 16 > 256 so the target is 512, but that needs 262 pad bytes, which does not fit in one byte. \u00a76 requires the frame to be emitted unpadded rather than padded to 256, so encoded_padded equals encoded_unpadded.",
+      "packet": {
+        "version": 1,
+        "type": 17,
+        "ttl": 7,
+        "timestamp": 1700000000000,
+        "sender_id": "0102030405060708",
+        "recipient_id": null,
+        "route": null,
+        "payload": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3",
+        "signature": null,
+        "is_rsr": false
+      },
+      "encoded_unpadded": "0111070000018bcfe568000000e40102030405060708000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3",
+      "encoded_padded": "0111070000018bcfe568000000e40102030405060708000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3",
+      "signing_transcript": "0111000000018bcfe568000000e40102030405060708000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3"
+    }
+  ]
+}
