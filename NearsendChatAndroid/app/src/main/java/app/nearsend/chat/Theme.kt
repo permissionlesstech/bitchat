@@ -53,7 +53,7 @@ val DayPalette = Palette(
 )
 val NightPalette = Palette(
     ink = Color(0xFFEAF2FF), inkSecondary = Color(0xFFEAF2FF).copy(alpha = 0.62f), link = NightBlue,
-    secure = Color(0xFF6EE7B7), glassFill = Color(0xFF0C1A36).copy(alpha = 0.74), glassEdge = Color.White.copy(alpha = 0.14f),
+    secure = Color(0xFF6EE7B7), glassFill = Color(0xFF0C1A36).copy(alpha = 0.74f), glassEdge = Color.White.copy(alpha = 0.14f),
     glassShadow = Color.Black.copy(alpha = 0.35f), night = true,
 )
 val LocalPalette = staticCompositionLocalOf { DayPalette }
