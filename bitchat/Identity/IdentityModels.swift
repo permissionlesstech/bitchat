@@ -119,6 +119,15 @@ struct CryptographicIdentity: Codable {
     // Optional Ed25519 signing public key (used to authenticate public messages)
     var signingPublicKey: Data? = nil
     let firstSeen: Date
+    /// Start of the UTC day a verified announce last refreshed this identity,
+    /// which retention ages strangers by (see
+    /// `SecureIdentityStateManager.RetentionPolicy`). Day-granular and
+    /// refreshed at most weekly, so it never costs a write per announce, and
+    /// never moved backwards: a stamp ahead of the clock is kept.
+    /// Nil for identities retention protects, and in caches written before
+    /// this field (synthesized decoding treats it as optional, and older
+    /// builds ignore it).
+    var lastSeen: Date? = nil
 }
 
 /// Represents the social layer of identity - user-assigned names and trust relationships.
@@ -181,7 +190,13 @@ struct IdentityCache: Codable {
     // Verified fingerprints (cryptographic proof)
     var verifiedFingerprints: Set<String> = []
 
-    // Last interaction timestamps (privacy: optional)
+    // Retired: nothing writes or reads it. Builds from mid-2025 wrote a
+    // timestamp here for every peer whose key they registered, a record of
+    // whom this device met. `SecureIdentityStateManager` empties it at load,
+    // and its next write removes those entries from the keychain. The
+    // key stays, always empty, because v1.7.0 and earlier decode the cache
+    // with a synthesized decoder that requires it: without it they would
+    // discard the whole cache after a downgrade.
     var lastInteractions: [String: Date] = [:]
 
     // Blocked Nostr pubkeys (lowercased hex) for geohash chats
@@ -204,8 +219,9 @@ struct IdentityCache: Codable {
 
     // Stable Noise fingerprints that proved encrypted private-media support
     // inside an authenticated Noise session. Optional for decoding caches
-    // written before this migration. Entries are monotonic until a panic wipe
-    // so an old/replayed announce cannot silently downgrade a peer.
+    // written before this migration. Entries stay until retention evicts the
+    // stranger (see `SecureIdentityStateManager.RetentionPolicy`) or a panic
+    // wipe, so an old/replayed announce cannot silently downgrade a peer.
     var privateMediaCapableFingerprints: Set<String>? = nil
 
     // Noise-fingerprint -> Ed25519 announcement key, learned only from the
@@ -220,6 +236,12 @@ struct IdentityCache: Codable {
     // noiseKey/peerID with their own signing key and be treated as first
     // contact (TOFU downgrade).
     var cryptographicIdentities: [String: CryptographicIdentity] = [:]
+
+    // UTC day of the last identity-retention pass. The next pass checks the
+    // clock against it before it forgets anything by age (see
+    // `SecureIdentityStateManager.agingDayLocked`). Optional: older caches
+    // lack it, and older builds ignore it.
+    var retentionPassDay: Date? = nil
 
     // Schema version for future migrations
     var version: Int = 1
@@ -243,6 +265,7 @@ struct IdentityCache: Codable {
         privateMediaCapableFingerprints = try container.decodeIfPresent(Set<String>.self, forKey: .privateMediaCapableFingerprints)
         authenticatedSigningKeysByFingerprint = try container.decodeIfPresent([String: Data].self, forKey: .authenticatedSigningKeysByFingerprint)
         cryptographicIdentities = try container.decodeIfPresent([String: CryptographicIdentity].self, forKey: .cryptographicIdentities) ?? [:]
+        retentionPassDay = try container.decodeIfPresent(Date.self, forKey: .retentionPassDay)
         version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
     }
 }

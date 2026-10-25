@@ -668,6 +668,12 @@ struct PrivateMediaEndToEndTests {
         #expect(identity.authenticatedSigningPublicKey(forFingerprint: bobFingerprint)
             == bob.noiseSigningPublicKeyData())
         #expect(alice.privateMediaSendPolicy(to: bob.myPeerID) == .encrypted)
+        // The peer state is stored inside the Noise session lock, through the
+        // upsert that never runs identity-cache retention; announces carry a
+        // nickname, so a nil one would be the peer state taking the
+        // announce path.
+        #expect(identity.authenticatedPeerUpserts == [bobFingerprint])
+        #expect(!identity.announceUpserts.contains { $0.claimedNickname == nil })
 
         bob._test_handlePacket(proofs.alice, fromPeerID: alice.myPeerID)
         alice._test_onOutboundPacket = nil

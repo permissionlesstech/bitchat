@@ -25,8 +25,28 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
         socialIdentities[fingerprint]
     }
     
-    func upsertCryptographicIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String?) {}
-    
+    // Upserts are recorded under a lock: BLEService makes them from its own
+    // queues.
+    private let upsertLock = NSLock()
+    private var recordedAnnounceUpserts: [(fingerprint: String, claimedNickname: String?)] = []
+    private var recordedAuthenticatedPeerUpserts: [String] = []
+
+    var announceUpserts: [(fingerprint: String, claimedNickname: String?)] {
+        upsertLock.withLock { recordedAnnounceUpserts }
+    }
+
+    var authenticatedPeerUpserts: [String] {
+        upsertLock.withLock { recordedAuthenticatedPeerUpserts }
+    }
+
+    func upsertCryptographicIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String?) {
+        upsertLock.withLock { recordedAnnounceUpserts.append((fingerprint, claimedNickname)) }
+    }
+
+    func upsertAuthenticatedPeerIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data) {
+        upsertLock.withLock { recordedAuthenticatedPeerUpserts.append(fingerprint) }
+    }
+
     func getCryptoIdentitiesByPeerIDPrefix(_ peerID: PeerID) -> [CryptographicIdentity] {
         []
     }
@@ -162,5 +182,13 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
 
     func mostRecentlyVerifiedFingerprints(limit: Int, excluding fingerprint: String) -> [String] {
         []
+    }
+
+    // MARK: Retention
+
+    private(set) var retentionProtectedFingerprints: Set<String>?
+
+    func setRetentionProtectedFingerprints(_ fingerprints: Set<String>) {
+        retentionProtectedFingerprints = fingerprints
     }
 }

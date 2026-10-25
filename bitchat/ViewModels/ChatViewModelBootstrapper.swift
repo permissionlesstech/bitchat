@@ -66,10 +66,36 @@ final class ChatViewModelBootstrapper {
         return Set(receipts)
     }
 
+    /// Feeds identity-cache retention the fingerprints the user favorited,
+    /// now and after every change (the panic wipe included), so retention
+    /// never evicts them. A record only the peer created (they favorited us)
+    /// does not count: any peer could opt itself in that way. Fails closed:
+    /// when the stored favorites could not be read, nothing is published
+    /// and retention stays off for the session rather than evict them.
+    static func bindIdentityRetentionProtection(
+        favorites: FavoritesPersistenceService,
+        identityManager: SecureIdentityStateManagerProtocol
+    ) -> AnyCancellable? {
+        guard favorites.loadWasAuthoritative else {
+            SecureLogger.warning(
+                "Stored favorites unreadable; identity cache retention is off for this session",
+                category: .security
+            )
+            return nil
+        }
+        return favorites.$favorites
+            .map { relationships in
+                Set(relationships.values.filter(\.isFavorite).map { $0.peerNoisePublicKey.sha256Fingerprint() })
+            }
+            .removeDuplicates()
+            .sink { identityManager.setRetentionProtectedFingerprints($0) }
+    }
+
     func configure() {
         wireServiceGraph()
         bindFeatureObjectChanges()
         loadPersistedViewState()
+        protectFavoritesFromIdentityRetention()
         configureTransport()
         startRuntimeServices()
         bindPeerService()
@@ -178,6 +204,16 @@ private extension ChatViewModelBootstrapper {
     func loadPersistedViewState() {
         viewModel.loadNickname()
         viewModel.loadVerifiedFingerprints()
+    }
+
+    /// Before the transport starts, so the first announces already see the
+    /// favorites snapshot.
+    func protectFavoritesFromIdentityRetention() {
+        Self.bindIdentityRetentionProtection(
+            favorites: .shared,
+            identityManager: viewModel.identityManager
+        )?
+        .store(in: &viewModel.cancellables)
     }
 
     func configureTransport() {

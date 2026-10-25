@@ -1,6 +1,6 @@
 # bitchat Privacy Policy
 
-*Last updated: July 2026*
+*Last updated: October 2026*
 
 ## Our Commitment
 
@@ -120,6 +120,7 @@ No cryptographic system can protect content after a recipient reads, copies, scr
 - **Public board posts and tombstones:** until expiry, at most seven days.
 - **Media:** seven days, or sooner by quota eviction, panic wipe, or app removal.
 - **Groups, favorites, preferences, identity keys, and bookmarks:** until removed by the feature, panic wipe, or app removal.
+- **Public keys and nicknames of people met over the mesh:** people you favorited, blocked, or named are kept while that lasts. People you verified, even after you remove the verification, and people vouched for by someone you verified are kept until a panic wipe or app removal. Everyone else is forgotten about five weeks after this device last saw them, and at most about 2,000 of them are kept. For anyone already stored when this version first runs, and anyone who has just stopped being kept for one of the reasons above, those five weeks start then. The device notes when it first saw each person it stores and, for those it may forget, roughly when it last saw them. Checks run while the app is hearing from people nearby, so nothing is forgotten while the app goes unused or while it cannot read your favorites. Private messages and files do not keep anyone longer.
 - **Nostr data:** according to the policies of the relays that receive it.
 
 ## Your Controls

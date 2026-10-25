@@ -1,6 +1,6 @@
 # bitchat Privacy Assessment
 
-Last reviewed: July 2026
+Last reviewed: October 2026
 
 ## Scope
 
@@ -45,6 +45,18 @@ Ingress validates announce structure, sender binding, signatures, payload sizes,
 - Panic wipe deletes the outbox, courier mail, keys, dedup state, and active transport state.
 
 Residual risk: private-message metadata such as timing, radio adjacency, ciphertext size, rotating recipient tags, and relay connections remains observable. A compromised recipient device can disclose plaintext.
+
+## Peer Identity Cache
+
+- Verified announces add a peer's Noise and signing public keys and claimed nickname to the identity cache, an AES-GCM-sealed keychain item, with the exact time the peer was first seen. Its signing-key pins stop a later announce from pairing a known peer's Noise key with another signing key.
+- Favorites, blocks, petnames, and notes protect a peer while they last. Verification and any trust level protect it too; removing a verification leaves the `casual` level, so a peer once verified stays until a panic wipe. Vouch links protect both sides of every stored vouch, expired or not, and every peer sent a vouch batch. They never expire, so those peers also stay until a panic wipe.
+- Every other peer is a stranger. For each stranger the cache stores the UTC day it was last seen, refreshed at most weekly, so that day lags the last sighting by up to six days. A stranger is forgotten at the first retention pass 38 or more days after that day: 32 to 38 days after the UTC day it was last seen, or a little over 31 days at the least in elapsed time. A stranger without a day, because it was in the cache when this build first ran or has just lost its protection, gets one at the next pass and is kept 37 days from then. Once a verified announce finds more than 2,000 strangers, the cache trims them to 1,500: first those whose day is more than a week old, oldest first, then the newest arrivals. The announcing stranger is never evicted by its own announce.
+- A pass runs on the first verified announce after each launch, then about daily, and at once whenever strangers pass 2,000. Passes need a verified announce, so none runs while the app hears no peer, and none runs in a session that cannot read the stored favorites. Ages follow the wall clock, but a stored day never moves backwards, and forgetting by age needs passes on two different days to agree, so a single wrong clock reading forgets nothing. The day of the last pass is stored only when the cache is next written, so after a relaunch, or after more than two days without a pass, the first pass may hold removals back until a pass on a later day.
+- Private conversations protect no one, and the cache keeps no record of them: no messages, message times, or list of partners. The traces an encrypted session can leave are covered under residual risk below. A peer the owner only exchanged messages or files with is a stranger. Once it is forgotten, its keys are learned again, as a first contact, from its next announce.
+- Builds from mid-2025 recorded a timestamp for every peer whose key they learned. The current build empties that field when it loads the cache, and the next write of the cache stores it empty.
+- Panic wipe deletes the cache.
+
+Residual risk: a seized unlocked device shows which strangers it heard from in about its last five weeks of use, exactly when it first saw each and roughly when it last saw each, and roughly the last day it heard from any peer. It also shows every protected peer and when each was first seen. The cache does not list whom its owner messaged. Until a stranger is forgotten, though, it keeps the signing key and private-media support that stranger proved in an encrypted session. Sessions start on their own with most directly connected peers, but with more distant peers they mostly carry private traffic, so for those a stored key hints that some was exchanged. A stranger first met in such a session, before any announce, also carries that session's time as its first-seen time.
 
 ## Public Gossip, Boards, and Media
 

@@ -4288,11 +4288,10 @@ extension BLEService {
                     state.signingPublicKey,
                     fingerprint: fingerprint
                 )
-                identityManager.upsertCryptographicIdentity(
+                identityManager.upsertAuthenticatedPeerIdentity(
                     fingerprint: fingerprint,
                     noisePublicKey: publicKey,
-                    signingPublicKey: state.signingPublicKey,
-                    claimedNickname: nil
+                    signingPublicKey: state.signingPublicKey
                 )
                 if state.capabilities.contains(.privateMedia) {
                     identityManager.markPrivateMediaCapable(fingerprint: fingerprint)

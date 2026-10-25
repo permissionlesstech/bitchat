@@ -27,10 +27,16 @@ extension PerformanceBaselineTests {
 
     // MARK: - Identity: known-peer upsert
 
-    /// Verified re-announces of known, unchanged peers: most announces.
+    /// Verified re-announces of known, unchanged peers: most announces. The
+    /// strangers were seen today and the favorites snapshot is set, so this
+    /// is the full announce path, retention checks included; the warm-up
+    /// pays for the day's retention pass, which has nothing to change.
     func testIdentityUpsertKnownPeer() throws {
-        let fixture = try IdentityCacheFixture(count: Self.identityCount)
+        let day: TimeInterval = 24 * 60 * 60
+        let today = Date(timeIntervalSince1970: (Date().timeIntervalSince1970 / day).rounded(.down) * day)
+        let fixture = try IdentityCacheFixture(count: Self.identityCount, lastSeen: today)
         let manager = SecureIdentityStateManager(fixture.keychain)
+        manager.setRetentionProtectedFingerprints([])
         let strangers = fixture.strangers
         let upserts = 25_000
         func upsert(_ index: Int) {
