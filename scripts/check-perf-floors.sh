@@ -6,10 +6,11 @@
 # prints into captured test output and fails if any benchmark's throughput is
 # below its floor from bitchatTests/Performance/perf-floors.json.
 #
-# Floor philosophy (see the floors file): floors sit at ~25% of locally
-# measured throughput, so they catch algorithmic regressions (O(n) -> O(n^2)),
-# never runner variance. Raise floors deliberately after intentional
-# improvements; never tune them to chase noise.
+# Floor philosophy (see `_philosophy` and the dated notes in the floors file,
+# which record each floor's basis): floors sit far below healthy throughput,
+# so they catch algorithmic regressions (O(n) -> O(n^2)), never runner
+# variance. Raise floors deliberately after intentional improvements; never
+# tune them to chase noise.
 #
 # Retry-on-noise: even generous floors can be dipped under by a saturated
 # runner (observed: gcs.buildAndDecode at 85% of floor on a loaded GitHub
@@ -139,9 +140,10 @@ if missing:
 if below_floor:
     print("\nperf-floors: below floor — order-of-magnitude-class regression suspected:")
     print("\n".join(below_floor))
-    print("\nFloors are ~25% of healthy local throughput; falling below one means an")
-    print("algorithmic regression, not runner noise. If the change is intentional,")
-    print("update bitchatTests/Performance/perf-floors.json deliberately.")
+    print("\nFloors sit far below healthy throughput (each floor's basis is recorded in")
+    print("perf-floors.json); falling below one means an algorithmic regression, not")
+    print("runner noise. If the change is intentional, update")
+    print("bitchatTests/Performance/perf-floors.json deliberately.")
     sys.exit(1)
 
 print("perf-floors: all benchmarks at or above their floors.")
