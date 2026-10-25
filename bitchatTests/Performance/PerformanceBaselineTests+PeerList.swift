@@ -296,6 +296,12 @@ final class PeerListPerfFixture {
 
     deinit {
         UserDefaults().removePersistentDomain(forName: suiteName)
+        // Removing the domain still leaves an empty plist behind.
+        if let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first {
+            try? FileManager.default.removeItem(
+                at: library.appendingPathComponent("Preferences/\(suiteName).plist")
+            )
+        }
     }
 
     func drainMainQueue() { Self.drainMainQueue() }

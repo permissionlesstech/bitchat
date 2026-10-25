@@ -14,13 +14,14 @@ import Testing
 import BitFoundation
 
 /// Counts value writes per key, so tests can prove a batch wrote nothing.
-private final class CountingDefaults: UserDefaults {
+/// In memory, so a test leaves no preferences plist behind.
+private final class CountingDefaults: InMemoryUserDefaults {
     private(set) var setCounts: [String: Int] = [:]
 
     var totalSetCount: Int { setCounts.values.reduce(0, +) }
 
     override func set(_ value: Any?, forKey defaultName: String) {
-        // `removeObject(forKey:)` arrives here with nil; only count writes.
+        // Storing nil is a removal; only count writes.
         if value != nil {
             setCounts[defaultName, default: 0] += 1
         }
@@ -36,10 +37,7 @@ private final class CountingDefaults: UserDefaults {
 struct MeshSightingsTrackerTests {
 
     private func makeDefaults() -> CountingDefaults {
-        let suite = "MeshSightingsTrackerTests-\(UUID().uuidString)"
-        let defaults = CountingDefaults(suiteName: suite)!
-        defaults.removePersistentDomain(forName: suite)
-        return defaults
+        CountingDefaults()
     }
 
     private let noon = Date(timeIntervalSince1970: 1_700_000_000)
