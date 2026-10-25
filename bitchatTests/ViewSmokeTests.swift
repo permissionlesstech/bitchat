@@ -313,7 +313,7 @@ struct ViewSmokeTests {
 
         let image = try makeCGImage()
 
-        let myQR = MyQRView(qrString: "bitchat://verify?name=alice&npub=npub1test")
+        let myQR = MyQRView(qrString: "bitchat://verify?name=alice&npub=npub1test", nickname: "alice")
         let qrCode = QRCodeImage(data: "bitchat://verify?hello=world", size: 96)
         let imageWrapper = ImageWrapper(image: image)
 
