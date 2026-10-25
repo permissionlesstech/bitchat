@@ -669,6 +669,8 @@ struct ViewSmokeTests {
             isPrivate: false,
             deliveryStatus: .sent
         )
+        // Stamped with my peer ID, as every DM I send is, so the row takes
+        // the own-DM delivery-status branch.
         let paymentMessage = BitchatMessage(
             sender: viewModel.nickname,
             content: "lightning:lnbc1test cashuA_test-token",
@@ -676,6 +678,7 @@ struct ViewSmokeTests {
             isRelay: false,
             isPrivate: true,
             recipientNickname: "Bob",
+            senderPeerID: viewModel.meshService.myPeerID,
             deliveryStatus: .partiallyDelivered(reached: 1, total: 2)
         )
 

@@ -142,12 +142,20 @@ final class PrivateChatManager: ObservableObject {
 
         // 2. Consolidate from temporary Nostr peer IDs (nostr_* prefixed)
         let normalizedNickname = peerNickname.lowercased()
+        let myPeerID = meshService.myPeerID
         var tempPeerIDsToConsolidate: [PeerID] = []
 
         for (storedPeerID, messages) in privateChats {
             if storedPeerID.isGeoDM && storedPeerID != peerID {
+                // Only the peer's own rows say who a thread is with. Mine
+                // carry my plain nickname (sendGeohashDM), so next to a mesh
+                // peer who shares it they would match as well: my thread with
+                // a geohash stranger would fold into the namesake's chat, a
+                // reply typed there would reach the namesake, and the
+                // stranger's next reply would open a fresh thread.
+                let containsMyRows = messages.contains { $0.senderPeerID == myPeerID }
                 let nicknamesMatch = messages.allSatisfy { $0.sender.lowercased() == normalizedNickname }
-                if nicknamesMatch && !messages.isEmpty {
+                if !containsMyRows && nicknamesMatch && !messages.isEmpty {
                     tempPeerIDsToConsolidate.append(storedPeerID)
                 }
             }
@@ -173,7 +181,11 @@ final class PrivateChatManager: ObservableObject {
                         originalSender: message.originalSender,
                         isPrivate: message.isPrivate,
                         recipientNickname: message.recipientNickname,
-                        senderPeerID: peerID,
+                        // Defense in depth: threads holding my rows are
+                        // skipped above, so every row here is the peer's and
+                        // moves to `peerID`. Were one of mine to get through,
+                        // it would keep my ID, as in the stable-key branch.
+                        senderPeerID: message.senderPeerID == meshService.myPeerID ? meshService.myPeerID : peerID,
                         mentions: message.mentions,
                         deliveryStatus: message.deliveryStatus
                     )
@@ -198,11 +210,15 @@ final class PrivateChatManager: ObservableObject {
         return hasUnreadMessages
     }
 
-    /// Syncs the read receipt tracking between manager and view model for sent messages
+    /// Syncs the read receipt tracking between manager and view model for sent
+    /// messages. "Sent" means carrying my peer ID, never merely my nickname:
+    /// a namesake's delivered message still gets its READ receipt, and my
+    /// messages from before a rename still count as mine.
     @MainActor
-    func syncReadReceiptsForSentMessages(peerID: PeerID, nickname: String, externalReceipts: inout Set<String>) {
+    func syncReadReceiptsForSentMessages(peerID: PeerID, externalReceipts: inout Set<String>) {
+        guard let myPeerID = meshService?.myPeerID else { return }
         for message in messages(for: peerID) {
-            if message.sender == nickname {
+            if message.isOwn(myPeerID: myPeerID, myGeoChatPeerID: nil) {
                 switch message.deliveryStatus {
                 case .read, .delivered:
                     externalReceipts.insert(message.id)

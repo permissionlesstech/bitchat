@@ -16,11 +16,15 @@ struct LocalizationCoverageTests {
         var allLocales: Set<String> { coverage.values.reduce(into: []) { $0.formUnion($1) } }
     }
 
-    private static func loadCatalog(_ relativePath: String) throws -> Catalog {
-        let url = repoRoot.appendingPathComponent(relativePath)
-        let data = try Data(contentsOf: url)
+    /// The catalog's `strings` table: key -> entry.
+    private static func loadStrings(_ relativePath: String) throws -> [String: Any] {
+        let data = try Data(contentsOf: repoRoot.appendingPathComponent(relativePath))
         let root = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let strings = try #require(root["strings"] as? [String: Any])
+        return try #require(root["strings"] as? [String: Any])
+    }
+
+    private static func loadCatalog(_ relativePath: String) throws -> Catalog {
+        let strings = try loadStrings(relativePath)
 
         var coverage: [String: Set<String>] = [:]
         for (key, value) in strings {
@@ -68,6 +72,59 @@ struct LocalizationCoverageTests {
         let shareExt = try Self.loadCatalog("bitchatShareExtension/Localization/Localizable.xcstrings")
         let missing = main.allLocales.subtracting(shareExt.allLocales).sorted()
         #expect(missing.isEmpty, "share extension is missing locales: \(missing.joined(separator: ", "))")
+    }
+
+    /// SwiftPM's default build system on Swift 6.4+ (swiftbuild) generates a
+    /// Swift symbol for every manually managed catalog key, and fails the
+    /// whole build on a key it cannot name ("%@", "#%@", "%lld/%lld"). CI may
+    /// still run the native build system, which never generates symbols, so
+    /// check the rule here rather than wait for the runner image to move.
+    /// This covers nameability only: the tool also fails on two manual keys
+    /// that generate the same symbol ("1" and "_1") and on skipped positional
+    /// arguments ("%1$@ %3$@"), which this does not check.
+    @Test func everyManualKeyCanDeriveAGeneratedSymbol() throws {
+        for path in [Self.mainCatalogPath, Self.shareExtensionCatalogPath] {
+            let unnameable = try Self.loadStrings(path).compactMap { key, value -> String? in
+                guard (value as? [String: Any])?["extractionState"] as? String == "manual" else { return nil }
+                return Self.canDeriveSymbol(from: key) ? nil : key
+            }.sorted()
+            #expect(
+                unnameable.isEmpty,
+                """
+                manual keys in \(path) that string catalog symbol generation \
+                cannot name, which breaks `swift build`: \(unnameable). Use \
+                Text(verbatim:) at the call site, or give the key a name.
+                """
+            )
+        }
+    }
+
+    /// Mirrors `xcstringstool generate-symbols`: printf-style format specifiers
+    /// split the key into words, and a character (grapheme cluster) can only
+    /// be part of the symbol name if every scalar in it can be part of a Swift
+    /// identifier. This approximates that, erring towards rejection, with
+    /// letters, numbers, marks, `_`, `$`, the joiners ZWJ and ZWNJ, and emoji
+    /// outside the Basic Multilingual Plane. So 🔒, 👋🏽 and 🧑‍🎄 count, but BMP
+    /// emoji (✅ ⚡ ❤️) and sequences built on one (🏃‍♂️ ✌🏽) do not.
+    private static func canDeriveSymbol(from key: String) -> Bool {
+        let words = key.replacingOccurrences(
+            of: #"%(\d+\$)?[-+0]*\d*(\.\d+)?(hh|h|ll|l|q|L|z|t|j)?[@dDiuUxXoOfFeEgGcCsSpaA]|%%"#,
+            with: " ",
+            options: .regularExpression
+        )
+        return words.contains { character in
+            character.unicodeScalars.allSatisfy { scalar in
+                switch scalar.properties.generalCategory {
+                case .uppercaseLetter, .lowercaseLetter, .titlecaseLetter, .modifierLetter, .otherLetter,
+                     .decimalNumber, .letterNumber, .otherNumber,
+                     .nonspacingMark, .spacingMark, .enclosingMark:
+                    return true
+                default:
+                    return scalar == "_" || scalar == "$" || scalar == "\u{200C}" || scalar == "\u{200D}"
+                        || (scalar.value >= 0x10000 && scalar.properties.isEmoji)
+                }
+            }
+        }
     }
 
     /// The catalog tests above validate the CATALOG; this one validates the

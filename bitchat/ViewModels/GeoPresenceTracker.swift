@@ -19,7 +19,7 @@ protocol GeoPresenceContext: AnyObject {
     func isNostrBlocked(pubkeyHexLowercased: String) -> Bool
     func parseMentions(from content: String) -> [String]
 
-    func recordGeoParticipant(pubkeyHex: String, geohash: String)
+    func recordGeoParticipant(pubkeyHex: String, geohash: String, seenAt: Date)
     func geoParticipantCount(for geohash: String) -> Int
     func markGeoTeleported(_ pubkeyHexLowercased: String)
 
@@ -43,8 +43,8 @@ extension ChatViewModel: GeoPresenceContext {
         locationPresenceStore.teleportedGeo.count
     }
 
-    func recordGeoParticipant(pubkeyHex: String, geohash: String) {
-        participantTracker.recordParticipant(pubkeyHex: pubkeyHex, geohash: geohash)
+    func recordGeoParticipant(pubkeyHex: String, geohash: String, seenAt: Date) {
+        participantTracker.recordParticipant(pubkeyHex: pubkeyHex, geohash: geohash, seenAt: seenAt)
     }
 
     func geoParticipantCount(for geohash: String) -> Int {
@@ -107,8 +107,21 @@ final class GeoPresenceTracker {
         // actor) by NostrRelayManager before delivery.
         guard shouldProcessGeoSamplingEvent(event.id) else { return }
 
-        let existingCount = context.geoParticipantCount(for: gh)
-        context.recordGeoParticipant(pubkeyHex: event.pubkey, geohash: gh)
+        // The open channel is usually one of the sampled cells, and its own
+        // subscription already records its senders; recording this copy too
+        // ran the participant bookkeeping twice for every event there.
+        let isOpenChannel: Bool = {
+            if case .location(let channel) = context.activeChannel {
+                return channel.geohash == gh
+            }
+            return false
+        }()
+        let existingCount = isOpenChannel ? nil : context.geoParticipantCount(for: gh)
+        if !isOpenChannel {
+            // Arrival time: sampling replays at most a few minutes of history,
+            // and live senders with skewed clocks must still count.
+            context.recordGeoParticipant(pubkeyHex: event.pubkey, geohash: gh, seenAt: Date())
+        }
 
         guard let content = event.content.trimmedOrNilIfEmpty else { return }
         if context.isNostrBlocked(pubkeyHexLowercased: event.pubkey.lowercased()) { return }

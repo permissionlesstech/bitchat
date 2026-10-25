@@ -823,8 +823,8 @@ struct ChatViewModelGeoDMTests {
 
 /// Contracts for the owner-side intent ops that are the sole mutation paths
 /// for `ChatViewModel`'s shared coordinator state (`nostrKeyMapping`,
-/// `sentReadReceipts`, `sentGeoDeliveryAcks`, `isBatchingPublic`, the geo
-/// subscription IDs, and the selected private chat hand-off).
+/// `sentReadReceipts`, `sentGeoDeliveryAcks`, the geo subscription IDs, and
+/// the selected private chat hand-off).
 struct ChatViewModelIntentOperationTests {
 
     @Test @MainActor
@@ -888,17 +888,6 @@ struct ChatViewModelIntentOperationTests {
         #expect(viewModel.nostrKeyMapping[PeerID(nostr: hex)] == nil)
         #expect(viewModel.nostrKeyMapping[PeerID(nostr_: hex)] == nil)
         #expect(viewModel.nostrKeyMapping[PeerID(nostr_: otherHex)] == otherHex)
-    }
-
-    @Test @MainActor
-    func setPublicBatching_publishesBatchingState() async {
-        let (viewModel, _) = makeTestableViewModel()
-
-        #expect(!viewModel.isBatchingPublic)
-        viewModel.setPublicBatching(true)
-        #expect(viewModel.isBatchingPublic)
-        viewModel.setPublicBatching(false)
-        #expect(!viewModel.isBatchingPublic)
     }
 
     @Test @MainActor

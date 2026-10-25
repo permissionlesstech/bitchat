@@ -11,7 +11,6 @@ final class ConversationUIModel: ObservableObject {
     @Published private(set) var autocompleteSuggestions: [String] = []
     @Published private(set) var selectedAutocompleteIndex = 0
     @Published private(set) var currentNickname: String
-    @Published private(set) var isBatchingPublic = false
     @Published private(set) var canSendMediaInCurrentContext = true
     @Published private(set) var legacyPrivateMediaConsentRequest: LegacyPrivateMediaConsentRequest?
     /// Who is talking live in the public mesh channel right now (floor
@@ -23,6 +22,15 @@ final class ConversationUIModel: ObservableObject {
     private let conversations: ConversationStore
     private var activeChannel: ChannelID
     private var cancellables = Set<AnyCancellable>()
+    /// My geochat sender ID for the location channel on screen, kept with the
+    /// public key it was built from. `publicKeyHex` hex-encodes on every
+    /// access, too slow to repeat per row render; keying on the key itself
+    /// means a geohash switch or a panic wipe (which reseeds every identity)
+    /// can never leave a stale ID behind. A switch to #mesh, where no row
+    /// reads it, drops it: a panic wipe always lands there, and the retired
+    /// key must not stay in memory until a geochat row next renders.
+    /// (Read access is internal so tests can check that.)
+    private(set) var ownGeoChatSender: (publicKey: Data, peerID: PeerID)?
 
     init(
         chatViewModel: ChatViewModel,
@@ -34,7 +42,6 @@ final class ConversationUIModel: ObservableObject {
         self.conversations = conversations
         self.activeChannel = conversations.activeChannel
         self.currentNickname = chatViewModel.nickname
-        self.isBatchingPublic = chatViewModel.isBatchingPublic
         self.showAutocomplete = chatViewModel.showAutocomplete
         self.autocompleteSuggestions = chatViewModel.autocompleteSuggestions
         self.selectedAutocompleteIndex = chatViewModel.selectedAutocompleteIndex
@@ -144,19 +151,50 @@ final class ConversationUIModel: ObservableObject {
     }
 
     func mediaAttachment(for message: BitchatMessage) -> BitchatMessage.Media? {
-        message.mediaAttachment(for: currentNickname)
+        // The model loads from outgoing/ exactly when the row's sender equals
+        // the name it is given. Ask with the row's own sender first: text rows,
+        // most of the timeline, stop here without an identity check per render.
+        guard let outgoing = message.mediaAttachment(for: message.sender) else { return nil }
+        if isSentByCurrentUser(message) { return outgoing }
+        // Not mine by identity: a name the sender can never equal (one
+        // character longer) loads it from incoming/, so a namesake's file
+        // resolves there while my send from before a rename stays outgoing.
+        return message.mediaAttachment(for: message.sender + "\u{0}")
     }
 
     func isSelfSender(peerID: PeerID?, displayName: String?) -> Bool {
         chatViewModel.isSelfSender(peerID: peerID, displayName: displayName)
     }
 
+    /// Whether this device wrote the row, by the sender ID it carries (see
+    /// `BitchatMessage.isOwn`), never by its display name: a namesake, an
+    /// `anon#xxxx` stranger next to a reader named "anon", and my own rows
+    /// from before a rename are all told apart correctly.
     func isSentByCurrentUser(_ message: BitchatMessage) -> Bool {
-        message.sender == currentNickname || message.sender.hasPrefix(currentNickname + "#")
+        message.isOwn(
+            myPeerID: chatViewModel.meshService.myPeerID,
+            myGeoChatPeerID: ownGeoChatPeerID()
+        )
     }
 
     func isMediaMessageFromCurrentUser(_ message: BitchatMessage) -> Bool {
-        message.sender == currentNickname || message.senderPeerID == chatViewModel.meshService.myPeerID
+        isSentByCurrentUser(message)
+    }
+
+    /// My geochat sender ID in the location channel on screen (nil on #mesh),
+    /// memoized in `ownGeoChatSender`.
+    private func ownGeoChatPeerID() -> PeerID? {
+        // The store's channel, not the mirrored `activeChannel`, which trails
+        // a switch by a runloop turn.
+        guard case .location(let channel) = conversations.activeChannel,
+              let identity = chatViewModel.geohashIdentity(for: channel.geohash)
+        else { return nil }
+        if let cached = ownGeoChatSender, cached.publicKey == identity.publicKey {
+            return cached.peerID
+        }
+        let peerID = PeerID(nostr: identity.publicKeyHex)
+        ownGeoChatSender = (identity.publicKey, peerID)
+        return peerID
     }
 
     /// Whether a private-message row should show the filled verification seal
@@ -224,31 +262,35 @@ final class ConversationUIModel: ObservableObject {
     }
 
     private func bind() {
+        // Every message row observes this model, so each republish re-renders
+        // all of them: forward only real changes, never a re-sent equal value.
         chatViewModel.$nickname
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .assign(to: &$currentNickname)
 
         chatViewModel.$showAutocomplete
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .assign(to: &$showAutocomplete)
 
         chatViewModel.$autocompleteSuggestions
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .assign(to: &$autocompleteSuggestions)
 
         chatViewModel.$selectedAutocompleteIndex
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .assign(to: &$selectedAutocompleteIndex)
 
-        chatViewModel.$isBatchingPublic
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$isBatchingPublic)
-
         chatViewModel.$activePublicVoiceTalker
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .assign(to: &$activeLiveVoiceTalker)
 
         chatViewModel.$legacyPrivateMediaConsentRequest
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .assign(to: &$legacyPrivateMediaConsentRequest)
 
@@ -256,6 +298,9 @@ final class ConversationUIModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] channel in
                 self?.activeChannel = channel
+                if channel == .mesh {
+                    self?.ownGeoChatSender = nil
+                }
                 self?.refreshComputedState()
             }
             .store(in: &cancellables)
@@ -278,18 +323,24 @@ final class ConversationUIModel: ObservableObject {
     }
 
     private func refreshComputedState() {
+        let canSendMedia: Bool
         if let selectedPeerID = privateConversationModel.selectedPeerID {
             // Media transfer is not wired for groups in v1; keep it off so the
             // composer can't strand a media placeholder that never sends.
-            canSendMediaInCurrentContext = !(selectedPeerID.isGeoDM || selectedPeerID.isGeoChat || selectedPeerID.isGroup)
-            return
+            canSendMedia = !(selectedPeerID.isGeoDM || selectedPeerID.isGeoChat || selectedPeerID.isGroup)
+        } else {
+            switch activeChannel {
+            case .mesh:
+                canSendMedia = true
+            case .location:
+                canSendMedia = false
+            }
         }
-
-        switch activeChannel {
-        case .mesh:
-            canSendMediaInCurrentContext = true
-        case .location:
-            canSendMediaInCurrentContext = false
+        // Every write republishes to every message row, and most triggers
+        // (each peer, favorite or status refresh of the selection) leave the
+        // value as it was.
+        if canSendMediaInCurrentContext != canSendMedia {
+            canSendMediaInCurrentContext = canSendMedia
         }
     }
 }
