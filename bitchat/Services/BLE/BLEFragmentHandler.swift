@@ -15,8 +15,9 @@ struct BLEFragmentHandlerEnvironment {
     let trackPacketSeen: (BitchatPacket) -> Void
     /// Appends the fragment to the assembly buffer (collections barrier write).
     let appendFragment: (BLEFragmentHeader) -> BLEFragmentAssemblyBuffer.AppendResult
-    /// Ingress acceptance check for the reassembled inner packet.
-    let isAcceptedIngressPayload: (_ packet: BitchatPacket, _ innerSender: PeerID) -> Bool
+    /// Ingress acceptance check for the reassembled inner packet, judged
+    /// against the peer it is attributed to.
+    let isAcceptedIngressPayload: (_ packet: BitchatPacket, _ validationPeerID: PeerID) -> Bool
     /// Re-enters the receive pipeline with the reassembled packet (TTL already zeroed).
     let processReassembledPacket: (_ packet: BitchatPacket, _ from: PeerID) -> Void
 }
@@ -31,7 +32,13 @@ final class BLEFragmentHandler {
         self.environment = environment
     }
 
-    func handle(_ packet: BitchatPacket, from peerID: PeerID) {
+    /// - Parameters:
+    ///   - peerID: the fragment's claimed sender, which is the original
+    ///     packet's author. Self-fragment suppression keys on it.
+    ///   - boundPeerID: the peer bound to the link the fragment arrived on, or
+    ///     nil when the link is unbound or the fragment did not arrive on a
+    ///     link (a re-injected packet).
+    func handle(_ packet: BitchatPacket, from peerID: PeerID, boundTo boundPeerID: PeerID?) {
         let env = environment
         guard let header = BLEFragmentHeader(packet: packet) else { return }
 
@@ -64,13 +71,24 @@ final class BLEFragmentHandler {
             // Reassembled packet validation. Both platforms' fragmenters copy
             // the inner type into every fragment, and the assembly was sized
             // for that claim, so a packet of any other type is forged.
+            // A solicited sync response is judged against the peer bound to
+            // the link that served it, the rule the ingress registry applies
+            // to a flagged single frame: the inner sender is the message's
+            // original author, who may hold no sync request with us. With no
+            // bound link the packet is judged against its own sender, as a
+            // single frame would be; the fragments' claimed sender is never
+            // the anchor, because anyone can name a peer we asked.
+            // validatePayload is the seam a reassembled packet has always
+            // passed through; the guard's other checks describe a frame on a
+            // link, not a packet rebuilt from one.
             let innerSender = PeerID(hexData: originalPacket.senderID)
+            let validationPeerID = originalPacket.isRSR ? (boundPeerID ?? innerSender) : innerSender
             if originalPacket.type != completedHeader.originalType {
                 SecureLogger.warning(
                     "🚫 Reassembled packet id=\(completedHeader.idLogString) is type \(originalPacket.type), fragments claimed \(completedHeader.originalType)",
                     category: .security
                 )
-            } else if !env.isAcceptedIngressPayload(originalPacket, innerSender) {
+            } else if !env.isAcceptedIngressPayload(originalPacket, validationPeerID) {
                 // Cleanup below
             } else {
                 SecureLogger.debug("✅ Reassembled packet id=\(completedHeader.idLogString) type=\(originalPacket.type) bytes=\(reassembled.count)", category: .session)

@@ -3078,7 +3078,7 @@ extension BLEService {
         fromPeerID: PeerID
     ) {
         bleQueue.async { [weak self] in
-            self?.handleReceivedPacket(packet, from: fromPeerID)
+            self?.handleReceivedPacket(packet, from: fromPeerID, boundPeerID: nil)
         }
     }
 
@@ -3089,6 +3089,13 @@ extension BLEService {
     /// tests exercise the same engine code as CoreBluetooth ingress.
     func _test_ingestFrame(_ packet: BitchatPacket, link: BLEIngressLinkID) {
         emitLinkEvent(.frameDecoded(packet, link: link, linkDescription: "Simulated \(link)"))
+    }
+
+    /// Records a pending sync request to `peerID`, what sending a
+    /// REQUEST_SYNC to that peer records (GossipSyncManager.sendRequestSync),
+    /// so a test can present a solicited reply without the timer-driven send.
+    func _test_registerSyncRequest(to peerID: PeerID) {
+        requestSyncManager._test_registerRequestNow(to: peerID)
     }
 
     /// Sends an unthrottled announce, exactly like the maintenance forced
@@ -3149,7 +3156,7 @@ extension BLEService {
                 }
             }
         }
-        handleReceivedPacket(packet, from: fromPeerID)
+        handleReceivedPacket(packet, from: fromPeerID, boundPeerID: nil)
     }
 
     /// Waits until fragment ingress already submitted by a test has finished
@@ -5660,12 +5667,12 @@ extension BLEService {
         }
     }
     
-    private func handleFragment(_ packet: BitchatPacket, from peerID: PeerID) {
+    private func handleFragment(_ packet: BitchatPacket, from peerID: PeerID, boundTo boundPeerID: PeerID?) {
         if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
-            fragmentHandler.handle(packet, from: peerID)
+            fragmentHandler.handle(packet, from: peerID, boundTo: boundPeerID)
         } else {
             messageQueue.async { [weak self] in
-                self?.fragmentHandler.handle(packet, from: peerID)
+                self?.fragmentHandler.handle(packet, from: peerID, boundTo: boundPeerID)
             }
         }
     }
@@ -5688,11 +5695,11 @@ extension BLEService {
                     self.fragmentAssemblyBuffer.append(header, maxInFlightAssemblies: self.maxInFlightAssemblies)
                 }
             },
-            isAcceptedIngressPayload: { [weak self] packet, innerSender in
-                self?.isAcceptedIngressPayload(packet, from: innerSender) ?? false
+            isAcceptedIngressPayload: { [weak self] packet, validationPeerID in
+                self?.isAcceptedIngressPayload(packet, from: validationPeerID) ?? false
             },
             processReassembledPacket: { [weak self] packet, peerID in
-                self?.handleReceivedPacket(packet, from: peerID)
+                self?.handleReceivedPacket(packet, from: peerID, boundPeerID: nil)
             }
         )
     }
@@ -5842,10 +5849,11 @@ extension BLEService {
         linkDescription: String
     ) {
         let claimedSenderID = PeerID(hexData: packet.senderID)
+        let linkBoundPeerID = linkBindings.boundPeer(for: link)
         let context = acceptedIngressContext(
             for: packet,
             claimedSenderID: claimedSenderID,
-            boundPeerID: linkBindings.boundPeer(for: link),
+            boundPeerID: linkBoundPeerID,
             linkDescription: linkDescription
         )
         guard let context else { return }
@@ -5859,8 +5867,7 @@ extension BLEService {
             // Raw announces only bind unbound links: this runs before
             // signature verification, so a bound link must not be re-bound
             // by a raw announce (spoofable).
-            let boundPeerID = linkBindings.boundPeer(for: link)
-            if boundPeerID == nil || boundPeerID == claimedSenderID {
+            if linkBoundPeerID == nil || linkBoundPeerID == claimedSenderID {
                 switch link {
                 case .peripheral(let peripheralUUID):
                     bindPeripheralLink(peripheralUUID, to: claimedSenderID)
@@ -5875,10 +5882,13 @@ extension BLEService {
             return
         }
 
-        handleReceivedPacket(packet, from: context.receivedFromPeerID)
+        handleReceivedPacket(packet, from: context.receivedFromPeerID, boundPeerID: linkBoundPeerID)
     }
 
-    private func handleReceivedPacket(_ packet: BitchatPacket, from peerID: PeerID) {
+    /// `boundPeerID` is the peer bound to the link the packet arrived on; nil
+    /// for an unbound link and for packets that did not arrive on a link.
+    /// Callers name it explicitly so a new link-borne site cannot forget it.
+    private func handleReceivedPacket(_ packet: BitchatPacket, from peerID: PeerID, boundPeerID: PeerID?) {
         let isNoisePacket = packet.type == MessageType.noiseHandshake.rawValue
             || packet.type == MessageType.noiseEncrypted.rawValue
 
@@ -5904,7 +5914,7 @@ extension BLEService {
                 #if DEBUG
                 self._test_onReceivePacketHandoff?()
                 #endif
-                self.handleReceivedPacketOnQueue(packet, from: peerID)
+                self.handleReceivedPacketOnQueue(packet, from: peerID, boundPeerID: boundPeerID)
             }
             return
         }
@@ -5921,16 +5931,17 @@ extension BLEService {
                       ) else {
                     return
                 }
-                self.handleReceivedPacketOnQueue(packet, from: peerID)
+                self.handleReceivedPacketOnQueue(packet, from: peerID, boundPeerID: boundPeerID)
             }
         } else {
-            handleReceivedPacketOnQueue(packet, from: peerID)
+            handleReceivedPacketOnQueue(packet, from: peerID, boundPeerID: boundPeerID)
         }
     }
 
     private func handleReceivedPacketOnQueue(
         _ packet: BitchatPacket,
-        from peerID: PeerID
+        from peerID: PeerID,
+        boundPeerID: PeerID?
     ) {
         let context = BLEReceivePipeline.context(for: packet, localPeerID: myPeerID)
         let senderID = context.senderID
@@ -6001,7 +6012,7 @@ extension BLEService {
             handleNoiseEncrypted(packet, from: senderID)
             
         case .fragment:
-            handleFragment(packet, from: senderID)
+            handleFragment(packet, from: senderID, boundTo: boundPeerID)
             
         case .fileTransfer:
             // Broadcast files that fail sender authentication must not spread
