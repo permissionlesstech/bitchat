@@ -42,10 +42,15 @@ import Testing
             while text.count < length {
                 if !text.isEmpty { text.append(" ") }
                 for _ in 0..<Int.random(in: 2..<8, using: &rng) {
-                    text.append(Character(Unicode.Scalar(UInt8(97 + Int.random(in: 0..<26, using: &rng)))))
+                    text.append(randomLetter())
                 }
             }
             return String(text.prefix(length))
+        }
+
+        func randomLetter() -> Character {
+            let offset: Int = Int.random(in: 0..<26, using: &rng)
+            return Character(Unicode.Scalar(UInt8(97 + offset)))
         }
 
         func advance(seconds: TimeInterval) {
@@ -105,7 +110,7 @@ import Testing
     @Test func charactersAreCountedAsScalars() {
         let h = Harness()
         let sentence = (0..<1200).map { i -> String in
-            i % 3 == 0 ? "😀" : String(Character(Unicode.Scalar(UInt8(97 + Int.random(in: 0..<26, using: &h.rng)))))
+            i % 3 == 0 ? "😀" : String(h.randomLetter())
         }.joined()
         #expect(h.send(sentence) == .allowed)
     }
@@ -431,7 +436,8 @@ import Testing
         for alphabet in [2, 3, 5, 26] {
             for _ in 0..<60 {
                 func text() -> [Int] {
-                    (0..<Int.random(in: 1...80, using: &rng)).map { _ in 97 + Int.random(in: 0..<alphabet, using: &rng) }
+                    let length: Int = Int.random(in: 1...80, using: &rng)
+                    return (0..<length).map { _ -> Int in 97 + Int.random(in: 0..<alphabet, using: &rng) }
                 }
                 let a = text()
                 var b = Bool.random(using: &rng) ? text() : a
@@ -475,21 +481,34 @@ import Testing
             base.unicodeScalars.map(transform).joined()
         }
         let invisibles = ["\u{200C}", "\u{200D}", "\u{2060}", "\u{00AD}", "\u{200E}"]
+        // One typed binding per disguise keeps each closure cheap to type-check.
+        let zeroWidth: String = mapScalars { (c: Unicode.Scalar) -> String in "\(c)\u{200B}" }
+        var mixed = ""
+        for (i, c) in base.unicodeScalars.enumerated() {
+            mixed += String(c) + invisibles[i % invisibles.count]
+        }
+        let accented: String = mapScalars { (c: Unicode.Scalar) -> String in
+            c.properties.isAlphabetic ? "\(c)\u{0301}" : "\(c)"
+        }
+        let bold: String = mapScalars { (c: Unicode.Scalar) -> String in
+            switch c.value {
+            case 0x61...0x7A: return String(Unicode.Scalar(0x1D41A + c.value - 0x61)!)
+            case 0x41...0x5A: return String(Unicode.Scalar(0x1D400 + c.value - 0x41)!)
+            default: return "\(c)"
+            }
+        }
+        let fullwidth: String = mapScalars { (c: Unicode.Scalar) -> String in
+            guard (0x21...0x7E).contains(c.value) else { return "\(c)" }
+            return String(Unicode.Scalar(c.value + 0xFEE0)!)
+        }
+        let nonBreaking: String = base.replacingOccurrences(of: " ", with: "\u{00A0}")
         return [
-            ("zero-width spaces", mapScalars { "\($0)\u{200B}" }),
-            ("mixed invisible characters", base.unicodeScalars.enumerated().map { "\($1)" + invisibles[$0 % 5] }.joined()),
-            ("an accent on every letter", mapScalars { $0.properties.isAlphabetic ? "\($0)\u{0301}" : "\($0)" }),
-            ("math bold letters", mapScalars { c in
-                switch c.value {
-                case 0x61...0x7A: return String(Unicode.Scalar(0x1D41A + c.value - 0x61)!)
-                case 0x41...0x5A: return String(Unicode.Scalar(0x1D400 + c.value - 0x41)!)
-                default: return "\(c)"
-                }
-            }),
-            ("fullwidth letters", mapScalars { c in
-                (0x21...0x7E).contains(c.value) ? String(Unicode.Scalar(c.value + 0xFEE0)!) : "\(c)"
-            }),
-            ("non-breaking spaces", base.replacingOccurrences(of: " ", with: "\u{00A0}"))
+            ("zero-width spaces", zeroWidth),
+            ("mixed invisible characters", mixed),
+            ("an accent on every letter", accented),
+            ("math bold letters", bold),
+            ("fullwidth letters", fullwidth),
+            ("non-breaking spaces", nonBreaking)
         ]
     }()
 

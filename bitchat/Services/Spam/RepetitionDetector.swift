@@ -221,8 +221,12 @@ enum RepetitionDetector {
     /// Distinct character trigrams as sorted hashes, for a cheap pre-check before `align`.
     static func trigrams(_ text: [Int]) -> [Int] {
         guard text.count >= 3 else { return [] }
-        let hashes = (0..<(text.count - 2)).map { i in (text[i] * 31 + text[i + 1]) * 31 + text[i + 2] }
-        return Array(Set(hashes)).sorted()
+        var hashes = Set<Int>()
+        for i in 0..<(text.count - 2) {
+            let pair: Int = text[i] * 31 + text[i + 1]
+            hashes.insert(pair * 31 + text[i + 2])
+        }
+        return hashes.sorted()
     }
 
     /// Shared trigrams over the larger trigram set. Near-copies share most of

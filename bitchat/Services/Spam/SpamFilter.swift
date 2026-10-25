@@ -156,7 +156,8 @@ final class SpamFilter: @unchecked Sendable {
 
         let repetition = config.repetition
         let text = isText ? RepetitionDetector.normalize(content, maxLength: repetition.maxAnalyzedLength) : nil
-        let fingerprint = text.map { fingerprint($0, time: time, config: repetition) }
+        var fingerprint: Fingerprint?
+        if let text { fingerprint = makeFingerprint(text, time: time, config: repetition) }
 
         let verdict: SpamVerdict
         if let text, let fingerprint {
@@ -224,7 +225,7 @@ final class SpamFilter: @unchecked Sendable {
             RepetitionDetector.selfSimilarity(text) >= config.repeatedCharactersThreshold
     }
 
-    private func fingerprint(_ text: [Int], time: TimeInterval, config: RepetitionConfig) -> Fingerprint {
+    private func makeFingerprint(_ text: [Int], time: TimeInterval, config: RepetitionConfig) -> Fingerprint {
         let compared = text.count > config.maxComparedLength ? Array(text.prefix(config.maxComparedLength)) : text
         return Fingerprint(
             time: time,
