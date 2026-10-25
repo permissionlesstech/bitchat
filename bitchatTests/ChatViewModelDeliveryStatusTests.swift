@@ -469,7 +469,7 @@ struct ChatViewModelDeliveryStatusTests {
     func cleanupOldReadReceipts_prunesNewlyStaleReceiptsAfterTheFirstPass() async {
         let (viewModel, transport) = makeTestableViewModel()
         let peerID = PeerID(str: "0102030405060709")
-        let messages = ["keep", "remove"].map { id in
+        let messages = ["keep", "remove"].map { (id: String) in
             BitchatMessage(
                 id: id,
                 sender: viewModel.nickname,
@@ -495,6 +495,25 @@ struct ChatViewModelDeliveryStatusTests {
         viewModel.conversations.removeMessage(withID: "remove", from: .directPeer(peerID))
         viewModel.cleanupOldReadReceipts()
         #expect(viewModel.sentReadReceipts == ["keep"])
+    }
+
+    /// Cleanup rides every peer-list update, and the debug store audit is
+    /// O(total messages): it runs on the first cleanup and then every Nth,
+    /// never on every one.
+    @Test @MainActor
+    func cleanupOldReadReceipts_samplesTheDebugStoreAudit() {
+        let (viewModel, _) = makeTestableViewModel()
+        let interval = TransportConfig.conversationStoreAuditCleanupInterval
+        // Put the first-cleanup audit behind us, whenever it happened.
+        viewModel.cleanupOldReadReceipts()
+        let auditsBefore = viewModel._test_storeAuditCount
+
+        // Any 2N consecutive cleanups hold exactly two multiples of N.
+        for _ in 0..<(2 * interval) {
+            viewModel.cleanupOldReadReceipts()
+        }
+
+        #expect(viewModel._test_storeAuditCount - auditsBefore == 2)
     }
 
     // MARK: - Relaunch-Restored Outbox Tests

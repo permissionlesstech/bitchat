@@ -119,6 +119,7 @@ struct MeshSightingsTrackerTests {
         #expect(tracker.todayCount == 50)
 
         defaults.resetCounts()
+        let hashesBefore = tracker._test_hashCount
         var publishes = 0
         let subscription = tracker.objectWillChange.sink { publishes += 1 }
         defer { subscription.cancel() }
@@ -129,6 +130,9 @@ struct MeshSightingsTrackerTests {
 
         #expect(defaults.totalSetCount == 0)
         #expect(publishes == 0)
+        // Peers still present from the previous batch cost a set lookup,
+        // not a hash.
+        #expect(tracker._test_hashCount == hashesBefore)
         #expect(tracker.todayCount == 50)
     }
 
@@ -144,6 +148,7 @@ struct MeshSightingsTrackerTests {
         tracker.recordSightings(of: [peerA, peerB])
 
         defaults.resetCounts()
+        let hashesBefore = tracker._test_hashCount
         tracker.recordSightings(of: [peerB])
         #expect(tracker._test_heldPeerIDCount == 1)
         tracker.recordSightings(of: [])
@@ -153,6 +158,8 @@ struct MeshSightingsTrackerTests {
         #expect(defaults.totalSetCount == 0)
         #expect(tracker.todayCount == 2)
         #expect(tracker._test_heldPeerIDCount == 2)
+        // Only the two returns were hashed; peerB staying put was not.
+        #expect(tracker._test_hashCount - hashesBefore == 2)
     }
 
     /// Hashes persisted before the upgrade were `%02x` per digest byte; the

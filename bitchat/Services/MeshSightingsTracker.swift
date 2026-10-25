@@ -137,6 +137,9 @@ final class MeshSightingsTracker: ObservableObject {
     /// `%02x`-per-byte form earlier builds persisted, so hashes stored
     /// before an upgrade keep deduplicating.
     private func saltedHash(_ value: String) -> String {
+        #if DEBUG
+        _test_hashCount += 1
+        #endif
         var digest = SHA256()
         digest.update(data: salt)
         digest.update(data: Data(value.utf8))
@@ -170,5 +173,8 @@ final class MeshSightingsTracker: ObservableObject {
     #if DEBUG
     /// Raw peer IDs held in memory; tests pin the present-peers-only bound.
     var _test_heldPeerIDCount: Int { countedPeerIDs.count }
+    /// Salted hashes computed so far; tests pin that peers still present
+    /// from the previous batch are not hashed again.
+    private(set) var _test_hashCount = 0
     #endif
 }

@@ -2313,6 +2313,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         }
         storeAuditLastAppendCount = appendCount
     }
+
+    /// Store audits run so far; tests pin the sampling.
+    var _test_storeAuditCount: Int { storeAuditCount }
     #endif
 
     func parseMentions(from content: String) -> [String] {
