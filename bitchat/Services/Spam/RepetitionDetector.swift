@@ -89,7 +89,6 @@ enum RepetitionDetector {
     /// One diagonal of the cross-correlation: `b[j]` lined up under `a[j + shift]`.
     struct Peak: Equatable {
         let shift: Int
-        let matches: Int
     }
 
     /// How two texts line up: the peaks used and the share of the longer text they cover.
@@ -139,7 +138,7 @@ enum RepetitionDetector {
             let to = min(b.count, a.count - bestShift)
             _ = runMatches(a, b, shift: bestShift, from: from, to: to,
                            usedA: &usedA, usedB: &usedB, minRun: run, mark: true)
-            peaks.append(Peak(shift: bestShift, matches: bestGain))
+            peaks.append(Peak(shift: bestShift))
             total += bestGain
         }
         return Alignment(peaks: peaks, matches: total, score: Double(total) / Double(max(a.count, b.count)))
