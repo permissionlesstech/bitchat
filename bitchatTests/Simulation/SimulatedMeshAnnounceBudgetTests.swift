@@ -147,6 +147,50 @@ struct SimulatedMeshAnnounceBudgetTests {
             == mesh.nodes[central].service.myPeerID)
     }
 
+    /// A central that resubscribes right after its link dropped is
+    /// rate-limited (BCH-01-004), so it gets no link-up announce at once,
+    /// but it still gets one when the backoff ends. Until one of our
+    /// announces reaches its new link, the central cannot bind the link and
+    /// shows us as gone. (Answering its announce, and the announce that used
+    /// to end a handshake, covered this.)
+    @Test
+    func rateLimitedResubscriptionGetsItsAnnounceWhenTheBackoffEnds() {
+        let mesh = SimulatedMesh(announceAccounting: true)
+        let central = mesh.launch(nickname: "central")
+        let peripheral = mesh.launch(nickname: "peripheral")
+        let peripheralID = mesh.nodes[peripheral].service.myPeerID
+        let subscription = mesh.linkUUID(from: central, at: peripheral)
+        let linkAtCentral = mesh.linkUUID(from: peripheral, at: central)
+        let firstSubscription = Date(timeIntervalSinceReferenceDate: 0)
+        mesh.connect(central, peripheral)
+        mesh.nodes[central].service.scheduleLinkUpAnnounce(after: TransportConfig.blePostSubscribeAnnounceDelaySeconds)
+        mesh.nodes[peripheral].service.scheduleSubscriptionLinkUpAnnounce(forCentral: subscription, now: firstSubscription)
+        mesh.settle()
+        #expect(mesh.nodes[central].service._test_centralBinding(linkAtCentral) == peripheralID)
+
+        // The link drops on both sides and comes straight back, inside the
+        // peripheral's 2 s backoff for that central.
+        mesh.nodes[central].service.emitLinkEvent(.centralLinkEnded(centralUUID: linkAtCentral))
+        mesh.nodes[peripheral].service.emitLinkEvent(.centralLinkEnded(centralUUID: subscription))
+        mesh.pump()
+        let before = mesh.announceOriginations(from: peripheral)
+        mesh.nodes[central].service.scheduleLinkUpAnnounce(after: TransportConfig.blePostSubscribeAnnounceDelaySeconds)
+        mesh.nodes[peripheral].service.scheduleSubscriptionLinkUpAnnounce(
+            forCentral: subscription,
+            now: firstSubscription.addingTimeInterval(1.5)
+        )
+        mesh.advanceTime(by: 1, inStepsOf: 0.05)
+        #expect(mesh.announceOriginations(from: peripheral) == before)
+        #expect(!mesh.nodes[central].service.getConnectedPeers().contains(peripheralID))
+
+        mesh.advanceTime(by: TransportConfig.bleSubscriptionRateLimitMinSeconds, inStepsOf: 0.05)
+        mesh.settle()
+
+        #expect(mesh.announceOriginations(from: peripheral) - before == 1)
+        #expect(mesh.nodes[central].service._test_centralBinding(linkAtCentral) == peripheralID)
+        #expect(mesh.nodes[central].service.getConnectedPeers().contains(peripheralID))
+    }
+
     /// Phones usually hold two links to each other, one per role, formed at
     /// different times. The second link costs one link-up announce per side
     /// (each must reach and bind it) and nothing else: both sides already
