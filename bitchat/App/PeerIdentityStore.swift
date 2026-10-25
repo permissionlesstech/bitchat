@@ -11,6 +11,9 @@ final class PeerIdentityStore: ObservableObject {
     private(set) var selectedPrivateChatFingerprint: String?
 
     private var stablePeerIDsByShortID: [PeerID: PeerID] = [:]
+    /// Bumps whenever a short→stable peer-ID mapping changes (mesh color
+    /// seeds depend on them).
+    private(set) var stablePeerIDRevision: UInt64 = 0
     private var encryptionStatusCache: [PeerID: EncryptionStatus] = [:]
 
     func stablePeerID(forShortID peerID: PeerID) -> PeerID? {
@@ -22,7 +25,9 @@ final class PeerIdentityStore: ObservableObject {
     }
 
     func setStablePeerID(_ stablePeerID: PeerID, forShortID peerID: PeerID) {
+        guard stablePeerIDsByShortID[peerID] != stablePeerID else { return }
         stablePeerIDsByShortID[peerID] = stablePeerID
+        stablePeerIDRevision &+= 1
     }
 
     func fingerprint(for peerID: PeerID) -> String? {
@@ -112,6 +117,7 @@ final class PeerIdentityStore: ObservableObject {
         peerFingerprintsByPeerID.removeAll()
         selectedPrivateChatFingerprint = nil
         stablePeerIDsByShortID.removeAll()
+        stablePeerIDRevision &+= 1
         encryptionStatusCache.removeAll()
     }
 }

@@ -14,6 +14,20 @@ final class ChatMessageFormatter {
     /// is rebuilt only when the roster's membership (or our own excluded
     /// key) changes rather than recomputing the roster on every lookup.
     private var nostrPaletteKey: NostrPaletteKey?
+    /// What the mesh palette was last built from: its seeds depend only on
+    /// the roster's peer IDs, their cached stable IDs, and our own ID.
+    private var meshPaletteKey: MeshPaletteKey?
+
+    private struct MeshPaletteKey: Equatable {
+        // periphery:ignore - read only via the synthesized Equatable
+        // conformance (the rebuild check), which the indexer cannot
+        // attribute.
+        let membershipRevision: UInt64
+        // periphery:ignore - see `membershipRevision`.
+        let stablePeerIDRevision: UInt64
+        // periphery:ignore - see `membershipRevision`.
+        let myPeerID: PeerID
+    }
 
     private struct NostrPaletteKey: Equatable {
         // periphery:ignore - read only via the synthesized Equatable
@@ -27,6 +41,11 @@ final class ChatMessageFormatter {
     init(viewModel: ChatViewModel) {
         self.viewModel = viewModel
     }
+
+    #if DEBUG
+    /// Whether either palette has been built (every build records its key).
+    var _test_hasBuiltPalettes: Bool { meshPaletteKey != nil || nostrPaletteKey != nil }
+    #endif
 
     func formatMessageAsText(_ message: BitchatMessage, colorScheme: ColorScheme, theme: AppTheme = .matrix) -> AttributedString {
         let design = theme.bodyFontDesign
@@ -513,24 +532,37 @@ private extension ChatMessageFormatter {
     }
 
     func getPeerPaletteColor(for peerID: PeerID, isDark: Bool) -> Color {
-        if peerID == viewModel.meshService.myPeerID {
+        let myPeerID = viewModel.meshService.myPeerID
+        if peerID == myPeerID {
             return .orange
         }
 
-        meshPalette.ensurePalette(for: currentMeshPaletteSeeds())
+        ensureMeshPalette(myPeerID: myPeerID)
         if let color = meshPalette.color(for: peerID.id, isDark: isDark) {
             return color
         }
         return Color(peerSeed: meshSeed(for: peerID), isDark: isDark)
     }
 
-    func currentMeshPaletteSeeds() -> [String: String] {
-        let myID = viewModel.meshService.myPeerID
+    /// Seeds the palette from the roster, and only when an input of the
+    /// seeds changed. Rebuilding the seeds on every lookup made every
+    /// people-sheet render O(N²) in the mesh size, and every formatted mesh
+    /// message O(N).
+    func ensureMeshPalette(myPeerID: PeerID) {
+        let key = MeshPaletteKey(
+            membershipRevision: viewModel.allPeersMembershipRevision,
+            stablePeerIDRevision: viewModel.peerIdentityStore.stablePeerIDRevision,
+            myPeerID: myPeerID
+        )
+        guard key != meshPaletteKey else { return }
+        meshPaletteKey = key
+
         var seeds: [String: String] = [:]
-        for peer in viewModel.allPeers where peer.peerID != myID {
+        seeds.reserveCapacity(viewModel.allPeers.count)
+        for peer in viewModel.allPeers where peer.peerID != myPeerID {
             seeds[peer.peerID.id] = meshSeed(for: peer.peerID)
         }
-        return seeds
+        meshPalette.ensurePalette(for: seeds)
     }
 
     func getNostrPaletteColor(for pubkeyHexLowercased: String, isDark: Bool) -> Color {

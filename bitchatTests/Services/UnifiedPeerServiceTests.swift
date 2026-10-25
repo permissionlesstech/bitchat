@@ -103,6 +103,27 @@ struct UnifiedPeerServiceTests {
         #expect(transport.purgedArchivePeers == [peerID])
     }
 
+    /// Rebuilds reuse the previous pass's fingerprints, keyed by noise-key
+    /// bytes: a peer ID that comes back with a different key (a rotated or
+    /// re-keyed identity) must be fingerprinted from the new key.
+    @Test @MainActor
+    func updatePeers_fingerprintsFollowTheNoiseKeyNotThePeerID() async {
+        let transport = MockTransport()
+        let idBridge = NostrIdentityBridge(keychain: MockKeychainHelper())
+        let service = UnifiedPeerService(meshService: transport, idBridge: idBridge, identityManager: TestIdentityManager())
+        let peerID = PeerID(str: "1111111111111111")
+        let firstKey = Data(repeating: 0x01, count: 32)
+        let secondKey = Data(repeating: 0x02, count: 32)
+
+        for key in [firstKey, firstKey, secondKey] {
+            transport.updatePeerSnapshots([
+                TransportPeerSnapshot(peerID: peerID, nickname: "alice", isConnected: true, noisePublicKey: key, lastSeen: Date())
+            ])
+            service.didUpdatePeerSnapshots(transport.currentPeerSnapshots())
+            #expect(service.getFingerprint(for: peerID) == key.sha256Fingerprint())
+        }
+    }
+
     // MARK: - Offline-favorite dedup (updatePeers phase 2)
 
     /// A mutual favorite that is also on the mesh must collapse to a single

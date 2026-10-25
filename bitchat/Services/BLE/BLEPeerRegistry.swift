@@ -53,9 +53,31 @@ struct BLEPeerRegistry {
         Array(peers.keys)
     }
 
-    var connectedCount: Int {
+    /// Connected entries in `peers`. Every writer goes through `store` and
+    /// `drop`, which keep it exact, so `isReachable` (asked once per listed
+    /// peer per peer-list update) and the per-packet relay-degree reads are
+    /// O(1) instead of a full scan.
+    private(set) var connectedCount = 0
+
+    private mutating func store(_ info: BLEPeerInfo, forKey key: PeerID) {
+        let previous = peers.updateValue(info, forKey: key)
+        if previous?.isConnected == true { connectedCount -= 1 }
+        if info.isConnected { connectedCount += 1 }
+    }
+
+    @discardableResult
+    private mutating func drop(_ key: PeerID) -> BLEPeerInfo? {
+        let removed = peers.removeValue(forKey: key)
+        if removed?.isConnected == true { connectedCount -= 1 }
+        return removed
+    }
+
+    #if DEBUG
+    /// Full recount, for checking the stored `connectedCount` in tests.
+    var recountedConnectedCount: Int {
         peers.values.filter(\.isConnected).count
     }
+    #endif
 
     var connectedPeerIDs: [PeerID] {
         peers.values.compactMap { $0.isConnected ? $0.peerID : nil }
@@ -71,6 +93,7 @@ struct BLEPeerRegistry {
 
     mutating func removeAll() {
         peers.removeAll()
+        connectedCount = 0
     }
 
     func info(for peerID: PeerID) -> BLEPeerInfo? {
@@ -78,12 +101,12 @@ struct BLEPeerRegistry {
     }
 
     mutating func upsert(_ info: BLEPeerInfo) {
-        peers[info.peerID] = info
+        store(info, forKey: info.peerID)
     }
 
     @discardableResult
     mutating func remove(_ peerID: PeerID) -> BLEPeerInfo? {
-        peers.removeValue(forKey: peerID)
+        drop(peerID)
     }
 
     func isConnected(_ peerID: PeerID) -> Bool {
@@ -162,7 +185,7 @@ struct BLEPeerRegistry {
     mutating func markDisconnected(_ peerID: PeerID) {
         guard var info = peers[peerID] else { return }
         info.isConnected = false
-        peers[peerID] = info
+        store(info, forKey: peerID)
     }
 
     /// Flips an already-known peer to connected. Returns false when the peer
@@ -171,14 +194,14 @@ struct BLEPeerRegistry {
     mutating func markConnected(_ peerID: PeerID) -> Bool {
         guard var info = peers[peerID], !info.isConnected else { return false }
         info.isConnected = true
-        peers[peerID] = info
+        store(info, forKey: peerID)
         return true
     }
 
     mutating func updateLastSeen(_ peerID: PeerID, at date: Date) {
         guard var peer = peers[peerID] else { return }
         peer.lastSeen = date
-        peers[peerID] = peer
+        store(peer, forKey: peerID)
     }
 
     /// Replaces the announcement signing key only after the surrounding Noise
@@ -186,7 +209,7 @@ struct BLEPeerRegistry {
     mutating func bindAuthenticatedSigningPublicKey(_ key: Data, for peerID: PeerID) {
         guard var peer = peers[peerID.toShort()] else { return }
         peer.signingPublicKey = key
-        peers[peer.peerID] = peer
+        store(peer, forKey: peer.peerID)
     }
 
     /// Applies a verified announce to the registry.
@@ -221,7 +244,7 @@ struct BLEPeerRegistry {
             previousNickname: existing?.nickname
         )
 
-        peers[peerID] = BLEPeerInfo(
+        store(BLEPeerInfo(
             peerID: existing?.peerID ?? peerID,
             nickname: nickname.normalizedNickname,
             isConnected: isConnected,
@@ -233,7 +256,7 @@ struct BLEPeerRegistry {
             capabilities: capabilities ?? [],
             capabilitiesWereExplicitlyAdvertised: capabilities != nil,
             bridgeGeohash: bridgeGeohash
-        )
+        ), forKey: peerID)
 
         return update
     }
@@ -255,13 +278,13 @@ struct BLEPeerRegistry {
                 if !state.hasPeripheral && !state.hasCentral {
                     var updated = peer
                     updated.isConnected = false
-                    peers[peerID] = updated
+                    store(updated, forKey: peerID)
                     changes.disconnectedPeerIDs.append(peerID)
                 }
             }
 
             if !peer.isConnected && age > retention {
-                peers.removeValue(forKey: peerID)
+                drop(peerID)
                 changes.removedPeers.append(BLERemovedPeer(peerID: peerID, nickname: peer.nickname))
             }
         }

@@ -53,13 +53,11 @@ private final class MockChatPeerListContext: ChatPeerListContext {
     var connectedMeshPeers: Set<PeerID> = []
     var reachableMeshPeers: Set<PeerID> = []
     var activeMeshPeerCountValue = 0
-    private(set) var registeredEphemeralSessions: [PeerID] = []
     private(set) var updateEncryptionStatusForPeersCount = 0
 
     func isPeerConnected(_ peerID: PeerID) -> Bool { connectedMeshPeers.contains(peerID) }
     func isPeerReachable(_ peerID: PeerID) -> Bool { reachableMeshPeers.contains(peerID) }
     func activeMeshPeerCount() -> Int { activeMeshPeerCountValue }
-    func registerEphemeralSession(peerID: PeerID) { registeredEphemeralSessions.append(peerID) }
     func updateEncryptionStatusForPeers() { updateEncryptionStatusForPeersCount += 1 }
 
     // Notifications
@@ -113,32 +111,29 @@ struct ChatPeerListCoordinatorContextTests {
         coordinator.didUpdatePeerListSynchronously([peerID])
 
         #expect(context.isConnected)
-        #expect(context.registeredEphemeralSessions == [peerID])
         #expect(context.updateEncryptionStatusForPeersCount == 1)
         #expect(context.cleanupOldReadReceiptsCount == 1)
     }
 
     @Test @MainActor
-    func didUpdatePeerList_updatesConnectionSessionsAndEncryptionStatus() async {
+    func didUpdatePeerList_updatesConnectionAndEncryptionStatus() async {
         let context = MockChatPeerListContext()
         let coordinator = ChatPeerListCoordinator(context: context)
         let peerA = PeerID(str: "0011223344556677")
         let peerB = PeerID(str: "8899aabbccddeeff")
         context.isConnected = true
 
-        // Empty list: disconnected, read-receipt hygiene still runs, no sessions.
+        // Empty list: disconnected, read-receipt hygiene still runs.
         coordinator.didUpdatePeerList([])
         await drainMainActorTasks()
         #expect(!context.isConnected)
         #expect(context.cleanupOldReadReceiptsCount == 1)
-        #expect(context.registeredEphemeralSessions.isEmpty)
         #expect(context.updateEncryptionStatusForPeersCount == 1)
 
-        // Non-empty list: connected, every peer gets an ephemeral session.
+        // Non-empty list: connected.
         coordinator.didUpdatePeerList([peerA, peerB])
         await drainMainActorTasks()
         #expect(context.isConnected)
-        #expect(context.registeredEphemeralSessions == [peerA, peerB])
         #expect(context.updateEncryptionStatusForPeersCount == 2)
         #expect(context.cleanupOldReadReceiptsCount == 2)
     }
@@ -196,6 +191,35 @@ struct ChatPeerListCoordinatorContextTests {
         // Noise-key IDs with stored messages survive, as does the live peer.
         #expect(context.unreadPrivateMessages == [currentPeer, geoDMWithMessages, noiseKeyWithMessages])
         #expect(context.cleanupOldReadReceiptsCount == 1)
+    }
+
+    /// The roster learns a peer one coalesced snapshot publish after the
+    /// transport does. A DM landing in between is stored under the sender's
+    /// short ID and marked unread; a list pass in that gap must not clear it.
+    @Test @MainActor
+    func didUpdatePeerList_keepsUnreadDMsFromPeersTheTransportStillLists() {
+        let context = MockChatPeerListContext()
+        let coordinator = ChatPeerListCoordinator(context: context)
+
+        let relayedNewcomer = PeerID(str: "0011223344556677")
+        let linkedNewcomer = PeerID(str: "8899aabbccddeeff")
+        let departedPeer = PeerID(str: "1122334455667788")
+        let presentWithoutMessages = PeerID(str: "99aabbccddeeff00")
+        context.reachableMeshPeers = [relayedNewcomer]
+        context.connectedMeshPeers = [linkedNewcomer, presentWithoutMessages]
+        context.unreadPrivateMessages = [relayedNewcomer, linkedNewcomer, departedPeer, presentWithoutMessages]
+        context.privateChats = [
+            relayedNewcomer: [makeMessage(id: "dm-relayed", senderPeerID: relayedNewcomer)],
+            linkedNewcomer: [makeMessage(id: "dm-linked", senderPeerID: linkedNewcomer)],
+            departedPeer: [makeMessage(id: "dm-departed", senderPeerID: departedPeer)]
+        ]
+
+        // None of them is in the roster yet (`unifiedPeers` is empty).
+        coordinator.didUpdatePeerListSynchronously([relayedNewcomer, linkedNewcomer, presentWithoutMessages])
+
+        // A sender the transport still lists keeps its unread DM; one it
+        // no longer lists, or an unread flag with nothing behind it, does not.
+        #expect(context.unreadPrivateMessages == [relayedNewcomer, linkedNewcomer])
     }
 
     @Test @MainActor
@@ -266,6 +290,28 @@ struct ChatPeerListCoordinatorContextTests {
         coordinator.didUpdatePeerList([peerA])
         await drainMainActorTasks()
         #expect(context.networkAvailableNotifications == [1])
+    }
+
+    @Test @MainActor
+    func didUpdatePeerList_recordsPresentMeshPeersAndAnEmptyBatchWhenNobodyIsInRange() async {
+        let context = MockChatPeerListContext()
+        let coordinator = ChatPeerListCoordinator(context: context)
+        let peerA = PeerID(str: "0011223344556677")
+        let peerB = PeerID(str: "8899aabbccddeeff")
+        context.connectedMeshPeers = [peerA]
+
+        // Only mesh-active peers are sightings; the tally gets the full
+        // present set each time.
+        coordinator.didUpdatePeerList([peerA, peerB])
+        await drainMainActorTasks()
+
+        // Nobody in range: an empty batch lets the tally drop the peer IDs
+        // it holds for present peers.
+        context.connectedMeshPeers = []
+        coordinator.didUpdatePeerList([])
+        await drainMainActorTasks()
+
+        #expect(context.recordedSightings == [[peerA], []])
     }
 
     @Test @MainActor

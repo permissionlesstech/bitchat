@@ -136,10 +136,11 @@ final class ChatVouchCoordinator {
 
     /// Trigger — verified announce processed: a peer's `.vouch` capability
     /// arrives on its *announce*, which is handled independently of the Noise
-    /// handshake. This is invoked on every peer-list update (fired after each
-    /// verified announce), so it closes the capability race — the batch that
-    /// `peerAuthenticated` couldn't send (capabilities not yet known) goes out
-    /// once the capability-bearing announce lands. Throttled per peer.
+    /// handshake. This is invoked on every peer-list update (one follows each
+    /// verified announce within a refresh interval), so it closes the
+    /// capability race — the batch that `peerAuthenticated` couldn't send
+    /// (capabilities not yet known) goes out once the capability-bearing
+    /// announce lands. Throttled per peer.
     func peersUpdated(_ peerIDs: [PeerID], now: Date = Date()) {
         for peerID in peerIDs {
             guard let fingerprint = context.getFingerprint(for: peerID) else { continue }

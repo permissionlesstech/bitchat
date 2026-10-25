@@ -25,7 +25,7 @@ struct BLEAnnounceHandlerTests {
         var persistedIdentities: [AnnouncementPacket] = []
         var dedupContainsQueries: [String] = []
         var dedupMarkedIDs: [String] = []
-        var uiEventDeliveries: [(peerID: PeerID, notifyPeerConnected: Bool, scheduleInitialSync: Bool)] = []
+        var uiEventDeliveries: [(peerID: PeerID, notifyPeerConnected: Bool, scheduleInitialSync: Bool, isNewPeer: Bool)] = []
         var trackedPackets: [BitchatPacket] = []
         var announceBacks = 0
         var afterglowDelays: [TimeInterval] = []
@@ -77,8 +77,8 @@ struct BLEAnnounceHandlerTests {
             dedupMarkProcessed: { id in
                 recorder.dedupMarkedIDs.append(id)
             },
-            deliverAnnounceUIEvents: { peerID, notifyPeerConnected, scheduleInitialSync in
-                recorder.uiEventDeliveries.append((peerID, notifyPeerConnected, scheduleInitialSync))
+            deliverAnnounceUIEvents: { peerID, notifyPeerConnected, scheduleInitialSync, isNewPeer in
+                recorder.uiEventDeliveries.append((peerID, notifyPeerConnected, scheduleInitialSync, isNewPeer))
             },
             trackPacketSeen: { packet in
                 recorder.trackedPackets.append(packet)
@@ -129,6 +129,7 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.uiEventDeliveries.first?.peerID == peerID)
         #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == true)
         #expect(recorder.uiEventDeliveries.first?.scheduleInitialSync == true)
+        #expect(recorder.uiEventDeliveries.first?.isNewPeer == true)
         #expect(recorder.trackedPackets.count == 1)
         #expect(recorder.dedupMarkedIDs == ["announce-back-\(peerID)"])
         #expect(recorder.announceBacks == 1)
@@ -186,11 +187,10 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.upsertCalls.isEmpty)
         #expect(recorder.topologyUpdates.isEmpty)
         #expect(recorder.afterglowDelays.isEmpty)
-        // Original behavior: list refresh and announce-back still occur for
-        // unverified announces.
-        #expect(recorder.uiEventDeliveries.count == 1)
-        #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
-        #expect(recorder.uiEventDeliveries.first?.scheduleInitialSync == false)
+        // An unverified announce changes nothing in the registry, so it must
+        // not cost a peer-list refresh (a free forged-announce amplifier).
+        // Announce-back still occurs.
+        #expect(recorder.uiEventDeliveries.isEmpty)
         // Identity persistence MUST NOT occur for unverified announces:
         // persisting would let an attacker who replays a victim's noisePublicKey
         // overwrite the victim's stored signing key/nickname (identity poisoning).
@@ -222,8 +222,7 @@ struct BLEAnnounceHandlerTests {
         #expect(result?.isVerified == false)
         #expect(recorder.verifySignatureCalls.count == 1)
         #expect(recorder.upsertCalls.isEmpty)
-        #expect(recorder.uiEventDeliveries.count == 1)
-        #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
+        #expect(recorder.uiEventDeliveries.isEmpty)
         #expect(recorder.trackedPackets.isEmpty)
     }
 
@@ -315,6 +314,7 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.uiEventDeliveries.first?.peerID == peerID)
         #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == true)
         #expect(recorder.uiEventDeliveries.first?.scheduleInitialSync == true)
+        #expect(recorder.uiEventDeliveries.first?.isNewPeer == false)
         #expect(recorder.reconnectLogQueries == [peerID])
         #expect(recorder.afterglowDelays.isEmpty)
     }
@@ -345,6 +345,8 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.uiEventDeliveries.count == 1)
         #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
         #expect(recorder.uiEventDeliveries.first?.scheduleInitialSync == false)
+        // No `.peerConnected`, but the roster must still learn the peer.
+        #expect(recorder.uiEventDeliveries.first?.isNewPeer == true)
         #expect(recorder.afterglowDelays.count == 1)
     }
 
@@ -543,8 +545,7 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.upsertCalls.isEmpty)
         #expect(recorder.persistedIdentities.isEmpty)
         #expect(recorder.topologyUpdates.isEmpty)
-        #expect(recorder.uiEventDeliveries.count == 1)
-        #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
+        #expect(recorder.uiEventDeliveries.isEmpty)
         // The impersonation announce is not carried for sync either.
         #expect(recorder.trackedPackets.isEmpty)
     }
@@ -577,8 +578,7 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.upsertCalls.isEmpty)
         #expect(recorder.persistedIdentities.isEmpty)
         #expect(recorder.topologyUpdates.isEmpty)
-        #expect(recorder.uiEventDeliveries.count == 1)
-        #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
+        #expect(recorder.uiEventDeliveries.isEmpty)
     }
 
     @Test
@@ -653,8 +653,7 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.upsertCalls.count == 1)
         #expect(recorder.persistedIdentities.isEmpty)
         #expect(recorder.topologyUpdates.isEmpty)
-        #expect(recorder.uiEventDeliveries.count == 1)
-        #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
+        #expect(recorder.uiEventDeliveries.isEmpty)
         #expect(recorder.afterglowDelays.isEmpty)
     }
 
@@ -678,8 +677,7 @@ struct BLEAnnounceHandlerTests {
 
         #expect(result?.isVerified == false)
         #expect(recorder.upsertCalls.isEmpty)
-        #expect(recorder.uiEventDeliveries.count == 1)
-        #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
+        #expect(recorder.uiEventDeliveries.isEmpty)
     }
 
     @Test
@@ -734,7 +732,7 @@ struct BLEAnnounceHandlerTests {
             },
             dedupContains: { _ in true },
             dedupMarkProcessed: { _ in },
-            deliverAnnounceUIEvents: { _, _, _ in },
+            deliverAnnounceUIEvents: { _, _, _, _ in },
             trackPacketSeen: { _ in },
             sendAnnounceBack: {},
             scheduleAfterglow: { _ in }
@@ -854,7 +852,7 @@ struct BLEAnnounceHandlerTests {
                 },
                 dedupContains: { _ in true },
                 dedupMarkProcessed: { _ in },
-                deliverAnnounceUIEvents: { _, _, _ in },
+                deliverAnnounceUIEvents: { _, _, _, _ in },
                 trackPacketSeen: { _ in },
                 sendAnnounceBack: {},
                 scheduleAfterglow: { _ in }

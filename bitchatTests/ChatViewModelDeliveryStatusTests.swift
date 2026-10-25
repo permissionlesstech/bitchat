@@ -462,6 +462,60 @@ struct ChatViewModelDeliveryStatusTests {
         #expect(viewModel.sentReadReceipts == ["keep-receipt"])
     }
 
+    /// The skip check in the view model's context: a receipt recorded after
+    /// the last prune, or a direct message removed since, is still pruned at
+    /// the next cleanup.
+    @Test @MainActor
+    func cleanupOldReadReceipts_prunesNewlyStaleReceiptsAfterTheFirstPass() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: "0102030405060709")
+        let messages = ["keep", "remove"].map { (id: String) in
+            BitchatMessage(
+                id: id,
+                sender: viewModel.nickname,
+                content: "message \(id)",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "Peer",
+                senderPeerID: transport.myPeerID,
+                deliveryStatus: .sent
+            )
+        }
+        viewModel.seedPrivateChat(messages, for: peerID)
+        viewModel.sentReadReceipts = ["keep", "remove"]
+        viewModel.isStartupPhase = false
+        viewModel.cleanupOldReadReceipts()
+        #expect(viewModel.sentReadReceipts == ["keep", "remove"])
+
+        viewModel.markReadReceiptSent("gone")
+        viewModel.cleanupOldReadReceipts()
+        #expect(viewModel.sentReadReceipts == ["keep", "remove"])
+
+        viewModel.conversations.removeMessage(withID: "remove", from: .directPeer(peerID))
+        viewModel.cleanupOldReadReceipts()
+        #expect(viewModel.sentReadReceipts == ["keep"])
+    }
+
+    /// Cleanup rides every peer-list update, and the debug store audit is
+    /// O(total messages): it runs on the first cleanup and then every Nth,
+    /// never on every one.
+    @Test @MainActor
+    func cleanupOldReadReceipts_samplesTheDebugStoreAudit() {
+        let (viewModel, _) = makeTestableViewModel()
+        let interval = TransportConfig.conversationStoreAuditCleanupInterval
+        // Put the first-cleanup audit behind us, whenever it happened.
+        viewModel.cleanupOldReadReceipts()
+        let auditsBefore = viewModel._test_storeAuditCount
+
+        // Any 2N consecutive cleanups hold exactly two multiples of N.
+        for _ in 0..<(2 * interval) {
+            viewModel.cleanupOldReadReceipts()
+        }
+
+        #expect(viewModel._test_storeAuditCount - auditsBefore == 2)
+    }
+
     // MARK: - Relaunch-Restored Outbox Tests
 
     @Test @MainActor
@@ -773,8 +827,18 @@ struct ChatViewModelDeliveryStatusTests {
 @MainActor
 private final class MockChatDeliveryContext: ChatDeliveryContext {
     let store = ConversationStore()
-    var sentReadReceipts: Set<String> = []
+    var sentReadReceipts: Set<String> = [] {
+        didSet {
+            if oldValue != sentReadReceipts { sentReadReceiptsRevision += 1 }
+        }
+    }
+    private var sentReadReceiptsRevision = 0
+    private(set) var privateMessageIDsCallCount = 0
     var isStartupPhase = false
+
+    var readReceiptPruneGeneration: Int {
+        store.directMessageRemovalCount &+ sentReadReceiptsRevision
+    }
     private(set) var notifyUIChangedCount = 0
     private(set) var markedDeliveredMessageIDs: [String] = []
     private(set) var peerBoundDeliveredMessages: [(messageID: String, peerIDs: Set<PeerID>)] = []
@@ -803,7 +867,8 @@ private final class MockChatDeliveryContext: ChatDeliveryContext {
     }
 
     func privateMessageIDs() -> Set<String> {
-        store.directMessageIDs()
+        privateMessageIDsCallCount += 1
+        return store.directMessageIDs()
     }
 
     func pruneSentReadReceipts(keeping validMessageIDs: Set<String>) -> Int {
@@ -1210,6 +1275,47 @@ struct ChatDeliveryCoordinatorContextTests {
         context.isStartupPhase = false
         coordinator.cleanupOldReadReceipts()
         #expect(context.sentReadReceipts == ["keep-receipt"])
+    }
+
+    /// Cleanup runs on every peer-list update, but a receipt can only go
+    /// stale when a direct message is removed or the receipts change, so
+    /// the O(direct messages) rebuild is skipped until one of those happens.
+    @Test @MainActor
+    func cleanupOldReadReceipts_skipsRebuildUntilAReceiptCanBeStale() async {
+        let context = MockChatDeliveryContext()
+        let coordinator = ChatDeliveryCoordinator(context: context)
+        let peerID = PeerID(str: "0102030405060708")
+        for index in 0..<3 {
+            context.store.append(makePrivateMessage(id: "dm-\(index)", status: .sent), to: .directPeer(peerID))
+        }
+        context.sentReadReceipts = ["dm-0", "dm-1", "dm-2"]
+
+        // The first cleanup always prunes (receipts restored from an earlier
+        // launch can point anywhere); the next 99 have nothing new to check.
+        for _ in 0..<100 {
+            coordinator.cleanupOldReadReceipts()
+        }
+        #expect(context.privateMessageIDsCallCount == 1)
+        #expect(context.sentReadReceipts == ["dm-0", "dm-1", "dm-2"])
+
+        // A removed direct message makes its receipt stale: the next
+        // cleanup prunes it, once.
+        context.store.removeMessage(withID: "dm-1", from: .directPeer(peerID))
+        coordinator.cleanupOldReadReceipts()
+        coordinator.cleanupOldReadReceipts()
+        #expect(context.privateMessageIDsCallCount == 2)
+        #expect(context.sentReadReceipts == ["dm-0", "dm-2"])
+
+        // So can a receipt recorded for a message no direct conversation
+        // holds; public-timeline churn changes nothing.
+        context.store.append(makePublicMessage(id: "mesh-1", status: .sent), to: .mesh)
+        coordinator.cleanupOldReadReceipts()
+        #expect(context.privateMessageIDsCallCount == 2)
+        context.sentReadReceipts.insert("gone")
+        coordinator.cleanupOldReadReceipts()
+        coordinator.cleanupOldReadReceipts()
+        #expect(context.privateMessageIDsCallCount == 3)
+        #expect(context.sentReadReceipts == ["dm-0", "dm-2"])
     }
 }
 

@@ -369,6 +369,12 @@ final class ConversationStore: ObservableObject {
     /// carry throughput context. Never read on a hot path.
     private(set) var appendCount: Int = 0
 
+    /// Monotonic count of messages that left a direct conversation (removal,
+    /// clear, migration out, cap trim, clearAll). A recorded read receipt can
+    /// only go stale when this moves, so the receipt prune skips its rebuild
+    /// while it stands still.
+    private(set) var directMessageRemovalCount: Int = 0
+
     /// Sample counter for the mirrored-republish debug log in the ID-only
     /// `setDeliveryStatus` fan-out (first + every Nth occurrence).
     private var mirroredRepublishLogCount = 0
@@ -682,6 +688,7 @@ final class ConversationStore: ObservableObject {
         conversationIDs.removeAll()
         unreadConversations.removeAll()
         conversationIDsByMessageID.removeAll()
+        directMessageRemovalCount += 1
         if selectedConversationID != nil {
             selectedConversationID = nil
         }
@@ -777,6 +784,11 @@ final class ConversationStore: ObservableObject {
     }
 
     private func unregisterMessageID(_ messageID: String, from id: ConversationID) {
+        // Single choke point for every removal path (remove, clear,
+        // removeConversation, migration out, cap trims).
+        if case .direct = id {
+            directMessageRemovalCount += 1
+        }
         guard var ids = conversationIDsByMessageID[messageID] else { return }
         ids.remove(id)
         if ids.isEmpty {

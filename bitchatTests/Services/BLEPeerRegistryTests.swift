@@ -220,4 +220,165 @@ struct BLEPeerRegistryTests {
         #expect(registry.info(for: inactiveConnectedPeer)?.isConnected == false)
         #expect(registry.info(for: expiredOfflinePeer) == nil)
     }
+
+    // MARK: - Stored connected count
+
+    @Test("connected count matches a recount across random mutations")
+    func connectedCountMatchesRecountAcrossRandomMutations() {
+        var rng = RegistrySeededGenerator(seed: 0xB1E5_C0DE)
+        var registry = BLEPeerRegistry()
+        let noiseKeys = (0..<24).map { index in Data((0..<32).map { UInt8(truncatingIfNeeded: index &* 37 &+ $0) }) }
+        let peerIDs = noiseKeys.map { PeerID(publicKey: $0) }
+        let pinnedSigningKeys = peerIDs.indices.map { Data(repeating: UInt8($0 + 1), count: 32) }
+        let unknownPeerID = PeerID(str: "feedfacefeedface")
+        var now = Date(timeIntervalSince1970: 10_000)
+
+        for _ in 0..<2_000 {
+            let index = Int.random(in: 0..<peerIDs.count, using: &rng)
+            let peerID = peerIDs[index]
+            now = now.addingTimeInterval(Double.random(in: 0...20, using: &rng))
+            switch Int.random(in: 0..<20, using: &rng) {
+            case 0..<5:
+                // Mostly the pinned key; occasionally an impersonation the
+                // registry must refuse without touching the entry.
+                let refused = Int.random(in: 0..<8, using: &rng) == 0
+                _ = registry.upsertVerifiedAnnounce(
+                    peerID: peerID,
+                    nickname: "peer\(index)",
+                    noisePublicKey: noiseKeys[index],
+                    signingPublicKey: refused ? Data(repeating: 0xEE, count: 32) : pinnedSigningKeys[index],
+                    isConnected: Bool.random(using: &rng),
+                    now: now
+                )
+            case 5..<7:
+                registry.upsert(BLEPeerInfo(
+                    peerID: peerID,
+                    nickname: "raw\(index)",
+                    isConnected: Bool.random(using: &rng),
+                    noisePublicKey: noiseKeys[index],
+                    signingPublicKey: nil,
+                    isVerifiedNickname: Bool.random(using: &rng),
+                    lastSeen: now.addingTimeInterval(-Double.random(in: 0...120, using: &rng))
+                ))
+            case 7..<9:
+                registry.markConnected(peerID)
+            case 9..<11:
+                registry.markDisconnected(peerID)
+            case 11..<13:
+                registry.updateLastSeen(peerID, at: now)
+            case 13..<15:
+                registry.remove(peerID)
+            case 15:
+                registry.bindAuthenticatedSigningPublicKey(pinnedSigningKeys[index], for: PeerID(hexData: noiseKeys[index]))
+            case 16:
+                if Int.random(in: 0..<10, using: &rng) == 0 {
+                    registry.removeAll()
+                }
+            default:
+                var linkStates: [PeerID: BLEPeerLinkPresence] = [:]
+                for candidate in peerIDs where Bool.random(using: &rng) {
+                    linkStates[candidate] = BLEPeerLinkPresence(
+                        hasPeripheral: Bool.random(using: &rng),
+                        hasCentral: Bool.random(using: &rng)
+                    )
+                }
+                _ = registry.reconcileConnectivity(now: now, linkStates: linkStates)
+            }
+
+            let snapshot = registry.snapshotByID
+            #expect(registry.connectedCount == snapshot.values.filter(\.isConnected).count)
+            let probes = [peerID, PeerID(hexData: noiseKeys[index]), unknownPeerID]
+            for probe in probes {
+                #expect(registry.isReachable(probe, now: now) == Self.referenceIsReachable(probe, in: snapshot, now: now))
+            }
+        }
+    }
+
+    @Test("reconciliation disconnects a stale peer without removing it in the same pass")
+    func reconcileDisconnectsBeforeRemoving() {
+        var registry = BLEPeerRegistry()
+        let stalePeer = PeerID(str: "1122334455667788")
+        let livePeer = PeerID(str: "8877665544332211")
+        let now = Date(timeIntervalSince1970: 10_000)
+        for (peerID, lastSeen) in [(stalePeer, Date.distantPast), (livePeer, now)] {
+            registry.upsert(BLEPeerInfo(
+                peerID: peerID,
+                nickname: "peer",
+                isConnected: true,
+                noisePublicKey: nil,
+                signingPublicKey: nil,
+                isVerifiedNickname: true,
+                lastSeen: lastSeen
+            ))
+        }
+        #expect(registry.connectedCount == 2)
+
+        let first = registry.reconcileConnectivity(now: now, linkStates: [:])
+        #expect(first.disconnectedPeerIDs == [stalePeer])
+        #expect(first.removedPeers.isEmpty)
+        #expect(registry.connectedCount == 1)
+
+        let second = registry.reconcileConnectivity(now: now, linkStates: [:])
+        #expect(second.removedPeers.map(\.peerID) == [stalePeer])
+        #expect(registry.connectedCount == 1)
+        #expect(registry.isReachable(livePeer, now: now))
+    }
+
+    @Test("removing a disconnected peer leaves the connected count alone")
+    func removingDisconnectedPeerKeepsCount() {
+        var registry = BLEPeerRegistry()
+        let connected = PeerID(str: "1122334455667788")
+        let offline = PeerID(str: "8877665544332211")
+        let now = Date(timeIntervalSince1970: 10_000)
+        for (peerID, isConnected) in [(connected, true), (offline, false)] {
+            registry.upsert(BLEPeerInfo(
+                peerID: peerID,
+                nickname: "peer",
+                isConnected: isConnected,
+                noisePublicKey: nil,
+                signingPublicKey: nil,
+                isVerifiedNickname: true,
+                lastSeen: now
+            ))
+        }
+
+        registry.remove(offline)
+        #expect(registry.connectedCount == 1)
+        registry.remove(connected)
+        #expect(registry.connectedCount == 0)
+        #expect(!registry.isReachable(offline, now: now))
+    }
+
+    /// `isReachable` as it was before the count was stored: a scan for any
+    /// connected peer on every call.
+    private static func referenceIsReachable(
+        _ peerID: PeerID,
+        in peers: [PeerID: BLEPeerInfo],
+        now: Date
+    ) -> Bool {
+        guard let info = peers[peerID.toShort()] else { return false }
+        if info.isConnected { return true }
+        guard peers.values.contains(where: \.isConnected) else { return false }
+        let retention: TimeInterval = info.isVerifiedNickname
+            ? TransportConfig.bleReachabilityRetentionVerifiedSeconds
+            : TransportConfig.bleReachabilityRetentionUnverifiedSeconds
+        return now.timeIntervalSince(info.lastSeen) <= retention
+    }
+}
+
+/// SplitMix64: a deterministic stream so a failing mutation sequence replays.
+private struct RegistrySeededGenerator: RandomNumberGenerator {
+    private var state: UInt64
+
+    init(seed: UInt64) {
+        state = seed
+    }
+
+    mutating func next() -> UInt64 {
+        state &+= 0x9E37_79B9_7F4A_7C15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        return z ^ (z >> 31)
+    }
 }

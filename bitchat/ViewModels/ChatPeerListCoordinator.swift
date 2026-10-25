@@ -30,14 +30,14 @@ protocol ChatPeerListContext: AnyObject {
     /// Number of mesh peers currently connected or reachable, from the
     /// transport's live peer snapshots.
     func activeMeshPeerCount() -> Int
-    func registerEphemeralSession(peerID: PeerID)
     func updateEncryptionStatusForPeers()
 
     // MARK: Notifications
     /// Posts the "bitchatters nearby" local notification.
     func notifyNetworkAvailable(peerCount: Int)
 
-    /// Records peers seen within range for the daily ambient sightings tally.
+    /// Records the mesh peers within range now (the full set, empty when
+    /// nobody is) for the daily ambient sightings tally.
     func recordMeshSightings(peerIDs: [PeerID])
 }
 
@@ -45,11 +45,10 @@ extension ChatViewModel: ChatPeerListContext {
     // `isConnected`, `privateMessages(for:)`, `unreadPrivateMessages`,
     // `hasTrackedPrivateChatSelection`, `updatePrivateChatPeerIfNeeded()`,
     // `cleanupOldReadReceipts()`, `unifiedPeers`, `isPeerConnected(_:)`,
-    // `isPeerReachable(_:)`, `registerEphemeralSession(peerID:)`, and
-    // `updateEncryptionStatusForPeers()` are shared requirements with the
-    // other contexts or satisfied by existing `ChatViewModel` members. The
-    // member below flattens the nested transport access into an intent-named
-    // call.
+    // `isPeerReachable(_:)`, and `updateEncryptionStatusForPeers()` are
+    // shared requirements with the other contexts or satisfied by existing
+    // `ChatViewModel` members. The member below flattens the nested
+    // transport access into an intent-named call.
 
     func activeMeshPeerCount() -> Int {
         meshService
@@ -65,9 +64,7 @@ extension ChatViewModel: ChatPeerListContext {
     }
 
     func recordMeshSightings(peerIDs: [PeerID]) {
-        for peerID in peerIDs {
-            MeshSightingsTracker.shared.recordSighting(peerID: peerID)
-        }
+        meshSightings.recordSightings(of: peerIDs)
     }
 }
 
@@ -122,10 +119,6 @@ private extension ChatPeerListCoordinator {
 
         handleNetworkAvailability(meshPeers)
 
-        for peerID in peers {
-            context.registerEphemeralSession(peerID: peerID)
-        }
-
         context.updateEncryptionStatusForPeers()
 
         if context.hasTrackedPrivateChatSelection {
@@ -138,6 +131,9 @@ private extension ChatPeerListCoordinator {
         let meshPeerSet = Set(meshPeers)
 
         if meshPeerSet.isEmpty {
+            // Nobody in range: the tally keeps its count but must not keep
+            // holding the last crowd's peer IDs.
+            context.recordMeshSightings(peerIDs: [])
             scheduleNetworkEmptyTimer()
             return
         }
@@ -187,6 +183,15 @@ private extension ChatPeerListCoordinator {
             }
 
             if staleID.isNoiseKeyHex, !context.privateMessages(for: staleID).isEmpty {
+                continue
+            }
+
+            // The roster learns a peer one coalesced snapshot publish after
+            // the transport does. A DM that lands in between is stored under
+            // the short ID; while the transport still lists the sender, its
+            // unread flag is not stale.
+            if context.isPeerConnected(staleID) || context.isPeerReachable(staleID),
+               !context.privateMessages(for: staleID).isEmpty {
                 continue
             }
 

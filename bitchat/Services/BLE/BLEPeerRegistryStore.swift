@@ -25,8 +25,26 @@ final class BLEPeerRegistryStore: @unchecked Sendable {
     }
 
     func mutate<T>(_ body: (inout BLEPeerRegistry) -> T) -> T {
-        lock.withLock { body(&registry) }
+        lock.withLock {
+            let result = body(&registry)
+            #if DEBUG
+            // The stored connected count must match a recount after every
+            // mutation. Checked under tests only: an O(N) recount on the
+            // per-packet last-seen path would weigh on Debug field builds.
+            if Self.verifiesConnectedCount {
+                assert(
+                    registry.connectedCount == registry.recountedConnectedCount,
+                    "BLEPeerRegistry.connectedCount drifted from a recount"
+                )
+            }
+            #endif
+            return result
+        }
     }
+
+    #if DEBUG
+    private static let verifiesConnectedCount = TestEnvironment.isRunningTests
+    #endif
 
     // MARK: - Single-question reads
 

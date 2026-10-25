@@ -130,6 +130,9 @@ enum TransportConfig {
     // Sample interval for the periodic store-audit "OK" heartbeat line
     // (first + every Nth audit); violations always log at error level.
     static let conversationStoreAuditLogInterval: Int = 10
+    // Debug builds audit the store on the first read-receipt cleanup and then
+    // every Nth (cleanups ride peer-list updates, at most ~2 a second).
+    static let conversationStoreAuditCleanupInterval: Int = 32
     // Sample interval for the mirrored-republish debug line in the ID-only
     // delivery fan-out (first + every Nth republish).
     static let conversationStoreMirroredRepublishLogInterval: Int = 25
@@ -162,6 +165,10 @@ enum TransportConfig {
 
     // BLE maintenance & thresholds
     static let bleMaintenanceInterval: TimeInterval = 5.0
+    // Announce-driven peer-list refreshes: the first change after a quiet
+    // interval goes out at once, later ones collapse into one trailing
+    // refresh per interval, however many announces arrive.
+    static let blePeerListRefreshIntervalSeconds: TimeInterval = 0.5
     static let bleMaintenanceLeewaySeconds: Int = 1
     static let bleIsolationRelaxThresholdSeconds: TimeInterval = 30
     // Isolated nodes accept the weakest usable links — a fringe connection

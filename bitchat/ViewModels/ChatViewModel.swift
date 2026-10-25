@@ -222,7 +222,19 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     // Computed properties for compatibility
     @MainActor
     var connectedPeers: Set<PeerID> { unifiedPeerService.connectedPeerIDs }
-    @Published var allPeers: [BitchatPeer] = []
+    @Published var allPeers: [BitchatPeer] = [] {
+        didSet {
+            let memberIDs = Set(allPeers.map(\.peerID))
+            guard memberIDs != allPeersMemberIDs else { return }
+            allPeersMemberIDs = memberIDs
+            allPeersMembershipRevision &+= 1
+        }
+    }
+    /// Bumps whenever the set of peer IDs in `allPeers` changes, so derived
+    /// per-roster state (the mesh color palette) is rebuilt on membership
+    /// changes only — not on every republish, reorder or attribute change.
+    private(set) var allPeersMembershipRevision: UInt64 = 0
+    private var allPeersMemberIDs: Set<PeerID> = []
     /// Nickname of whoever is talking live in the public mesh channel right
     /// now (floor-courtesy indicator on the composer mic), nil when nobody.
     @Published var activePublicVoiceTalker: String?
@@ -462,12 +474,35 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         return scratch
     }
 
+    /// The daily sightings tally the peer-list handler feeds and the panic
+    /// wipe clears. Always `MeshSightingsTracker.shared` in production —
+    /// the instance `MeshEmptyStateView` observes.
+    let meshSightings: MeshSightingsTracker
+
+    /// Default sightings tracker. Production uses `.shared`. Under test,
+    /// view models share one tracker on a scratch suite (emptied once per
+    /// process), so tests never write `UserDefaults.standard` and leave no
+    /// per-instance plist behind. Tests that assert on the tally inject
+    /// their own tracker.
+    private static func defaultMeshSightings() -> MeshSightingsTracker {
+        guard TestEnvironment.isRunningTests else { return .shared }
+        return testMeshSightings
+    }
+
+    private static let testMeshSightings: MeshSightingsTracker = {
+        let suiteName = "chat.bitchat.tests.meshSightings"
+        guard let scratch = UserDefaults(suiteName: suiteName) else { return .shared }
+        scratch.removePersistentDomain(forName: suiteName)
+        return MeshSightingsTracker(defaults: scratch)
+    }()
+
     // Track sent read receipts to avoid duplicates (persisted across launches)
     // Note: Persistence happens automatically in didSet, no lifecycle observers needed
     var sentReadReceipts: Set<String> = [] {  // messageID set
         didSet {
             // Only persist if there are changes
             guard oldValue != sentReadReceipts else { return }
+            sentReadReceiptsRevision &+= 1
 
             // Persist whenever it changes (no manual synchronize/verify re-read)
             if let data = try? JSONEncoder().encode(Array(sentReadReceipts)) {
@@ -478,6 +513,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         }
     }
 
+    /// Bumped on every change to `sentReadReceipts`; part of the read-receipt
+    /// prune's skip check (`readReceiptPruneGeneration`).
+    private(set) var sentReadReceiptsRevision = 0
+
     // Track which GeoDM messages we've already sent a delivery ACK for (by messageID)
     // Single-writer: mutate only via `markGeoDeliveryAckSent(_:)` below.
     private(set) var sentGeoDeliveryAcks: Set<String> = []
@@ -485,11 +524,16 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     // Track app startup phase to prevent marking old messages as unread
     var isStartupPhase = true
 
-    // ConversationStore field audit bookkeeping (see auditConversationStore()):
-    // runs on the read-receipt cleanup cadence, heartbeat sampled first +
-    // every `TransportConfig.conversationStoreAuditLogInterval`th audit.
+    #if DEBUG
+    // ConversationStore field audit bookkeeping (see
+    // auditConversationStoreIfDue()): sampled on the read-receipt cleanup
+    // cadence (first cleanup, then every
+    // `TransportConfig.conversationStoreAuditCleanupInterval`th), heartbeat
+    // logged first + every `TransportConfig.conversationStoreAuditLogInterval`th audit.
+    private var storeAuditCleanupCount = 0
     private var storeAuditCount = 0
     private var storeAuditLastAppendCount = 0
+    #endif
     // Announce Tor initial readiness once per launch to avoid duplicates
     var torInitialReadyAnnounced: Bool = false
 
@@ -1159,6 +1203,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         locationPresenceStore: LocationPresenceStore? = nil,
         locationManager: LocationChannelManager = .shared,
         readReceiptsDefaults: UserDefaults? = nil,
+        meshSightings: MeshSightingsTracker? = nil,
         outboxStore: MessageOutboxStore? = nil,
         sfMetrics: StoreAndForwardMetrics? = nil,
         panicMediaWipe: (() throws -> Void)? = nil,
@@ -1198,6 +1243,15 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         self.publicMessagePipeline = services.publicMessagePipeline
         let readReceiptsDefaults = readReceiptsDefaults ?? Self.defaultReadReceiptsDefaults()
         self.readReceiptsDefaults = readReceiptsDefaults
+        let meshSightings = meshSightings ?? Self.defaultMeshSightings()
+        // A second production instance would split the tally from the one
+        // the empty mesh timeline shows, and a panic wipe would leave the
+        // other holding today's peer IDs and salt.
+        assert(
+            TestEnvironment.isRunningTests || meshSightings === MeshSightingsTracker.shared,
+            "Production must feed MeshSightingsTracker.shared"
+        )
+        self.meshSightings = meshSightings
         self.sentReadReceipts = ChatViewModelBootstrapper.loadPersistedReadReceipts(userDefaults: readReceiptsDefaults)
 
         // Republish on every store change so SwiftUI observers of the
@@ -1645,7 +1699,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         // Ambient-liveliness bookkeeping: sampled nearby-chat previews, the
         // daily sightings tally, and the echoes-dismissed watermark
         GeohashChatActivityTracker.shared.clear()
-        MeshSightingsTracker.shared.clear()
+        meshSightings.clear()
         MeshEchoSettings.reset()
         NotificationPrivacySettings.reset()
         ComposerDraftStore.reset()
@@ -1691,6 +1745,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         setGeoDmSubscriptionID(nil)
         _ = clearGeoSamplingSubs()
         cachedGeohashIdentity = nil
+        // The formatter's color palettes hold this session's peer IDs, their
+        // noise keys and geohash pubkeys, and its rebuild checks hold our
+        // own pre-wipe peer ID and geohash identity. A fresh formatter
+        // starts with none of them instead of keeping them until the next
+        // color lookup.
+        messageFormatter = ChatMessageFormatter(viewModel: self)
         nostrKeyMapping.removeAll()
         // Every pubkey seen in any geohash this session, with when.
         participantTracker.clear()
@@ -2107,8 +2167,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
         case .peerListUpdated(let peers):
             peerListCoordinator.didUpdatePeerListSynchronously(peers)
-            // A peer-list update follows every verified announce, which is
-            // where a peer's `.vouch` capability actually arrives.
+            // A peer-list update follows every verified announce within one
+            // refresh interval, and announces are where a peer's `.vouch`
+            // capability actually arrives.
             vouchCoordinator.peersUpdated(peers)
 
         case .peerSnapshotsUpdated:
@@ -2204,9 +2265,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
     func didUpdatePeerList(_ peers: [PeerID]) {
         peerListCoordinator.didUpdatePeerList(peers)
-        // A peer-list update follows every verified announce, which is where a
-        // peer's `.vouch` capability actually arrives — retry vouching now that
-        // capabilities may finally be known (closes the auth-time capability race).
+        // A peer-list update follows every verified announce within one refresh
+        // interval, and announces are where a peer's `.vouch` capability
+        // actually arrives — retry vouching now that capabilities may finally be
+        // known (closes the auth-time capability race).
         Task { @MainActor [weak self] in
             self?.vouchCoordinator.peersUpdated(peers)
         }
@@ -2215,19 +2277,31 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     @MainActor
     func cleanupOldReadReceipts() {
         deliveryCoordinator.cleanupOldReadReceipts()
-        auditConversationStore()
+        #if DEBUG
+        auditConversationStoreIfDue()
+        #endif
     }
 
+    #if DEBUG
     /// Periodic on-device verification of the `ConversationStore`'s
-    /// correctness invariants, piggybacked on the read-receipt cleanup
-    /// cadence (peer-list updates) so no extra timer exists. Loud on
-    /// violation (one error line each), near-silent when healthy (sampled
-    /// heartbeat: first + every Nth audit). The audit is O(total messages)
-    /// and allocation-free while healthy — measured ~0.5 ms at 5k messages
-    /// (see `PerformanceBaselineTests.testConversationStoreAudit`), cheap
-    /// relative to its cadence, so it always runs.
+    /// correctness invariants in Debug (field-test) builds, piggybacked on
+    /// the read-receipt cleanup cadence (peer-list updates) so no extra timer
+    /// exists. Loud on violation (one error line each), near-silent when
+    /// healthy (sampled heartbeat: first + every Nth audit). Its only outputs
+    /// are log lines, which release builds compile out, so release skips the
+    /// audit entirely. It is O(total messages) (see
+    /// `PerformanceBaselineTests.testConversationStoreAudit`), over a
+    /// millisecond in debug with a full mesh timeline, so it runs on the
+    /// first cleanup and then every
+    /// `TransportConfig.conversationStoreAuditCleanupInterval`th, not on
+    /// every peer-list update.
     @MainActor
-    private func auditConversationStore() {
+    private func auditConversationStoreIfDue() {
+        storeAuditCleanupCount += 1
+        guard storeAuditCleanupCount == 1
+                || storeAuditCleanupCount.isMultiple(of: TransportConfig.conversationStoreAuditCleanupInterval) else {
+            return
+        }
         storeAuditCount += 1
         let violations = conversations.auditInvariants()
         guard violations.isEmpty else {
@@ -2245,6 +2319,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         }
         storeAuditLastAppendCount = appendCount
     }
+
+    /// Store audits run so far; tests pin the sampling.
+    var _test_storeAuditCount: Int { storeAuditCount }
+
+    /// Whether the message formatter has built a color palette; the panic
+    /// test pins that a wipe leaves none.
+    var _test_formatterHasBuiltPalettes: Bool { messageFormatter._test_hasBuiltPalettes }
+    #endif
 
     func parseMentions(from content: String) -> [String] {
         composerCoordinator.parseMentions(from: content)

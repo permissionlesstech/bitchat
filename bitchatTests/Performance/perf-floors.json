@@ -42,8 +42,31 @@
     "geochat.formatMessage_before": 107,
     "geochat.formatMessage": 18006,
     "hex.encodePublicKey_before": 64366,
-    "hex.encodePublicKey": 1194627
+    "hex.encodePublicKey": 1194627,
+    "peerList.update_before": 51,
+    "peerList.update": 2763,
+    "peerRegistry.reachability_before": 136256,
+    "peerRegistry.reachability": 2653405,
+    "peerList.refresh_before": 378,
+    "peerList.refresh": 1665,
+    "peerList.refreshUnread_before": 374,
+    "peerList.refreshUnread": 1202,
+    "mesh.peopleListColors_before": 5074,
+    "mesh.peopleListColors": 776637,
+    "peers.rosterRebuild_before": 1054,
+    "peers.rosterRebuild": 1735
   },
+  "_peer_list_floor_notes_2026_10": [
+    "Peer-list floors (peerList.*, peerRegistry.reachability, mesh.peopleListColors,",
+    "peers.rosterRebuild) sit at ~10% of the local debug medians above (interleaved",
+    "before/after runs on a loaded M5 Max), like the other October floors, until a CI",
+    "run supplies _slowest_observed_ci_numbers for them.",
+    "Gates on this change's gain (the pre-change value is under the floor):",
+    "peerList.update (51 vs 270), mesh.peopleListColors (5,074 vs 77,000) and,",
+    "with a thin margin, peerRegistry.reachability (136,256 vs 260,000).",
+    "O(N^2) tripwires only (the pre-change value clears the floor): peerList.refresh,",
+    "peerList.refreshUnread, peers.rosterRebuild."
+  ],
   "floors": {
     "nostrInbound.fresh": 450,
     "nostrInbound.duplicate": 250000,
@@ -60,7 +83,13 @@
     "geochat.peopleListColors": 40000,
     "geochat.participantHeartbeat": 150000,
     "geochat.formatMessage": 2500,
-    "hex.encodePublicKey": 250000
+    "hex.encodePublicKey": 250000,
+    "peerList.update": 270,
+    "peerRegistry.reachability": 260000,
+    "peerList.refresh": 160,
+    "peerList.refreshUnread": 120,
+    "mesh.peopleListColors": 77000,
+    "peers.rosterRebuild": 170
   },
   "_slowest_observed_ci_numbers_2026_06": {
     "nostrInbound.fresh": 918,

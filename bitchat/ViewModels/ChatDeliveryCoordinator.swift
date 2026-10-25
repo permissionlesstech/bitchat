@@ -33,6 +33,9 @@ protocol ChatDeliveryContext: AnyObject {
     func deliveryStatus(forMessageID messageID: String) -> DeliveryStatus?
     /// Message IDs across all direct conversations (read-receipt pruning).
     func privateMessageIDs() -> Set<String>
+    /// Changes whenever a recorded read receipt could have gone stale: a
+    /// message left a direct conversation, or the recorded receipts changed.
+    var readReceiptPruneGeneration: Int { get }
     /// Drops every recorded read receipt whose message ID is not in `validMessageIDs`.
     /// Returns the number of receipts removed. (Single mutation path for the
     /// owner's `sentReadReceipts`; this coordinator never reads the raw set.)
@@ -83,6 +86,10 @@ extension ChatViewModel: ChatDeliveryContext {
         conversations.directMessageIDs()
     }
 
+    var readReceiptPruneGeneration: Int {
+        conversations.directMessageRemovalCount &+ sentReadReceiptsRevision
+    }
+
     func notifyUIChanged() {
         objectWillChange.send()
     }
@@ -119,18 +126,28 @@ extension ChatViewModel: ChatDeliveryContext {
 /// positional `messageLocationIndex` this coordinator used to maintain.
 final class ChatDeliveryCoordinator {
     private unowned let context: any ChatDeliveryContext
+    /// `readReceiptPruneGeneration` right after the last prune; nil until
+    /// the first one, so receipts restored from an earlier launch are
+    /// checked once.
+    private var prunedAtGeneration: Int?
 
     init(context: any ChatDeliveryContext) {
         self.context = context
     }
 
+    /// Runs on every peer-list update. The rebuild of every direct message
+    /// ID is skipped unless a receipt could have gone stale since the last
+    /// prune.
     @MainActor
     func cleanupOldReadReceipts() {
         guard !context.isStartupPhase else { return }
+        guard context.readReceiptPruneGeneration != prunedAtGeneration else { return }
         let validMessageIDs = context.privateMessageIDs()
         guard !validMessageIDs.isEmpty else { return }
 
         let removedCount = context.pruneSentReadReceipts(keeping: validMessageIDs)
+        // Read after the prune: its own write moves the generation.
+        prunedAtGeneration = context.readReceiptPruneGeneration
         if removedCount > 0 {
             SecureLogger.debug("🧹 Cleaned up \(removedCount) old read receipts", category: .session)
         }

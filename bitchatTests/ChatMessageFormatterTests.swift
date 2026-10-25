@@ -6,6 +6,7 @@
 // For more information, see <https://unlicense.org>
 //
 
+import BitFoundation
 import Foundation
 import SwiftUI
 import Testing
@@ -67,6 +68,42 @@ struct ChatMessageFormatterTests {
         // fallback can never produce exactly, so inequality proves a slot.
         #expect(viewModel.colorForNostrPubkey(newcomer, isDark: true) != Color(peerSeed: "nostr:" + newcomer, isDark: true))
         #expect(pubkeys.map { viewModel.colorForNostrPubkey($0, isDark: true) } == before)
+    }
+
+    /// Mesh rows follow the same rule: a newcomer gets a palette slot, not
+    /// the hash fallback, and people already on screen keep their colors.
+    @Test func meshPaletteTracksMembershipChangesWithoutRecoloringExistingRows() {
+        let viewModel = makeViewModel()
+        let peerIDs = (1...10).map { PeerID(str: String(format: "%016llx", UInt64($0))) }
+        viewModel.allPeers = peerIDs.map { BitchatPeer(peerID: $0, noisePublicKey: Data(), nickname: $0.id) }
+        let before = peerIDs.map { viewModel.colorForMeshPeer(id: $0, isDark: true) }
+
+        let newcomer = PeerID(str: String(format: "%016llx", UInt64(0xfeed)))
+        viewModel.allPeers.append(BitchatPeer(peerID: newcomer, noisePublicKey: Data(), nickname: "newcomer"))
+
+        #expect(viewModel.colorForMeshPeer(id: newcomer, isDark: true) != Color(peerSeed: newcomer.id, isDark: true))
+        #expect(peerIDs.map { viewModel.colorForMeshPeer(id: $0, isDark: true) } == before)
+    }
+
+    /// The palette is rebuilt from `allPeers` only when its ID set changes;
+    /// reorders and attribute changes (a rename, a connection flip) don't.
+    @Test func allPeersMembershipRevisionMovesOnlyWithMembership() {
+        let viewModel = makeViewModel()
+        let alice = BitchatPeer(peerID: PeerID(str: "1111111111111111"), noisePublicKey: Data(), nickname: "alice")
+        let bob = BitchatPeer(peerID: PeerID(str: "2222222222222222"), noisePublicKey: Data(), nickname: "bob")
+        viewModel.allPeers = [alice, bob]
+        let initial = viewModel.allPeersMembershipRevision
+
+        viewModel.allPeers = [bob, alice]
+        let renamed = BitchatPeer(peerID: alice.peerID, noisePublicKey: Data(), nickname: "alice2", isConnected: true)
+        viewModel.allPeers = [renamed, bob]
+        #expect(viewModel.allPeersMembershipRevision == initial)
+
+        viewModel.allPeers = [renamed]
+        #expect(viewModel.allPeersMembershipRevision != initial)
+        let afterRemoval = viewModel.allPeersMembershipRevision
+        viewModel.allPeers = [renamed, bob]
+        #expect(viewModel.allPeersMembershipRevision != afterRemoval)
     }
 
     // MARK: - Helpers

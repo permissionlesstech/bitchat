@@ -235,10 +235,13 @@ final class PrivateConversationModel: ObservableObject {
     }
 
     private func refreshSelectedConversation() {
-        selectedPeerID = conversations.selectedPrivatePeerID
-        selectedHeaderState = selectedPeerID.flatMap { peerID in
-            makeHeaderState(for: peerID)
-        }
+        let peerID = conversations.selectedPrivatePeerID
+        let headerState = peerID.flatMap { makeHeaderState(for: $0) }
+        // Assign only what changed: the triggers above fire on every roster
+        // and encryption republish, and each @Published write re-renders
+        // every view observing this model.
+        if selectedPeerID != peerID { selectedPeerID = peerID }
+        if selectedHeaderState != headerState { selectedHeaderState = headerState }
     }
 
     private func makeHeaderState(for conversationPeerID: PeerID) -> PrivateConversationHeaderState {
