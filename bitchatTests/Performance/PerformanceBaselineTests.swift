@@ -428,7 +428,9 @@ final class PerformanceBaselineTests: XCTestCase {
             return InboundPublic(
                 peerID: PeerID(str: String(format: "%016x", 0xC0DE_0000 + sender)),
                 nickname: "perfpeer\(sender)",
-                content: "public pipeline message \(i) from sender \(sender)",
+                // Distinct sentences: numbered copies of one template are
+                // near-copies across senders, which the spam filter hides.
+                content: Self.perfSentence(i),
                 timestamp: base.addingTimeInterval(Double(i)),
                 messageID: "perf-pub-\(i)"
             )
@@ -465,6 +467,19 @@ final class PerformanceBaselineTests: XCTestCase {
         }
 
         reportThroughput("pipeline.publicIngest", samples: samples, operations: messageCount, unit: "messages")
+    }
+
+    /// A deterministic sentence of unrelated words, different for every `seed`.
+    private static func perfSentence(_ seed: Int) -> String {
+        let words = ["market", "river", "lantern", "bicycle", "orange", "window", "garden", "quiet", "station",
+                     "morning", "paper", "copper", "valley", "thunder", "pocket", "silver", "harbor", "candle",
+                     "meadow", "button", "ladder", "violet", "engine", "basket", "cloud", "pepper", "forest",
+                     "mirror", "saddle", "tunnel", "anchor", "biscuit", "canyon", "dragon", "ember", "falcon"]
+        var state = UInt64(seed) &* 0x9E37_79B9_7F4A_7C15 &+ 1
+        return (0..<7).map { _ in
+            state = state &* 6364136223846793005 &+ 1442695040888963407
+            return words[Int((state >> 33) % UInt64(words.count))]
+        }.joined(separator: " ")
     }
 
     // MARK: - 7. ConversationStore append (to-be architecture)
@@ -681,6 +696,7 @@ private final class PerfNostrContext: ChatNostrContext {
     func parseMentions(from content: String) -> [String] {
         MessageFormattingEngine.extractMentions(from: content)
     }
+    let spamFilter = SpamFilter()
 
     var selectedPrivateChatPeer: PeerID?
     var nostrKeyMapping: [PeerID: String] = [:]
