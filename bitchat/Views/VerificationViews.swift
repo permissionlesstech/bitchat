@@ -9,6 +9,8 @@ import AppKit
 #endif
 
 /// The user's verification QR on a white card, with their nickname under it.
+/// The raw payload stays off-screen; the card's context menu copies it for
+/// the macOS paste fallback.
 struct MyQRView: View {
     let qrString: String
     let nickname: String
@@ -16,6 +18,7 @@ struct MyQRView: View {
 
     private enum Strings {
         static let title: LocalizedStringKey = "verification.my_qr.title"
+        static let copy: LocalizedStringKey = "common.copy"
         static let accessibilityLabel = String(localized: "verification.my_qr.accessibility_label", comment: "Accessibility label describing the verification QR code")
     }
 
@@ -39,6 +42,15 @@ struct MyQRView: View {
                     .padding(20)
                     .background(cardShape.fill(Color.white))
                     .overlay(cardShape.stroke(palette.divider, lineWidth: 1))
+                    #if os(iOS)
+                    .contentShape(.contextMenuPreview, cardShape)
+                    #endif
+                    .contextMenu {
+                        Button(action: copyPayload) {
+                            Label(Strings.copy, systemImage: "doc.on.doc")
+                        }
+                        .disabled(qrString.isEmpty)
+                    }
                     .padding(.top, 24)
 
                 Text(verbatim: nickname)
@@ -56,6 +68,15 @@ struct MyQRView: View {
             .padding(.horizontal, 24)
             .padding(.vertical, 24)
         }
+    }
+
+    private func copyPayload() {
+        #if os(iOS)
+        UIPasteboard.general.string = qrString
+        #else
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(qrString, forType: .string)
+        #endif
     }
 }
 
