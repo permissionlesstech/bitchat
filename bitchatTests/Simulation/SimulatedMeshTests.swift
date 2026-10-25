@@ -542,4 +542,61 @@ struct SimulatedMeshPeerListRefreshTests {
         // The list itself still waits for the trailing refresh.
         #expect(capture.peerLists.count == 1)
     }
+
+    /// The same holds for a peer first heard through a relay, which gets no
+    /// `.peerConnected`: without its own publish the roster learned it only
+    /// after the trailing refresh, so a DM from it in between resolved to
+    /// "Unknown", with no stable key, for up to a whole window.
+    @Test
+    func relayedNewcomerDuringAWindowReachesTheRosterBeforeTheTrailingRefresh() async {
+        let mesh = SimulatedMesh()
+        let hub = mesh.addNode(nickname: "hub")
+        let relay = mesh.addNode(nickname: "relay")
+        let carol = mesh.addNode(nickname: "carol")
+        mesh.connect(0, 1)
+        let capture = PeerEventCapture()
+        hub.service.eventDelegate = capture
+        hub.service.peerEventsDelegate = capture
+
+        mesh.announceAll()
+        let relayConnected = await TestHelpers.waitUntil(
+            { capture.connectedPeers == [relay.service.myPeerID] },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(relayConnected)
+        // Release any snapshot publish the coalescer deferred, staying well
+        // inside the refresh window the relay's announce opened.
+        mesh.advanceTime(by: 0.2)
+        await capture.drain()
+        let listsBefore = capture.peerLists.count
+
+        // Carol comes into range of the relay only, mid-window. The relay's
+        // jittered forward is released on its own clock, so the hub's
+        // window stays where it was.
+        mesh.connect(1, 2)
+        carol.service._test_resetAnnounceThrottle()
+        mesh.forceAnnounce(from: 2)
+        mesh.nodes[1].scheduler.advance(by: 0.1)
+        mesh.pump()
+        let carolID = carol.service.myPeerID
+        let carolRegistered = await TestHelpers.waitUntil(
+            { hub.service.currentPeerSnapshots().contains { $0.peerID == carolID } },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(carolRegistered)
+        #expect(!hub.service.isPeerConnected(carolID))
+
+        // The publish is coalesced to at most one per 0.1 s; releasing that
+        // much time still leaves the refresh window open.
+        mesh.advanceTime(by: 0.1)
+        let carolInRoster = await TestHelpers.waitUntil(
+            { capture.snapshotPeerIDs.contains(carolID) },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(carolInRoster)
+        await capture.drain()
+
+        #expect(!capture.connectedPeers.contains(carolID))
+        #expect(capture.peerLists.count == listsBefore)
+    }
 }

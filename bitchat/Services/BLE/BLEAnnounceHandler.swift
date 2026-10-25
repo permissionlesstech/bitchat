@@ -65,11 +65,14 @@ struct BLEAnnounceHandlerEnvironment {
     /// separate unstructured tasks would not provide. The list part is
     /// throttled: inside an open refresh window it rides one trailing
     /// refresh, so an announce with nothing else to deliver posts no hop.
+    /// A peer that just entered the registry (`isNewPeer`, relayed or
+    /// direct) still has its snapshot publish requested at once.
     /// Called for verified announces only.
     let deliverAnnounceUIEvents: (
         _ peerID: PeerID,
         _ notifyPeerConnected: Bool,
-        _ scheduleInitialSync: Bool
+        _ scheduleInitialSync: Bool,
+        _ isNewPeer: Bool
     ) -> Void
     /// Tracks the announce packet for gossip sync.
     let trackPacketSeen: (BitchatPacket) -> Void
@@ -277,7 +280,8 @@ final class BLEAnnounceHandler {
             env.deliverAnnounceUIEvents(
                 peerID,
                 responsePlan.shouldNotifyPeerConnected,
-                responsePlan.shouldNotifyPeerConnected && responsePlan.shouldScheduleInitialSync
+                responsePlan.shouldNotifyPeerConnected && responsePlan.shouldScheduleInitialSync,
+                isNewPeer
             )
         }
 

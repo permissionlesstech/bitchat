@@ -6534,12 +6534,16 @@ extension BLEService {
             dedupMarkProcessed: { [weak self] id in
                 self?.messageDeduplicator.markProcessed(id)
             },
-            deliverAnnounceUIEvents: { [weak self] peerID, notifyPeerConnected, scheduleInitialSync in
+            deliverAnnounceUIEvents: { [weak self] peerID, notifyPeerConnected, scheduleInitialSync, isNewPeer in
                 guard let self else { return }
                 // On the engine: refresh the list now, or let this change
                 // ride the open window's trailing refresh.
                 let refreshList = self.admitPeerListRefresh()
-                guard notifyPeerConnected || scheduleInitialSync || refreshList else { return }
+                // A deferred list still owes the roster a peer that just
+                // linked or just entered the registry (a relayed newcomer
+                // gets no `.peerConnected`).
+                let publishRoster = notifyPeerConnected || isNewPeer
+                guard publishRoster || scheduleInitialSync || refreshList else { return }
                 // Single main-actor hop so event order is guaranteed:
                 // .peerConnected → initial sync scheduling → snapshot
                 // publish request → .peerListUpdated.
@@ -6553,11 +6557,11 @@ extension BLEService {
                     }
                     if refreshList {
                         self.refreshPeerList()
-                    } else if notifyPeerConnected {
+                    } else if publishRoster {
                         // The list waits for the trailing refresh, but the
-                        // roster must learn a newly linked peer now: its
-                        // first DM resolves the sender through it. The
-                        // publish is coalesced, so this stays bounded.
+                        // roster must learn the peer now: its first DM
+                        // resolves the sender's name and keys through it.
+                        // The publish is coalesced, so this stays bounded.
                         self.requestPeerDataPublish()
                     }
                 }

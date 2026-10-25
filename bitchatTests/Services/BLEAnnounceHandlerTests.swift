@@ -25,7 +25,7 @@ struct BLEAnnounceHandlerTests {
         var persistedIdentities: [AnnouncementPacket] = []
         var dedupContainsQueries: [String] = []
         var dedupMarkedIDs: [String] = []
-        var uiEventDeliveries: [(peerID: PeerID, notifyPeerConnected: Bool, scheduleInitialSync: Bool)] = []
+        var uiEventDeliveries: [(peerID: PeerID, notifyPeerConnected: Bool, scheduleInitialSync: Bool, isNewPeer: Bool)] = []
         var trackedPackets: [BitchatPacket] = []
         var announceBacks = 0
         var afterglowDelays: [TimeInterval] = []
@@ -77,8 +77,8 @@ struct BLEAnnounceHandlerTests {
             dedupMarkProcessed: { id in
                 recorder.dedupMarkedIDs.append(id)
             },
-            deliverAnnounceUIEvents: { peerID, notifyPeerConnected, scheduleInitialSync in
-                recorder.uiEventDeliveries.append((peerID, notifyPeerConnected, scheduleInitialSync))
+            deliverAnnounceUIEvents: { peerID, notifyPeerConnected, scheduleInitialSync, isNewPeer in
+                recorder.uiEventDeliveries.append((peerID, notifyPeerConnected, scheduleInitialSync, isNewPeer))
             },
             trackPacketSeen: { packet in
                 recorder.trackedPackets.append(packet)
@@ -129,6 +129,7 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.uiEventDeliveries.first?.peerID == peerID)
         #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == true)
         #expect(recorder.uiEventDeliveries.first?.scheduleInitialSync == true)
+        #expect(recorder.uiEventDeliveries.first?.isNewPeer == true)
         #expect(recorder.trackedPackets.count == 1)
         #expect(recorder.dedupMarkedIDs == ["announce-back-\(peerID)"])
         #expect(recorder.announceBacks == 1)
@@ -313,6 +314,7 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.uiEventDeliveries.first?.peerID == peerID)
         #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == true)
         #expect(recorder.uiEventDeliveries.first?.scheduleInitialSync == true)
+        #expect(recorder.uiEventDeliveries.first?.isNewPeer == false)
         #expect(recorder.reconnectLogQueries == [peerID])
         #expect(recorder.afterglowDelays.isEmpty)
     }
@@ -343,6 +345,8 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.uiEventDeliveries.count == 1)
         #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
         #expect(recorder.uiEventDeliveries.first?.scheduleInitialSync == false)
+        // No `.peerConnected`, but the roster must still learn the peer.
+        #expect(recorder.uiEventDeliveries.first?.isNewPeer == true)
         #expect(recorder.afterglowDelays.count == 1)
     }
 
@@ -728,7 +732,7 @@ struct BLEAnnounceHandlerTests {
             },
             dedupContains: { _ in true },
             dedupMarkProcessed: { _ in },
-            deliverAnnounceUIEvents: { _, _, _ in },
+            deliverAnnounceUIEvents: { _, _, _, _ in },
             trackPacketSeen: { _ in },
             sendAnnounceBack: {},
             scheduleAfterglow: { _ in }
@@ -848,7 +852,7 @@ struct BLEAnnounceHandlerTests {
                 },
                 dedupContains: { _ in true },
                 dedupMarkProcessed: { _ in },
-                deliverAnnounceUIEvents: { _, _, _ in },
+                deliverAnnounceUIEvents: { _, _, _, _ in },
                 trackPacketSeen: { _ in },
                 sendAnnounceBack: {},
                 scheduleAfterglow: { _ in }
