@@ -68,7 +68,7 @@ struct SimulatedMeshAnnounceBudgetTests {
         mesh.join(joiner, linkingTo: Self.anchors)
 
         let joinerID = mesh.nodes[joiner].service.myPeerID
-        #expect(mesh.nodes[35].service._test_hasConfirmedRoute(to: joinerID))
+        #expect(mesh.nodes[35].service._test_confirmedRouteHops(to: joinerID) != nil)
     }
 
     /// A new link between two nodes that already knew each other through
@@ -80,6 +80,11 @@ struct SimulatedMeshAnnounceBudgetTests {
         // Two king moves apart: known to each other through relays only.
         let (central, peripheral) = (7, 21)
         #expect(mesh.knows(central, peripheral) && mesh.knows(peripheral, central))
+        // Node 35 is four king moves from the central, the peripheral is on
+        // the way, and the link saves one hop: the route can only shorten if
+        // both ends claim the new edge.
+        let centralID = mesh.nodes[central].service.myPeerID
+        #expect(mesh.nodes[35].service._test_confirmedRouteHops(to: centralID) == 3)
         let before = originations(mesh)
         let framesBefore = mesh.floodFrameCount(ofType: .announce)
 
@@ -90,9 +95,8 @@ struct SimulatedMeshAnnounceBudgetTests {
         #expect(spent[central] == 2)
         #expect(spent[peripheral] == 1)
         #expect(othersSpentNothing(spent, except: [central, peripheral]))
-        let centralID = mesh.nodes[central].service.myPeerID
         #expect(mesh.nodes[peripheral].service.getConnectedPeers().contains(centralID))
-        #expect(mesh.nodes[35].service._test_hasConfirmedRoute(to: centralID))
+        #expect(mesh.nodes[35].service._test_confirmedRouteHops(to: centralID) == 2)
     }
 
     /// The peripheral's own link-up announce is skipped: the announce it
@@ -536,8 +540,8 @@ struct SimulatedMeshAnnounceBudgetTests {
             .flatMap { AnnouncementPacket.decode(from: $0.payload) }?
             .directNeighbors ?? []
         #expect(Set(lastClaims) == Set([aID.routingData, bID.routingData].compactMap { $0 }))
-        #expect(mesh.nodes[a].service._test_hasConfirmedRoute(to: bID))
-        #expect(mesh.nodes[b].service._test_hasConfirmedRoute(to: aID))
+        #expect(mesh.nodes[a].service._test_confirmedRouteHops(to: bID) == 1)
+        #expect(mesh.nodes[b].service._test_confirmedRouteHops(to: aID) == 1)
     }
 
     /// An owed announce's retry is dropped once another announce went out:

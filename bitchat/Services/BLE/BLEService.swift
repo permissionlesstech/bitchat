@@ -3221,13 +3221,14 @@ extension BLEService {
         }
     }
 
-    /// Whether this node's topology holds a fresh path of edges claimed by
-    /// both endpoints to `peerID` — what source routing needs. Refreshes our
-    /// own claim first, as `computeMeshPath` does; the version gate is off
-    /// because harness traffic is all v1.
-    func _test_hasConfirmedRoute(to peerID: PeerID) -> Bool {
+    /// Intermediate hops on this node's shortest fresh path of edges claimed
+    /// by both endpoints to `peerID` — what source routing needs — or nil
+    /// when there is none. Refreshes our own claim first, as
+    /// `computeMeshPath` does; the version gate is off because harness
+    /// traffic is all v1.
+    func _test_confirmedRouteHops(to peerID: PeerID) -> Int? {
         refreshLocalTopology()
-        return meshTopology.computeRoute(from: myPeerIDData, to: routingData(for: peerID)) != nil
+        return meshTopology.computeRoute(from: myPeerIDData, to: routingData(for: peerID))?.count
     }
 
     func _test_emitTransportEvent(
