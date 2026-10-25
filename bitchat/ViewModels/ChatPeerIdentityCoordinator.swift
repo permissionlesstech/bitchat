@@ -32,8 +32,6 @@ protocol ChatPeerIdentityContext: AnyObject {
     /// Appends a private message via the single-writer store intent (shared requirement with `ChatLifecycleContext`).
     @discardableResult
     func appendPrivateMessage(_ message: BitchatMessage, to peerID: PeerID) -> Bool
-    /// (dedup by ID, order preserved, unread carried, old chat removed).
-    func migratePrivateChat(from oldPeerID: PeerID, to newPeerID: PeerID)
     var selectedPrivateChatPeer: PeerID? { get set }
     var selectedPrivateChatFingerprint: String? { get set }
     var myPeerID: PeerID { get }
