@@ -18,6 +18,7 @@ enum SystemSettings {
     /// permission anchor: an already-authorized person whose radio is
     /// switched off can't fix anything from the privacy pane.
     case bluetoothPower
+    case camera
     case location
     case microphone
 
@@ -28,6 +29,7 @@ enum SystemSettings {
         switch self {
         case .bluetooth: "\(Self.baseURL)?Privacy_Bluetooth"
         case .bluetoothPower: "x-apple.systempreferences:com.apple.BluetoothSettings"
+        case .camera: "\(Self.baseURL)?Privacy_Camera"
         case .location: "\(Self.baseURL)?Privacy_LocationServices"
         case .microphone: "\(Self.baseURL)?Privacy_Microphone"
         }
