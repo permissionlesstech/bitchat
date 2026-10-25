@@ -22,6 +22,7 @@ struct AppInfoView: View {
     @State private var liveVoiceEnabled = PTTSettings.liveVoiceEnabled
     @State private var locationNotesEnabled = LocationNotesSettings.enabled
     @State private var hideMessagePreviews = NotificationPrivacySettings.hideMessagePreviews
+    @State private var spamFilterEnabled = SpamFilterSettings.isEnabled
     @State private var customRelays = NostrRelaySettings.customRelays()
     @State private var relayInput = ""
     @State private var relayError: String?
@@ -113,6 +114,10 @@ struct AppInfoView: View {
             }
             static let toggleOn: LocalizedStringKey = "common.toggle.on"
             static let toggleOff: LocalizedStringKey = "common.toggle.off"
+
+            static let publicChatsTitle = String(localized: "app_info.settings.public_chats.title", defaultValue: "PUBLIC CHATS", comment: "Section header (uppercase) for settings about public chats, such as the spam filter")
+            static let spamFilterTitle = String(localized: "app_info.settings.spam_filter.title", defaultValue: "spam filter", comment: "Title of the setting that hides spam in public mesh and location channels")
+            static let spamFilterSubtitle = String(localized: "app_info.settings.spam_filter.subtitle", defaultValue: "hides public messages from people who post too fast, repeat themselves, or flood links. private messages are never filtered. on by default.", comment: "Subtitle explaining what the spam filter hides and that private messages are never filtered")
 
             static let privacyTitle = String(localized: "app_info.settings.privacy.title", defaultValue: "PRIVACY", comment: "Section header (uppercase) for privacy settings such as hiding notification previews")
             static let hidePreviewsTitle = String(localized: "app_info.settings.hide_previews.title", defaultValue: "hide message previews", comment: "Title of the setting that keeps message text, sender names, and geohashes out of lock-screen notifications")
@@ -520,6 +525,25 @@ struct AppInfoView: View {
                             .bitchatFont(size: 12)
                             .foregroundColor(palette.accent)
                     }
+                }
+            }
+
+            // Public chats: what the mesh and location channels show.
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader(verbatim: Strings.Settings.publicChatsTitle)
+
+                settingsCard {
+                    settingToggle(
+                        title: Text(verbatim: Strings.Settings.spamFilterTitle),
+                        subtitle: Text(verbatim: Strings.Settings.spamFilterSubtitle),
+                        isOn: Binding(
+                            get: { spamFilterEnabled },
+                            set: { newValue in
+                                spamFilterEnabled = newValue
+                                SpamFilterSettings.isEnabled = newValue
+                            }
+                        )
+                    )
                 }
             }
 

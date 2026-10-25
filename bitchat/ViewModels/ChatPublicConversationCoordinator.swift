@@ -81,6 +81,8 @@ protocol ChatPublicConversationContext: AnyObject {
     /// `powBits` is the validated NIP-13 difficulty of the source Nostr event
     /// (0 for mesh messages); sufficient PoW relaxes the per-sender bucket.
     func allowPublicMessage(senderKey: String, contentKey: String, powBits: Int) -> Bool
+    /// Hides public spam (floods, repeats, link bursts); see `SpamFilter`.
+    var spamFilter: SpamFilter { get }
     /// Buffers a visible-channel message for the batched (~80 ms) pipeline
     /// flush, which commits it to `conversationID` in the store.
     func enqueuePublicMessage(_ message: BitchatMessage, to conversationID: ConversationID)
@@ -490,6 +492,17 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
             if archivedEchoKeys.contains(key) { return }
         }
 
+        // Local notices carry no sender ID and my own gossip or relay echoes
+        // are not spam, so neither is judged. Duplicates of a judged message
+        // get its first verdict without being counted again.
+        if shouldRateLimit, !isOwnMessage(finalMessage) {
+            let senderKey = normalizedSenderKey(for: finalMessage)
+            if context.spamFilter.shouldHide(finalMessage, senderKey: senderKey) {
+                SecureLogger.debug("🧹 Hiding public spam \(finalMessage.id.prefix(8))…", category: .session)
+                return
+            }
+        }
+
         let channelMatches: Bool = {
             switch context.activeChannel {
             case .mesh: return !isGeo || isSystem
@@ -521,7 +534,7 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
         }
         let isMentioned = message.mentions?.contains { myTokens.contains($0.normalizedNickname) } ?? false
 
-        if isMentioned && !isOwnMessage(message) {
+        if isMentioned && !isOwnMessage(message) && !context.spamFilter.wasHidden(messageID: message.id) {
             SecureLogger.info("🔔 Mention from \(message.sender)", category: .session)
             context.notifyMention(from: message.sender, message: message.content)
         }
@@ -530,6 +543,7 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
     func sendHapticFeedback(for message: BitchatMessage) {
         #if os(iOS)
         guard UIApplication.shared.applicationState == .active else { return }
+        guard !context.spamFilter.wasHidden(messageID: message.id) else { return }
 
         var tokens: [String] = [context.nickname]
         switch context.activeChannel {
