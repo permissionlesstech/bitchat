@@ -108,8 +108,26 @@ final class SpamFilter: @unchecked Sendable {
             senderKey: senderKey,
             messageID: message.id,
             content: message.content,
-            timestamp: message.timestamp
+            timestamp: message.timestamp,
+            isText: !Self.isMeshAttachment(message)
         )
+    }
+
+    /// A received image, voice note or file, which the timeline shows as
+    /// `[image] <filename>`. Its filename is not text someone wrote, so only
+    /// the message rate applies. Like the timeline's media detection, only
+    /// mesh senders can attach files: the same line in a geohash or bridged
+    /// message stays text, so the prefix can't dodge the text checks there.
+    static func isMeshAttachment(_ message: BitchatMessage) -> Bool {
+        if let peerID = message.senderPeerID, peerID.isGeoChat || peerID.isGeoDM || peerID.isBridge {
+            return false
+        }
+        let categories: [MimeType.Category] = [.image, .audio, .file]
+        return categories.contains { category in
+            guard message.content.hasPrefix(category.messagePrefix) else { return false }
+            let filename = String(message.content.dropFirst(category.messagePrefix.count))
+            return BitchatMessage.isSafeMediaFilename(filename)
+        }
     }
 
     func check(

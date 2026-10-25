@@ -308,6 +308,40 @@ import Testing
         #expect(filter.check(senderKey: "alice", messageID: "a7", content: h.prose(), timestamp: h.now) == .allowed)
     }
 
+    // MARK: - Attachments
+
+    private func attachment(_ content: String, id: String, from peerID: PeerID, at now: Date) -> BitchatMessage {
+        BitchatMessage(id: id, sender: "alice", content: content, timestamp: now, isRelay: false, senderPeerID: peerID)
+    }
+
+    @Test func meshAttachmentFilenamesAreNotJudgedAsText() {
+        let h = Harness()
+        let peer = PeerID(str: "aabbccddeeff0011")
+        // Numbered names would be near-copies, plain names would count as links.
+        let names = ["[image] photo1.jpg", "[image] photo2.jpg", "[image] photo3.jpg", "[voice] beach.m4a", "[file] notes.pdf"]
+        for (i, name) in names.enumerated() {
+            #expect(h.filter.check(attachment(name, id: "a\(i)", from: peer, at: h.now), senderKey: "mesh:a") == .allowed, "\(name)")
+        }
+    }
+
+    @Test func meshAttachmentFloodIsStillRateLimited() {
+        let h = Harness()
+        let peer = PeerID(str: "aabbccddeeff0011")
+        let verdicts = (0..<7).map {
+            h.filter.check(attachment("[image] img_\($0).jpg", id: "f\($0)", from: peer, at: h.now), senderKey: "mesh:a")
+        }
+        #expect(verdicts.last == .messageRate)
+        #expect(verdicts.dropLast().allSatisfy { $0 == .allowed })
+    }
+
+    @Test func attachmentPrefixInAGeohashMessageIsStillText() {
+        let h = Harness()
+        let geo = PeerID(nostr: String(repeating: "ab", count: 32))
+        let message = attachment("[image] " + String(repeating: "A", count: 80), id: "g", from: geo, at: h.now)
+        #expect(!SpamFilter.isMeshAttachment(message))
+        #expect(h.filter.check(message, senderKey: "nostr:ab") == .repeatedCharacters)
+    }
+
     // MARK: - Across users
 
     @Test func sameTextFromManyThrowawayIdentitiesIsHiddenAfterThreeCopies() {
