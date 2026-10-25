@@ -242,6 +242,7 @@ final class ChatPeerIdentityCoordinator {
 
     @MainActor
     func handleIdentityMismatch(for peerID: PeerID, reason: PeerIdentityMismatchReason, offendingKey: Data) {
+        SecureLogger.warning("🚨 Refused announce for \(peerID.id.prefix(8))…: \(reason)", category: .security)
         if warnedOffendingKeys[peerID]?.contains(offendingKey) == true {
             return
         }
