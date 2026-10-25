@@ -20,7 +20,8 @@ private func makeTestableViewModel(
     panicMediaWipe: (() throws -> Void)? = nil,
     panicRecoveryOperations: PanicRecoveryOperations? = nil,
     panicNetworkLifecycle: PanicNetworkLifecycle = .noop,
-    locationManager: LocationChannelManager = .shared
+    locationManager: LocationChannelManager = .shared,
+    meshSightings: MeshSightingsTracker? = nil
 ) -> (viewModel: ChatViewModel, transport: MockTransport) {
     let keychain = injectedKeychain ?? MockKeychain()
     let keychainHelper = MockKeychainHelper()
@@ -34,6 +35,7 @@ private func makeTestableViewModel(
         identityManager: identityManager,
         transport: transport,
         locationManager: locationManager,
+        meshSightings: meshSightings,
         panicMediaWipe: panicMediaWipe,
         panicRecoveryOperations: panicRecoveryOperations,
         panicNetworkLifecycle: panicNetworkLifecycle
@@ -2179,6 +2181,26 @@ struct ChatViewModelPanicTests {
         #expect(completed)
         #expect(events == ["stop", "wipe", "restart"])
         #expect(viewModel.networkActivationAllowed)
+    }
+
+    /// The tally the peer-list handler feeds (`.shared` in the app) holds
+    /// today's salt, the hashes, and the raw IDs of the peers in range; the
+    /// wipe must clear that same instance.
+    @Test @MainActor
+    func panicClearAllData_clearsTheSightingsTallyThePeerListFeeds() {
+        let tracker = MeshSightingsTracker(defaults: InMemoryUserDefaults())
+        let (viewModel, transport) = makeTestableViewModel(meshSightings: tracker)
+        let peerID = PeerID(str: "0011223344556677")
+        transport.connectedPeers = [peerID]
+
+        viewModel.didReceiveTransportEvent(.peerListUpdated([peerID]))
+        #expect(tracker.todayCount == 1)
+        #expect(tracker._test_heldPeerIDCount == 1)
+
+        viewModel.panicClearAllData(restartServices: false)
+
+        #expect(tracker.todayCount == 0)
+        #expect(tracker._test_heldPeerIDCount == 0)
     }
 
     @Test @MainActor
