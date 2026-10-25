@@ -35,6 +35,12 @@ enum ChatMediaPreparation {
 
     static func prepareImagePacket(from sourceURL: URL) throws -> ChatPreparedImage {
         let outputURL = try ImageUtils.processImage(at: sourceURL)
+        return try prepareProcessedImagePacket(at: outputURL)
+    }
+
+    /// Takes ownership of an already sanitized ImageUtils output, removing it
+    /// if packet preparation fails. Raw inputs must use prepareImagePacket.
+    static func prepareProcessedImagePacket(at outputURL: URL) throws -> ChatPreparedImage {
         do {
             let data = try Data(contentsOf: outputURL)
             guard data.count <= FileTransferLimits.maxImageBytes else {

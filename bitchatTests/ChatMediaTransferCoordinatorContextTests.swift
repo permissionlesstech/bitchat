@@ -792,6 +792,69 @@ struct ChatMediaTransferCoordinatorContextTests {
     }
 
     @Test @MainActor
+    func invalidImageSourceRemovesOwnedFile() throws {
+        let context = MockChatMediaTransferContext()
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("invalid-image-\(UUID().uuidString).jpg")
+        try Data().write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(FileManager.default.fileExists(atPath: url.path))
+
+        coordinator.sendImage(from: url, cleanup: {
+            try? FileManager.default.removeItem(at: url)
+        })
+
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+        #expect(context.systemMessages == ["Failed to prepare image for sending."])
+        #expect(context.privateChats.isEmpty)
+        #expect(context.appendedPublicMessages.isEmpty)
+    }
+
+    @Test @MainActor
+    func pickerImageSendsPreparedJPEGWithoutEnteringRawImagePreparation() async throws {
+        let context = MockChatMediaTransferContext()
+        let peerID = PeerID(str: "99aabbccddeeff00")
+        context.selectedPrivateChatPeer = peerID
+        let coordinator = ChatMediaTransferCoordinator(
+            context: context,
+            prepareImagePacket: { sourceURL in
+                // A picker result is already sanitized. Re-entering this raw
+                // path would decode/encode it again and leave another file.
+                try? FileManager.default.removeItem(at: sourceURL)
+                throw ChatMediaPreparationError.encodingFailed
+            }
+        )
+        let sourceURL = try makeCoordinatorTestImageURL()
+        defer {
+            try? FileManager.default.removeItem(at: sourceURL)
+            if let message = context.privateChats[peerID]?.first {
+                coordinator.cleanupLocalFile(forMessage: message)
+            }
+        }
+
+        #if os(iOS)
+        let image = try #require(UIImage(contentsOfFile: sourceURL.path))
+        coordinator.processThenSendImage(image)
+        #else
+        coordinator.processThenSendImage(from: sourceURL)
+        #endif
+
+        #expect(await TestHelpers.waitUntil(
+            { !context.privateFileSends.isEmpty || !context.systemMessages.isEmpty },
+            timeout: TestConstants.longTimeout
+        ))
+        #expect(context.systemMessages.isEmpty)
+        let packet = try #require(context.privateFileSends.first?.packet)
+        let fileName = try #require(packet.fileName)
+        let message = try #require(context.privateChats[peerID]?.first)
+        #expect(context.privateFileSends.count == 1)
+        #expect(packet.mimeType == "image/jpeg")
+        #expect(message.content == "\(MimeType.Category.image.messagePrefix)\(fileName)")
+        #expect(packet.fileSize == UInt64(packet.content.count))
+    }
+
+    @Test @MainActor
     func privateImageUsesWireDerivableMessageID() async throws {
         let context = MockChatMediaTransferContext()
         let coordinator = ChatMediaTransferCoordinator(context: context)
