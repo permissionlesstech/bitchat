@@ -147,6 +147,11 @@ struct MessageBubbleMeta: View {
     let isBridged: Bool
     /// Delivery status to show; nil for rows that show none.
     let status: DeliveryStatus?
+    /// The body text ends in this cluster's `placeholder`, which already
+    /// reads the time to VoiceOver. Only then is the visible time hidden
+    /// from it; media bubbles and collapsed long messages have no
+    /// placeholder, and their time must stay readable here.
+    var timeIsSpokenByBody = false
     let onStatusTap: () -> Void
 
     private static let spacing: CGFloat = 3
@@ -163,14 +168,13 @@ struct MessageBubbleMeta: View {
                         String(localized: "content.accessibility.bridged_message", defaultValue: "Arrived across a mesh bridge", comment: "Accessibility label for the glyph marking a message that arrived across a mesh bridge")
                     )
             }
-            // The placeholder in the body already reads the time out.
             Text(verbatim: time)
                 .font(.bitchatSystem(size: MessageBubbleMetrics.metaFontSize, design: theme.bodyFontDesign))
                 // Neutral grey like the IRC timestamps: the bubble's tint
                 // already says whose it is.
                 .foregroundColor(Color.gray.opacity(0.8))
                 .lineLimit(1)
-                .accessibilityHidden(true)
+                .accessibilityHidden(timeIsSpokenByBody)
             if let status {
                 Button(action: onStatusTap) {
                     DeliveryStatusView(status: status)

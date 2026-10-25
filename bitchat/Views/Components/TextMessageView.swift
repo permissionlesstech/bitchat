@@ -159,8 +159,12 @@ struct TextMessageView: View {
         let isCollapsed = scan.isLongForDisplay && !expandedMessageIDs.contains(message.id)
         let status: DeliveryStatus? = message.isPrivate && isOwn && deliveryStatus != .notSentYet ? deliveryStatus : nil
         let time = MessageBubbleMetrics.timestamp(for: message.timestamp)
-        let meta = MessageBubbleMeta(time: time, isBridged: message.isBridged, status: status) {
-            showDeliveryDetail.toggle()
+        // Only the inline cluster sits beside a placeholder that reads the
+        // time; the one under a collapsed message must read it itself.
+        func meta(timeIsSpokenByBody: Bool) -> MessageBubbleMeta {
+            MessageBubbleMeta(time: time, isBridged: message.isBridged, status: status, timeIsSpokenByBody: timeIsSpokenByBody) {
+                showDeliveryDetail.toggle()
+            }
         }
 
         return VStack(alignment: isOwn ? .trailing : .leading, spacing: 3) {
@@ -179,7 +183,7 @@ struct TextMessageView: View {
                     .lineLimit(isCollapsed ? TransportConfig.uiLongMessageLineLimit : nil)
                     .overlay(alignment: Alignment(horizontal: .trailing, vertical: .lastTextBaseline)) {
                         if !isCollapsed {
-                            meta
+                            meta(timeIsSpokenByBody: true)
                         }
                     }
 
@@ -187,7 +191,7 @@ struct TextMessageView: View {
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
                         expandToggle
                         if isCollapsed {
-                            meta
+                            meta(timeIsSpokenByBody: false)
                         }
                     }
                     .padding(.top, 2)
