@@ -6,7 +6,8 @@ import Testing
 
 @MainActor
 private func makeArchitectureViewModel(
-    locationManager: LocationChannelManager? = nil
+    locationManager: LocationChannelManager? = nil,
+    userDefaults: UserDefaults = .standard
 ) -> ChatViewModel {
     let keychain = MockKeychain()
     let keychainHelper = MockKeychainHelper()
@@ -19,7 +20,8 @@ private func makeArchitectureViewModel(
         idBridge: idBridge,
         identityManager: identityManager,
         transport: MockTransport(),
-        locationManager: locationManager
+        locationManager: locationManager,
+        userDefaults: userDefaults
     )
 }
 
@@ -413,8 +415,12 @@ struct AppArchitectureTests {
 
     @Test("AppChromeModel mirrors nickname and unread state through focused models")
     @MainActor
-    func appChromeModelMirrorsNicknameAndUnreadState() async {
-        let viewModel = makeArchitectureViewModel()
+    func appChromeModelMirrorsNicknameAndUnreadState() async throws {
+        // A commit persists the nickname: keep it out of the real defaults.
+        let suiteName = "AppArchitectureTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let viewModel = makeArchitectureViewModel(userDefaults: defaults)
         let conversations = ConversationStore()
         let privateInboxModel = PrivateInboxModel(conversations: conversations)
         let chromeModel = AppChromeModel(chatViewModel: viewModel, privateInboxModel: privateInboxModel)
@@ -426,6 +432,7 @@ struct AppArchitectureTests {
 
         #expect(viewModel.nickname == "builder")
         #expect(chromeModel.nickname == "builder")
+        #expect(defaults.string(forKey: "bitchat.nickname") == "builder")
         #expect(!chromeModel.hasUnreadPrivateMessages)
 
         let peerID = PeerID(str: "peer-1")

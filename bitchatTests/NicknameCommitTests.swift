@@ -13,6 +13,11 @@ struct NicknameCommitTests {
         let viewModel: ChatViewModel
         let chrome: AppChromeModel
         let defaults: UserDefaults
+        let suiteName: String
+
+        func removeDefaults() {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
     }
 
     private let nicknameKey = "bitchat.nickname"
@@ -20,7 +25,6 @@ struct NicknameCommitTests {
     private func makeFixture() throws -> Fixture {
         let suiteName = "NicknameCommitTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
-        defaults.removePersistentDomain(forName: suiteName)
         let keychain = MockKeychain()
         let transport = MockTransport()
         let viewModel = ChatViewModel(
@@ -36,12 +40,13 @@ struct NicknameCommitTests {
             chatViewModel: viewModel,
             privateInboxModel: PrivateInboxModel(conversations: ConversationStore())
         )
-        return Fixture(transport: transport, viewModel: viewModel, chrome: chrome, defaults: defaults)
+        return Fixture(transport: transport, viewModel: viewModel, chrome: chrome, defaults: defaults, suiteName: suiteName)
     }
 
     @Test
     func commitSendsOneAnnounceAndOneWrite() throws {
         let fixture = try makeFixture()
+        defer { fixture.removeDefaults() }
         let renamesBefore = fixture.transport.setNicknameCallCount
         let broadcastsBefore = fixture.transport.broadcastAnnounceCallCount
 
@@ -59,6 +64,7 @@ struct NicknameCommitTests {
     @Test
     func committingTheSameNameIsFree() throws {
         let fixture = try makeFixture()
+        defer { fixture.removeDefaults() }
         let current = fixture.chrome.nickname
         let renamesBefore = fixture.transport.setNicknameCallCount
         fixture.defaults.removeObject(forKey: nicknameKey)
@@ -74,6 +80,7 @@ struct NicknameCommitTests {
     @Test
     func submitThenFocusLossAnnouncesOnce() throws {
         let fixture = try makeFixture()
+        defer { fixture.removeDefaults() }
         let renamesBefore = fixture.transport.setNicknameCallCount
 
         let submitted = fixture.chrome.commitNickname("builder", replacing: fixture.chrome.nickname)
@@ -85,10 +92,16 @@ struct NicknameCommitTests {
     @Test
     func commitCanonicalizes() throws {
         let fixture = try makeFixture()
+        defer { fixture.removeDefaults() }
 
         #expect(fixture.chrome.commitNickname("  bob  ", replacing: fixture.chrome.nickname) == "bob")
-        // Typed decomposed (NFD), committed composed (NFC).
-        #expect(fixture.chrome.commitNickname("Jose\u{301}", replacing: fixture.chrome.nickname) == "Jos\u{E9}")
+        // Typed decomposed (NFD), committed composed (NFC). String == treats
+        // the two as equal, so compare scalars: what is announced and saved.
+        let composed = Array("Jos\u{E9}".unicodeScalars)
+        let committed = fixture.chrome.commitNickname("Jose\u{301}", replacing: fixture.chrome.nickname)
+        #expect(Array(committed.unicodeScalars) == composed)
+        #expect(Array(fixture.transport.myNickname.unicodeScalars) == composed)
+        #expect(fixture.defaults.string(forKey: nicknameKey).map { Array($0.unicodeScalars) } == composed)
         // Internal spaces are part of the name.
         #expect(fixture.chrome.commitNickname("mary ann", replacing: fixture.chrome.nickname) == "mary ann")
         let anonymous = fixture.chrome.commitNickname("   ", replacing: fixture.chrome.nickname)
@@ -101,6 +114,7 @@ struct NicknameCommitTests {
     @Test
     func staleDraftAfterExternalRenameIsDropped() throws {
         let fixture = try makeFixture()
+        defer { fixture.removeDefaults() }
         let draftBase = fixture.chrome.nickname
         fixture.viewModel.nickname = "anon4242"
         let renamesBefore = fixture.transport.setNicknameCallCount
