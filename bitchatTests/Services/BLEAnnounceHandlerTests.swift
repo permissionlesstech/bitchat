@@ -773,7 +773,8 @@ struct BLEAnnounceHandlerTests {
             deliverAnnounceUIEvents: { _, _, _ in },
             trackPacketSeen: { _ in },
             sendAnnounceBack: {},
-            scheduleAfterglow: { _ in }
+            scheduleAfterglow: { _ in },
+            notifyIdentityMismatch: { _, _, _ in }
         )
         let handler = BLEAnnounceHandler(environment: environment)
 
@@ -893,7 +894,8 @@ struct BLEAnnounceHandlerTests {
                 deliverAnnounceUIEvents: { _, _, _ in },
                 trackPacketSeen: { _ in },
                 sendAnnounceBack: {},
-                scheduleAfterglow: { _ in }
+                scheduleAfterglow: { _ in },
+                notifyIdentityMismatch: { _, _, _ in }
             )
         }
         let handler = BLEAnnounceHandler(environment: makeEnvironment(identityManager: identityManager))
