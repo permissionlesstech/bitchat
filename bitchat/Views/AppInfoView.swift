@@ -333,27 +333,30 @@ struct AppInfoView: View {
     @ViewBuilder
     private var settingsContent: some View {
         VStack(alignment: .leading, spacing: 24) {
-            // Appearance — single row: label left, theme chips right
-            HStack(spacing: 12) {
+            // Appearance — label above theme chips (scrollable for many themes)
+            VStack(alignment: .leading, spacing: 8) {
                 SectionHeader(Strings.appearanceTitle)
-                Spacer()
-                ForEach(AppTheme.allCases) { theme in
-                    Button {
-                        appThemeRawValue = theme.rawValue
-                    } label: {
-                        Text(theme.displayNameKey)
-                            .bitchatFont(size: 13, weight: selectedTheme == theme ? .semibold : .regular)
-                            .foregroundColor(selectedTheme == theme ? palette.accent : secondaryTextColor)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(selectedTheme == theme ? palette.accent.opacity(0.15) : Color.clear)
-                            )
-                            .contentShape(Rectangle())
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(AppTheme.allCases) { theme in
+                            Button {
+                                appThemeRawValue = theme.rawValue
+                            } label: {
+                                Text(theme.displayNameKey)
+                                    .bitchatFont(size: 13, weight: selectedTheme == theme ? .semibold : .regular)
+                                    .foregroundColor(selectedTheme == theme ? palette.accent : secondaryTextColor)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                            .fill(selectedTheme == theme ? palette.accent.opacity(0.15) : Color.clear)
+                                    )
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(selectedTheme == theme ? .isSelected : [])
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(selectedTheme == theme ? .isSelected : [])
                 }
             }
 
