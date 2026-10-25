@@ -130,7 +130,7 @@ struct ContentHeaderView: View {
                 }
             }
             .onChange(of: scenePhase) { phase in
-                if phase != .active {
+                if Self.commitsNicknameDraft(on: phase) {
                     commitNicknameDraft()
                 }
             }
@@ -438,6 +438,21 @@ private extension View {
     func headerTapTarget() -> some View {
         frame(minWidth: 30, maxHeight: .infinity)
             .contentShape(Rectangle())
+    }
+}
+
+extension ContentHeaderView {
+    /// Whether the scene moving to `phase` means the app left the foreground,
+    /// which commits a nickname draft. iOS also reports `.inactive` while
+    /// Control Center, the app switcher or Siri is up, and typing carries on
+    /// afterwards, so only `.background` counts there. macOS reports
+    /// `.inactive` when another app becomes active.
+    static func commitsNicknameDraft(on phase: ScenePhase) -> Bool {
+        #if os(iOS)
+        return phase == .background
+        #else
+        return phase != .active
+        #endif
     }
 }
 

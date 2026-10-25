@@ -1,5 +1,6 @@
 import BitFoundation
 import Foundation
+import SwiftUI
 import Testing
 @testable import bitchat
 
@@ -124,5 +125,19 @@ struct NicknameCommitTests {
         #expect(result == "anon4242")
         #expect(fixture.viewModel.nickname == "anon4242")
         #expect(fixture.transport.setNicknameCallCount == renamesBefore)
+    }
+
+    /// Leaving the foreground commits the draft. On iOS only `.background`
+    /// does: `.inactive` also covers Control Center, the app switcher and
+    /// Siri, and committing there would announce a half-typed name.
+    @Test
+    func draftIsCommittedOnlyWhenTheAppLeavesTheForeground() {
+        #expect(!ContentHeaderView.commitsNicknameDraft(on: .active))
+        #expect(ContentHeaderView.commitsNicknameDraft(on: .background))
+        #if os(iOS)
+        #expect(!ContentHeaderView.commitsNicknameDraft(on: .inactive))
+        #else
+        #expect(ContentHeaderView.commitsNicknameDraft(on: .inactive))
+        #endif
     }
 }
