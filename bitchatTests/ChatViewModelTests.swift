@@ -20,6 +20,7 @@ private func makeTestableViewModel(
     panicMediaWipe: (() throws -> Void)? = nil,
     panicRecoveryOperations: PanicRecoveryOperations? = nil,
     panicNetworkLifecycle: PanicNetworkLifecycle = .noop,
+    panicNotificationRemoval: @escaping @MainActor () -> Void = {},
     locationManager: LocationChannelManager = .shared
 ) -> (viewModel: ChatViewModel, transport: MockTransport) {
     let keychain = injectedKeychain ?? MockKeychain()
@@ -36,7 +37,8 @@ private func makeTestableViewModel(
         locationManager: locationManager,
         panicMediaWipe: panicMediaWipe,
         panicRecoveryOperations: panicRecoveryOperations,
-        panicNetworkLifecycle: panicNetworkLifecycle
+        panicNetworkLifecycle: panicNetworkLifecycle,
+        panicNotificationRemoval: panicNotificationRemoval
     )
 
     return (viewModel, transport)
@@ -2219,6 +2221,63 @@ struct ChatViewModelPanicTests {
     }
 
     @Test @MainActor
+    func panicClearAllData_removesNotifications() {
+        var removals = 0
+        let (viewModel, _) = makeTestableViewModel(panicNotificationRemoval: { removals += 1 })
+
+        let completed = viewModel.panicClearAllData()
+
+        #expect(completed)
+        #expect(removals == 1)
+    }
+
+    /// An alert's content is on screen whether or not the wipe committed, so
+    /// a failed transaction must not leave Notification Center untouched.
+    @Test @MainActor
+    func panicClearAllData_removesNotificationsEvenWhenTheWipeDoesNotCommit() {
+        let keychain = MockKeychain()
+        keychain.simulatedDeleteAllResult = false
+        var removals = 0
+        let (viewModel, _) = makeTestableViewModel(
+            keychain: keychain,
+            panicNotificationRemoval: { removals += 1 }
+        )
+
+        let completed = viewModel.panicClearAllData()
+
+        #expect(!completed)
+        #expect(removals == 1)
+    }
+
+    /// If the process dies after the recovery markers clear, startup has no
+    /// wipe to replay, so the alerts must already be gone by that commit.
+    @Test @MainActor
+    func panicClearAllData_removesNotificationsBeforeCommittingRecovery() throws {
+        var events: [String] = []
+        let operations = PanicRecoveryOperations(
+            isPending: { false },
+            begin: {
+                events.append("begin")
+                return PanicRecoveryIntent(
+                    fileMarkerEstablished: true,
+                    externalMarkerEstablished: false
+                )
+            },
+            wipeMedia: { _ in events.append("wipe") },
+            complete: { events.append("complete") }
+        )
+        let (viewModel, _) = makeTestableViewModel(
+            panicRecoveryOperations: operations,
+            panicNotificationRemoval: { events.append("remove notifications") }
+        )
+
+        #expect(viewModel.panicClearAllData())
+        let removal = try #require(events.firstIndex(of: "remove notifications"))
+        let commit = try #require(events.firstIndex(of: "complete"))
+        #expect(removal < commit)
+    }
+
+    @Test @MainActor
     func pendingPanicRecoveryCompletesBeforeTransportBootstrap() {
         var events: [String] = []
         let operations = PanicRecoveryOperations(
@@ -2251,6 +2310,7 @@ struct ChatViewModelPanicTests {
     func failedStartupRecoveryLeavesTransportAndNetworkBlocked() {
         enum WipeFailure: Error { case failed }
         var completedMarker = false
+        var removals = 0
         let operations = PanicRecoveryOperations(
             isPending: { true },
             begin: {
@@ -2264,10 +2324,13 @@ struct ChatViewModelPanicTests {
         )
 
         let (viewModel, transport) = makeTestableViewModel(
-            panicRecoveryOperations: operations
+            panicRecoveryOperations: operations,
+            panicNotificationRemoval: { removals += 1 }
         )
 
         #expect(!completedMarker)
+        // Startup replay reaches the removal too, even when the wipe throws.
+        #expect(removals == 1)
         #expect(transport.emergencyDisconnectCallCount == 1)
         #expect(transport.startServicesCallCount == 0)
         #expect(!viewModel.networkActivationAllowed)

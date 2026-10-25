@@ -331,6 +331,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     let keychain: KeychainManagerProtocol
     private let panicRecoveryOperations: PanicRecoveryOperations
     private let panicNetworkLifecycle: PanicNetworkLifecycle
+    private let panicNotificationRemoval: @MainActor () -> Void
     private var isPanicResetting = false
     /// Private group membership: keys in the keychain, metadata on disk.
     let groupStore: GroupStore
@@ -1163,7 +1164,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         sfMetrics: StoreAndForwardMetrics? = nil,
         panicMediaWipe: (() throws -> Void)? = nil,
         panicRecoveryOperations: PanicRecoveryOperations? = nil,
-        panicNetworkLifecycle: PanicNetworkLifecycle = .noop
+        panicNetworkLifecycle: PanicNetworkLifecycle = .noop,
+        panicNotificationRemoval: @escaping @MainActor () -> Void = {
+            NotificationService.shared.removeAllNotifications()
+        }
     ) {
         let conversations = conversations ?? ConversationStore()
         let peerIdentityStore = peerIdentityStore ?? PeerIdentityStore()
@@ -1181,6 +1185,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         self.panicRecoveryOperations = panicRecoveryOperations
             ?? .ephemeral(wipeMedia: panicMediaWipe ?? {})
         self.panicNetworkLifecycle = panicNetworkLifecycle
+        self.panicNotificationRemoval = panicNotificationRemoval
         self.groupStore = GroupStore(keychain: keychain)
         self.idBridge = idBridge
         self.identityManager = identityManager
@@ -1579,6 +1584,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         } else {
             meshService.emergencyDisconnectAll()
         }
+
+        // A delivered alert outlives the data behind it: with previews on,
+        // Notification Center still shows who wrote and what. Remove alerts
+        // now that nothing new arrives, before anything commits: if the
+        // process dies mid-wipe, startup replays the whole transaction, this
+        // step included.
+        panicNotificationRemoval()
 
         // Invalidate detached media preparation and close live capture file
         // handles before clearing state or removing the media directory.
