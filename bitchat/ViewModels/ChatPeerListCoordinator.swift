@@ -186,6 +186,15 @@ private extension ChatPeerListCoordinator {
                 continue
             }
 
+            // The roster learns a peer one coalesced snapshot publish after
+            // the transport does. A DM that lands in between is stored under
+            // the short ID; while the transport still lists the sender, its
+            // unread flag is not stale.
+            if context.isPeerConnected(staleID) || context.isPeerReachable(staleID),
+               !context.privateMessages(for: staleID).isEmpty {
+                continue
+            }
+
             idsToRemove.append(staleID)
             context.markPrivateChatRead(staleID)
         }

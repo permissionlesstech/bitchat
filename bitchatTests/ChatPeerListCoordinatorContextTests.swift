@@ -193,6 +193,35 @@ struct ChatPeerListCoordinatorContextTests {
         #expect(context.cleanupOldReadReceiptsCount == 1)
     }
 
+    /// The roster learns a peer one coalesced snapshot publish after the
+    /// transport does. A DM landing in between is stored under the sender's
+    /// short ID and marked unread; a list pass in that gap must not clear it.
+    @Test @MainActor
+    func didUpdatePeerList_keepsUnreadDMsFromPeersTheTransportStillLists() {
+        let context = MockChatPeerListContext()
+        let coordinator = ChatPeerListCoordinator(context: context)
+
+        let relayedNewcomer = PeerID(str: "0011223344556677")
+        let linkedNewcomer = PeerID(str: "8899aabbccddeeff")
+        let departedPeer = PeerID(str: "1122334455667788")
+        let presentWithoutMessages = PeerID(str: "99aabbccddeeff00")
+        context.reachableMeshPeers = [relayedNewcomer]
+        context.connectedMeshPeers = [linkedNewcomer, presentWithoutMessages]
+        context.unreadPrivateMessages = [relayedNewcomer, linkedNewcomer, departedPeer, presentWithoutMessages]
+        context.privateChats = [
+            relayedNewcomer: [makeMessage(id: "dm-relayed", senderPeerID: relayedNewcomer)],
+            linkedNewcomer: [makeMessage(id: "dm-linked", senderPeerID: linkedNewcomer)],
+            departedPeer: [makeMessage(id: "dm-departed", senderPeerID: departedPeer)]
+        ]
+
+        // None of them is in the roster yet (`unifiedPeers` is empty).
+        coordinator.didUpdatePeerListSynchronously([relayedNewcomer, linkedNewcomer, presentWithoutMessages])
+
+        // A sender the transport still lists keeps its unread DM; one it
+        // no longer lists, or an unread flag with nothing behind it, does not.
+        #expect(context.unreadPrivateMessages == [relayedNewcomer, linkedNewcomer])
+    }
+
     @Test @MainActor
     func didUpdatePeerList_notifiesNetworkAvailableOncePerCooldownForNewMeshPeers() async {
         let context = MockChatPeerListContext()
