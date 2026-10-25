@@ -387,9 +387,11 @@ struct SimulatedMeshAnnounceBudgetTests {
     }
 
     /// A courier hands mail over the moment it authenticates the recipient
-    /// on a direct link. It used to wait for the recipient's next announce
-    /// on that link, which the post-handshake announce happened to supply;
-    /// here every announce the recipient sends predates the handshake.
+    /// on a direct link, and sprays copies of mail it carries for others to
+    /// it as a fellow courier. It used to wait for the recipient's next
+    /// announce on that link, which the post-handshake announce happened to
+    /// supply; here every announce the recipient sends predates the
+    /// handshake.
     @Test
     func courierMailIsHandedOverWhenCarrierAuthenticatesRecipient() async throws {
         let mesh = SimulatedMesh(announceAccounting: true)
@@ -415,24 +417,44 @@ struct SimulatedMeshAnnounceBudgetTests {
         // The deposit is accepted on the main actor.
         let carried = await mainActorDrained { !carol.service.courierStore.isEmpty }
         #expect(carried)
+        // Carol also carries Alice's mail for Dave, who is nowhere near.
+        let daveKey = NoiseEncryptionService(keychain: MockKeychain()).getStaticPublicKeyData()
+        let forDave = CourierEnvelope(
+            recipientTag: CourierEnvelope.recipientTag(
+                noiseStaticKey: daveKey,
+                epochDay: CourierEnvelope.epochDay(for: Date())
+            ),
+            expiry: UInt64(Date().addingTimeInterval(3600).timeIntervalSince1970 * 1000),
+            ciphertext: Data(repeating: 0xD0, count: 128),
+            copies: TransportConfig.courierInitialCopies
+        )
+        #expect(carol.service.courierStore.deposit(forDave, from: alice.service.noiseStaticPublicKeyData()))
 
         // Carol's central role reaches Bob: Bob's only announce on the link
         // answers Carol's link-up, before any Noise session exists.
         mesh.linkUp(central: 1, peripheral: bobIndex)
         mesh.settle()
-
-        let sent = mesh.emittedPackets(from: 1)
-        let toBob = sent.indices.filter {
-            sent[$0].type == MessageType.courierEnvelope.rawValue
-                && PeerID(hexData: sent[$0].recipientID) == bob.myPeerID
+        // The spray's trust gate runs on the main actor; the send itself
+        // goes back to Carol's engine.
+        let sprayed = await mainActorDrained {
+            carol.service._test_fenceEngine()
+            return courierFrames(from: mesh, sender: 1, to: bob.myPeerID).contains { $0.envelope.ciphertext == forDave.ciphertext }
         }
-        print("BUDGET[courier handover]: courierFramesToRecipient=\(toBob.count)")
-        // The speculative copy at first contact, then the direct handover.
-        // (No physical link accepts the send in the harness, so Carol keeps
-        // the durable copy; the attempt is what the tap records.)
-        #expect(toBob.count == 2)
-        let lastHandshake = sent.lastIndex { $0.type == MessageType.noiseHandshake.rawValue }
-        #expect(lastHandshake.map { toBob.last ?? -1 > $0 } == true)
+        #expect(sprayed)
+
+        let lastHandshake = mesh.emittedPackets(from: 1).lastIndex { $0.type == MessageType.noiseHandshake.rawValue } ?? .max
+        let frames = courierFrames(from: mesh, sender: 1, to: bob.myPeerID)
+        let bobsMail = frames.filter { $0.envelope.ciphertext != forDave.ciphertext }
+        print("BUDGET[courier handover]: courierFramesToRecipient=\(bobsMail.count)")
+        // Bob's own mail goes over once the link is authenticated (the
+        // earlier speculative copy is a separate path). No physical link
+        // accepts the send in the harness, so Carol keeps the durable copy;
+        // the attempt is what the tap records.
+        #expect(bobsMail.filter { $0.index > lastHandshake }.count == 1)
+        // Half of the copies of Dave's mail go to Bob to spread.
+        let daveCopies = frames.filter { $0.envelope.ciphertext == forDave.ciphertext }
+        #expect(daveCopies.map(\.envelope.copies) == [TransportConfig.courierInitialCopies / 2])
+        #expect(daveCopies.allSatisfy { $0.index > lastHandshake })
         #expect(carol.service._test_isNoiseAuthenticatedCentral(mesh.linkUUID(from: bobIndex, at: 1), for: bob.myPeerID))
     }
 
@@ -599,6 +621,21 @@ struct SimulatedMeshAnnounceBudgetTests {
             await MainActor.run {}
         }
         return condition()
+    }
+
+    /// Courier envelopes `sender` addressed to `recipient`, with their
+    /// position among everything `sender` emitted.
+    private func courierFrames(
+        from mesh: SimulatedMesh,
+        sender: Int,
+        to recipient: PeerID
+    ) -> [(index: Int, envelope: CourierEnvelope)] {
+        mesh.emittedPackets(from: sender).enumerated().compactMap { index, packet in
+            guard packet.type == MessageType.courierEnvelope.rawValue,
+                  PeerID(hexData: packet.recipientID) == recipient,
+                  let envelope = CourierEnvelope.decode(packet.payload) else { return nil }
+            return (index, envelope)
+        }
     }
 
     private func originations(_ mesh: SimulatedMesh) -> [Int] {

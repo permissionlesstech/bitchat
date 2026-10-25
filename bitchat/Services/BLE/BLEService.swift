@@ -4937,11 +4937,12 @@ extension BLEService {
             }
         }
         let policy = courierDepositPolicy
-        notifyUI {
+        notifyUI { [weak self] in
             // Same trust gate as deposits: don't hand mail to a peer who
-            // would reject it from us.
+            // would reject it from us. The gate reads main-actor state; the
+            // sends read engine-owned link state, so they go back there.
             guard policy(noiseKey, isVerifiedPeer) != nil else { return }
-            sendSpray()
+            self?.messageQueue.async(execute: sendSpray)
         }
     }
 
