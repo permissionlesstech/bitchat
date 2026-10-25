@@ -24,9 +24,17 @@ protocol ChatPeerIdentityContext: AnyObject {
     var unreadPrivateMessages: Set<PeerID> { get }
     /// Clears the peer's unread flag (single-writer store intent).
     func markPrivateChatRead(_ peerID: PeerID)
+    /// Sets the peer's unread flag (shared requirement with the inbound DM
+    /// paths; witness on `ChatViewModel`).
+    func markPrivateChatUnread(_ peerID: PeerID)
     /// Moves all messages from `oldPeerID`'s chat into `newPeerID`'s chat
     /// (dedup by ID, order preserved, unread carried, old chat removed).
     func migratePrivateChat(from oldPeerID: PeerID, to newPeerID: PeerID)
+    /// Appends a private message via the single-writer store intent; returns
+    /// `false` when that chat already holds a message with the same ID
+    /// (shared requirement with `ChatLifecycleContext`).
+    @discardableResult
+    func appendPrivateMessage(_ message: BitchatMessage, to peerID: PeerID) -> Bool
     var selectedPrivateChatPeer: PeerID? { get set }
     var selectedPrivateChatFingerprint: String? { get set }
     var myPeerID: PeerID { get }
@@ -676,6 +684,79 @@ private extension ChatPeerIdentityCoordinator {
 
 /// Default for conforming test contexts that model chats as a dictionary;
 /// `ChatViewModel` overrides with a store-direct lookup.
+// MARK: - Refused signing keys
+
+extension ChatPeerIdentityCoordinator {
+    /// Prefix of a refused-key notice's ID. The rest is the refused key, so
+    /// the store's per-chat ID index keeps it to one notice per offending key.
+    static let refusedSigningKeyNoticeIDPrefix = "signing-key-refused-"
+
+    /// Warns in the contact's existing private chat that someone presented a
+    /// different signing key for them and bitchat refused it. Nothing is
+    /// migrated or trusted, and with no chat to warn in nothing is created.
+    /// No notice is added while the newest message already is one, so a
+    /// stream of freshly generated keys cannot flood the chat.
+    @MainActor
+    func warnOfRefusedSigningKey(
+        for peerID: PeerID,
+        noisePublicKey: Data,
+        signingPublicKey: Data,
+        reason: SigningKeyRefusalReason
+    ) {
+        guard let chatID = existingPrivateChat(for: peerID, noisePublicKey: noisePublicKey) else {
+            return
+        }
+        if let newest = context.privateMessages(for: chatID).last,
+           newest.id.hasPrefix(Self.refusedSigningKeyNoticeIDPrefix) {
+            return
+        }
+        // The name comes from what this device already knows. The refused
+        // announce reached neither the registry nor the persisted identity,
+        // so the nickname it carried cannot appear here.
+        let notice = BitchatMessage(
+            id: Self.refusedSigningKeyNoticeIDPrefix + signingPublicKey.hexEncodedString(),
+            sender: "system",
+            content: String(
+                format: String(localized: "system.identity.signing_key_refused", defaultValue: "someone presented a different key for %@, and bitchat refused it. this chat keeps the key it already had.", comment: "Private-chat notice after bitchat refused an announce that claimed this contact's identity with a different signing key; placeholder is the contact's name. The contact's key did not change: say refused, not changed"),
+                locale: .current,
+                resolveNickname(for: peerID)
+            ),
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: true,
+            recipientNickname: context.peerNickname(for: peerID),
+            senderPeerID: context.myPeerID
+        )
+        guard context.appendPrivateMessage(notice, to: chatID) else { return }
+        if context.selectedPrivateChatPeer != chatID {
+            context.markPrivateChatUnread(chatID)
+        }
+        context.notifyUIChanged()
+        SecureLogger.info(
+            "⚠️ Warned in chat: refused signing key for \(peerID.id.prefix(8))… (\(reason))",
+            category: .security
+        )
+    }
+}
+
+private extension ChatPeerIdentityCoordinator {
+    /// The chat already held with this contact: the open one if it is theirs,
+    /// else the first with messages under their mesh ID, full Noise key, or
+    /// bridged Nostr key.
+    @MainActor
+    func existingPrivateChat(for peerID: PeerID, noisePublicKey: Data) -> PeerID? {
+        var candidates = [peerID, PeerID(hexData: noisePublicKey)]
+        if let nostrPublicKey = context.bridgedNostrPublicKey(for: noisePublicKey) {
+            candidates.append(PeerID(nostr_: nostrPublicKey))
+        }
+        if let selected = context.selectedPrivateChatPeer, candidates.contains(selected) {
+            return selected
+        }
+        return candidates.first { !context.privateMessages(for: $0).isEmpty }
+    }
+}
+
 extension ChatPeerIdentityContext {
     func privateMessages(for peerID: PeerID) -> [BitchatMessage] {
         privateChats[peerID] ?? []

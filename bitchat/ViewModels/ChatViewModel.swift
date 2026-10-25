@@ -2122,6 +2122,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
         case .bluetoothStateUpdated(let state):
             updateBluetoothState(state)
+
+        case let .signingKeyRefused(peerID, noisePublicKey, signingPublicKey, reason):
+            peerIdentityCoordinator.warnOfRefusedSigningKey(
+                for: peerID,
+                noisePublicKey: noisePublicKey,
+                signingPublicKey: signingPublicKey,
+                reason: reason
+            )
         }
     }
 

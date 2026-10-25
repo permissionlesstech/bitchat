@@ -974,6 +974,38 @@ struct ChatViewModelPeerTests {
     }
 
     @Test @MainActor
+    func signingKeyRefusedEventWarnsInTheContactsChat() {
+        let (viewModel, _) = makeTestableViewModel()
+        let noiseKey = Data(repeating: 0x9B, count: 32)
+        let peerID = PeerID(publicKey: noiseKey)
+        let earlier = BitchatMessage(
+            id: "earlier",
+            sender: "alice",
+            content: "hi",
+            timestamp: Date(timeIntervalSince1970: 1),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: viewModel.nickname,
+            senderPeerID: peerID
+        )
+        viewModel.seedPrivateChat([earlier], for: peerID)
+
+        viewModel.didReceiveTransportEvent(
+            .signingKeyRefused(
+                peerID: peerID,
+                noisePublicKey: noiseKey,
+                signingPublicKey: Data(repeating: 0x99, count: 32),
+                reason: .pinnedKey
+            )
+        )
+
+        let chat = viewModel.privateMessages(for: peerID)
+        #expect(chat.count == 2)
+        #expect(chat.last?.id.hasPrefix(ChatPeerIdentityCoordinator.refusedSigningKeyNoticeIDPrefix) == true)
+        #expect(viewModel.unreadPrivateMessages.contains(peerID))
+    }
+
+    @Test @MainActor
     func didConnectToPeer_notifiesDelegate() async {
         let (_, transport) = makeTestableViewModel()
         let peerID = PeerID(str: "NEWPEER")
