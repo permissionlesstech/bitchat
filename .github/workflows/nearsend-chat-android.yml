@@ -24,7 +24,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: '8.7' }
       - name: Build debug APK
-        run: gradle --no-daemon :app:assembleDebug
+        run: |
+          set +e
+          gradle --no-daemon :app:assembleDebug > build.log 2>&1
+          code=$?
+          grep -E "^e: |error:|What went wrong|Execution failed|Could not|Unresolved|not found" -A3 build.log | head -40 | while IFS= read -r l; do echo "::error::${l//%/%25}"; done
+          exit $code
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.7
       - name: Enable KVM
