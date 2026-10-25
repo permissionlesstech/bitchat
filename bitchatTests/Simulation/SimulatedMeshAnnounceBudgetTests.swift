@@ -455,6 +455,123 @@ struct SimulatedMeshAnnounceBudgetTests {
         #expect(alice.service.getPeerNicknames()[bob.service.myPeerID] == "robert")
     }
 
+    /// A rename refused while an earlier owed announce's retry is pending,
+    /// with another announce sent in between, still reaches peers. The
+    /// pending retry lands inside that announce's throttle window and is
+    /// refused too, so the rename needs a retry of its own.
+    @Test
+    func renameRefusedAfterAnInterveningAnnounceStillReachesPeers() {
+        let mesh = SimulatedMesh(announceAccounting: true)
+        let alice = mesh.addNode(nickname: "alice")
+        let bob = mesh.addNode(nickname: "bob")
+        mesh.connect(0, 1)
+        mesh.announceAll()
+        mesh.settle()
+
+        bob.service._test_forceAnnounce()
+        mesh.pump()
+        mesh.advanceTime(by: 0.05)
+        // Refused; its retry is due 0.2 s later.
+        bob.service.setNickname("robert")
+        mesh.pump()
+        mesh.advanceTime(by: 0.12)
+        // Admitted, carrying "robert", 0.08 s before that retry.
+        bob.service._test_forceAnnounce()
+        mesh.pump()
+        mesh.advanceTime(by: 0.02)
+        // Refused while the first retry is still pending.
+        bob.service.setNickname("bobby")
+        mesh.pump()
+        mesh.advanceTime(by: 1.0, inStepsOf: 0.01)
+        mesh.settle()
+
+        #expect(alice.service.getPeerNicknames()[bob.service.myPeerID] == "bobby")
+    }
+
+    /// Phones bring links up one at a time. When the second comes up while
+    /// the announce owed for the first is still waiting out the throttle,
+    /// the joiner still claims both neighbours, so routes cross both new
+    /// edges at once.
+    @Test
+    func joinerClaimsEveryNeighborWhenItsLinksFormInSequence() {
+        let mesh = SimulatedMesh(announceAccounting: true)
+        let a = mesh.launch(nickname: "a")
+        let b = mesh.launch(nickname: "b")
+        let joiner = mesh.launch(nickname: "joiner")
+
+        mesh.linkUp(central: joiner, peripheral: a)
+        mesh.advanceTime(by: 0.16, inStepsOf: 0.01)
+        mesh.linkUp(central: joiner, peripheral: b)
+        mesh.advanceTime(by: 1.0, inStepsOf: 0.01)
+        mesh.exchangeInitialSync(joiner, a)
+        mesh.exchangeInitialSync(joiner, b)
+        mesh.settle()
+
+        let aID = mesh.nodes[a].service.myPeerID
+        let bID = mesh.nodes[b].service.myPeerID
+        let lastClaims = mesh.emittedPackets(from: joiner)
+            .last { $0.type == MessageType.announce.rawValue && $0.ttl == TransportConfig.messageTTLDefault }
+            .flatMap { AnnouncementPacket.decode(from: $0.payload) }?
+            .directNeighbors ?? []
+        #expect(Set(lastClaims) == Set([aID.routingData, bID.routingData].compactMap { $0 }))
+        #expect(mesh.nodes[a].service._test_hasConfirmedRoute(to: bID))
+        #expect(mesh.nodes[b].service._test_hasConfirmedRoute(to: aID))
+    }
+
+    /// An owed announce's retry is dropped once another announce went out:
+    /// that announce was built later, so it already carries what the retry
+    /// would (here, the new name).
+    @Test
+    func owedRetryIsDroppedOnceAnotherAnnounceWentOut() {
+        let mesh = SimulatedMesh(announceAccounting: true)
+        let alice = mesh.addNode(nickname: "alice")
+        let bob = mesh.addNode(nickname: "bob")
+        mesh.connect(0, 1)
+        mesh.announceAll()
+        mesh.settle()
+        let before = mesh.announceOriginations(from: 1)
+
+        bob.service._test_forceAnnounce()
+        mesh.pump()
+        mesh.advanceTime(by: 0.12)
+        // Refused; its retry is due 0.2 s later.
+        bob.service.setNickname("robert")
+        mesh.pump()
+        mesh.advanceTime(by: 0.04)
+        // Admitted, already carrying "robert".
+        bob.service._test_forceAnnounce()
+        mesh.pump()
+        mesh.advanceTime(by: 1.0, inStepsOf: 0.01)
+        mesh.settle()
+
+        #expect(mesh.announceOriginations(from: 1) - before == 2)
+        #expect(alice.service.getPeerNicknames()[bob.service.myPeerID] == "robert")
+    }
+
+    /// An owed announce that cannot be built (a nickname over the 255-byte
+    /// field fails to encode) is retried once, not on a timer that keeps
+    /// re-arming itself.
+    @Test
+    func unbuildableOwedAnnounceIsNotRetriedForever() {
+        let mesh = SimulatedMesh(announceAccounting: true)
+        let bob = mesh.addNode(nickname: "bob")
+        mesh.addNode(nickname: "alice")
+        mesh.connect(0, 1)
+        mesh.announceAll()
+        mesh.settle()
+
+        bob.service._test_forceAnnounce()
+        mesh.pump()
+        // Refused (an announce just went out), so its retry is armed.
+        bob.service.setNickname(String(repeating: "b", count: 256))
+        mesh.pump()
+        mesh.settle()
+        // Long past every other deferred task of the setup.
+        mesh.advanceTime(by: 60)
+
+        #expect(bob.scheduler.pendingCount == 0)
+    }
+
     /// Setting the nickname a node already has announces nothing (launch
     /// sets it twice: once while loading, once while wiring the transport).
     @Test

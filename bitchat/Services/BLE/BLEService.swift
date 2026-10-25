@@ -339,8 +339,8 @@ final class BLEService: NSObject {
     
     // Simple announce throttling
     private let announceThrottle = BLEAnnounceThrottle()
-    // While an owed announce's retry is scheduled: the broadcast count it
-    // must see change (engine-confined; see sendOwedAnnounce).
+    // The broadcast count the latest owed-announce retry was armed at
+    // (engine-confined; see sendOwedAnnounce).
     private var owedAnnounceRetrySince: UInt64?
 
     // Application state tracking (thread-safe)
@@ -2865,18 +2865,25 @@ final class BLEService: NSObject {
     /// forced throttle refuses it — once more after the window, unless
     /// another announce is broadcast first (any announce built later carries
     /// the same information). Engine-confined.
+    ///
+    /// Requests refused between the same two broadcasts share one retry. A
+    /// request refused after a newer broadcast gets its own: a retry armed
+    /// before that broadcast can fire inside its throttle window and be
+    /// refused as well. A retry never re-arms itself: with nothing broadcast
+    /// since it was armed, only an announce that failed to build (a nickname
+    /// too long to encode) can have refused it, and re-arming would turn
+    /// that into a timer loop.
     private func sendOwedAnnounce() {
         guard !isPanicSuspended else { return }
         let broadcastsBefore = announceThrottle.broadcastCount
         sendAnnounceNow(forceSend: true)
-        guard announceThrottle.broadcastCount == broadcastsBefore else { return }
-        let retryScheduled = owedAnnounceRetrySince != nil
+        guard announceThrottle.broadcastCount == broadcastsBefore,
+              owedAnnounceRetrySince != broadcastsBefore else { return }
         owedAnnounceRetrySince = broadcastsBefore
-        guard !retryScheduled else { return }
         engineScheduler.schedule(after: TransportConfig.bleForceAnnounceRetryDelaySeconds) { [weak self] in
-            guard let self, let since = self.owedAnnounceRetrySince else { return }
+            guard let self, self.owedAnnounceRetrySince == broadcastsBefore else { return }
             self.owedAnnounceRetrySince = nil
-            guard self.announceThrottle.broadcastCount == since else { return }
+            guard self.announceThrottle.broadcastCount == broadcastsBefore else { return }
             self.sendAnnounceNow(forceSend: true)
         }
     }
