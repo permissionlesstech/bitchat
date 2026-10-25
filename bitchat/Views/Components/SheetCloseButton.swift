@@ -18,7 +18,8 @@ struct SheetCloseButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "xmark")
+            Label("common.close", systemImage: "xmark")
+                .labelStyle(.iconOnly)
                 .bitchatFont(size: 13, weight: .semibold)
                 .frame(width: 32, height: 32)
                 .contentShape(Rectangle().inset(by: -6))

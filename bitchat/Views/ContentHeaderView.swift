@@ -41,6 +41,316 @@ struct ContentHeaderView: View {
     }
 
     var body: some View {
+        platformHeader
+        .sheet(isPresented: $showVerifySheet) {
+            VerificationSheetView(isPresented: $showVerifySheet)
+                .environmentObject(verificationModel)
+        }
+        .onReceive(CourierStore.shared.$carriedCount) { count in
+            carriedMailCount = count
+        }
+        .onReceive(BoardStore.shared.$postsSnapshot) { posts in
+            boardPosts = posts
+        }
+        .sheet(isPresented: $appChromeModel.isLocationChannelsSheetPresented) {
+            LocationChannelsSheet(isPresented: $appChromeModel.isLocationChannelsSheetPresented)
+                .environmentObject(locationChannelsModel)
+                .environmentObject(peerListModel)
+        }
+        .sheet(
+            isPresented: $appChromeModel.isNoticesSheetPresented,
+            onDismiss: { appChromeModel.noticesSheetPrefersGeoTab = false }
+        ) {
+            NoticesView(
+                senderNickname: appChromeModel.nickname,
+                board: appChromeModel.boardManager,
+                initialTab: initialNoticesTab
+            )
+            .environmentObject(locationChannelsModel)
+        }
+        .onAppear {
+            locationChannelsModel.refreshMeshChannelsIfNeeded()
+        }
+        .onChange(of: locationChannelsModel.selectedChannel) { _ in
+            locationChannelsModel.refreshMeshChannelsIfNeeded()
+        }
+        .onChange(of: locationChannelsModel.permissionState) { _ in
+            locationChannelsModel.refreshMeshChannelsIfNeeded()
+        }
+        .alert("content.alert.screenshot.title", isPresented: $appChromeModel.showScreenshotPrivacyWarning) {
+            Button("common.ok", role: .cancel) {}
+        } message: {
+            Text("content.alert.screenshot.message")
+        }
+        .confirmationDialog(
+            String(localized: "channel.share.precision_warning.title", defaultValue: "share a precise location channel?", comment: "Title of the confirmation before sharing a neighborhood-or-finer geohash invite"),
+            isPresented: $showSharePrecisionWarning,
+            titleVisibility: .visible
+        ) {
+            Button(String(localized: "channel.share.precision_warning.confirm", defaultValue: "share anyway", comment: "Confirms sharing a fine-precision location channel after the OpSec warning")) {
+                if let gh = pendingShareGeohash {
+                    activeSharePayload = ChannelSharePayload(text: ChannelShare.payload(forGeohash: gh))
+                }
+                pendingShareGeohash = nil
+            }
+            Button("common.cancel", role: .cancel) {
+                pendingShareGeohash = nil
+            }
+        } message: {
+            Text(String(localized: "channel.share.precision_warning.message", defaultValue: "this channel covers a small area. an invite sent over sms or imessage is visible to the carrier and both handsets — it discloses interest in that place, not only that someone uses bitchat.", comment: "Body of the confirmation before sharing a fine-precision geohash invite"))
+        }
+        .sheet(item: $activeSharePayload) { payload in
+            ShareActivityView(text: payload.text)
+        }
+    }
+
+    @ViewBuilder
+    private var platformHeader: some View {
+        #if os(iOS)
+        identityHeader
+            .navigationTitle(channelTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                #if canImport(SwiftUI, _version: 8.0.85)
+                if #available(iOS 27.1, *) {
+                    primaryToolbar.visibilityPriority(.high)
+                    ToolbarOverflowMenu { additionalActions }
+                } else {
+                    legacyToolbar
+                }
+                #else
+                legacyToolbar
+                #endif
+            }
+        #else
+        desktopHeader
+            .themedChromePanel(edge: .top)
+        #endif
+    }
+
+    #if os(iOS)
+    @ToolbarContentBuilder
+    private var legacyToolbar: some ToolbarContent {
+        primaryToolbar
+        ToolbarItem(placement: .navigationBarTrailing) {
+            Menu {
+                additionalActions
+            } label: {
+                Label(
+                    String(localized: "content.header.actions", defaultValue: "Actions", comment: "Title for the additional chat actions menu on earlier iOS releases"),
+                    systemImage: "slider.horizontal.3"
+                )
+            }
+        }
+    }
+
+    /// Identity stays in the content area: custom title views disappear when
+    /// a navigation bar becomes vertical. Editing and the panic gesture must
+    /// remain available on both displays, even at accessibility text sizes.
+    private var identityHeader: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Text(verbatim: "bitchat/")
+                    .bitchatFont(size: 18, weight: .medium)
+                    .foregroundColor(palette.primary)
+                    .lineLimit(1)
+                    .layoutPriority(1)
+                    .onTapGesture(count: 3) { appChromeModel.requestPanicWipe() }
+                    .onTapGesture { appChromeModel.presentAppInfo() }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHint(
+                        String(localized: "content.accessibility.app_info_hint", comment: "Accessibility hint on the bitchat/ logo explaining a tap opens app info")
+                    )
+                    .accessibilityAction { appChromeModel.presentAppInfo() }
+
+                HStack(spacing: 0) {
+                    Text(verbatim: "@")
+                        .bitchatFont(size: 14)
+                        .foregroundColor(palette.secondary)
+                    TextField(
+                        "content.input.nickname_placeholder",
+                        text: Binding(
+                            get: { appChromeModel.nickname },
+                            set: { appChromeModel.setNickname($0) }
+                        )
+                    )
+                    .textFieldStyle(.plain)
+                    .bitchatFont(size: 14)
+                    .foregroundColor(palette.primary)
+                    .focused(isNicknameFieldFocused)
+                    .autocorrectionDisabled(true)
+                    .textInputAutocapitalization(.never)
+                    .modifier(FocusEffectDisabledModifier())
+                    .onChange(of: isNicknameFieldFocused.wrappedValue) { isFocused in
+                        if !isFocused { appChromeModel.validateAndSaveNickname() }
+                    }
+                    .onSubmit { appChromeModel.validateAndSaveNickname() }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            // Native bars may show symbols alone. Keep the active channel,
+            // people count and connection state visible as wrapping content.
+            Text(verbatim: [channelTitle, peopleCountTitle, peopleConnectionStatus].joined(separator: " · "))
+                .bitchatFont(size: 12)
+                .foregroundColor(palette.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    /// Each action is a separate labeled control so SwiftUI can arrange it
+    /// along either axis and move lower-priority actions to system overflow.
+    private var primaryToolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .navigationBarTrailing) {
+            Button {
+                withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                    showSidebar = true
+                }
+            } label: {
+                Label {
+                    Text(peopleCountTitle)
+                } icon: {
+                    Image(systemName: "person.2.fill")
+                }
+            }
+            .tint(channelPeopleCountAndColor().1)
+            .accessibilityValue(peopleConnectionStatus)
+
+            Button {
+                appChromeModel.isLocationChannelsSheetPresented = true
+            } label: {
+                Label(channelTitle, systemImage: "number")
+            }
+            .tint(channelPeopleCountAndColor().1)
+            .accessibilityHint(
+                String(localized: "content.accessibility.location_channels", comment: "Accessibility label for the location channels button")
+            )
+
+            Button(action: openNotices) {
+                Label(
+                    String(localized: "content.accessibility.notices", defaultValue: "Notices", comment: "Accessibility label for the notices button"),
+                    systemImage: scopeHasNotices || unseenNoticesCount > 0 ? "pin.fill" : "pin"
+                )
+            }
+            .tint(scopeHasNotices || unseenNoticesCount > 0 ? .orange : palette.secondary)
+            .accessibilityValue(
+                unseenNoticesCount > 0
+                    ? String(
+                        format: String(localized: "content.accessibility.notices_new", defaultValue: "%lld new", comment: "Accessibility value for the notices button when unseen pins arrived"),
+                        locale: .current,
+                        unseenNoticesCount
+                    )
+                    : ""
+            )
+
+            if appChromeModel.hasUnreadPrivateMessages {
+                Button { appChromeModel.openMostRelevantPrivateChat() } label: {
+                    Label(
+                        String(localized: "content.accessibility.open_unread_private_chat", comment: "Accessibility label for the unread private chat button"),
+                        systemImage: "envelope.fill"
+                    )
+                }
+                .tint(.orange)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var additionalActions: some View {
+        Button { appChromeModel.presentAppInfo() } label: {
+            Label(
+                String(localized: "content.header.app_info", defaultValue: "App Info", comment: "Toolbar action opening app information and settings"),
+                systemImage: "info.circle"
+            )
+        }
+        Button { showVerifySheet = true } label: {
+            Label("verification.sheet.title", systemImage: "qrcode")
+        }
+        if locationChannelsModel.gatewayEnabled {
+            Button { appChromeModel.presentAppInfo() } label: {
+                Label(
+                    String(localized: "content.accessibility.gateway_active", defaultValue: "Internet gateway active, sharing your connection with the mesh", comment: "Accessibility label for the internet gateway indicator"),
+                    systemImage: "globe"
+                )
+            }
+        }
+        if carriedMailCount > 0 {
+            Label(
+                String(
+                    format: String(localized: "content.accessibility.carrying_mail", defaultValue: "Carrying %lld sealed messages for friends", comment: "Accessibility label for the courier mail indicator"),
+                    locale: .current,
+                    carriedMailCount
+                ),
+                systemImage: "figure.walk"
+            )
+        }
+        if case .location(let channel) = locationChannelsModel.selectedChannel {
+            Button { locationChannelsModel.toggleBookmark(channel.geohash) } label: {
+                Label(
+                    String(
+                        format: String(localized: "content.accessibility.toggle_bookmark", comment: "Accessibility label for toggling a geohash bookmark"),
+                        locale: .current,
+                        channel.geohash
+                    ),
+                    systemImage: locationChannelsModel.isBookmarked(channel.geohash) ? "bookmark.fill" : "bookmark"
+                )
+            }
+            Button { requestHeaderShare(forGeohash: channel.geohash) } label: {
+                Label(
+                    String(localized: "channel.share.action", defaultValue: "share channel", comment: "Accessibility label for sharing the active location channel"),
+                    systemImage: "square.and.arrow.up"
+                )
+            }
+        }
+    }
+
+    private var channelTitle: String {
+        switch locationChannelsModel.selectedChannel {
+        case .mesh: return "#mesh"
+        case .location(let channel): return "#\(channel.geohash)"
+        }
+    }
+
+    private var headerOtherPeersCount: Int {
+        if case .location = locationChannelsModel.selectedChannel {
+            return peerListModel.visibleGeohashPeerCount
+        }
+        return channelPeopleCountAndColor().0 + bridgeService.bridgedPeerCount
+    }
+
+    private var peopleCountTitle: String {
+        String(
+            format: String(localized: "content.accessibility.people_count", comment: "Accessibility label announcing number of people in header"),
+            locale: .current,
+            headerOtherPeersCount
+        )
+    }
+
+    private var peopleConnectionStatus: String {
+        if showBridgedPeerCount {
+            return String(
+                format: String(localized: "content.accessibility.bridged_count", defaultValue: "%lld more people across the bridge", comment: "Accessibility value announcing the number of people reachable via the mesh bridge"),
+                locale: .current,
+                bridgeService.bridgedPeerCount
+            )
+        }
+        return headerPeersReachable
+            ? String(localized: "content.accessibility.peers_connected", comment: "Accessibility value when peers are reachable")
+            : String(localized: "content.accessibility.peers_none", comment: "Accessibility value when no peers are reachable")
+    }
+
+    private func openNotices() {
+        var scopes: Set<String> = [""]
+        if let geoScope = noticesGeoScope { scopes.insert(geoScope) }
+        boardAlertsModel.markSeen(forScopes: scopes)
+        appChromeModel.presentNotices()
+    }
+    #else
+    private var desktopHeader: some View {
         HStack(spacing: 0) {
             Text(verbatim: "bitchat/")
                 .bitchatFont(size: 18, weight: .medium)
@@ -314,10 +624,6 @@ struct ContentHeaderView: View {
                 )
             }
             .layoutPriority(3)
-            .sheet(isPresented: $showVerifySheet) {
-                VerificationSheetView(isPresented: $showVerifySheet)
-                    .environmentObject(verificationModel)
-            }
         }
         // Fixed height is load-bearing: children fill the bar with
         // .frame(maxHeight: .infinity) tap targets, so an open-ended
@@ -326,64 +632,8 @@ struct ContentHeaderView: View {
         // Type.
         .frame(height: headerHeight)
         .padding(.horizontal, 12)
-        .onReceive(CourierStore.shared.$carriedCount) { count in
-            carriedMailCount = count
-        }
-        .onReceive(BoardStore.shared.$postsSnapshot) { posts in
-            boardPosts = posts
-        }
-        .sheet(isPresented: $appChromeModel.isLocationChannelsSheetPresented) {
-            LocationChannelsSheet(isPresented: $appChromeModel.isLocationChannelsSheetPresented)
-                .environmentObject(locationChannelsModel)
-                .environmentObject(peerListModel)
-        }
-        .sheet(
-            isPresented: $appChromeModel.isNoticesSheetPresented,
-            onDismiss: { appChromeModel.noticesSheetPrefersGeoTab = false }
-        ) {
-            NoticesView(
-                senderNickname: appChromeModel.nickname,
-                board: appChromeModel.boardManager,
-                initialTab: initialNoticesTab
-            )
-            .environmentObject(locationChannelsModel)
-        }
-        .onAppear {
-            locationChannelsModel.refreshMeshChannelsIfNeeded()
-        }
-        .onChange(of: locationChannelsModel.selectedChannel) { _ in
-            locationChannelsModel.refreshMeshChannelsIfNeeded()
-        }
-        .onChange(of: locationChannelsModel.permissionState) { _ in
-            locationChannelsModel.refreshMeshChannelsIfNeeded()
-        }
-        .alert("content.alert.screenshot.title", isPresented: $appChromeModel.showScreenshotPrivacyWarning) {
-            Button("common.ok", role: .cancel) {}
-        } message: {
-            Text("content.alert.screenshot.message")
-        }
-        .confirmationDialog(
-            String(localized: "channel.share.precision_warning.title", defaultValue: "share a precise location channel?", comment: "Title of the confirmation before sharing a neighborhood-or-finer geohash invite"),
-            isPresented: $showSharePrecisionWarning,
-            titleVisibility: .visible
-        ) {
-            Button(String(localized: "channel.share.precision_warning.confirm", defaultValue: "share anyway", comment: "Confirms sharing a fine-precision location channel after the OpSec warning")) {
-                if let gh = pendingShareGeohash {
-                    activeSharePayload = ChannelSharePayload(text: ChannelShare.payload(forGeohash: gh))
-                }
-                pendingShareGeohash = nil
-            }
-            Button("common.cancel", role: .cancel) {
-                pendingShareGeohash = nil
-            }
-        } message: {
-            Text(String(localized: "channel.share.precision_warning.message", defaultValue: "this channel covers a small area. an invite sent over sms or imessage is visible to the carrier and both handsets — it discloses interest in that place, not only that someone uses bitchat.", comment: "Body of the confirmation before sharing a fine-precision geohash invite"))
-        }
-        .sheet(item: $activeSharePayload) { payload in
-            ShareActivityView(text: payload.text)
-        }
-        .themedChromePanel(edge: .top)
     }
+    #endif
 
     private func requestHeaderShare(forGeohash geohash: String) {
         if ChannelShare.shouldWarn(forGeohash: geohash) {

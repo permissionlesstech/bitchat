@@ -280,7 +280,7 @@ struct AppInfoView: View {
             }
         }
         #else
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 0) {
                 panePicker
 
@@ -291,7 +291,7 @@ struct AppInfoView: View {
             .themedSheetBackground()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .cancellationAction) {
                     SheetCloseButton { dismiss() }
                         .foregroundColor(textColor)
                 }

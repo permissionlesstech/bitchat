@@ -25,6 +25,7 @@ struct ContentRootModalPresentationState {
     var isVoiceAlertPresented = false
     var isScreenshotPrivacyAlertPresented = false
     var isMediaPickerPresented = false
+    var isPrivateMediaConsentPresented = false
 
     var hasPresentation: Bool {
         isPeopleSheetPresented
@@ -37,6 +38,7 @@ struct ContentRootModalPresentationState {
             || isVoiceAlertPresented
             || isScreenshotPrivacyAlertPresented
             || isMediaPickerPresented
+            || isPrivateMediaConsentPresented
     }
 }
 
@@ -48,7 +50,8 @@ extension ContentRootModalPresentationState {
         isImagePreviewPresented: Bool = false,
         isVerificationSheetPresented: Bool = false,
         isVoiceAlertPresented: Bool = false,
-        isMediaPickerPresented: Bool = false
+        isMediaPickerPresented: Bool = false,
+        isPrivateMediaConsentPresented: Bool = false
     ) {
         self.init(
             isPeopleSheetPresented: isPeopleSheetPresented,
@@ -64,7 +67,8 @@ extension ContentRootModalPresentationState {
             isVoiceAlertPresented: isVoiceAlertPresented,
             isScreenshotPrivacyAlertPresented:
                 appChromeModel.showScreenshotPrivacyWarning,
-            isMediaPickerPresented: isMediaPickerPresented
+            isMediaPickerPresented: isMediaPickerPresented,
+            isPrivateMediaConsentPresented: isPrivateMediaConsentPresented
         )
     }
 }
@@ -106,6 +110,8 @@ struct ContentView: View {
     @Environment(\.appTheme) private var appTheme
     @Environment(\.scenePhase) private var scenePhase
     @State private var showSidebar = false
+    @State private var splitColumnVisibility: NavigationSplitViewVisibility = .all
+    @State private var showsPeopleColumn = false
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: PeerID?
     @FocusState private var isNicknameFieldFocused: Bool
@@ -113,6 +119,7 @@ struct ContentView: View {
     @State private var isAtBottomPrivate = true
     @State private var autocompleteDebounceTimer: Timer?
     @State private var showVerifySheet = false
+    @State private var showPeopleVerification = false
     @State private var imagePreviewURL: URL?
     #if os(iOS)
     @State private var showImagePicker = false
@@ -143,7 +150,7 @@ struct ContentView: View {
     private var usesGlassLayout: Bool { appTheme.usesGlassChrome }
 
     private var isPeopleSheetPresented: Bool {
-        showSidebar || selectedPrivatePeerID != nil
+        !usesSplitNavigation && (showSidebar || selectedPrivatePeerID != nil)
     }
 
     private func rootModalPresentationState(
@@ -159,9 +166,11 @@ struct ContentView: View {
             appChromeModel: appChromeModel,
             isPeopleSheetPresented: isPeopleSheetPresented,
             isImagePreviewPresented: imagePreviewURL != nil,
-            isVerificationSheetPresented: showVerifySheet,
+            isVerificationSheetPresented: showVerifySheet || showPeopleVerification,
             isVoiceAlertPresented: includingVoiceAlert && voiceRecordingVM.showAlert,
-            isMediaPickerPresented: isMediaPickerPresented
+            isMediaPickerPresented: isMediaPickerPresented,
+            isPrivateMediaConsentPresented: usesSplitNavigation
+                && conversationUIModel.legacyPrivateMediaConsentRequest != nil
         )
     }
 
@@ -227,7 +236,7 @@ struct ContentView: View {
     }
 
     var body: some View {
-        mainContent
+        workspaceContent
             .onAppear { [conversationUIModel, voiceRecordingVM] in
                 conversationUIModel.setCurrentColorScheme(colorScheme)
                 conversationUIModel.setCurrentTheme(appTheme)
@@ -268,7 +277,9 @@ struct ContentView: View {
         .frame(minWidth: 600, minHeight: 400)
         #endif
         .onChange(of: selectedPrivatePeerID) { newValue in
-            if newValue != nil {
+            if usesSplitNavigation {
+                showsPeopleColumn = false
+            } else if newValue != nil {
                 showSidebar = true
             }
             sharedContentImportModel.updateDestination(sharedContentDestination)
@@ -277,6 +288,14 @@ struct ContentView: View {
                 fingerprint: newValue.flatMap { conversationUIModel.getFingerprint(for: $0) },
                 channel: locationChannelsModel.selectedChannel
             ))
+        }
+        .onChange(of: showSidebar) { isRequested in
+            guard usesSplitNavigation, isRequested else { return }
+            // This is a navigation request, never a presentation or a reason
+            // to clear the selected conversation when the device folds.
+            showsPeopleColumn = selectedPrivatePeerID == nil
+            splitColumnVisibility = .all
+            showSidebar = false
         }
         .onChange(of: locationChannelsModel.selectedChannel) { newChannel in
             sharedContentImportModel.updateDestination(sharedContentDestination)
@@ -300,8 +319,9 @@ struct ContentView: View {
         }
         .sheet(
             isPresented: Binding(
-                get: { isPeopleSheetPresented },
+                get: { !usesSplitNavigation && isPeopleSheetPresented },
                 set: { isPresented in
+                    guard !usesSplitNavigation else { return }
                     if !isPresented {
                         showSidebar = false
                         // Scene/background and alert-presentation
@@ -318,61 +338,7 @@ struct ContentView: View {
                 }
             )
         ) {
-            #if os(iOS)
-            ContentPeopleSheetView(
-                showSidebar: $showSidebar,
-                messageText: $messageText,
-                selectedMessageSender: $selectedMessageSender,
-                selectedMessageSenderID: $selectedMessageSenderID,
-                imagePreviewURL: $imagePreviewURL,
-                windowCountPublic: $windowCountPublic,
-                windowCountPrivate: $windowCountPrivate,
-                isAtBottomPrivate: $isAtBottomPrivate,
-                isTextFieldFocused: $isTextFieldFocused,
-                voiceRecordingVM: voiceRecordingVM,
-                autocompleteDebounceTimer: $autocompleteDebounceTimer,
-                headerHeight: headerHeight,
-                onSendMessage: sendMessage,
-                showImagePicker: $showImagePicker,
-                imagePickerSourceType: $imagePickerSourceType
-            )
-            // Sheets + NavigationStack can drop inherited EnvironmentObjects on
-            // some iOS versions (#1558). Re-inject every model the sheet tree
-            // reads so ContentPeopleListView / MessageListView never crash.
-            .environmentObject(appChromeModel)
-            .environmentObject(privateConversationModel)
-            .environmentObject(verificationModel)
-            .environmentObject(conversationUIModel)
-            .environmentObject(locationChannelsModel)
-            .environmentObject(peerListModel)
-            .environmentObject(publicChatModel)
-            .environmentObject(privateInboxModel)
-            #else
-            ContentPeopleSheetView(
-                showSidebar: $showSidebar,
-                messageText: $messageText,
-                selectedMessageSender: $selectedMessageSender,
-                selectedMessageSenderID: $selectedMessageSenderID,
-                imagePreviewURL: $imagePreviewURL,
-                windowCountPublic: $windowCountPublic,
-                windowCountPrivate: $windowCountPrivate,
-                isAtBottomPrivate: $isAtBottomPrivate,
-                isTextFieldFocused: $isTextFieldFocused,
-                voiceRecordingVM: voiceRecordingVM,
-                autocompleteDebounceTimer: $autocompleteDebounceTimer,
-                headerHeight: headerHeight,
-                onSendMessage: sendMessage,
-                showMacImagePicker: $showMacImagePicker
-            )
-            .environmentObject(appChromeModel)
-            .environmentObject(privateConversationModel)
-            .environmentObject(verificationModel)
-            .environmentObject(conversationUIModel)
-            .environmentObject(locationChannelsModel)
-            .environmentObject(peerListModel)
-            .environmentObject(publicChatModel)
-            .environmentObject(privateInboxModel)
-            #endif
+            peopleContent
         }
         .sheet(isPresented: $appChromeModel.isAppInfoPresented) {
             AppInfoView(
@@ -382,7 +348,10 @@ struct ContentView: View {
             .environmentObject(locationChannelsModel)
         }
         .sheet(isPresented: Binding(
-            get: { appChromeModel.showingFingerprintFor != nil && !showSidebar && selectedPrivatePeerID == nil },
+            get: {
+                appChromeModel.showingFingerprintFor != nil
+                    && (usesSplitNavigation || (!showSidebar && selectedPrivatePeerID == nil))
+            },
             set: { _ in appChromeModel.clearFingerprint() }
         )) {
             if let peerID = appChromeModel.showingFingerprintFor {
@@ -403,7 +372,6 @@ struct ContentView: View {
                 showImagePicker = false
                 conversationUIModel.processSelectedImage(image)
             }
-            .ignoresSafeArea()
         }
         #endif
         #if os(macOS)
@@ -486,6 +454,113 @@ struct ContentView: View {
             autocompleteDebounceTimer?.invalidate()
             appChromeModel.setPanicPreparation(nil)
         }
+    }
+
+    private var usesSplitNavigation: Bool {
+        #if os(iOS)
+        if #available(iOS 17.0, *) { return true }
+        #endif
+        return false
+    }
+
+    @ViewBuilder
+    private var workspaceContent: some View {
+        #if os(iOS)
+        if #available(iOS 17.0, *) {
+            // One navigation tree for both displays. System split views handle
+            // collapse, vertical bars, and active fold/camera reserved regions.
+            NavigationSplitView(columnVisibility: $splitColumnVisibility,
+                                preferredCompactColumn: Binding(
+                                    get: { showsPeopleColumn ? .sidebar : .detail },
+                                    set: { showsPeopleColumn = $0 == .sidebar }
+                                )) {
+                ContentPeopleListView(
+                    showSidebar: $showSidebar,
+                    showVerifySheet: $showPeopleVerification,
+                    isWorkspace: true,
+                    onShowPublicChat: {
+                        privateConversationModel.endConversation()
+                        showsPeopleColumn = false
+                    },
+                    onShowConversation: { showsPeopleColumn = false }
+                )
+                .navigationSplitViewColumnWidth(min: 240, ideal: 300, max: 380)
+            } detail: {
+                NavigationStack {
+                    if selectedPrivatePeerID != nil {
+                        peopleContent
+                    } else {
+                        mainContent
+                    }
+                }
+            }
+            .navigationSplitViewStyle(.balanced)
+        } else {
+            NavigationStack { mainContent }
+        }
+        #else
+        mainContent
+        #endif
+    }
+
+    private var peopleContent: some View {
+        #if os(iOS)
+        ContentPeopleSheetView(
+            showSidebar: $showSidebar,
+            messageText: $messageText,
+            selectedMessageSender: $selectedMessageSender,
+            selectedMessageSenderID: $selectedMessageSenderID,
+            imagePreviewURL: $imagePreviewURL,
+            windowCountPublic: $windowCountPublic,
+            windowCountPrivate: $windowCountPrivate,
+            isAtBottomPrivate: $isAtBottomPrivate,
+            isTextFieldFocused: $isTextFieldFocused,
+            voiceRecordingVM: voiceRecordingVM,
+            autocompleteDebounceTimer: $autocompleteDebounceTimer,
+            isWorkspace: usesSplitNavigation,
+            headerHeight: headerHeight,
+            onSendMessage: sendMessage,
+            showImagePicker: $showImagePicker,
+            imagePickerSourceType: $imagePickerSourceType
+        )
+        // Sheets + NavigationStack can drop inherited EnvironmentObjects on
+        // some iOS versions (#1558). Re-inject every model the sheet tree
+        // reads so ContentPeopleListView / MessageListView never crash.
+        .environmentObject(appChromeModel)
+        .environmentObject(privateConversationModel)
+        .environmentObject(verificationModel)
+        .environmentObject(conversationUIModel)
+        .environmentObject(locationChannelsModel)
+        .environmentObject(peerListModel)
+        .environmentObject(publicChatModel)
+        .environmentObject(privateInboxModel)
+        #else
+        ContentPeopleSheetView(
+            showSidebar: $showSidebar,
+            messageText: $messageText,
+            selectedMessageSender: $selectedMessageSender,
+            selectedMessageSenderID: $selectedMessageSenderID,
+            imagePreviewURL: $imagePreviewURL,
+            windowCountPublic: $windowCountPublic,
+            windowCountPrivate: $windowCountPrivate,
+            isAtBottomPrivate: $isAtBottomPrivate,
+            isTextFieldFocused: $isTextFieldFocused,
+            voiceRecordingVM: voiceRecordingVM,
+            autocompleteDebounceTimer: $autocompleteDebounceTimer,
+            isWorkspace: usesSplitNavigation,
+            headerHeight: headerHeight,
+            onSendMessage: sendMessage,
+            showMacImagePicker: $showMacImagePicker
+        )
+        .environmentObject(appChromeModel)
+        .environmentObject(privateConversationModel)
+        .environmentObject(verificationModel)
+        .environmentObject(conversationUIModel)
+        .environmentObject(locationChannelsModel)
+        .environmentObject(peerListModel)
+        .environmentObject(publicChatModel)
+        .environmentObject(privateInboxModel)
+        #endif
     }
 
     /// Matrix: classic opaque bars with dividers. Glass: full-bleed message

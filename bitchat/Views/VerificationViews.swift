@@ -67,11 +67,13 @@ struct QRCodeImage: View {
         Group {
             if let image = generateImage() {
                 ImageWrapper(image: image)
-                    .frame(width: size, height: size)
+                    .aspectRatio(1, contentMode: .fit)
+                    .frame(maxWidth: size)
             } else {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(palette.secondary.opacity(0.5), lineWidth: 1)
-                    .frame(width: size, height: size)
+                    .aspectRatio(1, contentMode: .fit)
+                    .frame(maxWidth: size)
                     .overlay(
                         Text(Strings.unavailable)
                             .bitchatFont(size: 12)
@@ -156,7 +158,8 @@ struct QRScanView: View {
                         .padding(16)
                 }
             }
-            .frame(height: 260)
+            .aspectRatio(4.0 / 3.0, contentMode: .fit)
+            .frame(maxHeight: 260)
             .clipShape(RoundedRectangle(cornerRadius: 8))
 
             #if os(macOS)
@@ -175,7 +178,6 @@ struct QRScanView: View {
                     .foregroundColor(palette.secondary)
             }
             #endif
-            Spacer()
         }
         .padding()
     }
@@ -216,6 +218,9 @@ struct CameraScannerView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> PreviewView {
         let view = PreviewView()
+        view.onLayout = { [weak coordinator = context.coordinator, weak view] in
+            coordinator?.updatePreviewRotation(in: view?.window?.windowScene)
+        }
         context.coordinator.setup(
             previewLayer: view.videoPreviewLayer,
             onCode: onCode,
@@ -227,6 +232,12 @@ struct CameraScannerView: UIViewRepresentable {
 
     func updateUIView(_ uiView: PreviewView, context: Context) {
         context.coordinator.setActive(isActive)
+        context.coordinator.updatePreviewRotation(in: uiView.window?.windowScene)
+    }
+
+    static func dismantleUIView(_ uiView: PreviewView, coordinator: CameraScannerCoordinator) {
+        uiView.onLayout = nil
+        coordinator.stopPreview()
     }
 
     func makeCoordinator() -> CameraScannerCoordinator { CameraScannerCoordinator() }
@@ -234,11 +245,53 @@ struct CameraScannerView: UIViewRepresentable {
     final class PreviewView: UIView {
         override static var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
         var videoPreviewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
+        var onLayout: (() -> Void)?
+
         override init(frame: CGRect) {
             super.init(frame: frame)
-            videoPreviewLayer.videoGravity = .resizeAspectFill
+            videoPreviewLayer.videoGravity = .resizeAspect
         }
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            onLayout?()
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            onLayout?()
+        }
+    }
+}
+
+/// The rotation coordinator observes the actual camera and preview layer, rather
+/// than inferring camera direction from the shape of a resizable app window.
+@available(iOS 17.0, *)
+private final class CameraPreviewRotation {
+    private let coordinator: AVCaptureDevice.RotationCoordinator
+    private var observation: NSKeyValueObservation?
+    private weak var previewLayer: AVCaptureVideoPreviewLayer?
+
+    init(device: AVCaptureDevice, previewLayer: AVCaptureVideoPreviewLayer) {
+        self.previewLayer = previewLayer
+        coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: previewLayer)
+        // Apple delivers these updates on the main queue. The weak layer capture
+        // keeps the observation from extending the preview's lifetime.
+        observation = coordinator.observe(\.videoRotationAngleForHorizonLevelPreview, options: [.initial, .new]) { [weak previewLayer] coordinator, _ in
+            Self.apply(coordinator.videoRotationAngleForHorizonLevelPreview, to: previewLayer)
+        }
+    }
+
+    func update() {
+        Self.apply(coordinator.videoRotationAngleForHorizonLevelPreview, to: previewLayer)
+    }
+
+    private static func apply(_ angle: CGFloat, to previewLayer: AVCaptureVideoPreviewLayer?) {
+        guard let connection = previewLayer?.connection,
+              connection.isVideoRotationAngleSupported(angle),
+              connection.videoRotationAngle != angle else { return }
+        connection.videoRotationAngle = angle
     }
 }
 #elseif os(macOS)
@@ -271,7 +324,7 @@ struct CameraScannerView: NSViewRepresentable {
         override init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
             wantsLayer = true
-            videoPreviewLayer.videoGravity = .resizeAspectFill
+            videoPreviewLayer.videoGravity = .resizeAspect
             layer = CALayer()
             layer?.addSublayer(videoPreviewLayer)
         }
@@ -295,6 +348,15 @@ final class CameraScannerCoordinator: NSObject, AVCaptureMetadataOutputObjectsDe
     private var desiredActive = false
     private var didConfigureSession = false
     private weak var previewLayer: AVCaptureVideoPreviewLayer?
+    #if os(iOS)
+    // Type-erased storage keeps iOS 16 supported without initializing an iOS 17 API.
+    private var previewRotation: AnyObject?
+    private weak var previewWindowScene: UIWindowScene?
+    // Keep a quick scanner dismissal from racing a pending startRunning call.
+    private let sessionQueue = DispatchQueue(label: "chat.bitchat.verification-camera", qos: .userInitiated)
+    #else
+    private var sessionQueue: DispatchQueue { .global(qos: .userInitiated) }
+    #endif
 
     func setup(
         previewLayer: AVCaptureVideoPreviewLayer,
@@ -361,9 +423,44 @@ final class CameraScannerCoordinator: NSObject, AVCaptureMetadataOutputObjectsDe
         }
         session.commitConfiguration()
         previewLayer?.session = session
+        #if os(iOS)
+        if #available(iOS 17.0, *), let previewLayer {
+            previewRotation = CameraPreviewRotation(device: device, previewLayer: previewLayer)
+        }
+        #endif
         didConfigureSession = true
+        #if os(iOS)
+        updatePreviewRotation(in: previewWindowScene)
+        #endif
         return true
     }
+
+    #if os(iOS)
+    func updatePreviewRotation(in windowScene: UIWindowScene?) {
+        previewWindowScene = windowScene
+        if #available(iOS 17.0, *) {
+            (previewRotation as? CameraPreviewRotation)?.update()
+        } else {
+            // This is camera presentation, not a layout decision. Read only the
+            // preview's scene; iOS 16 has no capture-device rotation coordinator.
+            guard let orientation = windowScene?.interfaceOrientation,
+                  let connection = previewLayer?.connection,
+                  connection.isVideoOrientationSupported else { return }
+            switch orientation {
+            case .portrait: connection.videoOrientation = .portrait
+            case .portraitUpsideDown: connection.videoOrientation = .portraitUpsideDown
+            case .landscapeLeft: connection.videoOrientation = .landscapeLeft
+            case .landscapeRight: connection.videoOrientation = .landscapeRight
+            default: break
+            }
+        }
+    }
+
+    func stopPreview() {
+        previewRotation = nil
+        setActive(false)
+    }
+    #endif
 
     private func reportUnavailable() {
         DispatchQueue.main.async {
@@ -376,12 +473,12 @@ final class CameraScannerCoordinator: NSObject, AVCaptureMetadataOutputObjectsDe
         guard permissionGranted, didConfigureSession else { return }
         if active && !isRunning {
             isRunning = true
-            DispatchQueue.global(qos: .userInitiated).async {
+            sessionQueue.async {
                 if !self.session.isRunning { self.session.startRunning() }
             }
         } else if !active && isRunning {
             isRunning = false
-            DispatchQueue.global(qos: .userInitiated).async {
+            sessionQueue.async {
                 if self.session.isRunning { self.session.stopRunning() }
             }
         }
@@ -412,25 +509,29 @@ struct VerificationSheetView: View {
     private var boxColor: Color { palette.secondary.opacity(0.1) }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Top header (always at top)
-            HStack {
-                Text("verification.sheet.title")
-                    .bitchatFont(size: 14, weight: .bold)
-                    .foregroundColor(accentColor)
-                Spacer()
-                SheetCloseButton {
-                    showingScanner = false
-                    isPresented = false
-                }
-                .foregroundColor(accentColor)
+        NavigationStack {
+            ScrollView {
+                verificationContent
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
+            .navigationTitle("verification.sheet.title")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    SheetCloseButton {
+                        showingScanner = false
+                        isPresented = false
+                    }
+                }
+            }
+        }
+        .themedSheetBackground()
+        .onDisappear { showingScanner = false }
+    }
 
-            Divider()
-
+    private var verificationContent: some View {
+        VStack(spacing: 0) {
             // Content area
             Group {
                 if showingScanner {
@@ -444,7 +545,6 @@ struct VerificationSheetView: View {
                             showingScanner = false
                         })
                             .environmentObject(verificationModel)
-                            .frame(minHeight: 280)
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                     }
                     .padding()
@@ -489,7 +589,5 @@ struct VerificationSheetView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
         }
-        .themedSheetBackground()
-        .onDisappear { showingScanner = false }
     }
 }

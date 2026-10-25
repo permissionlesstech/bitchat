@@ -121,63 +121,71 @@ struct LocationChannelsSheet: View {
     }
 
     var body: some View {
-        NavigationView {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 12) {
-                    Text(Strings.title)
-                        .bitchatFont(size: 18)
-                    Spacer()
-                    closeButton
-                }
-                Text(Strings.description)
-                    .bitchatFont(size: 12)
-                    .foregroundColor(palette.secondary)
-
-                // The description's tor claim is only true while tor is on;
-                // when it's off, say what that exposes right where the person
-                // is about to join a channel, not just in settings.
-                if !locationChannelsModel.userTorEnabled {
-                    Text(verbatim: Strings.torOffWarning)
-                        .bitchatFont(size: 11)
-                        .foregroundColor(palette.alertRed)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Group {
-                    switch locationChannelsModel.permissionState {
-                    case .notDetermined:
-                        Button(action: { locationChannelsModel.enableLocationChannels() }) {
-                            Text(Strings.requestPermissions)
-                                .bitchatFont(size: 12)
-                                .foregroundColor(standardGreen)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 6)
-                                .background(standardGreen.opacity(0.12))
-                                .cornerRadius(6)
-                        }
-                        .buttonStyle(.plain)
-                    case .denied, .restricted:
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(Strings.permissionDenied)
-                                .bitchatFont(size: 12)
-                                .foregroundColor(palette.secondary)
-                            Button(Strings.openSettings, action: SystemSettings.location.open)
-                            .buttonStyle(.plain)
-                        }
-                    case .authorized:
-                        EmptyView()
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    #if os(macOS)
+                    HStack(spacing: 12) {
+                        Text(Strings.title)
+                            .bitchatFont(size: 18)
+                        Spacer()
+                        closeButton
                     }
-                }
+                    #endif
+                    Text(Strings.description)
+                        .bitchatFont(size: 12)
+                        .foregroundColor(palette.secondary)
 
-                channelList
-                Spacer()
+                    // The description's tor claim is only true while tor is on;
+                    // when it's off, say what that exposes right where the person
+                    // is about to join a channel, not just in settings.
+                    if !locationChannelsModel.userTorEnabled {
+                        Text(verbatim: Strings.torOffWarning)
+                            .bitchatFont(size: 11)
+                            .foregroundColor(palette.alertRed)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Group {
+                        switch locationChannelsModel.permissionState {
+                        case .notDetermined:
+                            Button(action: { locationChannelsModel.enableLocationChannels() }) {
+                                Text(Strings.requestPermissions)
+                                    .bitchatFont(size: 12)
+                                    .foregroundColor(standardGreen)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 6)
+                                    .background(standardGreen.opacity(0.12))
+                                    .cornerRadius(6)
+                            }
+                            .buttonStyle(.plain)
+                        case .denied, .restricted:
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(Strings.permissionDenied)
+                                    .bitchatFont(size: 12)
+                                    .foregroundColor(palette.secondary)
+                                Button(Strings.openSettings, action: SystemSettings.location.open)
+                                .buttonStyle(.plain)
+                            }
+                        case .authorized:
+                            EmptyView()
+                        }
+                    }
+
+                    channelList
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
             .themedSurface()
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            .navigationBarHidden(true)
+            .navigationTitle(Strings.title)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    closeButton
+                }
+            }
             #else
             .navigationTitle("")
             #endif
@@ -295,99 +303,96 @@ struct LocationChannelsSheet: View {
     }
 
     private var channelListContent: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                channelRow(title: Strings.meshTitle(peerListModel.reachableMeshPeerCount), subtitlePrefix: Strings.subtitlePrefix(geohash: "bluetooth", coverage: bluetoothRangeString()), isSelected: isMeshSelected, titleColor: standardBlue, titleBold: peerListModel.reachableMeshPeerCount > 0) {
-                    locationChannelsModel.select(ChannelID.mesh)
-                    isPresented = false
-                }
-                .padding(.vertical, 6)
+        LazyVStack(spacing: 0) {
+            channelRow(title: Strings.meshTitle(peerListModel.reachableMeshPeerCount), subtitlePrefix: Strings.subtitlePrefix(geohash: "bluetooth", coverage: bluetoothRangeString()), isSelected: isMeshSelected, titleColor: standardBlue, titleBold: peerListModel.reachableMeshPeerCount > 0) {
+                locationChannelsModel.select(ChannelID.mesh)
+                isPresented = false
+            }
+            .padding(.vertical, 6)
 
-                let nearby = locationChannelsModel.availableChannels.filter { $0.level != .building }
-                if !nearby.isEmpty {
-                    ForEach(nearby) { channel in
-                        sectionDivider
-                        let coverage = coverageString(forPrecision: channel.geohash.count)
-                        let nameBase = locationName(for: channel.level)
-                        let namePart = nameBase.map { formattedNamePrefix(for: channel.level) + $0 }
-                        let participantCount = peerListModel.participantCount(for: channel.geohash)
-                        let subtitlePrefix = Strings.subtitlePrefix(geohash: channel.geohash, coverage: coverage)
-                        let highlight = participantCount > 0
-                        channelRow(
-                            title: Strings.levelTitle(for: channel.level, count: participantCount),
-                            subtitlePrefix: subtitlePrefix,
-                            subtitleName: namePart,
-                            isSelected: isSelected(channel),
-                            titleBold: highlight,
-                            trailingAccessory: {
-                                Button(action: { locationChannelsModel.toggleBookmark(channel.geohash) }) {
-                                    Image(systemName: locationChannelsModel.isBookmarked(channel.geohash) ? "bookmark.fill" : "bookmark")
-                                        .font(.bitchatSystem(size: 14))
-                                }
-                                .buttonStyle(.plain)
-                                .padding(.leading, 8)
-                                .accessibilityLabel(locationChannelsModel.isBookmarked(channel.geohash) ? Strings.removeBookmark : Strings.addBookmark)
-                            },
-                            accessoryActionTitle: locationChannelsModel.isBookmarked(channel.geohash) ? Strings.removeBookmark : Strings.addBookmark,
-                            accessoryAction: { locationChannelsModel.toggleBookmark(channel.geohash) },
-                            shareGeohash: channel.geohash,
-                            onShare: { requestShare(forGeohash: channel.geohash) }
-                        ) {
-                            locationChannelsModel.markTeleported(for: channel.geohash, false)
-                            locationChannelsModel.select(ChannelID.location(channel))
-                            isPresented = false
-                        }
-                        .contextMenu {
-                            Button {
-                                requestShare(forGeohash: channel.geohash)
-                            } label: {
-                                Label(Strings.shareChannel, systemImage: "square.and.arrow.up")
-                            }
-                        }
-                        .padding(.vertical, 6)
-                    }
-                } else if locationChannelsModel.permissionState == .authorized {
+            let nearby = locationChannelsModel.availableChannels.filter { $0.level != .building }
+            if !nearby.isEmpty {
+                ForEach(nearby) { channel in
                     sectionDivider
-                    HStack(spacing: 8) {
-                        ProgressView()
-                        Text(Strings.loadingNearby)
-                            .bitchatFont(size: 12)
+                    let coverage = coverageString(forPrecision: channel.geohash.count)
+                    let nameBase = locationName(for: channel.level)
+                    let namePart = nameBase.map { formattedNamePrefix(for: channel.level) + $0 }
+                    let participantCount = peerListModel.participantCount(for: channel.geohash)
+                    let subtitlePrefix = Strings.subtitlePrefix(geohash: channel.geohash, coverage: coverage)
+                    let highlight = participantCount > 0
+                    channelRow(
+                        title: Strings.levelTitle(for: channel.level, count: participantCount),
+                        subtitlePrefix: subtitlePrefix,
+                        subtitleName: namePart,
+                        isSelected: isSelected(channel),
+                        titleBold: highlight,
+                        trailingAccessory: {
+                            Button(action: { locationChannelsModel.toggleBookmark(channel.geohash) }) {
+                                Image(systemName: locationChannelsModel.isBookmarked(channel.geohash) ? "bookmark.fill" : "bookmark")
+                                    .font(.bitchatSystem(size: 14))
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.leading, 8)
+                            .accessibilityLabel(locationChannelsModel.isBookmarked(channel.geohash) ? Strings.removeBookmark : Strings.addBookmark)
+                        },
+                        accessoryActionTitle: locationChannelsModel.isBookmarked(channel.geohash) ? Strings.removeBookmark : Strings.addBookmark,
+                        accessoryAction: { locationChannelsModel.toggleBookmark(channel.geohash) },
+                        shareGeohash: channel.geohash,
+                        onShare: { requestShare(forGeohash: channel.geohash) }
+                    ) {
+                        locationChannelsModel.markTeleported(for: channel.geohash, false)
+                        locationChannelsModel.select(ChannelID.location(channel))
+                        isPresented = false
                     }
+                    .contextMenu {
+                        Button {
+                            requestShare(forGeohash: channel.geohash)
+                        } label: {
+                            Label(Strings.shareChannel, systemImage: "square.and.arrow.up")
+                        }
+                    }
+                    .padding(.vertical, 6)
+                }
+            } else if locationChannelsModel.permissionState == .authorized {
+                sectionDivider
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text(Strings.loadingNearby)
+                        .bitchatFont(size: 12)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 10)
+            } else {
+                // No permission means no fix is coming: an honest hint
+                // beats a spinner that would never finish.
+                sectionDivider
+                Text(Strings.grantToFind)
+                    .bitchatFont(size: 12)
+                    .foregroundColor(palette.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 10)
-                } else {
-                    // No permission means no fix is coming: an honest hint
-                    // beats a spinner that would never finish.
-                    sectionDivider
-                    Text(Strings.grantToFind)
-                        .bitchatFont(size: 12)
-                        .foregroundColor(palette.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 10)
-                }
-
-                sectionDivider
-                customTeleportSection
-                    .padding(.vertical, 8)
-
-                if QuickJoinSuggestion.current() != nil {
-                    sectionDivider
-                    quickJoinSection
-                        .padding(.vertical, 8)
-                }
-
-                let bookmarkedList = locationChannelsModel.bookmarks
-                if !bookmarkedList.isEmpty {
-                    sectionDivider
-                    bookmarkedSection(bookmarkedList)
-                        .padding(.vertical, 8)
-                }
-
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 6)
-            .themedSurface()
+
+            sectionDivider
+            customTeleportSection
+                .padding(.vertical, 8)
+
+            if QuickJoinSuggestion.current() != nil {
+                sectionDivider
+                quickJoinSection
+                    .padding(.vertical, 8)
+            }
+
+            let bookmarkedList = locationChannelsModel.bookmarks
+            if !bookmarkedList.isEmpty {
+                sectionDivider
+                bookmarkedSection(bookmarkedList)
+                    .padding(.vertical, 8)
+            }
+
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 6)
         .themedSurface()
     }
 

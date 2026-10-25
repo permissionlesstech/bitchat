@@ -12,6 +12,9 @@ struct ContentComposerView: View {
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @ObservedObject private var bridgeService = BridgeService.shared
     @Environment(\.appTheme) private var theme
+    @Environment(\.scenePhase) private var scenePhase
+    @GestureState private var isMicPressed = false
+    @State private var micHoldStarted = false
     @ThemedPalette private var palette
 
     @Binding var messageText: String
@@ -144,6 +147,19 @@ struct ContentComposerView: View {
         .themedChromePanel(edge: .bottom)
         .onDisappear {
             autocompleteDebounceTimer?.invalidate()
+            cancelActiveCapture()
+        }
+        .onChange(of: scenePhase) { phase in
+            if phase != .active { cancelActiveCapture() }
+        }
+        .background {
+            GeometryReader { geometry in
+                Color.clear.onChange(of: geometry.size.width) { _ in
+                    // Width changes can cancel a touch without onEnded.
+                    // Recording HUD height changes must keep capture running.
+                    cancelActiveCapture()
+                }
+            }
         }
     }
 }
@@ -346,7 +362,12 @@ private extension ContentComposerView {
                     .contentShape(Circle())
                     .gesture(
                         DragGesture(minimumDistance: 0)
+                            .updating($isMicPressed) { _, isPressed, _ in
+                                isPressed = true
+                            }
                             .onChanged { _ in
+                                guard !micHoldStarted else { return }
+                                micHoldStarted = true
                                 voiceRecordingVM.start(shouldShow: conversationUIModel.canSendMediaInCurrentContext)
                             }
                             .onEnded { _ in
@@ -354,6 +375,12 @@ private extension ContentComposerView {
                             }
                     )
             )
+            .onChange(of: isMicPressed) { isPressed in
+                if !isPressed {
+                    micHoldStarted = false
+                    cancelActiveCapture()
+                }
+            }
             .accessibilityLabel(
                 String(localized: "content.accessibility.record_voice_note", comment: "Accessibility label for the voice note button")
             )
@@ -381,6 +408,11 @@ private extension ContentComposerView {
                     voiceRecordingVM.start(shouldShow: conversationUIModel.canSendMediaInCurrentContext)
                 }
             }
+    }
+
+    private func cancelActiveCapture() {
+        guard voiceRecordingVM.state.isActive || voiceRecordingVM.state == .requestingPermission else { return }
+        voiceRecordingVM.cancel()
     }
 
     func sendButtonView(enabled: Bool) -> some View {

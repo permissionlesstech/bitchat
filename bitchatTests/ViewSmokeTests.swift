@@ -134,7 +134,7 @@ private struct ContentPeopleSheetHarness: View {
     @State private var windowCountPrivate: [PeerID: Int] = [:]
     @State private var isAtBottomPrivate = true
     @State private var autocompleteDebounceTimer: Timer?
-    @StateObject private var voiceRecordingVM = VoiceRecordingViewModel()
+    @StateObject private var voiceRecordingVM: VoiceRecordingViewModel
     @FocusState private var isTextFieldFocused: Bool
     #if os(iOS)
     @State private var showImagePicker = false
@@ -142,6 +142,10 @@ private struct ContentPeopleSheetHarness: View {
     #else
     @State private var showMacImagePicker = false
     #endif
+
+    init(voiceRecordingVM: VoiceRecordingViewModel? = nil) {
+        _voiceRecordingVM = StateObject(wrappedValue: voiceRecordingVM ?? VoiceRecordingViewModel())
+    }
 
     var body: some View {
         #if os(iOS)
@@ -182,6 +186,19 @@ private struct ContentPeopleSheetHarness: View {
         #endif
     }
 }
+
+#if os(iOS)
+@MainActor
+private final class SmokeVoiceCaptureSession: VoiceCaptureSession {
+    let isLive = false
+    private(set) var cancelCount = 0
+    func requestPermission() async -> Bool { true }
+    func start() async throws {}
+    func finish() async -> URL? { nil }
+    func cancel() async { cancelCount += 1 }
+    func panicCancelSynchronously() {}
+}
+#endif
 
 @MainActor
 @discardableResult
@@ -303,7 +320,7 @@ struct ViewSmokeTests {
         let (viewModel, transport, _) = makeSmokeViewModel()
         let featureModels = makeSmokeFeatureModels(for: viewModel)
         let peerID = PeerID(str: "2122232425262728")
-        let fingerprint = String(repeating: "cd", count: 32)
+        let fingerprint = Data(repeating: 0x77, count: 32).sha256Fingerprint()
         var isPresented = true
 
         transport.peerFingerprints[peerID] = fingerprint
@@ -556,6 +573,199 @@ struct ViewSmokeTests {
         #expect(featureModels.privateConversationModel.selectedPeerID == peerID)
         #expect(featureModels.privateConversationModel.selectedHeaderState?.headerPeerID == peerID)
     }
+
+    #if os(iOS)
+    @Test("Resizing the same chat workspace preserves selection and unsent drafts")
+    @available(iOS 17.0, *)
+    func contentWorkspace_preservesConversationAndDraftAcrossResizing() async throws {
+        let previousDrafts = ComposerDraftStore.replaceAllForTesting()
+        defer { ComposerDraftStore.replaceAllForTesting(previousDrafts) }
+        let (viewModel, transport, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let peerID = PeerID(str: "6162636465666768")
+        let fingerprint = Data(repeating: 0x77, count: 32).sha256Fingerprint()
+        transport.peerFingerprints[peerID] = fingerprint
+        transport.updatePeerSnapshots([
+            makeSnapshot(peerID: peerID, nickname: "DuoAlice", noiseByte: 0x77)
+        ])
+        let peerReady = await TestHelpers.waitUntil {
+            featureModels.conversationUIModel.getFingerprint(for: peerID) == fingerprint
+                && viewModel.allPeers.contains { $0.peerID == peerID }
+        }
+        try #require(peerReady)
+        let privateKey = ComposerDraftStore.Key.privateChat(stableID: fingerprint)
+        ComposerDraftStore.save("saved mesh draft", for: .mesh)
+        ComposerDraftStore.save("saved private draft", for: privateKey)
+
+        // Retain one root throughout: replacing rootView would conceal the
+        // draft/selection loss caused by rebuilding navigation on a resize.
+        let host = UIHostingController(rootView:
+            installSmokeEnvironment(ContentView(), featureModels: featureModels)
+                .environment(\.scenePhase, .active)
+        )
+        let container = UIViewController()
+        container.addChild(host)
+        container.view.addSubview(host.view)
+        host.didMove(toParent: container)
+        let sceneReady = await TestHelpers.waitUntil {
+            UIApplication.shared.connectedScenes.contains { $0 is UIWindowScene }
+        }
+        try #require(sceneReady)
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        // Test-host permission alerts can leave the visible scene temporarily
+        // inactive. It still owns the live window used for these layouts.
+        let scene = try #require(scenes.first { $0.activationState == .foregroundActive }
+            ?? scenes.first { $0.activationState == .foregroundInactive }
+            ?? scenes.first)
+        let previousKeyWindow = scene.windows.first { $0.isKeyWindow }
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = container
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+            previousKeyWindow?.makeKey()
+        }
+        window.makeKeyAndVisible()
+        window.layoutIfNeeded()
+
+        func resize(width: CGFloat, height: CGFloat, sizeClass: UIUserInterfaceSizeClass) async {
+            container.setOverrideTraitCollection(
+                UITraitCollection(horizontalSizeClass: sizeClass), forChild: host
+            )
+            // Resize the live child, not the scene's window. Scale its rendered
+            // surface to fit the real scene so no text field becomes offstage
+            // when testing a container larger than the simulator's display.
+            host.view.transform = .identity
+            host.view.bounds = CGRect(x: 0, y: 0, width: width, height: height)
+            host.view.center = CGPoint(x: container.view.bounds.midX, y: container.view.bounds.midY)
+            let scale = min(container.view.bounds.width / width, container.view.bounds.height / height)
+            host.view.transform = CGAffineTransform(scaleX: scale, y: scale)
+            container.view.setNeedsLayout()
+            container.view.layoutIfNeeded()
+            host.view.setNeedsLayout()
+            host.view.layoutIfNeeded()
+            // Yield a runloop turn for navigation's collapse/expand transaction;
+            // the pre-transition field can otherwise satisfy a draft check.
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            #expect(host.traitCollection.horizontalSizeClass == sizeClass)
+            #expect(host.view.window === window)
+        }
+        func textFields(in view: UIView) -> [UITextField] {
+            (view as? UITextField).map { [$0] } ?? view.subviews.flatMap { textFields(in: $0) }
+        }
+        func composerField(privateChat: Bool) -> UITextField? {
+            host.view.layoutIfNeeded()
+            return textFields(in: host.view).first { field in
+                guard field.window === window,
+                      field.convert(field.bounds, to: window).intersects(window.bounds) else {
+                    return false
+                }
+                var ancestor: UIView? = field
+                while let view = ancestor {
+                    guard !view.isHidden, view.alpha > 0 else { return false }
+                    ancestor = view.superview
+                }
+                let placeholder = field.placeholder ?? field.attributedPlaceholder?.string ?? ""
+                return privateChat
+                    ? placeholder.contains("@DuoAlice")
+                    : placeholder == String(localized: "content.input.placeholder.mesh")
+            }
+        }
+
+        await resize(width: 390, height: 700, sizeClass: .compact)
+        let publicMounted = await TestHelpers.waitUntil {
+            composerField(privateChat: false)?.text == "saved mesh draft"
+        }
+        try #require(publicMounted)
+        let meshField = try #require(composerField(privateChat: false))
+        meshField.text = "mesh draft typed in the workspace"
+        meshField.sendActions(for: .editingChanged)
+
+        featureModels.privateConversationModel.startConversation(with: peerID)
+        let privateMounted = await TestHelpers.waitUntil {
+            composerField(privateChat: true)?.text == "saved private draft"
+        }
+        try #require(privateMounted)
+        #expect(ComposerDraftStore.load(.mesh) == "mesh draft typed in the workspace")
+        let privateField = try #require(composerField(privateChat: true))
+        privateField.text = "private draft typed before folding"
+        privateField.sendActions(for: .editingChanged)
+
+        // Representative container sizes, not assumed hardware dimensions.
+        for (width, height, sizeClass) in [
+            (CGFloat(1000), CGFloat(800), UIUserInterfaceSizeClass.regular),
+            (CGFloat(600), CGFloat(340), UIUserInterfaceSizeClass.compact),
+            (CGFloat(800), CGFloat(1000), UIUserInterfaceSizeClass.regular)
+        ] {
+            await resize(width: width, height: height, sizeClass: sizeClass)
+            let preserved = await TestHelpers.waitUntil {
+                composerField(privateChat: true)?.text == "private draft typed before folding"
+            }
+            #expect(preserved)
+            #expect(featureModels.privateConversationModel.selectedPeerID == peerID)
+        }
+
+        featureModels.privateConversationModel.endConversation()
+        let meshRestored = await TestHelpers.waitUntil {
+            composerField(privateChat: false)?.text == "mesh draft typed in the workspace"
+        }
+        #expect(meshRestored)
+        #expect(featureModels.privateConversationModel.selectedPeerID == nil)
+        #expect(ComposerDraftStore.load(privateKey) == "private draft typed before folding")
+
+        featureModels.privateConversationModel.startConversation(with: peerID)
+        let privateRestored = await TestHelpers.waitUntil {
+            composerField(privateChat: true)?.text == "private draft typed before folding"
+        }
+        #expect(privateRestored)
+    }
+    #endif
+
+    #if os(iOS)
+    @Test("Recording HUD keeps capture running; a narrower composer cancels it")
+    func voiceCapture_survivesHUDAndCancelsOnResize() async throws {
+        let (viewModel, transport, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let peerID = PeerID(str: "7172737475767778")
+        transport.updatePeerSnapshots([makeSnapshot(peerID: peerID, nickname: "VoiceAlice", noiseByte: 0x78)])
+        featureModels.privateConversationModel.startConversation(with: peerID)
+        let capture = SmokeVoiceCaptureSession()
+        let recordingVM = VoiceRecordingViewModel()
+        recordingVM.sessionProvider = { capture }
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let scene = try #require(scenes.first { $0.activationState == .foregroundActive } ?? scenes.first)
+        let previousKeyWindow = scene.windows.first { $0.isKeyWindow }
+        let window = UIWindow(windowScene: scene)
+        let host = UIHostingController(rootView:
+            installSmokeEnvironment(ContentPeopleSheetHarness(voiceRecordingVM: recordingVM), featureModels: featureModels)
+                .environment(\.scenePhase, .active)
+        )
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        host.view.layoutIfNeeded()
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+            previousKeyWindow?.makeKey()
+        }
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        recordingVM.start(shouldShow: true)
+        let started = await TestHelpers.waitUntil { recordingVM.state.isActive }
+        try #require(started)
+        // Preparing/recording inserts the HUD and changes composer height.
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        #expect(recordingVM.state.isActive)
+        #expect(capture.cancelCount == 0)
+
+        host.view.bounds.size.width -= 80
+        host.view.setNeedsLayout()
+        host.view.layoutIfNeeded()
+        let canceled = await TestHelpers.waitUntil {
+            recordingVM.state == .idle && capture.cancelCount == 1
+        }
+        #expect(canceled)
+    }
+    #endif
 
     @Test("Root Bluetooth alert waits for location and notices sheets")
     func rootBluetoothAlertGuard_includesHeaderSheets() {
@@ -828,7 +1038,7 @@ struct ViewSmokeTests {
             coordinator.setActive(false)
         }
 
-        #expect(preview.videoPreviewLayer.videoGravity == .resizeAspectFill)
+        #expect(preview.videoPreviewLayer.videoGravity == .resizeAspect)
         #endif
     }
 }

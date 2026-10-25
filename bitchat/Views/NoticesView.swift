@@ -26,6 +26,7 @@ struct NoticesView: View {
 
     @ThemedPalette private var palette
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @State private var tab: Tab
@@ -203,7 +204,7 @@ struct NoticesView: View {
         ownsLiveGeoRefresh = next.ownsLiveRefresh
     }
 
-    private var maxDraftLines: Int { dynamicTypeSize.isAccessibilitySize ? 5 : 3 }
+    private var maxDraftLines: Int { verticalSizeClass == .compact ? 1 : (dynamicTypeSize.isAccessibilitySize ? 5 : 3) }
 
     /// The geohash the geo tab is scoped to: the selected location channel,
     /// or the device's building geohash when chatting on mesh.
@@ -293,11 +294,23 @@ struct NoticesView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            headerSection
-            contentSection
-            if activeGeohash != nil {
-                composer
+        NavigationStack {
+            VStack(spacing: 0) {
+                headerSection
+                contentSection
+                if activeGeohash != nil {
+                    composer
+                }
+            }
+            .navigationTitle(scopeTitle)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    SheetCloseButton { dismiss() }
+                        .accessibilityLabel(Strings.closeHint)
+                }
             }
         }
         .themedSurface()
@@ -350,13 +363,6 @@ struct NoticesView: View {
 
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
-                Text(verbatim: scopeTitle)
-                    .bitchatFont(size: 18)
-                Spacer()
-                SheetCloseButton { dismiss() }
-                    .accessibilityLabel(Strings.closeHint)
-            }
             Picker(Strings.scopePicker, selection: $tab) {
                 Text(Strings.geoTab).tag(Tab.geo)
                 Text(Strings.meshTab).tag(Tab.mesh)
@@ -487,46 +493,62 @@ struct NoticesView: View {
             }
             // Both tabs pick an expiry (geo notes may be ∞); urgency is a
             // mesh-board concept — notes are ambient by nature.
-            HStack(spacing: 12) {
-                if tab == .mesh {
-                    Toggle(isOn: $urgent) {
-                        Text(Strings.urgentToggle)
-                            .bitchatFont(size: 12)
-                            .foregroundColor(urgent ? palette.alertRed : palette.secondary)
-                    }
-                    .toggleStyle(.switch)
-                    .fixedSize()
-                    .accessibilityLabel(Strings.urgentToggle)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    urgencyToggle
+                    expiryPicker
                 }
-                Spacer()
-                Text(Strings.expiryLabel)
-                    .bitchatFont(size: 12)
-                    .foregroundColor(palette.secondary)
-                Picker(Strings.expiryLabel, selection: $expiryDays) {
-                    // Mesh board posts must fade (the wire caps their
-                    // lifetime); only relay-backed geo notes can be ∞.
-                    if tab == .geo {
-                        Text(verbatim: "∞")
-                            .accessibilityLabel(Strings.permanentOption)
-                            .tag(Self.permanentExpiry)
-                    }
-                    ForEach([1, 3, 7], id: \.self) { days in
-                        Text(Strings.expiryDaysOption(days)).tag(days)
-                    }
+                VStack(alignment: .leading, spacing: 8) {
+                    urgencyToggle
+                    expiryPicker
                 }
-                .pickerStyle(.segmented)
-                // macOS segmented pickers render their own label; the themed
-                // Text alongside already carries it (and accessibility keeps
-                // the explicit label below).
-                .labelsHidden()
-                .fixedSize()
-                .accessibilityLabel(Strings.expiryLabel)
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .themedSurface()
         .overlay(Divider(), alignment: .top)
+    }
+
+    @ViewBuilder
+    private var urgencyToggle: some View {
+        if tab == .mesh {
+            Toggle(isOn: $urgent) {
+                Text(Strings.urgentToggle)
+                    .bitchatFont(size: 12)
+                    .foregroundColor(urgent ? palette.alertRed : palette.secondary)
+            }
+            .toggleStyle(.switch)
+            .fixedSize()
+            .accessibilityLabel(Strings.urgentToggle)
+        }
+    }
+
+    private var expiryPicker: some View {
+        HStack(spacing: 12) {
+            Text(Strings.expiryLabel)
+                .bitchatFont(size: 12)
+                .foregroundColor(palette.secondary)
+            Picker(Strings.expiryLabel, selection: $expiryDays) {
+                // Mesh board posts must fade (the wire caps their
+                // lifetime); only relay-backed geo notes can be ∞.
+                if tab == .geo {
+                    Text(verbatim: "∞")
+                        .accessibilityLabel(Strings.permanentOption)
+                        .tag(Self.permanentExpiry)
+                }
+                ForEach([1, 3, 7], id: \.self) { days in
+                    Text(Strings.expiryDaysOption(days)).tag(days)
+                }
+            }
+            .pickerStyle(.segmented)
+            // macOS segmented pickers render their own label; the themed
+            // Text alongside already carries it (and accessibility keeps
+            // the explicit label below).
+            .labelsHidden()
+            .fixedSize()
+            .accessibilityLabel(Strings.expiryLabel)
+        }
     }
 
     private var sendEnabled: Bool {
