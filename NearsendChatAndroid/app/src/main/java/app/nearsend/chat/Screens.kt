@@ -159,7 +159,8 @@ fun NearbyScreen(store: ChatStore, onOpenChat: (Peer) -> Unit) {
 }
 
 private fun radiusFor(p: Peer) = ((-40 - p.rssi) / 55f).coerceIn(0.18f, 1f)
-private fun angleFor(p: Peer) = (abs(p.id.hashCode()) % 360) * Math.PI.toFloat() / 180f
+// Golden-angle spread so peers with similar ids don't bunch together.
+private fun angleFor(p: Peer) = ((abs(p.id.hashCode()) * 137.508f) % 360f) * Math.PI.toFloat() / 180f
 
 @Composable
 fun Radar(peers: List<Peer>, modifier: Modifier = Modifier) {

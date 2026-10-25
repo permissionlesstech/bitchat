@@ -11,6 +11,9 @@ shot() { # name, extras...
   adb exec-out screencap -p > "shots/$1.png"
 }
 adb shell cmd uimode night no
+# Warm-up launch: the first start after install is slow and can screenshot as a blank frame.
+adb shell am start -n app.nearsend.chat/.MainActivity --ez onboarded true
+sleep 15
 shot 1-onboarding --ez onboarded false
 shot 2-nearby --ez onboarded true --ei tab 0
 shot 3-chats --ez onboarded true --ei tab 1
