@@ -77,6 +77,21 @@ struct AppInfoView: View {
                     cell
                 )
             }
+            /// The cell caption plus how many people are across the bridge.
+            /// The count is a plural substitution, so "1 person" and "2 people"
+            /// are separate translations.
+            static func bridgeCell(_ cell: String, people: Int) -> String {
+                String(
+                    format: String(
+                        localized: "app_info.settings.bridge.cell_people",
+                        defaultValue: "rendezvous cell: %1$@ · %2$#@people@",
+                        comment: "Caption under the mesh bridge toggle: the rendezvous cell and a plural count of people across the bridge"
+                    ),
+                    locale: .current,
+                    cell,
+                    people
+                )
+            }
             static let bridgeNoCell = String(localized: "app_info.settings.bridge.no_cell", defaultValue: "no rendezvous cell yet — needs location access or a nearby bridge peer", comment: "Caption under the mesh bridge toggle when the bridge is on but has no geohash cell to meet on")
 
             // Moved from LocationChannelsSheet; keys unchanged. (The former
@@ -436,7 +451,7 @@ struct AppInfoView: View {
                     // a hint about why there isn't one yet (no location and no
                     // bridge peer advertising a cell).
                     if bridgeService.isEnabled {
-                        Text(bridgeService.activeCell.map(Strings.Settings.bridgeCell) ?? Strings.Settings.bridgeNoCell)
+                        Text(bridgeCaption)
                             .bitchatFont(size: 11)
                             .foregroundColor(secondaryTextColor)
                     }
@@ -594,6 +609,23 @@ struct AppInfoView: View {
             if isSelected {
                 Image(systemName: "checkmark")
             }
+        }
+    }
+
+    /// The line under the mesh bridge toggle. A live cell keeps the existing
+    /// caption, and adds the bridged-people count only when someone is there.
+    private var bridgeCaption: String {
+        let people = bridgeService.bridgedPeerCount
+        switch BridgeSettingsCaption.resolve(
+            hasCell: bridgeService.activeCell != nil,
+            people: people
+        ) {
+        case .noCell:
+            return Strings.Settings.bridgeNoCell
+        case .cell:
+            return Strings.Settings.bridgeCell(bridgeService.activeCell ?? "")
+        case .cellAndPeople:
+            return Strings.Settings.bridgeCell(bridgeService.activeCell ?? "", people: people)
         }
     }
 
