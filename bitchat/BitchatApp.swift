@@ -16,6 +16,7 @@ struct BitchatApp: App {
 
     @StateObject private var runtime: AppRuntime
     @AppStorage(AppTheme.storageKey) private var appThemeRawValue = AppTheme.matrix.rawValue
+    @AppStorage(ChatStyle.storageKey) private var chatStyleRawValue = ChatStyle.bubbles.rawValue
     #if os(iOS)
     @Environment(\.scenePhase) var scenePhase
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -32,6 +33,7 @@ struct BitchatApp: App {
         WindowGroup {
             ContentView()
                 .environment(\.appTheme, AppTheme(rawValue: appThemeRawValue) ?? .matrix)
+                .environment(\.chatStyle, ChatStyle(rawValue: chatStyleRawValue) ?? .bubbles)
                 .environmentObject(runtime.publicChatModel)
                 .environmentObject(runtime.privateInboxModel)
                 .environmentObject(runtime.privateConversationModel)

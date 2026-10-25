@@ -150,6 +150,21 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.formatMessageHeader(message, colorScheme: colorScheme, theme: theme)
     }
 
+    func formatBubbleBody(_ message: BitchatMessage, colorScheme: ColorScheme, theme: AppTheme? = nil) -> AttributedString {
+        chatViewModel.formatBubbleBody(message, colorScheme: colorScheme, theme: theme)
+    }
+
+    func formatBubbleSender(_ message: BitchatMessage, colorScheme: ColorScheme, theme: AppTheme? = nil) -> AttributedString {
+        chatViewModel.formatBubbleSender(message, colorScheme: colorScheme, theme: theme)
+    }
+
+    /// Wash color of a message's bubble: orange for my own, the sender's
+    /// stable peer color (the one their name is drawn in) for everyone else.
+    func bubbleTint(for message: BitchatMessage, colorScheme: ColorScheme) -> Color {
+        if isSentByCurrentUser(message) { return .orange }
+        return chatViewModel.senderColor(for: message, isDark: colorScheme == .dark)
+    }
+
     func mediaAttachment(for message: BitchatMessage) -> BitchatMessage.Media? {
         // The model loads from outgoing/ exactly when the row's sender equals
         // the name it is given. Ask with the row's own sender first: text rows,

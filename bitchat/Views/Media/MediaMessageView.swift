@@ -11,10 +11,13 @@ import BitFoundation
 struct MediaMessageView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appTheme) private var theme
+    @Environment(\.chatStyle) private var chatStyle
     @ThemedPalette private var palette
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     let message: BitchatMessage
     let media: BitchatMessage.Media
+    /// Whether this row starts its author's run (see `TextMessageView`).
+    let startsRun: Bool
     /// Value snapshot of the message's mutable delivery status, captured at
     /// construction (see `TextMessageView.deliveryStatus`): `BitchatMessage`
     /// is a reference type mutated in place, and SwiftUI compares reference
@@ -25,22 +28,42 @@ struct MediaMessageView: View {
 
     @Binding var imagePreviewURL: URL?
 
-    init(message: BitchatMessage, media: BitchatMessage.Media, imagePreviewURL: Binding<URL?>) {
+    init(message: BitchatMessage, media: BitchatMessage.Media, startsRun: Bool = true, imagePreviewURL: Binding<URL?>) {
         self.message = message
         self.media = media
+        self.startsRun = startsRun
         self.deliveryStatus = message.deliveryStatus
         self._imagePreviewURL = imagePreviewURL
     }
 
     var body: some View {
+        Group {
+            if chatStyle.usesBubbles {
+                bubbleBody
+            } else {
+                ircBody
+            }
+        }
+        // Collapse the revealed caption when the status advances (e.g.
+        // sending → sent → delivered) so a detail opened for one state
+        // doesn't linger and silently morph into another. Guarded write:
+        // under a message storm many rows change status within one frame,
+        // and an unconditional state write per change trips SwiftUI's
+        // "tried to update multiple times per frame" re-entrancy warning.
+        .onChange(of: deliveryStatus) { _ in
+            if showDeliveryDetail {
+                showDeliveryDetail = false
+            }
+        }
+    }
+
+    private var ircBody: some View {
         let isFromMe = conversationUIModel.isMediaMessageFromCurrentUser(message)
-        let state = mediaSendState(for: deliveryStatus, isFromMe: isFromMe)
-        let cancelAction: (() -> Void)? = state.canCancel ? { conversationUIModel.cancelMediaSend(messageID: message.id) } : nil
 
         // Baseline alignment (via the header text inside the VStack) keeps the
         // lock on the header line; a fixed top padding left its solid body
         // hanging below the line's visual center.
-        HStack(alignment: .firstTextBaseline, spacing: 0) {
+        return HStack(alignment: .firstTextBaseline, spacing: 0) {
             if message.isPrivate {
                 Image(systemName: "lock.fill")
                     .font(.bitchatSystem(size: 8))
@@ -98,46 +121,99 @@ struct MediaMessageView: View {
                     }
                 }
 
-                Group {
-                    switch media {
-                    case .voice(let url):
-                        VoiceNoteView(
-                            url: url,
-                            isSending: state.isSending,
-                            sendProgress: state.progress,
-                            isLive: conversationUIModel.isLiveVoiceMessage(message),
-                            onCancel: cancelAction
-                        )
-                    case .image(let url):
-                        BlockRevealImageView(
-                            url: url,
-                            revealProgress: state.progress,
-                            isSending: state.isSending,
-                            onCancel: cancelAction,
-                            initiallyBlurred: !isFromMe,
-                            onOpen: {
-                                if !state.isSending {
-                                    imagePreviewURL = url
-                                }
-                            },
-                            onDelete: !isFromMe ? { conversationUIModel.deleteMediaMessage(messageID: message.id) } : nil
-                        )
-                        .frame(maxWidth: 280)
-                    }
-                }
+                mediaContent(isFromMe: isFromMe, showsVoiceCard: true)
             }
         }
         .padding(.vertical, 4)
-        // Collapse the revealed caption when the status advances (e.g.
-        // sending → sent → delivered) so a detail opened for one state
-        // doesn't linger and silently morph into another. Guarded write:
-        // under a message storm many rows change status within one frame,
-        // and an unconditional state write per change trips SwiftUI's
-        // "tried to update multiple times per frame" re-entrancy warning.
-        .onChange(of: deliveryStatus) { _ in
-            if showDeliveryDetail {
-                showDeliveryDetail = false
+    }
+
+    /// Messenger layout, the same shell as a text bubble: sender on the
+    /// first bubble of a run, the media, then the time and delivery status
+    /// flush with the bubble's trailing edge.
+    private var bubbleBody: some View {
+        let isFromMe = conversationUIModel.isMediaMessageFromCurrentUser(message)
+        let isOwn = conversationUIModel.isSentByCurrentUser(message)
+        let status: DeliveryStatus? = message.isPrivate && isOwn && deliveryStatus != .notSentYet ? deliveryStatus : nil
+
+        return VStack(alignment: isOwn ? .trailing : .leading, spacing: 3) {
+            // A one-column grid hugs its widest cell and still lets each
+            // cell pick its own edge; a VStack would need a flexible frame
+            // to push the meta right, stretching every bubble to full width.
+            Grid(alignment: .leading, verticalSpacing: 6) {
+                if startsRun && !isOwn {
+                    GridRow {
+                        bubbleSenderLine
+                    }
+                }
+                GridRow {
+                    mediaContent(isFromMe: isFromMe, showsVoiceCard: false)
+                }
+                GridRow {
+                    MessageBubbleMeta(
+                        time: MessageBubbleMetrics.timestamp(for: message.timestamp),
+                        isBridged: message.isBridged,
+                        status: status
+                    ) {
+                        showDeliveryDetail.toggle()
+                    }
+                    .gridCellAnchor(.trailing)
+                }
             }
+            .messageBubbleChrome(tint: conversationUIModel.bubbleTint(for: message, colorScheme: colorScheme), isOwn: isOwn)
+
+            if let status {
+                MessageBubbleDeliveryCaption(status: status, showsDetail: showDeliveryDetail)
+            }
+        }
+    }
+
+    private var bubbleSenderLine: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(conversationUIModel.formatBubbleSender(message, colorScheme: colorScheme, theme: theme))
+                .lineLimit(1)
+            if conversationUIModel.showsVerifiedSeal(for: message) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.bitchatSystem(size: 9))
+                    .foregroundColor(Color.green.opacity(0.85))
+                    .accessibilityLabel(
+                        String(localized: "content.accessibility.verified_sender", defaultValue: "Verified sender", comment: "Accessibility label for the seal next to a verified peer's name on a private message")
+                    )
+            }
+        }
+    }
+
+    /// The voice note or image itself. Inside a bubble the voice note drops
+    /// its own card: the bubble already frames it.
+    @ViewBuilder
+    private func mediaContent(isFromMe: Bool, showsVoiceCard: Bool) -> some View {
+        let state = mediaSendState(for: deliveryStatus, isFromMe: isFromMe)
+        let cancelAction: (() -> Void)? = state.canCancel ? { conversationUIModel.cancelMediaSend(messageID: message.id) } : nil
+        switch media {
+        case .voice(let url):
+            VoiceNoteView(
+                url: url,
+                isSending: state.isSending,
+                sendProgress: state.progress,
+                isLive: conversationUIModel.isLiveVoiceMessage(message),
+                showsCard: showsVoiceCard,
+                onCancel: cancelAction
+            )
+            .frame(maxWidth: showsVoiceCard ? nil : 260)
+        case .image(let url):
+            BlockRevealImageView(
+                url: url,
+                revealProgress: state.progress,
+                isSending: state.isSending,
+                onCancel: cancelAction,
+                initiallyBlurred: !isFromMe,
+                onOpen: {
+                    if !state.isSending {
+                        imagePreviewURL = url
+                    }
+                },
+                onDelete: !isFromMe ? { conversationUIModel.deleteMediaMessage(messageID: message.id) } : nil
+            )
+            .frame(maxWidth: 280)
         }
     }
 

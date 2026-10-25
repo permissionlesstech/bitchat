@@ -8,6 +8,7 @@ struct AppInfoView: View {
     @Environment(\.dismiss) var dismiss
     @ThemedPalette private var palette
     @AppStorage(AppTheme.storageKey) private var appThemeRawValue = AppTheme.matrix.rawValue
+    @AppStorage(ChatStyle.storageKey) private var chatStyleRawValue = ChatStyle.bubbles.rawValue
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @ObservedObject private var bridgeService = BridgeService.shared
 
@@ -44,6 +45,10 @@ struct AppInfoView: View {
         AppTheme(rawValue: appThemeRawValue) ?? .matrix
     }
 
+    private var selectedChatStyle: ChatStyle {
+        ChatStyle(rawValue: chatStyleRawValue) ?? .bubbles
+    }
+
     private var textColor: Color { palette.primary }
 
     private var secondaryTextColor: Color { palette.secondary }
@@ -53,6 +58,7 @@ struct AppInfoView: View {
         static let appName: LocalizedStringKey = "app_info.app_name"
         static let tagline: LocalizedStringKey = "app_info.tagline"
         static let appearanceTitle: LocalizedStringKey = "app_info.appearance.title"
+        static let chatStyleTitle: LocalizedStringKey = "app_info.chat_style.title"
 
         /// New keys carry their English copy inline (defaultValue) until the
         /// i18n pass lands them in the catalog; moved keys keep their homes.
@@ -318,6 +324,23 @@ struct AppInfoView: View {
         .padding(.top, 12)
     }
 
+    private func appearanceChip(_ title: LocalizedStringKey, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .bitchatFont(size: 13, weight: isSelected ? .semibold : .regular)
+                .foregroundColor(isSelected ? palette.accent : secondaryTextColor)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(isSelected ? palette.accent.opacity(0.15) : Color.clear)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
     @ViewBuilder
     private var paneContent: some View {
         switch selectedPane {
@@ -333,27 +356,28 @@ struct AppInfoView: View {
     @ViewBuilder
     private var settingsContent: some View {
         VStack(alignment: .leading, spacing: 24) {
-            // Appearance — single row: label left, theme chips right
-            HStack(spacing: 12) {
-                SectionHeader(Strings.appearanceTitle)
-                Spacer()
-                ForEach(AppTheme.allCases) { theme in
-                    Button {
-                        appThemeRawValue = theme.rawValue
-                    } label: {
-                        Text(theme.displayNameKey)
-                            .bitchatFont(size: 13, weight: selectedTheme == theme ? .semibold : .regular)
-                            .foregroundColor(selectedTheme == theme ? palette.accent : secondaryTextColor)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(selectedTheme == theme ? palette.accent.opacity(0.15) : Color.clear)
-                            )
-                            .contentShape(Rectangle())
+            // Appearance — label left, chips right: the theme, then the
+            // chat layout (independent of the theme).
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 12) {
+                    SectionHeader(Strings.appearanceTitle)
+                    Spacer()
+                    ForEach(AppTheme.allCases) { theme in
+                        appearanceChip(theme.displayNameKey, isSelected: selectedTheme == theme) {
+                            appThemeRawValue = theme.rawValue
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(selectedTheme == theme ? .isSelected : [])
+                }
+                HStack(spacing: 12) {
+                    Text(Strings.chatStyleTitle)
+                        .bitchatFont(size: 13)
+                        .foregroundColor(secondaryTextColor)
+                    Spacer()
+                    ForEach(ChatStyle.allCases) { style in
+                        appearanceChip(style.displayNameKey, isSelected: selectedChatStyle == style) {
+                            chatStyleRawValue = style.rawValue
+                        }
+                    }
                 }
             }
 

@@ -724,6 +724,69 @@ struct ChatViewModelFormattingTests {
         #expect(viewModel.formatMessageHeader(message, colorScheme: .dark, theme: .matrix) == header)
         #expect(viewModel.formatMessageAsText(message, colorScheme: .dark, theme: .matrix) == fullText)
     }
+
+    @Test @MainActor
+    func formatBubbleBody_isTheContentAlone() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let message = BitchatMessage(
+            id: "fmt-bubble-1",
+            sender: "Alice#a1b2",
+            content: "hello @bob #mesh",
+            timestamp: Date(),
+            isRelay: false,
+            senderPeerID: PeerID(str: "00000000000000b4")
+        )
+
+        // The bubble draws sender and time itself.
+        let body = viewModel.formatBubbleBody(message, colorScheme: .dark, theme: .matrix)
+
+        #expect(String(body.characters) == "hello @bob #mesh")
+    }
+
+    @Test @MainActor
+    func formatBubbleSender_setsTheSuffixOffWithAThinSpace() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let message = BitchatMessage(
+            id: "fmt-bubble-2",
+            sender: "Alice#a1b2",
+            content: "hello",
+            timestamp: Date(),
+            isRelay: false,
+            senderPeerID: PeerID(str: "00000000000000b5")
+        )
+
+        let sender = viewModel.formatBubbleSender(message, colorScheme: .dark, theme: .matrix)
+
+        #expect(String(sender.characters) == "@Alice\u{2009}#a1b2")
+        #expect(sender.runs.contains { $0.link?.absoluteString == "bitchat://user/00000000000000b5" })
+    }
+
+    @Test @MainActor
+    func bubbleFormats_areCachedApartFromTheIRCFormats() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let message = BitchatMessage(
+            id: "fmt-bubble-3",
+            sender: "Alice#a1b2",
+            content: "hello",
+            timestamp: Date(),
+            isRelay: false,
+            senderPeerID: PeerID(str: "00000000000000b6")
+        )
+
+        // Switching styles must never serve one layout's cached text to the
+        // other: each lookup answers from its own entry.
+        let fullText = viewModel.formatMessageAsText(message, colorScheme: .dark, theme: .matrix)
+        let header = viewModel.formatMessageHeader(message, colorScheme: .dark, theme: .matrix)
+        let body = viewModel.formatBubbleBody(message, colorScheme: .dark, theme: .matrix)
+        let sender = viewModel.formatBubbleSender(message, colorScheme: .dark, theme: .matrix)
+
+        #expect(String(body.characters) == "hello")
+        #expect(String(sender.characters) == "@Alice\u{2009}#a1b2")
+        #expect(viewModel.formatMessageAsText(message, colorScheme: .dark, theme: .matrix) == fullText)
+        #expect(viewModel.formatMessageHeader(message, colorScheme: .dark, theme: .matrix) == header)
+        #expect(viewModel.formatBubbleBody(message, colorScheme: .dark, theme: .matrix) == body)
+        #expect(viewModel.formatBubbleSender(message, colorScheme: .dark, theme: .matrix) == sender)
+    }
 }
 
 // MARK: - Verification Tests

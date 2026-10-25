@@ -1840,6 +1840,16 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         messageFormatter.formatMessageHeader(message, colorScheme: colorScheme, theme: theme ?? currentTheme)
     }
 
+    @MainActor
+    func formatBubbleBody(_ message: BitchatMessage, colorScheme: ColorScheme, theme: AppTheme? = nil) -> AttributedString {
+        messageFormatter.formatBubbleBody(message, colorScheme: colorScheme, theme: theme ?? currentTheme)
+    }
+
+    @MainActor
+    func formatBubbleSender(_ message: BitchatMessage, colorScheme: ColorScheme, theme: AppTheme? = nil) -> AttributedString {
+        messageFormatter.formatBubbleSender(message, colorScheme: colorScheme, theme: theme ?? currentTheme)
+    }
+
     // MARK: - Noise Protocol Support
 
     @MainActor
