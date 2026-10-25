@@ -62,13 +62,49 @@ struct GeohashPickerView: View {
     }
 
     var body: some View {
+        #if os(iOS)
+        NavigationStack {
+            globeContent
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        SheetCloseButton(action: onCancel)
+                    }
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            guard hasSelection else { return }
+                            onSelect(state.selectedGeohash)
+                        } label: {
+                            Label(Strings.select, systemImage: "checkmark")
+                        }
+                        .disabled(!hasSelection)
+                        .accessibilityLabel(Strings.selectHint)
+                    }
+                    ToolbarItemGroup(placement: .bottomBar) {
+                        Button {
+                            state.animatePrecision(state.precision - 1)
+                        } label: {
+                            Label(Strings.decreasePrecision, systemImage: "minus.magnifyingglass")
+                        }
+                        Button {
+                            state.animatePrecision(state.precision + 1)
+                        } label: {
+                            Label(Strings.increasePrecision, systemImage: "plus.magnifyingglass")
+                        }
+                    }
+                }
+        }
+        #else
+        globeContent
+        #endif
+    }
+
+    private var globeContent: some View {
         ZStack {
             palette.background
                 .ignoresSafeArea()
 
             if let world {
                 GlobeView(state: state, colors: globeColors, world: world)
-                    .ignoresSafeArea()
             }
 
             VStack(spacing: 0) {
@@ -103,10 +139,12 @@ struct GeohashPickerView: View {
                 .frame(maxWidth: .infinity)
                 .geohashPickerPanel()
 
+            #if os(macOS)
             SheetCloseButton(action: onCancel)
                 .foregroundColor(palette.primary)
                 .frame(width: 40, height: 40)
                 .geohashPickerPanel(cornerRadius: 20)
+            #endif
         }
     }
 
@@ -127,6 +165,7 @@ struct GeohashPickerView: View {
             .geohashPickerPanel()
             .accessibilityElement(children: .combine)
 
+            #if os(macOS)
             HStack(spacing: 10) {
                 precisionButton(systemImage: "minus", label: Strings.decreasePrecision) {
                     state.animatePrecision(state.precision - 1)
@@ -152,6 +191,7 @@ struct GeohashPickerView: View {
                 .opacity(hasSelection ? 1 : 0.38)
                 .accessibilityLabel(Strings.selectHint)
             }
+            #endif
         }
     }
 

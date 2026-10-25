@@ -23,6 +23,42 @@ struct ImagePreviewView: View {
     #endif
 
     var body: some View {
+        #if os(iOS)
+        NavigationStack {
+            previewContent
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(action: { dismiss() }) {
+                            Label {
+                                Text("close", comment: "Button to dismiss fullscreen media viewer")
+                            } icon: {
+                                Image(systemName: "xmark")
+                            }
+                        }
+                    }
+                    ToolbarItem(placement: .primaryAction) {
+                        Button(action: saveCopy) {
+                            Label {
+                                Text("save", comment: "Button to save media to device")
+                            } icon: {
+                                Image(systemName: "square.and.arrow.down")
+                            }
+                        }
+                    }
+                }
+        }
+        .preferredColorScheme(.dark)
+        .onAppear(perform: loadImage)
+        .sheet(isPresented: $showExporter) {
+            FileExportWrapper(url: url)
+        }
+        #else
+        previewContent
+            .onAppear(perform: loadImage)
+        #endif
+    }
+
+    private var previewContent: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             VStack {
@@ -45,6 +81,7 @@ struct ImagePreviewView: View {
                         .tint(.white)
                 }
                 Spacer()
+                #if os(macOS)
                 HStack {
                     Button(action: { dismiss() }) {
                         Text("close", comment: "Button to dismiss fullscreen media viewer")
@@ -65,14 +102,9 @@ struct ImagePreviewView: View {
                     }
                 }
                 .padding([.horizontal, .bottom], 24)
+                #endif
             }
         }
-        .onAppear(perform: loadImage)
-        #if os(iOS)
-        .sheet(isPresented: $showExporter) {
-            FileExportWrapper(url: url)
-        }
-        #endif
     }
 
     private func loadImage() {

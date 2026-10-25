@@ -59,16 +59,16 @@ struct MeshTopologyView: View {
         .frame(width: 500, height: 520)
         .themedSheetBackground()
         #else
-        NavigationView {
+        NavigationStack {
             content
                 .themedSheetBackground()
                 .navigationTitle(Text("topology.title"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
+                    ToolbarItem(placement: .primaryAction) {
                         refreshButton
                     }
-                    ToolbarItem(placement: .navigationBarTrailing) {
+                    ToolbarItem(placement: .cancellationAction) {
                         SheetCloseButton { dismiss() }
                             .foregroundColor(palette.primary)
                     }
@@ -81,7 +81,8 @@ struct MeshTopologyView: View {
         Button {
             model = provider()
         } label: {
-            Image(systemName: "arrow.clockwise")
+            Label("topology.refresh", systemImage: "arrow.clockwise")
+                .labelStyle(.iconOnly)
                 .font(.bitchatSystem(size: 14))
                 .foregroundColor(palette.primary)
         }

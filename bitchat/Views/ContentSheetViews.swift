@@ -43,6 +43,7 @@ struct ContentPeopleSheetView: View {
     @State private var showVerifySheet = false
     @ThemedPalette private var palette
 
+    var isWorkspace = false
     let headerHeight: CGFloat
     let onSendMessage: () -> Void
 
@@ -85,7 +86,7 @@ struct ContentPeopleSheetView: View {
     private var bluetoothAlertBinding: Binding<Bool> {
         Binding(
             get: {
-                scenePhase == .active
+                !isWorkspace && scenePhase == .active
                     && appChromeModel.showBluetoothAlert
                     && !hasModalPresentation
             },
@@ -107,7 +108,7 @@ struct ContentPeopleSheetView: View {
     private var voiceAlertBinding: Binding<Bool> {
         Binding(
             get: {
-                scenePhase == .active
+                !isWorkspace && scenePhase == .active
                     && voiceRecordingVM.showAlert
                     && !hasModalPresentationBesidesVoiceAlert
             },
@@ -124,76 +125,11 @@ struct ContentPeopleSheetView: View {
 
     var body: some View {
         let legacyConsentRequest = conversationUIModel.legacyPrivateMediaConsentRequest
-        NavigationStack {
-            Group {
-                if privateConversationModel.selectedPeerID != nil {
-                    #if os(iOS)
-                    ContentPrivateChatSheetView(
-                        showSidebar: $showSidebar,
-                        messageText: $messageText,
-                        selectedMessageSender: $selectedMessageSender,
-                        selectedMessageSenderID: $selectedMessageSenderID,
-                        imagePreviewURL: $imagePreviewURL,
-                        windowCountPublic: $windowCountPublic,
-                        windowCountPrivate: $windowCountPrivate,
-                        isAtBottomPrivate: $isAtBottomPrivate,
-                        isTextFieldFocused: isTextFieldFocused,
-                        voiceRecordingVM: voiceRecordingVM,
-                        autocompleteDebounceTimer: $autocompleteDebounceTimer,
-                        headerHeight: headerHeight,
-                        onSendMessage: onSendMessage,
-                        showImagePicker: $showImagePicker,
-                        imagePickerSourceType: $imagePickerSourceType
-                    )
-                    #else
-                    ContentPrivateChatSheetView(
-                        showSidebar: $showSidebar,
-                        messageText: $messageText,
-                        selectedMessageSender: $selectedMessageSender,
-                        selectedMessageSenderID: $selectedMessageSenderID,
-                        imagePreviewURL: $imagePreviewURL,
-                        windowCountPublic: $windowCountPublic,
-                        windowCountPrivate: $windowCountPrivate,
-                        isAtBottomPrivate: $isAtBottomPrivate,
-                        isTextFieldFocused: isTextFieldFocused,
-                        voiceRecordingVM: voiceRecordingVM,
-                        autocompleteDebounceTimer: $autocompleteDebounceTimer,
-                        headerHeight: headerHeight,
-                        onSendMessage: onSendMessage,
-                        showMacImagePicker: $showMacImagePicker
-                    )
-                    #endif
-                } else {
-                    ContentPeopleListView(
-                        showSidebar: $showSidebar,
-                        showVerifySheet: $showVerifySheet
-                    )
-                }
-            }
-            .navigationDestination(isPresented: Binding(
-                get: { appChromeModel.showingFingerprintFor != nil && (showSidebar || privateConversationModel.selectedPeerID != nil) },
-                set: { isPresented in
-                    if !isPresented {
-                        appChromeModel.clearFingerprint()
-                    }
-                }
-            )) {
-                if let peerID = appChromeModel.showingFingerprintFor {
-                    FingerprintView(peerID: peerID)
-                        .environmentObject(verificationModel)
-                }
-            }
-            // This sheet covers the root header where the connectivity
-            // banner lives; a person sitting in the people list or a DM
-            // would otherwise get no persistent signal that the radio is
-            // off or tor is stalled. Mirror it here.
-            .safeAreaInset(edge: .top, spacing: 0) {
-                if let issue = ConnectivityIssue.resolve(
-                    bluetoothState: appChromeModel.bluetoothState,
-                    torBlocked: appChromeModel.torBlocked
-                ) {
-                    ConnectivityStatusBanner(issue: issue)
-                }
+        Group {
+            if isWorkspace {
+                conversationContent
+            } else {
+                NavigationStack { conversationContent }
             }
         }
         .themedSheetBackground()
@@ -271,7 +207,6 @@ struct ContentPeopleSheetView: View {
                 showImagePicker = false
                 conversationUIModel.processSelectedImage(image)
             }
-            .ignoresSafeArea()
         }
         #endif
         #if os(macOS)
@@ -307,9 +242,86 @@ struct ContentPeopleSheetView: View {
             Text(appChromeModel.bluetoothAlertMessage)
         }
     }
+
+    private var conversationContent: some View {
+        Group {
+            if privateConversationModel.selectedPeerID != nil {
+                #if os(iOS)
+                ContentPrivateChatSheetView(
+                    showSidebar: $showSidebar,
+                    messageText: $messageText,
+                    selectedMessageSender: $selectedMessageSender,
+                    selectedMessageSenderID: $selectedMessageSenderID,
+                    imagePreviewURL: $imagePreviewURL,
+                    windowCountPublic: $windowCountPublic,
+                    windowCountPrivate: $windowCountPrivate,
+                    isAtBottomPrivate: $isAtBottomPrivate,
+                    isTextFieldFocused: isTextFieldFocused,
+                    voiceRecordingVM: voiceRecordingVM,
+                    autocompleteDebounceTimer: $autocompleteDebounceTimer,
+                    headerHeight: headerHeight,
+                    onSendMessage: onSendMessage,
+                    showImagePicker: $showImagePicker,
+                    imagePickerSourceType: $imagePickerSourceType
+                )
+                #else
+                ContentPrivateChatSheetView(
+                    showSidebar: $showSidebar,
+                    messageText: $messageText,
+                    selectedMessageSender: $selectedMessageSender,
+                    selectedMessageSenderID: $selectedMessageSenderID,
+                    imagePreviewURL: $imagePreviewURL,
+                    windowCountPublic: $windowCountPublic,
+                    windowCountPrivate: $windowCountPrivate,
+                    isAtBottomPrivate: $isAtBottomPrivate,
+                    isTextFieldFocused: isTextFieldFocused,
+                    voiceRecordingVM: voiceRecordingVM,
+                    autocompleteDebounceTimer: $autocompleteDebounceTimer,
+                    headerHeight: headerHeight,
+                    onSendMessage: onSendMessage,
+                    showMacImagePicker: $showMacImagePicker
+                )
+                #endif
+            } else {
+                ContentPeopleListView(
+                    showSidebar: $showSidebar,
+                    showVerifySheet: $showVerifySheet
+                )
+            }
+        }
+        .navigationDestination(isPresented: Binding(
+            get: {
+                !isWorkspace && appChromeModel.showingFingerprintFor != nil
+                    && (showSidebar || privateConversationModel.selectedPeerID != nil)
+            },
+            set: { isPresented in
+                if !isPresented {
+                    appChromeModel.clearFingerprint()
+                }
+            }
+        )) {
+            if let peerID = appChromeModel.showingFingerprintFor {
+                FingerprintView(peerID: peerID, isPushed: true)
+                    .environmentObject(verificationModel)
+            }
+        }
+        // This sheet covers the root header where the connectivity
+        // banner lives; a person sitting in the people list or a DM
+        // would otherwise get no persistent signal that the radio is
+        // off or tor is stalled. Mirror it here.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let issue = ConnectivityIssue.resolve(
+                bluetoothState: appChromeModel.bluetoothState,
+                torBlocked: appChromeModel.torBlocked
+            ) {
+                ConnectivityStatusBanner(issue: issue)
+            }
+        }
+    }
+
 }
 
-private struct ContentPeopleListView: View {
+struct ContentPeopleListView: View {
     @EnvironmentObject private var appChromeModel: AppChromeModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var verificationModel: VerificationModel
@@ -321,63 +333,79 @@ private struct ContentPeopleListView: View {
 
     @Binding var showSidebar: Bool
     @Binding var showVerifySheet: Bool
+    var isWorkspace = false
+    var onShowPublicChat: () -> Void = {}
+    var onShowConversation: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 12) {
-                    Text(peopleSheetTitle)
-                        .bitchatFont(size: 18)
-                        .foregroundColor(palette.primary)
-                    Spacer()
-                    if case .mesh = locationChannelsModel.selectedChannel {
-                        Button(action: { showVerifySheet = true }) {
-                            Image(systemName: "qrcode")
-                                .font(.bitchatSystem(size: 14))
+            if !isWorkspace {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 12) {
+                        Text(peopleSheetTitle)
+                            .bitchatFont(size: 18)
+                            .foregroundColor(palette.primary)
+                        Spacer()
+                        if case .mesh = locationChannelsModel.selectedChannel {
+                            Button(action: { showVerifySheet = true }) {
+                                Image(systemName: "qrcode")
+                                    .font(.bitchatSystem(size: 14))
+                            }
+                            .buttonStyle(.plain)
+                            // .help maps to the accessibility *hint* on iOS, so the
+                            // button still needs a spoken name.
+                            .accessibilityLabel(
+                                String(localized: "content.accessibility.verification", comment: "Accessibility label for the verification QR button")
+                            )
+                            .help(
+                                String(localized: "content.help.verification", comment: "Help text for verification button")
+                            )
                         }
-                        .buttonStyle(.plain)
-                        // .help maps to the accessibility *hint* on iOS, so the
-                        // button still needs a spoken name.
-                        .accessibilityLabel(
-                            String(localized: "content.accessibility.verification", comment: "Accessibility label for the verification QR button")
-                        )
-                        .help(
-                            String(localized: "content.help.verification", comment: "Help text for verification button")
-                        )
-                    }
-                    SheetCloseButton {
-                        withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                            dismiss()
-                            showSidebar = false
-                            showVerifySheet = false
-                            privateConversationModel.endConversation()
+                        SheetCloseButton {
+                            withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                                dismiss()
+                                showSidebar = false
+                                showVerifySheet = false
+                                privateConversationModel.endConversation()
+                            }
                         }
                     }
-                }
 
-                // The mesh sheet titles its sections inline (#mesh / across
-                // the bridge / groups) — no subtitle or count up here.
-                // Location channels keep their geohash subtitle.
-                if case .location(let channel) = locationChannelsModel.selectedChannel {
-                    Text(verbatim: "#\(channel.geohash.lowercased())")
-                        .bitchatFont(size: 12)
-                        .foregroundColor(palette.locationAccent)
+                    // The mesh sheet titles its sections inline (#mesh / across
+                    // the bridge / groups) — no subtitle or count up here.
+                    // Location channels keep their geohash subtitle.
+                    if case .location(let channel) = locationChannelsModel.selectedChannel {
+                        Text(verbatim: "#\(channel.geohash.lowercased())")
+                            .bitchatFont(size: 12)
+                            .foregroundColor(palette.locationAccent)
+                    }
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
+                .themedSurface()
+
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
-            .padding(.bottom, 12)
-            .themedSurface()
-
             ScrollView {
                 // spacing 0: every section supplies its own rhythm (header
                 // top 12 / bottom 4, rows vertical 4), so inter-child spacing
                 // here would make the first section's gap read differently.
                 VStack(alignment: .leading, spacing: 0) {
+                    if isWorkspace {
+                        Button(action: onShowPublicChat) {
+                            Label(publicChatTitle, systemImage: "bubble.left.and.bubble.right")
+                                .bitchatFont(size: 15)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding()
+                        }
+                        .buttonStyle(.plain)
+                        Divider()
+                    }
                     if case .location = locationChannelsModel.selectedChannel {
                         GeohashPeopleList(
                             onTapPerson: {
-                                showSidebar = true
+                                showSidebar = !isWorkspace
+                                onShowConversation()
                             }
                         )
                         // Skip re-rendering the roster when this view
@@ -390,7 +418,8 @@ private struct ContentPeopleListView: View {
                             chats: peerListModel.recentChatRows,
                             onTapChat: { peerID in
                                 peerListModel.startConversation(with: peerID)
-                                showSidebar = true
+                                showSidebar = !isWorkspace
+                                onShowConversation()
                             }
                         )
                     } else {
@@ -402,7 +431,8 @@ private struct ContentPeopleListView: View {
                         MeshPeerList(
                             onTapPeer: { peerID in
                                 peerListModel.startConversation(with: peerID)
-                                showSidebar = true
+                                showSidebar = !isWorkspace
+                                onShowConversation()
                             },
                             onToggleFavorite: { peerID in
                                 peerListModel.toggleFavorite(peerID: peerID)
@@ -425,7 +455,8 @@ private struct ContentPeopleListView: View {
                             groups: peerListModel.groupRows,
                             onTapGroup: { peerID in
                                 peerListModel.startConversation(with: peerID)
-                                showSidebar = true
+                                showSidebar = !isWorkspace
+                                onShowConversation()
                             }
                         )
                         // Conversations with people no roster above lists
@@ -435,7 +466,8 @@ private struct ContentPeopleListView: View {
                             chats: peerListModel.recentChatRows,
                             onTapChat: { peerID in
                                 peerListModel.startConversation(with: peerID)
-                                showSidebar = true
+                                showSidebar = !isWorkspace
+                                onShowConversation()
                             }
                         )
                     }
@@ -453,6 +485,19 @@ private struct ContentPeopleListView: View {
                 .id(ConversationID(channelID: locationChannelsModel.selectedChannel))
             }
         }
+        .navigationTitle(isWorkspace ? peopleSheetTitle : "")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .toolbar {
+            if isWorkspace, case .mesh = locationChannelsModel.selectedChannel {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { showVerifySheet = true } label: {
+                        Label("content.accessibility.verification", systemImage: "qrcode")
+                    }
+                }
+            }
+        }
         .sheet(isPresented: $showVerifySheet) {
             VerificationSheetView(isPresented: $showVerifySheet)
                 .environmentObject(verificationModel)
@@ -461,6 +506,13 @@ private struct ContentPeopleListView: View {
 }
 
 private extension ContentPeopleListView {
+    var publicChatTitle: String {
+        switch locationChannelsModel.selectedChannel {
+        case .mesh: return "#mesh"
+        case .location(let channel): return "#\(channel.geohash)"
+        }
+    }
+
     var peopleSheetTitle: String {
         String(localized: "content.header.people", comment: "Title for the people list sheet").lowercased()
     }
@@ -496,6 +548,7 @@ private struct ContentPrivateChatSheetView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            #if os(macOS)
             if let headerState = privateConversationModel.selectedHeaderState {
                 HStack(spacing: 12) {
                     Button(action: {
@@ -561,6 +614,12 @@ private struct ContentPrivateChatSheetView: View {
                 .modifier(PrivateHeaderChrome())
             }
 
+            #else
+            if let headerState = privateConversationModel.selectedHeaderState {
+                privateConnectionStatus(headerState)
+            }
+            #endif
+
             MessageListView(
                 privatePeer: privateConversationModel.selectedPeerID,
                 isAtBottom: $isAtBottomPrivate,
@@ -579,7 +638,9 @@ private struct ContentPrivateChatSheetView: View {
             // whole sheet it preempted the composer's press-and-hold mic
             // gesture (a high-priority ancestor drag cancels child gestures
             // within milliseconds — same starvation as the image-reveal bug).
+            #if os(macOS)
             .highPriorityGesture(swipeToLeaveGesture)
+            #endif
 
             if !theme.usesGlassChrome {
                 Divider()
@@ -610,7 +671,71 @@ private struct ContentPrivateChatSheetView: View {
         }
         .themedSheetBackground()
         .foregroundColor(palette.primary)
+        #if os(iOS)
+        .navigationTitle(privateConversationModel.selectedHeaderState?.displayName ?? "")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    privateConversationModel.endConversation()
+                } label: {
+                    Label("content.accessibility.back_to_main_chat", systemImage: "bubble.left.and.bubble.right")
+                }
+            }
+            if let headerState = privateConversationModel.selectedHeaderState {
+                if !headerState.isGroupConversation {
+                    ToolbarItem(placement: .secondaryAction) {
+                        ContentPrivateHeaderInfoButton(headerState: headerState, headerHeight: headerHeight)
+                    }
+                }
+                if headerState.supportsFavoriteToggle {
+                    ToolbarItem(placement: .secondaryAction) {
+                        Button {
+                            privateConversationModel.toggleFavoriteForSelectedConversation()
+                        } label: {
+                            Label(headerState.isFavorite
+                                ? "content.accessibility.remove_favorite"
+                                : "content.accessibility.add_favorite",
+                                  systemImage: headerState.isFavorite ? "star.fill" : "star")
+                        }
+                    }
+                }
+            }
+        }
+        #endif
     }
+
+    #if os(iOS)
+    /// Safety status remains readable in content when the navigation title
+    /// and toolbar move to the side or collapse into overflow.
+    private func privateConnectionStatus(_ header: PrivateConversationHeaderState) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if !header.isGroupConversation {
+                switch header.availability {
+                case .bluetoothConnected:
+                    Label("content.accessibility.connected_mesh", systemImage: "dot.radiowaves.left.and.right")
+                case .meshReachable:
+                    Label("content.accessibility.reachable_mesh", systemImage: "point.3.filled.connected.trianglepath.dotted")
+                case .nostrAvailable:
+                    Label("content.accessibility.available_nostr", systemImage: "globe")
+                case .offline:
+                    Label("mesh_peers.state.offline", systemImage: "antenna.radiowaves.left.and.right.slash")
+                }
+            }
+            if let status = header.encryptionStatus, let icon = status.icon {
+                Label(status.accessibilityDescription, systemImage: icon)
+                    .foregroundColor(status == .noiseVerified || status == .noiseSecured
+                        ? palette.primary : .red)
+            }
+        }
+        .bitchatFont(size: 11)
+        .foregroundColor(palette.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
+    }
+    #endif
 
     private var swipeToLeaveGesture: some Gesture {
         DragGesture(minimumDistance: 25, coordinateSpace: .local)
@@ -710,6 +835,9 @@ private struct ContentPrivateHeaderInfoButton: View {
             guard !headerState.isGroupConversation else { return }
             appChromeModel.showFingerprint(for: headerState.headerPeerID)
         }) {
+            #if os(iOS)
+            Label(headerState.displayName, systemImage: "info.circle")
+            #else
             HStack(spacing: 6) {
                 if headerState.isGroupConversation {
                     Image(systemName: "person.3.fill")
@@ -778,6 +906,7 @@ private struct ContentPrivateHeaderInfoButton: View {
                 }
 
             }
+            #endif
         }
         .buttonStyle(.plain)
         .accessibilityLabel(

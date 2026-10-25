@@ -12,6 +12,7 @@ import BitFoundation
 struct FingerprintView: View {
     @EnvironmentObject private var verificationModel: VerificationModel
     let peerID: PeerID
+    var isPushed = false
     @Environment(\.dismiss) var dismiss
     @ThemedPalette private var palette
     @State private var aliasDraft: String = ""
@@ -65,20 +66,44 @@ struct FingerprintView: View {
     var body: some View {
         let fingerprintState = verificationModel.fingerprintPresentation(for: peerID)
 
-        VStack(spacing: 20) {
-            // Header
-            HStack {
-                Text(Strings.title)
-                    .bitchatFont(size: 16, weight: .bold)
-                    .foregroundColor(textColor)
-                
-                Spacer()
-                
-                SheetCloseButton { dismiss() }
-                    .foregroundColor(textColor)
+        Group {
+            if isPushed {
+                fingerprintReader(fingerprintState)
+            } else {
+                NavigationStack { fingerprintReader(fingerprintState) }
             }
-            .padding()
-            
+        }
+        .themedSheetBackground()
+        .onAppear {
+            syncAliasDraft(from: fingerprintState, force: true)
+        }
+        .onChange(of: fingerprintState.theirFingerprint) { _ in
+            // Fingerprint can arrive after the sheet opens; load (or reload)
+            // the saved alias then, otherwise an empty draft looks like a clear.
+            syncAliasDraft(from: fingerprintState, force: false)
+        }
+        .onDisappear {
+            commitAlias()
+        }
+    }
+
+    private func fingerprintReader(_ fingerprintState: FingerprintPresentationState) -> some View {
+        ScrollView {
+            fingerprintContent(fingerprintState)
+        }
+        .navigationTitle(Strings.title)
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                SheetCloseButton { dismiss() }
+            }
+        }
+    }
+
+    private func fingerprintContent(_ fingerprintState: FingerprintPresentationState) -> some View {
+        VStack(spacing: 20) {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     if let icon = fingerprintState.encryptionStatus.icon {
@@ -279,23 +304,9 @@ struct FingerprintView: View {
             }
             .padding()
             .frame(maxWidth: 500) // Constrain max width for better readability
-            
-            Spacer()
         }
         .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .themedSheetBackground()
-        .onAppear {
-            syncAliasDraft(from: fingerprintState, force: true)
-        }
-        .onChange(of: fingerprintState.theirFingerprint) { _ in
-            // Fingerprint can arrive after the sheet opens; load (or reload)
-            // the saved alias then, otherwise an empty draft looks like a clear.
-            syncAliasDraft(from: fingerprintState, force: false)
-        }
-        .onDisappear {
-            commitAlias()
-        }
+        .frame(maxWidth: .infinity)
     }
 
     /// Populate `aliasDraft` from the persisted petname once we know the

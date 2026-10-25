@@ -16,7 +16,6 @@ struct ShareActivityView: View {
     var body: some View {
         #if os(iOS)
         ShareActivityController(items: [text])
-            .ignoresSafeArea()
         #elseif os(macOS)
         VStack(alignment: .leading, spacing: 16) {
             Text(text)
