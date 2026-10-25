@@ -76,7 +76,7 @@ final class NotificationServiceTests: XCTestCase {
         XCTAssertEqual(request?.content.userInfo["peerID"] as? String, peerID.id)
     }
 
-    func test_removeAllDeliveredNotifications_removesThemFromTheCenter() {
+    func test_removeAllNotifications_removesThemFromTheCenter() {
         let remover = RecordingNotificationRemover()
         let service = NotificationService(
             isRunningTestsProvider: { false },
@@ -85,12 +85,12 @@ final class NotificationServiceTests: XCTestCase {
             remover: remover
         )
 
-        service.removeAllDeliveredNotifications()
+        service.removeAllNotifications()
 
         XCTAssertEqual(remover.removalCount, 1)
     }
 
-    func test_removeAllDeliveredNotifications_skipsWhenRunningTests() {
+    func test_removeAllNotifications_skipsWhenRunningTests() {
         let remover = RecordingNotificationRemover()
         let service = NotificationService(
             isRunningTestsProvider: { true },
@@ -99,9 +99,89 @@ final class NotificationServiceTests: XCTestCase {
             remover: remover
         )
 
-        service.removeAllDeliveredNotifications()
+        service.removeAllNotifications()
 
         XCTAssertEqual(remover.removalCount, 0)
+    }
+
+    /// A post the center finishes taking between the removal and the
+    /// invalidation would find its generation still current and stay up.
+    func test_removeAllNotifications_invalidatesPostsBeforeRemoving() {
+        let generation = NotificationPostGeneration()
+        let postedBefore = generation.current
+        var stillCurrentAtRemoval: Bool?
+        let remover = RecordingNotificationRemover {
+            stillCurrentAtRemoval = generation.isCurrent(postedBefore)
+        }
+        let service = NotificationService(
+            isRunningTestsProvider: { false },
+            authorizer: RecordingNotificationAuthorizer(),
+            requestDeliverer: RecordingNotificationRequestDeliverer(),
+            remover: remover,
+            postGeneration: generation
+        )
+
+        service.removeAllNotifications()
+
+        XCTAssertEqual(stillCurrentAtRemoval, false)
+    }
+
+    func test_deliver_handsTheCenterARequestNoWipeOvertook() async {
+        let center = FakeNotificationCenter()
+        let generation = NotificationPostGeneration()
+        let deliverer = NotificationCenterRequestDelivererAdapter(center: center, generation: generation)
+
+        await deliverer.deliver(Self.request("dm-1"), postedIn: generation.current)
+
+        XCTAssertEqual(center.added, ["dm-1"])
+        XCTAssertEqual(center.removedDelivered, [])
+        XCTAssertEqual(center.removedPending, [])
+    }
+
+    func test_deliver_dropsARequestPostedBeforeAWipe() async {
+        let center = FakeNotificationCenter()
+        let generation = NotificationPostGeneration()
+        let deliverer = NotificationCenterRequestDelivererAdapter(center: center, generation: generation)
+        let postedIn = generation.current
+        generation.invalidate()
+
+        await deliverer.deliver(Self.request("dm-1"), postedIn: postedIn)
+
+        XCTAssertEqual(center.added, [])
+    }
+
+    /// The wipe starts while the center is still taking the request, so the
+    /// wipe's own removal can run before the request lands.
+    func test_deliver_takesBackARequestAWipeOvertakesInFlight() async {
+        let center = FakeNotificationCenter()
+        let addStarted = expectation(description: "the center started taking the request")
+        center.holdAdds { addStarted.fulfill() }
+        let generation = NotificationPostGeneration()
+        let deliverer = NotificationCenterRequestDelivererAdapter(center: center, generation: generation)
+        let postedIn = generation.current
+
+        let delivery = Task { await deliverer.deliver(Self.request("dm-1"), postedIn: postedIn) }
+        await fulfillment(of: [addStarted], timeout: TestConstants.settleTimeout)
+        generation.invalidate()
+        center.releaseHeldAdd()
+        await delivery.value
+
+        XCTAssertEqual(center.added, ["dm-1"])
+        XCTAssertEqual(center.removedDelivered, ["dm-1"])
+        XCTAssertEqual(center.removedPending, ["dm-1"])
+    }
+
+    func test_removerAdapter_removesPendingRequestsAsWellAsDeliveredAlerts() {
+        let center = FakeNotificationCenter()
+
+        NotificationCenterRemoverAdapter(center: center).removeAllNotifications()
+
+        XCTAssertEqual(center.pendingClears, 1)
+        XCTAssertEqual(center.deliveredClears, 1)
+    }
+
+    private static func request(_ identifier: String) -> UNNotificationRequest {
+        UNNotificationRequest(identifier: identifier, content: UNMutableNotificationContent(), trigger: nil)
     }
 
     /// Previews hidden: the default. The routing payload has to survive
@@ -172,9 +252,72 @@ private final class RecordingNotificationRequestDeliverer: NotificationRequestDe
 
 private final class RecordingNotificationRemover: NotificationRemoving {
     private(set) var removalCount = 0
+    private let onRemove: () -> Void
+
+    init(onRemove: @escaping () -> Void = {}) {
+        self.onRemove = onRemove
+    }
+
+    func removeAllNotifications() {
+        removalCount += 1
+        onRemove()
+    }
+}
+
+/// Records what reaches the center. After `holdAdds`, `add` waits until
+/// `releaseHeldAdd()`, so a test can start a wipe mid-add.
+private final class FakeNotificationCenter: NotificationCenterPosting, NotificationCenterClearing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var addedIDs: [String] = []
+    private var removedDeliveredIDs: [String] = []
+    private var removedPendingIDs: [String] = []
+    private var pendingClearCount = 0
+    private var deliveredClearCount = 0
+    private var onAddHeld: (() -> Void)?
+    private var heldAdd: CheckedContinuation<Void, Never>?
+
+    var added: [String] { lock.withLock { addedIDs } }
+    var removedDelivered: [String] { lock.withLock { removedDeliveredIDs } }
+    var removedPending: [String] { lock.withLock { removedPendingIDs } }
+    var pendingClears: Int { lock.withLock { pendingClearCount } }
+    var deliveredClears: Int { lock.withLock { deliveredClearCount } }
+
+    func holdAdds(onHeld: @escaping () -> Void) {
+        lock.withLock { onAddHeld = onHeld }
+    }
+
+    func releaseHeldAdd() {
+        let continuation = lock.withLock { () -> CheckedContinuation<Void, Never>? in
+            defer { heldAdd = nil }
+            return heldAdd
+        }
+        continuation?.resume()
+    }
+
+    func add(_ request: UNNotificationRequest) async throws {
+        if let onHeld = lock.withLock({ onAddHeld }) {
+            await withCheckedContinuation { continuation in
+                lock.withLock { heldAdd = continuation }
+                onHeld()
+            }
+        }
+        lock.withLock { addedIDs.append(request.identifier) }
+    }
+
+    func removeDeliveredNotifications(withIdentifiers identifiers: [String]) {
+        lock.withLock { removedDeliveredIDs += identifiers }
+    }
+
+    func removePendingNotificationRequests(withIdentifiers identifiers: [String]) {
+        lock.withLock { removedPendingIDs += identifiers }
+    }
+
+    func removeAllPendingNotificationRequests() {
+        lock.withLock { pendingClearCount += 1 }
+    }
 
     func removeAllDeliveredNotifications() {
-        removalCount += 1
+        lock.withLock { deliveredClearCount += 1 }
     }
 }
 

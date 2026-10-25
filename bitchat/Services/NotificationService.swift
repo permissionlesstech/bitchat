@@ -31,7 +31,43 @@ protocol NotificationCategoryRegistering {
 }
 
 protocol NotificationRemoving {
+    func removeAllNotifications()
+}
+
+/// The part of `UNUserNotificationCenter` that posting uses, so the ordering
+/// against a panic wipe can be tested without the real center.
+protocol NotificationCenterPosting {
+    func add(_ request: UNNotificationRequest) async throws
+    func removeDeliveredNotifications(withIdentifiers identifiers: [String])
+    func removePendingNotificationRequests(withIdentifiers identifiers: [String])
+}
+
+/// The part of `UNUserNotificationCenter` that panic removal uses.
+protocol NotificationCenterClearing {
+    func removeAllPendingNotificationRequests()
     func removeAllDeliveredNotifications()
+}
+
+extension UNUserNotificationCenter: NotificationCenterPosting, NotificationCenterClearing {}
+
+/// Counts panic wipes, so a post still on its way to the notification center
+/// can tell when it gets there whether a wipe overtook it. Same shape as
+/// `PTTCaptureGeneration`.
+final class NotificationPostGeneration: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: UInt = 0
+
+    var current: UInt {
+        lock.withLock { value }
+    }
+
+    func invalidate() {
+        lock.withLock { value &+= 1 }
+    }
+
+    func isCurrent(_ generation: UInt) -> Bool {
+        lock.withLock { value == generation }
+    }
 }
 
 private final class NotificationCenterAuthorizerAdapter: NotificationAuthorizing {
@@ -49,17 +85,32 @@ private final class NotificationCenterAuthorizerAdapter: NotificationAuthorizing
     }
 }
 
-private final class NotificationCenterRequestDelivererAdapter: NotificationRequestDelivering {
-    private let center: UNUserNotificationCenter
+/// Posts on a task, since the center's `add` is asynchronous, and orders each
+/// post against panic wipes: a wipe that starts before the center has the
+/// request drops it, and one that starts while the center is taking it takes
+/// it back out. Either way nothing posted before a wipe outlives it.
+final class NotificationCenterRequestDelivererAdapter: NotificationRequestDelivering {
+    private let center: NotificationCenterPosting
+    private let generation: NotificationPostGeneration
 
-    init(center: UNUserNotificationCenter) {
+    init(center: NotificationCenterPosting, generation: NotificationPostGeneration) {
         self.center = center
+        self.generation = generation
     }
 
     func add(_ request: UNNotificationRequest) {
+        let postedIn = generation.current
         Task {
-            try? await center.add(request)
+            await deliver(request, postedIn: postedIn)
         }
+    }
+
+    func deliver(_ request: UNNotificationRequest, postedIn: UInt) async {
+        guard generation.isCurrent(postedIn) else { return }
+        try? await center.add(request)
+        guard !generation.isCurrent(postedIn) else { return }
+        center.removeDeliveredNotifications(withIdentifiers: [request.identifier])
+        center.removePendingNotificationRequests(withIdentifiers: [request.identifier])
     }
 }
 
@@ -75,14 +126,17 @@ private final class NotificationCenterCategoryRegistrarAdapter: NotificationCate
     }
 }
 
-private final class NotificationCenterRemoverAdapter: NotificationRemoving {
-    private let center: UNUserNotificationCenter
+/// Removes pending requests as well as delivered alerts: one posted with no
+/// trigger can still be pending for a moment, and would appear after the wipe.
+final class NotificationCenterRemoverAdapter: NotificationRemoving {
+    private let center: NotificationCenterClearing
 
-    init(center: UNUserNotificationCenter) {
+    init(center: NotificationCenterClearing) {
         self.center = center
     }
 
-    func removeAllDeliveredNotifications() {
+    func removeAllNotifications() {
+        center.removeAllPendingNotificationRequests()
         center.removeAllDeliveredNotifications()
     }
 }
@@ -105,7 +159,7 @@ private struct NoopNotificationCategoryRegistrar: NotificationCategoryRegisterin
 }
 
 private struct NoopNotificationRemover: NotificationRemoving {
-    func removeAllDeliveredNotifications() {}
+    func removeAllNotifications() {}
 }
 
 final class NotificationService {
@@ -149,6 +203,7 @@ final class NotificationService {
     private let requestDeliverer: NotificationRequestDelivering
     private let categoryRegistrar: NotificationCategoryRegistering
     private let remover: NotificationRemoving
+    private let postGeneration: NotificationPostGeneration
 
     /// Returns true if running in test environment (XCTest, Swift Testing, or CI)
     private var isRunningTests: Bool {
@@ -165,6 +220,8 @@ final class NotificationService {
                    env["GITHUB_ACTIONS"] != nil ||
                    env["CI"] != nil
         }
+        let postGeneration = NotificationPostGeneration()
+        self.postGeneration = postGeneration
         if isRunningTestsProvider() {
             self.authorizer = NoopNotificationAuthorizer()
             self.requestDeliverer = NoopNotificationRequestDeliverer()
@@ -173,7 +230,10 @@ final class NotificationService {
         } else {
             let center = UNUserNotificationCenter.current()
             self.authorizer = NotificationCenterAuthorizerAdapter(center: center)
-            self.requestDeliverer = NotificationCenterRequestDelivererAdapter(center: center)
+            self.requestDeliverer = NotificationCenterRequestDelivererAdapter(
+                center: center,
+                generation: postGeneration
+            )
             self.categoryRegistrar = NotificationCenterCategoryRegistrarAdapter(center: center)
             self.remover = NotificationCenterRemoverAdapter(center: center)
         }
@@ -185,6 +245,7 @@ final class NotificationService {
         requestDeliverer: NotificationRequestDelivering,
         categoryRegistrar: NotificationCategoryRegistering = NoopNotificationCategoryRegistrar(),
         remover: NotificationRemoving = NoopNotificationRemover(),
+        postGeneration: NotificationPostGeneration = NotificationPostGeneration(),
         hidePreviewsProvider: @escaping () -> Bool = { NotificationPrivacySettings.hideMessagePreviews }
     ) {
         self.isRunningTestsProvider = isRunningTestsProvider
@@ -192,6 +253,7 @@ final class NotificationService {
         self.requestDeliverer = requestDeliverer
         self.categoryRegistrar = categoryRegistrar
         self.remover = remover
+        self.postGeneration = postGeneration
         self.hidePreviewsProvider = hidePreviewsProvider
     }
 
@@ -253,14 +315,17 @@ final class NotificationService {
         requestDeliverer.add(request)
     }
     
-    /// Removes bitchat's delivered notifications from Notification Center.
-    /// Panic wipe calls this: a delivered alert keeps its title and body (with
-    /// previews on, the sender and the message) after the data behind it is
-    /// gone. Removal, not erasure — the system's own record of what it showed
-    /// is outside the app's reach.
-    func removeAllDeliveredNotifications() {
+    /// Removes bitchat's notifications: delivered, pending, and any post still
+    /// on its way to the center. Panic wipe calls this: a delivered alert
+    /// keeps its title and body (with previews on, the sender and the message)
+    /// after the data behind it is gone. Removal, not erasure — the system's
+    /// own record of what it showed is outside the app's reach.
+    func removeAllNotifications() {
         guard !isRunningTests else { return }
-        remover.removeAllDeliveredNotifications()
+        // Invalidate first, so a post the center finishes taking after the
+        // removal below finds itself overtaken and takes itself back out.
+        postGeneration.invalidate()
+        remover.removeAllNotifications()
     }
 
     func sendMentionNotification(from sender: String, message: String) {

@@ -1166,7 +1166,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         panicRecoveryOperations: PanicRecoveryOperations? = nil,
         panicNetworkLifecycle: PanicNetworkLifecycle = .noop,
         panicNotificationRemoval: @escaping @MainActor () -> Void = {
-            NotificationService.shared.removeAllDeliveredNotifications()
+            NotificationService.shared.removeAllNotifications()
         }
     ) {
         let conversations = conversations ?? ConversationStore()
@@ -1585,6 +1585,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             meshService.emergencyDisconnectAll()
         }
 
+        // A delivered alert outlives the data behind it: with previews on,
+        // Notification Center still shows who wrote and what. Remove alerts
+        // now that nothing new arrives, before anything commits: if the
+        // process dies mid-wipe, startup replays the whole transaction, this
+        // step included.
+        panicNotificationRemoval()
+
         // Invalidate detached media preparation and close live capture file
         // handles before clearing state or removing the media directory.
         mediaTransferCoordinator.resetForPanic()
@@ -1764,11 +1771,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             Self.clearAppSwitcherSnapshots()
         }
         #endif
-
-        // A delivered alert outlives the data behind it: with previews on,
-        // Notification Center still shows who wrote and what. Remove them
-        // whether or not the transaction committed, as with the snapshots.
-        panicNotificationRemoval()
 
         guard panicCompleted else { return false }
 

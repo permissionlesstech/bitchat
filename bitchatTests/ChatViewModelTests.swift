@@ -2249,6 +2249,34 @@ struct ChatViewModelPanicTests {
         #expect(removals == 1)
     }
 
+    /// If the process dies after the recovery markers clear, startup has no
+    /// wipe to replay, so the alerts must already be gone by that commit.
+    @Test @MainActor
+    func panicClearAllData_removesNotificationsBeforeCommittingRecovery() throws {
+        var events: [String] = []
+        let operations = PanicRecoveryOperations(
+            isPending: { false },
+            begin: {
+                events.append("begin")
+                return PanicRecoveryIntent(
+                    fileMarkerEstablished: true,
+                    externalMarkerEstablished: false
+                )
+            },
+            wipeMedia: { _ in events.append("wipe") },
+            complete: { events.append("complete") }
+        )
+        let (viewModel, _) = makeTestableViewModel(
+            panicRecoveryOperations: operations,
+            panicNotificationRemoval: { events.append("remove notifications") }
+        )
+
+        #expect(viewModel.panicClearAllData())
+        let removal = try #require(events.firstIndex(of: "remove notifications"))
+        let commit = try #require(events.firstIndex(of: "complete"))
+        #expect(removal < commit)
+    }
+
     @Test @MainActor
     func pendingPanicRecoveryCompletesBeforeTransportBootstrap() {
         var events: [String] = []
