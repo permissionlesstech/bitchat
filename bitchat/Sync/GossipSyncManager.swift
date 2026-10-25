@@ -647,7 +647,8 @@ final class GossipSyncManager {
 
     /// Restore archived public messages within the count and retained-payload
     /// byte budgets, starting with the newest entries. Invalid or out-of-window
-    /// entries are skipped. Decoding precedes the byte-budget check.
+    /// entries and messages that do not fit the remaining budget are skipped.
+    /// Older smaller messages can still fit. Decoding precedes the budget check.
     /// Restoration or rejected entries mark the archive for its next flush.
     private func restoreArchivedMessages() {
         guard let archive else { return }
@@ -665,7 +666,7 @@ final class GossipSyncManager {
             }
             guard keptBytes + packet.retainedPayloadBytes <= config.messageByteBudget else {
                 droppedAny = true
-                break
+                continue
             }
             keptBytes += packet.retainedPayloadBytes
             kept.append((PacketIdUtil.computeId(packet).hexEncodedString(), packet))

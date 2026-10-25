@@ -1081,7 +1081,7 @@ struct GossipSyncManagerTests {
         #expect(delegate.packets.count == expectedIDs.count)
     }
 
-    @Test func archiveRestoreStopsAtTheByteBudgetKeepingTheNewest() throws {
+    @Test func archiveRestoreKeepsNewestMessagesWithinTheByteBudget() throws {
         let fileURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("gossip-archive-\(UUID().uuidString).json")
         defer { try? FileManager.default.removeItem(at: fileURL) }
@@ -1219,7 +1219,8 @@ extension GossipSyncManagerTests {
         #expect(Set(afterRemoval.map(\.senderID)) == Set(packets[2...3].map(\.senderID)))
     }
 
-    @Test func archiveRestoreUsesRetainedBytesToSelectTheNewestPrefix() async throws {
+    @Test(arguments: [false, true])
+    func archiveRestoreKeepsOlderMessagesAfterSkippingOneThatDoesNotFit(rejectedNewest: Bool) async throws {
         let now = UInt64(Date().timeIntervalSince1970 * 1000)
         let content = Data(repeating: 0x41, count: 32)
         let oldest = try RetainedPacketTestFixture.packet(sender: Data(repeating: 1, count: 8), timestamp: now - 2, payload: content)
@@ -1228,16 +1229,74 @@ extension GossipSyncManagerTests {
         var config = GossipSyncManager.Config()
         config.messageByteBudget = oldest.retainedPayloadBytes + newest.retainedPayloadBytes
         #expect(oversized.retainedPayloadBytes > config.messageByteBudget)
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("synthetic-retained-prefix-\(UUID().uuidString).json")
+        let packets = rejectedNewest ? [oldest, newest, oversized] : [oldest, oversized, newest]
+        try await expectRestoredArchive(packets, config: config, expected: [oldest, newest])
+    }
+
+    private func expectRestoredArchive(
+        _ packets: [BitchatPacket], config: GossipSyncManager.Config, expected: [BitchatPacket]
+    ) async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("archive-retention-\(UUID().uuidString).json")
         defer { try? FileManager.default.removeItem(at: url) }
         let archive = GossipMessageArchive(fileURL: url)
-        archive.save(try [oldest, oversized, newest].map { try #require($0.toBinaryData(padding: false)) })
-        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: RequestSyncManager(), archive: archive)
-        let restored = await withCheckedContinuation { continuation in
-            manager.collectPublicMessagePackets { continuation.resume(returning: $0) }
+        archive.save(try packets.map { try #require($0.toBinaryData(padding: false)) })
+        let expectedFrames = try expected.map { try #require($0.toBinaryData(padding: false)) }
+        for _ in 0..<2 {
+            let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: RequestSyncManager(), archive: archive)
+            let restored = await withCheckedContinuation { continuation in
+                manager.collectPublicMessagePackets { continuation.resume(returning: $0) }
+            }
+            #expect(restored.map(\.senderID) == expected.map(\.senderID))
+            #expect(restored.reduce(0) { $0 + $1.retainedPayloadBytes } <= config.messageByteBudget)
+            #expect(restored.count <= max(1, config.seenCapacity))
+            manager._performMaintenanceSynchronously(now: Date())
+            #expect(archive.load() == expectedFrames)
         }
-        #expect(restored.map(\.senderID) == [newest.senderID])
     }
+
+    @Test(arguments: [-1, 0, 1])
+    func archiveRestorePreservesMessagesAtTheRemainingBudgetBoundary(extraByte: Int) async throws {
+        let now = UInt64(Date().timeIntervalSince1970 * 1000)
+        let packets = try (1...3).map { index in
+            try RetainedPacketTestFixture.packet(sender: Data(repeating: UInt8(index), count: 8),
+                timestamp: now - UInt64(3 - index), payload: Data(repeating: 65, count: 32))
+        }
+        var config = GossipSyncManager.Config()
+        config.messageByteBudget = 2 * packets[0].retainedPayloadBytes + extraByte
+        let expected = extraByte < 0 ? Array(packets.suffix(1)) : Array(packets.suffix(2))
+        try await expectRestoredArchive(packets, config: config, expected: expected)
+    }
+
+    @Test func archiveRestoreSkipsExpiredEntriesAndRespectsCountAfterBudgetRejection() async throws {
+        let now = UInt64(Date().timeIntervalSince1970 * 1000)
+        let older = try RetainedPacketTestFixture.packet(sender: Data(repeating: 1, count: 8), timestamp: now - 2, payload: Data(repeating: 65, count: 32))
+        let newer = try RetainedPacketTestFixture.packet(sender: Data(repeating: 2, count: 8), timestamp: now - 1, payload: Data(repeating: 65, count: 32))
+        let expired = try RetainedPacketTestFixture.packet(sender: Data(repeating: 3, count: 8), timestamp: now - 120_000, payload: Data(repeating: 65, count: 32))
+        let oversized = try RetainedPacketTestFixture.packet(sender: Data(repeating: 4, count: 8), timestamp: now, payload: Data(repeating: 65, count: 32), emptyBlocks: 40)
+        var config = GossipSyncManager.Config()
+        config.publicMessageMaxAgeSeconds = 60
+        config.seenCapacity = 1
+        config.messageByteBudget = older.retainedPayloadBytes + newer.retainedPayloadBytes
+        try await expectRestoredArchive([older, newer, expired, oversized], config: config, expected: [newer])
+    }
+
+    @Test func archiveRestorePreservesAnOlderSmallMessageWithTheDefaultByteBudget() async throws {
+        let now = UInt64(Date().timeIntervalSince1970 * 1000)
+        let older = try RetainedPacketTestFixture.packet(sender: Data(repeating: 1, count: 8), timestamp: now - 100, payload: Data(repeating: 65, count: 32))
+        var packets = [older]
+        for index in 0..<70 {
+            packets.append(try RetainedPacketTestFixture.packet(sender: Data(repeating: UInt8(index + 2), count: 8),
+                timestamp: now - UInt64(70 - index), payload: Data(repeating: 66, count: 60_000)))
+        }
+        let config = GossipSyncManager.Config()
+        // This archive fits the decoded-only accounting used before representation retention.
+        #expect(packets.reduce(0) { $0 + $1.payload.count } < config.messageByteBudget)
+        #expect(packets.reduce(0) { $0 + $1.retainedPayloadBytes } > config.messageByteBudget)
+        #expect(69 * packets[1].retainedPayloadBytes + older.retainedPayloadBytes <= config.messageByteBudget)
+        #expect(70 * packets[1].retainedPayloadBytes > config.messageByteBudget)
+        try await expectRestoredArchive(packets, config: config, expected: [older] + packets.suffix(69))
+    }
+
 }
 
 
