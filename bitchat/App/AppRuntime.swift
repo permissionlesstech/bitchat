@@ -428,18 +428,27 @@ private extension AppRuntime {
             if case .location = chatViewModel.activeChannel { return true }
             return false
         }()
+        #if os(iOS)
+        let isPublicTimelineBesideConversation = appChromeModel.isPublicTimelineBesideConversation
+        #else
+        let isPublicTimelineBesideConversation = false
+        #endif
 
         switch Self.resolveScreenshotResponse(
             isLocationChannelsSheetPresented: appChromeModel.isLocationChannelsSheetPresented,
             isAppInfoPresented: appChromeModel.isAppInfoPresented,
             hasPrivateChatOpen: chatViewModel.selectedPrivateChatPeer != nil,
-            isLocationChannelActive: isLocationChannelActive
+            isLocationChannelActive: isLocationChannelActive,
+            isPublicTimelineBesideConversation: isPublicTimelineBesideConversation
         ) {
         case .warnLocally:
             appChromeModel.triggerScreenshotPrivacyWarning()
         case .ignore:
             break
         case .forwardToChat:
+            chatViewModel.handleScreenshotCaptured()
+        case .warnLocallyAndForwardToChat:
+            appChromeModel.triggerScreenshotPrivacyWarning()
             chatViewModel.handleScreenshotCaptured()
         }
     }
@@ -476,22 +485,32 @@ extension AppRuntime {
         /// warn about, and alerting on every screenshot would train people
         /// to dismiss the one alert that matters (the location one).
         case forwardToChat
+        /// Both of the above: the split layout shows a location timeline
+        /// beside an open DM, so the image reveals the place and the peer
+        /// still gets the DM's notice.
+        case warnLocallyAndForwardToChat
     }
 
     /// Pure decision table so the screenshot routing is testable without a
     /// runtime.
+    /// - Parameter isPublicTimelineBesideConversation: The split layout
+    ///   shows the timeline beside an open DM rather than under its sheet.
     nonisolated static func resolveScreenshotResponse(
         isLocationChannelsSheetPresented: Bool,
         isAppInfoPresented: Bool,
         hasPrivateChatOpen: Bool,
-        isLocationChannelActive: Bool
+        isLocationChannelActive: Bool,
+        isPublicTimelineBesideConversation: Bool = false
     ) -> ScreenshotCaptureResponse {
         if isLocationChannelsSheetPresented { return .warnLocally }
         if isAppInfoPresented { return .ignore }
         // A geohash timeline screenshot still reveals a place — warn the
         // person taking it, locally, with the same alert the channel sheet
         // uses.
-        if !hasPrivateChatOpen, isLocationChannelActive { return .warnLocally }
+        if isLocationChannelActive {
+            if !hasPrivateChatOpen { return .warnLocally }
+            if isPublicTimelineBesideConversation { return .warnLocallyAndForwardToChat }
+        }
         return .forwardToChat
     }
 }

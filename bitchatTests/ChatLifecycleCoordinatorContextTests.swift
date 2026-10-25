@@ -354,7 +354,8 @@ struct ChatLifecycleCoordinatorContextTests {
 // MARK: - Screenshot Routing
 
 /// Pins `AppRuntime`'s screenshot decision table: the geohash warn path,
-/// the App Info exemption, and the deliberate mesh silence. Combined with
+/// the App Info exemption, the deliberate mesh silence, and the split
+/// layout's timeline beside a DM. Combined with
 /// `handleScreenshotCaptured_publicChannel_staysSilent` above, this proves
 /// location + screenshot → local privacy alert, and nothing sent anywhere.
 struct ScreenshotCaptureRoutingTests {
@@ -404,5 +405,44 @@ struct ScreenshotCaptureRoutingTests {
             hasPrivateChatOpen: true,
             isLocationChannelActive: true
         ) == .forwardToChat)
+    }
+
+    @Test("The split layout's location timeline beside a DM warns and forwards")
+    func splitLayoutScreenshotsShowTheTimelineBesideTheConversation() {
+        // Both are in the image: warn about the place, notify the peer.
+        #expect(AppRuntime.resolveScreenshotResponse(
+            isLocationChannelsSheetPresented: false,
+            isAppInfoPresented: false,
+            hasPrivateChatOpen: true,
+            isLocationChannelActive: true,
+            isPublicTimelineBesideConversation: true
+        ) == .warnLocallyAndForwardToChat)
+
+        // In compact width the DM's sheet covers the timeline.
+        #expect(AppRuntime.resolveScreenshotResponse(
+            isLocationChannelsSheetPresented: false,
+            isAppInfoPresented: false,
+            hasPrivateChatOpen: true,
+            isLocationChannelActive: true,
+            isPublicTimelineBesideConversation: false
+        ) == .forwardToChat)
+
+        // Mesh beside a DM reveals no place.
+        #expect(AppRuntime.resolveScreenshotResponse(
+            isLocationChannelsSheetPresented: false,
+            isAppInfoPresented: false,
+            hasPrivateChatOpen: true,
+            isLocationChannelActive: false,
+            isPublicTimelineBesideConversation: true
+        ) == .forwardToChat)
+
+        // Beside the people list there is no DM to notify.
+        #expect(AppRuntime.resolveScreenshotResponse(
+            isLocationChannelsSheetPresented: false,
+            isAppInfoPresented: false,
+            hasPrivateChatOpen: false,
+            isLocationChannelActive: true,
+            isPublicTimelineBesideConversation: true
+        ) == .warnLocally)
     }
 }

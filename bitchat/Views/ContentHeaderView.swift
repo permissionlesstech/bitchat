@@ -18,6 +18,10 @@ struct ContentHeaderView: View {
     let headerHeight: CGFloat
     let headerPeerIconSize: CGFloat
     let headerPeerCountFontSize: CGFloat
+    /// How far a rounded display corner the safe area leaves uncovered
+    /// reaches into the bar from each side (TopCornerClearance).
+    var leadingCornerReach: CGFloat = 0
+    var trailingCornerReach: CGFloat = 0
 
     /// Courier envelopes this device is carrying for offline third parties.
     @State private var carriedMailCount = 0
@@ -33,6 +37,12 @@ struct ContentHeaderView: View {
     @State private var pendingShareGeohash: String?
     @State private var showSharePrecisionWarning = false
     @State private var activeSharePayload: ChannelSharePayload?
+
+    /// How far the content already sits in from the bar's edges: 12pt, and
+    /// glass floats the bar as a panel another 8pt in (themedChromePanel).
+    private var cornerContentInset: CGFloat {
+        theme.usesGlassChrome ? 20 : 12
+    }
 
     /// The bridged-people count belongs to the mesh channel only.
     private var showBridgedPeerCount: Bool {
@@ -326,6 +336,15 @@ struct ContentHeaderView: View {
         // Type.
         .frame(height: headerHeight)
         .padding(.horizontal, 12)
+        // Inside the bar's background or glass panel; horizontal only.
+        .padding(.leading, TopCornerClearance.padding(
+            forReach: leadingCornerReach,
+            contentInset: cornerContentInset
+        ))
+        .padding(.trailing, TopCornerClearance.padding(
+            forReach: trailingCornerReach,
+            contentInset: cornerContentInset
+        ))
         .onReceive(CourierStore.shared.$carriedCount) { count in
             carriedMailCount = count
         }

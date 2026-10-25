@@ -547,15 +547,55 @@ final class ChatMediaTransferCoordinator {
         self.transferIDFactory = transferIDFactory
     }
 
-    func sendVoiceNote(at url: URL) {
-        guard context.canSendMediaInCurrentContext else {
+    /// Where a voice note or photo goes, fixed when the person commits to
+    /// sending it: the mic's release, the photo's pick. The file arrives
+    /// later, after the recorder's finalize padding or detached image
+    /// processing, and reading the selection only then would post a DM's
+    /// media to the public mesh if the person had just left the DM. That's
+    /// why the send paths take one and have no form that reads the
+    /// selection itself.
+    struct MediaDestination {
+        /// The DM partner, or nil for the public timeline.
+        let privatePeer: PeerID?
+        /// Where a public send lands.
+        let publicChannel: ChannelID
+        /// Mesh DMs and #mesh take media; geohash channels, geohash DMs
+        /// and groups don't.
+        let allowsMedia: Bool
+    }
+
+    /// The conversation on screen now, for a send committed now.
+    var currentMediaDestination: MediaDestination {
+        MediaDestination(
+            privatePeer: context.selectedPrivateChatPeer,
+            publicChannel: context.activeChannel,
+            allowsMedia: context.canSendMediaInCurrentContext
+        )
+    }
+
+    /// The completion for a mic release. Created at the release, it binds
+    /// the voice note to the conversation on screen then, not to whatever
+    /// is selected once the recorder hands over the file.
+    func makeVoiceNoteSender() -> (URL) -> Void {
+        let destination = currentMediaDestination
+        return { [weak self] url in
+            guard let self else {
+                try? FileManager.default.removeItem(at: url)
+                return
+            }
+            self.sendVoiceNote(at: url, to: destination)
+        }
+    }
+
+    func sendVoiceNote(at url: URL, to destination: MediaDestination) {
+        guard destination.allowsMedia else {
             SecureLogger.info("Voice note blocked outside mesh/private context", category: .session)
             try? FileManager.default.removeItem(at: url)
             context.addSystemMessage(String(localized: "Voice notes are only available in mesh chats.", comment: "System message when a voice note is attempted outside mesh chats"))
             return
         }
 
-        let targetPeer = context.selectedPrivateChatPeer
+        let targetPeer = destination.privatePeer
         let privateMessageID = targetPeer.flatMap { peerID in
             PrivateMediaMessageIdentity.stableID(
                 senderPeerID: context.myPeerID,
@@ -566,7 +606,8 @@ final class ChatMediaTransferCoordinator {
         let message = enqueueMediaMessage(
             content: "\(MimeType.Category.audio.messagePrefix)\(url.lastPathComponent)",
             targetPeer: targetPeer,
-            messageID: privateMessageID
+            messageID: privateMessageID,
+            publicChannel: destination.publicChannel
         )
         let messageID = message.id
         let transferId = makeTransferID(messageID: messageID)
@@ -629,6 +670,9 @@ final class ChatMediaTransferCoordinator {
     #if os(iOS)
     func processThenSendImage(_ image: UIImage?) {
         guard let image else { return }
+        // Bound at the pick: processing takes long enough for the person to
+        // leave the conversation the photo was meant for.
+        let destination = currentMediaDestination
         let generation = imagePreparationBarrier.currentGeneration
         let barrier = imagePreparationBarrier
         Task.detached(priority: .userInitiated) { [weak self, barrier] in
@@ -650,7 +694,7 @@ final class ChatMediaTransferCoordinator {
                         try? FileManager.default.removeItem(at: processedURL)
                         return
                     }
-                    self.sendImage(from: processedURL)
+                    self.sendImage(from: processedURL, to: destination)
                 }
             } catch {
                 SecureLogger.error("Image processing failed: \(error)", category: .session)
@@ -660,6 +704,9 @@ final class ChatMediaTransferCoordinator {
     #elseif os(macOS)
     func processThenSendImage(from url: URL?) {
         guard let url else { return }
+        // Bound at the pick: processing takes long enough for the person to
+        // leave the conversation the photo was meant for.
+        let destination = currentMediaDestination
         let generation = imagePreparationBarrier.currentGeneration
         let barrier = imagePreparationBarrier
         Task.detached(priority: .userInitiated) { [weak self, barrier] in
@@ -681,7 +728,7 @@ final class ChatMediaTransferCoordinator {
                         try? FileManager.default.removeItem(at: processedURL)
                         return
                     }
-                    self.sendImage(from: processedURL)
+                    self.sendImage(from: processedURL, to: destination)
                 }
             } catch {
                 SecureLogger.error("Image processing failed: \(error)", category: .session)
@@ -690,15 +737,20 @@ final class ChatMediaTransferCoordinator {
     }
     #endif
 
-    func sendImage(from sourceURL: URL, cleanup: (() -> Void)? = nil) {
-        guard context.canSendMediaInCurrentContext else {
+    func sendImage(
+        from sourceURL: URL,
+        to destination: MediaDestination,
+        cleanup: (() -> Void)? = nil
+    ) {
+        guard destination.allowsMedia else {
             SecureLogger.info("Image send blocked outside mesh/private context", category: .session)
             cleanup?()
             context.addSystemMessage(String(localized: "Images are only available in mesh chats.", comment: "System message when an image send is attempted outside mesh chats"))
             return
         }
 
-        let targetPeer = context.selectedPrivateChatPeer
+        let targetPeer = destination.privatePeer
+        let publicChannel = destination.publicChannel
         let generation = imagePreparationBarrier.currentGeneration
 
         do {
@@ -741,7 +793,8 @@ final class ChatMediaTransferCoordinator {
                     let message = self.enqueueMediaMessage(
                         content: "\(MimeType.Category.image.messagePrefix)\(prepared.outputURL.lastPathComponent)",
                         targetPeer: targetPeer,
-                        messageID: privateMessageID
+                        messageID: privateMessageID,
+                        publicChannel: publicChannel
                     )
                     let messageID = message.id
                     let transferId = self.makeTransferID(messageID: messageID)
@@ -779,10 +832,13 @@ final class ChatMediaTransferCoordinator {
         }
     }
 
+    /// `publicChannel` is where a public send was bound; nil means the
+    /// active channel.
     func enqueueMediaMessage(
         content: String,
         targetPeer: PeerID?,
-        messageID: String? = nil
+        messageID: String? = nil,
+        publicChannel: ChannelID? = nil
     ) -> BitchatMessage {
         let timestamp = Date()
         let message: BitchatMessage
@@ -802,7 +858,14 @@ final class ChatMediaTransferCoordinator {
             )
             context.appendPrivateMessage(message, to: peerID)
         } else {
-            let (displayName, senderPeerID) = context.currentPublicSender()
+            let channel = publicChannel ?? context.activeChannel
+            // currentPublicSender() speaks for the active channel, and a
+            // geohash channel posts under its own Nostr identity. Media only
+            // posts publicly to #mesh, so a send bound there before a switch
+            // keeps the mesh identity it is broadcast under.
+            let (displayName, senderPeerID) = channel == context.activeChannel
+                ? context.currentPublicSender()
+                : (name: context.nickname, peerID: context.myPeerID)
             message = BitchatMessage(
                 sender: displayName,
                 content: content,
@@ -814,7 +877,7 @@ final class ChatMediaTransferCoordinator {
                 senderPeerID: senderPeerID,
                 deliveryStatus: .sending
             )
-            context.appendPublicMessage(message, to: ConversationID(channelID: context.activeChannel))
+            context.appendPublicMessage(message, to: ConversationID(channelID: channel))
         }
 
         let key = context.normalizedContentKey(message.content)

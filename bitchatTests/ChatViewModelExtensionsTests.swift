@@ -971,7 +971,7 @@ struct ChatViewModelMediaTransferTests {
     }
 
     @Test @MainActor
-    func sendVoiceNote_outsideAllowedContextDeletesTempFile() async throws {
+    func voiceNoteSender_outsideAllowedContextDeletesTempFile() async throws {
         let (viewModel, _) = makeTestableViewModel()
         let geohash = "u4pruydq"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("voice-\(UUID().uuidString).m4a")
@@ -979,7 +979,7 @@ struct ChatViewModelMediaTransferTests {
         try Data("voice".utf8).write(to: url)
         viewModel.switchLocationChannel(to: .location(GeohashChannel(level: .city, geohash: geohash)))
 
-        viewModel.sendVoiceNote(at: url)
+        viewModel.makeVoiceNoteSender()(url)
 
         #expect(!FileManager.default.fileExists(atPath: url.path))
         #expect(viewModel.messages.contains(where: { $0.sender == "system" }))
@@ -992,7 +992,11 @@ struct ChatViewModelMediaTransferTests {
         var cleanupCalled = false
 
         viewModel.switchLocationChannel(to: .location(GeohashChannel(level: .city, geohash: geohash)))
-        viewModel.sendImage(from: URL(fileURLWithPath: "/tmp/ignored.jpg")) {
+        let coordinator = viewModel.mediaTransferCoordinator
+        coordinator.sendImage(
+            from: URL(fileURLWithPath: "/tmp/ignored.jpg"),
+            to: coordinator.currentMediaDestination
+        ) {
             cleanupCalled = true
         }
 
@@ -1000,8 +1004,10 @@ struct ChatViewModelMediaTransferTests {
         #expect(viewModel.messages.contains(where: { $0.sender == "system" }))
     }
 
+    /// The sender is made at the mic's release. Closing the DM while the
+    /// recorder finalizes must not make the note public.
     @Test @MainActor
-    func sendVoiceNote_privateChatUsesPrivateFileTransfer() async throws {
+    func voiceNoteSender_privateChatKeepsItsPeerAfterTheDMCloses() async throws {
         let (viewModel, transport) = makeTestableViewModel()
         let peerID = PeerID(str: "2222222222222222222222222222222222222222222222222222222222222222")
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("voice-\(UUID().uuidString).m4a")
@@ -1009,7 +1015,9 @@ struct ChatViewModelMediaTransferTests {
         defer { try? FileManager.default.removeItem(at: url) }
 
         viewModel.selectedPrivateChatPeer = peerID
-        viewModel.sendVoiceNote(at: url)
+        let sendVoiceNote = viewModel.makeVoiceNoteSender()
+        viewModel.selectedPrivateChatPeer = nil
+        sendVoiceNote(url)
 
         // Media sends hop through Task.detached; the global executor is
         // shared with every parallel test worker, so a loaded runner can be
@@ -1018,7 +1026,9 @@ struct ChatViewModelMediaTransferTests {
         let didSend = await TestHelpers.waitUntil({ transport.sentPrivateFiles.count == 1 }, timeout: TestConstants.settleTimeout)
         #expect(didSend)
         #expect(transport.sentPrivateFiles.first?.peerID == peerID)
+        #expect(transport.sentBroadcastFiles.isEmpty)
         #expect(viewModel.privateChats[peerID]?.last?.content.contains("[voice]") == true)
+        #expect(!viewModel.messages.contains(where: { $0.content.contains("[voice]") }))
         #expect(viewModel.messageIDToTransferId.count == 1)
         #expect(viewModel.transferIdToMessageIDs.count == 1)
     }
@@ -1107,14 +1117,14 @@ struct ChatViewModelMediaTransferTests {
     }
 
     @Test @MainActor
-    func sendVoiceNote_oversizedFileFailsAndDeletesTempFile() async throws {
+    func voiceNoteSender_oversizedFileFailsAndDeletesTempFile() async throws {
         let (viewModel, transport) = makeTestableViewModel()
         let peerID = PeerID(str: "3333333333333333333333333333333333333333333333333333333333333333")
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("voice-too-large-\(UUID().uuidString).m4a")
         try Data(repeating: 0x55, count: FileTransferLimits.maxVoiceNoteBytes + 1).write(to: url, options: .atomic)
 
         viewModel.selectedPrivateChatPeer = peerID
-        viewModel.sendVoiceNote(at: url)
+        viewModel.makeVoiceNoteSender()(url)
 
         let didFail = await TestHelpers.waitUntil({
             isFailed(status: viewModel.privateChats[peerID]?.last?.deliveryStatus)
@@ -1132,7 +1142,8 @@ struct ChatViewModelMediaTransferTests {
         defer { try? FileManager.default.removeItem(at: sourceURL) }
 
         viewModel.selectedPrivateChatPeer = peerID
-        viewModel.sendImage(from: sourceURL)
+        let coordinator = viewModel.mediaTransferCoordinator
+        coordinator.sendImage(from: sourceURL, to: coordinator.currentMediaDestination)
 
         let didSend = await TestHelpers.waitUntil({ transport.sentPrivateFiles.count == 1 }, timeout: TestConstants.settleTimeout)
         #expect(didSend)
@@ -1151,7 +1162,8 @@ struct ChatViewModelMediaTransferTests {
         defer { try? FileManager.default.removeItem(at: url) }
 
         viewModel.selectedPrivateChatPeer = peerID
-        viewModel.sendImage(from: url)
+        let coordinator = viewModel.mediaTransferCoordinator
+        coordinator.sendImage(from: url, to: coordinator.currentMediaDestination)
 
         let didNotify = await TestHelpers.waitUntil({
             viewModel.messages.contains(where: { $0.sender == "system" && $0.content.contains("Failed to prepare image") })

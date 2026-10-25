@@ -25,6 +25,17 @@ struct ContentRootModalPresentationState {
     var isVoiceAlertPresented = false
     var isScreenshotPrivacyAlertPresented = false
     var isMediaPickerPresented = false
+    /// The legacy private-media dialog presents from the root whenever the
+    /// people UI is inline rather than a sheet.
+    var isLegacyMediaConsentPresented = false
+
+    /// Only the people column puts the legacy-consent dialog in the root's
+    /// tree. In compact the people sheet hosts it and already defers the
+    /// root while up; a request left pending once the sheet closed has no
+    /// presenter, and waiting on it would swallow the root alerts.
+    static func legacyConsentDefersRoot(isSplitLayout: Bool, hasPendingRequest: Bool) -> Bool {
+        isSplitLayout && hasPendingRequest
+    }
 
     var hasPresentation: Bool {
         isPeopleSheetPresented
@@ -37,6 +48,7 @@ struct ContentRootModalPresentationState {
             || isVoiceAlertPresented
             || isScreenshotPrivacyAlertPresented
             || isMediaPickerPresented
+            || isLegacyMediaConsentPresented
     }
 }
 
@@ -48,7 +60,8 @@ extension ContentRootModalPresentationState {
         isImagePreviewPresented: Bool = false,
         isVerificationSheetPresented: Bool = false,
         isVoiceAlertPresented: Bool = false,
-        isMediaPickerPresented: Bool = false
+        isMediaPickerPresented: Bool = false,
+        isLegacyMediaConsentPresented: Bool = false
     ) {
         self.init(
             isPeopleSheetPresented: isPeopleSheetPresented,
@@ -64,8 +77,48 @@ extension ContentRootModalPresentationState {
             isVoiceAlertPresented: isVoiceAlertPresented,
             isScreenshotPrivacyAlertPresented:
                 appChromeModel.showScreenshotPrivacyWarning,
-            isMediaPickerPresented: isMediaPickerPresented
+            isMediaPickerPresented: isMediaPickerPresented,
+            isLegacyMediaConsentPresented: isLegacyMediaConsentPresented
         )
+    }
+}
+
+/// What a dismissal reported through the people sheet's binding asks for.
+enum PeopleSheetDismissal: Equatable {
+    /// Nothing: SwiftUI catching up with our own state.
+    case ignore
+    /// Close the people list but keep any open conversation selected.
+    case closeList
+    /// A person leaving: close the list and the conversation.
+    case endConversation
+}
+
+/// Whether the people/DM UI is up as a modal sheet, and what a dismissal of
+/// that sheet means. On a split layout the same UI is an inline column, so
+/// the sheet's getter turns false while the conversation stays open.
+enum PeopleSheetPresentationPolicy {
+    static func isPresented(
+        isSplitLayout: Bool,
+        showSidebar: Bool,
+        hasSelectedConversation: Bool
+    ) -> Bool {
+        !isSplitLayout && (showSidebar || hasSelectedConversation)
+    }
+
+    /// A getter that already reads false means SwiftUI is catching up with
+    /// our own state (the split layout moved the DM into its column), not a
+    /// person leaving: ending the conversation there would close the DM on
+    /// every unfold. Scene/background and alert-presentation reconciliation
+    /// (Bluetooth-off, recording errors) are not requests to leave the
+    /// conversation either: keeping the DM selected lets the sheet come back
+    /// when the app returns from Settings.
+    static func dismissal(
+        sheetStillPresented: Bool,
+        sceneIsActive: Bool,
+        alertPending: Bool
+    ) -> PeopleSheetDismissal {
+        guard sheetStillPresented else { return .ignore }
+        return sceneIsActive && !alertPending ? .endConversation : .closeList
     }
 }
 
@@ -120,6 +173,27 @@ struct ContentView: View {
     #else
     @State private var showMacImagePicker = false
     #endif
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    /// Display corners are named by physical side, while the padding that
+    /// clears them follows the layout direction (TopCornerClearance).
+    @Environment(\.layoutDirection) private var layoutDirection
+    /// The live layout mode. Presentation bindings read this, never the size
+    /// class: SwiftUI runs a departing sheet's setter after the layout has
+    /// flipped, and environment values captured in that closure are stale.
+    @State private var isSplitLayout = false
+    /// The people column's QR sheet presents through the root, so its state
+    /// lives here where the root alerts can defer to it.
+    @State private var showColumnVerifySheet = false
+    /// Set when unfolding moves a focused DM composer out of the sheet; the
+    /// sheet's dismissal hands focus to the column's composer.
+    @State private var refocusComposerAfterLayoutChange = false
+    /// Set when unfolding moves an open DM out of the sheet. The column's list
+    /// lands on the latest message, but the departing sheet's list reports
+    /// its last row leaving afterwards, which raised a stale jump-to-latest
+    /// pill in the column.
+    @State private var repinConversationAfterLayoutChange = false
+    #endif
     @ScaledMetric(relativeTo: .body) private var headerHeight: CGFloat = 44
     @ScaledMetric(relativeTo: .subheadline) private var headerPeerIconSize: CGFloat = 11
     @ScaledMetric(relativeTo: .subheadline) private var headerPeerCountFontSize: CGFloat = 12
@@ -142,8 +216,21 @@ struct ContentView: View {
 
     private var usesGlassLayout: Bool { appTheme.usesGlassChrome }
 
+    /// People list or DM as a column beside the timeline instead of a sheet.
+    private var isSplitLayoutActive: Bool {
+        #if os(iOS)
+        return isSplitLayout
+        #else
+        return false
+        #endif
+    }
+
     private var isPeopleSheetPresented: Bool {
-        showSidebar || selectedPrivatePeerID != nil
+        PeopleSheetPresentationPolicy.isPresented(
+            isSplitLayout: isSplitLayoutActive,
+            showSidebar: showSidebar,
+            hasSelectedConversation: selectedPrivatePeerID != nil
+        )
     }
 
     private func rootModalPresentationState(
@@ -151,17 +238,23 @@ struct ContentView: View {
     ) -> ContentRootModalPresentationState {
         #if os(iOS)
         let isMediaPickerPresented = showImagePicker
+        let isVerificationSheetPresented = showVerifySheet || showColumnVerifySheet
         #else
         let isMediaPickerPresented = showMacImagePicker
+        let isVerificationSheetPresented = showVerifySheet
         #endif
 
         return ContentRootModalPresentationState(
             appChromeModel: appChromeModel,
             isPeopleSheetPresented: isPeopleSheetPresented,
             isImagePreviewPresented: imagePreviewURL != nil,
-            isVerificationSheetPresented: showVerifySheet,
+            isVerificationSheetPresented: isVerificationSheetPresented,
             isVoiceAlertPresented: includingVoiceAlert && voiceRecordingVM.showAlert,
-            isMediaPickerPresented: isMediaPickerPresented
+            isMediaPickerPresented: isMediaPickerPresented,
+            isLegacyMediaConsentPresented: ContentRootModalPresentationState.legacyConsentDefersRoot(
+                isSplitLayout: isSplitLayoutActive,
+                hasPendingRequest: conversationUIModel.legacyPrivateMediaConsentRequest != nil
+            )
         )
     }
 
@@ -226,8 +319,37 @@ struct ContentView: View {
         )
     }
 
+    private var rootImagePreviewBinding: Binding<Bool> {
+        Binding(
+            get: { imagePreviewURL != nil && !isPeopleSheetPresented },
+            set: { presenting in
+                if !presenting {
+                    imagePreviewURL = nil
+                }
+            }
+        )
+    }
+
+    /// The header's people button. On the split layout the list is on screen
+    /// unless a DM covers it, so the button leaves the DM instead of toggling
+    /// a sheet that can't present there.
+    private var headerPeopleBinding: Binding<Bool> {
+        Binding(
+            get: { showSidebar },
+            set: { newValue in
+                if isSplitLayoutActive {
+                    if selectedPrivatePeerID != nil {
+                        privateConversationModel.endConversation()
+                    }
+                } else {
+                    showSidebar = newValue
+                }
+            }
+        )
+    }
+
     var body: some View {
-        mainContent
+        adaptiveContent
             .onAppear { [conversationUIModel, voiceRecordingVM] in
                 conversationUIModel.setCurrentColorScheme(colorScheme)
                 conversationUIModel.setCurrentTheme(appTheme)
@@ -268,15 +390,35 @@ struct ContentView: View {
         .frame(minWidth: 600, minHeight: 400)
         #endif
         .onChange(of: selectedPrivatePeerID) { newValue in
-            if newValue != nil {
-                showSidebar = true
-            }
-            sharedContentImportModel.updateDestination(sharedContentDestination)
-            switchComposerDraft(to: ComposerDraftStore.Key.from(
+            let draftKey = ComposerDraftStore.Key.from(
                 peerID: newValue,
                 fingerprint: newValue.flatMap { conversationUIModel.getFingerprint(for: $0) },
                 channel: locationChannelsModel.selectedChannel
-            ))
+            )
+            // A hold records for the conversation it started in, but a voice
+            // note is routed by the selection when the hold ends, and a live
+            // push-to-talk stream keeps its original target; the composer
+            // holding the press may also just have been removed. Compared like
+            // drafts, so the same person's peer-ID handoff keeps the hold.
+            if draftKey != activeDraftKey, voiceRecordingVM.isHoldInFlight {
+                voiceRecordingVM.cancel()
+            }
+            // The split layout shows the DM in its column; a stale sidebar
+            // flag would pop the people sheet after the next fold.
+            if newValue != nil, !isSplitLayoutActive {
+                showSidebar = true
+            }
+            #if os(iOS)
+            // The column swaps its list, and the QR sheet the list presents,
+            // for the DM without a dismissal reaching this flag. Left set, it
+            // would hold back the root alerts and bring the QR sheet back
+            // with the list.
+            if newValue != nil {
+                showColumnVerifySheet = false
+            }
+            #endif
+            sharedContentImportModel.updateDestination(sharedContentDestination)
+            switchComposerDraft(to: draftKey)
         }
         .onChange(of: locationChannelsModel.selectedChannel) { newChannel in
             sharedContentImportModel.updateDestination(sharedContentDestination)
@@ -302,21 +444,28 @@ struct ContentView: View {
             isPresented: Binding(
                 get: { isPeopleSheetPresented },
                 set: { isPresented in
-                    if !isPresented {
+                    guard !isPresented else { return }
+                    switch PeopleSheetPresentationPolicy.dismissal(
+                        sheetStillPresented: isPeopleSheetPresented,
+                        sceneIsActive: scenePhase == .active,
+                        alertPending: appChromeModel.showBluetoothAlert
+                            || voiceRecordingVM.showAlert
+                    ) {
+                    case .ignore:
+                        break
+                    case .closeList:
                         showSidebar = false
-                        // Scene/background and alert-presentation
-                        // reconciliation (Bluetooth-off, recording errors)
-                        // are not user requests to leave the conversation.
-                        // Keep the selected DM so the sheet remains live
-                        // when the app returns from Settings.
-                        if scenePhase == .active,
-                           !appChromeModel.showBluetoothAlert,
-                           !voiceRecordingVM.showAlert {
-                            privateConversationModel.endConversation()
-                        }
+                    case .endConversation:
+                        showSidebar = false
+                        privateConversationModel.endConversation()
                     }
                 }
-            )
+            ),
+            onDismiss: {
+                #if os(iOS)
+                finishLayoutChangeAfterSheetDismissal()
+                #endif
+            }
         ) {
             #if os(iOS)
             ContentPeopleSheetView(
@@ -382,7 +531,7 @@ struct ContentView: View {
             .environmentObject(locationChannelsModel)
         }
         .sheet(isPresented: Binding(
-            get: { appChromeModel.showingFingerprintFor != nil && !showSidebar && selectedPrivatePeerID == nil },
+            get: { appChromeModel.showingFingerprintFor != nil && !isPeopleSheetPresented },
             set: { _ in appChromeModel.clearFingerprint() }
         )) {
             if let peerID = appChromeModel.showingFingerprintFor {
@@ -392,7 +541,7 @@ struct ContentView: View {
         }
         #if os(iOS)
         .fullScreenCover(isPresented: Binding(
-            get: { showImagePicker && !showSidebar && selectedPrivatePeerID == nil },
+            get: { showImagePicker && !isPeopleSheetPresented },
             set: { newValue in
                 if !newValue {
                     showImagePicker = false
@@ -408,7 +557,7 @@ struct ContentView: View {
         #endif
         #if os(macOS)
         .sheet(isPresented: Binding(
-            get: { showMacImagePicker && !showSidebar && selectedPrivatePeerID == nil },
+            get: { showMacImagePicker && !isPeopleSheetPresented },
             set: { newValue in
                 if !newValue {
                     showMacImagePicker = false
@@ -421,18 +570,23 @@ struct ContentView: View {
             }
         }
         #endif
-        .sheet(isPresented: Binding(
-            get: { imagePreviewURL != nil },
-            set: { presenting in
-                if !presenting {
-                    imagePreviewURL = nil
-                }
-            }
-        )) {
+        // Previews opened from a DM in the people sheet present from inside
+        // it: a second root presentation would wait until the sheet closed.
+        #if os(iOS)
+        // The viewer is a black full-bleed canvas with its own close button;
+        // as a sheet it was a card, and a small one on wide displays.
+        .fullScreenCover(isPresented: rootImagePreviewBinding) {
             if let url = imagePreviewURL {
                 ImagePreviewView(url: url)
             }
         }
+        #else
+        .sheet(isPresented: rootImagePreviewBinding) {
+            if let url = imagePreviewURL {
+                ImagePreviewView(url: url)
+            }
+        }
+        #endif
         .alert(Text(String(localized: "voice.error.title", defaultValue: "recording error", comment: "Title of the voice recording error alert")), isPresented: rootVoiceAlertBinding, actions: {
             Button("common.ok", role: .cancel) {}
             if voiceRecordingVM.state == .permissionDenied {
@@ -488,15 +642,70 @@ struct ContentView: View {
         }
     }
 
+    /// iOS: where the width allows two columns (the iPhone Duo's inner
+    /// display), the people list or open DM becomes a column beside the
+    /// timeline, split at the hinge; everywhere else the single column stays,
+    /// with people and DMs in the sheet. The column appears only once
+    /// isSplitLayout has flipped as well, so the sheet and the column never
+    /// both host the DM in one frame, and mainContent stays the first child
+    /// in both modes so the public timeline keeps its identity and scroll
+    /// position. macOS keeps mainContent alone: a GeometryReader at the root
+    /// would change how the window sizes itself to its content.
+    @ViewBuilder
+    private var adaptiveContent: some View {
+        #if os(iOS)
+        GeometryReader { proxy in
+            let layout = ContentSplitLayout.resolve(
+                isRegularWidth: horizontalSizeClass == .regular,
+                width: proxy.size.width,
+                leadingInset: proxy.safeAreaInsets.leading,
+                trailingInset: proxy.safeAreaInsets.trailing,
+                division: ContentSplitLayout.division(in: proxy)
+            )
+            let split = isSplitLayout ? layout : nil
+            let corners = topCornerClearance(in: proxy)
+            HStack(spacing: 0) {
+                // Split, the header ends at the fold and the column's top
+                // rows meet the trailing corner instead.
+                mainContent(
+                    headerLeadingCornerReach: corners.leading,
+                    headerTrailingCornerReach: split == nil ? corners.trailing : 0
+                )
+                .frame(width: split?.leadingWidth)
+                if let split {
+                    ContentColumnGap(width: split.gapWidth)
+                    peopleColumn(trailingCornerReach: corners.trailing)
+                        .frame(width: split.trailingWidth)
+                }
+            }
+            .onAppear {
+                isSplitLayout = layout != nil
+                appChromeModel.isPublicTimelineBesideConversation = layout != nil
+            }
+            .onChange(of: layout != nil) { isSplit in
+                handleLayoutModeChange(toSplit: isSplit)
+            }
+        }
+        #else
+        mainContent()
+        #endif
+    }
+
     /// Matrix: classic opaque bars with dividers. Glass: full-bleed message
     /// list scrolling underneath floating chrome panels (safe-area insets),
     /// so the translucency gains usable space instead of losing it.
     @ViewBuilder
-    private var mainContent: some View {
+    private func mainContent(
+        headerLeadingCornerReach: CGFloat = 0,
+        headerTrailingCornerReach: CGFloat = 0
+    ) -> some View {
         if usesGlassLayout {
             publicMessageList
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    headerView
+                    headerView(
+                        leadingCornerReach: headerLeadingCornerReach,
+                        trailingCornerReach: headerTrailingCornerReach
+                    )
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if selectedPrivatePeerID == nil {
@@ -505,7 +714,10 @@ struct ContentView: View {
                 }
         } else {
             VStack(spacing: 0) {
-                headerView
+                headerView(
+                    leadingCornerReach: headerLeadingCornerReach,
+                    trailingCornerReach: headerTrailingCornerReach
+                )
 
                 Divider()
 
@@ -527,15 +739,20 @@ struct ContentView: View {
         }
     }
 
-    private var headerView: some View {
+    private func headerView(
+        leadingCornerReach: CGFloat,
+        trailingCornerReach: CGFloat
+    ) -> some View {
         VStack(spacing: 0) {
             ContentHeaderView(
-                showSidebar: $showSidebar,
+                showSidebar: headerPeopleBinding,
                 showVerifySheet: $showVerifySheet,
                 isNicknameFieldFocused: $isNicknameFieldFocused,
                 headerHeight: headerHeight,
                 headerPeerIconSize: headerPeerIconSize,
-                headerPeerCountFontSize: headerPeerCountFontSize
+                headerPeerCountFontSize: headerPeerCountFontSize,
+                leadingCornerReach: leadingCornerReach,
+                trailingCornerReach: trailingCornerReach
             )
 
             // Failed-wipe outranks connectivity: "your data may still be
@@ -608,6 +825,108 @@ struct ContentView: View {
         )
         #endif
     }
+
+    #if os(iOS)
+    private func peopleColumn(trailingCornerReach: CGFloat) -> some View {
+        ContentPeopleColumnView(
+            showSidebar: $showSidebar,
+            showVerifySheet: $showColumnVerifySheet,
+            messageText: $messageText,
+            selectedMessageSender: $selectedMessageSender,
+            selectedMessageSenderID: $selectedMessageSenderID,
+            imagePreviewURL: $imagePreviewURL,
+            windowCountPublic: $windowCountPublic,
+            windowCountPrivate: $windowCountPrivate,
+            isAtBottomPrivate: $isAtBottomPrivate,
+            isTextFieldFocused: $isTextFieldFocused,
+            voiceRecordingVM: voiceRecordingVM,
+            autocompleteDebounceTimer: $autocompleteDebounceTimer,
+            showImagePicker: $showImagePicker,
+            imagePickerSourceType: $imagePickerSourceType,
+            headerHeight: headerHeight,
+            trailingCornerReach: trailingCornerReach,
+            onSendMessage: sendMessage
+        )
+    }
+
+    /// How far display corners the safe area leaves uncovered reach into the
+    /// top bars; each bar subtracts its own content inset. Zero below iOS
+    /// 26, which can't report corners, and on iPhones whose status bar
+    /// clears them.
+    private func topCornerClearance(in proxy: GeometryProxy) -> TopCornerClearance {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            let corners = proxy.containerCornerInsets
+            // Named by physical side, right-to-left included.
+            return TopCornerClearance(
+                topLeft: corners.topLeading,
+                topRight: corners.topTrailing,
+                safeArea: proxy.safeAreaInsets,
+                isRightToLeft: layoutDirection == .rightToLeft
+            )
+        }
+        #endif
+        return TopCornerClearance()
+    }
+
+    /// Folding, unfolding, rotating or resizing across the split threshold.
+    /// The DM selection, the draft and the public scroll position are state
+    /// here and survive by construction; what the old host was presenting
+    /// cannot follow the DM to the new one, so it closes.
+    private func handleLayoutModeChange(toSplit: Bool) {
+        guard toSplit != isSplitLayout else { return }
+        let conversationMoves = selectedPrivatePeerID != nil
+        let sheetWasPresented = isPeopleSheetPresented
+        let sheetWillBePresented = !toSplit && conversationMoves
+        let composerWasFocused = conversationMoves && isTextFieldFocused
+
+        // First, so the departing sheet's setter reads as our own change and
+        // leaves the conversation open.
+        isSplitLayout = toSplit
+        appChromeModel.isPublicTimelineBesideConversation = toSplit
+        // The DM composer changes hosts: the press on its mic is torn down
+        // and would never finish the recording.
+        if conversationMoves, voiceRecordingVM.isHoldInFlight {
+            voiceRecordingVM.cancel()
+        }
+        // Folding brings an open DM back in the sheet, the list behind it;
+        // an idle column must not pop the people sheet.
+        showSidebar = sheetWillBePresented
+        showColumnVerifySheet = false
+        if sheetWasPresented != sheetWillBePresented {
+            // Presented by the sheet, or by the root for the column: the
+            // other host can't adopt them.
+            showImagePicker = false
+            imagePreviewURL = nil
+            appChromeModel.clearFingerprint()
+        }
+
+        // Best effort: on unfolding, the departing sheet's dismissal hands
+        // focus to the column's composer; on folding, the sheet's composer
+        // mounts as it presents.
+        refocusComposerAfterLayoutChange = toSplit && composerWasFocused
+        repinConversationAfterLayoutChange = toSplit && conversationMoves
+        if !toSplit, composerWasFocused {
+            DispatchQueue.main.async {
+                isTextFieldFocused = true
+            }
+        }
+    }
+
+    /// Only once the departing sheet is gone is the column's composer the one
+    /// field bound to the focus state, and has the sheet's list stopped
+    /// reporting where it is scrolled.
+    private func finishLayoutChangeAfterSheetDismissal() {
+        if repinConversationAfterLayoutChange {
+            repinConversationAfterLayoutChange = false
+            isAtBottomPrivate = true
+        }
+        if refocusComposerAfterLayoutChange {
+            refocusComposerAfterLayoutChange = false
+            isTextFieldFocused = true
+        }
+    }
+    #endif
 
     private func sendMessage() {
         guard let trimmed = messageText.trimmedOrNilIfEmpty else { return }
