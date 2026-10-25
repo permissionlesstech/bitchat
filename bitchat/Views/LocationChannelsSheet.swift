@@ -121,7 +121,10 @@ struct LocationChannelsSheet: View {
     }
 
     var body: some View {
-        NavigationView {
+        // NavigationStack, not NavigationView: inside a sheet the older
+        // container resigns the geohash field as soon as it becomes first
+        // responder (#1797).
+        NavigationStack {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 12) {
                     Text(Strings.title)
@@ -287,16 +290,43 @@ struct LocationChannelsSheet: View {
     /// Participant counts mean "active in the last five minutes": they change
     /// as people arrive and as quiet ones age out, neither of which publishes
     /// anything this sheet observes, so re-read them every few seconds while
-    /// the sheet is open.
+    /// the sheet is open. The geohash field stays outside that `TimelineView`:
+    /// rebuilding it resigns first responder (#1797).
     private var channelList: some View {
-        TimelineView(.periodic(from: .now, by: 5)) { _ in
-            channelListContent
+        ScrollView {
+            VStack(spacing: 0) {
+                TimelineView(.periodic(from: .now, by: 5)) { _ in
+                    countedChannelRows
+                }
+
+                sectionDivider
+                customTeleportSection
+                    .padding(.vertical, 8)
+
+                if QuickJoinSuggestion.current() != nil {
+                    sectionDivider
+                    quickJoinSection
+                        .padding(.vertical, 8)
+                }
+
+                TimelineView(.periodic(from: .now, by: 5)) { _ in
+                    bookmarkRows
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 6)
+            .themedSurface()
         }
+        #if os(iOS)
+        // A content-size change from the count refresh must not count as a
+        // scroll that dismisses the keyboard.
+        .scrollDismissesKeyboard(.never)
+        #endif
+        .themedSurface()
     }
 
-    private var channelListContent: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
+    private var countedChannelRows: some View {
+        VStack(spacing: 0) {
                 channelRow(title: Strings.meshTitle(peerListModel.reachableMeshPeerCount), subtitlePrefix: Strings.subtitlePrefix(geohash: "bluetooth", coverage: bluetoothRangeString()), isSelected: isMeshSelected, titleColor: standardBlue, titleBold: peerListModel.reachableMeshPeerCount > 0) {
                     locationChannelsModel.select(ChannelID.mesh)
                     isPresented = false
@@ -366,29 +396,17 @@ struct LocationChannelsSheet: View {
                         .padding(.vertical, 10)
                 }
 
-                sectionDivider
-                customTeleportSection
-                    .padding(.vertical, 8)
-
-                if QuickJoinSuggestion.current() != nil {
-                    sectionDivider
-                    quickJoinSection
-                        .padding(.vertical, 8)
-                }
-
-                let bookmarkedList = locationChannelsModel.bookmarks
-                if !bookmarkedList.isEmpty {
-                    sectionDivider
-                    bookmarkedSection(bookmarkedList)
-                        .padding(.vertical, 8)
-                }
-
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 6)
-            .themedSurface()
+    }
+
+    @ViewBuilder
+    private var bookmarkRows: some View {
+        let bookmarkedList = locationChannelsModel.bookmarks
+        if !bookmarkedList.isEmpty {
+            sectionDivider
+            bookmarkedSection(bookmarkedList)
+                .padding(.vertical, 8)
         }
-        .themedSurface()
     }
 
     private var sectionDivider: some View {
@@ -405,7 +423,12 @@ struct LocationChannelsSheet: View {
                 Text(verbatim: "#")
                     .bitchatFont(size: 14)
                     .foregroundColor(palette.secondary)
-                TextField("geohash", text: $customGeohash)
+                TextField(
+                    "",
+                    text: $customGeohash,
+                    prompt: Text(verbatim: "geohash").foregroundColor(palette.secondary.opacity(0.6))
+                )
+                    .foregroundColor(palette.primary)
                     #if os(iOS)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled(true)
