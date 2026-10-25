@@ -1745,6 +1745,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         setGeoDmSubscriptionID(nil)
         _ = clearGeoSamplingSubs()
         cachedGeohashIdentity = nil
+        // The formatter's color palettes hold this session's peer IDs, their
+        // noise keys and geohash pubkeys, and its rebuild checks hold our
+        // own pre-wipe peer ID and geohash identity. A fresh formatter
+        // starts with none of them instead of keeping them until the next
+        // color lookup.
+        messageFormatter = ChatMessageFormatter(viewModel: self)
         nostrKeyMapping.removeAll()
         // Every pubkey seen in any geohash this session, with when.
         participantTracker.clear()
@@ -2316,6 +2322,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
     /// Store audits run so far; tests pin the sampling.
     var _test_storeAuditCount: Int { storeAuditCount }
+
+    /// Whether the message formatter has built a color palette; the panic
+    /// test pins that a wipe leaves none.
+    var _test_formatterHasBuiltPalettes: Bool { messageFormatter._test_hasBuiltPalettes }
     #endif
 
     func parseMentions(from content: String) -> [String] {

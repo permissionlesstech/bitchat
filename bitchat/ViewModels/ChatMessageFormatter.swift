@@ -42,6 +42,11 @@ final class ChatMessageFormatter {
         self.viewModel = viewModel
     }
 
+    #if DEBUG
+    /// Whether either palette has been built (every build records its key).
+    var _test_hasBuiltPalettes: Bool { meshPaletteKey != nil || nostrPaletteKey != nil }
+    #endif
+
     func formatMessageAsText(_ message: BitchatMessage, colorScheme: ColorScheme, theme: AppTheme = .matrix) -> AttributedString {
         let design = theme.bodyFontDesign
         let isSelf: Bool = {

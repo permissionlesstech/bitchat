@@ -2203,6 +2203,22 @@ struct ChatViewModelPanicTests {
         #expect(tracker._test_heldPeerIDCount == 0)
     }
 
+    /// The formatter's color palettes hold the session's peer IDs and their
+    /// keys, and its rebuild checks hold our own pre-wipe IDs; none of it
+    /// may outlive the wipe until the next color lookup.
+    @Test @MainActor
+    func panicClearAllData_dropsTheFormattersColorPalettes() {
+        let (viewModel, _) = makeTestableViewModel()
+        let peerID = PeerID(str: "0011223344556677")
+        viewModel.allPeers = [BitchatPeer(peerID: peerID, noisePublicKey: Data(), nickname: "alice")]
+        _ = viewModel.colorForMeshPeer(id: peerID, isDark: true)
+        #expect(viewModel._test_formatterHasBuiltPalettes)
+
+        viewModel.panicClearAllData(restartServices: false)
+
+        #expect(!viewModel._test_formatterHasBuiltPalettes)
+    }
+
     @Test @MainActor
     func panicKeychainFailureKeepsRecoveryPendingAndServicesStopped() {
         let keychain = MockKeychain()
