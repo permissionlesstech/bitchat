@@ -120,6 +120,7 @@ No cryptographic system can protect content after a recipient reads, copies, scr
 - **Public board posts and tombstones:** until expiry, at most seven days.
 - **Media:** seven days, or sooner by quota eviction, panic wipe, or app removal.
 - **Groups, favorites, preferences, identity keys, and bookmarks:** until removed by the feature, panic wipe, or app removal.
+- **Public keys and nicknames of people met over the mesh:** someone you have no relationship with is forgotten about 30 days after this device last saw them, and at most about 2,000 such people are kept. Someone you exchanged private messages or files with is kept for 90 days after the last one, or until you clear that chat; after that, the 30-day rule applies. To do this, the device notes roughly when it last saw each person and when you last messaged them. People you favorited, verified, blocked, or named, and people vouched for by someone you verified, are kept for as long as that lasts.
 - **Nostr data:** according to the policies of the relays that receive it.
 
 ## Your Controls

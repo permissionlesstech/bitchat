@@ -44,7 +44,7 @@
     "hex.encodePublicKey_before": 64366,
     "hex.encodePublicKey": 1194627,
     "identity.upsertKnownPeer_before": 151,
-    "identity.upsertKnownPeer": 1730092,
+    "identity.upsertKnownPeer": 1328107,
     "identity.vouchBatch_before": 9,
     "identity.vouchBatch": 151,
     "identity.lookupByPeerIDPrefix_before": 12350,

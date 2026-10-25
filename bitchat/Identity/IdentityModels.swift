@@ -119,6 +119,15 @@ struct CryptographicIdentity: Codable {
     // Optional Ed25519 signing public key (used to authenticate public messages)
     var signingPublicKey: Data? = nil
     let firstSeen: Date
+    /// Start of the UTC day a verified announce last refreshed this identity,
+    /// which retention ages strangers by (see
+    /// `SecureIdentityStateManager.RetentionPolicy`). Day-granular and
+    /// refreshed at most weekly, so it never costs a write per announce, and
+    /// never moved backwards: a stamp ahead of the clock is kept.
+    /// Nil for identities retention protects, and in caches written before
+    /// this field (synthesized decoding treats it as optional, and older
+    /// builds ignore it).
+    var lastSeen: Date? = nil
 }
 
 /// Represents the social layer of identity - user-assigned names and trust relationships.
@@ -181,7 +190,13 @@ struct IdentityCache: Codable {
     // Verified fingerprints (cryptographic proof)
     var verifiedFingerprints: Set<String> = []
 
-    // Last interaction timestamps (privacy: optional)
+    // Direct-message partners: fingerprint -> UTC day of the latest private
+    // message or file exchanged, rewritten at most weekly. Only
+    // `SecureIdentityStateManager.recordDirectMessageHistory` writes it;
+    // retention keeps these identities until the marker expires
+    // (`RetentionPolicy.directMessageRetention`), and clearing the chat
+    // removes it. Builds from mid-2025 wrote an exact time here for every
+    // peer whose key they registered; those entries are long expired.
     var lastInteractions: [String: Date] = [:]
 
     // Blocked Nostr pubkeys (lowercased hex) for geohash chats
@@ -221,6 +236,12 @@ struct IdentityCache: Codable {
     // contact (TOFU downgrade).
     var cryptographicIdentities: [String: CryptographicIdentity] = [:]
 
+    // UTC day of the last identity-retention pass. The next pass checks the
+    // clock against it before it forgets anything by age (see
+    // `SecureIdentityStateManager.agingDayLocked`). Optional: older caches
+    // lack it, and older builds ignore it.
+    var retentionPassDay: Date? = nil
+
     // Schema version for future migrations
     var version: Int = 1
 
@@ -243,6 +264,7 @@ struct IdentityCache: Codable {
         privateMediaCapableFingerprints = try container.decodeIfPresent(Set<String>.self, forKey: .privateMediaCapableFingerprints)
         authenticatedSigningKeysByFingerprint = try container.decodeIfPresent([String: Data].self, forKey: .authenticatedSigningKeysByFingerprint)
         cryptographicIdentities = try container.decodeIfPresent([String: CryptographicIdentity].self, forKey: .cryptographicIdentities) ?? [:]
+        retentionPassDay = try container.decodeIfPresent(Date.self, forKey: .retentionPassDay)
         version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
     }
 }

@@ -46,6 +46,16 @@ Ingress validates announce structure, sender binding, signatures, payload sizes,
 
 Residual risk: private-message metadata such as timing, radio adjacency, ciphertext size, rotating recipient tags, and relay connections remains observable. A compromised recipient device can disclose plaintext.
 
+## Peer Identity Cache
+
+- Verified announces add a peer's Noise and signing public keys and claimed nickname to the identity cache, an AES-GCM-sealed keychain item. Its signing-key pins stop a later announce from pairing a known peer's Noise key with another signing key.
+- Strangers, meaning peers with no favorite, verification, block, petname, notes, trust level, vouch link, or recent private conversation, are forgotten 30 to 37 days after they were last seen; at most 2,000 are kept, and past that the least recently seen go first. For each stranger the cache stores the UTC day it was last seen, refreshed weekly.
+- A direct-message partner is kept for 90 to 97 days after the last private message or file, so the cache stores the day of the latest one, refreshed weekly. Clearing the chat removes that record.
+- Ages follow the wall clock, but a stamp never moves backwards and a single wrong clock reading forgets nothing.
+- Panic wipe deletes the cache.
+
+Residual risk: a seized unlocked device shows which nearby strangers it verified in about the last month, whom its owner exchanged private messages with in about the last three months and roughly when, and every favorite, verified, blocked, or named peer.
+
 ## Public Gossip, Boards, and Media
 
 - Recent signed public mesh messages are archived in Application Support for up to 6 hours so gossip sync survives a relaunch and can cross mesh partitions.

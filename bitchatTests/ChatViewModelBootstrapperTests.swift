@@ -75,10 +75,60 @@ struct ChatViewModelBootstrapperTests {
         #expect(!viewModel.teleportedGeo.contains(key))
     }
 
+    // MARK: - Identity-cache retention
+
+    @Test func configurePushesFavoriteFingerprintsToIdentityRetention() {
+        let identityManager = MockIdentityManager(MockKeychain())
+        let viewModel = makeViewModel(identityManager: identityManager)
+
+        // Retention never runs before a snapshot arrives; configure provides
+        // one before the transport starts.
+        #expect(identityManager.retentionProtectedFingerprints != nil)
+        _ = viewModel
+    }
+
+    @Test func retentionProtectionCoversOnlyPeopleTheUserFavorited() {
+        let favorites = FavoritesPersistenceService(keychain: MockKeychain())
+        let identityManager = MockIdentityManager(MockKeychain())
+        let favorited = Data(repeating: 0x61, count: 32)
+        let favoritedUs = Data(repeating: 0x62, count: 32)
+        favorites.addFavorite(peerNoisePublicKey: favorited, peerNickname: "alice")
+        // A record the peer created by favoriting us must not protect it:
+        // any peer could opt itself in.
+        favorites.updatePeerFavoritedUs(peerNoisePublicKey: favoritedUs, favorited: true, peerNickname: "bob")
+
+        let binding = ChatViewModelBootstrapper.bindIdentityRetentionProtection(
+            favorites: favorites,
+            identityManager: identityManager
+        )
+        #expect(identityManager.retentionProtectedFingerprints == [favorited.sha256Fingerprint()])
+
+        favorites.removeFavorite(peerNoisePublicKey: favorited)
+        #expect(identityManager.retentionProtectedFingerprints == [])
+        binding?.cancel()
+    }
+
+    @Test func retentionProtectionFailsClosedWhenStoredFavoritesAreUnreadable() {
+        let keychain = MockKeychain()
+        keychain.simulatedGenericReadError = .deviceLocked
+        let favorites = FavoritesPersistenceService(keychain: keychain)
+        let identityManager = MockIdentityManager(MockKeychain())
+
+        let binding = ChatViewModelBootstrapper.bindIdentityRetentionProtection(
+            favorites: favorites,
+            identityManager: identityManager
+        )
+        favorites.addFavorite(peerNoisePublicKey: Data(repeating: 0x63, count: 32), peerNickname: "carol")
+
+        // No snapshot means no retention: unknown favorites are never evicted.
+        #expect(binding == nil)
+        #expect(identityManager.retentionProtectedFingerprints == nil)
+    }
+
     /// A private location manager: the shared one is switched by other
     /// suites running in parallel, and a switch clears nicknames and
     /// teleport markers.
-    private func makeViewModel() -> ChatViewModel {
+    private func makeViewModel(identityManager: MockIdentityManager? = nil) -> ChatViewModel {
         let keychain = MockKeychain()
         let locationSuite = "ChatViewModelBootstrapperTests.\(UUID().uuidString)"
         let locationStorage = UserDefaults(suiteName: locationSuite) ?? .standard
@@ -86,7 +136,7 @@ struct ChatViewModelBootstrapperTests {
         return ChatViewModel(
             keychain: keychain,
             idBridge: NostrIdentityBridge(keychain: MockKeychainHelper()),
-            identityManager: MockIdentityManager(keychain),
+            identityManager: identityManager ?? MockIdentityManager(keychain),
             transport: MockTransport(),
             locationManager: LocationChannelManager(storage: locationStorage)
         )

@@ -21,6 +21,23 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
         XCTAssertNotNil(keychain.load(key: storageKey, service: serviceKey))
     }
 
+    func test_init_reportsWhetherTheStoredFavoritesWereRead() {
+        XCTAssertTrue(FavoritesPersistenceService(keychain: MockKeychain()).loadWasAuthoritative, "nothing stored")
+
+        let stored = MockKeychain()
+        FavoritesPersistenceService(keychain: stored)
+            .addFavorite(peerNoisePublicKey: Data(repeating: 0x51, count: 32), peerNickname: "Alice")
+        XCTAssertTrue(FavoritesPersistenceService(keychain: stored).loadWasAuthoritative, "decoded")
+
+        let locked = MockKeychain()
+        locked.simulatedGenericReadError = .deviceLocked
+        XCTAssertFalse(FavoritesPersistenceService(keychain: locked).loadWasAuthoritative, "read error")
+
+        let corrupt = MockKeychain()
+        corrupt.save(key: storageKey, data: Data("not json".utf8), service: serviceKey, accessible: nil)
+        XCTAssertFalse(FavoritesPersistenceService(keychain: corrupt).loadWasAuthoritative, "undecodable")
+    }
+
     func test_removeFavorite_preservesRelationshipWhenPeerStillFavoritesUs() {
         let service = FavoritesPersistenceService(keychain: MockKeychain())
         let peerKey = Data((32..<64).map(UInt8.init))

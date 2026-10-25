@@ -387,7 +387,7 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         XCTAssertTrue(downgraded)
     }
 
-    func test_ephemeralSessionLifecycle_tracksHandshakeProgressAndLastInteraction() async {
+    func test_ephemeralSessionLifecycle_tracksHandshakeProgress() async {
         let manager = SecureIdentityStateManager(MockKeychain())
         let peerID = PeerID(str: "1234567890abcdef")
         let fingerprint = String(repeating: "90", count: 32)
@@ -413,11 +413,14 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         manager.updateHandshakeState(peerID: peerID, state: .completed(fingerprint: fingerprint))
         let completed = await waitUntil {
             if case .completed(let completedFingerprint)? = manager.debugEphemeralSession(for: peerID)?.handshakeState {
-                return completedFingerprint == fingerprint && manager.debugLastInteraction(for: fingerprint) != nil
+                return completedFingerprint == fingerprint
             }
             return false
         }
         XCTAssertTrue(completed)
+        // A handshake is not direct-message history (which protects an
+        // identity from retention): every nearby iOS peer completes one.
+        XCTAssertNil(manager.debugLastInteraction(for: fingerprint))
 
         manager.removeEphemeralSession(peerID: peerID)
         let removed = await waitUntil {
@@ -655,11 +658,10 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         // BLEService.handleAuthenticatedPeerState, once per Noise session.
         func applyAuthenticatedPeerState() {
             manager.bindAuthenticatedSigningPublicKey(signingPublicKey, fingerprint: fingerprint)
-            manager.upsertCryptographicIdentity(
+            manager.upsertAuthenticatedPeerIdentity(
                 fingerprint: fingerprint,
                 noisePublicKey: noisePublicKey,
-                signingPublicKey: signingPublicKey,
-                claimedNickname: nil
+                signingPublicKey: signingPublicKey
             )
             manager.markPrivateMediaCapable(fingerprint: fingerprint)
         }

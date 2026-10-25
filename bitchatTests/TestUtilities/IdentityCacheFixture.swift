@@ -30,9 +30,18 @@ struct IdentityCacheFixture {
     let keychain = MockKeychain()
     let strangers: [Stranger]
 
-    /// - Parameter count: strangers in the cache, each with a crypto identity
-    ///   and an auto-created social identity, as verified announces leave them.
-    init(count: Int) throws {
+    /// - Parameters:
+    ///   - count: strangers in the cache, each with a crypto identity and an
+    ///     auto-created social identity, as verified announces leave them.
+    ///   - lastSeen: every stranger's `lastSeen`; nil gives the shape of a
+    ///     cache written before the field existed.
+    ///   - configure: edits the cache, given the strangers, before it is
+    ///     sealed.
+    init(
+        count: Int,
+        lastSeen: Date? = nil,
+        configure: (_ cache: inout IdentityCache, _ strangers: [Stranger]) -> Void = { _, _ in }
+    ) throws {
         let keyData = Self.bytes(seed: 0x5EED, count: 32)
         _ = keychain.saveIdentityKey(keyData, forKey: Self.encryptionKeyName)
 
@@ -50,7 +59,8 @@ struct IdentityCacheFixture {
                 fingerprint: stranger.fingerprint,
                 publicKey: stranger.noisePublicKey,
                 signingPublicKey: stranger.signingPublicKey,
-                firstSeen: firstSeenBase.addingTimeInterval(TimeInterval(index))
+                firstSeen: firstSeenBase.addingTimeInterval(TimeInterval(index)),
+                lastSeen: lastSeen
             )
             cache.socialIdentities[stranger.fingerprint] = SocialIdentity(
                 fingerprint: stranger.fingerprint,
@@ -63,6 +73,7 @@ struct IdentityCacheFixture {
             )
             return stranger
         }
+        configure(&cache, strangers)
 
         let sealed = try AES.GCM.seal(JSONEncoder().encode(cache), using: SymmetricKey(data: keyData))
         guard let combined = sealed.combined else { throw CocoaError(.coderInvalidValue) }

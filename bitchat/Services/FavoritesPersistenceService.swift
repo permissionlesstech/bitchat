@@ -31,6 +31,11 @@ final class FavoritesPersistenceService: ObservableObject {
     
     @Published private(set) var favorites: [Data: FavoriteRelationship] = [:] // Noise pubkey -> relationship
     @Published private(set) var mutualFavorites: Set<Data> = []
+    /// Whether `favorites` started from what is stored: the stored
+    /// relationships were read and decoded, or none are stored. False after
+    /// a keychain read error or an undecodable item, when the stored
+    /// favorites are unknown.
+    private(set) var loadWasAuthoritative = false
     
     static let shared = FavoritesPersistenceService()
 
@@ -238,16 +243,21 @@ final class FavoritesPersistenceService: ObservableObject {
     private func loadFavorites() {
         // Loading favorites from keychain
         
-        guard let data = keychain.load(
-            key: Self.storageKey,
-            service: Self.keychainService
-        ) else { 
-            return 
+        let data: Data
+        switch keychain.loadWithResult(key: Self.storageKey, service: Self.keychainService) {
+        case .success(let stored):
+            data = stored
+        case .itemNotFound:
+            loadWasAuthoritative = true
+            return
+        case .accessDenied, .deviceLocked, .authenticationFailed, .otherError:
+            return
         }
         
         do {
             let decoder = JSONDecoder()
             let relationships = try decoder.decode([FavoriteRelationship].self, from: data)
+            loadWasAuthoritative = true
             
             SecureLogger.info("✅ Loaded \(relationships.count) favorite relationships", category: .session)
             

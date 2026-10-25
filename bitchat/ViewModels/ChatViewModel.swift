@@ -657,6 +657,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     /// Empties the peer's chat but keeps the conversation alive (`/clear`).
     @MainActor
     func clearPrivateChat(_ peerID: PeerID) {
+        // The identity cache's record that we messaged this person goes too.
+        forgetDirectMessageHistory(with: peerID)
         let sourceConversationID = ConversationID.directPeer(peerID)
         // An active live-voice row owns an open FileHandle and may be
         // republished as frames/final media arrive. Treat it like an in-flight

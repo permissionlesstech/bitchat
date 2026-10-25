@@ -2411,3 +2411,71 @@ struct ChatViewModelLifecycleTests {
         #expect(transport.startServicesCallCount == 1)
     }
 }
+
+// MARK: - Direct-Message History
+
+struct ChatViewModelDirectMessageHistoryTests {
+
+    /// Retention keeps direct-message partners; the marker must land on the
+    /// mesh identity behind the conversation's peer ID.
+    @Test @MainActor
+    func recordDirectMessageHistory_marksTheMeshIdentityBehindThePeerID() throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let identityManager = try #require(viewModel.identityManager as? MockIdentityManager)
+        let shortPeerID = PeerID(str: "0102030405060708")
+        let fingerprint = String(repeating: "ab", count: 32)
+        transport.peerFingerprints[shortPeerID] = fingerprint
+        let noiseKey = Data(repeating: 0x5C, count: 32)
+
+        viewModel.recordDirectMessageHistory(with: shortPeerID)
+        viewModel.recordDirectMessageHistory(with: PeerID(hexData: noiseKey))
+        // Geohash DMs and unknown peers have no mesh identity to keep.
+        viewModel.recordDirectMessageHistory(with: PeerID(nostr_: String(repeating: "cd", count: 32)))
+        viewModel.recordDirectMessageHistory(with: PeerID(str: "1112131415161718"))
+
+        #expect(identityManager.directMessageHistoryFingerprints == [fingerprint, noiseKey.sha256Fingerprint()])
+    }
+
+    /// An absent peer known only from the identity cache, such as a courier
+    /// delivery, is marked through its one persisted identity; a short ID
+    /// that two persisted identities share marks no one.
+    @Test @MainActor
+    func recordDirectMessageHistory_fallsBackToTheOnePersistedIdentity() throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let identityManager = try #require(viewModel.identityManager as? MockIdentityManager)
+        func identity(_ fingerprint: String) -> CryptographicIdentity {
+            CryptographicIdentity(fingerprint: fingerprint, publicKey: Data(repeating: 0x01, count: 32), firstSeen: Date())
+        }
+        let absent = PeerID(str: "2122232425262728")
+        let shared = PeerID(str: "3132333435363738")
+        let candidate = absent.id + String(repeating: "a", count: 48)
+        identityManager.cryptoIdentitiesByPeerIDPrefix = [
+            absent: [identity(candidate)],
+            shared: [
+                identity(shared.id + String(repeating: "b", count: 48)),
+                identity(shared.id + String(repeating: "c", count: 48))
+            ]
+        ]
+
+        viewModel.recordDirectMessageHistory(with: absent)
+        viewModel.recordDirectMessageHistory(with: shared)
+
+        #expect(identityManager.directMessageHistoryFingerprints == [candidate])
+    }
+
+    /// Clearing a chat also removes the identity cache's record that we
+    /// messaged that person.
+    @Test @MainActor
+    func clearPrivateChat_forgetsTheDirectMessageMarker() throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let identityManager = try #require(viewModel.identityManager as? MockIdentityManager)
+        let shortPeerID = PeerID(str: "0102030405060708")
+        let fingerprint = String(repeating: "ab", count: 32)
+        transport.peerFingerprints[shortPeerID] = fingerprint
+
+        viewModel.clearPrivateChat(shortPeerID)
+        viewModel.clearPrivateChat(PeerID(nostr_: String(repeating: "cd", count: 32)))
+
+        #expect(identityManager.forgottenDirectMessageFingerprints == [fingerprint])
+    }
+}
