@@ -327,7 +327,14 @@ final class BLEService: NSObject {
     
     // Simple announce throttling
     private let announceThrottle = BLEAnnounceThrottle()
-    
+    /// Clock backing announce admission. Injectable so a test harness that
+    /// advances only simulated time can move the throttle window too;
+    /// production passes `Date.init`. Without this the admission decision
+    /// reads the runner's wall clock while the harness's clock stands still,
+    /// which makes the simulated-mesh storm bound a measure of machine speed
+    /// rather than relay behaviour.
+    private let dateProvider: () -> Date
+
     // Application state tracking (thread-safe)
     #if os(iOS)
     var isAppActive: Bool = true  // Assume active initially
@@ -509,9 +516,11 @@ final class BLEService: NSObject {
         startSuspendedForPanicRecovery: Bool = false,
         noiseResponderHandshakeTimeout: TimeInterval =
             NoiseSecurityConstants.ordinaryResponderHandshakeTimeout,
-        engineScheduler: BLEEngineScheduling = BLEEngineDispatchScheduler()
+        engineScheduler: BLEEngineScheduling = BLEEngineDispatchScheduler(),
+        dateProvider: @escaping () -> Date = Date.init
     ) {
         self.engineScheduler = engineScheduler
+        self.dateProvider = dateProvider
         self.keychain = keychain
         self.idBridge = idBridge
         self.incomingFileStore = incomingFileStore
@@ -2757,7 +2766,7 @@ final class BLEService: NSObject {
         // after this announce was scheduled but before it runs.
         guard !isPanicSuspended else { return }
         // Throttle announces to prevent flooding
-        if !announceThrottle.shouldSend(force: forceSend, now: Date()) {
+        if !announceThrottle.shouldSend(force: forceSend, now: dateProvider()) {
             return
         }
 
@@ -3097,9 +3106,11 @@ extension BLEService {
         onEngine { sendAnnounceNow(forceSend: true) }
     }
 
-    /// Clears the announce throttle's wall-clock debt — the simulator's
-    /// stand-in for "enough real time has passed", since scheduler time
-    /// cannot move the throttle's Date-based window. Deliberately NOT
+    /// Clears the announce throttle's debt so an announce issued at the
+    /// same instant as the previous one is admitted. With an injected
+    /// clock the simulator can also just advance time past the window;
+    /// this stays for the cases that want a second announce *without*
+    /// moving time (and so releasing scheduled work). Deliberately NOT
     /// part of `_test_forceAnnounce`: the panic-rotation mesh test relies
     /// on the production panic path performing its own reset, and a
     /// blanket reset here would mask that regression.

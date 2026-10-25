@@ -29,6 +29,29 @@ final class SimulatedMesh {
     private var pendingDeliveries: [(from: Int, packet: BitchatPacket)] = []
     /// Total (packet, receiving-node) deliveries pumped — the storm bound.
     private(set) var deliveredFrameCount = 0
+    /// The same deliveries split by packet type. A whole-mesh frame budget
+    /// silently includes announce traffic, and announce *admission* is the one
+    /// decision the manual scheduler does not own: `sendAnnounceNow` asks
+    /// `announceThrottle.shouldSend(force:now: Date())` (BLEService), so
+    /// whether a scheduled re-announce reaches the wire depends on real
+    /// elapsed seconds, not on `advanceTime`. Burn 0.2s of wall clock in the
+    /// middle of a test — the forced-announce window is 0.15s — and announce
+    /// deliveries rise (measured: 22 → 36) while every other type is
+    /// unchanged. A test that drains the mesh to quiet before it measures
+    /// absorbs that into its baseline; one that cannot has a budget moving
+    /// with runner load. Counting per type lets a test bound the traffic it
+    /// is actually about either way.
+    private var deliveredFrameCountsByType: [UInt8: Int] = [:]
+
+    /// Deliveries of one packet type — the storm bound for a specific kind of
+    /// traffic, immune to unrelated announce frames.
+    /// Unlocked deliberately, matching `deliveredFrameCount` above: both
+    /// counters are written only by `pump` on the test thread (the outbound
+    /// tap touches `pendingDeliveries`/`emitted`, never these). Taking the
+    /// lock here would advertise a protection the writer does not hold.
+    func deliveredFrameCount(ofType type: MessageType) -> Int {
+        deliveredFrameCountsByType[type.rawValue] ?? 0
+    }
 
     private(set) var nodes: [Node] = []
     private var neighbors: [Set<Int>] = []
@@ -54,7 +77,11 @@ final class SimulatedMesh {
             idBridge: idBridge,
             identityManager: identityManager,
             initializeBluetoothManagers: false,
-            engineScheduler: scheduler
+            engineScheduler: scheduler,
+            // Announce admission reads this, so the throttle window moves
+            // with `advanceTime` instead of with however long the runner
+            // took to get here.
+            dateProvider: { scheduler.currentDate }
         )
         let index = nodes.count
         let node = Node(service: service, scheduler: scheduler)
@@ -68,9 +95,8 @@ final class SimulatedMesh {
         // The tap must be live before `setNickname` below: setNickname
         // force-announces asynchronously on the engine, and if that slot
         // ran in the gap before a later tap install, the announce was
-        // emitted invisibly while still stamping the wall-clock announce
-        // throttle — swallowing `announceAll`'s forced announce on a
-        // starved runner (the CI flake this ordering fixes).
+        // emitted invisibly while still stamping the announce throttle —
+        // swallowing `announceAll`'s forced announce.
         service._test_onOutboundPacket = { [weak self] packet in
             // Runs on the sender's engine; only buffer here — delivering
             // inline would nest one engine inside another.
@@ -168,6 +194,7 @@ final class SimulatedMesh {
                 for receiver in neighbors[from] {
                     for link in links(from: from, at: receiver) {
                         deliveredFrameCount += 1
+                        deliveredFrameCountsByType[packet.type, default: 0] += 1
                         nodes[receiver].service._test_ingestFrame(packet, link: link)
                     }
                 }
@@ -186,11 +213,12 @@ final class SimulatedMesh {
 
     /// Full discovery round: every node announces, traffic settles.
     ///
-    /// Resets each node's announce throttle first: the throttle window is
-    /// wall-clock, so any announce that already ran (setNickname's, in
-    /// `addNode`) would otherwise swallow this forced one whenever the two
-    /// land within the forced minimum interval — which is always, on any
-    /// runner. `forceAnnounce(from:)` deliberately does NOT reset — the
+    /// Resets each node's announce throttle first: `setNickname`'s announce
+    /// in `addNode` lands at the same simulated instant as this one, well
+    /// inside the forced minimum interval, and would otherwise swallow it.
+    /// (Advancing time would clear the window too, but it would also
+    /// release scheduled work that callers of `announceAll` have not asked
+    /// for yet.) `forceAnnounce(from:)` deliberately does NOT reset — the
     /// panic-rotation tests pin the production reset behavior through it.
     func announceAll() {
         for node in nodes {
