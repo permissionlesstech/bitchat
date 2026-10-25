@@ -153,6 +153,15 @@ struct QRScanView: View {
     @State private var lastValid: String = ""
 
     @State private var camera: CameraAvailability = .available
+    /// Bumped to rebuild the scanner, whose coordinator only checks camera
+    /// access when it is created.
+    @State private var scannerGeneration = 0
+
+    #if os(iOS)
+    private static let didBecomeActive = UIApplication.didBecomeActiveNotification
+    #else
+    private static let didBecomeActive = NSApplication.didBecomeActiveNotification
+    #endif
 
     private enum CameraAvailability {
         case available
@@ -216,6 +225,7 @@ struct QRScanView: View {
                 CameraScannerView(isActive: isActive, onUnavailable: handleCameraUnavailable) { code in
                     handleScannedCode(code, announceResult: false)
                 }
+                .id(scannerGeneration)
                 // Hidden rather than removed: the coordinator lives on this view.
                 .opacity(camera == .available ? 1 : 0)
                 if camera == .available {
@@ -243,6 +253,9 @@ struct QRScanView: View {
                     .foregroundColor(palette.secondary)
             }
             #endif
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Self.didBecomeActive)) { _ in
+            recheckCameraAccess()
         }
     }
 
@@ -300,6 +313,15 @@ struct QRScanView: View {
         default:
             camera = .unavailable
         }
+    }
+
+    /// Back from Settings with access granted: the denied scanner already
+    /// gave up, so swap in a fresh one that sees the new status.
+    private func recheckCameraAccess() {
+        guard camera == .denied,
+              AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { return }
+        camera = .available
+        scannerGeneration += 1
     }
 
     private func handleScannedCode(_ code: String, announceResult: Bool) {
