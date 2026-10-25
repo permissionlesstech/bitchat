@@ -117,6 +117,103 @@ struct SecureIdentityStateManagerVouchTests {
         #expect(manager.validVouchers(for: vouchee).count == SecureIdentityStateManager.maxVouchersPerVouchee)
     }
 
+    // MARK: - Batches and write accounting
+
+    @Test
+    func recordVouches_persistsOncePerBatch() {
+        let keychain = MockKeychain()
+        let manager = SecureIdentityStateManager(keychain)
+        manager.setVerified(fingerprint: voucher, verified: true)
+        let writesBefore = cacheWrites(keychain)
+        let now = Date()
+        let vouchees = (0..<VouchAttestation.maxBatchCount).map { String(format: "%02x", 0x40 + $0) + String(repeating: "00", count: 31) }
+
+        let stored = manager.recordVouches(vouchees.map { ($0, now) }, voucherFingerprint: voucher, now: now)
+
+        #expect(stored == vouchees.count)
+        #expect(cacheWrites(keychain) - writesBefore == 1)
+        let reloaded = SecureIdentityStateManager(keychain)
+        #expect(vouchees.allSatisfy { reloaded.isVouched(fingerprint: $0, now: now) })
+    }
+
+    @Test
+    func recordVouches_unchangedBatchDoesNotPersist() {
+        let keychain = MockKeychain()
+        let manager = SecureIdentityStateManager(keychain)
+        manager.setVerified(fingerprint: voucher, verified: true)
+        let now = Date()
+        let batch = [(voucheeFingerprint: vouchee, timestamp: now)]
+        #expect(manager.recordVouches(batch, voucherFingerprint: voucher, now: now) == 1)
+        let writesAfterFirst = cacheWrites(keychain)
+
+        // The same batch redelivered (a retransmit, or the peer's next
+        // session within the batch interval).
+        #expect(manager.recordVouches(batch, voucherFingerprint: voucher, now: now) == 0)
+        #expect(cacheWrites(keychain) == writesAfterFirst)
+    }
+
+    @Test
+    func recordVouch_equalOrOlderRefreshDoesNotPersist() {
+        let keychain = MockKeychain()
+        let manager = SecureIdentityStateManager(keychain)
+        manager.setVerified(fingerprint: voucher, verified: true)
+        let now = Date()
+        #expect(manager.recordVouch(voucheeFingerprint: vouchee, voucherFingerprint: voucher, timestamp: now, now: now))
+        let writes = cacheWrites(keychain)
+
+        #expect(!manager.recordVouch(voucheeFingerprint: vouchee, voucherFingerprint: voucher, timestamp: now, now: now))
+        #expect(!manager.recordVouch(
+            voucheeFingerprint: vouchee,
+            voucherFingerprint: voucher,
+            timestamp: now.addingTimeInterval(-60),
+            now: now
+        ))
+        #expect(cacheWrites(keychain) == writes)
+
+        let newer = now.addingTimeInterval(60)
+        #expect(manager.recordVouch(voucheeFingerprint: vouchee, voucherFingerprint: voucher, timestamp: newer, now: newer))
+        #expect(cacheWrites(keychain) == writes + 1)
+        #expect(manager.validVouchers(for: vouchee, now: newer).map(\.timestamp) == [newer])
+    }
+
+    @Test
+    func recordVouches_appliesEveryStorageGatePerEntry() {
+        let keychain = MockKeychain()
+        let manager = SecureIdentityStateManager(keychain)
+        let now = Date()
+        manager.setVerified(fingerprint: voucher, verified: true)
+        let verifiedVouchee = String(repeating: "0c", count: 32)
+        manager.setVerified(fingerprint: verifiedVouchee, verified: true)
+        // A vouchee already holding the maximum of fresher vouches.
+        let crowdedVouchee = String(repeating: "0d", count: 32)
+        for index in 0..<SecureIdentityStateManager.maxVouchersPerVouchee {
+            let otherVoucher = String(format: "%02x", 0x60 + index) + String(repeating: "00", count: 31)
+            manager.setVerified(fingerprint: otherVoucher, verified: true)
+            manager.recordVouch(voucheeFingerprint: crowdedVouchee, voucherFingerprint: otherVoucher, timestamp: now, now: now)
+        }
+        let writes = cacheWrites(keychain)
+
+        let stored = manager.recordVouches([
+            (voucheeFingerprint: voucher, timestamp: now),                                       // self-vouch
+            (voucheeFingerprint: verifiedVouchee, timestamp: now),                               // verified by me
+            (voucheeFingerprint: vouchee, timestamp: now.addingTimeInterval(-31 * 24 * 60 * 60)), // stale
+            (voucheeFingerprint: vouchee, timestamp: now.addingTimeInterval(2 * 60 * 60)),        // far future
+            (voucheeFingerprint: crowdedVouchee, timestamp: now.addingTimeInterval(-60)),         // older than the cap
+            (voucheeFingerprint: vouchee, timestamp: now)                                        // valid
+        ], voucherFingerprint: voucher, now: now)
+
+        #expect(stored == 1)
+        #expect(cacheWrites(keychain) == writes + 1)
+        #expect(manager.validVouchers(for: vouchee, now: now).map(\.voucherFingerprint) == [voucher])
+        #expect(manager.validVouchers(for: voucher, now: now).isEmpty)
+        #expect(!manager.validVouchers(for: crowdedVouchee, now: now).contains { $0.voucherFingerprint == voucher })
+
+        // An unverified voucher stores nothing and writes nothing.
+        let stranger = String(repeating: "0e", count: 32)
+        #expect(manager.recordVouches([(voucheeFingerprint: vouchee, timestamp: now)], voucherFingerprint: stranger, now: now) == 0)
+        #expect(cacheWrites(keychain) == writes + 1)
+    }
+
     // MARK: - Derived trust & invalidation
 
     @Test
@@ -318,6 +415,10 @@ struct SecureIdentityStateManagerVouchTests {
     }
 
     // MARK: - Helpers
+
+    private func cacheWrites(_ keychain: MockKeychain) -> Int {
+        keychain.identityKeySaveCounts["bitchat.identityCache.v2", default: 0]
+    }
 
     private func waitUntil(
         timeout: TimeInterval = TestConstants.settleTimeout,

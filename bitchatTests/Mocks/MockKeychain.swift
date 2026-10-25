@@ -20,8 +20,19 @@ final class MockKeychain: KeychainManagerProtocol {
     var simulatedGenericReadError: KeychainReadResult?
     var simulatedDeleteAllResult = true
     private(set) var deleteAllCallCount = 0
+    /// `saveIdentityKey` attempts per key, failed attempts included.
+    private(set) var identityKeySaveCounts: [String: Int] = [:]
+    /// Keys whose `saveIdentityKey` fails. A failed save also drops the
+    /// stored value: `KeychainManager.saveData` deletes the item before the
+    /// add that fails.
+    var failingIdentityKeySaves: Set<String> = []
 
     func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool {
+        identityKeySaveCounts[key, default: 0] += 1
+        guard !failingIdentityKeySaves.contains(key) else {
+            storage.removeValue(forKey: key)
+            return false
+        }
         storage[key] = keyData
         return true
     }

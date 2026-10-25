@@ -128,13 +128,16 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
     private var vouchBatchSentAt: [String: Date] = [:]
 
     @discardableResult
-    func recordVouch(voucheeFingerprint: String, voucherFingerprint: String, timestamp: Date) -> Bool {
-        guard voucheeFingerprint != voucherFingerprint else { return false }
-        var records = vouchesByVouchee[voucheeFingerprint] ?? []
-        records.removeAll { $0.voucherFingerprint == voucherFingerprint }
-        records.append(VouchRecord(voucherFingerprint: voucherFingerprint, timestamp: timestamp))
-        vouchesByVouchee[voucheeFingerprint] = records
-        return true
+    func recordVouches(_ vouches: [(voucheeFingerprint: String, timestamp: Date)], voucherFingerprint: String) -> Int {
+        var stored = 0
+        for vouch in vouches where vouch.voucheeFingerprint != voucherFingerprint {
+            var records = vouchesByVouchee[vouch.voucheeFingerprint] ?? []
+            records.removeAll { $0.voucherFingerprint == voucherFingerprint }
+            records.append(VouchRecord(voucherFingerprint: voucherFingerprint, timestamp: vouch.timestamp))
+            vouchesByVouchee[vouch.voucheeFingerprint] = records
+            stored += 1
+        }
+        return stored
     }
 
     func validVouchers(for fingerprint: String) -> [VouchRecord] {

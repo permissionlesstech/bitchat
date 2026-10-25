@@ -28,6 +28,7 @@ private final class MockChatVouchContext: ChatVouchContext {
     var recentVerified: [String] = []
     private(set) var recentVerifiedRequests: [(limit: Int, excluding: String)] = []
     private(set) var recordedVouches: [(vouchee: String, voucher: String, timestamp: Date)] = []
+    private(set) var recordVouchesCallCount = 0
     var recordVouchResult = true
     var lastBatchSentAt: [String: Date] = [:]
     private(set) var markedBatchSent: [(fingerprint: String, date: Date)] = []
@@ -42,9 +43,10 @@ private final class MockChatVouchContext: ChatVouchContext {
     }
 
     @discardableResult
-    func recordVouch(voucheeFingerprint: String, voucherFingerprint: String, timestamp: Date) -> Bool {
-        recordedVouches.append((voucheeFingerprint, voucherFingerprint, timestamp))
-        return recordVouchResult
+    func recordVouches(_ vouches: [(voucheeFingerprint: String, timestamp: Date)], voucherFingerprint: String) -> Int {
+        recordVouchesCallCount += 1
+        recordedVouches.append(contentsOf: vouches.map { ($0.voucheeFingerprint, voucherFingerprint, $0.timestamp) })
+        return recordVouchResult ? vouches.count : 0
     }
 
     func lastVouchBatchSent(to fingerprint: String) -> Date? { lastBatchSentAt[fingerprint] }
@@ -260,14 +262,23 @@ struct ChatVouchCoordinatorContextTests {
         vouchee: String = String(repeating: "07", count: 32),
         timestampMs: UInt64 = UInt64(Date().timeIntervalSince1970 * 1000)
     ) throws -> Data {
+        let attestation = try makeAttestation(signedBy: key, vouchee: vouchee, timestampMs: timestampMs)
+        return try #require(VouchAttestation.encodeList([attestation]))
+    }
+
+    @MainActor
+    private func makeAttestation(
+        signedBy key: Curve25519.Signing.PrivateKey,
+        vouchee: String,
+        timestampMs: UInt64 = UInt64(Date().timeIntervalSince1970 * 1000)
+    ) throws -> VouchAttestation {
         let voucheeData = try #require(Data(hexString: vouchee))
-        let attestation = try #require(VouchAttestation.build(
+        return try #require(VouchAttestation.build(
             voucheeFingerprint: voucheeData,
             voucheeSigningKey: Data(repeating: 0x44, count: 32),
             timestampMs: timestampMs,
             sign: { try? key.signature(for: $0) }
         ))
-        return try #require(VouchAttestation.encodeList([attestation]))
     }
 
     @Test @MainActor
@@ -283,6 +294,29 @@ struct ChatVouchCoordinatorContextTests {
         #expect(context.recordedVouches.count == 1)
         #expect(context.recordedVouches.first?.vouchee == vouchee)
         #expect(context.recordedVouches.first?.voucher == peerFingerprint)
+        #expect(context.trustChangedCount == 1)
+    }
+
+    @Test @MainActor
+    func handleVouchPayload_recordsAcceptedAttestationsInOneCall() throws {
+        let (context, coordinator) = makeVerifiedCapablePeer()
+        let senderKey = Curve25519.Signing.PrivateKey()
+        context.signingKeysByFingerprint[peerFingerprint] = senderKey.publicKey.rawRepresentation
+        let first = String(repeating: "07", count: 32)
+        let second = String(repeating: "08", count: 32)
+        let forged = String(repeating: "09", count: 32)
+        let payload = try #require(VouchAttestation.encodeList([
+            try makeAttestation(signedBy: senderKey, vouchee: first),
+            try makeAttestation(signedBy: Curve25519.Signing.PrivateKey(), vouchee: forged),
+            try makeAttestation(signedBy: senderKey, vouchee: second)
+        ]))
+
+        coordinator.handleVouchPayload(from: peerID, payload: payload)
+
+        // One store call (one identity-cache write) for the whole batch.
+        #expect(context.recordVouchesCallCount == 1)
+        #expect(context.recordedVouches.map(\.vouchee) == [first, second])
+        #expect(context.recordedVouches.allSatisfy { $0.voucher == peerFingerprint })
         #expect(context.trustChangedCount == 1)
     }
 
