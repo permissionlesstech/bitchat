@@ -80,7 +80,7 @@ class ChatStore(app: Application) : AndroidViewModel(app) {
             val r = MeshRouter(deviceId, nickname, crypto)
             val t = BleTransport(getApplication(), deviceId, nickname, crypto.publicKey)
             r.transmit = { link, data, done -> t.write(link, data, done) }
-            r.onPeers = { setPeers(it) }
+            r.onPeers = { applyPeers(it) }
             r.onText = { from, name, text, hops, id -> receiveText(from, name, text, hops, id) }
             r.onPublic = { _, name, text, id -> receivePublic(name, text, id) }
             r.onDelivered = { markDelivered(it) }
@@ -194,7 +194,7 @@ class ChatStore(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun setPeers(list: List<Peer>) {
+    private fun applyPeers(list: List<Peer>) {
         val known = peers.map { it.id }.toSet()
         val mapped = list.map { it.copy(verified = it.fingerprint in verified) }.sortedWith(compareBy<Peer> { it.hops }.thenByDescending { it.rssi })
         if (mapped.any { it.id !in known }) Notifier.tap(getApplication(), 15)
