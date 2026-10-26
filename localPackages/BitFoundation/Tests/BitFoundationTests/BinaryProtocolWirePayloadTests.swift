@@ -230,6 +230,41 @@ struct BinaryProtocolWirePayloadTests {
         #expect(key.publicKey.isValidSignature(signature, for: relayedPreimage))
     }
 
+    // MARK: - 2b. A frame stock bitchat-android actually sends
+
+    /// `10_v1_300_a_b33_sig22` from the bitchat-android vector file: a signed
+    /// v1 message whose 300-byte payload ("A" + 33 x "B", repeated) Android's
+    /// `java.util.zip.Deflater` (zlib level 6) compresses to a 10-byte stream.
+    /// Apple's encoder (zlib level 5) emits a different stream for the same
+    /// input, so rebuilding the preimage by re-compressing yields bytes the
+    /// Android sender never signed.
+    @Test func stockAndroidFrameKeepsTheAndroidSigningPreimage() throws {
+        let frame = try #require(Data(hexString:
+            "0102070000018e0c19c80006000c1122334455667788012c737422041c4755400100"
+            + String(repeating: "22", count: 64)))
+        let androidStream = try #require(Data(hexString: "737422041c4755400100"))
+        let payload = Data((0..<300).map { $0 % 34 == 0 ? 0x41 : 0x42 })
+        // Android's preimage: the frame with ttl 0, no signature, padded to 256.
+        let androidPreimage = padded(try #require(Data(hexString:
+            "0102000000018e0c19c80004000c1122334455667788012c737422041c4755400100")))
+
+        let decoded = try #require(BinaryProtocol.decode(frame))
+        #expect(decoded.payload == payload)
+        #expect(decoded.wirePayload?.bytes == androidStream)
+        let preimage = try #require(decoded.toBinaryDataForSigning())
+        #expect(preimage == androidPreimage)
+
+        // Re-compressing with Apple's encoder gives another stream and so
+        // another preimage: a signature over Android's bytes fails on it.
+        let freshPreimage = try #require(
+            fresh(type: 0x02, ttl: 7, payload: payload).toBinaryDataForSigning())
+        #expect(freshPreimage != androidPreimage, "precondition: Apple's DEFLATE differs from Android's here")
+        let key = Curve25519.Signing.PrivateKey()
+        let signature = try key.signature(for: androidPreimage)
+        #expect(key.publicKey.isValidSignature(signature, for: preimage))
+        #expect(!key.publicKey.isValidSignature(signature, for: freshPreimage))
+    }
+
     // MARK: - 3. Changing the payload drops the remembered wire bytes
 
     @Test func changedPayloadIsCompressedAfreshNotReplayed() throws {
