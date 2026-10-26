@@ -69,7 +69,7 @@ jobs:
           mkdir -p NearsendChatiOS/previews && cp NearsendChatiOS/shots/*.png NearsendChatiOS/previews/
           git config user.name "github-actions"; git config user.email "actions@github.com"
           git add -f NearsendChatiOS/Sources/Resources NearsendChatiOS/NearsendChat.xcodeproj NearsendChatiOS/Info.plist NearsendChatiOS/previews
-          git diff --cached --quiet || (git commit -m "CI: generated Xcode project and previews [skip ci]" && git pull --rebase origin ios-app && git push)
+          git diff --cached --quiet || (git commit -m "CI: generated Xcode project and previews [skip ci]" && git pull --rebase --autostash origin ios-app && git push || (sleep 5; git pull --rebase --autostash origin ios-app && git push))
       - uses: actions/upload-artifact@v4
         with:
           name: screenshots

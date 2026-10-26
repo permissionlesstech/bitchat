@@ -61,7 +61,7 @@ jobs:
           mkdir -p NearsendChatAndroid/previews && cp NearsendChatAndroid/shots/*.png NearsendChatAndroid/previews/
           git config user.name "github-actions"; git config user.email "actions@github.com"
           git add -f NearsendChatAndroid/app/src/main/res/font NearsendChatAndroid/gradlew NearsendChatAndroid/gradlew.bat NearsendChatAndroid/gradle NearsendChatAndroid/previews
-          git diff --cached --quiet || (git commit -m "CI: Android font, wrapper and previews [skip ci]" && git pull --rebase origin ios-app && git push)
+          git diff --cached --quiet || (git commit -m "CI: Android font, wrapper and previews [skip ci]" && git pull --rebase --autostash origin ios-app && git push || (sleep 5; git pull --rebase --autostash origin ios-app && git push))
       - uses: actions/upload-artifact@v4
         with:
           name: android-apk
