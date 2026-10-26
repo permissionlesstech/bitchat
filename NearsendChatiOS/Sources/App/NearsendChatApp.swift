@@ -2,7 +2,8 @@ import SwiftUI
 
 @main
 struct NearsendChatApp: App {
-    @StateObject private var store = ChatStore()
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    private let store = ChatStore.shared
     @AppStorage("onboarded") private var onboarded = false
 
     init() {

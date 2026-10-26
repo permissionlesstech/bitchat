@@ -15,7 +15,7 @@ Belongs to the [nearsend.app](https://nearsend.app) family and shares its "Open 
 - **End-to-end encrypted direct messages** (X25519 + HKDF + ChaCha20-Poly1305), real **fingerprints**, "mark as verified".
 - **Multi-hop relay** (up to 5 hops), delivery receipts, **public "Nearby channel"** (unencrypted, clearly labelled).
 - Messages are **saved on the phone**; messages to people out of range are **queued and sent when they appear**; failed messages can be retried.
-- Local **notifications** and haptics; on Android a **foreground service** keeps Bluetooth running when the app is closed (switchable in the You tab). **Erase everything** (button or triple-tap the title) wipes messages, keys and identity.
+- Local **notifications** and haptics; iOS **state restoration** for background Bluetooth; on Android a **foreground service** keeps Bluetooth running when the app is closed (switchable in the You tab). **Erase everything** (button or triple-tap the title) wipes messages, keys and identity.
 - **12 languages** that follow the phone's language, plus an in-app language picker (You tab): English, Svenska, Español, Français, Deutsch, Português, Italiano, العربية (right-to-left), Türkçe, Русский, 简体中文, 日本語.
 - Light/dark "Open Sky" design from nearsend.app, app icons, Reduce Motion and screen-reader labels.
 
@@ -84,14 +84,14 @@ Taken from the Nearsend web app's `DESIGN.md`:
 - Untested on real hardware. Android↔iPhone interoperability is designed and unit-tested at the message level, not proven over the air.
 - Not audited. No forward secrecy; announcements are unauthenticated until two people compare fingerprints; metadata is visible to relays.
 - Messages are limited to 180 UTF-8 bytes; no photos or voice notes yet.
-- Background operation: Android has a foreground service ("Keep running in the background", on by default) that is verified on an emulator only; real Bluetooth in the background is untested, and some phone makers kill background apps. iOS declares the Bluetooth background modes but has no state restoration yet, so iOS may suspend the app.
+- Background operation: Android has a foreground service ("Keep running in the background", on by default) that is verified on an emulator only; real Bluetooth in the background is untested, and some phone makers kill background apps. iOS keeps Bluetooth running in the background and has **state restoration** (iOS relaunches the app after the system terminates it), compiled but untested on a real iPhone. iOS does not relaunch an app the user force-quit from the app switcher, and it does not run our 8-second announcement timer while suspended.
 - Translations were written without native-speaker review.
 - Demo data is shown on simulators/emulators (they have no Bluetooth).
 
 ## Next steps
 
 1. Test on real phones (see `RELEASING.md` section 0) and fix what breaks.
-2. Test the Android foreground service on real phones (including battery-saver behaviour); add iOS state restoration.
+2. Test the Android foreground service on real phones (including battery-saver behaviour). Test iOS state restoration on a real iPhone.
 3. Independent security review; signatures for announcements and public messages; forward secrecy.
 4. Store-and-forward for people who are away, group chats, small images.
 5. Native-speaker review of the translations; TestFlight / Play internal testing.

@@ -9,6 +9,11 @@ final class BLETransport: NSObject {
     static let identityChar = CBUUID(string: "7A3C5E11-9D2B-4F6A-8C1E-4E4541525345")
     static let messageChar = CBUUID(string: "7A3C5E12-9D2B-4F6A-8C1E-4E4541525345")
 
+    /// Lets iOS relaunch the app in the background and hand back our Bluetooth state if it terminated us (e.g. low memory).
+    /// Does not apply after the user force-quits the app from the app switcher.
+    private static let centralRestoreID = "app.nearsend.chat.central"
+    private static let peripheralRestoreID = "app.nearsend.chat.peripheral"
+
     private struct Identity: Codable { let id: String; let name: String; let pk: String }
 
     private final class Link {
@@ -38,8 +43,8 @@ final class BLETransport: NSObject {
 
     func start() {
         guard central == nil else { return }
-        central = CBCentralManager(delegate: self, queue: .main)
-        peripheralManager = CBPeripheralManager(delegate: self, queue: .main)
+        central = CBCentralManager(delegate: self, queue: .main, options: [CBCentralManagerOptionRestoreIdentifierKey: Self.centralRestoreID])
+        peripheralManager = CBPeripheralManager(delegate: self, queue: .main, options: [CBPeripheralManagerOptionRestoreIdentifierKey: Self.peripheralRestoreID])
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             self?.links.values.forEach { if $0.peripheral.state == .connected { $0.peripheral.readRSSI() } }
         }
@@ -94,6 +99,20 @@ extension BLETransport: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ c: CBCentralManager) {
         onState?(stateName(c.state))
         if c.state == .poweredOn { startScan() }
+    }
+
+    /// Called first after a background relaunch: re-adopt the connections iOS kept alive for us and re-read their identities.
+    func centralManager(_ c: CBCentralManager, willRestoreState dict: [String: Any]) {
+        let restored = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] ?? []
+        for p in restored where links[p.identifier] == nil {
+            links[p.identifier] = Link(p)
+            p.delegate = self
+            switch p.state {
+            case .connected: p.discoverServices([Self.service])
+            case .disconnected: c.connect(p)
+            default: break      // still connecting; iOS will report the result
+            }
+        }
     }
 
     func centralManager(_ c: CBCentralManager, didDiscover p: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
@@ -151,8 +170,14 @@ extension BLETransport: CBPeripheralDelegate {
 }
 
 extension BLETransport: CBPeripheralManagerDelegate {
+    /// iOS may hand back the service we had published before termination. We always rebuild it (below) so the identity
+    /// it serves matches the current nickname and we never publish the service twice.
+    func peripheralManager(_ pm: CBPeripheralManager, willRestoreState dict: [String: Any]) {}
+
     func peripheralManagerDidUpdateState(_ pm: CBPeripheralManager) {
-        if pm.state == .poweredOn { addService() }
+        guard pm.state == .poweredOn else { return }
+        pm.stopAdvertising(); pm.removeAllServices()
+        addService()
     }
 
     func peripheralManager(_ pm: CBPeripheralManager, didAdd service: CBService, error: Error?) {

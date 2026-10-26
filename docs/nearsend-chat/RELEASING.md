@@ -14,7 +14,7 @@ What is still needed before real people can install the apps. Items marked **(yo
 3. Bump `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` in `project.yml`.
 4. Product → Archive → Distribute App → App Store Connect → Upload. Add testers in TestFlight.
 5. App Store listing: name, subtitle, description, privacy policy URL, age rating, screenshots (see `NearsendChatiOS/previews/`; App Store needs 6.9″/6.5″ sizes — re-shoot from the matching simulators).
-6. **App Review notes:** explain that the app needs two physical devices to demonstrate Bluetooth, and why it declares the `bluetooth-central` and `bluetooth-peripheral` background modes (receive messages while the screen is off). Provide a short demo video. Reviewers cannot test Bluetooth alone — expect questions.
+6. **App Review notes:** explain that the app needs two physical devices to demonstrate Bluetooth, and why it declares the `bluetooth-central` and `bluetooth-peripheral` background modes (receive messages while the screen is off). Provide a short demo video. State restoration (`bluetooth-central`/`bluetooth-peripheral` plus restore identifiers) is the reason for the background modes. Reviewers cannot test Bluetooth alone — expect questions.
 7. Privacy "nutrition label": *Data not collected*.
 
 ## 2. Android — internal testing, then Play
@@ -33,3 +33,9 @@ The current translations were produced without a native-speaker review: have eac
 
 ## 4. Continuous integration
 `.github/workflows/nearsend-chat-ios.yml` and `...-android.yml` run the protocol tests, build both apps and refresh the screenshots on every push to `ios-app`.
+
+## 5. Testing iOS background behaviour (needs two iPhones)
+1. Run on both phones from Xcode, finish onboarding, confirm they see each other, then press Home on phone A (do **not** force-quit).
+2. Send a message from phone B: phone A should show a notification within a few seconds, even with the screen locked.
+3. Restoration: in Xcode, Debug ▸ *Simulate memory warning* does not terminate the app, so use Xcode's *Product ▸ Stop*, then **re-launch from a message**: with phone A stopped from Xcode (not swiped away in the app switcher), send a message from phone B; iOS should relaunch A in the background and deliver a notification. If it does not, check Settings ▸ General ▸ Background App Refresh is on.
+4. Remember: iOS never restores an app the user force-quit, and may delay background work in Low Power Mode.

@@ -11,6 +11,9 @@ private struct SavedState: Codable {
 /// Bluetooth, so there it shows demo data instead. Conversations are saved on the device.
 @MainActor
 final class ChatStore: ObservableObject {
+    /// One store per process. The app delegate starts it on a background relaunch, before any screen exists.
+    static let shared = ChatStore()
+
     @Published var peers: [Peer] = []
     @Published var conversations: [Conversation] = []
     @Published var nickname: String {
