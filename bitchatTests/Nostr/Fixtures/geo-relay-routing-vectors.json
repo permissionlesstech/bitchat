@@ -146,6 +146,37 @@
         }
       ],
       "expected": []
+    },
+    {
+      "geohash": "s0000000",
+      "primaryCount": 2,
+      "entries": [
+        {
+          "host": "WSS://Tie-A.EXAMPLE:443/",
+          "lat": 0.0,
+          "lon": 0.0
+        },
+        {
+          "host": "tie-a.example",
+          "lat": 0.0,
+          "lon": 0.0
+        },
+        {
+          "host": "https://tie-b.example/",
+          "lat": 0.0,
+          "lon": 0.0
+        },
+        {
+          "host": "tie-c.example:8443",
+          "lat": 0.0,
+          "lon": 0.0
+        }
+      ],
+      "expected": [
+        "wss://tie-a.example",
+        "wss://tie-b.example",
+        "wss://tie-c.example:8443"
+      ]
     }
   ]
 }

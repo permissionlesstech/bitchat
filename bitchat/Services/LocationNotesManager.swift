@@ -460,7 +460,7 @@ final class LocationNotesManager: ObservableObject {
                 nickname: nickname,
                 expiresAt: dependencies.now().addingTimeInterval(expiry)
             )
-            publish(event, to: relays)
+            dependencies.sendEvent(event, relays)
             return true
         } catch {
             SecureLogger.error("LocationNotesManager: failed to post drop: \(error)", category: .session)
