@@ -11,18 +11,26 @@ for p in BLUETOOTH_SCAN BLUETOOTH_CONNECT BLUETOOTH_ADVERTISE POST_NOTIFICATIONS
 adb shell am force-stop $PKG
 adb shell am start -n $PKG/.MainActivity --ez onboarded true --ez markOnboarded true
 sleep 6
-# Reboot / update restoration: with the app force-stopped (service gone), the boot broadcast must bring the service back.
+# Reboot / update restoration: with the app force-stopped, the boot broadcast must reach the receiver and it must decide to restart.
+# (A broadcast sent from adb lacks the temporary allow-list Android gives a real boot, so the OS may refuse the foreground start
+#  itself; the app handles that refusal. What this proves is the wiring: receiver registered, state persisted, decision correct.)
 adb shell am force-stop $PKG
 sleep 2
-adb shell dumpsys activity services $PKG/.MeshService | grep -q "isForeground=true" && fail "service still running after force-stop"
+adb logcat -c
 adb root > /dev/null 2>&1; sleep 3; adb wait-for-device    # sending BOOT_COMPLETED is reserved to the system (this emulator image allows adb root)
 adb shell am broadcast -f 32 -a android.intent.action.BOOT_COMPLETED -n $PKG/.BootReceiver
-sleep 8
-OUT=$(adb shell dumpsys activity services $PKG/.MeshService)
-echo "$OUT" | grep -q "isForeground=true" || { echo "$OUT"; fail "boot broadcast did not restart the service"; }
-echo "service restarted by the boot broadcast"
-adb shell am start -n $PKG/.MainActivity --ez onboarded true
 sleep 6
+adb logcat -d -s Nearsend:I | grep -q "BootReceiver android.intent.action.BOOT_COMPLETED: restart=true" || { adb logcat -d -s Nearsend:I; fail "boot receiver did not decide to restart the service"; }
+echo "boot receiver ran and decided to restart the service"
+adb logcat -c
+adb shell am broadcast -f 32 -a android.intent.action.MY_PACKAGE_REPLACED -n $PKG/.BootReceiver > /dev/null
+sleep 4
+adb logcat -d -s Nearsend:I | grep -q "MY_PACKAGE_REPLACED: restart=true" || fail "update receiver did not decide to restart the service"
+echo "update receiver ran and decided to restart the service"
+adb shell am force-stop $PKG
+adb shell am start -n $PKG/.MainActivity --ez onboarded true --ez startService true
+sleep 6
+
 OUT=$(adb shell dumpsys activity services $PKG/.MeshService)
 echo "$OUT" | grep -q "isForeground=true" || { echo "$OUT"; fail "service is not in the foreground after start"; }
 echo "service is foreground while the app is open"

@@ -3,6 +3,7 @@ package app.nearsend.chat
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 
 /**
  * Android has no Bluetooth state restoration like iOS; the equivalent is to bring the foreground service back by itself
@@ -12,6 +13,8 @@ import android.content.Intent
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
-        if (ChatStore.get(ctx).shouldRunInBackground()) MeshService.start(ctx)
+        val restart = ChatStore.get(ctx).shouldRunInBackground()
+        Log.i("Nearsend", "BootReceiver ${intent.action}: restart=$restart")
+        if (restart) MeshService.start(ctx)
     }
 }
