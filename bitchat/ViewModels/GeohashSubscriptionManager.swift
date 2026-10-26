@@ -148,7 +148,7 @@ final class GeohashSubscriptionManager {
             since: Date().addingTimeInterval(-TransportConfig.nostrGeohashInitialLookbackSeconds),
             limit: TransportConfig.nostrGeohashInitialLimit
         )
-        let subRelays = GeoRelayDirectory.shared.closestRelays(
+        let subRelays = GeoRelayDirectory.shared.routingRelays(
             toGeohash: channel.geohash,
             count: TransportConfig.nostrGeoRelayCount
         )
@@ -250,7 +250,7 @@ final class GeohashSubscriptionManager {
         context.startGeoParticipantRefreshTimer()
         let ts = Date().addingTimeInterval(-TransportConfig.nostrGeohashInitialLookbackSeconds)
         let filter = NostrFilter.geohashEphemeral(channel.geohash, since: ts, limit: TransportConfig.nostrGeohashInitialLimit)
-        let subRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: channel.geohash, count: 5)
+        let subRelays = GeoRelayDirectory.shared.routingRelays(toGeohash: channel.geohash, count: 5)
         replayingGeoSubscriptionID = subID
         NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays, handler: { [weak self] event in
             Task { @MainActor [weak self] in
@@ -297,7 +297,7 @@ final class GeohashSubscriptionManager {
         let event = geoContext.event
         let identity = geoContext.identity
 
-        let targetRelays = GeoRelayDirectory.shared.closestRelays(
+        let targetRelays = GeoRelayDirectory.shared.routingRelays(
             toGeohash: channel.geohash,
             count: TransportConfig.nostrGeoRelayCount
         )
@@ -383,7 +383,7 @@ final class GeohashSubscriptionManager {
             since: Date().addingTimeInterval(-TransportConfig.nostrGeohashSampleLookbackSeconds),
             limit: TransportConfig.nostrGeohashSampleLimit
         )
-        let subRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: gh, count: 5)
+        let subRelays = GeoRelayDirectory.shared.routingRelays(toGeohash: gh, count: 5)
         NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays) { [weak self] event in
             Task { @MainActor [weak self] in
                 self?.presence.subscribeNostrEvent(event, gh: gh)

@@ -271,8 +271,6 @@ enum TransportConfig {
     // A bridge drop is durable only after NIP-01 `OK`. Relays that omit OK must
     // not pin the router's in-flight state indefinitely.
     static let nostrConfirmedSendAckTimeoutSeconds: TimeInterval = 10.0
-    // After this long, a relay marked permanently failed gets another chance.
-    static let nostrRelayFailureCooldownSeconds: TimeInterval = 600.0
 
     // Geo relay directory
     static let geoRelayFetchIntervalSeconds: TimeInterval = 60 * 60 * 24

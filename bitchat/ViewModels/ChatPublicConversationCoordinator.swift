@@ -395,7 +395,7 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
                         nickname: context.nickname,
                         teleported: context.isTeleported
                     )
-                    let targetRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: channel.geohash, count: 5)
+                    let targetRelays = GeoRelayDirectory.shared.routingRelays(toGeohash: channel.geohash, count: 5)
                     if targetRelays.isEmpty {
                         NostrRelayManager.shared.sendEvent(event)
                     } else {
