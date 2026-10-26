@@ -1,29 +1,28 @@
 import Foundation
 import CoreBluetooth
 
-/// Real Bluetooth LE link between nearby phones. Every phone advertises the Nearsend service (peripheral role)
-/// and scans for it (central role), so two phones find each other without any pairing step.
-/// Messages are written to the other phone's message characteristic. NOT encrypted yet.
+/// Bluetooth LE link layer. Every phone advertises the Nearsend service (peripheral role) and scans for it
+/// (central role), so two phones find each other without pairing. It only moves bytes: identities and packets
+/// go up to `MeshRouter` (see PROTOCOL.md).
 final class BLETransport: NSObject {
     static let service = CBUUID(string: "7A3C5E10-9D2B-4F6A-8C1E-4E4541525345")
     static let identityChar = CBUUID(string: "7A3C5E11-9D2B-4F6A-8C1E-4E4541525345")
     static let messageChar = CBUUID(string: "7A3C5E12-9D2B-4F6A-8C1E-4E4541525345")
 
-    private struct Identity: Codable { let id: String; let name: String }
-    private struct Payload: Codable { let from: String; let name: String; let text: String }
+    private struct Identity: Codable { let id: String; let name: String; let pk: String }
 
     private final class Link {
         let peripheral: CBPeripheral
         var messageChar: CBCharacteristic?
         var peerID: String?
-        var name = ""
-        var rssi = -80
         var writes: [(Bool) -> Void] = []
         init(_ p: CBPeripheral) { peripheral = p }
     }
 
-    var onPeers: (([Peer]) -> Void)?
-    var onMessage: ((_ fromID: String, _ name: String, _ text: String) -> Void)?
+    var onNeighbor: ((_ link: String, _ id: String, _ name: String, _ pk: Data) -> Void)?
+    var onLost: ((_ link: String) -> Void)?
+    var onPacket: ((_ data: Data) -> Void)?
+    var onRSSI: ((_ link: String, _ rssi: Int) -> Void)?
     var onState: ((String) -> Void)?
 
     private var identity: Identity
@@ -32,8 +31,8 @@ final class BLETransport: NSObject {
     private var links: [UUID: Link] = [:]
     private var timer: Timer?
 
-    init(id: String, name: String) {
-        identity = Identity(id: id, name: name)
+    init(id: String, name: String, publicKey: Data) {
+        identity = Identity(id: id, name: name, pk: publicKey.base64EncodedString())
         super.init()
     }
 
@@ -50,49 +49,35 @@ final class BLETransport: NSObject {
         timer?.invalidate(); timer = nil
         central?.stopScan()
         links.values.forEach { central?.cancelPeripheralConnection($0.peripheral) }
+        for (id, l) in links { l.writes.forEach { $0(false) }; if l.peerID != nil { onLost?(id.uuidString) } }
         links.removeAll()
         peripheralManager?.stopAdvertising()
         peripheralManager?.removeAllServices()
         central = nil; peripheralManager = nil
-        onPeers?([])
     }
 
     func setName(_ name: String) {
-        identity = Identity(id: identity.id, name: name)
+        identity = Identity(id: identity.id, name: name, pk: identity.pk)
         guard let pm = peripheralManager, pm.state == .poweredOn else { return }
         pm.stopAdvertising(); pm.removeAllServices(); addService()
     }
 
-    /// Calls `completion(true)` once the other phone has acknowledged the write.
-    func send(_ text: String, to peerID: String, completion: @escaping (Bool) -> Void) {
-        guard let link = links.values.first(where: { $0.peerID == peerID && $0.messageChar != nil }),
-              link.peripheral.state == .connected,
-              let data = try? JSONEncoder().encode(Payload(from: identity.id, name: identity.name, text: String(text.prefix(300))))
-        else { completion(false); return }
-        link.writes.append(completion)
-        link.peripheral.writeValue(data, for: link.messageChar!, type: .withResponse)
+    /// Writes one packet to a neighbour. `done(true)` once the other phone acknowledged the write.
+    func write(link: String, data: Data, done: @escaping (Bool) -> Void) {
+        guard let uuid = UUID(uuidString: link), let l = links[uuid], let ch = l.messageChar, l.peripheral.state == .connected else { done(false); return }
+        l.writes.append(done)
+        l.peripheral.writeValue(data, for: ch, type: .withResponse)
     }
 
     private func addService() {
-        let idData = try? JSONEncoder().encode(identity)
-        let idChar = CBMutableCharacteristic(type: Self.identityChar, properties: [.read], value: idData, permissions: [.readable])
+        let idChar = CBMutableCharacteristic(type: Self.identityChar, properties: [.read], value: try? JSONEncoder().encode(identity), permissions: [.readable])
         let msgChar = CBMutableCharacteristic(type: Self.messageChar, properties: [.write], value: nil, permissions: [.writeable])
         let svc = CBMutableService(type: Self.service, primary: true)
         svc.characteristics = [idChar, msgChar]
         peripheralManager?.add(svc)
     }
 
-    private func startScan() {
-        central?.scanForPeripherals(withServices: [Self.service], options: nil)
-    }
-
-    private func emitPeers() {
-        let peers = links.values.compactMap { l -> Peer? in
-            guard let id = l.peerID else { return nil }
-            return Peer(id: id, name: l.name, hops: 1, rssi: l.rssi)
-        }
-        onPeers?(peers)
-    }
+    private func startScan() { central?.scanForPeripherals(withServices: [Self.service], options: nil) }
 
     private func stateName(_ s: CBManagerState) -> String {
         switch s {
@@ -113,24 +98,19 @@ extension BLETransport: CBCentralManagerDelegate {
 
     func centralManager(_ c: CBCentralManager, didDiscover p: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
         guard links[p.identifier] == nil else { return }
-        let link = Link(p)
-        if RSSI.intValue != 127 { link.rssi = RSSI.intValue }
-        links[p.identifier] = link
+        links[p.identifier] = Link(p)
         p.delegate = self
         c.connect(p)
     }
 
-    func centralManager(_ c: CBCentralManager, didConnect p: CBPeripheral) {
-        p.discoverServices([Self.service])
-    }
-
+    func centralManager(_ c: CBCentralManager, didConnect p: CBPeripheral) { p.discoverServices([Self.service]) }
     func centralManager(_ c: CBCentralManager, didFailToConnect p: CBPeripheral, error: Error?) { drop(p) }
     func centralManager(_ c: CBCentralManager, didDisconnectPeripheral p: CBPeripheral, error: Error?) { drop(p) }
 
     private func drop(_ p: CBPeripheral) {
-        links[p.identifier]?.writes.forEach { $0(false) }
-        links.removeValue(forKey: p.identifier)
-        emitPeers()
+        guard let l = links.removeValue(forKey: p.identifier) else { return }
+        l.writes.forEach { $0(false) }
+        if l.peerID != nil { onLost?(p.identifier.uuidString) }
         // Re-report the phone if it comes back into range.
         central?.stopScan(); startScan()
     }
@@ -151,18 +131,17 @@ extension BLETransport: CBPeripheralDelegate {
     }
 
     func peripheral(_ p: CBPeripheral, didUpdateValueFor ch: CBCharacteristic, error: Error?) {
-        guard ch.uuid == Self.identityChar, let link = links[p.identifier],
-              let data = ch.value, let id = try? JSONDecoder().decode(Identity.self, from: data) else { return }
+        guard ch.uuid == Self.identityChar, let link = links[p.identifier], let data = ch.value,
+              let id = try? JSONDecoder().decode(Identity.self, from: data), let pk = Data(base64Encoded: id.pk), pk.count == 32,
+              id.id != identity.id else { return }
         link.peerID = id.id
-        link.name = id.name
-        emitPeers()
+        onNeighbor?(p.identifier.uuidString, id.id, id.name, pk)
         p.readRSSI()
     }
 
     func peripheral(_ p: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
-        guard error == nil, let link = links[p.identifier] else { return }
-        link.rssi = RSSI.intValue
-        emitPeers()
+        guard error == nil, links[p.identifier]?.peerID != nil else { return }
+        onRSSI?(p.identifier.uuidString, RSSI.intValue)
     }
 
     func peripheral(_ p: CBPeripheral, didWriteValueFor ch: CBCharacteristic, error: Error?) {
@@ -183,9 +162,7 @@ extension BLETransport: CBPeripheralManagerDelegate {
 
     func peripheralManager(_ pm: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {
         for r in requests where r.characteristic.uuid == Self.messageChar {
-            if let data = r.value, let m = try? JSONDecoder().decode(Payload.self, from: data) {
-                onMessage?(m.from, m.name, m.text)
-            }
+            if let data = r.value { onPacket?(data) }
         }
         if let first = requests.first { pm.respond(to: first, withResult: .success) }
     }

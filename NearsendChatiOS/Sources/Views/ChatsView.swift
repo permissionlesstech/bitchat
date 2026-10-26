@@ -2,11 +2,14 @@ import SwiftUI
 
 struct ChatsView: View {
     @EnvironmentObject var store: ChatStore
-    @State private var query = ""
-    @State private var path: [String] = UserDefaults.standard.bool(forKey: "openThread") ? ["a"] : []
+    @State private var path: [String] = UserDefaults.standard.bool(forKey: "openThread") ? [UserDefaults.standard.string(forKey: "threadID") ?? "a"] : []
 
-    private var filtered: [Conversation] {
-        query.isEmpty ? store.conversations : store.conversations.filter { $0.peer.name.localizedCaseInsensitiveContains(query) }
+    private var sorted: [Conversation] {
+        store.conversations.sorted {
+            if $0.id == publicChannelID { return true }
+            if $1.id == publicChannelID { return false }
+            return ($0.last?.date ?? .distantPast) > ($1.last?.date ?? .distantPast)
+        }
     }
 
     var body: some View {
@@ -16,16 +19,16 @@ struct ChatsView: View {
                 ScrollView {
                     VStack(spacing: 12) {
                         PageTitle(text: "Chats").padding(.top, 8)
-                        if filtered.isEmpty {
+                        if store.conversations.count <= 1 {
                             Card {
                                 VStack(spacing: 8) {
-                                    Image(systemName: "bubble.left.and.text.bubble.right").font(.system(size: 36)).foregroundStyle(Theme.actionBlue)
-                                    Text("No conversations yet").font(.headline)
+                                    Image(systemName: "bubble.left.and.text.bubble.right").font(.system(size: 30)).foregroundStyle(Theme.actionBlue)
+                                    Text("No private chats yet").font(.headline)
                                     Text("Open Nearby and tap someone to say hi.").font(.footnote).foregroundStyle(Theme.inkSecondary)
                                 }.frame(maxWidth: .infinity)
                             }
                         }
-                        ForEach(filtered) { c in
+                        ForEach(sorted) { c in
                             NavigationLink(value: c.id) { row(c) }.buttonStyle(.plain)
                         }
                     }.padding(.horizontal, 20)
@@ -39,17 +42,18 @@ struct ChatsView: View {
     }
 
     private func row(_ c: Conversation) -> some View {
-        Card(padding: 12) {
+        let isPublic = c.id == publicChannelID
+        return Card(padding: 12) {
             HStack(spacing: 12) {
-                Avatar(name: c.peer.name, size: 52, online: c.peer.hops == 1)
+                Avatar(name: isPublic ? "#" : c.peer.name, size: 52, online: !isPublic && c.peer.hops == 1).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text(c.peer.name).font(.headline)
+                        if isPublic { Text("Nearby channel").font(.headline) } else { Text(verbatim: c.peer.name).font(.headline) }
                         Spacer()
                         if let d = c.last?.date { Text(d, style: .time).font(.caption).foregroundStyle(Theme.inkSecondary) }
                     }
                     HStack {
-                        Text(c.last?.text ?? "").font(.subheadline).foregroundStyle(Theme.inkSecondary).lineLimit(1)
+                        Text(verbatim: preview(c)).font(.subheadline).foregroundStyle(Theme.inkSecondary).lineLimit(1)
                         Spacer()
                         if c.unread > 0 {
                             Text("\(c.unread)").font(.caption.bold()).foregroundStyle(.white)
@@ -59,5 +63,11 @@ struct ChatsView: View {
                 }
             }
         }
+    }
+
+    private func preview(_ c: Conversation) -> String {
+        guard let m = c.last else { return c.id == publicChannelID ? String(localized: "Public · anyone in range can read this") : "" }
+        if let s = m.sender { return "\(s): \(m.text)" }
+        return m.text
     }
 }

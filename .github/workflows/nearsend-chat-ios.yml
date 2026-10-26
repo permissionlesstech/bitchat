@@ -19,12 +19,28 @@ jobs:
           mkdir -p Sources/Resources
           curl -fsSL -o Sources/Resources/Anton-Regular.ttf https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf
           test $(stat -f%z Sources/Resources/Anton-Regular.ttf) -gt 10000
-      - run: brew install xcodegen && xcodegen generate && sed -i '' 's/objectVersion = 77;/objectVersion = 56;/; s/preferredProjectObjectVersion = 77;/preferredProjectObjectVersion = 56;/' NearsendChat.xcodeproj/project.pbxproj
-      - run: xcodebuild -project NearsendChat.xcodeproj -scheme NearsendChat -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build 2>&1 | tee build.log
+      - name: Protocol tests (crypto vectors + relay simulation)
+        run: |
+          set +e
+          swiftc -o /tmp/proto Sources/Models/Models.swift Sources/Mesh/MeshCrypto.swift Sources/Mesh/MeshRouter.swift Tests/main.swift > /tmp/t.log 2>&1 && /tmp/proto >> /tmp/t.log 2>&1
+          code=$?
+          grep -E "FAIL|error:" /tmp/t.log | head -30 | while IFS= read -r l; do echo "::error::${l//%/%25}"; done
+          grep -E "PASSED" /tmp/t.log | while IFS= read -r l; do echo "::notice::$l ($(grep -c '^PASS' /tmp/t.log) checks)"; done
+          exit $code
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen && xcodegen generate
+          sed -i '' 's/objectVersion = 77;/objectVersion = 56;/; s/preferredProjectObjectVersion = 77;/preferredProjectObjectVersion = 56;/' NearsendChat.xcodeproj/project.pbxproj
+      - name: Build for simulator
+        run: |
+          set +e
+          xcodebuild -project NearsendChat.xcodeproj -scheme NearsendChat -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -derivedDataPath dd CODE_SIGNING_ALLOWED=NO build > build.log 2>&1
+          code=$?
+          grep -E "error:" build.log | sort -u | head -20 | while IFS= read -r l; do echo "::error::${l//%/%25}"; done
+          exit $code
       - name: Screenshots
         run: |
           set -x
-          xcodebuild -project NearsendChat.xcodeproj -scheme NearsendChat -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -derivedDataPath dd CODE_SIGNING_ALLOWED=NO build | tail -3
           UDID=$(xcrun simctl list devices available | grep "iPhone 16 Pro (" | head -1 | grep -oE '[0-9A-F-]{36}')
           xcrun simctl boot $UDID; xcrun simctl bootstatus $UDID -b
           xcrun simctl status_bar $UDID override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 0 || true
@@ -34,11 +50,14 @@ jobs:
           shot 1-onboarding -onboarded NO
           shot 2-nearby -onboarded YES -tab 0
           shot 3-chats -onboarded YES -tab 1
-          shot 4-thread -onboarded YES -tab 1 -openThread YES
+          shot 4-thread -onboarded YES -tab 1 -openThread YES -threadID a
           shot 5-you -onboarded YES -tab 2
+          shot 9-public-channel -onboarded YES -tab 1 -openThread YES -threadID public
+          shot 10-nearby-sv -onboarded YES -tab 0 -AppleLanguages "(sv)" -AppleLocale sv_SE
+          shot 11-you-sv -onboarded YES -tab 2 -AppleLanguages "(sv)" -AppleLocale sv_SE
           xcrun simctl ui $UDID appearance dark
           shot 6-nearby-night -onboarded YES -tab 0
-          shot 7-thread-night -onboarded YES -tab 1 -openThread YES
+          shot 7-thread-night -onboarded YES -tab 1 -openThread YES -threadID a
           shot 8-onboarding-night -onboarded NO
       - name: Commit project and previews
         working-directory: .
@@ -46,7 +65,7 @@ jobs:
           mkdir -p NearsendChatiOS/previews && cp NearsendChatiOS/shots/*.png NearsendChatiOS/previews/
           git config user.name "github-actions"; git config user.email "actions@github.com"
           git add -f NearsendChatiOS/Sources/Resources NearsendChatiOS/NearsendChat.xcodeproj NearsendChatiOS/Info.plist NearsendChatiOS/previews
-          git diff --cached --quiet || (git commit -m "CI: generated Xcode project and previews [skip ci]" && git push)
+          git diff --cached --quiet || (git commit -m "CI: generated Xcode project and previews [skip ci]" && git pull --rebase origin ios-app && git push)
       - uses: actions/upload-artifact@v4
         with:
           name: screenshots

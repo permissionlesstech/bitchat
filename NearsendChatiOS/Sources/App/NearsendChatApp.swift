@@ -33,7 +33,7 @@ struct RootView: View {
         TabView(selection: $tab) {
             NearbyView().tabItem { Label("Nearby", systemImage: "dot.radiowaves.left.and.right") }.tag(0)
             ChatsView().tabItem { Label("Chats", systemImage: "bubble.left.and.bubble.right.fill") }
-                .badge(store.conversations.reduce(0) { $0 + $1.unread }).tag(1)
+                .badge(store.unreadTotal).tag(1)
             IdentityView().tabItem { Label("You", systemImage: "person.crop.circle.fill") }.tag(2)
         }
     }

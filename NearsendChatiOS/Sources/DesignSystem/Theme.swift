@@ -35,6 +35,7 @@ enum Theme {
 
 struct SkyBackground: View {
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var drift = false
 
     var body: some View {
@@ -60,7 +61,7 @@ struct SkyBackground: View {
             }
         }
         .ignoresSafeArea()
-        .onAppear { withAnimation(.easeInOut(duration: 28).repeatForever(autoreverses: true)) { drift = true } }
+        .onAppear { if !reduceMotion { withAnimation(.easeInOut(duration: 28).repeatForever(autoreverses: true)) { drift = true } } }
     }
 
     private func frac(_ v: Double) -> Double { v - floor(v) }
@@ -89,9 +90,10 @@ struct Card<Content: View>: View {
 
 /// Page titles sit straight on the sky in the poster face.
 struct PageTitle: View {
-    let text: String
+    let text: LocalizedStringKey
     var body: some View {
-        Text(text.uppercased()).font(Theme.display(40)).foregroundStyle(.white)
+        Text(text).textCase(.uppercase).font(Theme.display(40)).foregroundStyle(.white)
+            .accessibilityAddTraits(.isHeader)
             .shadow(color: Color(hex: 0x0C2444, opacity: 0.35), radius: 8, y: 2)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -107,7 +109,7 @@ struct SkyPill<Content: View>: View {
 }
 
 struct PrimaryButton: View {
-    let title: String
+    let title: LocalizedStringKey
     var icon: String? = nil
     let action: () -> Void
     var body: some View {
@@ -149,7 +151,7 @@ struct Avatar: View {
 
 /// Green is reserved for "connected" and "secure".
 struct StatusPill: View {
-    let text: String
+    let text: LocalizedStringKey
     var color: Color = Theme.secure
     var body: some View {
         HStack(spacing: 6) {

@@ -17,7 +17,9 @@ targets:
       path: Info.plist
       properties:
         CFBundleDisplayName: Nearsend Chat
-        UILaunchScreen: {}
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        CFBundleLocalizations: [en, sv]
         UIAppFonts: [Anton-Regular.ttf]
         NSBluetoothAlwaysUsageDescription: Nearsend Chat uses Bluetooth to find and message people near you without internet.
         NSLocalNetworkUsageDescription: Nearsend Chat uses the local network to reach nearby devices.
@@ -26,3 +28,4 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.nearsend.chat
         GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
