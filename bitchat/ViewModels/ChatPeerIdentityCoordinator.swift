@@ -682,8 +682,6 @@ private extension ChatPeerIdentityCoordinator {
     }
 }
 
-/// Default for conforming test contexts that model chats as a dictionary;
-/// `ChatViewModel` overrides with a store-direct lookup.
 // MARK: - Refused signing keys
 
 extension ChatPeerIdentityCoordinator {
@@ -757,6 +755,8 @@ private extension ChatPeerIdentityCoordinator {
     }
 }
 
+/// Default for conforming test contexts that model chats as a dictionary;
+/// `ChatViewModel` overrides with a store-direct lookup.
 extension ChatPeerIdentityContext {
     func privateMessages(for peerID: PeerID) -> [BitchatMessage] {
         privateChats[peerID] ?? []
