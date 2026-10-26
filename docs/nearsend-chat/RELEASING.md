@@ -39,3 +39,9 @@ The current translations were produced without a native-speaker review: have eac
 2. Send a message from phone B: phone A should show a notification within a few seconds, even with the screen locked.
 3. Restoration: in Xcode, Debug ▸ *Simulate memory warning* does not terminate the app, so use Xcode's *Product ▸ Stop*, then **re-launch from a message**: with phone A stopped from Xcode (not swiped away in the app switcher), send a message from phone B; iOS should relaunch A in the background and deliver a notification. If it does not, check Settings ▸ General ▸ Background App Refresh is on.
 4. Remember: iOS never restores an app the user force-quit, and may delay background work in Low Power Mode.
+
+## 6. Testing Android restart after reboot (needs a real phone)
+CI proves the boot/update receiver runs and decides to restart the service, but an `adb` broadcast does not carry the temporary
+allow-list that Android gives a real boot, so the OS-level foreground start after a real reboot is untested.
+Test: finish onboarding, leave "Keep running in the background" on, reboot the phone, and check that the "Nearsend Chat is on"
+notification appears without opening the app. Also test after installing an update over the app, and after toggling Bluetooth off and on.
