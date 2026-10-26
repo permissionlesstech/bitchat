@@ -56,7 +56,7 @@ jobs:
           working-directory: NearsendChatAndroid
           script: |
             bash ci/shots.sh
-            bash ci/service_check.sh
+            bash -c 'bash ci/service_check.sh > service.log 2>&1; c=$?; head -c 6000 service.log | while IFS= read -r l; do echo "::warning::$l"; done; exit $c'
       - name: Commit font, wrapper and previews
         working-directory: .
         run: |

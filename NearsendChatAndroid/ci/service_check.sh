@@ -2,7 +2,11 @@
 # Verifies on the emulator that the foreground service starts, stays foreground after the app is closed, and shows its notification.
 # (Emulators have no Bluetooth, so this proves the service/lifecycle wiring, not real background BLE.)
 PKG=app.nearsend.chat
-fail() { echo "SERVICE CHECK FAILED: $1"; exit 1; }
+fail() {
+  echo "SERVICE CHECK FAILED: $1"
+  adb logcat -d -t 600 | grep -E "FATAL|AndroidRuntime|app.nearsend|MeshService|BootReceiver|ForegroundService|SecurityException" | tail -25
+  exit 1
+}
 for p in BLUETOOTH_SCAN BLUETOOTH_CONNECT BLUETOOTH_ADVERTISE POST_NOTIFICATIONS; do adb shell pm grant $PKG android.permission.$p; done
 adb shell am force-stop $PKG
 adb shell am start -n $PKG/.MainActivity --ez onboarded true --ez markOnboarded true
