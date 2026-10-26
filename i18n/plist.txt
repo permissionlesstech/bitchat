@@ -1,0 +1,13 @@
+# lang|NSBluetoothAlwaysUsageDescription|NSLocalNetworkUsageDescription  (iOS permission prompts; shown in the phone's language)
+en|Nearsend Chat uses Bluetooth to find and message people near you without internet.|Nearsend Chat uses the local network to reach nearby devices.
+sv|Nearsend Chat använder Bluetooth för att hitta och skicka meddelanden till personer i närheten utan internet.|Nearsend Chat använder det lokala nätverket för att nå enheter i närheten.
+es|Nearsend Chat usa Bluetooth para encontrar y enviar mensajes a personas cercanas sin internet.|Nearsend Chat usa la red local para llegar a dispositivos cercanos.
+fr|Nearsend Chat utilise le Bluetooth pour trouver des personnes à proximité et leur envoyer des messages sans internet.|Nearsend Chat utilise le réseau local pour joindre les appareils à proximité.
+de|Nearsend Chat nutzt Bluetooth, um Leute in der Nähe ohne Internet zu finden und ihnen Nachrichten zu senden.|Nearsend Chat nutzt das lokale Netzwerk, um Geräte in der Nähe zu erreichen.
+pt|O Nearsend Chat usa Bluetooth para encontrar pessoas por perto e enviar mensagens sem internet.|O Nearsend Chat usa a rede local para alcançar dispositivos por perto.
+it|Nearsend Chat usa il Bluetooth per trovare persone vicine e scambiare messaggi senza internet.|Nearsend Chat usa la rete locale per raggiungere i dispositivi vicini.
+ar|يستخدم Nearsend Chat البلوتوث للعثور على الأشخاص القريبين ومراسلتهم دون إنترنت.|يستخدم Nearsend Chat الشبكة المحلية للوصول إلى الأجهزة القريبة.
+tr|Nearsend Chat, yakınınızdaki kişileri bulmak ve internetsiz mesajlaşmak için Bluetooth kullanır.|Nearsend Chat, yakındaki cihazlara ulaşmak için yerel ağı kullanır.
+ru|Nearsend Chat использует Bluetooth, чтобы находить людей рядом и обмениваться сообщениями без интернета.|Nearsend Chat использует локальную сеть, чтобы связываться с устройствами рядом.
+zh|Nearsend Chat 使用蓝牙查找附近的人并在无网络时收发消息。|Nearsend Chat 使用本地网络连接附近的设备。
+ja|Nearsend ChatはBluetoothを使って、インターネットなしで近くの人を見つけてメッセージを送ります。|Nearsend Chatはローカルネットワークを使って近くの端末に接続します。

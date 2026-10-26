@@ -1,0 +1,2 @@
+"NSBluetoothAlwaysUsageDescription" = "Nearsend Chat 使用蓝牙查找附近的人并在无网络时收发消息。";
+"NSLocalNetworkUsageDescription" = "Nearsend Chat 使用本地网络连接附近的设备。";
