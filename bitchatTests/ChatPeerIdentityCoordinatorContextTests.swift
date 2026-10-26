@@ -46,6 +46,20 @@ private final class MockChatPeerIdentityContext: ChatPeerIdentityContext {
         unreadPrivateMessages.remove(peerID)
     }
 
+    func markPrivateChatUnread(_ peerID: PeerID) {
+        unreadPrivateMessages.insert(peerID)
+    }
+
+    @discardableResult
+    func appendPrivateMessage(_ message: BitchatMessage, to peerID: PeerID) -> Bool {
+        var chat = privateChats[peerID] ?? []
+        guard !chat.contains(where: { $0.id == message.id }) else { return false }
+        let index = chat.firstIndex(where: { $0.timestamp > message.timestamp }) ?? chat.count
+        chat.insert(message, at: index)
+        privateChats[peerID] = chat
+        return true
+    }
+
     func migratePrivateChat(from oldPeerID: PeerID, to newPeerID: PeerID) {
         migratedChats.append((oldPeerID, newPeerID))
         guard oldPeerID != newPeerID, let source = privateChats[oldPeerID] else { return }
@@ -503,4 +517,135 @@ struct ChatPeerIdentityCoordinatorContextTests {
         #expect(context.nostrFavoriteNotifications.map(\.isFavorite) == [true, false])
     }
 
+}
+
+// MARK: - Refused Signing Keys
+
+/// The notice for an announce that claimed a contact's identity with a
+/// different signing key and was refused.
+struct ChatPeerIdentityCoordinatorRefusedSigningKeyTests {
+    private let noiseKey = Data(repeating: 0x9B, count: 32)
+    private var peerID: PeerID { PeerID(publicKey: noiseKey) }
+
+    @MainActor
+    private func refuse(
+        _ coordinator: ChatPeerIdentityCoordinator,
+        key: UInt8,
+        reason: SigningKeyRefusalReason = .pinnedKey
+    ) {
+        coordinator.warnOfRefusedSigningKey(
+            for: peerID,
+            noisePublicKey: noiseKey,
+            signingPublicKey: Data(repeating: key, count: 32),
+            reason: reason
+        )
+    }
+
+    @MainActor
+    private func notices(in chat: [BitchatMessage]) -> [BitchatMessage] {
+        chat.filter { $0.id.hasPrefix(ChatPeerIdentityCoordinator.refusedSigningKeyNoticeIDPrefix) }
+    }
+
+    @Test @MainActor
+    func warnsInTheExistingChatUnderTheNameAlreadyKnown() throws {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        context.nicknamesByPeerID[peerID] = "alice"
+        context.privateChats[peerID] = [makePrivateMessage(id: "m1", timestamp: Date(timeIntervalSince1970: 1))]
+
+        refuse(coordinator, key: 0x99)
+
+        let chat = context.privateChats[peerID] ?? []
+        #expect(chat.count == 2)
+        let notice = try #require(chat.last)
+        #expect(notice.sender == "system")
+        #expect(notice.isPrivate)
+        #expect(notice.content.contains("alice"))
+        #expect(context.unreadPrivateMessages.contains(peerID))
+        #expect(context.notifyUIChangedCount == 1)
+    }
+
+    @Test @MainActor
+    func theSameRefusedKeyWarnsOnce() {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        context.privateChats[peerID] = [makePrivateMessage(id: "m1", timestamp: Date(timeIntervalSince1970: 1))]
+
+        refuse(coordinator, key: 0x99)
+        // A real message in between, so only the per-key de-dup can hold it.
+        _ = context.appendPrivateMessage(makePrivateMessage(id: "m2"), to: peerID)
+        refuse(coordinator, key: 0x99)
+
+        #expect(notices(in: context.privateChats[peerID] ?? []).count == 1)
+    }
+
+    /// Signing keys cost nothing to generate, so de-duplicating per key alone
+    /// would let a stream of fresh keys fill the chat with notices.
+    @Test @MainActor
+    func freshKeysCannotFloodTheChat() {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        context.privateChats[peerID] = [makePrivateMessage(id: "m1", timestamp: Date(timeIntervalSince1970: 1))]
+
+        refuse(coordinator, key: 0xA1)
+        refuse(coordinator, key: 0xA2)
+        refuse(coordinator, key: 0xA3, reason: .authenticatedKey)
+        #expect(notices(in: context.privateChats[peerID] ?? []).count == 1)
+
+        _ = context.appendPrivateMessage(makePrivateMessage(id: "m2"), to: peerID)
+        refuse(coordinator, key: 0xA4)
+        #expect(notices(in: context.privateChats[peerID] ?? []).count == 2)
+    }
+
+    @Test @MainActor
+    func withNoChatNothingIsCreated() {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+
+        refuse(coordinator, key: 0x99)
+
+        #expect(context.privateChats.isEmpty)
+        #expect(context.unreadPrivateMessages.isEmpty)
+        #expect(context.notifyUIChangedCount == 0)
+    }
+
+    @Test @MainActor
+    func theOpenChatIsWarnedWithoutMarkingItUnread() {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        context.selectedPrivateChatPeer = peerID
+
+        refuse(coordinator, key: 0x99)
+
+        #expect(notices(in: context.privateChats[peerID] ?? []).count == 1)
+        #expect(!context.unreadPrivateMessages.contains(peerID))
+    }
+
+    @Test @MainActor
+    func warnsInTheChatHeldUnderTheFullNoiseKey() {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        let stableID = PeerID(hexData: noiseKey)
+        context.privateChats[stableID] = [makePrivateMessage(id: "m1", timestamp: Date(timeIntervalSince1970: 1))]
+
+        refuse(coordinator, key: 0x99)
+
+        #expect(notices(in: context.privateChats[stableID] ?? []).count == 1)
+        #expect(context.privateChats[peerID] == nil)
+    }
+
+    @Test @MainActor
+    func warnsInTheChatHeldUnderTheBridgedNostrKey() {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        let nostrPublicKey = String(repeating: "ab", count: 32)
+        context.bridgedNostrKeysByNoiseKey[noiseKey] = nostrPublicKey
+        let nostrID = PeerID(nostr_: nostrPublicKey)
+        context.privateChats[nostrID] = [makePrivateMessage(id: "m1", timestamp: Date(timeIntervalSince1970: 1))]
+
+        refuse(coordinator, key: 0x99)
+
+        #expect(notices(in: context.privateChats[nostrID] ?? []).count == 1)
+        #expect(context.privateChats[peerID] == nil)
+    }
 }

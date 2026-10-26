@@ -6466,6 +6466,14 @@ extension BLEService {
             verifySignature: { [weak self] packet, signingPublicKey in
                 self?.noiseService.verifyPacketSignature(packet, publicKey: signingPublicKey) ?? false
             },
+            reportRefusedSigningKey: { [weak self] peerID, noisePublicKey, signingPublicKey, reason in
+                self?.emitTransportEvent(.signingKeyRefused(
+                    peerID: peerID,
+                    noisePublicKey: noisePublicKey,
+                    signingPublicKey: signingPublicKey,
+                    reason: reason
+                ))
+            },
             linkState: { [weak self] peerID in
                 self?.linkState(for: peerID) ?? (hasPeripheral: false, hasCentral: false)
             },

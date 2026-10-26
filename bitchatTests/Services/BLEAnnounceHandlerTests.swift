@@ -18,6 +18,7 @@ struct BLEAnnounceHandlerTests {
         var shouldEmitReconnectLogResult = true
 
         var verifySignatureCalls: [(packet: BitchatPacket, signingPublicKey: Data)] = []
+        var refusedSigningKeys: [(peerID: PeerID, noisePublicKey: Data, signingPublicKey: Data, reason: SigningKeyRefusalReason)] = []
         var barrierCount = 0
         var upsertCalls: [(peerID: PeerID, announcement: AnnouncementPacket, isConnected: Bool, now: Date)] = []
         var reconnectLogQueries: [PeerID] = []
@@ -49,6 +50,9 @@ struct BLEAnnounceHandlerTests {
             verifySignature: { packet, signingPublicKey in
                 recorder.verifySignatureCalls.append((packet, signingPublicKey))
                 return recorder.signatureValid
+            },
+            reportRefusedSigningKey: { peerID, noisePublicKey, signingPublicKey, reason in
+                recorder.refusedSigningKeys.append((peerID, noisePublicKey, signingPublicKey, reason))
             },
             linkState: { _ in recorder.linkState },
             linkBoundToOtherPeer: { _, _ in recorder.linkBoundToOtherPeer },
@@ -550,6 +554,112 @@ struct BLEAnnounceHandlerTests {
     }
 
     @Test
+    func signingKeyMismatchWithPinnedKeyReportsTheRefusedKey() throws {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let noiseKey = Data(repeating: 0x9B, count: 32)
+        let peerID = PeerID(publicKey: noiseKey)
+        // Attacker announce: victim's noiseKey/peerID, attacker's signing key
+        // (0x99 from makeAnnouncePacket) with a "valid" self-signature.
+        let packet = try makeAnnouncePacket(
+            noisePublicKey: noiseKey,
+            peerID: peerID,
+            timestamp: timestamp(now),
+            signature: Data(repeating: 0xEE, count: 64)
+        )
+
+        let recorder = Recorder()
+        recorder.existingNoisePublicKey = noiseKey
+        recorder.existingSigningPublicKey = Data(repeating: 0x42, count: 32) // victim's pinned key
+        recorder.signatureValid = true
+        let handler = makeHandler(recorder: recorder, now: now)
+
+        handler.handle(packet, from: peerID)
+
+        #expect(recorder.refusedSigningKeys.count == 1)
+        let refusal = try #require(recorder.refusedSigningKeys.first)
+        #expect(refusal.peerID == peerID)
+        #expect(refusal.noisePublicKey == noiseKey)
+        // The attacker's key is the one reported, not the pinned one.
+        #expect(refusal.signingPublicKey == Data(repeating: 0x99, count: 32))
+        #expect(refusal.reason == .pinnedKey)
+    }
+
+    @Test
+    func signingKeyContradictingTheAuthenticatedBindingReportsTheRefusedKey() throws {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let noiseKey = Data(repeating: 0x9C, count: 32)
+        let peerID = PeerID(publicKey: noiseKey)
+        let packet = try makeAnnouncePacket(
+            noisePublicKey: noiseKey,
+            peerID: peerID,
+            timestamp: timestamp(now),
+            signature: Data(repeating: 0xEE, count: 64)
+        )
+
+        let recorder = Recorder()
+        recorder.existingNoisePublicKey = noiseKey
+        // Bound to this Noise identity inside an authenticated session.
+        recorder.authenticatedSigningPublicKey = Data(repeating: 0x42, count: 32)
+        recorder.signatureValid = true
+        let handler = makeHandler(recorder: recorder, now: now)
+
+        handler.handle(packet, from: peerID)
+
+        #expect(recorder.refusedSigningKeys.count == 1)
+        let refusal = try #require(recorder.refusedSigningKeys.first)
+        #expect(refusal.peerID == peerID)
+        #expect(refusal.signingPublicKey == Data(repeating: 0x99, count: 32))
+        #expect(refusal.reason == .authenticatedKey)
+    }
+
+    @Test
+    func noiseKeyMismatchStaysLogOnly() throws {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let noiseKey = Data(repeating: 0x9E, count: 32)
+        let peerID = PeerID(publicKey: noiseKey)
+        let packet = try makeAnnouncePacket(
+            noisePublicKey: noiseKey,
+            peerID: peerID,
+            timestamp: timestamp(now),
+            signature: Data(repeating: 0xEE, count: 64)
+        )
+
+        let recorder = Recorder()
+        recorder.existingNoisePublicKey = Data(repeating: 0x77, count: 32)
+        recorder.existingSigningPublicKey = Data(repeating: 0x42, count: 32)
+        recorder.signatureValid = true
+        let handler = makeHandler(recorder: recorder, now: now)
+
+        handler.handle(packet, from: peerID)
+
+        #expect(recorder.refusedSigningKeys.isEmpty)
+    }
+
+    @Test
+    func verifiedAnnounceReportsNoRefusedKey() throws {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let noiseKey = Data(repeating: 0x9F, count: 32)
+        let peerID = PeerID(publicKey: noiseKey)
+        let packet = try makeAnnouncePacket(
+            noisePublicKey: noiseKey,
+            peerID: peerID,
+            timestamp: timestamp(now),
+            signature: Data(repeating: 0xEE, count: 64)
+        )
+
+        let recorder = Recorder()
+        recorder.existingNoisePublicKey = noiseKey
+        recorder.existingSigningPublicKey = Data(repeating: 0x99, count: 32) // same key as announced
+        recorder.signatureValid = true
+        let handler = makeHandler(recorder: recorder, now: now)
+
+        handler.handle(packet, from: peerID)
+
+        #expect(recorder.upsertCalls.count == 1)
+        #expect(recorder.refusedSigningKeys.isEmpty)
+    }
+
+    @Test
     func persistedSigningKeyMismatchWithoutRegistryEntryIsRejected() throws {
         // Registry has no entry (app restart or offline-peer eviction), but
         // the persisted cryptographic identity still pins the victim's
@@ -714,6 +824,7 @@ struct BLEAnnounceHandlerTests {
             verifySignature: { packet, signingPublicKey in
                 victim.verifyPacketSignature(packet, publicKey: signingPublicKey)
             },
+            reportRefusedSigningKey: { _, _, _, _ in },
             linkState: { _ in (hasPeripheral: true, hasCentral: false) },
             linkBoundToOtherPeer: { _, _ in false },
             withRegistryBarrier: { body in body() },
@@ -829,6 +940,7 @@ struct BLEAnnounceHandlerTests {
                 verifySignature: { packet, signingPublicKey in
                     victim.verifyPacketSignature(packet, publicKey: signingPublicKey)
                 },
+                reportRefusedSigningKey: { _, _, _, _ in },
                 linkState: { _ in (hasPeripheral: true, hasCentral: false) },
                 linkBoundToOtherPeer: { _, _ in false },
                 withRegistryBarrier: { body in body() },
