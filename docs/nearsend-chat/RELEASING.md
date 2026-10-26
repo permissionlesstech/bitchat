@@ -23,7 +23,7 @@ What is still needed before real people can install the apps. Items marked **(yo
 3. Add a `signingConfigs` block (reading passwords from `~/.gradle/gradle.properties`) and run `./gradlew :app:bundleRelease`. Upload the `.aab` to *Internal testing*.
 4. Store listing, privacy policy URL, Data safety form: *no data collected or shared*, content rating, target audience.
 5. Bluetooth permissions are declared `neverForLocation`, so no location prompt on Android 12+.
-6. Background delivery: the app currently only receives while it is running; a foreground service would be required for reliable background operation (see next steps).
+6. Background delivery: `MeshService` is a foreground service of type `connectedDevice` (permissions `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_CONNECTED_DEVICE`). Play asks you to declare foreground service types in the Console: choose *Connected device* and explain it is for Bluetooth messaging with nearby phones while the app is closed. It shows an ongoing notification and can be switched off in the You tab. Some phone makers (Xiaomi, Huawei, OnePlus, Samsung "sleeping apps") kill background apps anyway; tell testers to exclude the app from battery optimisation (see dontkillmyapp.com).
 
 ## 3. Adding or fixing a language
 Edit `i18n/translations.txt` (one row per string, one column per language), then run `python3 i18n/generate.py`.
