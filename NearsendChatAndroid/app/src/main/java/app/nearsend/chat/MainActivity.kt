@@ -1,22 +1,25 @@
 package app.nearsend.chat
 
+import android.Manifest
 import android.graphics.Color as AndroidColor
+import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -24,16 +27,24 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.os.LocaleListCompat
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     private val store: ChatStore by viewModels()
 
     private val permLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { store.startIfNeeded() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Demo/screenshot extra: force a language, e.g. `--es lang ar`. Normal use goes through the You tab or system settings.
+        intent.getStringExtra("lang")?.let { tag ->
+            if (AppCompatDelegate.getApplicationLocales().toLanguageTags() != tag) {
+                AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(tag))
+            }
+        }
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
@@ -46,19 +57,25 @@ class MainActivity : ComponentActivity() {
         setContent {
             NearsendApp(store, onboarded, tab, thread) {
                 prefs.edit().putBoolean("onboarded", true).apply()
-                requestBlePermissions()
+                requestPermissions()
             }
         }
     }
+
+    override fun onStart() { super.onStart(); Notifier.foreground = true }
+    override fun onStop() { super.onStop(); Notifier.foreground = false }
 
     override fun onResume() {
         super.onResume()
         if (getSharedPreferences("nearsend", MODE_PRIVATE).getBoolean("onboarded", false)) store.startIfNeeded()
     }
 
-    private fun requestBlePermissions() {
-        if (store.simulated || store.hasBlePermissions()) store.startIfNeeded()
-        else permLauncher.launch(store.blePermissions().toTypedArray())
+    private fun requestPermissions() {
+        if (store.simulated) { store.startIfNeeded(); return }
+        val needed = store.blePermissions().toMutableList()
+        if (Build.VERSION.SDK_INT >= 33) needed += Manifest.permission.POST_NOTIFICATIONS
+        if (store.hasBlePermissions() && Notifier.hasPermission(this)) store.startIfNeeded()
+        else permLauncher.launch(needed.toTypedArray())
     }
 }
 
@@ -70,6 +87,7 @@ fun NearsendApp(store: ChatStore, startOnboarded: Boolean, startTab: Int, startT
     var thread by remember { mutableStateOf(startThread) }
     var threadPeer by remember { mutableStateOf<Peer?>(null) }
     val openPeer = threadPeer ?: thread?.let { id -> store.conversations.firstOrNull { it.id == id }?.peer }
+    LaunchedEffect(store.wipeCount) { if (store.wipeCount > 0) { onboarded = false; thread = null; tab = 0 } }
 
     CompositionLocalProvider(LocalPalette provides if (night) NightPalette else DayPalette) {
         Box(Modifier.fillMaxSize()) {
@@ -88,7 +106,7 @@ fun NearsendApp(store: ChatStore, startOnboarded: Boolean, startTab: Int, startT
                             else -> IdentityScreen(store)
                         }
                     }
-                    TabBar(tab, store.conversations.sumOf { it.unread }) { tab = it }
+                    TabBar(tab, store.unreadTotal) { tab = it }
                 }
             }
         }
@@ -98,10 +116,11 @@ fun NearsendApp(store: ChatStore, startOnboarded: Boolean, startTab: Int, startT
 @Composable
 private fun TabBar(selected: Int, unread: Int, onSelect: (Int) -> Unit) {
     val p = LocalPalette.current
-    val items: List<Pair<String, ImageVector>> = listOf("Nearby" to Icons.Filled.Sensors, "Chats" to Icons.Filled.Chat, "You" to Icons.Filled.Person)
+    val items: List<Pair<Int, ImageVector>> = listOf(R.string.tab_nearby to Icons.Filled.Sensors, R.string.tab_chats to Icons.Filled.Chat, R.string.tab_you to Icons.Filled.Person)
     Row(Modifier.fillMaxWidth().glass(0.dp).navigationBarsPadding().padding(vertical = 8.dp)) {
-        items.forEachIndexed { i, (label, icon) ->
+        items.forEachIndexed { i, (labelRes, icon) ->
             val color = if (i == selected) p.link else p.inkSecondary
+            val label = stringResource(labelRes)
             Column(Modifier.weight(1f).clickable { onSelect(i) }.padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box {
                     Icon(icon, label, tint = color)

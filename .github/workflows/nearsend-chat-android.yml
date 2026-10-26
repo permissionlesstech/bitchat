@@ -23,6 +23,14 @@ jobs:
           test $(stat -c%s app/src/main/res/font/anton_regular.ttf) -gt 10000
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: '8.7' }
+      - name: Unit tests (crypto vectors + relay simulation)
+        run: |
+          set +e
+          gradle --no-daemon :app:testDebugUnitTest > test.log 2>&1
+          code=$?
+          grep -E "FAILED|AssertionError|error:|^e: |What went wrong" -A3 test.log | head -40 | while IFS= read -r l; do echo "::error::${l//%/%25}"; done
+          for f in app/build/test-results/testDebugUnitTest/*.xml; do [ -f "$f" ] && echo "::notice::$(grep -o 'tests="[0-9]*" skipped="[0-9]*" failures="[0-9]*"' "$f" | head -1)"; done
+          exit $code
       - name: Build debug APK
         run: |
           set +e

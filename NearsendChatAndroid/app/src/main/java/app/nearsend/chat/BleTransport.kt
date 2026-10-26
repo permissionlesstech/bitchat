@@ -13,36 +13,38 @@ import java.io.ByteArrayOutputStream
 import java.util.UUID
 
 /**
- * Real Bluetooth LE link between nearby phones, wire-compatible with the iOS app:
- * same service/characteristic UUIDs, identity = {"id","name"}, message = {"from","name","text"}.
- * Every phone advertises the service (GATT server) and scans for it (GATT client). NOT encrypted yet.
+ * Bluetooth LE link layer, wire-compatible with the iOS app (same UUIDs, identity JSON {"id","name","pk"}).
+ * Every phone advertises the service (GATT server) and scans for it (GATT client). It only moves bytes:
+ * identities and packets go up to [MeshRouter] (see PROTOCOL.md).
  */
 @SuppressLint("MissingPermission")
-class BleTransport(private val ctx: Context, private val id: String, private var name: String) {
+class BleTransport(private val ctx: Context, private val id: String, private var name: String, private val publicKey: ByteArray) {
     companion object {
         val SERVICE: UUID = UUID.fromString("7A3C5E10-9D2B-4F6A-8C1E-4E4541525345")
         val ID_CHAR: UUID = UUID.fromString("7A3C5E11-9D2B-4F6A-8C1E-4E4541525345")
         val MSG_CHAR: UUID = UUID.fromString("7A3C5E12-9D2B-4F6A-8C1E-4E4541525345")
     }
 
-    var onPeers: ((List<Peer>) -> Unit)? = null
-    var onMessage: ((fromId: String, name: String, text: String) -> Unit)? = null
+    var onNeighbor: ((link: String, id: String, name: String, pk: ByteArray) -> Unit)? = null
+    var onLost: ((link: String) -> Unit)? = null
+    var onPacket: ((data: ByteArray) -> Unit)? = null
+    var onRssi: ((link: String, rssi: Int) -> Unit)? = null
     var onState: ((String) -> Unit)? = null
 
     private class Link(val gatt: BluetoothGatt) {
         var msgChar: BluetoothGattCharacteristic? = null
         var peerId: String? = null
-        var name = ""
-        var rssi = -80
         var busy = false
-        val writes = ArrayDeque<(Boolean) -> Unit>()
+        val queue = ArrayDeque<Pair<ByteArray, (Boolean) -> Unit>>()
+        var inflight: ((Boolean) -> Unit)? = null
+        fun failAll() { inflight?.invoke(false); inflight = null; queue.forEach { it.second(false) }; queue.clear() }
     }
 
     private val main = Handler(Looper.getMainLooper())
     private val btManager = ctx.getSystemService(BluetoothManager::class.java)
     private var server: BluetoothGattServer? = null
     private var running = false
-    private val links = HashMap<String, Link>()          // key: device address (main thread only)
+    private val links = HashMap<String, Link>()          // key: device address = link id (main thread only)
     private val pendingWrites = HashMap<String, ByteArrayOutputStream>()
 
     private val rssiTick = object : Runnable {
@@ -76,70 +78,68 @@ class BleTransport(private val ctx: Context, private val id: String, private var
         val adapter = btManager?.adapter
         runCatching { adapter?.bluetoothLeScanner?.stopScan(scanCb) }
         runCatching { adapter?.bluetoothLeAdvertiser?.stopAdvertising(advCb) }
-        links.values.forEach { l -> l.writes.forEach { it(false) }; runCatching { l.gatt.close() } }
+        links.forEach { (addr, l) -> l.failAll(); runCatching { l.gatt.close() }; if (l.peerId != null) onLost?.invoke(addr) }
         links.clear()
         runCatching { server?.close() }
         server = null
-        onPeers?.invoke(emptyList())
     }
 
     fun setName(n: String) { name = n }   // identity is read on demand, so nothing to rebuild
 
-    /** Calls completion(true) once the other phone has acknowledged the write. */
-    fun send(text: String, peerId: String, completion: (Boolean) -> Unit) {
-        val link = links.values.firstOrNull { it.peerId == peerId && it.msgChar != null && !it.busy }
-        val ch = link?.msgChar
-        if (link == null || ch == null) { completion(false); return }
-        val bytes = JSONObject().put("from", id).put("name", name).put("text", text.take(300)).toString().toByteArray()
+    /** Queues one packet for a neighbour. `done(true)` once the other phone acknowledged the write. */
+    fun write(linkId: String, data: ByteArray, done: (Boolean) -> Unit) {
+        val link = links[linkId]
+        if (link == null || link.msgChar == null) { done(false); return }
+        link.queue.addLast(data to done)
+        pump(link)
+    }
+
+    /** GATT allows one operation at a time, so packets are written one after another. */
+    private fun pump(link: Link) {
+        val ch = link.msgChar ?: return
+        if (link.busy) return
+        val (data, done) = link.queue.removeFirstOrNull() ?: return
         link.busy = true
-        link.writes.addLast(completion)
+        link.inflight = done
         val ok = if (Build.VERSION.SDK_INT >= 33) {
-            link.gatt.writeCharacteristic(ch, bytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothStatusCodes.SUCCESS
+            link.gatt.writeCharacteristic(ch, data, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothStatusCodes.SUCCESS
         } else {
             @Suppress("DEPRECATION") run {
                 ch.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-                ch.value = bytes
+                ch.value = data
                 link.gatt.writeCharacteristic(ch)
             }
         }
-        if (!ok) { link.busy = false; link.writes.removeLastOrNull(); completion(false) }
+        if (!ok) { link.busy = false; link.inflight = null; done(false); pump(link) }
     }
 
-    private fun identityBytes() = JSONObject().put("id", id).put("name", name).toString().toByteArray()
-
-    private fun emitPeers() {
-        onPeers?.invoke(links.values.mapNotNull { l ->
-            l.peerId?.let { Peer(it, l.name, 1, l.rssi) }
-        })
-    }
-
-    private fun handlePayload(bytes: ByteArray) {
-        val o = runCatching { JSONObject(String(bytes)) }.getOrNull() ?: return
-        val from = o.optString("from"); val n = o.optString("name"); val t = o.optString("text")
-        if (from.isNotEmpty()) main.post { onMessage?.invoke(from, n, t) }
-    }
+    private fun identityBytes() = JSONObject().put("id", id).put("name", name)
+        .put("pk", java.util.Base64.getEncoder().encodeToString(publicKey)).toString().toByteArray()
 
     private fun handleIdentity(gatt: BluetoothGatt, bytes: ByteArray?) {
-        val link = links[gatt.device.address] ?: return
+        val addr = gatt.device.address
+        val link = links[addr] ?: return
         link.busy = false
+        pump(link)
         val o = runCatching { JSONObject(String(bytes ?: return)) }.getOrNull() ?: return
         val pid = o.optString("id")
-        if (pid.isEmpty() || pid == id) return
+        val pk = runCatching { java.util.Base64.getDecoder().decode(o.optString("pk")) }.getOrNull() ?: return
+        if (pid.isEmpty() || pid == id || pk.size != 32) return
         // Same phone seen under a new address: drop the stale link.
         links.entries.filter { it.value !== link && it.value.peerId == pid }.forEach { e ->
-            links.remove(e.key); runCatching { e.value.gatt.close() }
+            links.remove(e.key); runCatching { e.value.gatt.close() }; onLost?.invoke(e.key)
         }
         link.peerId = pid
-        link.name = o.optString("name")
-        emitPeers()
+        onNeighbor?.invoke(addr, pid, o.optString("name"), pk)
         gatt.readRemoteRssi()
     }
 
     private fun drop(gatt: BluetoothGatt) {
-        val link = links.remove(gatt.device.address)
-        link?.writes?.forEach { it(false) }
+        val addr = gatt.device.address
+        val link = links.remove(addr)
+        link?.failAll()
         runCatching { gatt.close() }
-        emitPeers()
+        if (link?.peerId != null) onLost?.invoke(addr)
     }
 
     private val scanCb = object : ScanCallback() {
@@ -149,7 +149,7 @@ class BleTransport(private val ctx: Context, private val id: String, private var
                 val addr = result.device.address
                 if (links.containsKey(addr)) return@post
                 val g = result.device.connectGatt(ctx, false, gattCb, BluetoothDevice.TRANSPORT_LE)
-                links[addr] = Link(g).also { if (result.rssi != 127) it.rssi = result.rssi }
+                links[addr] = Link(g)
             }
         }
     }
@@ -197,7 +197,7 @@ class BleTransport(private val ctx: Context, private val id: String, private var
         override fun onReadRemoteRssi(gatt: BluetoothGatt, rssi: Int, status: Int) {
             main.post {
                 val link = links[gatt.device.address] ?: return@post
-                if (status == BluetoothGatt.GATT_SUCCESS) { link.rssi = rssi; emitPeers() }
+                if (status == BluetoothGatt.GATT_SUCCESS && link.peerId != null) onRssi?.invoke(gatt.device.address, rssi)
             }
         }
 
@@ -205,7 +205,9 @@ class BleTransport(private val ctx: Context, private val id: String, private var
             main.post {
                 val link = links[gatt.device.address] ?: return@post
                 link.busy = false
-                link.writes.removeFirstOrNull()?.invoke(status == BluetoothGatt.GATT_SUCCESS)
+                val cb = link.inflight; link.inflight = null
+                cb?.invoke(status == BluetoothGatt.GATT_SUCCESS)
+                pump(link)
             }
         }
     }
@@ -233,14 +235,14 @@ class BleTransport(private val ctx: Context, private val id: String, private var
         ) {
             if (characteristic.uuid == MSG_CHAR && value != null) {
                 if (preparedWrite) pendingWrites.getOrPut(device.address) { ByteArrayOutputStream() }.write(value)
-                else handlePayload(value)
+                else main.post { onPacket?.invoke(value) }
             }
             if (responseNeeded) server?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value)
         }
 
         override fun onExecuteWrite(device: BluetoothDevice, requestId: Int, execute: Boolean) {
             val buf = pendingWrites.remove(device.address)
-            if (execute && buf != null) handlePayload(buf.toByteArray())
+            if (execute && buf != null) { val bytes = buf.toByteArray(); main.post { onPacket?.invoke(bytes) } }
             server?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, null)
         }
     }

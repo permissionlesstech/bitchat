@@ -8,7 +8,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.core.*
+import androidx.annotation.StringRes
 import androidx.compose.material3.Text
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -106,9 +112,14 @@ fun Card(modifier: Modifier = Modifier, padding: Dp = 16.dp, content: @Composabl
 
 /** Page titles sit straight on the sky in the poster face. */
 @Composable
-fun PageTitle(text: String) {
-    Text(text.uppercase(), fontFamily = Anton, fontSize = 40.sp, color = Color.White, modifier = Modifier.fillMaxWidth())
+fun PageTitle(@StringRes text: Int, modifier: Modifier = Modifier) {
+    Text(upper(stringResource(text)), fontFamily = Anton, fontSize = 40.sp, color = Color.White,
+        modifier = modifier.fillMaxWidth().semantics { heading() })
 }
+
+/** Locale-aware capitals (Turkish dotted İ and so on). */
+@Composable
+fun upper(s: String): String = s.uppercase(LocalConfiguration.current.locales[0])
 
 /** Text that must read directly on the sky goes on the dark-blue pill. */
 @Composable
@@ -155,7 +166,8 @@ fun StatusPill(text: String, color: Color = LocalPalette.current.secure) {
 fun SignalBars(rssi: Int) {
     val p = LocalPalette.current
     val level = if (rssi > -55) 4 else if (rssi > -70) 3 else if (rssi > -82) 2 else 1
-    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+    val label = stringResource(R.string.signal_n, level)
+    Row(Modifier.semantics { contentDescription = label }, verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         for (i in 1..4) Box(Modifier.width(4.dp).height((4 + i * 4).dp)
             .background(if (i <= level) ActionBlue else p.inkSecondary.copy(alpha = 0.3f), RoundedCornerShape(1.5.dp)))
     }

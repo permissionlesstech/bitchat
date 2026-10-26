@@ -1,0 +1,2 @@
+"NSBluetoothAlwaysUsageDescription" = "Nearsend Chat использует Bluetooth, чтобы находить людей рядом и обмениваться сообщениями без интернета.";
+"NSLocalNetworkUsageDescription" = "Nearsend Chat использует локальную сеть, чтобы связываться с устройствами рядом.";

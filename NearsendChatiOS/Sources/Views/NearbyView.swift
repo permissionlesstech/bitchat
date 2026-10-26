@@ -26,7 +26,7 @@ struct NearbyView: View {
     private var needsSettings: Bool { !store.simulated && ["off", "unauthorized"].contains(store.bluetoothState) }
     private var statusText: String {
         if !store.meshActive { return "Mesh paused" }
-        if store.simulated { return "Demo data · simulator" }
+        if store.simulated { return "Demo data" }
         switch store.bluetoothState {
         case "ready": return "Bluetooth live · offline"
         case "off": return "Bluetooth is off"

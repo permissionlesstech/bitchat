@@ -3,6 +3,7 @@ import SwiftUI
 struct IdentityView: View {
     @EnvironmentObject var store: ChatStore
     @State private var confirmWipe = false
+    @AppStorage("language") private var language = "system"
 
     var body: some View {
         NavigationStack {
@@ -31,6 +32,16 @@ struct IdentityView: View {
                                 Text("Compare this in person to verify a contact. It changes if you erase everything.")
                                     .font(.footnote).foregroundStyle(Theme.inkSecondary)
                             }.frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        Card {
+                            HStack {
+                                Label("Language", systemImage: "globe").font(.subheadline.weight(.semibold))
+                                Spacer()
+                                Picker("Language", selection: $language) {
+                                    Text("System default").tag("system")
+                                    ForEach(AppLanguage.all) { Text(verbatim: $0.name).tag($0.code) }
+                                }.pickerStyle(.menu).tint(Theme.link)
+                            }
                         }
                         Button(role: .destructive) { confirmWipe = true } label: {
                             Label("Erase everything", systemImage: "trash.fill").font(.subheadline.weight(.semibold))

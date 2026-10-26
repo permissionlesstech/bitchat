@@ -53,7 +53,11 @@ struct ChatsView: View {
                         if let d = c.last?.date { Text(d, style: .time).font(.caption).foregroundStyle(Theme.inkSecondary) }
                     }
                     HStack {
-                        Text(verbatim: preview(c)).font(.subheadline).foregroundStyle(Theme.inkSecondary).lineLimit(1)
+                        Group {
+                            if c.last != nil { Text(verbatim: preview(c)) }
+                            else if isPublic { Text("Public · anyone in range can read this") }
+                            else { Text(verbatim: "") }
+                        }.font(.subheadline).foregroundStyle(Theme.inkSecondary).lineLimit(1)
                         Spacer()
                         if c.unread > 0 {
                             Text("\(c.unread)").font(.caption.bold()).foregroundStyle(.white)
@@ -66,7 +70,7 @@ struct ChatsView: View {
     }
 
     private func preview(_ c: Conversation) -> String {
-        guard let m = c.last else { return c.id == publicChannelID ? String(localized: "Public · anyone in range can read this") : "" }
+        guard let m = c.last else { return "" }
         if let s = m.sender { return "\(s): \(m.text)" }
         return m.text
     }

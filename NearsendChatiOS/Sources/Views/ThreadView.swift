@@ -48,7 +48,7 @@ struct ThreadView: View {
                 VStack(spacing: 1) {
                     if isPublic { Text("Nearby channel").font(.headline).foregroundStyle(Theme.ink) }
                     else { Text(verbatim: livePeer.name).font(.headline).foregroundStyle(Theme.ink) }
-                    Text(LocalizedStringKey(subtitle)).font(.caption2).foregroundStyle(online ? Theme.secure : Theme.inkSecondary)
+                    subtitle.font(.caption2).foregroundStyle(online ? Theme.secure : Theme.inkSecondary)
                 }
             }
             if !isPublic {
@@ -60,10 +60,11 @@ struct ThreadView: View {
         .sheet(isPresented: $showInfo) { PeerInfoSheet(peer: livePeer).environmentObject(store) }
     }
 
-    private var subtitle: String {
-        if isPublic { return "Public channel" }
-        if !online { return "Out of range · will send when nearby" }
-        return livePeer.hops == 1 ? "Direct link" : "\(livePeer.hops) hops"
+    @ViewBuilder private var subtitle: some View {
+        if isPublic { Text("Public channel") }
+        else if !online { Text("Out of range · will send when nearby") }
+        else if livePeer.hops == 1 { Text("Direct link") }
+        else { Text("\(livePeer.hops) hops") }
     }
 
     private var composer: some View {

@@ -55,6 +55,10 @@ jobs:
           shot 9-public-channel -onboarded YES -tab 1 -openThread YES -threadID public
           shot 10-nearby-sv -onboarded YES -tab 0 -AppleLanguages "(sv)" -AppleLocale sv_SE
           shot 11-you-sv -onboarded YES -tab 2 -AppleLanguages "(sv)" -AppleLocale sv_SE
+          shot 12-you-ar -onboarded YES -tab 2 -language ar
+          shot 13-nearby-ja -onboarded YES -tab 0 -language ja
+          shot 14-thread-de -onboarded YES -tab 1 -openThread YES -threadID a -language de
+          shot 15-onboarding-ru -onboarded NO -language ru
           xcrun simctl ui $UDID appearance dark
           shot 6-nearby-night -onboarded YES -tab 0
           shot 7-thread-night -onboarded YES -tab 1 -openThread YES -threadID a

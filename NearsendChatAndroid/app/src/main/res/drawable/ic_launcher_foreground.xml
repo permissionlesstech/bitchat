@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- radar rings -->
+    <path android:pathData="M54,54m-27,0a27,27 0 1,1 54,0a27,27 0 1,1 -54,0" android:strokeColor="#66FFFFFF" android:strokeWidth="2.4"/>
+    <path android:pathData="M54,54m-19,0a19,19 0 1,1 38,0a19,19 0 1,1 -38,0" android:strokeColor="#99FFFFFF" android:strokeWidth="2.4"/>
+    <path android:pathData="M54,54m-11,0a11,11 0 1,1 22,0a11,11 0 1,1 -22,0" android:strokeColor="#E6FFFFFF" android:strokeWidth="2.4"/>
+    <!-- sweep -->
+    <path android:pathData="M54,54L81,54" android:strokeColor="#FFFFFF" android:strokeWidth="1.8"/>
+    <path android:pathData="M54,54L81,54A27,27 0 0,0 73.5,35.2Z" android:fillColor="#40FFFFFF"/>
+    <!-- you -->
+    <path android:pathData="M54,54m-5,0a5,5 0 1,1 10,0a5,5 0 1,1 -10,0" android:fillColor="#FFFFFF"/>
+    <path android:pathData="M54,54m-3,0a3,3 0 1,1 6,0a3,3 0 1,1 -6,0" android:fillColor="#2F6FE0"/>
+    <!-- peers -->
+    <path android:pathData="M69,40m-3,0a3,3 0 1,1 6,0a3,3 0 1,1 -6,0" android:fillColor="#FFFFFF"/>
+    <path android:pathData="M40,66m-3,0a3,3 0 1,1 6,0a3,3 0 1,1 -6,0" android:fillColor="#FFFFFF"/>
+    <path android:pathData="M64,74m-3,0a3,3 0 1,1 6,0a3,3 0 1,1 -6,0" android:fillColor="#FFFFFF"/>
+</vector>
