@@ -51,6 +51,7 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("nearsend", MODE_PRIVATE)
         // Launch extras let screenshots / demos jump straight to a screen.
         val onboarded = if (intent.hasExtra("onboarded")) intent.getBooleanExtra("onboarded", false) else prefs.getBoolean("onboarded", false)
+        if (intent.getBooleanExtra("markOnboarded", false)) prefs.edit().putBoolean("onboarded", true).apply()   // CI only
         if (intent.getBooleanExtra("startService", false)) MeshService.start(this)   // CI check of the foreground service
         val tab = intent.getIntExtra("tab", 0)
         val thread = intent.getStringExtra("thread")

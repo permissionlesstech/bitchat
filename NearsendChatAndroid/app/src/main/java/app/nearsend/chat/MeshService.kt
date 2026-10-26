@@ -6,6 +6,9 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.bluetooth.BluetoothAdapter
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -37,6 +40,21 @@ class MeshService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /** Restores the mesh when Bluetooth is switched off and on again while the service is running. */
+    private val btReceiver = object : BroadcastReceiver() {
+        override fun onReceive(ctx: Context, intent: Intent) {
+            when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
+                BluetoothAdapter.STATE_ON -> ChatStore.get(ctx).onBluetoothChanged(true)
+                BluetoothAdapter.STATE_OFF -> ChatStore.get(ctx).onBluetoothChanged(false)
+            }
+        }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        ContextCompat.registerReceiver(this, btReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val store = ChatStore.get(this)
         if (intent?.action == ACTION_STOP) {            // the Stop button on the notification
@@ -60,6 +78,7 @@ class MeshService : Service() {
     }
 
     override fun onDestroy() {
+        runCatching { unregisterReceiver(btReceiver) }
         running = false
         ChatStore.get(this).peerCountListener = null
         super.onDestroy()

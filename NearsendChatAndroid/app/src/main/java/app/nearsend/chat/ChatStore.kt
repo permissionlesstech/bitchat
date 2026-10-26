@@ -43,7 +43,7 @@ class ChatStore private constructor(private val app: Application) {
     var peers by mutableStateOf(listOf<Peer>()); private set
     var conversations by mutableStateOf(listOf<Conversation>()); private set
     var nickname by mutableStateOf(prefs.getString("nickname", null) ?: "anon-${(1000..9999).random()}")
-    var meshActive by mutableStateOf(true); private set
+    var meshActive by mutableStateOf(prefs.getBoolean("mesh", true)); private set
     var bluetoothState by mutableStateOf("starting"); private set   // starting | ready | off | unauthorized | unsupported
     var myFingerprint by mutableStateOf("A3F1 9C02 7BD4 E58A\n11C0 4F6E 92AB 3D77"); private set
     var verified by mutableStateOf(setOf<String>()); private set
@@ -115,8 +115,20 @@ class ChatStore private constructor(private val app: Application) {
         if (on && !simulated && meshActive && hasBlePermissions()) MeshService.start(app) else MeshService.stop(app)
     }
 
+    /** Used after a reboot or app update to decide whether to bring the service back. */
+    fun shouldRunInBackground(): Boolean =
+        prefs.getBoolean("onboarded", false) && backgroundEnabled && meshActive && (simulated || hasBlePermissions())
+
+    /** Bluetooth was switched on/off while we were running: tear the links down, or start fresh when it comes back. */
+    fun onBluetoothChanged(enabled: Boolean) {
+        if (simulated || !meshActive) return
+        transport?.stop()
+        if (enabled) startIfNeeded() else { peers = emptyList(); peerCountListener?.invoke(0); bluetoothState = "off" }
+    }
+
     fun setMesh(on: Boolean) {
         meshActive = on
+        prefs.edit().putBoolean("mesh", on).apply()
         if (simulated) return
         if (on) startIfNeeded() else { transport?.stop(); peers = emptyList(); peerCountListener?.invoke(0); MeshService.stop(app) }
     }
