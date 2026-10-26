@@ -71,4 +71,10 @@
     <string name="language_system">Как в системе</string>
     <string name="back">Назад</string>
     <string name="mesh_switch">Сеть</string>
+    <string name="bg_title">Работать в фоне</string>
+    <string name="bg_hint">Позволяет получать сообщения при закрытом приложении. Показывает уведомление и немного расходует заряд.</string>
+    <string name="bg_notif_title">Nearsend Chat работает</string>
+    <string name="bg_notif_searching">Поиск людей рядом</string>
+    <string name="bg_stop">Остановить</string>
+    <string name="bg_channel">Фоновое соединение</string>
 </resources>

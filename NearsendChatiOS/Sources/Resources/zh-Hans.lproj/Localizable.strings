@@ -69,3 +69,9 @@
 "System default" = "跟随系统";
 "Back" = "返回";
 "Mesh" = "网络";
+"Keep running in the background" = "在后台保持运行";
+"Lets you receive messages while the app is closed. Shows a notification and uses some battery." = "应用关闭时也能接收消息。会显示一条通知并消耗少量电量。";
+"Nearsend Chat is on" = "Nearsend Chat 正在运行";
+"Looking for people nearby" = "正在寻找附近的人";
+"Stop" = "停止";
+"Background connection" = "后台连接";

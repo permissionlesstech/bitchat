@@ -71,4 +71,10 @@
     <string name="language_system">Predeterminado del sistema</string>
     <string name="back">Atrás</string>
     <string name="mesh_switch">Red</string>
+    <string name="bg_title">Seguir activa en segundo plano</string>
+    <string name="bg_hint">Te permite recibir mensajes con la app cerrada. Muestra una notificación y gasta algo de batería.</string>
+    <string name="bg_notif_title">Nearsend Chat está activo</string>
+    <string name="bg_notif_searching">Buscando gente cerca</string>
+    <string name="bg_stop">Detener</string>
+    <string name="bg_channel">Conexión en segundo plano</string>
 </resources>

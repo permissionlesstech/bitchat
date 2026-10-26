@@ -72,4 +72,10 @@
     <string name="language_system">System default</string>
     <string name="back">Back</string>
     <string name="mesh_switch">Mesh</string>
+    <string name="bg_title">Keep running in the background</string>
+    <string name="bg_hint">Lets you receive messages while the app is closed. Shows a notification and uses some battery.</string>
+    <string name="bg_notif_title">Nearsend Chat is on</string>
+    <string name="bg_notif_searching">Looking for people nearby</string>
+    <string name="bg_stop">Stop</string>
+    <string name="bg_channel">Background connection</string>
 </resources>

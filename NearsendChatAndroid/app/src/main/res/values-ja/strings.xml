@@ -71,4 +71,10 @@
     <string name="language_system">システムの設定</string>
     <string name="back">戻る</string>
     <string name="mesh_switch">メッシュ</string>
+    <string name="bg_title">バックグラウンドで動作を続ける</string>
+    <string name="bg_hint">アプリを閉じていてもメッセージを受信できます。通知が表示され、バッテリーを少し消費します。</string>
+    <string name="bg_notif_title">Nearsend Chatは動作中</string>
+    <string name="bg_notif_searching">近くの人を探しています</string>
+    <string name="bg_stop">停止</string>
+    <string name="bg_channel">バックグラウンド接続</string>
 </resources>

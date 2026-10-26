@@ -69,3 +69,9 @@
 "System default" = "افتراضي النظام";
 "Back" = "رجوع";
 "Mesh" = "الشبكة";
+"Keep running in the background" = "الاستمرار في العمل في الخلفية";
+"Lets you receive messages while the app is closed. Shows a notification and uses some battery." = "يتيح لك استلام الرسائل أثناء إغلاق التطبيق. يعرض إشعارًا ويستهلك بعض البطارية.";
+"Nearsend Chat is on" = "Nearsend Chat قيد التشغيل";
+"Looking for people nearby" = "جارٍ البحث عن أشخاص قريبين";
+"Stop" = "إيقاف";
+"Background connection" = "الاتصال في الخلفية";

@@ -71,4 +71,10 @@
     <string name="language_system">Réglage du système</string>
     <string name="back">Retour</string>
     <string name="mesh_switch">Réseau</string>
+    <string name="bg_title">Continuer en arrière-plan</string>
+    <string name="bg_hint">Permet de recevoir des messages quand l\'app est fermée. Affiche une notification et consomme un peu de batterie.</string>
+    <string name="bg_notif_title">Nearsend Chat est actif</string>
+    <string name="bg_notif_searching">Recherche de personnes à proximité</string>
+    <string name="bg_stop">Arrêter</string>
+    <string name="bg_channel">Connexion en arrière-plan</string>
 </resources>

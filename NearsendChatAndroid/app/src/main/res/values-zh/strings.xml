@@ -71,4 +71,10 @@
     <string name="language_system">跟随系统</string>
     <string name="back">返回</string>
     <string name="mesh_switch">网络</string>
+    <string name="bg_title">在后台保持运行</string>
+    <string name="bg_hint">应用关闭时也能接收消息。会显示一条通知并消耗少量电量。</string>
+    <string name="bg_notif_title">Nearsend Chat 正在运行</string>
+    <string name="bg_notif_searching">正在寻找附近的人</string>
+    <string name="bg_stop">停止</string>
+    <string name="bg_channel">后台连接</string>
 </resources>

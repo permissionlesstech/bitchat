@@ -69,3 +69,9 @@
 "System default" = "Systemets standard";
 "Back" = "Tillbaka";
 "Mesh" = "Nätverk";
+"Keep running in the background" = "Fortsätt köra i bakgrunden";
+"Lets you receive messages while the app is closed. Shows a notification and uses some battery." = "Gör att du kan ta emot meddelanden när appen är stängd. Visar en avisering och drar lite batteri.";
+"Nearsend Chat is on" = "Nearsend Chat är igång";
+"Looking for people nearby" = "Letar efter personer i närheten";
+"Stop" = "Stoppa";
+"Background connection" = "Bakgrundsanslutning";

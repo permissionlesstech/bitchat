@@ -71,4 +71,10 @@
     <string name="language_system">Predefinito di sistema</string>
     <string name="back">Indietro</string>
     <string name="mesh_switch">Rete</string>
+    <string name="bg_title">Continua in background</string>
+    <string name="bg_hint">Ti permette di ricevere messaggi con l\'app chiusa. Mostra una notifica e consuma un po\' di batteria.</string>
+    <string name="bg_notif_title">Nearsend Chat è attivo</string>
+    <string name="bg_notif_searching">Ricerca di persone vicine</string>
+    <string name="bg_stop">Ferma</string>
+    <string name="bg_channel">Connessione in background</string>
 </resources>

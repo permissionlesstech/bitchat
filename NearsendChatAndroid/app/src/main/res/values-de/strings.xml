@@ -71,4 +71,10 @@
     <string name="language_system">Systemstandard</string>
     <string name="back">Zurück</string>
     <string name="mesh_switch">Netz</string>
+    <string name="bg_title">Im Hintergrund weiterlaufen</string>
+    <string name="bg_hint">Damit erhältst du Nachrichten, auch wenn die App geschlossen ist. Zeigt eine Benachrichtigung und verbraucht etwas Akku.</string>
+    <string name="bg_notif_title">Nearsend Chat ist aktiv</string>
+    <string name="bg_notif_searching">Suche nach Leuten in der Nähe</string>
+    <string name="bg_stop">Stopp</string>
+    <string name="bg_channel">Hintergrundverbindung</string>
 </resources>

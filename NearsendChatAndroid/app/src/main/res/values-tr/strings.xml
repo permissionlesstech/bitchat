@@ -71,4 +71,10 @@
     <string name="language_system">Sistem varsayılanı</string>
     <string name="back">Geri</string>
     <string name="mesh_switch">Ağ</string>
+    <string name="bg_title">Arka planda çalışmaya devam et</string>
+    <string name="bg_hint">Uygulama kapalıyken mesaj almanızı sağlar. Bir bildirim gösterir ve biraz pil harcar.</string>
+    <string name="bg_notif_title">Nearsend Chat açık</string>
+    <string name="bg_notif_searching">Yakındaki kişiler aranıyor</string>
+    <string name="bg_stop">Durdur</string>
+    <string name="bg_channel">Arka plan bağlantısı</string>
 </resources>

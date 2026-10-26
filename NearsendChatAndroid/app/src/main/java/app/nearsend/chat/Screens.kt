@@ -453,6 +453,20 @@ fun IdentityScreen(store: ChatStore) {
             }
         }
         item {
+            Card {
+                val bgLabel = stringResource(R.string.bg_title)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(bgLabel, color = p.ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.bg_hint), color = p.inkSecondary, fontSize = 13.sp)
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Switch(store.backgroundEnabled, { store.setBackground(it) }, Modifier.semantics { contentDescription = bgLabel },
+                        colors = SwitchDefaults.colors(checkedTrackColor = ActionBlue, checkedThumbColor = Color.White))
+                }
+            }
+        }
+        item {
             Box(Modifier.fillMaxWidth().glass(12.dp).clickable { confirmWipe = true }.padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Icon(Icons.Filled.Delete, null, tint = Color(0xFFD93025), modifier = Modifier.size(16.dp))

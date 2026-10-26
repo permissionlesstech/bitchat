@@ -69,3 +69,9 @@
 "System default" = "Sistem varsayılanı";
 "Back" = "Geri";
 "Mesh" = "Ağ";
+"Keep running in the background" = "Arka planda çalışmaya devam et";
+"Lets you receive messages while the app is closed. Shows a notification and uses some battery." = "Uygulama kapalıyken mesaj almanızı sağlar. Bir bildirim gösterir ve biraz pil harcar.";
+"Nearsend Chat is on" = "Nearsend Chat açık";
+"Looking for people nearby" = "Yakındaki kişiler aranıyor";
+"Stop" = "Durdur";
+"Background connection" = "Arka plan bağlantısı";

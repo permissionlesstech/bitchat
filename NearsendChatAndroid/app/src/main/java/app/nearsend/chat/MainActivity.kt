@@ -9,7 +9,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.background
@@ -33,7 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.os.LocaleListCompat
 
 class MainActivity : AppCompatActivity() {
-    private val store: ChatStore by viewModels()
+    private val store by lazy { ChatStore.get(applicationContext) }
 
     private val permLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { store.startIfNeeded() }
 
@@ -52,6 +51,7 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("nearsend", MODE_PRIVATE)
         // Launch extras let screenshots / demos jump straight to a screen.
         val onboarded = if (intent.hasExtra("onboarded")) intent.getBooleanExtra("onboarded", false) else prefs.getBoolean("onboarded", false)
+        if (intent.getBooleanExtra("startService", false)) MeshService.start(this)   // CI check of the foreground service
         val tab = intent.getIntExtra("tab", 0)
         val thread = intent.getStringExtra("thread")
         setContent {

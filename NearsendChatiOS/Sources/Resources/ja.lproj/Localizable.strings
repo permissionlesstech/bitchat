@@ -69,3 +69,9 @@
 "System default" = "システムの設定";
 "Back" = "戻る";
 "Mesh" = "メッシュ";
+"Keep running in the background" = "バックグラウンドで動作を続ける";
+"Lets you receive messages while the app is closed. Shows a notification and uses some battery." = "アプリを閉じていてもメッセージを受信できます。通知が表示され、バッテリーを少し消費します。";
+"Nearsend Chat is on" = "Nearsend Chatは動作中";
+"Looking for people nearby" = "近くの人を探しています";
+"Stop" = "停止";
+"Background connection" = "バックグラウンド接続";

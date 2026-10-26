@@ -71,4 +71,10 @@
     <string name="language_system">Systemets standard</string>
     <string name="back">Tillbaka</string>
     <string name="mesh_switch">Nätverk</string>
+    <string name="bg_title">Fortsätt köra i bakgrunden</string>
+    <string name="bg_hint">Gör att du kan ta emot meddelanden när appen är stängd. Visar en avisering och drar lite batteri.</string>
+    <string name="bg_notif_title">Nearsend Chat är igång</string>
+    <string name="bg_notif_searching">Letar efter personer i närheten</string>
+    <string name="bg_stop">Stoppa</string>
+    <string name="bg_channel">Bakgrundsanslutning</string>
 </resources>

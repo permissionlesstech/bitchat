@@ -69,3 +69,9 @@
 "System default" = "Как в системе";
 "Back" = "Назад";
 "Mesh" = "Сеть";
+"Keep running in the background" = "Работать в фоне";
+"Lets you receive messages while the app is closed. Shows a notification and uses some battery." = "Позволяет получать сообщения при закрытом приложении. Показывает уведомление и немного расходует заряд.";
+"Nearsend Chat is on" = "Nearsend Chat работает";
+"Looking for people nearby" = "Поиск людей рядом";
+"Stop" = "Остановить";
+"Background connection" = "Фоновое соединение";

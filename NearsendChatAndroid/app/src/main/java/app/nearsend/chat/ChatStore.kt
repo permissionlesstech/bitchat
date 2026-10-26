@@ -11,8 +11,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -24,7 +25,16 @@ import java.util.UUID
  * UI-facing state. On a real phone it is driven by [BleTransport] + [MeshRouter]; emulators have no Bluetooth,
  * so there it shows demo data instead. Conversations are saved on the device.
  */
-class ChatStore(app: Application) : AndroidViewModel(app) {
+class ChatStore private constructor(private val app: Application) {
+    companion object {
+        @Volatile private var instance: ChatStore? = null
+        /** One store per process, owned by the app (not by a screen), so the mesh keeps running when the UI is closed. */
+        fun get(ctx: Context): ChatStore = instance ?: synchronized(this) {
+            instance ?: ChatStore(ctx.applicationContext as Application).also { instance = it }
+        }
+    }
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val prefs = app.getSharedPreferences("nearsend", Context.MODE_PRIVATE)
     private val file = File(app.filesDir, "chat.json")
     private val main = Handler(Looper.getMainLooper())
@@ -39,6 +49,8 @@ class ChatStore(app: Application) : AndroidViewModel(app) {
     var verified by mutableStateOf(setOf<String>()); private set
     var activeConversation: String? = null
     var wipeCount by mutableStateOf(0); private set   // UI returns to onboarding when this changes
+    var backgroundEnabled by mutableStateOf(prefs.getBoolean("background", true)); private set
+    var peerCountListener: ((Int) -> Unit)? = null   // the foreground service keeps its notification up to date
 
     val simulated = isEmulator()
     private var deviceId = prefs.getString("deviceID", null) ?: newDeviceId()
@@ -67,7 +79,7 @@ class ChatStore(app: Application) : AndroidViewModel(app) {
         else listOf(Manifest.permission.ACCESS_FINE_LOCATION)
 
     fun hasBlePermissions(): Boolean = blePermissions().all {
-        ContextCompat.checkSelfPermission(getApplication(), it) == PackageManager.PERMISSION_GRANTED
+        ContextCompat.checkSelfPermission(app, it) == PackageManager.PERMISSION_GRANTED
     }
 
     /** Safe to call repeatedly (after onboarding, after the permission prompt, on resume). */
@@ -78,7 +90,7 @@ class ChatStore(app: Application) : AndroidViewModel(app) {
             val crypto = keys.loadOrCreate()
             myFingerprint = crypto.fingerprint
             val r = MeshRouter(deviceId, nickname, crypto)
-            val t = BleTransport(getApplication(), deviceId, nickname, crypto.publicKey)
+            val t = BleTransport(app, deviceId, nickname, crypto.publicKey)
             r.transmit = { link, data, done -> t.write(link, data, done) }
             r.onPeers = { applyPeers(it) }
             r.onText = { from, name, text, hops, id -> receiveText(from, name, text, hops, id) }
@@ -93,12 +105,20 @@ class ChatStore(app: Application) : AndroidViewModel(app) {
             main.postDelayed(tick, 8000)
         }
         transport?.start()
+        if (backgroundEnabled && !MeshService.running) MeshService.start(app)
+    }
+
+    /** "Keep running in the background": a foreground service keeps Bluetooth alive while the app is closed. */
+    fun setBackground(on: Boolean) {
+        backgroundEnabled = on
+        prefs.edit().putBoolean("background", on).apply()
+        if (on && !simulated && meshActive && hasBlePermissions()) MeshService.start(app) else MeshService.stop(app)
     }
 
     fun setMesh(on: Boolean) {
         meshActive = on
         if (simulated) return
-        if (on) startIfNeeded() else { transport?.stop(); peers = emptyList() }
+        if (on) startIfNeeded() else { transport?.stop(); peers = emptyList(); peerCountListener?.invoke(0); MeshService.stop(app) }
     }
 
     fun updateNickname(n: String) { nickname = n }
@@ -149,7 +169,7 @@ class ChatStore(app: Application) : AndroidViewModel(app) {
         conversations = conversations.map { if (it.id == id) it.copy(messages = it.messages + m) else it }
         save()
         when {
-            simulated -> viewModelScope.launch {
+            simulated -> scope.launch {
                 delay(600); update(m.id, id, Delivery.Sent)
                 delay(900); update(m.id, id, Delivery.Delivered)
             }
@@ -197,8 +217,9 @@ class ChatStore(app: Application) : AndroidViewModel(app) {
     private fun applyPeers(list: List<Peer>) {
         val known = peers.map { it.id }.toSet()
         val mapped = list.map { it.copy(verified = it.fingerprint in verified) }.sortedWith(compareBy<Peer> { it.hops }.thenByDescending { it.rssi })
-        if (mapped.any { it.id !in known }) Notifier.tap(getApplication(), 15)
+        if (mapped.any { it.id !in known }) Notifier.tap(app, 15)
         peers = mapped
+        peerCountListener?.invoke(mapped.size)
         conversations = conversations.map { c -> mapped.firstOrNull { it.id == c.id }?.let { c.copy(peer = it) } ?: c }
         flushOutbox()
     }
@@ -210,8 +231,8 @@ class ChatStore(app: Application) : AndroidViewModel(app) {
         conversations = conversations.map {
             if (it.id == from) it.copy(messages = it.messages + m, unread = if (activeConversation == from) it.unread else it.unread + 1) else it
         }
-        Notifier.notify(getApplication(), name, text)
-        Notifier.tap(getApplication())
+        Notifier.notify(app, name, text)
+        Notifier.tap(app)
         save()
     }
 
@@ -221,7 +242,7 @@ class ChatStore(app: Application) : AndroidViewModel(app) {
         conversations = conversations.map {
             if (it.id == PUBLIC_CHANNEL_ID) it.copy(messages = it.messages + m, unread = if (activeConversation == PUBLIC_CHANNEL_ID) it.unread else it.unread + 1) else it
         }
-        Notifier.notify(getApplication(), "#nearby · $name", text)
+        Notifier.notify(app, "#nearby · $name", text)
         save()
     }
 
@@ -243,8 +264,6 @@ class ChatStore(app: Application) : AndroidViewModel(app) {
             conversations = listOf(Conversation(PUBLIC_CHANNEL_ID, Peer(PUBLIC_CHANNEL_ID, "Nearby", 1, -50), emptyList())) + conversations
         }
     }
-
-    override fun onCleared() { main.removeCallbacks(tick); transport?.stop() }
 
     // ---- persistence
 
@@ -301,7 +320,7 @@ class ChatStore(app: Application) : AndroidViewModel(app) {
     }
 
     private fun drift() {
-        viewModelScope.launch {
+        scope.launch {
             while (true) {
                 delay(2500)
                 peers = peers.map { it.copy(rssi = (it.rssi + (-3..3).random()).coerceIn(-95, -40)) }

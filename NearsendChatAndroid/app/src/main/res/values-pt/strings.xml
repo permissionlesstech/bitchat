@@ -71,4 +71,10 @@
     <string name="language_system">Padrão do sistema</string>
     <string name="back">Voltar</string>
     <string name="mesh_switch">Rede</string>
+    <string name="bg_title">Continuar em segundo plano</string>
+    <string name="bg_hint">Permite receber mensagens com o app fechado. Mostra uma notificação e usa um pouco de bateria.</string>
+    <string name="bg_notif_title">O Nearsend Chat está ativo</string>
+    <string name="bg_notif_searching">Procurando pessoas por perto</string>
+    <string name="bg_stop">Parar</string>
+    <string name="bg_channel">Conexão em segundo plano</string>
 </resources>

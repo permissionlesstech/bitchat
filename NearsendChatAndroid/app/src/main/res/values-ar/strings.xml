@@ -71,4 +71,10 @@
     <string name="language_system">افتراضي النظام</string>
     <string name="back">رجوع</string>
     <string name="mesh_switch">الشبكة</string>
+    <string name="bg_title">الاستمرار في العمل في الخلفية</string>
+    <string name="bg_hint">يتيح لك استلام الرسائل أثناء إغلاق التطبيق. يعرض إشعارًا ويستهلك بعض البطارية.</string>
+    <string name="bg_notif_title">Nearsend Chat قيد التشغيل</string>
+    <string name="bg_notif_searching">جارٍ البحث عن أشخاص قريبين</string>
+    <string name="bg_stop">إيقاف</string>
+    <string name="bg_channel">الاتصال في الخلفية</string>
 </resources>

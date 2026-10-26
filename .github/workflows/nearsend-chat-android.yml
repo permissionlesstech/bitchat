@@ -54,7 +54,9 @@ jobs:
           target: google_apis
           profile: pixel_6
           working-directory: NearsendChatAndroid
-          script: bash ci/shots.sh
+          script: |
+            bash ci/shots.sh
+            bash ci/service_check.sh
       - name: Commit font, wrapper and previews
         working-directory: .
         run: |

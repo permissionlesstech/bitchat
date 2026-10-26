@@ -69,3 +69,9 @@
 "System default" = "Systemstandard";
 "Back" = "Zurück";
 "Mesh" = "Netz";
+"Keep running in the background" = "Im Hintergrund weiterlaufen";
+"Lets you receive messages while the app is closed. Shows a notification and uses some battery." = "Damit erhältst du Nachrichten, auch wenn die App geschlossen ist. Zeigt eine Benachrichtigung und verbraucht etwas Akku.";
+"Nearsend Chat is on" = "Nearsend Chat ist aktiv";
+"Looking for people nearby" = "Suche nach Leuten in der Nähe";
+"Stop" = "Stopp";
+"Background connection" = "Hintergrundverbindung";
