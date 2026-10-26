@@ -15,6 +15,7 @@
 		2805A4A18DC1E6078505BED7 /* Platform.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2C5BABD63D9698F3E56778E /* Platform.swift */; };
 		59DB2C6EE11E3E9535532BFC /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 80EE8A74865B7D1BBB9E43C7 /* Localizable.strings */; };
 		5C78597EA3F1F9CF377B3DF4 /* NearsendChatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB40130C7B1E840D860F4464 /* NearsendChatApp.swift */; };
+		6CE3D43D23537F5EC5158AB9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B4DC2A22C1D63D0A2DB198E /* AppDelegate.swift */; };
 		7E9D2AC431AF9BC052D1E9BC /* ChatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D296A62CD2EF81230FB8554E /* ChatsView.swift */; };
 		932A3B628956D826782DA903 /* IdentityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3035BF11BB223029CA61FBE /* IdentityView.swift */; };
 		AB66BB44A63B667FC433FF7E /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = D9AB179AB7D0AE6D8D7DCFF5 /* InfoPlist.strings */; };
@@ -40,6 +41,7 @@
 		28D23FEEE99206B50AA5D8BE /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		2A8156C4CF0D5D5CDE983A47 /* ThreadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadView.swift; sourceTree = "<group>"; };
 		2FE7E11464E41C885097BF69 /* MeshService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeshService.swift; sourceTree = "<group>"; };
+		4B4DC2A22C1D63D0A2DB198E /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		54703935BF10B9442B84A047 /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		648BCDE5F19E5D99938EF769 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/Localizable.strings; sourceTree = "<group>"; };
 		6AF6BA0C220236EF73DD4D67 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/InfoPlist.strings; sourceTree = "<group>"; };
@@ -114,6 +116,7 @@
 		76DF526EB27DFC56D7EB26AB /* App */ = {
 			isa = PBXGroup;
 			children = (
+				4B4DC2A22C1D63D0A2DB198E /* AppDelegate.swift */,
 				AB40130C7B1E840D860F4464 /* NearsendChatApp.swift */,
 			);
 			path = App;
@@ -239,6 +242,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6CE3D43D23537F5EC5158AB9 /* AppDelegate.swift in Sources */,
 				D52B97E33BE72926F55921D1 /* BLETransport.swift in Sources */,
 				7E9D2AC431AF9BC052D1E9BC /* ChatsView.swift in Sources */,
 				932A3B628956D826782DA903 /* IdentityView.swift in Sources */,
