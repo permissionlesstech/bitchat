@@ -15,6 +15,7 @@ sleep 6
 adb shell am force-stop $PKG
 sleep 2
 adb shell dumpsys activity services $PKG/.MeshService | grep -q "isForeground=true" && fail "service still running after force-stop"
+adb root > /dev/null 2>&1; sleep 3; adb wait-for-device    # sending BOOT_COMPLETED is reserved to the system (this emulator image allows adb root)
 adb shell am broadcast -f 32 -a android.intent.action.BOOT_COMPLETED -n $PKG/.BootReceiver
 sleep 8
 OUT=$(adb shell dumpsys activity services $PKG/.MeshService)
