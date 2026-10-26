@@ -296,7 +296,7 @@ final class LocationNotesManager: ObservableObject {
             let currentRelays = self.dependencies.relayLookup(self.geohash, TransportConfig.nostrGeoRelayCount)
             if self.notes.isEmpty, !self.dependencies.anyRelayConnected(currentRelays) {
                 self.state = .connecting
-                self.scheduleConnectivityRetry(relays: currentRelays)
+                self.scheduleConnectivityRetry()
             } else {
                 self.state = .ready
             }
@@ -306,19 +306,19 @@ final class LocationNotesManager: ObservableObject {
     /// While `.connecting`, poll for a live target relay and re-subscribe as
     /// soon as one appears (fresh REQ, fresh EOSE tracking). The poll dies
     /// with the state: any subscribe/cancel invalidates it.
-    private func scheduleConnectivityRetry(relays: [String]) {
+    private func scheduleConnectivityRetry() {
         connectivityRetryTimer?.invalidate()
         connectivityRetryTimer = Timer.scheduledTimer(
             withTimeInterval: TransportConfig.uiGeoNotesConnectivityRetrySeconds,
             repeats: true
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.retryIfRelaysAvailable(relays: relays)
+                self?.retryIfRelaysAvailable()
             }
         }
     }
 
-    func retryIfRelaysAvailable(relays: [String]) {
+    func retryIfRelaysAvailable() {
         guard state == .connecting else {
             connectivityRetryTimer?.invalidate()
             connectivityRetryTimer = nil

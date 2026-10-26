@@ -152,7 +152,6 @@ final class NostrRelayManager: ObservableObject {
         var messagesSent: Int = 0
         var messagesReceived: Int = 0
         var reconnectAttempts: Int = 0
-        var lastDisconnectedAt: Date?
         var nextReconnectTime: Date?
     }
     
@@ -533,18 +532,14 @@ final class NostrRelayManager: ObservableObject {
     }
 
     private func markRelaySocketsClosed(resetState: Bool) {
-        let now = dependencies.now()
         for index in relays.indices {
             relays[index].isConnected = false
             relays[index].nextReconnectTime = nil
             if resetState {
                 relays[index].lastError = nil
-                relays[index].lastDisconnectedAt = nil
                 relays[index].messagesSent = 0
                 relays[index].messagesReceived = 0
                 relays[index].reconnectAttempts = 0
-            } else {
-                relays[index].lastDisconnectedAt = now
             }
         }
     }
@@ -1509,8 +1504,6 @@ final class NostrRelayManager: ObservableObject {
             if isConnected {
                 relays[index].reconnectAttempts = 0  // Reset on successful connection
                 relays[index].nextReconnectTime = nil
-            } else {
-                relays[index].lastDisconnectedAt = dependencies.now()
             }
         }
         updateConnectionStatus()
