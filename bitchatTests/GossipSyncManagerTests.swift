@@ -1012,6 +1012,39 @@ struct GossipSyncManagerTests {
         #expect(manager._messageCount(for: PeerID(hexData: packets[2].senderID)) == 1)
     }
 
+    /// A received packet also retains its wire bytes, and a valid DEFLATE
+    /// stream can be far larger than the payload it inflates to; the store
+    /// charges the larger of the two so a few-byte message cannot pin a
+    /// frame-sized stream for a few bytes of budget.
+    @Test func messageStoreChargesRetainedWireBytes() throws {
+        var config = GossipSyncManager.Config()
+        config.messageByteBudget = 250
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: RequestSyncManager())
+
+        // Three 1-byte payloads, each remembered with a 100-byte wire stream.
+        var packets = try makeBudgetPackets(type: .message).map { packet in
+            BitchatPacket(
+                type: packet.type,
+                senderID: packet.senderID,
+                recipientID: nil,
+                timestamp: packet.timestamp,
+                payload: Data([0x01]),
+                signature: nil,
+                ttl: 1
+            )
+        }
+        for index in packets.indices {
+            packets[index].wirePayload = WirePayload(bytes: Data(repeating: UInt8(index), count: 100), compressed: true, forPayload: packets[index].payload)
+        }
+        packets.forEach(manager.onPublicPacketSeen)
+
+        // 300 retained bytes against a 250-byte budget: the oldest goes,
+        // exactly as it does for three 100-byte payloads.
+        #expect(manager._messageCount(for: PeerID(hexData: packets[0].senderID)) == 0)
+        #expect(manager._messageCount(for: PeerID(hexData: packets[1].senderID)) == 1)
+        #expect(manager._messageCount(for: PeerID(hexData: packets[2].senderID)) == 1)
+    }
+
     @Test func fragmentFileAndGroupStoresEvictOldestPastTheirByteBudgets() async throws {
         var config = GossipSyncManager.Config()
         config.fragmentByteBudget = 250
