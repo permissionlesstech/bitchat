@@ -63,6 +63,22 @@ jobs:
           shot 6-nearby-night -onboarded YES -tab 0
           shot 7-thread-night -onboarded YES -tab 1 -openThread YES -threadID a
           shot 8-onboarding-night -onboarded NO
+      - name: Build unsigned .ipa for sideloading
+        run: |
+          set +e
+          xcodebuild -project NearsendChat.xcodeproj -scheme NearsendChat -sdk iphoneos -configuration Release -derivedDataPath dd-device CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build > ipa.log 2>&1
+          code=$?
+          grep -E "error:" ipa.log | sort -u | head -10 | while IFS= read -r l; do echo "::error::${l//%/%25}"; done
+          [ $code -eq 0 ] || exit $code
+          mkdir -p ipa/Payload && cp -R dd-device/Build/Products/Release-iphoneos/NearsendChat.app ipa/Payload/
+          (cd ipa && zip -qry ../NearsendChat-unsigned.ipa Payload)
+          ls -la NearsendChat-unsigned.ipa
+          echo "::notice::ipa $(stat -f%z NearsendChat-unsigned.ipa) bytes, arch: $(lipo -archs ipa/Payload/NearsendChat.app/NearsendChat)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NearsendChat-unsigned-ipa
+          path: NearsendChatiOS/NearsendChat-unsigned.ipa
+          retention-days: 30
       - name: Commit project and previews
         working-directory: .
         run: |
