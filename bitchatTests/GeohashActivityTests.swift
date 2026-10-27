@@ -184,6 +184,12 @@ struct GeohashActivityMonitorTests {
         #expect(monitor.snapshot.channels.isEmpty)
     }
 
+    @Test func statusFollowsRelayConnectivity() {
+        #expect(GeohashActivityMonitor.status(relayConnected: true, networkAvailable: true) == .live)
+        #expect(GeohashActivityMonitor.status(relayConnected: false, networkAvailable: true) == .connecting)
+        #expect(GeohashActivityMonitor.status(relayConnected: false, networkAvailable: false) == .offline)
+    }
+
     @Test func startingAndStoppingWithoutRelaysIsSafe() {
         let monitor = GeohashActivityMonitor(relayManager: nil, relayDirectory: nil, isNetworkAvailable: { false })
         monitor.start()

@@ -174,16 +174,17 @@ final class GeohashActivityMonitor: ObservableObject {
     }
 
     private func updateStatus() {
-        let next: Status
-        if let relayManager, relayManager.isAnyRelayConnected(among: Array(subscribedRelays)) {
-            next = .live
-        } else if !snapshot.channels.isEmpty {
-            // Relays dropped, but what was seen is still being shown.
-            next = .live
-        } else {
-            next = isNetworkAvailable() ? .connecting : .offline
-        }
+        let connected = relayManager?.isAnyRelayConnected(among: Array(subscribedRelays)) ?? false
+        let next = Self.status(relayConnected: connected, networkAvailable: isNetworkAvailable())
         if next != status { status = next }
+    }
+
+    /// Re-derived every tick from the monitor's own relays, so a dropped connection
+    /// stops reading "live" even while what was seen is still shown, and a late
+    /// connection turns live without waiting for traffic.
+    static func status(relayConnected: Bool, networkAvailable: Bool) -> Status {
+        if relayConnected { return .live }
+        return networkAvailable ? .connecting : .offline
     }
 
     /// Events count when they say they happened (clamped to now by the aggregator).
