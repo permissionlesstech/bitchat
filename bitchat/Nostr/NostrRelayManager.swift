@@ -202,6 +202,9 @@ final class NostrRelayManager: ObservableObject {
     private var hasMutualFavorites: Bool = false
     private var hasLocationPermission: Bool = false
     private var connections: [String: NostrRelayConnectionProtocol] = [:]
+    /// A direct ensure/retry is an explicit connection request. Subscriptions
+    /// and sends instead retain only the targets their own durable intent needs.
+    private var explicitConnectionURLs = Set<String>()
     private var healthPingTokens: [String: UUID] = [:]
     private var subscriptions: [String: Set<String>] = [:] // relay URL -> active subscription IDs
     // Not-yet-flushed REQs per relay, bounded by a per-relay cap (oldest by
@@ -498,6 +501,7 @@ final class NostrRelayManager: ObservableObject {
     /// can capture pre-wipe Nostr private keys.
     func resetForPanicWipe() {
         connectionGeneration &+= 1
+        explicitConnectionURLs.removeAll()
         for (_, task) in connections {
             task.cancel(with: .goingAway, reason: nil)
         }
@@ -546,6 +550,13 @@ final class NostrRelayManager: ObservableObject {
     
     /// Ensure connections exist to the given relay URLs (idempotent).
     func ensureConnections(to relayUrls: [String]) {
+        guard dependencies.activationAllowed() else { return }
+        let targets = allowedRelayList(from: relayUrls)
+        explicitConnectionURLs.formUnion(targets)
+        ensureManagedConnections(to: targets)
+    }
+
+    private func ensureManagedConnections(to relayUrls: [String]) {
         // Global network policy gate
         guard dependencies.activationAllowed() else { return }
         let targets = allowedRelayList(from: relayUrls)
@@ -568,7 +579,7 @@ final class NostrRelayManager: ObservableObject {
         // Keep geo intent even if the directory has not arrived yet.
         guard !targetRelays.isEmpty || geohash != nil else { return }
         enqueuePendingSend(event, pendingRelays: Set(targetRelays), routingGeohash: geohash)
-        ensureConnections(to: targetRelays)
+        ensureManagedConnections(to: targetRelays)
         flushMessageQueue()
     }
 
@@ -741,17 +752,34 @@ final class NostrRelayManager: ObservableObject {
         return lookup(geohash)
     }
 
+    private func retainedRelayURLs() -> Set<String> {
+        var retained = explicitConnectionURLs
+        if allowDefaultRelays { retained.formUnion(defaultRelaySet) }
+        for state in subscriptionRequestState.values { retained.formUnion(state.relayURLs) }
+        for state in confirmedSends.values { retained.formUnion(state.awaitingRelays) }
+        messageQueueLock.lock()
+        for item in messageQueue { retained.formUnion(item.pendingRelays) }
+        messageQueueLock.unlock()
+        return retained
+    }
+
+    private func pruneUnusedRelays(disconnectedOnly: Bool = false) {
+        // Start from tracked rows, even targets whose writes succeeded and
+        // therefore no longer appear in a pending publication's destinations.
+        let candidates = relays.filter { !disconnectedOnly || !$0.isConnected }
+        let obsolete = Set(candidates.map(\.url)).subtracting(retainedRelayURLs())
+        dropRelays(obsolete)
+    }
+
     /// Keep durable REQs and queued publications on the same directory snapshot.
     /// No identity, filter, handler, or subscription ID changes during a move.
     private func reconcileGeoRelayDirectory() {
         guard dependencies.geoRelayLookup != nil else { return }
-        var oldTargets = Set<String>()
         var newTargets = Set<String>()
         for (id, state) in subscriptionRequestState {
             guard let urls = geoRelays(for: state.routingGeohash) else { continue }
             let targets = Set(allowedRelayList(from: urls))
             guard targets != state.relayURLs else { continue }
-            oldTargets.formUnion(state.relayURLs)
             newTargets.formUnion(targets)
             let added = targets.subtracting(state.relayURLs)
             let removed = state.relayURLs.subtracting(targets)
@@ -779,7 +807,6 @@ final class NostrRelayManager: ObservableObject {
         messageQueueLock.lock()
         for index in messageQueue.indices {
             guard let urls = geoRelays(for: messageQueue[index].routingGeohash) else { continue }
-            oldTargets.formUnion(messageQueue[index].pendingRelays)
             let targets = Set(allowedRelayList(from: urls))
             messageQueue[index].pendingRelays = targets.subtracting(messageQueue[index].deliveredRelays)
             messageQueue[index].inFlightRelays.formIntersection(targets)
@@ -787,14 +814,12 @@ final class NostrRelayManager: ObservableObject {
         }
         // A temporarily empty directory must retain geo intent for the next refresh.
         messageQueue.removeAll { $0.pendingRelays.isEmpty && geoRelays(for: $0.routingGeohash)?.isEmpty == false }
-        let queuedTargets = messageQueue.reduce(into: Set<String>()) { $0.formUnion($1.pendingRelays) }
         messageQueueLock.unlock()
         // Track targets even while the network gate is closed. Foreground /
         // network restoration then connects the new set, not the old one.
         for url in newTargets where !relays.contains(where: { $0.url == url }) { relays.append(Relay(url: url)) }
-        let retained = subscriptionRequestState.values.reduce(into: queuedTargets) { $0.formUnion($1.relayURLs) }
-        dropRelays(oldTargets.subtracting(retained).subtracting(defaultRelaySet))
-        ensureConnections(to: Array(newTargets))
+        pruneUnusedRelays()
+        ensureManagedConnections(to: Array(newTargets))
         for url in newTargets where connectedConnection(for: url) != nil { flushPendingSubscriptions(for: url) }
         flushMessageQueue()
         for (id, tracker) in eoseTrackers where tracker.isComplete {
@@ -863,7 +888,7 @@ final class NostrRelayManager: ObservableObject {
             }
             SecureLogger.debug("📋 Queued subscription id=\(id) for \(urls.count) relay(s)", category: .session)
             // Ensure we actually have sockets opening to these relays so queued REQs can flush
-            ensureConnections(to: urls)
+            ensureManagedConnections(to: urls)
             // If some targets are already connected, flush immediately for them
             for url in urls {
                 if let r = relays.first(where: { $0.url == url }), r.isConnected {
@@ -886,7 +911,7 @@ final class NostrRelayManager: ObservableObject {
                 existing.insert(url)
             }
             if dependencies.activationAllowed() {
-                ensureConnections(to: defaultRelays)
+                ensureManagedConnections(to: defaultRelays)
             }
         } else {
             dropRelays(defaultRelaySet)
@@ -897,7 +922,9 @@ final class NostrRelayManager: ObservableObject {
     /// subscriptions, queued sends addressed only to them, and the published row.
     private func dropRelays(_ urls: Set<String>) {
         guard !urls.isEmpty else { return }
+        explicitConnectionURLs.subtract(urls)
         for url in urls {
+            healthPingTokens.removeValue(forKey: url)
             if let connection = connections[url] {
                 connection.cancel(with: .goingAway, reason: nil)
             }
@@ -939,12 +966,15 @@ final class NostrRelayManager: ObservableObject {
     
     /// Unsubscribe from a subscription
     func unsubscribe(id: String) {
+        // Keep live sockets until their next health check so an immediate
+        // resubscribe can reuse them without a disconnect/reconnect loop.
+        defer { pruneUnusedRelays(disconnectedOnly: true) }
         messageHandlers.removeValue(forKey: id)
         removeRecentInboundEvents(forSubscriptionID: id)
         duplicateInboundEventDropCountBySubscription.removeValue(forKey: id)
         // Allow immediate re-subscription by clearing coalescer timestamp
         subscribeCoalesce.removeValue(forKey: id)
-        subscriptionRequestState.removeValue(forKey: id)
+        let previousTargets = subscriptionRequestState.removeValue(forKey: id)?.relayURLs ?? []
         pendingEOSECallbacks.removeValue(forKey: id)
         eoseTrackers.removeValue(forKey: id)
         for url in Array(pendingSubscriptions.keys) {
@@ -959,7 +989,7 @@ final class NostrRelayManager: ObservableObject {
         
         // Send unsubscribe to all relays
         for (relayUrl, connection) in connections {
-            if subscriptions[relayUrl]?.contains(id) == true {
+            if previousTargets.contains(relayUrl) || subscriptions[relayUrl]?.contains(id) == true {
                 subscriptions[relayUrl]?.remove(id)
                 connection.send(.string(messageString)) { _ in
                     // Local state is cleared before sending so callers can re-subscribe immediately.
@@ -977,8 +1007,9 @@ final class NostrRelayManager: ObservableObject {
     private func connectToRelays(_ relayUrls: [String], shouldLog: Bool = false) {
         guard dependencies.activationAllowed() else { return }
         sweepStalePendingSubscriptions()
+        let retained = retainedRelayURLs()
         let targets = allowedRelayList(from: relayUrls).filter { url in
-            connections[url] == nil &&
+            retained.contains(url) && connections[url] == nil &&
             (relays.first(where: { $0.url == url })?.nextReconnectTime ?? .distantPast) <= dependencies.now()
         }
         guard !targets.isEmpty else { return }
@@ -999,8 +1030,9 @@ final class NostrRelayManager: ObservableObject {
     }
 
     private func queueConnectionsUntilTorReady(_ relayUrls: [String]) {
+        let retained = retainedRelayURLs()
         let targets = allowedRelayList(from: relayUrls).filter {
-            connections[$0] == nil
+            retained.contains($0) && connections[$0] == nil
         }
         guard !targets.isEmpty else { return }
 
@@ -1214,6 +1246,10 @@ final class NostrRelayManager: ObservableObject {
     private func connectToRelay(_ urlString: String) {
         // Global network policy gate
         guard dependencies.activationAllowed() else { return }
+        guard retainedRelayURLs().contains(urlString) else {
+            dropRelays([urlString])
+            return
+        }
         guard let url = URL(string: urlString) else { 
             SecureLogger.warning("Invalid relay URL: \(urlString)", category: .session)
             return 
@@ -1279,6 +1315,10 @@ final class NostrRelayManager: ObservableObject {
         dependencies.scheduleAfter(dependencies.healthCheckInterval) { [weak self, weak connection] in
             Task { @MainActor in
                 guard let self, let connection, self.connections[url] === connection else { return }
+                guard self.retainedRelayURLs().contains(url) else {
+                    self.dropRelays([url])
+                    return
+                }
                 let token = UUID()
                 self.healthPingTokens[url] = token
                 connection.sendPing { [weak self, weak connection] error in
@@ -1576,6 +1616,10 @@ final class NostrRelayManager: ObservableObject {
         }
         updateRelayStatus(relayUrl, isConnected: false, error: error)
         settleEOSETrackers(droppingRelay: relayUrl)
+        guard retainedRelayURLs().contains(relayUrl) else {
+            dropRelays([relayUrl])
+            return
+        }
         // If networking is disallowed, do not schedule reconnection
         if !dependencies.activationAllowed() {
             return
@@ -1607,14 +1651,20 @@ final class NostrRelayManager: ObservableObject {
 
         // Schedule reconnection with exponential backoff
         let gen = connectionGeneration
+        let relayID = relays[index].id
         dependencies.scheduleAfter(backoffInterval) { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
                 // Ignore stale scheduled reconnects from a previous generation
                 guard gen == self.connectionGeneration else { return }
-                // Check if we should still reconnect (relay might have been removed)
-                if self.relays.contains(where: { $0.url == relayUrl }) {
-                    self.connectToRelay(relayUrl)
+                // A removed/recreated row belongs to a different connection
+                // lifetime. Old retry timers must not act on its replacement.
+                if self.relays.contains(where: { $0.id == relayID }) {
+                    if self.retainedRelayURLs().contains(relayUrl) {
+                        self.connectToRelay(relayUrl)
+                    } else {
+                        self.dropRelays([relayUrl])
+                    }
                 }
             }
         }
@@ -1626,6 +1676,7 @@ final class NostrRelayManager: ObservableObject {
     func retryConnection(to relayUrl: String) {
         let normalizedRelayUrl = NostrRelayURL.normalized(relayUrl) ?? relayUrl
         guard let index = relays.firstIndex(where: { $0.url == normalizedRelayUrl }) else { return }
+        explicitConnectionURLs.insert(normalizedRelayUrl)
         
         // Reset reconnection attempts
         relays[index].reconnectAttempts = 0

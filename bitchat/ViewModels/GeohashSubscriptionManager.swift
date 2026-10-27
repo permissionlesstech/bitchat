@@ -297,16 +297,10 @@ final class GeohashSubscriptionManager {
         let event = geoContext.event
         let identity = geoContext.identity
 
-        let targetRelays = GeoRelayDirectory.shared.routingRelays(
-            toGeohash: channel.geohash,
-            count: TransportConfig.nostrGeoRelayCount
-        )
-
-        if targetRelays.isEmpty {
-            SecureLogger.warning("Geo: no geohash relays available for \(channel.geohash); not sending", category: .session)
-        } else {
-            NostrRelayManager.shared.sendEvent(event, to: targetRelays)
-        }
+        // The manager retains geographic intent while the directory is empty
+        // and retargets it when entries arrive. Always submit the composed event.
+        let relayManager = context.nostrRelayManager ?? NostrRelayManager.shared
+        relayManager.sendEvent(event, routingGeohash: channel.geohash)
 
         // Mesh gateway uplink: with no working relay connection, hand the
         // locally signed event to a mesh peer advertising the gateway
