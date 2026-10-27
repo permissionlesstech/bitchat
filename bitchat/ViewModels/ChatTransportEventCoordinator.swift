@@ -80,6 +80,9 @@ protocol ChatTransportEventContext: AnyObject {
     // MARK: Live voice (push-to-talk)
     func handleVoiceFramePayload(from peerID: PeerID, payload: Data, timestamp: Date)
 
+    // MARK: Live video
+    func handleVideoFramePayload(from peerID: PeerID, payload: Data, timestamp: Date)
+
     // MARK: Group payloads (creator-signed state over Noise)
     func handleGroupInvitePayload(from peerID: PeerID, payload: Data)
     func handleGroupKeyUpdatePayload(from peerID: PeerID, payload: Data)
@@ -504,6 +507,9 @@ private extension ChatTransportEventCoordinator {
 
         case .voiceFrame:
             context.handleVoiceFramePayload(from: peerID, payload: payload, timestamp: timestamp)
+
+        case .videoFrame:
+            context.handleVideoFramePayload(from: peerID, payload: payload, timestamp: timestamp)
 
         case .privateFile, .authenticatedPeerState:
             // BLEService validates and persists decrypted private files before

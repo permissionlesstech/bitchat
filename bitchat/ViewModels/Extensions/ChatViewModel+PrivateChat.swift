@@ -115,10 +115,101 @@ extension ChatViewModel {
         }
     }
 
+    // MARK: Live video
+
+    /// Whether the current conversation can watch a live stream now: the
+    /// public mesh channel, or a DM peer that is mesh-reachable with an
+    /// established Noise session. Clips only need a mesh conversation.
+    @MainActor
+    var canGoLiveWithVideo: Bool {
+        liveVideoTarget() != nil
+    }
+
+    /// Where a live video stream goes right now, or nil when no live
+    /// audience is reachable (the composer then offers clips only).
+    @MainActor
+    func makeLiveVideoTarget() -> LiveVideoTarget? {
+        guard let videoTransport = meshService as? MeshVideoStreaming else { return nil }
+        switch liveVideoTarget() {
+        case .peer(let peerID):
+            return LiveVideoTarget(
+                send: { [weak videoTransport] packet in videoTransport?.sendVideoFrame(packet, to: peerID) },
+                backlog: { [weak videoTransport] in videoTransport?.liveSendBacklog() ?? 0 },
+                packetBudgetPerSecond: videoTransport.liveSendPacketBudget(to: peerID),
+                linkBoost: { [weak videoTransport] active in videoTransport?.setLiveMediaLinkBoost(active) }
+            )
+        case .publicMesh:
+            return LiveVideoTarget(
+                send: { [weak videoTransport] packet in videoTransport?.sendVideoFrameBroadcast(packet) },
+                backlog: { [weak videoTransport] in videoTransport?.liveSendBacklog() ?? 0 },
+                packetBudgetPerSecond: videoTransport.liveSendPacketBudget(to: nil),
+                linkBoost: { [weak videoTransport] active in videoTransport?.setLiveMediaLinkBoost(active) }
+            )
+        case nil:
+            return nil
+        }
+    }
+
+    @MainActor
+    private func liveVideoTarget() -> LiveVoiceTarget? {
+        if let selectedPeer = selectedPrivateChatPeer {
+            guard !selectedPeer.isGeoDM, !selectedPeer.isGeoChat, !selectedPeer.isGroup else { return nil }
+            let peerID = selectedPeer.toShort()
+            guard meshService.isPeerReachable(peerID),
+                  case .established = meshService.getNoiseSessionState(for: peerID)
+            else { return nil }
+            return .peer(peerID)
+        }
+        return activeChannel == .mesh ? .publicMesh : nil
+    }
+
+    /// Directory for videos this device sends (live recordings and clips).
+    func outgoingVideoDirectory() throws -> URL {
+        let directory = try FileManager.default
+            .url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+            .appendingPathComponent("files/\(MimeType.Category.video.mediaDir)/outgoing", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true,
+            attributes: BLEIncomingFileStore.mediaProtectionAttributes
+        )
+        return directory
+    }
+
+    /// Delivers a finished recording: as an ordinary `video/mp4` transfer
+    /// when it fits one mesh file transfer (live viewers swap it into their
+    /// bubble), otherwise only as the sender's own local copy (viewers keep
+    /// their reconstruction).
+    @MainActor
+    func finishOutgoingVideo(at url: URL) {
+        let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? Int.max
+        if size <= LiveVideoLimits.maxVideoFileBytes {
+            sendVideo(at: url)
+        } else {
+            addLocalVideoMessage(at: url)
+        }
+    }
+
     /// Inbound handler for `NoisePayloadType.voiceFrame`.
     @MainActor
     func handleVoiceFramePayload(from peerID: PeerID, payload: Data, timestamp: Date) {
         liveVoiceCoordinator.handleVoiceFramePayload(from: peerID, payload: payload, timestamp: timestamp)
+    }
+
+    /// Inbound handler for `NoisePayloadType.videoFrame`.
+    @MainActor
+    func handleVideoFramePayload(from peerID: PeerID, payload: Data, timestamp: Date) {
+        liveVideoCoordinator.handleVideoFramePayload(from: peerID, payload: payload, timestamp: timestamp)
+    }
+
+    @MainActor
+    func sendVideo(at url: URL) {
+        mediaTransferCoordinator.sendVideo(at: url)
+    }
+
+    @MainActor
+    func addLocalVideoMessage(at url: URL) {
+        mediaTransferCoordinator.addLocalVideoMessage(at: url)
     }
 
     #if os(iOS)
@@ -179,6 +270,7 @@ extension ChatViewModel {
         // A finalized voice note whose burst already streamed in live swaps
         // into the existing bubble instead of appearing (and notifying) twice.
         if liveVoiceCoordinator.absorbFinalizedVoiceNote(message) { return }
+        if liveVideoCoordinator.absorbFinalizedVideo(message) { return }
         privateConversationCoordinator.handlePrivateMessage(message)
     }
 

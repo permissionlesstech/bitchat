@@ -202,9 +202,13 @@ enum BLEFanoutSelector {
         return (keptPeripheralIDs, keptCentralIDs)
     }
 
+    /// Live video is exempt: its packets are paced, FEC-protected and already
+    /// sent once per peer, so a per-packet subset would only leave direct
+    /// neighbours of the sender missing most of the stream.
     private static func shouldSubset(packetType: UInt8, directedPeerHint: PeerID?) -> Bool {
         directedPeerHint == nil
             && packetType != MessageType.fragment.rawValue
+            && packetType != MessageType.videoFrame.rawValue
             && packetType != MessageType.announce.rawValue
             && packetType != MessageType.requestSync.rawValue
     }

@@ -1108,6 +1108,7 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
         return [
             "voicenotes/incoming",
             "images/incoming",
+            "videos/incoming",
             "files/incoming"
         ].contains { relativeDirectory in
             filesRoot.appendingPathComponent(

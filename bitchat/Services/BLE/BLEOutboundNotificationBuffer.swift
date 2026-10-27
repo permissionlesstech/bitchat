@@ -3,6 +3,9 @@ import Foundation
 struct BLEPendingNotification<Target> {
     let data: Data
     let targets: [Target]?
+    /// Live media only: a notification still queued past this uptime is
+    /// stale and dropped instead of sent late (nil = no deadline).
+    var deadline: TimeInterval? = nil
 }
 
 struct BLEOutboundNotificationBuffer<Target> {
@@ -25,19 +28,22 @@ struct BLEOutboundNotificationBuffer<Target> {
         notifications.removeAll()
     }
 
-    mutating func enqueue(data: Data, targets: [Target]?, capCount: Int) -> EnqueueResult {
+    mutating func enqueue(data: Data, targets: [Target]?, capCount: Int, deadline: TimeInterval? = nil) -> EnqueueResult {
         guard notifications.count < capCount else {
             return .full(count: notifications.count)
         }
 
-        notifications.append(BLEPendingNotification(data: data, targets: targets))
+        notifications.append(BLEPendingNotification(data: data, targets: targets, deadline: deadline))
         return .enqueued(count: notifications.count)
     }
 
-    mutating func takeAll() -> [BLEPendingNotification<Target>] {
+    /// Takes the queue, minus live notifications whose deadline passed.
+    mutating func takeAll(uptime: TimeInterval = ProcessInfo.processInfo.systemUptime) -> [BLEPendingNotification<Target>] {
         let pending = notifications
         notifications.removeAll()
-        return pending
+        return pending.filter { notification in
+            notification.deadline.map { uptime <= $0 } ?? true
+        }
     }
 
     mutating func prepend(_ pending: [BLEPendingNotification<Target>]) {
@@ -53,7 +59,7 @@ struct BLEOutboundNotificationBuffer<Target> {
             guard let targets = notification.targets else { return notification }
             let remaining = targets.filter { !matches($0) }
             guard !remaining.isEmpty else { return nil }
-            return BLEPendingNotification(data: notification.data, targets: remaining)
+            return BLEPendingNotification(data: notification.data, targets: remaining, deadline: notification.deadline)
         }
     }
 }

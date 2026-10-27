@@ -5,6 +5,14 @@ enum ChatMediaPreparationError: Error, Equatable {
     case encodingFailed
     case voiceNoteTooLarge(bytes: Int)
     case imageTooLarge(bytes: Int)
+    case videoTooLarge(bytes: Int)
+
+    var isTooLarge: Bool {
+        switch self {
+        case .voiceNoteTooLarge, .imageTooLarge, .videoTooLarge: return true
+        case .encodingFailed: return false
+        }
+    }
 }
 
 struct ChatPreparedImage {
@@ -27,6 +35,23 @@ enum ChatMediaPreparation {
             fileName: url.lastPathComponent,
             fileSize: UInt64(data.count),
             mimeType: "audio/mp4",
+            content: data
+        )
+        guard packet.encode() != nil else { throw ChatMediaPreparationError.encodingFailed }
+        return packet
+    }
+
+    /// Videos must fit one mesh file transfer: current Android receivers cap
+    /// reassembly at 256 fragments (`LiveVideoLimits.maxVideoFileBytes`).
+    static func prepareVideoPacket(at url: URL) throws -> BitchatFilePacket {
+        let data = try Data(contentsOf: url)
+        guard data.count <= LiveVideoLimits.maxVideoFileBytes else {
+            throw ChatMediaPreparationError.videoTooLarge(bytes: data.count)
+        }
+        let packet = BitchatFilePacket(
+            fileName: url.lastPathComponent,
+            fileSize: UInt64(data.count),
+            mimeType: MimeType.mp4Video.mimeString,
             content: data
         )
         guard packet.encode() != nil else { throw ChatMediaPreparationError.encodingFailed }
