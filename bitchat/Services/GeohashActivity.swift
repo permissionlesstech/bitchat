@@ -19,7 +19,8 @@ struct GeohashChannelActivity: Equatable, Identifiable, Sendable {
     let online: Int
     /// Distinct people who wrote in the channel inside the chat window.
     let chatters: Int
-    /// Chat messages inside the chat window.
+    /// Chat messages inside the chat window (history is capped per channel, so a
+    /// very busy channel reads as at most the cap).
     let messages: Int
     /// Distinct people across both windows; this is what a marker shows.
     let people: Int
@@ -102,6 +103,9 @@ struct GeohashActivityAggregator {
         let center: (lat: Double, lon: Double)?
         /// pubkey -> newest activity of any kind.
         var lastSeen: [String: Date] = [:]
+        /// pubkey -> newest chat message. Kept apart from `messages` so the size cap
+        /// on message history never drops an author who wrote inside the window.
+        var lastChat: [String: Date] = [:]
         /// Chat messages by event id, plus their arrival order for the size cap.
         var messages: [String: Message] = [:]
         var messageOrder: [String] = []
@@ -154,6 +158,9 @@ struct GeohashActivityAggregator {
         } else {
             channel.lastSeen[key] = stamp
         }
+        if chatEventID != nil, stamp > (channel.lastChat[key] ?? .distantPast) {
+            channel.lastChat[key] = stamp
+        }
         if let chatEventID, channel.messages[chatEventID] == nil {
             channel.messages[chatEventID] = Message(pubkey: key, at: stamp)
             channel.messageOrder.append(chatEventID)
@@ -172,8 +179,8 @@ struct GeohashActivityAggregator {
         guard let channel = channels[geohash.lowercased()] else { return false }
         let key = pubkey.lowercased()
         if let seen = channel.lastSeen[key], seen >= now.addingTimeInterval(-presenceWindow) { return true }
-        let chatCutoff = now.addingTimeInterval(-chatWindow)
-        return channel.messages.values.contains { $0.pubkey == key && $0.at >= chatCutoff }
+        if let wrote = channel.lastChat[key], wrote >= now.addingTimeInterval(-chatWindow) { return true }
+        return false
     }
 
     /// People counted in `geohash` right now, with their newest activity.
@@ -230,14 +237,13 @@ struct GeohashActivityAggregator {
         let presenceCutoff = now.addingTimeInterval(-presenceWindow)
         var changed = false
         for (geohash, var channel) in channels {
-            let messageCount = channel.messages.count
+            let counts = (channel.messages.count, channel.lastChat.count, channel.lastSeen.count)
             channel.messages = channel.messages.filter { $0.value.at >= chatCutoff }
-            let chatters = Set(channel.messages.values.map(\.pubkey))
-            let seenCount = channel.lastSeen.count
-            channel.lastSeen = channel.lastSeen.filter { $0.value >= presenceCutoff || chatters.contains($0.key) }
-            guard channel.messages.count != messageCount || channel.lastSeen.count != seenCount else { continue }
+            channel.lastChat = channel.lastChat.filter { $0.value >= chatCutoff }
+            channel.lastSeen = channel.lastSeen.filter { $0.value >= presenceCutoff || channel.lastChat[$0.key] != nil }
+            guard (channel.messages.count, channel.lastChat.count, channel.lastSeen.count) != counts else { continue }
             changed = true
-            if channel.lastSeen.isEmpty && channel.messages.isEmpty {
+            if channel.lastSeen.isEmpty && channel.lastChat.isEmpty && channel.messages.isEmpty {
                 channels.removeValue(forKey: geohash)
             } else {
                 channel.messageOrder.removeAll { channel.messages[$0] == nil }
@@ -252,6 +258,7 @@ struct GeohashActivityAggregator {
         let key = pubkey.lowercased()
         for (geohash, var channel) in channels {
             channel.lastSeen.removeValue(forKey: key)
+            channel.lastChat.removeValue(forKey: key)
             channel.messages = channel.messages.filter { $0.value.pubkey != key }
             channel.messageOrder.removeAll { channel.messages[$0] == nil }
             channels[geohash] = channel
@@ -271,9 +278,11 @@ struct GeohashActivityAggregator {
         let chatCutoff = now.addingTimeInterval(-chatWindow)
         let presenceCutoff = now.addingTimeInterval(-presenceWindow)
         var chatters = Set<String>()
+        for (pubkey, wrote) in channel.lastChat where wrote >= chatCutoff && !exclude(pubkey) {
+            chatters.insert(pubkey)
+        }
         var messages = 0
         for message in channel.messages.values where message.at >= chatCutoff && !exclude(message.pubkey) {
-            chatters.insert(message.pubkey)
             messages += 1
         }
         var people = chatters

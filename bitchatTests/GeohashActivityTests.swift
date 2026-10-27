@@ -50,6 +50,22 @@ struct GeohashActivityAggregatorTests {
         #expect(channel.messages == 1)
     }
 
+    @Test func authorsOutliveTheMessageHistoryCap() throws {
+        var aggregator = GeohashActivityAggregator(maxMessagesPerChannel: 2)
+        aggregator.record(geohash: "9q8y", pubkey: "early", at: now.addingTimeInterval(-600), chatEventID: "m0", now: now)
+        for index in 1...3 {
+            aggregator.record(geohash: "9q8y", pubkey: "busy", at: now, chatEventID: "m\(index)", now: now)
+        }
+        let channel = try #require(aggregator.snapshot(now: now).channel("9q8y"))
+        #expect(channel.chatters == 2)
+        #expect(channel.people == 2)
+        #expect(channel.messages == 2)
+        #expect(aggregator.isActive("early", in: "9q8y", now: now))
+        let pruned = aggregator.prune(now: now)
+        #expect(!pruned)
+        #expect(aggregator.count(in: "9q8y", now: now) == 2)
+    }
+
     @Test func futureTimestampsAreClampedToNow() {
         var aggregator = GeohashActivityAggregator()
         aggregator.record(geohash: "9q8y", pubkey: "skewed", at: now.addingTimeInterval(3_600), now: now)
