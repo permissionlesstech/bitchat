@@ -16,35 +16,35 @@ struct GeohashActivityAggregatorTests {
 
     @Test func heartbeatsCountForThePresenceWindowOnly() {
         var aggregator = GeohashActivityAggregator()
-        let result1 = aggregator.record(geohash: "u33d", pubkey: "a", at: now.addingTimeInterval(-200), now: now)
+        let result1 = aggregator.record(geohash: "9q8y", pubkey: "a", at: now.addingTimeInterval(-200), now: now)
         #expect(result1)
-        let result2 = aggregator.record(geohash: "u33d", pubkey: "b", at: now.addingTimeInterval(-400), now: now)
+        let result2 = aggregator.record(geohash: "9q8y", pubkey: "b", at: now.addingTimeInterval(-400), now: now)
         #expect(!result2)
-        #expect(aggregator.count(in: "u33d", now: now) == 1)
-        #expect(aggregator.count(in: "u33d", now: now.addingTimeInterval(101)) == 0)
+        #expect(aggregator.count(in: "9q8y", now: now) == 1)
+        #expect(aggregator.count(in: "9q8y", now: now.addingTimeInterval(101)) == 0)
     }
 
     @Test func chatAuthorsCountForTheHour() throws {
         var aggregator = GeohashActivityAggregator()
-        let result3 = aggregator.record(geohash: "u33d", pubkey: "a", at: now.addingTimeInterval(-1_800), chatEventID: "m1", now: now)
+        let result3 = aggregator.record(geohash: "9q8y", pubkey: "a", at: now.addingTimeInterval(-1_800), chatEventID: "m1", now: now)
         #expect(result3)
-        let result4 = aggregator.record(geohash: "u33d", pubkey: "b", at: now.addingTimeInterval(-3_700), chatEventID: "m2", now: now)
+        let result4 = aggregator.record(geohash: "9q8y", pubkey: "b", at: now.addingTimeInterval(-3_700), chatEventID: "m2", now: now)
         #expect(!result4)
 
-        let channel = try #require(aggregator.snapshot(now: now).channel("u33d"))
+        let channel = try #require(aggregator.snapshot(now: now).channel("9q8y"))
         #expect(channel.people == 1)
         #expect(channel.chatters == 1)
         #expect(channel.messages == 1)
         #expect(channel.online == 0)
-        #expect(aggregator.count(in: "u33d", now: now.addingTimeInterval(1_801)) == 0)
+        #expect(aggregator.count(in: "9q8y", now: now.addingTimeInterval(1_801)) == 0)
     }
 
     @Test func aHeartbeatAndAMessageFromOnePersonCountOnce() throws {
         var aggregator = GeohashActivityAggregator()
-        aggregator.record(geohash: "u33d", pubkey: "A", at: now, now: now)
-        aggregator.record(geohash: "u33d", pubkey: "a", at: now, chatEventID: "m1", now: now)
-        aggregator.record(geohash: "u33d", pubkey: "a", at: now, chatEventID: "m1", now: now)
-        let channel = try #require(aggregator.snapshot(now: now).channel("u33d"))
+        aggregator.record(geohash: "9q8y", pubkey: "A", at: now, now: now)
+        aggregator.record(geohash: "9q8y", pubkey: "a", at: now, chatEventID: "m1", now: now)
+        aggregator.record(geohash: "9q8y", pubkey: "a", at: now, chatEventID: "m1", now: now)
+        let channel = try #require(aggregator.snapshot(now: now).channel("9q8y"))
         #expect(channel.people == 1)
         #expect(channel.online == 1)
         #expect(channel.messages == 1)
@@ -52,31 +52,31 @@ struct GeohashActivityAggregatorTests {
 
     @Test func futureTimestampsAreClampedToNow() {
         var aggregator = GeohashActivityAggregator()
-        aggregator.record(geohash: "u33d", pubkey: "skewed", at: now.addingTimeInterval(3_600), now: now)
-        #expect(aggregator.count(in: "u33d", now: now.addingTimeInterval(301)) == 0)
+        aggregator.record(geohash: "9q8y", pubkey: "skewed", at: now.addingTimeInterval(3_600), now: now)
+        #expect(aggregator.count(in: "9q8y", now: now.addingTimeInterval(301)) == 0)
     }
 
     @Test func excludedIdentitiesDropOutOfEveryCount() throws {
         var aggregator = GeohashActivityAggregator()
-        aggregator.record(geohash: "u33d", pubkey: "blocked", at: now, chatEventID: "m1", now: now)
-        aggregator.record(geohash: "u33d", pubkey: "friend", at: now, now: now)
+        aggregator.record(geohash: "9q8y", pubkey: "blocked", at: now, chatEventID: "m1", now: now)
+        aggregator.record(geohash: "9q8y", pubkey: "friend", at: now, now: now)
         let snapshot = aggregator.snapshot(now: now) { $0 == "blocked" }
-        let channel = try #require(snapshot.channel("u33d"))
+        let channel = try #require(snapshot.channel("9q8y"))
         #expect(channel.people == 1)
         #expect(channel.messages == 0)
         #expect(snapshot.activeChats == 0)
-        #expect(aggregator.count(in: "u33d", now: now) { $0 == "blocked" } == 1)
+        #expect(aggregator.count(in: "9q8y", now: now) { $0 == "blocked" } == 1)
     }
 
     @Test func pruningKeepsChattersForTheHourThenDropsTheChannel() {
         var aggregator = GeohashActivityAggregator()
-        aggregator.record(geohash: "u33d", pubkey: "a", at: now, now: now)
-        aggregator.record(geohash: "u33d", pubkey: "a", at: now, chatEventID: "m1", now: now)
-        aggregator.record(geohash: "u33d", pubkey: "quiet", at: now, now: now)
+        aggregator.record(geohash: "9q8y", pubkey: "a", at: now, now: now)
+        aggregator.record(geohash: "9q8y", pubkey: "a", at: now, chatEventID: "m1", now: now)
+        aggregator.record(geohash: "9q8y", pubkey: "quiet", at: now, now: now)
 
         let result5 = aggregator.prune(now: now.addingTimeInterval(400))
         #expect(result5)
-        #expect(aggregator.activePeople(in: "u33d", now: now.addingTimeInterval(400)).keys.sorted() == ["a"])
+        #expect(aggregator.activePeople(in: "9q8y", now: now.addingTimeInterval(400)).keys.sorted() == ["a"])
 
         let result6 = aggregator.prune(now: now.addingTimeInterval(3_700))
         #expect(result6)
@@ -87,7 +87,7 @@ struct GeohashActivityAggregatorTests {
         var aggregator = GeohashActivityAggregator()
         // The same three people heartbeat into region, province and city channels.
         for key in ["a", "b", "c"] {
-            for cell in ["u3", "u33d", "u33dc"] {
+            for cell in ["9q", "9q8y", "9q8yy"] {
                 aggregator.record(geohash: cell, pubkey: key + cell, at: now, now: now)
             }
         }
@@ -95,7 +95,7 @@ struct GeohashActivityAggregatorTests {
         aggregator.record(geohash: "not-a-geohash", pubkey: "e", at: now, now: now)
 
         let snapshot = aggregator.snapshot(now: now)
-        #expect(snapshot.channels.map(\.geohash) == ["u3", "u33d", "u33dc", "dr5r"])
+        #expect(snapshot.channels.map(\.geohash) == ["9q", "9q8y", "9q8yy", "dr5r"])
         #expect(snapshot.totalOnline == 4)
         #expect(snapshot.activeChats == 1)
         #expect(aggregator.count(in: "not-a-geohash", now: now) == 1)
@@ -103,17 +103,17 @@ struct GeohashActivityAggregatorTests {
 
     @Test func busiestInsideOffersALivelierNestedChat() {
         var aggregator = GeohashActivityAggregator()
-        aggregator.record(geohash: "u33", pubkey: "a", at: now, chatEventID: "1", now: now)
-        aggregator.record(geohash: "u33d", pubkey: "b", at: now, chatEventID: "2", now: now)
-        aggregator.record(geohash: "u33d", pubkey: "b", at: now, chatEventID: "3", now: now)
-        aggregator.record(geohash: "u33dc", pubkey: "c", at: now, now: now)
-        aggregator.record(geohash: "u0", pubkey: "d", at: now, chatEventID: "4", now: now)
-        aggregator.record(geohash: "u0", pubkey: "d", at: now, chatEventID: "5", now: now)
-        aggregator.record(geohash: "u0", pubkey: "d", at: now, chatEventID: "6", now: now)
+        aggregator.record(geohash: "9q8", pubkey: "a", at: now, chatEventID: "1", now: now)
+        aggregator.record(geohash: "9q8y", pubkey: "b", at: now, chatEventID: "2", now: now)
+        aggregator.record(geohash: "9q8y", pubkey: "b", at: now, chatEventID: "3", now: now)
+        aggregator.record(geohash: "9q8yy", pubkey: "c", at: now, now: now)
+        aggregator.record(geohash: "dr", pubkey: "d", at: now, chatEventID: "4", now: now)
+        aggregator.record(geohash: "dr", pubkey: "d", at: now, chatEventID: "5", now: now)
+        aggregator.record(geohash: "dr", pubkey: "d", at: now, chatEventID: "6", now: now)
 
         let snapshot = aggregator.snapshot(now: now)
-        #expect(snapshot.busiestInside("u33")?.geohash == "u33d")
-        #expect(snapshot.busiestInside("u33d") == nil)
+        #expect(snapshot.busiestInside("9q8")?.geohash == "9q8y")
+        #expect(snapshot.busiestInside("9q8y") == nil)
         #expect(snapshot.busiestInside("") == nil)
     }
 }
@@ -135,12 +135,12 @@ struct GeohashActivityMonitorTests {
     @Test func ingestCountsGeohashEventsOnly() {
         let monitor = GeohashActivityMonitor(relayManager: nil, relayDirectory: nil)
         let now = Date()
-        #expect(monitor.ingest(event(.geohashPresence, pubkey: "a", geohash: "u33d", at: now), seenAt: now))
+        #expect(monitor.ingest(event(.geohashPresence, pubkey: "a", geohash: "9q8y", at: now), seenAt: now))
         #expect(!monitor.ingest(event(.geohashPresence, pubkey: "b", geohash: nil, at: now), seenAt: now))
         #expect(!monitor.ingest(event(.geohashPresence, pubkey: "c", geohash: "oops!", at: now), seenAt: now))
-        #expect(!monitor.ingest(event(.textNote, pubkey: "d", geohash: "u33d", content: "hi", at: now), seenAt: now))
+        #expect(!monitor.ingest(event(.textNote, pubkey: "d", geohash: "9q8y", content: "hi", at: now), seenAt: now))
         monitor.publish()
-        #expect(monitor.snapshot.channels.map(\.geohash) == ["u33d"])
+        #expect(monitor.snapshot.channels.map(\.geohash) == ["9q8y"])
         #expect(monitor.snapshot.totalOnline == 1)
     }
 
@@ -149,12 +149,12 @@ struct GeohashActivityMonitorTests {
     @Test func onlineCountsExpireWithoutNewEvents() throws {
         let monitor = GeohashActivityMonitor(relayManager: nil, relayDirectory: nil)
         let now = Date()
-        monitor.ingest(event(.ephemeralEvent, pubkey: "a", geohash: "u33d", content: "hi", at: now), seenAt: now)
+        monitor.ingest(event(.ephemeralEvent, pubkey: "a", geohash: "9q8y", content: "hi", at: now), seenAt: now)
         monitor.publish(now: now)
         #expect(monitor.snapshot.totalOnline == 1)
 
         monitor.publish(now: now.addingTimeInterval(400))
-        let channel = try #require(monitor.snapshot.channel("u33d"))
+        let channel = try #require(monitor.snapshot.channel("9q8y"))
         #expect(channel.online == 0)
         #expect(channel.people == 1)
         #expect(monitor.snapshot.totalOnline == 0)
@@ -163,7 +163,7 @@ struct GeohashActivityMonitorTests {
     @Test func blockedPeopleAreHidden() {
         let monitor = GeohashActivityMonitor(relayManager: nil, relayDirectory: nil, isBlocked: { $0 == "blocked" })
         let now = Date()
-        monitor.ingest(event(.ephemeralEvent, pubkey: "BLOCKED", geohash: "u33d", content: "spam", at: now), seenAt: now)
+        monitor.ingest(event(.ephemeralEvent, pubkey: "BLOCKED", geohash: "9q8y", content: "spam", at: now), seenAt: now)
         monitor.publish(now: now)
         #expect(monitor.snapshot.channels.isEmpty)
     }
@@ -184,12 +184,12 @@ struct GeohashParticipantTrackerActivityRuleTests {
         let tracker = GeohashParticipantTracker()
         let context = MockParticipantContext()
         tracker.configure(context: context)
-        tracker.setActiveGeohash("u33d")
+        tracker.setActiveGeohash("9q8y")
         let halfAnHourAgo = Date().addingTimeInterval(-1_800)
 
         #expect(!tracker.recordParticipant(pubkeyHex: "lurker", seenAt: halfAnHourAgo))
         #expect(tracker.recordParticipant(pubkeyHex: "writer", seenAt: halfAnHourAgo, chatEventID: "m1"))
-        #expect(tracker.participantCount(for: "u33d") == 1)
+        #expect(tracker.participantCount(for: "9q8y") == 1)
         #expect(tracker.getVisiblePeople().map(\.id) == ["writer"])
     }
 
@@ -198,9 +198,9 @@ struct GeohashParticipantTrackerActivityRuleTests {
         let context = MockParticipantContext()
         context.blockedPubkeys = ["troll"]
         tracker.configure(context: context)
-        tracker.recordParticipant(pubkeyHex: "troll", geohash: "u33d")
-        tracker.recordParticipant(pubkeyHex: "friend", geohash: "u33d")
-        #expect(tracker.participantCount(for: "u33d") == 1)
+        tracker.recordParticipant(pubkeyHex: "troll", geohash: "9q8y")
+        tracker.recordParticipant(pubkeyHex: "friend", geohash: "9q8y")
+        #expect(tracker.participantCount(for: "9q8y") == 1)
     }
 }
 
@@ -222,12 +222,12 @@ struct GlobeActivityLayerTests {
     private let size = CGSize(width: 400, height: 800)
 
     @Test func nearbyChannelsClusterUntilZoomedIn() {
-        let channels = [channel("u33dc", people: 9, messages: 10), channel("u33dg", people: 4)]
-        let center = Geohash.decodeCenter("u33d")
+        let channels = [channel("9q8yy", people: 9, messages: 10), channel("9q8yv", people: 4)]
+        let center = Geohash.decodeCenter("9q8y")
         let far = GlobeMarkerLayoutEngine.layout(channels, centerLat: center.lat, centerLon: center.lon, radius: 176, size: size)
         #expect(far.count == 1)
         #expect(far[0].isCluster)
-        #expect(far[0].primary.geohash == "u33dc")
+        #expect(far[0].primary.geohash == "9q8yy")
         #expect(far[0].messages == 10)
 
         let near = GlobeMarkerLayoutEngine.layout(channels, centerLat: center.lat, centerLon: center.lon, radius: 40_000, size: size)
@@ -235,16 +235,16 @@ struct GlobeActivityLayerTests {
     }
 
     @Test func farSideChannelsAreCulled() {
-        let markers = GlobeMarkerLayoutEngine.layout([channel("u33d"), channel("r3gx")], centerLat: 52.5, centerLon: 13.4, radius: 176, size: size)
-        #expect(markers.map(\.primary.geohash) == ["u33d"])
+        let markers = GlobeMarkerLayoutEngine.layout([channel("9q8y"), channel("r3gx")], centerLat: 37.77, centerLon: -122.42, radius: 176, size: size)
+        #expect(markers.map(\.primary.geohash) == ["9q8y"])
     }
 
     @Test func hitTestingPrefersTheClosestEdge() {
         let layer = GlobeMarkerLayer()
-        let center = Geohash.decodeCenter("u33d")
-        _ = layer.frame(channels: [channel("u33d", people: 25, messages: 5)], centerLat: center.lat, centerLon: center.lon,
+        let center = Geohash.decodeCenter("9q8y")
+        _ = layer.frame(channels: [channel("9q8y", people: 25, messages: 5)], centerLat: center.lat, centerLon: center.lon,
                         radius: 176, size: size, now: 0, instant: true)
-        #expect(layer.hitTest(CGPoint(x: 200, y: 400))?.primary.geohash == "u33d")
+        #expect(layer.hitTest(CGPoint(x: 200, y: 400))?.primary.geohash == "9q8y")
         #expect(layer.hitTest(CGPoint(x: 20, y: 20)) == nil)
     }
 
@@ -286,32 +286,32 @@ struct GlobeMarkerAnimatorTests {
 
     @Test func newMarkersFadeInInPlaceAndSettleAtFullSize() throws {
         let animator = GlobeMarkerAnimator()
-        _ = animator.frame([marker("u0")], now: 0, instant: false)
-        let appearing = try #require(animator.frame([marker("u0")], now: 0.08, instant: false).first)
+        _ = animator.frame([marker("dr")], now: 0, instant: false)
+        let appearing = try #require(animator.frame([marker("dr")], now: 0.08, instant: false).first)
         #expect(appearing.x == 100 && appearing.y == 100)
         #expect(appearing.alpha > 0.01 && appearing.alpha < 0.99)
         #expect(appearing.radius >= 6 && appearing.radius < 10)
         #expect(animator.isAnimating)
 
-        let settled = try #require(animator.frame([marker("u0")], now: 0.25, instant: false).first)
+        let settled = try #require(animator.frame([marker("dr")], now: 0.25, instant: false).first)
         #expect(abs(settled.radius - 10) < 0.01)
         #expect(settled.alpha == 1)
-        _ = animator.frame([marker("u0")], now: 0.266, instant: false)
+        _ = animator.frame([marker("dr")], now: 0.266, instant: false)
         #expect(!animator.isAnimating)
     }
 
     @Test func appearingNeverOvershootsFullSize() {
         let animator = GlobeMarkerAnimator()
         for step in 0...31 {
-            let frame = animator.frame([marker("u0")], now: Double(step) * 0.008, instant: false)
+            let frame = animator.frame([marker("dr")], now: Double(step) * 0.008, instant: false)
             #expect(frame[0].radius <= 10)
         }
     }
 
     @Test func removedMarkersFadeOutWhereTheyWereThenVanish() throws {
         let animator = GlobeMarkerAnimator()
-        _ = animator.frame([marker("u0")], now: 0, instant: false)
-        _ = animator.frame([marker("u0")], now: 0.3, instant: false)
+        _ = animator.frame([marker("dr")], now: 0, instant: false)
+        _ = animator.frame([marker("dr")], now: 0.3, instant: false)
         _ = animator.frame([], now: 0.3, instant: false)
         let leaving = try #require(animator.frame([], now: 0.37, instant: false).first)
         #expect(leaving.x == 100)
@@ -323,25 +323,25 @@ struct GlobeMarkerAnimatorTests {
 
     @Test func mergingIntoAClusterFadesInPlaceWithoutTravelling() throws {
         let animator = GlobeMarkerAnimator()
-        _ = animator.frame([marker("u0"), marker("u1", x: 200)], now: 0, instant: false)
-        _ = animator.frame([marker("u0"), marker("u1", x: 200)], now: 0.3, instant: false)
-        let cluster = marker("u0", "u1", radius: 14)
+        _ = animator.frame([marker("dr"), marker("dp", x: 200)], now: 0, instant: false)
+        _ = animator.frame([marker("dr"), marker("dp", x: 200)], now: 0.3, instant: false)
+        let cluster = marker("dr", "dp", radius: 14)
         _ = animator.frame([cluster], now: 0.31, instant: false)
-        let ghost = try #require(animator.frame([cluster], now: 0.36, instant: false).first { $0.marker.primary.geohash == "u1" })
+        let ghost = try #require(animator.frame([cluster], now: 0.36, instant: false).first { $0.marker.primary.geohash == "dp" })
         #expect(ghost.x == 200)
     }
 
     @Test func clusterGrowthEasesInsteadOfJumping() throws {
         let animator = GlobeMarkerAnimator()
-        _ = animator.frame([marker("u0")], now: 0, instant: false)
-        _ = animator.frame([marker("u0")], now: 0.3, instant: false)
-        let grown = try #require(animator.frame([marker("u0", radius: 16)], now: 0.316, instant: false).first)
+        _ = animator.frame([marker("dr")], now: 0, instant: false)
+        _ = animator.frame([marker("dr")], now: 0.3, instant: false)
+        let grown = try #require(animator.frame([marker("dr", radius: 16)], now: 0.316, instant: false).first)
         #expect(grown.radius > 10 && grown.radius < 16)
     }
 
     @Test func reduceMotionShowsChangesImmediately() throws {
         let animator = GlobeMarkerAnimator()
-        let frame = try #require(animator.frame([marker("u0")], now: 0, instant: true).first)
+        let frame = try #require(animator.frame([marker("dr")], now: 0, instant: true).first)
         #expect(frame.radius == 10)
         #expect(frame.alpha == 1)
         #expect(animator.frame([], now: 0.01, instant: true).isEmpty)
