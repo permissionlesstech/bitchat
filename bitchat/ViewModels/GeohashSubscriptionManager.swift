@@ -325,7 +325,13 @@ final class GeohashSubscriptionManager {
             )
         }
 
-        context.recordGeoParticipant(pubkeyHex: identity.publicKeyHex, seenAt: Date(), chatEventID: nil)
+        // Our own message counts for the chat hour, as received ones do; its relay
+        // echo is deduplicated away, so this is the only record of it.
+        context.recordGeoParticipant(
+            pubkeyHex: identity.publicKeyHex,
+            seenAt: Date(),
+            chatEventID: NostrInboundPipeline.chatEventID(event)
+        )
         context.registerNostrKeyMapping(identity.publicKeyHex, for: PeerID(nostr: identity.publicKeyHex))
         SecureLogger.debug(
             "GeoTeleport: sent geo message pub=\(identity.publicKeyHex.prefix(8))… teleported=\(geoContext.teleported)",

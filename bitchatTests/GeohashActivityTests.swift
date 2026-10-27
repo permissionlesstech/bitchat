@@ -184,6 +184,16 @@ struct GeohashActivityMonitorTests {
         #expect(monitor.snapshot.channels.isEmpty)
     }
 
+    /// Chat text counts as a chat message (for the hour, sent or received);
+    /// heartbeats and empty teleport markers count as presence only.
+    @Test func chatEventIDsAreForChatTextOnly() throws {
+        let identity = try NostrIdentity.generate()
+        let chat = try NostrProtocol.createEphemeralGeohashEvent(content: "hi", geohash: "9q8yy", senderIdentity: identity)
+        #expect(NostrInboundPipeline.chatEventID(chat) == chat.id)
+        #expect(NostrInboundPipeline.chatEventID(event(.ephemeralEvent, pubkey: "a", geohash: "9q8yy", content: "  ", at: Date())) == nil)
+        #expect(NostrInboundPipeline.chatEventID(event(.geohashPresence, pubkey: "a", geohash: "9q8yy", at: Date())) == nil)
+    }
+
     @Test func statusFollowsRelayConnectivity() {
         #expect(GeohashActivityMonitor.status(relayConnected: true, networkAvailable: true) == .live)
         #expect(GeohashActivityMonitor.status(relayConnected: false, networkAvailable: true) == .connecting)
@@ -380,3 +390,4 @@ struct GlobeMarkerAnimatorTests {
         #expect(animator.frame([], now: 0.01, instant: true).isEmpty)
     }
 }
+
