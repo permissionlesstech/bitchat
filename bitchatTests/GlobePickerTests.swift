@@ -467,11 +467,11 @@ struct GeohashPickerTargetTests {
         #expect(target.lat == Geohash.decodeCenter("u2e").lat)
     }
 
-    @Test func defaultsToAWideWorldView() {
+    @Test func defaultsToTheWholeGlobe() {
         let target = GeohashPickerView.initialTarget(initialGeohash: nil, nearbyGeohashes: [])
         #expect(target.lat == 20)
         #expect(target.lon == 0)
-        #expect(target.precision == 2)
+        #expect(target.precision == 1)
     }
 
     @Test func coverageMatchesTheChannelLevels() {
