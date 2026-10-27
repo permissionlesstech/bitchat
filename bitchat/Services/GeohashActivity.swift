@@ -150,12 +150,21 @@ struct GeohashActivityAggregator {
         guard stamp >= now.addingTimeInterval(-window) else { return false }
 
         let key = pubkey.lowercased()
-        var channel = channels[cell] ?? Channel(
-            center: Geohash.isValidGeohash(cell) ? Geohash.decodeCenter(cell) : nil
+        // Mutated in place: copying the channel out and back would copy its per-person
+        // tables on every heartbeat, which runs for every inbound geohash event.
+        Self.add(
+            to: &channels[cell, default: Channel(center: Geohash.isValidGeohash(cell) ? Geohash.decodeCenter(cell) : nil)],
+            key: key,
+            at: stamp,
+            chatEventID: chatEventID,
+            maxMessages: maxMessagesPerChannel
         )
-        if let previous = channel.lastSeen[key] {
-            if stamp > previous { channel.lastSeen[key] = stamp }
-        } else {
+        if channels.count > maxChannels { evictStalest() }
+        return true
+    }
+
+    private static func add(to channel: inout Channel, key: String, at stamp: Date, chatEventID: String?, maxMessages: Int) {
+        if stamp > (channel.lastSeen[key] ?? .distantPast) {
             channel.lastSeen[key] = stamp
         }
         if chatEventID != nil, stamp > (channel.lastChat[key] ?? .distantPast) {
@@ -164,14 +173,11 @@ struct GeohashActivityAggregator {
         if let chatEventID, channel.messages[chatEventID] == nil {
             channel.messages[chatEventID] = Message(pubkey: key, at: stamp)
             channel.messageOrder.append(chatEventID)
-            if channel.messageOrder.count > maxMessagesPerChannel {
+            if channel.messageOrder.count > maxMessages {
                 channel.messages.removeValue(forKey: channel.messageOrder.removeFirst())
             }
         }
         channel.lastActiveAt = max(channel.lastActiveAt, stamp)
-        channels[cell] = channel
-        if channels.count > maxChannels { evictStalest() }
-        return true
     }
 
     /// Whether `pubkey` currently counts in `geohash`.
