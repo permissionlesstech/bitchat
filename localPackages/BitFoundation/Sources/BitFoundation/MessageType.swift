@@ -51,11 +51,17 @@ public enum MessageType: UInt8 {
     /// `fragmentStart` until #446), and a very old peer that still maps it to a
     /// fragment header would misparse presence as a partial message. Values
     /// after `voiceFrame` have only ever been allocated forward. `0x2A`/`0x2B`
-    /// are spoken for by the courier spray-ack work, hence `0x2C`.
+    /// are spoken for by the courier spray-ack work, hence `0x2C`; live video
+    /// follows at `0x2D`.
     ///
     /// Not emitted or consumed by the shipping mesh yet; see
     /// `docs/PEER-ID-ROTATION.md`.
     case announceV2 = 0x2C
+
+    // Live video: one signed live-video packet (ephemeral broadcast, never
+    // gossip-synced). Private streams ride noiseEncrypted instead. See
+    // docs/LIVE_VIDEO_V1.md.
+    case videoFrame = 0x2D
 
     public var description: String {
         switch self {
@@ -76,6 +82,7 @@ public enum MessageType: UInt8 {
         case .pong: return "pong"
         case .nostrCarrier: return "nostrCarrier"
         case .voiceFrame: return "voiceFrame"
+        case .videoFrame: return "videoFrame"
         }
     }
 }

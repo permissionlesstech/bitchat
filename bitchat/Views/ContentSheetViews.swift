@@ -273,6 +273,13 @@ struct ContentPeopleSheetView: View {
             }
             .ignoresSafeArea()
         }
+        .fullScreenCover(isPresented: Binding(
+            get: { conversationUIModel.isVideoStudioPresented && (showSidebar || privateConversationModel.selectedPeerID != nil) },
+            set: { if !$0 { conversationUIModel.isVideoStudioPresented = false } }
+        )) {
+            VideoStudioView()
+                .environmentObject(conversationUIModel)
+        }
         #endif
         #if os(macOS)
         .sheet(isPresented: $showMacImagePicker) {

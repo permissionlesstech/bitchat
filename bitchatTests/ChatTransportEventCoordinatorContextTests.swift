@@ -187,6 +187,13 @@ private final class MockChatTransportEventContext: ChatTransportEventContext {
     func handleVoiceFramePayload(from peerID: PeerID, payload: Data, timestamp: Date) {
         voiceFramePayloads.append((peerID, payload, timestamp))
     }
+
+    // Live video payloads
+    private(set) var videoFramePayloads: [(peerID: PeerID, payload: Data, timestamp: Date)] = []
+
+    func handleVideoFramePayload(from peerID: PeerID, payload: Data, timestamp: Date) {
+        videoFramePayloads.append((peerID, payload, timestamp))
+    }
 }
 
 // MARK: - Helpers
