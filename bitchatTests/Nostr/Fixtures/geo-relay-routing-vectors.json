@@ -1,0 +1,182 @@
+{
+  "description": "Synthetic relay locations at the equator; unrelated to any device or user.",
+  "cases": [
+    {
+      "geohash": "s0000000",
+      "primaryCount": 5,
+      "entries": [
+        {
+          "host": "r12.example",
+          "lat": 0.0,
+          "lon": 12.0
+        },
+        {
+          "host": "r11.example",
+          "lat": 0.0,
+          "lon": 11.0
+        },
+        {
+          "host": "r10.example",
+          "lat": 0.0,
+          "lon": 10.0
+        },
+        {
+          "host": "r09.example",
+          "lat": 0.0,
+          "lon": 9.0
+        },
+        {
+          "host": "r08.example",
+          "lat": 0.0,
+          "lon": 8.0
+        },
+        {
+          "host": "r07.example",
+          "lat": 0.0,
+          "lon": 7.0
+        },
+        {
+          "host": "r06.example",
+          "lat": 0.0,
+          "lon": 6.0
+        },
+        {
+          "host": "r05.example",
+          "lat": 0.0,
+          "lon": 5.0
+        },
+        {
+          "host": "r04.example",
+          "lat": 0.0,
+          "lon": 4.0
+        },
+        {
+          "host": "r03.example",
+          "lat": 0.0,
+          "lon": 3.0
+        },
+        {
+          "host": "r02.example",
+          "lat": 0.0,
+          "lon": 2.0
+        },
+        {
+          "host": "r01.example",
+          "lat": 0.0,
+          "lon": 1.0
+        }
+      ],
+      "expected": [
+        "wss://r01.example",
+        "wss://r02.example",
+        "wss://r03.example",
+        "wss://r04.example",
+        "wss://r05.example",
+        "wss://r06.example",
+        "wss://r07.example",
+        "wss://r08.example",
+        "wss://r09.example",
+        "wss://r10.example"
+      ]
+    },
+    {
+      "geohash": "s0000000",
+      "primaryCount": 2,
+      "entries": [
+        {
+          "host": "tie-06.example",
+          "lat": 0.0,
+          "lon": 0.0
+        },
+        {
+          "host": "tie-05.example",
+          "lat": 0.0,
+          "lon": 0.0
+        },
+        {
+          "host": "tie-04.example",
+          "lat": 0.0,
+          "lon": 0.0
+        },
+        {
+          "host": "tie-03.example",
+          "lat": 0.0,
+          "lon": 0.0
+        },
+        {
+          "host": "tie-02.example",
+          "lat": 0.0,
+          "lon": 0.0
+        },
+        {
+          "host": "tie-01.example",
+          "lat": 0.0,
+          "lon": 0.0
+        }
+      ],
+      "expected": [
+        "wss://tie-01.example",
+        "wss://tie-02.example",
+        "wss://tie-03.example",
+        "wss://tie-04.example"
+      ]
+    },
+    {
+      "geohash": "s0000000",
+      "primaryCount": 5,
+      "entries": [
+        {
+          "host": "only.example",
+          "lat": 0.0,
+          "lon": 0.0
+        }
+      ],
+      "expected": [
+        "wss://only.example"
+      ]
+    },
+    {
+      "geohash": "s0000000",
+      "primaryCount": 0,
+      "entries": [
+        {
+          "host": "only.example",
+          "lat": 0.0,
+          "lon": 0.0
+        }
+      ],
+      "expected": []
+    },
+    {
+      "geohash": "s0000000",
+      "primaryCount": 2,
+      "entries": [
+        {
+          "host": "WSS://Tie-A.EXAMPLE:443/",
+          "lat": 0.0,
+          "lon": 0.0
+        },
+        {
+          "host": "tie-a.example",
+          "lat": 0.0,
+          "lon": 0.0
+        },
+        {
+          "host": "https://tie-b.example/",
+          "lat": 0.0,
+          "lon": 0.0
+        },
+        {
+          "host": "tie-c.example:8443",
+          "lat": 0.0,
+          "lon": 0.0
+        }
+      ],
+      "expected": [
+        "wss://tie-a.example",
+        "wss://tie-b.example",
+        "wss://tie-c.example:8443"
+      ]
+    }
+  ]
+}

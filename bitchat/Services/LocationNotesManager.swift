@@ -8,6 +8,7 @@ struct LocationNotesDependencies {
     typealias Subscribe = @MainActor (_ filter: NostrFilter, _ id: String, _ relays: [String], _ handler: @escaping (NostrEvent) -> Void, _ onEOSE: (() -> Void)?) -> Void
     typealias Unsubscribe = @MainActor (_ id: String) -> Void
     typealias SendEvent = @MainActor (_ event: NostrEvent, _ relayUrls: [String]) -> Void
+    typealias SendGeoEvent = @MainActor (_ event: NostrEvent, _ geohash: String) -> Void
 
     var relayLookup: RelayLookup
     var subscribe: Subscribe
@@ -21,12 +22,13 @@ struct LocationNotesDependencies {
     /// "loaded, empty" from "still connecting (Tor warming up)" when EOSE
     /// fires without data. Defaults to true so tests keep legacy behavior.
     var anyRelayConnected: @MainActor (_ relayUrls: [String]) -> Bool = { _ in true }
+    var sendGeoEvent: SendGeoEvent? = nil
 
     private static let idBridge = NostrIdentityBridge()
 
     static let live = LocationNotesDependencies(
         relayLookup: { geohash, count in
-            GeoRelayDirectory.shared.closestRelays(toGeohash: geohash, count: count)
+            GeoRelayDirectory.shared.routingRelays(toGeohash: geohash, count: count)
         },
         subscribe: { filter, id, relays, handler, onEOSE in
             NostrRelayManager.shared.subscribe(
@@ -53,6 +55,9 @@ struct LocationNotesDependencies {
             .eraseToAnyPublisher(),
         anyRelayConnected: { relayUrls in
             NostrRelayManager.shared.isAnyRelayConnected(among: relayUrls)
+        },
+        sendGeoEvent: { event, geohash in
+            NostrRelayManager.shared.sendEvent(event, routingGeohash: geohash)
         }
     )
 }
@@ -288,9 +293,10 @@ final class LocationNotesManager: ObservableObject {
             // EOSE with no data and zero connected target relays means the
             // 10s fallback fired while Tor was still warming up — showing
             // "no notes" would be a lie. Wait visibly and retry.
-            if self.notes.isEmpty, !self.dependencies.anyRelayConnected(relays) {
+            let currentRelays = self.dependencies.relayLookup(self.geohash, TransportConfig.nostrGeoRelayCount)
+            if self.notes.isEmpty, !self.dependencies.anyRelayConnected(currentRelays) {
                 self.state = .connecting
-                self.scheduleConnectivityRetry(relays: relays)
+                self.scheduleConnectivityRetry()
             } else {
                 self.state = .ready
             }
@@ -300,25 +306,26 @@ final class LocationNotesManager: ObservableObject {
     /// While `.connecting`, poll for a live target relay and re-subscribe as
     /// soon as one appears (fresh REQ, fresh EOSE tracking). The poll dies
     /// with the state: any subscribe/cancel invalidates it.
-    private func scheduleConnectivityRetry(relays: [String]) {
+    private func scheduleConnectivityRetry() {
         connectivityRetryTimer?.invalidate()
         connectivityRetryTimer = Timer.scheduledTimer(
             withTimeInterval: TransportConfig.uiGeoNotesConnectivityRetrySeconds,
             repeats: true
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.retryIfRelaysAvailable(relays: relays)
+                self?.retryIfRelaysAvailable()
             }
         }
     }
 
-    func retryIfRelaysAvailable(relays: [String]) {
+    func retryIfRelaysAvailable() {
         guard state == .connecting else {
             connectivityRetryTimer?.invalidate()
             connectivityRetryTimer = nil
             return
         }
-        guard dependencies.anyRelayConnected(relays) else { return }
+        let currentRelays = dependencies.relayLookup(geohash, TransportConfig.nostrGeoRelayCount)
+        guard dependencies.anyRelayConnected(currentRelays) else { return }
         connectivityRetryTimer?.invalidate()
         connectivityRetryTimer = nil
         SecureLogger.debug("LocationNotesManager: relay came up, retrying notes fetch for \(geohash)", category: .session)
@@ -347,7 +354,7 @@ final class LocationNotesManager: ObservableObject {
                 expiresAt: expiresAt,
                 urgent: urgent
             )
-            dependencies.sendEvent(event, relays)
+            publish(event, to: relays)
             // Optimistic local-echo
             let echo = Note(
                 id: event.id,
@@ -377,6 +384,16 @@ final class LocationNotesManager: ObservableObject {
         return note.pubkey == ownPubkey
     }
 
+    private func publish(_ event: NostrEvent, to relays: [String]) {
+        // Deletions carry only an event reference, so their geographic intent
+        // must stay local instead of adding a new tag to the signed event.
+        if let sendGeoEvent = dependencies.sendGeoEvent {
+            sendGeoEvent(event, geohash)
+        } else {
+            dependencies.sendEvent(event, relays)
+        }
+    }
+
     /// Requests NIP-09 deletion of one of our own notes and removes it locally.
     @discardableResult
     func delete(note: Note) -> Bool {
@@ -390,7 +407,7 @@ final class LocationNotesManager: ObservableObject {
         do {
             let identity = try dependencies.deriveIdentity(geohash)
             let deletion = try NostrProtocol.createDeleteEvent(ofEventID: note.id, senderIdentity: identity)
-            dependencies.sendEvent(deletion, relays)
+            publish(deletion, to: relays)
             // Keep the id in noteIDs so a relay replay can't resurrect it.
             notes.removeAll { $0.id == note.id }
             return true
