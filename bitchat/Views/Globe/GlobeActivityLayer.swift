@@ -365,15 +365,8 @@ final class GlobeMarkerAnimator {
 final class GlobeMarkerLayer {
     private let animator = GlobeMarkerAnimator()
     private(set) var markers: [GlobeMarker] = []
-    private var layoutKey: LayoutKey?
-
-    private struct LayoutKey: Equatable {
-        let centerLat: Double
-        let centerLon: Double
-        let radius: Double
-        let size: CGSize
-        let channels: [GeohashChannelActivity]
-    }
+    /// Inputs of the last layout; markers are recomputed only when one changes.
+    private var layoutInputs: (centerLat: Double, centerLon: Double, radius: Double, size: CGSize, channels: [GeohashChannelActivity])?
 
     var isAnimating: Bool { animator.isAnimating }
 
@@ -400,9 +393,9 @@ final class GlobeMarkerLayer {
         now: CFTimeInterval,
         instant: Bool
     ) -> [GlobeMarkerFrame] {
-        let key = LayoutKey(centerLat: centerLat, centerLon: centerLon, radius: radius, size: size, channels: channels)
-        if key != layoutKey {
-            layoutKey = key
+        let inputs = (centerLat: centerLat, centerLon: centerLon, radius: radius, size: size, channels: channels)
+        if layoutInputs.map({ $0 != inputs }) ?? true {
+            layoutInputs = inputs
             markers = GlobeMarkerLayoutEngine.layout(channels, centerLat: centerLat, centerLon: centerLon, radius: radius, size: size)
         }
         return animator.frame(markers, now: now, instant: instant)
