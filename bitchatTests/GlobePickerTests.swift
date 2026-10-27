@@ -568,6 +568,18 @@ struct GeohashPickerTargetTests {
         #expect(abs(GlobeMath.normalizeLon(state.centerLon - center.lon)) < 1e-6)
     }
 
+    @Test func zoomingOutStaysAvailableAtLevelOneUntilTheWholeGlobeShows() {
+        let state = GlobeState(targetLat: 37.77, targetLon: -122.42, initialPrecision: 1, startZoomedOut: true)
+        #expect(!state.canZoomOut)
+        state.setViewport(baseRadius: 170, screenMin: 390, animateIntro: false)
+        #expect(state.precision == 1)
+        #expect(state.zoom > GlobeMath.minZoom)
+        #expect(state.canZoomOut)
+        state.zoomBy(0.0001)
+        #expect(state.precision == 1)
+        #expect(!state.canZoomOut)
+    }
+
     @Test func thresholdZoomAgreesWithAutoPrecision() {
         for precision in 2...6 {
             let zoom = GlobeMath.thresholdZoom(forPrecision: precision, baseRadius: 170, screenMin: 390)

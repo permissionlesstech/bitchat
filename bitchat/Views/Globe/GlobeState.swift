@@ -350,6 +350,12 @@ final class GlobeState: ObservableObject {
         )))
     }
 
+    /// Whether there is a wider view to zoom out to: a coarser precision, or the
+    /// whole globe while level 1 is framed closer (as after the opening rotation).
+    var canZoomOut: Bool {
+        precision > 1 || zoom > GlobeMath.minZoom * 1.001
+    }
+
     /// Button-driven precision change: adjusts precision and animates zoom to frame it.
     func animatePrecision(_ newPrecision: Int) {
         let p = min(max(newPrecision, 1), GlobeMath.maxPrecision)

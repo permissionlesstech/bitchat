@@ -180,9 +180,10 @@ struct GeohashPickerView: View {
                 Spacer(minLength: 0)
                 ControlRail(
                     precision: state.precision,
+                    canZoomOut: state.canZoomOut,
                     onWholeGlobe: showWholeGlobe,
                     onZoomIn: { stepPrecision(by: 1) },
-                    onZoomOut: { stepPrecision(by: -1) },
+                    onZoomOut: zoomOut,
                     strings: (Strings.wholeGlobe, Strings.increasePrecision, Strings.decreasePrecision, Strings.precision(state.precision))
                 )
             }
@@ -391,6 +392,15 @@ struct GeohashPickerView: View {
         state.animatePrecision(state.precision + delta)
     }
 
+    /// At level 1 there is no coarser precision, so zooming out shows the whole globe.
+    private func zoomOut() {
+        if state.precision > 1 {
+            stepPrecision(by: -1)
+        } else {
+            showWholeGlobe()
+        }
+    }
+
     private func showWholeGlobe() {
         dismissHints()
         setCluster(nil)
@@ -562,6 +572,7 @@ private struct StatusChip: View {
 /// and zoom out.
 private struct ControlRail: View {
     let precision: Int
+    let canZoomOut: Bool
     let onWholeGlobe: () -> Void
     let onZoomIn: () -> Void
     let onZoomOut: () -> Void
@@ -571,7 +582,7 @@ private struct ControlRail: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            button("globe", strings.wholeGlobe, enabled: precision > 1, action: onWholeGlobe)
+            button("globe", strings.wholeGlobe, enabled: canZoomOut, action: onWholeGlobe)
                 .pickerSurface(Circle())
 
             VStack(spacing: 0) {
@@ -582,7 +593,7 @@ private struct ControlRail: View {
                     .foregroundColor(palette.secondary)
                     .frame(width: 44, height: 22)
                     .accessibilityLabel(strings.precision)
-                button("minus", strings.zoomOut, enabled: precision > 1, action: onZoomOut)
+                button("minus", strings.zoomOut, enabled: canZoomOut, action: onZoomOut)
             }
             .pickerSurface(Capsule())
         }
