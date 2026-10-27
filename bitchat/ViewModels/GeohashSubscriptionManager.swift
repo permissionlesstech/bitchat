@@ -48,7 +48,7 @@ protocol GeohashSubscriptionContext: AnyObject {
     func stopGeoParticipantRefreshTimer()
     func setActiveParticipantGeohash(_ geohash: String?)
     @discardableResult
-    func recordGeoParticipant(pubkeyHex: String, seenAt: Date) -> Bool
+    func recordGeoParticipant(pubkeyHex: String, seenAt: Date, chatEventID: String?) -> Bool
     func markGeoTeleported(_ pubkeyHexLowercased: String)
     func clearGeoTeleported(_ pubkeyHexLowercased: String)
     func clearTeleportedGeo()
@@ -232,7 +232,7 @@ final class GeohashSubscriptionManager {
         context.setActiveParticipantGeohash(channel.geohash)
 
         if let identity = try? context.deriveNostrIdentity(forGeohash: channel.geohash) {
-            context.recordGeoParticipant(pubkeyHex: identity.publicKeyHex, seenAt: Date())
+            context.recordGeoParticipant(pubkeyHex: identity.publicKeyHex, seenAt: Date(), chatEventID: nil)
             let key = identity.publicKeyHex.lowercased()
             if context.isTeleported && context.isGeohashOutsideRegionalChannels(channel.geohash) {
                 context.markGeoTeleported(key)
@@ -325,7 +325,7 @@ final class GeohashSubscriptionManager {
             )
         }
 
-        context.recordGeoParticipant(pubkeyHex: identity.publicKeyHex, seenAt: Date())
+        context.recordGeoParticipant(pubkeyHex: identity.publicKeyHex, seenAt: Date(), chatEventID: nil)
         context.registerNostrKeyMapping(identity.publicKeyHex, for: PeerID(nostr: identity.publicKeyHex))
         SecureLogger.debug(
             "GeoTeleport: sent geo message pub=\(identity.publicKeyHex.prefix(8))… teleported=\(geoContext.teleported)",
