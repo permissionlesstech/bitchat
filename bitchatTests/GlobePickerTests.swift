@@ -232,6 +232,70 @@ struct GlobeMotionDetailTests {
     }
 }
 
+struct GlobeFlightTests {
+    private let screen = 390.0
+    private let baseRadius = 170.0
+
+    /// Largest on-screen jump of the view center between frames, in points.
+    private func largestStep(_ view: (Double) -> (lat: Double, lon: Double, zoom: Double), frames: Int) -> Double {
+        var largest = 0.0
+        var previous = view(0)
+        for frame in 1...frames {
+            let next = view(Double(frame) / Double(frames))
+            let p = GlobeMath.projectRaw(lat: next.lat, lon: next.lon, centerLat: previous.lat, centerLon: previous.lon)
+            let radius = baseRadius * max(previous.zoom, next.zoom)
+            largest = max(largest, (p.x * p.x + p.y * p.y).squareRoot() * radius)
+            previous = next
+        }
+        return largest
+    }
+
+    @Test func endsExactlyOnBothViews() {
+        let flight = GlobeFlight(from: (8, -192.4 + 360, 1), to: (37.75, -122.42, 4_000))
+        #expect(flight.view(at: 0).zoom == 1)
+        let end = flight.view(at: 1)
+        #expect(end.lat == 37.75 && end.lon == -122.42 && end.zoom == 4_000)
+    }
+
+    /// Diving from the whole globe into a block-level cell far away used to stream
+    /// the screen past hundreds of cells per frame; the smooth path keeps every
+    /// frame's motion to a fraction of the screen.
+    @Test func deepFlightsMoveSmoothly() {
+        let start = (lat: 15.1, lon: -192.42 + 360, zoom: 1.0)
+        let zoom = GlobeMath.zoomForPrecision(7, baseRadius: baseRadius, screenMin: screen)
+        let flight = GlobeFlight(from: start, to: (37.75, -122.42, zoom))
+        let frames = 90
+
+        let smooth = largestStep({ flight.view(at: $0) }, frames: frames)
+        let naive = largestStep({ t in
+            (start.lat + (37.75 - start.lat) * t,
+             GlobeMath.normalizeLon(start.lon + GlobeMath.normalizeLon(-122.42 - start.lon) * t),
+             start.zoom * pow(zoom / start.zoom, t))
+        }, frames: frames)
+        #expect(smooth < screen * 0.25)
+        #expect(naive > smooth * 20)
+    }
+
+    @Test func zoomingInPlaceKeepsTheCenter() {
+        let flight = GlobeFlight(from: (10, 20, 1), to: (10, 20, 50))
+        var previousZoom = 1.0
+        for step in 1...20 {
+            let view = flight.view(at: Double(step) / 20)
+            #expect(abs(view.lat - 10) < 1e-9 && abs(view.lon - 20) < 1e-9)
+            #expect(view.zoom >= previousZoom)
+            previousZoom = view.zoom
+        }
+    }
+
+    @Test func spinsAtOneZoomStayAtThatZoom() {
+        let flight = GlobeFlight(from: (8, -70, 1), to: (20, 0, 1))
+        for step in 0...20 {
+            #expect(flight.view(at: Double(step) / 20).zoom == 1)
+        }
+        #expect(flight.view(at: 0.5).lon > -70 && flight.view(at: 0.5).lon < 0)
+    }
+}
+
 @MainActor
 struct GlobeStateTests {
     @Test func selectionFollowsTheViewCenterOnceLaidOut() {
