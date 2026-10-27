@@ -202,7 +202,7 @@ final class NostrRelayManager: ObservableObject {
     private var hasMutualFavorites: Bool = false
     private var hasLocationPermission: Bool = false
     private var connections: [String: NostrRelayConnectionProtocol] = [:]
-    /// A direct ensure/retry is an explicit connection request. Subscriptions
+    /// A direct ensure is an explicit connection request. Subscriptions
     /// and sends instead retain only the targets their own durable intent needs.
     private var explicitConnectionURLs = Set<String>()
     private var healthPingTokens: [String: UUID] = [:]
@@ -1676,7 +1676,6 @@ final class NostrRelayManager: ObservableObject {
     func retryConnection(to relayUrl: String) {
         let normalizedRelayUrl = NostrRelayURL.normalized(relayUrl) ?? relayUrl
         guard let index = relays.firstIndex(where: { $0.url == normalizedRelayUrl }) else { return }
-        explicitConnectionURLs.insert(normalizedRelayUrl)
         
         // Reset reconnection attempts
         relays[index].reconnectAttempts = 0

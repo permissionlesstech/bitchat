@@ -103,6 +103,26 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertTrue(context.scheduler.scheduled.isEmpty)
     }
 
+    func test_manualRetryDoesNotPinARelayAfterItsGeoOwnerUnsubscribes() async {
+        let url = "wss://manual-retry-region.example"
+        let context = makeContext(permission: .denied, geoRelayLookup: { _ in [url] })
+        context.sessionFactory.pingErrorByURL[url] = URLError(.cannotFindHost)
+        context.manager.subscribe(filter: .geohashEphemeral("s0000000"), id: "retry-owner", handler: { _ in })
+        let failed = await waitUntil { context.scheduler.scheduled.count == 1 }
+        XCTAssertTrue(failed)
+        context.manager.retryConnection(to: url)
+        let retried = await waitUntil { context.scheduler.scheduled.count == 2 }
+        XCTAssertTrue(retried)
+
+        context.manager.unsubscribe(id: "retry-owner")
+        XCTAssertTrue(context.manager.relays.isEmpty)
+        context.scheduler.runNext()
+        context.scheduler.runNext()
+        await Task { @MainActor in }.value
+        XCTAssertEqual(context.sessionFactory.requestedURLs, [url, url])
+        XCTAssertTrue(context.scheduler.scheduled.isEmpty)
+    }
+
     func test_sharedSubscriptionAndDefaultsRetainFailedRelays() async {
         let url = "wss://shared-region.example"
         let context = makeContext(permission: .authorized, geoRelayLookup: { _ in [url] })
