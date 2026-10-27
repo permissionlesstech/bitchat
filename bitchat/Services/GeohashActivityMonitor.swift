@@ -40,6 +40,9 @@ final class GeohashActivityMonitor: ObservableObject {
 
     private var isRunning = false
     private var subscriptionIDs: [String] = []
+    /// Relays the sweep wants, in order: the worldwide spread, then focus relays.
+    private var wantedRelays: [String] = []
+    /// Relays the relay manager accepted a subscription for.
     private var subscribedRelays: Set<String> = []
     private var openedRelays: Set<String> = []
     private var publishTimer: Timer?
@@ -96,10 +99,11 @@ final class GeohashActivityMonitor: ObservableObject {
         }
         RunLoop.main.add(timer, forMode: .common)
         publishTimer = timer
-        subscribe(to: sweepRelays())
+        want(sweepRelays())
         if let cell = lastFocusCell {
-            subscribe(to: focusRelays(cell))
+            want(focusRelays(cell))
         }
+        subscribePending()
     }
 
     func stop() {
@@ -113,6 +117,7 @@ final class GeohashActivityMonitor: ObservableObject {
             relayManager?.unsubscribe(id: id)
         }
         subscriptionIDs.removeAll()
+        wantedRelays.removeAll()
         subscribedRelays.removeAll()
         relayManager?.releaseRelays(Array(openedRelays))
         openedRelays.removeAll()
@@ -130,7 +135,8 @@ final class GeohashActivityMonitor: ObservableObject {
         focusTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: Constants.focusSettle)
             guard !Task.isCancelled, let self, self.isRunning else { return }
-            self.subscribe(to: self.focusRelays(cell))
+            self.want(self.focusRelays(cell))
+            self.subscribePending()
         }
     }
 
@@ -165,7 +171,26 @@ final class GeohashActivityMonitor: ObservableObject {
 
     // MARK: - Private
 
+    /// Subscribes to every wanted relay not yet registered. The relay manager drops
+    /// requests while network activation is off (for example the picker opened
+    /// before location access or a location channel), so a relay is only marked
+    /// subscribed once the network can take it; the publish tick retries the rest.
+    /// Internal so tests can drive it.
+    func subscribePending() {
+        guard isRunning, relayManager != nil, isNetworkAvailable() else { return }
+        let pending = wantedRelays.filter { !subscribedRelays.contains($0) }
+        guard !pending.isEmpty else { return }
+        subscribe(to: pending)
+    }
+
+    private func want(_ relays: [String]) {
+        for url in relays.compactMap({ NostrRelayURL.normalized($0) }) where !wantedRelays.contains(url) {
+            wantedRelays.append(url)
+        }
+    }
+
     private func tick() {
+        subscribePending()
         let now = Date()
         if dirty || now.timeIntervalSince(lastPublishedAt) >= Constants.refreshInterval {
             publish(now: now)
@@ -197,9 +222,8 @@ final class GeohashActivityMonitor: ObservableObject {
     }
 
     private func sweepRelays() -> [String] {
-        guard let relayDirectory else { return [] }
         let nearestPerAnchor = Constants.sweepAnchors.map {
-            relayDirectory.closestRelays(toGeohash: $0, count: Constants.relaysPerAnchor)
+            relayDirectory?.closestRelays(toGeohash: $0, count: Constants.relaysPerAnchor) ?? []
         }
         var ordered: [String] = []
         var seen = Set<String>()
@@ -215,11 +239,11 @@ final class GeohashActivityMonitor: ObservableObject {
     }
 
     private func focusRelays(_ cell: String) -> [String] {
-        let room = Constants.maxTotalRelays - subscribedRelays.count
+        let room = Constants.maxTotalRelays - wantedRelays.count
         guard room > 0, let relayDirectory else { return [] }
         return Array(
             relayDirectory.closestRelays(toGeohash: cell, count: Constants.relaysPerFocus)
-                .filter { !subscribedRelays.contains($0) }
+                .filter { !wantedRelays.contains($0) }
                 .prefix(room)
         )
     }

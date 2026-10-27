@@ -6,6 +6,7 @@
 // For more information, see <https://unlicense.org>
 //
 
+import Combine
 import CoreGraphics
 import Foundation
 import Testing
@@ -192,6 +193,33 @@ struct GeohashActivityMonitorTests {
         #expect(NostrInboundPipeline.chatEventID(chat) == chat.id)
         #expect(NostrInboundPipeline.chatEventID(event(.ephemeralEvent, pubkey: "a", geohash: "9q8yy", content: "  ", at: Date())) == nil)
         #expect(NostrInboundPipeline.chatEventID(event(.geohashPresence, pubkey: "a", geohash: "9q8yy", at: Date())) == nil)
+    }
+
+    /// Opened while network activation is off, the relay manager drops the sweep's
+    /// subscriptions; the monitor must not treat them as done, and registers them
+    /// once access returns instead of staying empty until reopened.
+    @Test func subscriptionsRetryWhenNetworkAccessReturns() {
+        let network = NetworkFlag()
+        let manager = NostrRelayManager(dependencies: .offlineTest(activationAllowed: { network.available }))
+        let monitor = GeohashActivityMonitor(relayManager: manager, relayDirectory: nil, isNetworkAvailable: { network.available })
+        let builtIn = NostrRelayManager.builtInRelayURLs.compactMap { NostrRelayURL.normalized($0) }
+        #expect(!builtIn.isEmpty)
+        func sweepRequests() -> Int {
+            builtIn.reduce(0) { total, url in
+                total + manager.debugPendingSubscriptionIDs(for: url).filter { $0.hasPrefix("globe-activity-") }.count
+            }
+        }
+
+        monitor.start()
+        defer { monitor.stop() }
+        #expect(sweepRequests() == 0)
+
+        network.available = true
+        monitor.subscribePending()
+        // Chat and presence requests, queued for every built-in relay.
+        #expect(sweepRequests() == builtIn.count * 2)
+        monitor.subscribePending()
+        #expect(sweepRequests() == builtIn.count * 2)
     }
 
     @Test func statusFollowsRelayConnectivity() {
@@ -391,3 +419,44 @@ struct GlobeMarkerAnimatorTests {
     }
 }
 
+private final class NetworkFlag {
+    var available = false
+}
+
+/// Sockets that never connect, so a relay manager can register subscriptions in a
+/// test without touching the network.
+private final class IdleRelaySession: NostrRelaySessionProtocol {
+    private final class IdleConnection: NostrRelayConnectionProtocol {
+        func resume() {}
+        func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {}
+        func send(_ message: URLSessionWebSocketTask.Message, completionHandler: @escaping (Error?) -> Void) {}
+        func receive(completionHandler: @escaping (Result<URLSessionWebSocketTask.Message, Error>) -> Void) {}
+        func sendPing(pongReceiveHandler: @escaping (Error?) -> Void) {}
+    }
+
+    func webSocketTask(with url: URL) -> NostrRelayConnectionProtocol { IdleConnection() }
+}
+
+private extension NostrRelayManagerDependencies {
+    static func offlineTest(activationAllowed: @escaping () -> Bool) -> Self {
+        let session = IdleRelaySession()
+        return Self(
+            activationAllowed: activationAllowed,
+            userTorEnabled: { false },
+            hasMutualFavorites: { false },
+            hasLocationPermission: { true },
+            mutualFavoritesPublisher: Just(Set<Data>()).eraseToAnyPublisher(),
+            locationPermissionPublisher: Just(LocationChannelManager.PermissionState.authorized).eraseToAnyPublisher(),
+            torEnforced: { false },
+            torIsReady: { true },
+            torIsForeground: { true },
+            awaitTorReady: { $0(true) },
+            makeSession: { session },
+            scheduleAfter: { _, _ in },
+            now: Date.init,
+            jitterUnit: { 0.5 },
+            notificationCenter: NotificationCenter(),
+            customRelays: { [] }
+        )
+    }
+}
