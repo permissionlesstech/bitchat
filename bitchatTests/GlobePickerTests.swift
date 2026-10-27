@@ -538,22 +538,64 @@ struct GeohashPickerTargetTests {
 
     /// A fine selected geohash opens as a whole-globe spin to its location, not a
     /// dive into the cell.
-    @Test func openingSpinStaysOnTheWholeGlobe() {
+    /// A fine selected geohash opens as a rotation that zooms into a regional view
+    /// while the selection stays at level 1, not a dive into the cell.
+    @Test func openingRotationZoomsInButStaysAtLevelOne() {
         let center = Geohash.decodeCenter("9q8yyk2")
         let state = GlobeState(targetLat: center.lat, targetLon: center.lon, initialPrecision: 1, startZoomedOut: true)
+        #expect(state.zoom < GlobeMath.minZoom)
         state.setViewport(baseRadius: 170, screenMin: 390)
+        let threshold = GlobeMath.thresholdZoom(forPrecision: 2, baseRadius: 170, screenMin: 390)
         var time = 100.0
         state.tick(time)
         var maxZoom = state.zoom
+        var turnedWhileZooming = false
+        let startLon = state.centerLon
         while state.isAnimating, time < 110 {
             time += 1.0 / 60
             state.tick(time)
             maxZoom = max(maxZoom, state.zoom)
+            #expect(state.precision == 1)
+            if state.zoom > 1.5, state.zoom < state.introEndZoom * 0.9,
+               abs(GlobeMath.normalizeLon(state.centerLon - startLon)) > 5 { turnedWhileZooming = true }
         }
-        #expect(maxZoom == GlobeMath.minZoom)
+        #expect(abs(state.zoom - state.introEndZoom) < 1e-9)
+        #expect(state.zoom > 2.5)
+        #expect(maxZoom < threshold)
+        #expect(turnedWhileZooming)
         #expect(state.precision == 1)
         #expect(abs(state.centerLat - center.lat) < 1e-6)
         #expect(abs(GlobeMath.normalizeLon(state.centerLon - center.lon)) < 1e-6)
+    }
+
+    @Test func thresholdZoomAgreesWithAutoPrecision() {
+        for precision in 2...6 {
+            let zoom = GlobeMath.thresholdZoom(forPrecision: precision, baseRadius: 170, screenMin: 390)
+            #expect(GlobeMath.autoPrecision(globeRadius: 170 * zoom * 1.001, screenMin: 390) == precision)
+            #expect(GlobeMath.autoPrecision(globeRadius: 170 * zoom * 0.999, screenMin: 390) == precision - 1)
+        }
+    }
+
+    /// Interrupting the intro below the minimum zoom: pinching continues from there
+    /// without snapping up or going further out, and a fly-to starts where it is.
+    @Test func interruptedIntroContinuesFromBelowTheMinimum() {
+        let state = GlobeState(targetLat: 0, targetLon: 0, initialPrecision: 1, startZoomedOut: true)
+        state.setViewport(baseRadius: 170, screenMin: 390)
+        state.tick(100)
+        state.beginInteraction()
+        let start = state.zoom
+        #expect(start < GlobeMath.minZoom)
+        state.zoomBy(1.05)
+        #expect(abs(state.zoom - start * 1.05) < 1e-9)
+        state.zoomBy(0.5)
+        #expect(abs(state.zoom - start * 1.05) < 1e-9)
+        state.endInteraction()
+
+        let before = state.zoom
+        state.animateTo(lat: 30, lon: 40, zoom: 40, precision: 4, duration: 0.6)
+        state.tick(200)
+        state.tick(200 + 1.0 / 60)
+        #expect(state.zoom < before * 1.2)
     }
 
     @Test func coverageMatchesTheChannelLevels() {
