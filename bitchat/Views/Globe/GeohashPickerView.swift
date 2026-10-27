@@ -81,8 +81,9 @@ struct GeohashPickerView: View {
     }
 
     /// - Parameters:
-    ///   - initialGeohash: cell to fly to; when empty, the coarsest of
-    ///     `nearbyGeohashes` is used, else the whole globe.
+    ///   - initialGeohash: where the opening spin comes to rest; when empty, the
+    ///     coarsest of `nearbyGeohashes`, else a default view. The picker always
+    ///     opens on the whole globe (precision 1), so the world's activity is in view.
     ///   - isBlocked: hides blocked identities from activity counts, as the
     ///     channel sheet does.
     ///   - activityMonitor: injected for previews and tests.
@@ -100,22 +101,22 @@ struct GeohashPickerView: View {
         _state = StateObject(wrappedValue: GlobeState(
             targetLat: target.lat,
             targetLon: target.lon,
-            initialPrecision: target.precision,
+            initialPrecision: 1,
             startZoomedOut: true
         ))
         _activity = StateObject(wrappedValue: activityMonitor ?? GeohashActivityMonitor(isBlocked: isBlocked))
     }
 
-    /// Where the intro flies to: the given geohash, else the coarsest nearby channel,
-    /// else the whole globe, where the world's activity is in view.
-    static func initialTarget(initialGeohash: String?, nearbyGeohashes: [String]) -> (lat: Double, lon: Double, precision: Int) {
+    /// Where the opening spin turns the globe: the given geohash, else the coarsest
+    /// nearby channel, else a default view.
+    static func initialTarget(initialGeohash: String?, nearbyGeohashes: [String]) -> (lat: Double, lon: Double) {
         let initial = (initialGeohash ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let focus = Geohash.isValidGeohash(initial)
             ? initial
             : nearbyGeohashes.filter(Geohash.isValidGeohash).min { $0.count < $1.count }
-        guard let focus else { return (20, 0, 1) }
+        guard let focus else { return (20, 0) }
         let center = Geohash.decodeCenter(focus)
-        return (center.lat, center.lon, min(max(focus.count, 1), GlobeMath.maxPrecision))
+        return (center.lat, center.lon)
     }
 
     var body: some View {

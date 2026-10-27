@@ -374,7 +374,7 @@ struct GlobeStateTests {
         let target = GeohashPickerView.initialTarget(initialGeohash: "zzzz", nearbyGeohashes: [])
         #expect(target.lat > 89)
 
-        let animated = GlobeState(targetLat: target.lat, targetLon: target.lon, initialPrecision: target.precision, startZoomedOut: true)
+        let animated = GlobeState(targetLat: target.lat, targetLon: target.lon, initialPrecision: 4, startZoomedOut: true)
         animated.setViewport(baseRadius: 170, screenMin: 390, animateIntro: true)
         #expect(animated.isAnimating)
         animated.tick(100)
@@ -382,7 +382,7 @@ struct GlobeStateTests {
         #expect(!animated.isAnimating)
         #expect(animated.selectedGeohash == "zzzz")
 
-        let still = GlobeState(targetLat: target.lat, targetLon: target.lon, initialPrecision: target.precision, startZoomedOut: true)
+        let still = GlobeState(targetLat: target.lat, targetLon: target.lon, initialPrecision: 4, startZoomedOut: true)
         still.setViewport(baseRadius: 170, screenMin: 390, animateIntro: false)
         #expect(still.selectedGeohash == "zzzz")
         #expect(still.centerLat == animated.centerLat)
@@ -522,20 +522,38 @@ struct GeohashPickerTargetTests {
         let center = Geohash.decodeCenter("u2edk")
         #expect(target.lat == center.lat)
         #expect(target.lon == center.lon)
-        #expect(target.precision == 5)
     }
 
     @Test func fallsBackToTheCoarsestNearbyChannel() {
         let target = GeohashPickerView.initialTarget(initialGeohash: "", nearbyGeohashes: ["u2edk", "u2e", "u2edk7q"])
-        #expect(target.precision == 3)
         #expect(target.lat == Geohash.decodeCenter("u2e").lat)
+        #expect(target.lon == Geohash.decodeCenter("u2e").lon)
     }
 
-    @Test func defaultsToTheWholeGlobe() {
+    @Test func defaultsToAWorldView() {
         let target = GeohashPickerView.initialTarget(initialGeohash: nil, nearbyGeohashes: [])
         #expect(target.lat == 20)
         #expect(target.lon == 0)
-        #expect(target.precision == 1)
+    }
+
+    /// A fine selected geohash opens as a whole-globe spin to its location, not a
+    /// dive into the cell.
+    @Test func openingSpinStaysOnTheWholeGlobe() {
+        let center = Geohash.decodeCenter("9q8yyk2")
+        let state = GlobeState(targetLat: center.lat, targetLon: center.lon, initialPrecision: 1, startZoomedOut: true)
+        state.setViewport(baseRadius: 170, screenMin: 390)
+        var time = 100.0
+        state.tick(time)
+        var maxZoom = state.zoom
+        while state.isAnimating, time < 110 {
+            time += 1.0 / 60
+            state.tick(time)
+            maxZoom = max(maxZoom, state.zoom)
+        }
+        #expect(maxZoom == GlobeMath.minZoom)
+        #expect(state.precision == 1)
+        #expect(abs(state.centerLat - center.lat) < 1e-6)
+        #expect(abs(GlobeMath.normalizeLon(state.centerLon - center.lon)) < 1e-6)
     }
 
     @Test func coverageMatchesTheChannelLevels() {
