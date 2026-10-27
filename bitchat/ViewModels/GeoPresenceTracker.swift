@@ -19,7 +19,7 @@ protocol GeoPresenceContext: AnyObject {
     func isNostrBlocked(pubkeyHexLowercased: String) -> Bool
     func parseMentions(from content: String) -> [String]
 
-    func recordGeoParticipant(pubkeyHex: String, geohash: String, seenAt: Date)
+    func recordGeoParticipant(pubkeyHex: String, geohash: String, seenAt: Date, chatEventID: String?)
     func geoParticipantCount(for geohash: String) -> Int
     func markGeoTeleported(_ pubkeyHexLowercased: String)
 
@@ -43,8 +43,8 @@ extension ChatViewModel: GeoPresenceContext {
         locationPresenceStore.teleportedGeo.count
     }
 
-    func recordGeoParticipant(pubkeyHex: String, geohash: String, seenAt: Date) {
-        participantTracker.recordParticipant(pubkeyHex: pubkeyHex, geohash: geohash, seenAt: seenAt)
+    func recordGeoParticipant(pubkeyHex: String, geohash: String, seenAt: Date, chatEventID: String?) {
+        participantTracker.recordParticipant(pubkeyHex: pubkeyHex, geohash: geohash, seenAt: seenAt, chatEventID: chatEventID)
     }
 
     func geoParticipantCount(for geohash: String) -> Int {
@@ -120,7 +120,12 @@ final class GeoPresenceTracker {
         if !isOpenChannel {
             // Arrival time: sampling replays at most a few minutes of history,
             // and live senders with skewed clocks must still count.
-            context.recordGeoParticipant(pubkeyHex: event.pubkey, geohash: gh, seenAt: Date())
+            context.recordGeoParticipant(
+                pubkeyHex: event.pubkey,
+                geohash: gh,
+                seenAt: Date(),
+                chatEventID: NostrInboundPipeline.chatEventID(event)
+            )
         }
 
         guard let content = event.content.trimmedOrNilIfEmpty else { return }

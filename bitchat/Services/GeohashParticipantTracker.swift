@@ -34,14 +34,22 @@ protocol GeohashParticipantContext: AnyObject {
 @MainActor
 final class GeohashParticipantTracker: ObservableObject {
 
-    /// Activity cutoff duration (defaults to 5 minutes)
+    /// Presence window as a negative offset from now (defaults to 5 minutes).
     let activityCutoff: TimeInterval
 
-    /// Per-geohash participant map: [geohash: [pubkeyHex: lastSeen]]
-    private var participants: [String: [String: Date]] = [:]
+    /// Who counts per geohash, under the rule the globe picker uses too: a
+    /// heartbeat or message in the presence window, or a message in the last hour.
+    private var activity: GeohashActivityAggregator
 
     /// Currently visible people for the active geohash
     @Published private(set) var visiblePeople: [GeoPerson] = []
+
+    /// The subset of `visiblePeople` active inside the presence window. Chat
+    /// authors stay in the roster for the hour; state that describes people
+    /// present now (teleport badges) follows this instead. Refreshed with the
+    /// roster and on the refresh timer, so it lapses on time even when the
+    /// roster itself doesn't change.
+    @Published private(set) var recentlyPresentIDs: Set<String> = []
 
     /// Bumps whenever the set of ids in `visiblePeople` changes, so derived
     /// per-roster state (the sender color palette) is rebuilt only when
@@ -58,8 +66,12 @@ final class GeohashParticipantTracker: ObservableObject {
     /// Timer for periodic refresh
     private var refreshTimer: Timer?
 
-    init(activityCutoff: TimeInterval = -300) { // default 5 minutes
+    init(
+        activityCutoff: TimeInterval = -GeohashActivityAggregator.presenceWindow,
+        chatWindow: TimeInterval = GeohashActivityAggregator.chatWindow
+    ) {
         self.activityCutoff = activityCutoff
+        activity = GeohashActivityAggregator(presenceWindow: -activityCutoff, chatWindow: chatWindow)
     }
 
     /// Configure with a context provider
@@ -80,36 +92,31 @@ final class GeohashParticipantTracker: ObservableObject {
     /// Record activity from a participant in the current active geohash.
     /// Returns `false`, recording nothing, when no geohash is active.
     @discardableResult
-    func recordParticipant(pubkeyHex: String, seenAt: Date = Date()) -> Bool {
+    func recordParticipant(pubkeyHex: String, seenAt: Date = Date(), chatEventID: String? = nil) -> Bool {
         guard let gh = activeGeohash else { return false }
-        return recordParticipant(pubkeyHex: pubkeyHex, geohash: gh, seenAt: seenAt)
+        return recordParticipant(pubkeyHex: pubkeyHex, geohash: gh, seenAt: seenAt, chatEventID: chatEventID)
     }
 
     /// Record activity from a participant in a specific geohash.
     ///
     /// `seenAt` is when the activity happened, clamped to now: arrival time
     /// for live events, the event's own timestamp for history relays replay
-    /// on subscribe. Replayed history older than the activity window must
-    /// not make its authors count as present. Returns whether the activity
-    /// counted, i.e. fell inside the window.
+    /// on subscribe. A heartbeat counts for the presence window; a chat
+    /// message (`chatEventID` set) counts its author for the hour, so replayed
+    /// history older than that must not make its authors count as present.
+    /// Returns whether the activity counted, i.e. fell inside its window.
     ///
     /// Runs for every inbound geohash event, so the common case — someone
     /// already present sending a heartbeat or message — only moves their
     /// timestamp. The roster is republished only when someone becomes
     /// visible; departures are picked up by the refresh timer.
     @discardableResult
-    func recordParticipant(pubkeyHex: String, geohash: String, seenAt: Date = Date()) -> Bool {
+    func recordParticipant(pubkeyHex: String, geohash: String, seenAt: Date = Date(), chatEventID: String? = nil) -> Bool {
         let now = Date()
-        let cutoff = now.addingTimeInterval(activityCutoff)
-        let stamp = min(seenAt, now)
-        guard stamp >= cutoff else { return false }
-
-        let key = pubkeyHex.lowercased()
-        let previous = participants[geohash]?[key]
-        if let previous, previous >= stamp { return true }
-        participants[geohash, default: [:]][key] = stamp
-
-        let wasActive = previous.map { $0 >= cutoff } ?? false
+        let wasActive = activity.isActive(pubkeyHex, in: geohash, now: now)
+        guard activity.record(geohash: geohash, pubkey: pubkeyHex, at: seenAt, chatEventID: chatEventID, now: now) else {
+            return false
+        }
         guard !wasActive else { return true }
         // Someone newly counts as present here: participant counts for
         // this geohash changed (sampled channels included).
@@ -129,44 +136,27 @@ final class GeohashParticipantTracker: ObservableObject {
 
     /// Remove a participant from all geohashes (used when blocking)
     func removeParticipant(pubkeyHex: String) {
-        let key = pubkeyHex.lowercased()
-        for geohash in participants.keys {
-            participants[geohash]?.removeValue(forKey: key)
-        }
+        activity.remove(pubkey: pubkeyHex)
         refresh()
     }
 
-    /// Get participant count for a specific geohash
+    /// Participant count for a specific geohash. Blocked people are left out,
+    /// as they are from the roster and the globe.
     func participantCount(for geohash: String) -> Int {
-        let cutoff = Date().addingTimeInterval(activityCutoff)
-        let map = participants[geohash] ?? [:]
-        return map.values.reduce(0) { $1 >= cutoff ? $0 + 1 : $0 }
+        activity.count(in: geohash, excluding: isBlocked)
     }
 
     /// Drops entries that aged out of the activity window, in every geohash
     /// (sampled ones included) so a long session doesn't keep every pubkey
     /// it ever saw.
     func pruneExpired(now: Date = Date()) {
-        let cutoff = now.addingTimeInterval(activityCutoff)
-        for (geohash, map) in participants {
-            let active = map.filter { $0.value >= cutoff }
-            if active.isEmpty {
-                participants.removeValue(forKey: geohash)
-            } else if active.count != map.count {
-                participants[geohash] = active
-            }
-        }
+        activity.prune(now: now)
     }
 
     /// Get the visible people list for the active geohash (read-only query)
     func getVisiblePeople() -> [GeoPerson] {
         guard let gh = activeGeohash, let context = context else { return [] }
-        let cutoff = Date().addingTimeInterval(activityCutoff)
-        let map = (participants[gh] ?? [:])
-            .filter { $0.value >= cutoff }
-            .filter { !context.isBlocked($0.key) }
-
-        return map
+        return activity.activePeople(in: gh, excluding: context.isBlocked)
             .map { (pub, seen) in
                 GeoPerson(id: pub, displayName: context.displayNameForPubkey(pub), lastSeen: seen)
             }
@@ -179,6 +169,7 @@ final class GeohashParticipantTracker: ObservableObject {
     /// activity that only moved timestamps.
     func refresh() {
         let people = getVisiblePeople()
+        updateRecentlyPresent(from: people)
         guard Self.rosterKey(people) != Self.rosterKey(visiblePeople) else { return }
         publishVisiblePeople(people)
     }
@@ -187,7 +178,14 @@ final class GeohashParticipantTracker: ObservableObject {
         Dictionary(people.map { ($0.id, $0.displayName) }, uniquingKeysWith: { first, _ in first })
     }
 
+    private func updateRecentlyPresent(from people: [GeoPerson]) {
+        let cutoff = Date().addingTimeInterval(activityCutoff)
+        let recent = Set(people.lazy.filter { $0.lastSeen >= cutoff }.map(\.id))
+        if recent != recentlyPresentIDs { recentlyPresentIDs = recent }
+    }
+
     private func publishVisiblePeople(_ people: [GeoPerson]) {
+        updateRecentlyPresent(from: people)
         let ids = Set(people.map(\.id))
         if ids != visibleMemberIDs {
             visibleMemberIDs = ids
@@ -197,6 +195,10 @@ final class GeohashParticipantTracker: ObservableObject {
     }
 
     /// Start the periodic refresh timer: expires people who went quiet.
+    private func isBlocked(_ pubkeyHexLowercased: String) -> Bool {
+        context?.isBlocked(pubkeyHexLowercased) ?? false
+    }
+
     func startRefreshTimer(interval: TimeInterval = 30.0) {
         stopRefreshTimer()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
@@ -215,13 +217,13 @@ final class GeohashParticipantTracker: ObservableObject {
 
     /// Clear all participant data
     func clear() {
-        participants.removeAll()
+        activity.removeAll()
         publishVisiblePeople([])
     }
 
     /// Clear participant data for a specific geohash
     func clear(geohash: String) {
-        participants.removeValue(forKey: geohash)
+        activity.removeChannel(geohash)
         if activeGeohash == geohash {
             publishVisiblePeople([])
         }
