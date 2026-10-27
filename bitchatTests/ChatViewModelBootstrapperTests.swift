@@ -75,6 +75,35 @@ struct ChatViewModelBootstrapperTests {
         #expect(!viewModel.teleportedGeo.contains(key))
     }
 
+    /// A teleported writer stays in the roster for the hour, but their badge
+    /// follows the presence window: once they go quiet past it, they're no
+    /// longer shown as teleported.
+    @Test func teleportBadgeLapsesWithPresenceNotTheChatHour() async throws {
+        let viewModel = makeViewModel()
+        await drainMainQueue()
+
+        let geohash = "9q8yy"
+        viewModel.currentGeohash = geohash
+        viewModel.participantTracker.setActiveGeohash(geohash)
+        let key = String(repeating: "c", count: 64)
+        // They wrote, teleported, just inside the presence window.
+        viewModel.participantTracker.recordParticipant(
+            pubkeyHex: key,
+            seenAt: Date().addingTimeInterval(-TransportConfig.uiRecentCutoffFiveMinutesSeconds + 0.5),
+            chatEventID: "m1"
+        )
+        viewModel.locationPresenceStore.markTeleported(key)
+        await drainMainQueue()
+        #expect(viewModel.teleportedGeo.contains(key))
+
+        try await Task.sleep(nanoseconds: 700_000_000)
+        viewModel.participantTracker.refresh()
+        await drainMainQueue()
+
+        #expect(viewModel.participantTracker.visiblePeople.map(\.id) == [key])
+        #expect(!viewModel.teleportedGeo.contains(key))
+    }
+
     /// A private location manager: the shared one is switched by other
     /// suites running in parallel, and a switch clears nicknames and
     /// teleport markers.

@@ -209,6 +209,17 @@ struct GeohashParticipantTrackerActivityRuleTests {
         #expect(tracker.getVisiblePeople().map(\.id) == ["writer"])
     }
 
+    @Test func recentlyPresentLeavesOutQuietChatAuthors() {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        tracker.setActiveGeohash("9q8y")
+        tracker.recordParticipant(pubkeyHex: "writer", seenAt: Date().addingTimeInterval(-600), chatEventID: "m1")
+        tracker.recordParticipant(pubkeyHex: "here")
+        #expect(Set(tracker.visiblePeople.map(\.id)) == ["writer", "here"])
+        #expect(tracker.recentlyPresentIDs == ["here"])
+    }
+
     @Test func blockedPeopleAreLeftOutOfTheCount() {
         let tracker = GeohashParticipantTracker()
         let context = MockParticipantContext()

@@ -44,6 +44,13 @@ final class GeohashParticipantTracker: ObservableObject {
     /// Currently visible people for the active geohash
     @Published private(set) var visiblePeople: [GeoPerson] = []
 
+    /// The subset of `visiblePeople` active inside the presence window. Chat
+    /// authors stay in the roster for the hour; state that describes people
+    /// present now (teleport badges) follows this instead. Refreshed with the
+    /// roster and on the refresh timer, so it lapses on time even when the
+    /// roster itself doesn't change.
+    @Published private(set) var recentlyPresentIDs: Set<String> = []
+
     /// Bumps whenever the set of ids in `visiblePeople` changes, so derived
     /// per-roster state (the sender color palette) is rebuilt only when
     /// membership changes — not on every activity timestamp update.
@@ -162,6 +169,7 @@ final class GeohashParticipantTracker: ObservableObject {
     /// activity that only moved timestamps.
     func refresh() {
         let people = getVisiblePeople()
+        updateRecentlyPresent(from: people)
         guard Self.rosterKey(people) != Self.rosterKey(visiblePeople) else { return }
         publishVisiblePeople(people)
     }
@@ -170,7 +178,14 @@ final class GeohashParticipantTracker: ObservableObject {
         Dictionary(people.map { ($0.id, $0.displayName) }, uniquingKeysWith: { first, _ in first })
     }
 
+    private func updateRecentlyPresent(from people: [GeoPerson]) {
+        let cutoff = Date().addingTimeInterval(activityCutoff)
+        let recent = Set(people.lazy.filter { $0.lastSeen >= cutoff }.map(\.id))
+        if recent != recentlyPresentIDs { recentlyPresentIDs = recent }
+    }
+
     private func publishVisiblePeople(_ people: [GeoPerson]) {
+        updateRecentlyPresent(from: people)
         let ids = Set(people.map(\.id))
         if ids != visibleMemberIDs {
             visibleMemberIDs = ids
