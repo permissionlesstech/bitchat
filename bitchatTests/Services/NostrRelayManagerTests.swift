@@ -2111,7 +2111,7 @@ private final class MockRelayConnection: NostrRelayConnectionProtocol {
 
     func emitEventMessage(subscriptionID: String, event: NostrEvent) throws {
         let eventData = try JSONEncoder().encode(event)
-        let eventJSONObject = try JSONSerialization.jsonObject(with: eventData) as! [String: Any]
+        let eventJSONObject = try JSONSerialization.jsonObject(with: eventData)
         let payload: [Any] = ["EVENT", subscriptionID, eventJSONObject]
         try emit(jsonObject: payload)
     }

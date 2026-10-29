@@ -233,7 +233,12 @@ struct CameraScannerView: UIViewRepresentable {
 
     final class PreviewView: UIView {
         override static var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
-        var videoPreviewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
+        var videoPreviewLayer: AVCaptureVideoPreviewLayer {
+            guard let previewLayer = layer as? AVCaptureVideoPreviewLayer else {
+                preconditionFailure("PreviewView.layerClass must be AVCaptureVideoPreviewLayer")
+            }
+            return previewLayer
+        }
         override init(frame: CGRect) {
             super.init(frame: frame)
             videoPreviewLayer.videoGravity = .resizeAspectFill
