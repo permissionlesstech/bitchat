@@ -36,7 +36,7 @@ public final class BitchatMessage: Codable {
 
     // Cached formatted text (not included in Codable)
     private var _cachedFormattedText: [String: AttributedString] = [:]
-    
+
     public func getCachedFormattedText(isDark: Bool, isSelf: Bool, variant: String = "") -> AttributedString? {
         return _cachedFormattedText["\(variant)\(isDark)-\(isSelf)"]
     }
@@ -156,7 +156,7 @@ extension BitchatMessage: Equatable {
 extension BitchatMessage {
     func toBinaryPayload() -> Data? {
         var data = Data()
-        
+
         // Message format:
         // - Flags: 1 byte (bit 0: isRelay, bit 1: isPrivate, bit 2: hasOriginalSender, bit 3: hasRecipientNickname, bit 4: hasSenderPeerID, bit 5: hasMentions)
         // - Timestamp: 8 bytes (seconds since epoch)
@@ -171,7 +171,7 @@ extension BitchatMessage {
         // - Recipient nickname length + data
         // - Sender peer ID length + data
         // - Mentions array
-        
+
         var flags: UInt8 = 0
         if isRelay { flags |= 0x01 }
         if isPrivate { flags |= 0x02 }
@@ -180,16 +180,16 @@ extension BitchatMessage {
         if senderPeerID != nil { flags |= 0x10 }
         if mentions != nil && !mentions!.isEmpty { flags |= 0x20 }
         if isBridged { flags |= 0x40 }
-        
+
         data.append(flags)
-        
+
         // Timestamp (in milliseconds)
         let timestampMillis = UInt64(timestamp.timeIntervalSince1970 * 1000)
         // Encode as 8 bytes, big-endian
         for i in (0..<8).reversed() {
             data.append(UInt8((timestampMillis >> (i * 8)) & 0xFF))
         }
-        
+
         // ID
         if let idData = id.data(using: .utf8) {
             data.append(UInt8(min(idData.count, 255)))
@@ -197,7 +197,7 @@ extension BitchatMessage {
         } else {
             data.append(0)
         }
-        
+
         // Sender
         if let senderData = sender.data(using: .utf8) {
             data.append(UInt8(min(senderData.count, 255)))
@@ -205,7 +205,7 @@ extension BitchatMessage {
         } else {
             data.append(0)
         }
-        
+
         // Content
         if let contentData = content.data(using: .utf8) {
             let length = UInt16(min(contentData.count, 65535))
@@ -216,23 +216,23 @@ extension BitchatMessage {
         } else {
             data.append(contentsOf: [0, 0])
         }
-        
+
         // Optional fields
         if let originalSender = originalSender, let origData = originalSender.data(using: .utf8) {
             data.append(UInt8(min(origData.count, 255)))
             data.append(origData.prefix(255))
         }
-        
+
         if let recipientNickname = recipientNickname, let recipData = recipientNickname.data(using: .utf8) {
             data.append(UInt8(min(recipData.count, 255)))
             data.append(recipData.prefix(255))
         }
-        
+
         if let peerData = senderPeerID?.id.data(using: .utf8) {
             data.append(UInt8(min(peerData.count, 255)))
             data.append(peerData.prefix(255))
         }
-        
+
         // Mentions array
         if let mentions = mentions {
             data.append(UInt8(min(mentions.count, 255))) // Number of mentions
@@ -245,22 +245,22 @@ extension BitchatMessage {
                 }
             }
         }
-        
-        
+
+
         return data
     }
-    
+
     convenience init?(_ data: Data) {
         // Create an immutable copy to prevent threading issues
         let dataCopy = Data(data)
-        
-        
+
+
         guard dataCopy.count >= 13 else {
             return nil
         }
-        
+
         var offset = 0
-        
+
         // Flags
         guard offset < dataCopy.count else {
             return nil
@@ -273,7 +273,7 @@ extension BitchatMessage {
         let hasSenderPeerID = (flags & 0x10) != 0
         let hasMentions = (flags & 0x20) != 0
         let isBridged = (flags & 0x40) != 0
-        
+
         // Timestamp
         guard offset + 8 <= dataCopy.count else {
             return nil
@@ -284,7 +284,7 @@ extension BitchatMessage {
         }
         offset += 8
         let timestamp = Date(timeIntervalSince1970: TimeInterval(timestampMillis) / 1000.0)
-        
+
         // ID
         guard offset < dataCopy.count else {
             return nil
@@ -295,7 +295,7 @@ extension BitchatMessage {
         }
         let id = String(data: dataCopy[offset..<offset+idLength], encoding: .utf8) ?? UUID().uuidString
         offset += idLength
-        
+
         // Sender
         guard offset < dataCopy.count else {
             return nil
@@ -306,7 +306,7 @@ extension BitchatMessage {
         }
         let sender = String(data: dataCopy[offset..<offset+senderLength], encoding: .utf8) ?? "unknown"
         offset += senderLength
-        
+
         // Content
         guard offset + 2 <= dataCopy.count else {
             return nil
@@ -319,10 +319,10 @@ extension BitchatMessage {
         guard offset + contentLength <= dataCopy.count else {
             return nil
         }
-        
+
         let content = String(data: dataCopy[offset..<offset+contentLength], encoding: .utf8) ?? ""
         offset += contentLength
-        
+
         // Optional fields
         var originalSender: String?
         if hasOriginalSender && offset < dataCopy.count {
@@ -332,7 +332,7 @@ extension BitchatMessage {
                 offset += length
             }
         }
-        
+
         var recipientNickname: String?
         if hasRecipientNickname && offset < dataCopy.count {
             let length = Int(dataCopy[offset]); offset += 1
@@ -341,7 +341,7 @@ extension BitchatMessage {
                 offset += length
             }
         }
-        
+
         var senderPeerID: PeerID?
         if hasSenderPeerID && offset < dataCopy.count {
             let length = Int(dataCopy[offset]); offset += 1
@@ -350,7 +350,7 @@ extension BitchatMessage {
                 offset += length
             }
         }
-        
+
         // Mentions array
         var mentions: [String]?
         if hasMentions && offset < dataCopy.count {
@@ -370,7 +370,7 @@ extension BitchatMessage {
                 }
             }
         }
-        
+
         self.init(
             id: id,
             sender: sender,
@@ -390,13 +390,13 @@ extension BitchatMessage {
 // MARK: - Helpers
 
 extension BitchatMessage {
-    
+
     private static let timestampFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm:ss"
         return formatter
     }()
-    
+
     public var formattedTimestamp: String {
         Self.timestampFormatter.string(from: timestamp)
     }

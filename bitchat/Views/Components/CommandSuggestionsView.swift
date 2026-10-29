@@ -59,7 +59,7 @@ struct CommandSuggestionsView: View {
             .themedOverlayPanel()
         }
     }
-    
+
     private func buttonRow(for command: CommandInfo) -> some View {
         HStack {
             Text(command.alias)
@@ -99,7 +99,7 @@ struct CommandSuggestionsView: View {
         conversations: viewModel.conversations
     )
     let locationChannelsModel = LocationChannelsModel()
-    
+
     CommandSuggestionsView(messageText: $messageText)
         .environmentObject(privateConversationModel)
         .environmentObject(locationChannelsModel)

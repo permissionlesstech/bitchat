@@ -9,17 +9,17 @@ struct BitchatPeer: Equatable {
     let nickname: String
     let isConnected: Bool
     let isReachable: Bool
-    
+
     // Favorite-related properties
     var favoriteStatus: FavoritesPersistenceService.FavoriteRelationship?
-    
+
     // Nostr identity (if known)
     var nostrPublicKey: String?
 
     /// Device-local alias (petname). Never sent over the wire; when set it
     /// outranks the peer-claimed `nickname` for display only.
     var localPetname: String?
-    
+
     // Connection state
     enum ConnectionState {
         case bluetoothConnected
@@ -27,7 +27,7 @@ struct BitchatPeer: Equatable {
         case nostrAvailable     // Mutual favorite, reachable via Nostr
         case offline            // Not connected via any transport
     }
-    
+
     var connectionState: ConnectionState {
         if isConnected {
             return .bluetoothConnected
@@ -49,19 +49,19 @@ struct BitchatPeer: Equatable {
     var reachableNostrPublicKey: String? {
         nostrPublicKey ?? favoriteStatus?.peerNostrPublicKey
     }
-    
+
     var isFavorite: Bool {
         favoriteStatus?.isFavorite ?? false
     }
-    
+
     var isMutualFavorite: Bool {
         favoriteStatus?.isMutual ?? false
     }
-    
+
     var theyFavoritedUs: Bool {
         favoriteStatus?.theyFavoritedUs ?? false
     }
-    
+
     // Display helpers
     var displayName: String {
         if let localPetname, !localPetname.isEmpty {
@@ -69,7 +69,7 @@ struct BitchatPeer: Equatable {
         }
         return nickname.isEmpty ? String(peerID.id.prefix(8)) : nickname
     }
-    
+
     var statusIcon: String {
         switch connectionState {
         case .bluetoothConnected:
@@ -86,7 +86,7 @@ struct BitchatPeer: Equatable {
             }
         }
     }
-    
+
     // Initialize from mesh service data
     init(
         peerID: PeerID,
@@ -103,12 +103,12 @@ struct BitchatPeer: Equatable {
         self.isConnected = isConnected
         self.isReachable = isReachable
         self.localPetname = localPetname
-        
+
         // Load favorite status - will be set later by the manager
         self.favoriteStatus = nil
         self.nostrPublicKey = nil
     }
-    
+
     static func == (lhs: BitchatPeer, rhs: BitchatPeer) -> Bool {
         lhs.peerID == rhs.peerID
     }

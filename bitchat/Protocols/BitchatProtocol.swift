@@ -172,7 +172,7 @@ extension BitchatDelegate {
     func isFavorite(fingerprint: String) -> Bool {
         return false
     }
-    
+
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
         // Default empty implementation
     }

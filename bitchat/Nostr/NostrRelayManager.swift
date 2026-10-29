@@ -138,7 +138,7 @@ final class NostrRelayManager: ObservableObject {
     static func registerPendingGiftWrap(id: String) {
         pendingGiftWrapIDs.insert(id)
     }
-    
+
     struct Relay: Identifiable {
         let id = UUID()
         let url: String
@@ -150,7 +150,7 @@ final class NostrRelayManager: ObservableObject {
         var lastDisconnectedAt: Date?
         var nextReconnectTime: Date?
     }
-    
+
     // Built-in relays carry private-message envelopes, so avoid relays known to
     // reject the kinds they use.
     nonisolated private static let builtInRelays = [
@@ -192,7 +192,7 @@ final class NostrRelayManager: ObservableObject {
     /// target the default (gift-wrap-capable) relay set, so a connected
     /// geohash/custom relay alone must not count — sends would still queue.
     @Published private(set) var isDMRelayConnected = false
-    
+
     private let dependencies: NostrRelayManagerDependencies
     private var allowDefaultRelays: Bool = false
     private var hasMutualFavorites: Bool = false
@@ -259,7 +259,7 @@ final class NostrRelayManager: ObservableObject {
     private var eoseTrackers: [String: EOSETracker] = [:]
     private var eoseTrackerEpoch = 0
     private var pendingEOSECallbacks: [String: () -> Void] = [:]
-    
+
     // Message queue for reliability
     // Pending sends held only for relays that are not yet connected.
     private struct PendingSend {
@@ -282,13 +282,13 @@ final class NostrRelayManager: ObservableObject {
     private var pendingSendDropCount = 0
     private let encoder = JSONEncoder()
     private var shouldUseTor: Bool { dependencies.userTorEnabled() }
-    
+
     // Exponential backoff configuration
     private let initialBackoffInterval: TimeInterval = TransportConfig.nostrRelayInitialBackoffSeconds
     private let maxBackoffInterval: TimeInterval = TransportConfig.nostrRelayMaxBackoffSeconds
     private let backoffMultiplier: Double = TransportConfig.nostrRelayBackoffMultiplier
     private let maxReconnectAttempts = TransportConfig.nostrRelayMaxReconnectAttempts
-    
+
     // Bump generation to invalidate scheduled reconnects when we reset/disconnect
     private var connectionGeneration: Int = 0
 
@@ -441,7 +441,7 @@ final class NostrRelayManager: ObservableObject {
         guard dependencies.activationAllowed() else { return }
         connectToRelays(relays.map(\.url), shouldLog: true)
     }
-    
+
     /// Disconnect from all relays
     func disconnect() {
         connectionGeneration &+= 1
@@ -527,7 +527,7 @@ final class NostrRelayManager: ObservableObject {
             }
         }
     }
-    
+
     /// Ensure connections exist to the given relay URLs (idempotent).
     func ensureConnections(to relayUrls: [String]) {
         // Global network policy gate
@@ -734,7 +734,7 @@ final class NostrRelayManager: ObservableObject {
         }
         return connection
     }
-    
+
     /// Subscribe to events matching a filter. If `relayUrls` provided, targets only those relays.
     func subscribe(
         filter: NostrFilter,
@@ -752,18 +752,18 @@ final class NostrRelayManager: ObservableObject {
         }
         subscribeCoalesce[id] = now
         messageHandlers[id] = handler
-        
+
         let req = NostrRequest.subscribe(id: id, filters: [filter])
-        
+
         do {
             let message = try encoder.encode(req)
-            guard let messageString = String(data: message, encoding: .utf8) else { 
+            guard let messageString = String(data: message, encoding: .utf8) else {
                 SecureLogger.error("❌ Failed to encode subscription request", category: .session)
-                return 
+                return
             }
-            
+
             // SecureLogger.debug("📋 Subscription filter JSON: \(messageString.prefix(200))...", category: .session)
-            
+
             // Target specific relays if provided; else default. Filter permanently failed relays.
             let baseUrls = relayUrls ?? defaultRelays
             let urls = allowedRelayList(from: baseUrls).filter { !isPermanentlyFailed($0) }
@@ -867,7 +867,7 @@ final class NostrRelayManager: ObservableObject {
         }
         return result
     }
-    
+
     /// Unsubscribe from a subscription
     func unsubscribe(id: String) {
         messageHandlers.removeValue(forKey: id)
@@ -881,13 +881,13 @@ final class NostrRelayManager: ObservableObject {
         for url in Array(pendingSubscriptions.keys) {
             pendingSubscriptions[url]?.removeValue(forKey: id)
         }
-        
+
         let req = NostrRequest.close(id: id)
         let message = try? encoder.encode(req)
-        
+
         guard let messageData = message,
               let messageString = String(data: messageData, encoding: .utf8) else { return }
-        
+
         // Send unsubscribe to all relays
         for (relayUrl, connection) in connections {
             if subscriptions[relayUrl]?.contains(id) == true {
@@ -898,7 +898,7 @@ final class NostrRelayManager: ObservableObject {
             }
         }
     }
-    
+
     // MARK: - Private Methods
 
     private var shouldWaitForTorBeforeConnecting: Bool {
@@ -1140,20 +1140,20 @@ final class NostrRelayManager: ObservableObject {
         }
         recentInboundEventKeyOrder = retainedKeys
     }
-    
+
     private func connectToRelay(_ urlString: String) {
         // Global network policy gate
         guard dependencies.activationAllowed() else { return }
-        guard let url = URL(string: urlString) else { 
+        guard let url = URL(string: urlString) else {
             SecureLogger.warning("Invalid relay URL: \(urlString)", category: .session)
-            return 
+            return
         }
 
         // Avoid initiating connections while app is backgrounded; we'll reconnect on foreground
         if shouldUseTor && dependencies.torEnforced() && !dependencies.torIsForeground() {
             return
         }
-        
+
         // Skip if we already have a connection object
         if connections[urlString] != nil {
             return
@@ -1161,18 +1161,18 @@ final class NostrRelayManager: ObservableObject {
         if isPermanentlyFailed(urlString) {
             return
         }
-        
+
         // Attempting to connect to Nostr relay via the proxied session
-        
+
         // If Tor is enforced but not ready, delay connection until it is.
         if shouldWaitForTorBeforeConnecting {
             queueConnectionsUntilTorReady([urlString])
             return
         }
-        
+
         let session = dependencies.makeSession()
         let task = session.webSocketTask(with: url)
-        
+
         connections[urlString] = task
         task.resume()
 
@@ -1182,7 +1182,7 @@ final class NostrRelayManager: ObservableObject {
 
         // Start receiving messages
         receiveMessage(from: task, relayUrl: urlString)
-        
+
         // Send initial ping to verify connection
         task.sendPing { [weak self] error in
             DispatchQueue.main.async {
@@ -1247,11 +1247,11 @@ final class NostrRelayManager: ObservableObject {
             }
         }
     }
-    
+
     private func receiveMessage(from task: NostrRelayConnectionProtocol, relayUrl: String) {
         task.receive { [weak self] result in
             guard let self = self else { return }
-            
+
             switch result {
             case .success(let message):
                 // Hand the raw frame to this relay's serial inbound pipeline:
@@ -1267,7 +1267,7 @@ final class NostrRelayManager: ObservableObject {
                     guard self.connections[relayUrl] === task else { return }
                     self.receiveMessage(from: task, relayUrl: relayUrl)
                 }
-                
+
             case .failure(let error):
                 DispatchQueue.main.async {
                     self.handleDisconnection(relayUrl: relayUrl, error: error, connection: task)
@@ -1275,7 +1275,7 @@ final class NostrRelayManager: ObservableObject {
             }
         }
     }
-    
+
     // Parsed inbound message type (off-main)
     // Note: declared at file scope below to avoid MainActor isolation inside this class
     // and keep parsing off the main actor.
@@ -1360,7 +1360,7 @@ final class NostrRelayManager: ObservableObject {
             break
         }
     }
-    
+
     private func sendToRelay(
         event: NostrEvent,
         connection: NostrRelayConnectionProtocol,
@@ -1368,13 +1368,13 @@ final class NostrRelayManager: ObservableObject {
         completion: ((Bool) -> Void)? = nil
     ) {
         let req = NostrRequest.event(event)
-        
+
         do {
             let data = try encoder.encode(req)
             let message = String(data: data, encoding: .utf8) ?? ""
-            
+
             SecureLogger.debug("📤 Send kind=\(event.kind) id=\(event.id.prefix(16))… relay=\(relayUrl)", category: .session)
-            
+
             connection.send(.string(message)) { [weak self] error in
                 DispatchQueue.main.async {
                     if let error = error {
@@ -1395,7 +1395,7 @@ final class NostrRelayManager: ObservableObject {
             completion?(false)
         }
     }
-    
+
     private func updateRelayStatus(_ url: String, isConnected: Bool, error: Error? = nil) {
         if let index = relays.firstIndex(where: { $0.url == url }) {
             relays[index].isConnected = isConnected
@@ -1413,14 +1413,14 @@ final class NostrRelayManager: ObservableObject {
             flushMessageQueue(for: url)
         }
     }
-    
+
     private func updateConnectionStatus() {
         isConnected = relays.contains { $0.isConnected }
         // Relay URLs are normalized before entries are created, so direct
         // set membership is sound.
         isDMRelayConnected = relays.contains { $0.isConnected && defaultRelaySet.contains($0.url) }
     }
-    
+
     /// A relay that drops before sending EOSE must not stall initial-load
     /// callbacks; treat it as done and let the remaining relays (or the
     /// fallback timeout) drive completion.
@@ -1477,11 +1477,11 @@ final class NostrRelayManager: ObservableObject {
         if !dependencies.activationAllowed() {
             return
         }
-        
+
         // Check if this is a DNS or handshake error; treat as permanent
         let errorDescription = error.localizedDescription.lowercased()
         let ns = error as NSError
-        if errorDescription.contains("hostname could not be found") || 
+        if errorDescription.contains("hostname could not be found") ||
            errorDescription.contains("dns") ||
            (ns.domain == NSURLErrorDomain && ns.code == NSURLErrorBadServerResponse) {
             if relays.first(where: { $0.url == relayUrl })?.lastError == nil {
@@ -1495,18 +1495,18 @@ final class NostrRelayManager: ObservableObject {
             pendingSubscriptions[relayUrl] = nil
             return
         }
-        
+
         // Implement exponential backoff for non-DNS errors
         guard let index = relays.firstIndex(where: { $0.url == relayUrl }) else { return }
-        
+
         relays[index].reconnectAttempts += 1
-        
+
         // Stop attempting after max attempts
         if relays[index].reconnectAttempts >= maxReconnectAttempts {
             SecureLogger.warning("Max reconnection attempts (\(maxReconnectAttempts)) reached for \(relayUrl)", category: .session)
             return
         }
-        
+
         // Calculate backoff interval with ±jitterRatio random jitter so relays
         // that dropped together don't all reconnect at the same instant.
         let baseBackoffInterval = min(
@@ -1541,19 +1541,19 @@ final class NostrRelayManager: ObservableObject {
             }
         }
     }
-    
+
     // MARK: - Public Utility Methods
-    
+
     /// Manually retry connection to a specific relay
     func retryConnection(to relayUrl: String) {
         let normalizedRelayUrl = NostrRelayURL.normalized(relayUrl) ?? relayUrl
         guard let index = relays.firstIndex(where: { $0.url == normalizedRelayUrl }) else { return }
-        
+
         // Reset reconnection attempts
         relays[index].reconnectAttempts = 0
         relays[index].nextReconnectTime = nil
         relays[index].lastError = nil
-        
+
         // Disconnect if connected
         if let connection = connections[normalizedRelayUrl] {
             connection.cancel(with: .goingAway, reason: nil)
@@ -1564,12 +1564,12 @@ final class NostrRelayManager: ObservableObject {
         // Attempt immediate reconnection
         connectToRelay(normalizedRelayUrl)
     }
-    
+
     /// Get detailed status for all relays
     func getRelayStatuses() -> [(url: String, isConnected: Bool, reconnectAttempts: Int, nextReconnectTime: Date?)] {
         return relays.map { relay in
-            (url: relay.url, 
-             isConnected: relay.isConnected, 
+            (url: relay.url,
+             isConnected: relay.isConnected,
              reconnectAttempts: relay.reconnectAttempts,
              nextReconnectTime: relay.nextReconnectTime)
         }
@@ -1613,20 +1613,20 @@ final class NostrRelayManager: ObservableObject {
     func debugFlushMessageQueue() {
         flushMessageQueue(for: nil)
     }
-    
+
     /// Reset all relay connections
     func resetAllConnections() {
         disconnect()
         // New generation begins now
         connectionGeneration &+= 1
-        
+
         // Reset all relay states
         for index in relays.indices {
             relays[index].reconnectAttempts = 0
             relays[index].nextReconnectTime = nil
             relays[index].lastError = nil
         }
-        
+
         // Reconnect
         connect()
     }
@@ -1729,7 +1729,7 @@ private enum ParsedInbound {
     case ok(eventId: String, success: Bool, reason: String)
     case eose(subscriptionId: String)
     case notice(String)
-    
+
     init?(_ message: URLSessionWebSocketTask.Message) {
         guard let data = message.dataWithinInboundLimit,
               let array = try? JSONSerialization.jsonObject(with: data) as? [Any],
@@ -1799,22 +1799,22 @@ enum NostrRequest: Encodable {
     case event(NostrEvent)
     case subscribe(id: String, filters: [NostrFilter])
     case close(id: String)
-    
+
     func encode(to encoder: Encoder) throws {
         var container = encoder.unkeyedContainer()
-        
+
         switch self {
         case .event(let event):
             try container.encode("EVENT")
             try container.encode(event)
-            
+
         case .subscribe(let id, let filters):
             try container.encode("REQ")
             try container.encode(id)
             for filter in filters {
                 try container.encode(filter)
             }
-            
+
         case .close(let id):
             try container.encode("CLOSE")
             try container.encode(id)
@@ -1829,22 +1829,22 @@ struct NostrFilter: Encodable {
     var since: Int?
     var until: Int?
     var limit: Int?
-    
+
     // Tag filters - stored internally but encoded specially
     fileprivate var tagFilters: [String: [String]]?
-    
+
     init() {
         // Default initializer
     }
-    
+
     // Custom encoding to handle tag filters properly
     enum CodingKeys: String, CodingKey {
         case ids, authors, kinds, since, until, limit
     }
-    
+
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: DynamicCodingKey.self)
-        
+
         // Encode standard fields
         if let ids = ids { try container.encode(ids, forKey: DynamicCodingKey(stringValue: "ids")) }
         if let authors = authors { try container.encode(authors, forKey: DynamicCodingKey(stringValue: "authors")) }
@@ -1852,7 +1852,7 @@ struct NostrFilter: Encodable {
         if let since = since { try container.encode(since, forKey: DynamicCodingKey(stringValue: "since")) }
         if let until = until { try container.encode(until, forKey: DynamicCodingKey(stringValue: "until")) }
         if let limit = limit { try container.encode(limit, forKey: DynamicCodingKey(stringValue: "limit")) }
-        
+
         // Encode tag filters with # prefix
         if let tagFilters = tagFilters {
             for (tag, values) in tagFilters {
@@ -1860,7 +1860,7 @@ struct NostrFilter: Encodable {
             }
         }
     }
-    
+
     // For NIP-17 gift wraps
     static func giftWrapsFor(pubkey: String, since: Date? = nil) -> NostrFilter {
         var filter = NostrFilter()
@@ -1929,11 +1929,11 @@ struct NostrFilter: Encodable {
 private struct DynamicCodingKey: CodingKey {
     var stringValue: String
     var intValue: Int? { nil }
-    
+
     init(stringValue: String) {
         self.stringValue = stringValue
     }
-    
+
     init?(intValue: Int) {
         return nil
     }

@@ -14,7 +14,7 @@ import BitFoundation
 final class TestHelpers {
 
     // MARK: - Message Creation
-    
+
     static func createTestMessage(
         content: String = TestConstants.testMessage1,
         sender: String = TestConstants.testNickname1,
@@ -36,7 +36,7 @@ final class TestHelpers {
             mentions: mentions
         )
     }
-    
+
     static func createTestPacket(
         type: UInt8 = 0x01,
         senderID: PeerID = PeerID(str: UUID().uuidString),
@@ -55,9 +55,9 @@ final class TestHelpers {
             ttl: ttl
         )
     }
-    
+
     // MARK: - Data Generation
-    
+
     static func generateRandomData(length: Int) -> Data {
         var data = Data(count: length)
         _ = data.withUnsafeMutableBytes { bytes in
@@ -67,7 +67,7 @@ final class TestHelpers {
     }
 
     // MARK: - Async Helpers
-    
+
     static func waitFor(_ condition: @escaping () -> Bool, timeout: TimeInterval = TestConstants.defaultTimeout) async throws {
         let start = Date()
         while !condition() {

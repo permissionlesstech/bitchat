@@ -10,9 +10,9 @@ import Combine
 import Tor
 
 extension ChatViewModel {
-    
+
     // MARK: - Tor notifications
-    
+
     @objc func handleTorWillStart() {
         Task { @MainActor in
             // A fresh attempt can stall again, so let it be reported again.
