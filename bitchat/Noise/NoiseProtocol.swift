@@ -282,7 +282,7 @@ final class NoiseCipherState {
 
         // Create combined payload: <nonce><ciphertext>
         let combinedPayload: Data
-        if (useExtractedNonce) {
+        if useExtractedNonce {
             let nonceBytes = nonceToBytes(currentNonce)
             combinedPayload = nonceBytes + sealedBox.ciphertext + sealedBox.tag
         } else {

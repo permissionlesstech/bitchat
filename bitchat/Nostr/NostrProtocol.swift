@@ -36,6 +36,11 @@ struct NostrProtocol {
         case courierDrop = 1401
     }
 
+    static func isEphemeralOrGeohash(_ event: NostrEvent) -> Bool {
+        guard let kind = EventKind(rawValue: event.kind) else { return false }
+        return kind == .ephemeralEvent || kind == .geohashPresence
+    }
+
     /// Bound work before Base64-decoding either encrypted layer of an inbound
     /// private envelope, and before parsing each decrypted nested JSON layer.
     /// Real envelopes are normally a few KiB; 64 KiB leaves ample headroom
