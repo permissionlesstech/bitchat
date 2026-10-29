@@ -64,7 +64,6 @@ enum MimeType: CaseIterable, Hashable {
         }
     }
 
-
     var mimeString: String {
         switch self {
         case .jpeg, .jpg:   "image/jpeg"

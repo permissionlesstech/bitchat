@@ -354,7 +354,6 @@ extension NostrTransport {
         dependencies.sendEvent(event)
     }
 
-
     /// Sends a single ack item (invoked by the pacer, one per interval)
     private func sendAckItem(_ item: QueuedAck) {
         Task { @MainActor in

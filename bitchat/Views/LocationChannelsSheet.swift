@@ -567,7 +567,6 @@ struct LocationChannelsSheet: View {
         }
     }
 
-
     private func isSelected(_ channel: GeohashChannel) -> Bool {
         locationChannelsModel.isSelected(channel)
     }

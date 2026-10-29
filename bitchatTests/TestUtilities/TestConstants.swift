@@ -58,7 +58,6 @@ struct TestConstants {
     /// expect to succeed reintroduces exactly the flake class it sits next to.
     static let negativeWaitWindow: TimeInterval = 1.0
 
-
     static let testNickname1 = "Alice"
     static let testNickname2 = "Bob"
     static let testNickname3 = "Charlie"

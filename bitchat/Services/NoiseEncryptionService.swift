@@ -692,7 +692,6 @@ final class NoiseEncryptionService {
         return verifySignature(signature, for: packetData, publicKey: publicKey)
     }
 
-
     // MARK: - Handshake Management
 
     /// Initiate a Noise handshake with a peer
@@ -841,7 +840,6 @@ final class NoiseEncryptionService {
             from: peerID,
             message: message
         )
-
 
         // Return raw response without wrapper
         return result
