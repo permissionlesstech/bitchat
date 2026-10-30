@@ -24,10 +24,15 @@ final class NostrProcessedEventStore {
     private let fileURL: URL?
     // All file access is serialized here: appends are read-modify-write, and
     // overlapping debounced flushes would otherwise race and drop IDs.
-    private let ioQueue = DispatchQueue(label: "chat.bitchat.nostr-processed-events", qos: .utility)
+    private let ioQueue: DispatchQueue
 
-    init(fileURL: URL? = nil) {
+    /// The I/O queue must be serial to preserve append and wipe ordering.
+    init(
+        fileURL: URL? = nil,
+        ioQueue: DispatchQueue = DispatchQueue(label: "chat.bitchat.nostr-processed-events", qos: .utility)
+    ) {
         self.fileURL = fileURL ?? Self.defaultFileURL()
+        self.ioQueue = ioQueue
     }
 
     /// Processed event IDs, oldest first (insertion order).
@@ -55,11 +60,9 @@ final class NostrProcessedEventStore {
         }
     }
 
-    func wipe() {
-        ioQueue.async { [self] in
-            guard let fileURL else { return }
-            try? FileManager.default.removeItem(at: fileURL)
-        }
+    @discardableResult
+    func wipe() -> Bool {
+        ioQueue.sync { PanicFileDeletion.remove(fileURL) }
     }
 
     private func loadLocked() -> [String] {

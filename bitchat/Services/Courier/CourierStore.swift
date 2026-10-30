@@ -416,15 +416,16 @@ final class CourierStore {
     // MARK: - Maintenance
 
     /// Panic wipe: drop all carried mail from memory and disk.
-    func wipe() {
-        queue.sync {
+    @discardableResult
+    func wipe() -> Bool {
+        let removed = queue.sync {
             envelopes.removeAll()
             diskLoadDeferred = false
-            if let fileURL {
-                try? FileManager.default.removeItem(at: fileURL)
-            }
+            let removed = PanicFileDeletion.remove(fileURL)
             publishCountLocked()
+            return removed
         }
+        return removed
     }
 
     /// Retries a protected-data read and merges any envelopes accepted while

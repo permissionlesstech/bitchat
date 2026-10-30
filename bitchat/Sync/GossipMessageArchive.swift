@@ -56,13 +56,14 @@ final class GossipMessageArchive {
         }
     }
 
-    func wipe() {
-        guard let fileURL else { return }
-        try? FileManager.default.removeItem(at: fileURL)
+    @discardableResult
+    func wipe() -> Bool {
+        return PanicFileDeletion.remove(fileURL)
     }
 
     /// Panic-wipe hook for callers that don't hold the live instance.
-    static func wipeDefault() {
+    @discardableResult
+    static func wipeDefault() -> Bool {
         GossipMessageArchive().wipe()
     }
 

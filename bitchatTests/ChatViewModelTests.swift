@@ -20,6 +20,7 @@ private func makeTestableViewModel(
     panicMediaWipe: (() throws -> Void)? = nil,
     panicRecoveryOperations: PanicRecoveryOperations? = nil,
     panicNetworkLifecycle: PanicNetworkLifecycle = .noop,
+    panicMetadataWipeOperations: PanicMetadataWipeOperations? = nil,
     locationManager: LocationChannelManager = .shared
 ) -> (viewModel: ChatViewModel, transport: MockTransport) {
     let keychain = injectedKeychain ?? MockKeychain()
@@ -36,6 +37,7 @@ private func makeTestableViewModel(
         locationManager: locationManager,
         panicMediaWipe: panicMediaWipe,
         panicRecoveryOperations: panicRecoveryOperations,
+        panicMetadataWipeOperations: panicMetadataWipeOperations,
         panicNetworkLifecycle: panicNetworkLifecycle
     )
 
@@ -2149,6 +2151,125 @@ struct ChatViewModelPrivateMediaDeletionTests {
 // MARK: - Panic Clear Tests
 
 struct ChatViewModelPanicTests {
+
+    @Test(arguments: 0...6) @MainActor
+    func metadataFailureAttemptsRemainingCleanupAndRetryCommits(_ failedStore: Int) {
+        let names = ["courier", "bridge", "gossip", "groups", "board", "events"]
+        var attempts: [String] = []
+        var denyDeletion = true
+        var pending = false
+        var commits = 0
+        var mediaAttempts = 0
+        var restarts = 0
+        func wipe(_ index: Int) -> Bool {
+            attempts.append(names[index])
+            return !denyDeletion || (failedStore != index && failedStore != 6)
+        }
+        let metadata = PanicMetadataWipeOperations(
+            wipeCourier: { wipe(0) },
+            wipeBridge: { wipe(1) },
+            wipeGossip: { wipe(2) },
+            wipeGroups: { wipe(3) },
+            wipeBoard: { wipe(4) },
+            wipeEvents: { wipe(5) }
+        )
+        let recovery = PanicRecoveryOperations(
+            isPending: { pending },
+            begin: {
+                pending = true
+                return PanicRecoveryIntent(fileMarkerEstablished: true, externalMarkerEstablished: true)
+            },
+            wipeMedia: { _ in mediaAttempts += 1 },
+            complete: { commits += 1; pending = false }
+        )
+        let keychain = MockKeychain()
+        let (viewModel, transport) = makeTestableViewModel(
+            keychain: keychain,
+            panicRecoveryOperations: recovery,
+            panicNetworkLifecycle: PanicNetworkLifecycle(stop: {}, restart: { restarts += 1 }),
+            panicMetadataWipeOperations: metadata
+        )
+        let starts = transport.startServicesCallCount
+
+        #expect(!viewModel.panicClearAllData(), "A denied metadata store must keep panic incomplete")
+        #expect(attempts == names, "A denied store must not skip the later metadata stores")
+        #expect(keychain.deleteAllCallCount == 1)
+        #expect(mediaAttempts == 1, "Metadata failure must not skip media cleanup")
+        #expect(pending)
+        #expect(commits == 0)
+        #expect(restarts == 0)
+        #expect(transport.startServicesCallCount == starts)
+        #expect(!viewModel.networkActivationAllowed)
+
+        denyDeletion = false
+        attempts.removeAll()
+        #expect(viewModel.panicClearAllData())
+        #expect(attempts == names, "Retry must attempt the full metadata cleanup again")
+        #expect(keychain.deleteAllCallCount == 2)
+        #expect(mediaAttempts == 2)
+        #expect(!pending)
+        #expect(commits == 1)
+        #expect(restarts == 1)
+        #expect(transport.startServicesCallCount == starts + 1)
+        #expect(viewModel.networkActivationAllowed)
+    }
+
+    @Test @MainActor
+    func metadataFailureDuringBootstrapKeepsIntentForRetry() {
+        let names = ["courier", "bridge", "gossip", "groups", "board", "events"]
+        var attempts: [String] = []
+        var denyBoardDeletion = true
+        var pending = true
+        var commits = 0
+        var mediaAttempts = 0
+        var restarts = 0
+        func wipe(_ index: Int) -> Bool {
+            attempts.append(names[index])
+            return index != 4 || !denyBoardDeletion
+        }
+        let metadata = PanicMetadataWipeOperations(
+            wipeCourier: { wipe(0) }, wipeBridge: { wipe(1) },
+            wipeGossip: { wipe(2) }, wipeGroups: { wipe(3) },
+            wipeBoard: { wipe(4) }, wipeEvents: { wipe(5) }
+        )
+        let recovery = PanicRecoveryOperations(
+            isPending: { pending },
+            begin: {
+                pending = true
+                return PanicRecoveryIntent(fileMarkerEstablished: true, externalMarkerEstablished: true)
+            },
+            wipeMedia: { _ in mediaAttempts += 1 },
+            complete: { commits += 1; pending = false }
+        )
+        let keychain = MockKeychain()
+        let (viewModel, transport) = makeTestableViewModel(
+            keychain: keychain,
+            panicRecoveryOperations: recovery,
+            panicNetworkLifecycle: PanicNetworkLifecycle(stop: {}, restart: { restarts += 1 }),
+            panicMetadataWipeOperations: metadata
+        )
+
+        #expect(attempts == names, "Bootstrap recovery must attempt each metadata operation")
+        #expect(keychain.deleteAllCallCount == 1)
+        #expect(mediaAttempts == 1)
+        #expect(pending)
+        #expect(commits == 0)
+        #expect(restarts == 0)
+        #expect(transport.startServicesCallCount == 0)
+        #expect(!viewModel.networkActivationAllowed)
+
+        denyBoardDeletion = false
+        attempts.removeAll()
+        #expect(viewModel.panicClearAllData())
+        #expect(attempts == names)
+        #expect(keychain.deleteAllCallCount == 2)
+        #expect(mediaAttempts == 2)
+        #expect(!pending)
+        #expect(commits == 1)
+        #expect(restarts == 1)
+        #expect(transport.startServicesCallCount == 1)
+        #expect(viewModel.networkActivationAllowed)
+    }
 
     @Test @MainActor
     func panicClearAllData_finishesMediaWipeBeforeReturning() {

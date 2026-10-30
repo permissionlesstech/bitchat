@@ -329,6 +329,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     var nostrRelayManager: NostrRelayManager?
     private let userDefaults = UserDefaults.standard
     let keychain: KeychainManagerProtocol
+    private let panicMetadataWipeOperations: PanicMetadataWipeOperations?
     private let panicRecoveryOperations: PanicRecoveryOperations
     private let panicNetworkLifecycle: PanicNetworkLifecycle
     private var isPanicResetting = false
@@ -1163,6 +1164,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         sfMetrics: StoreAndForwardMetrics? = nil,
         panicMediaWipe: (() throws -> Void)? = nil,
         panicRecoveryOperations: PanicRecoveryOperations? = nil,
+        panicMetadataWipeOperations: PanicMetadataWipeOperations? = nil,
         panicNetworkLifecycle: PanicNetworkLifecycle = .noop
     ) {
         let conversations = conversations ?? ConversationStore()
@@ -1178,6 +1180,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         )
 
         self.keychain = keychain
+        self.panicMetadataWipeOperations = panicMetadataWipeOperations
         self.panicRecoveryOperations = panicRecoveryOperations
             ?? .ephemeral(wipeMedia: panicMediaWipe ?? {})
         self.panicNetworkLifecycle = panicNetworkLifecycle
@@ -1636,10 +1639,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         // Drop courier mail carried for third parties (memory and disk),
         // our own queued outbox, the carried public history, and the
         // counters describing all of it
-        CourierStore.shared.wipe()
-        BridgeCourierService.shared.wipe()
+        var metadataWipeCompleted = (panicMetadataWipeOperations?.wipeCourier() ?? CourierStore.shared.wipe())
+        metadataWipeCompleted = (panicMetadataWipeOperations?.wipeBridge() ?? BridgeCourierService.shared.wipe()) && metadataWipeCompleted
         messageRouter.wipeOutbox()
-        GossipMessageArchive.wipeDefault()
+        metadataWipeCompleted = (panicMetadataWipeOperations?.wipeGossip() ?? GossipMessageArchive.wipeDefault()) && metadataWipeCompleted
         StoreAndForwardMetrics.shared.reset()
 
         // Ambient-liveliness bookkeeping: sampled nearby-chat previews, the
@@ -1654,14 +1657,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         NostrRelaySettings.reset()
 
         // Drop private group keys and rosters (keychain + disk)
-        groupStore.wipe()
+        metadataWipeCompleted = (panicMetadataWipeOperations?.wipeGroups() ?? groupStore.wipe()) && metadataWipeCompleted
         // Drop cached peers' prekey bundles (who we could write to is
         // metadata too). Our own prekey privates are keychain-backed and go
         // with deleteAllKeychainData above plus the identity reset below.
         PrekeyBundleStore.shared.wipe()
         // Drop bulletin-board posts and tombstones (memory and disk); board
         // posts are signed with our identity key and persist for days.
-        BoardStore.shared.wipe()
+        metadataWipeCompleted = (panicMetadataWipeOperations?.wipeBoard() ?? BoardStore.shared.wipe()) && metadataWipeCompleted
 
         // Drop any share-extension handoff staged in the app group. The normal
         // panic path clears this through AppChromeModel.onPanicWipe, but the
@@ -1697,7 +1700,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
         // Clear read receipt tracking
         sentReadReceipts.removeAll()
-        deduplicationService.clearAll()
+        metadataWipeCompleted = (panicMetadataWipeOperations?.wipeEvents() ?? deduplicationService.clearAll()) && metadataWipeCompleted
 
         // IMPORTANT: Clear Nostr-related state
         // Drop relay subscriptions, handlers, pending sends, and replay state.
@@ -1731,7 +1734,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         let panicCompleted: Bool
         do {
             try panicRecoveryOperations.wipeMedia(recoveryIntent)
-            if keychainWipeCompleted {
+            if keychainWipeCompleted && metadataWipeCompleted {
                 try panicRecoveryOperations.complete()
                 panicCompleted = true
                 SecureLogger.info(

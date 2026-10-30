@@ -147,18 +147,19 @@ final class BoardStore {
     // MARK: - Maintenance
 
     /// Panic wipe: drop all board data from memory and disk.
-    func wipe() {
-        queue.sync {
+    @discardableResult
+    func wipe() -> Bool {
+        let removed = queue.sync {
             posts.removeAll()
             tombstones.removeAll()
-            if let fileURL {
-                try? FileManager.default.removeItem(at: fileURL)
-            }
+            let removed = PanicFileDeletion.remove(fileURL)
             publishSnapshotLocked()
+            return removed
         }
         DispatchQueue.main.async { [weak self] in
             self?.didWipe.send()
         }
+        return removed
     }
 
     // MARK: - Internals (call only on `queue`)

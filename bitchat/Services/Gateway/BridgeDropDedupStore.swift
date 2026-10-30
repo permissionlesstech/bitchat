@@ -118,9 +118,9 @@ final class BridgeDropDedupStore {
     }
 
     /// Panic wipe: forget which drops we published or handled.
-    func wipe() {
-        guard let fileURL else { return }
-        try? FileManager.default.removeItem(at: fileURL)
+    @discardableResult
+    func wipe() -> Bool {
+        return PanicFileDeletion.remove(fileURL)
     }
 
     private static func defaultFileURL() -> URL? {
