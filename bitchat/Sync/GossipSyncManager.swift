@@ -533,7 +533,7 @@ final class GossipSyncManager {
             }
         }
         if requestedTypes.contains(.boardPost) {
-            // The board store already filters to live posts and tombstones;
+            // The board store already filters to live posts, tombstones, and endorsements;
             // no freshness window applies (posts sync until their own expiry).
             let boardPackets = boardPacketsProvider?() ?? []
             for pkt in boardPackets {

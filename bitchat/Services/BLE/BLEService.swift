@@ -6564,7 +6564,7 @@ extension BLEService {
 
     // MARK: - Board (geohash bulletin board)
 
-    /// Validates and stores an incoming board post or tombstone. Returns
+    /// Validates and stores an incoming board post, tombstone, or endorsement. Returns
     /// whether the packet is worth relaying onward.
     private func handleBoardPost(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
         guard let wire = BoardWire.decode(from: packet.payload) else {
@@ -6588,7 +6588,7 @@ extension BLEService {
         }
     }
 
-    /// Broadcasts a pre-signed board payload (post or tombstone) built by the
+    /// Broadcasts a pre-signed board payload (post, tombstone, or endorsement) built by the
     /// board manager, and ingests it locally so it shows up on our own board
     /// and joins gossip sync immediately.
     func sendBoardPayload(_ payload: Data) {

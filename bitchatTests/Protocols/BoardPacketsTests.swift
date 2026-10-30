@@ -208,4 +208,130 @@ struct BoardPacketsTests {
         #expect(!BoardWire.urgentFlag(in: BoardWire.tombstone(tombstone).encode()))
         #expect(!BoardWire.urgentFlag(in: Data()))
     }
+
+    @Test func endorsementIsNeverReadAsUrgent() throws {
+        let post = try makeSignedPost(flags: BoardPostPacket.urgentFlag)
+        let endorsement = try makeSignedEndorsement(of: post)
+        #expect(!BoardWire.urgentFlag(in: BoardWire.endorsement(endorsement).encode()))
+    }
+
+    // MARK: - Endorsements
+
+    private func makeSignedEndorsement(
+        of post: BoardPostPacket,
+        endorsedAt: UInt64 = 1_700_000_050_000,
+        signWith key: Curve25519.Signing.PrivateKey = Curve25519.Signing.PrivateKey(),
+        claimKey: Data? = nil
+    ) throws -> BoardEndorsementPacket {
+        let endorserKey = claimKey ?? key.publicKey.rawRepresentation
+        let signingBytes = BoardEndorsementPacket.signingBytes(
+            postID: post.postID,
+            postAuthorSigningKey: post.authorSigningKey,
+            postDigest: post.digest,
+            endorserSigningKey: endorserKey,
+            endorsedAt: endorsedAt
+        )
+        return BoardEndorsementPacket(
+            postID: post.postID,
+            postAuthorSigningKey: post.authorSigningKey,
+            postDigest: post.digest,
+            endorserSigningKey: endorserKey,
+            endorsedAt: endorsedAt,
+            signature: try key.signature(for: signingBytes)
+        )
+    }
+
+    @Test func endorsementRoundTrip() throws {
+        let post = try makeSignedPost(flags: BoardPostPacket.urgentFlag)
+        let endorsement = try makeSignedEndorsement(of: post)
+        let decoded = try #require(BoardWire.decode(from: BoardWire.endorsement(endorsement).encode()))
+        #expect(decoded == .endorsement(endorsement))
+        #expect(decoded.verifySignature())
+    }
+
+    @Test func forgedEndorsementSignatureFailsVerification() throws {
+        let post = try makeSignedPost()
+        let victim = Curve25519.Signing.PrivateKey()
+        let forged = try makeSignedEndorsement(of: post, claimKey: victim.publicKey.rawRepresentation)
+        let decoded = try #require(BoardWire.decode(from: BoardWire.endorsement(forged).encode()))
+        #expect(!decoded.verifySignature())
+    }
+
+    @Test func endorsementCannotBeRepointedAtAnotherAuthor() throws {
+        let post = try makeSignedPost()
+        let endorsement = try makeSignedEndorsement(of: post)
+        let repointed = BoardEndorsementPacket(
+            postID: endorsement.postID,
+            postAuthorSigningKey: Curve25519.Signing.PrivateKey().publicKey.rawRepresentation,
+            postDigest: endorsement.postDigest,
+            endorserSigningKey: endorsement.endorserSigningKey,
+            endorsedAt: endorsement.endorsedAt,
+            signature: endorsement.signature
+        )
+        let decoded = try #require(BoardWire.decode(from: BoardWire.endorsement(repointed).encode()))
+        #expect(!decoded.verifySignature())
+    }
+
+    @Test func endorsementCannotBeRepointedAtAnotherVersionOfThePost() throws {
+        let post = try makeSignedPost()
+        let endorsement = try makeSignedEndorsement(of: post)
+        let repointed = BoardEndorsementPacket(
+            postID: endorsement.postID,
+            postAuthorSigningKey: endorsement.postAuthorSigningKey,
+            postDigest: Data(repeating: 0xAB, count: BoardWireConstants.postDigestLength),
+            endorserSigningKey: endorsement.endorserSigningKey,
+            endorsedAt: endorsement.endorsedAt,
+            signature: endorsement.signature
+        )
+        let decoded = try #require(BoardWire.decode(from: BoardWire.endorsement(repointed).encode()))
+        #expect(!decoded.verifySignature())
+    }
+
+    @Test func endorsementCarryingPostOnlyFieldsIsRejected() throws {
+        let post = try makeSignedPost()
+        let encoded = BoardWire.endorsement(try makeSignedEndorsement(of: post)).encode()
+        let urgentFlags = Data([0x09, 0x00, 0x01, BoardPostPacket.urgentFlag])
+        #expect(BoardWire.decode(from: encoded + urgentFlags) == nil)
+        let content = Data([0x04, 0x00, 0x01, 0x41])
+        #expect(BoardWire.decode(from: encoded + content) == nil)
+    }
+
+    @Test func onlyUrgentPostsPeekAsUrgent() throws {
+        let urgentPost = try makeSignedPost(flags: BoardPostPacket.urgentFlag)
+        #expect(BoardWire.urgentFlag(in: BoardWire.post(urgentPost).encode()))
+
+        // A flags TLV appended to a non-post never earns the urgent relay reach.
+        let urgentFlags = Data([0x09, 0x00, 0x01, BoardPostPacket.urgentFlag])
+        let endorsement = BoardWire.endorsement(try makeSignedEndorsement(of: urgentPost)).encode()
+        #expect(!BoardWire.urgentFlag(in: endorsement + urgentFlags))
+        #expect(!BoardWire.urgentFlag(in: urgentFlags))
+    }
+
+    @Test func endorsementMissingEndorserKeyIsRejected() throws {
+        let post = try makeSignedPost()
+        let endorsement = try makeSignedEndorsement(of: post)
+        var encoded = Data()
+        func putTLV(_ type: UInt8, _ value: Data) {
+            encoded.append(type)
+            encoded.append(UInt8(value.count >> 8))
+            encoded.append(UInt8(value.count & 0xFF))
+            encoded.append(value)
+        }
+        putTLV(0x01, Data([0x03]))
+        putTLV(0x02, endorsement.postID)
+        putTLV(0x05, endorsement.postAuthorSigningKey)
+        putTLV(0x0D, BoardWireEncoding.uint64Data(endorsement.endorsedAt))
+        putTLV(0x0A, endorsement.signature)
+        #expect(BoardWire.decode(from: encoded) == nil)
+    }
+
+    @Test func endorsementSigningContextIsDistinctFromPostsAndTombstones() throws {
+        // A signature over one board kind must never verify as another.
+        let contexts = [
+            BoardWireConstants.postSigningContext,
+            BoardWireConstants.tombstoneSigningContext,
+            BoardWireConstants.endorsementSigningContext
+        ]
+        #expect(Set(contexts).count == contexts.count)
+    }
 }

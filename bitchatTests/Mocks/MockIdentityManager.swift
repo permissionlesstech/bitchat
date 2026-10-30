@@ -160,4 +160,8 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
     func mostRecentlyVerifiedFingerprints(limit: Int, excluding fingerprint: String) -> [String] {
         []
     }
+
+    func trustedSigningKeys() -> Set<Data> {
+        []
+    }
 }
