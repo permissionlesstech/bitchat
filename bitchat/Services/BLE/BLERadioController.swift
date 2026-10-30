@@ -233,12 +233,10 @@ final class BLERadioController {
         let peripheralID = candidate.peripheralID
         linkStateStore.beginConnecting(to: peripheral, at: Date())
         peripheral.delegate = peripheralDelegate
-        let options: [String: Any] = [
-            CBConnectPeripheralOptionNotifyOnConnectionKey: true,
-            CBConnectPeripheralOptionNotifyOnDisconnectionKey: true,
-            CBConnectPeripheralOptionNotifyOnNotificationKey: true
-        ]
-        central.connect(peripheral, options: options)
+        // No CBConnectPeripheralOptionNotifyOn* keys. Those options are what
+        // makes iOS raise the lock-screen "accessory would like to open
+        // bitchat" prompt, and accepting it names the app.
+        central.connect(peripheral, options: nil)
         scheduler.recordConnectionAttempt(at: Date())
         SecureLogger.debug("\(logPrefix): \(candidate.name) [RSSI:\(candidate.rssi)]", category: .session)
 
@@ -345,11 +343,7 @@ final class BLERadioController {
                     for: target.peripheralID
                 )
                 target.peripheral.delegate = self.peripheralDelegate
-                central.connect(target.peripheral, options: [
-                    CBConnectPeripheralOptionNotifyOnConnectionKey: true,
-                    CBConnectPeripheralOptionNotifyOnDisconnectionKey: true,
-                    CBConnectPeripheralOptionNotifyOnNotificationKey: true
-                ])
+                central.connect(target.peripheral, options: nil)
             }
             SecureLogger.info("🌙 Armed \(targets.count) pending background connect(s) for wake-on-proximity", category: .session)
         }
