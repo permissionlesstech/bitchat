@@ -34,6 +34,9 @@ struct AppInfoView: View {
     /// The override changed this session; localization resolves at process
     /// start, so surface the restart hint.
     @State private var showLanguageRestartNote = false
+    #if os(iOS)
+    @State private var selectedAppIcon = AlternateAppIconSettings.selected(in: .standard)
+    #endif
 
     private enum Pane: String {
         case settings
@@ -60,6 +63,9 @@ struct AppInfoView: View {
             static let tabPickerLabel = String(localized: "app_info.tab.picker_label", defaultValue: "view", comment: "Accessibility label for the segmented control switching between the settings and info panes of the app info sheet")
             static let tabSettings = String(localized: "app_info.tab.settings", defaultValue: "settings", comment: "Segmented control label for the settings pane of the app info sheet")
             static let tabInfo = String(localized: "app_info.tab.info", defaultValue: "info", comment: "Segmented control label for the info pane of the app info sheet")
+
+            static let iconTitle = String(localized: "app_info.settings.icon.title", defaultValue: "HOME SCREEN ICON", comment: "Section header (uppercase) for alternate app icon picker") // periphery:ignore - iOS App Info settings UI
+            static let iconSubtitle = String(localized: "app_info.settings.icon.subtitle", defaultValue: "optional low-profile icons. the home-screen label still reads “bitchat”, and the real name still shows in settings and search — this only changes the glyph.", comment: "Caption under the alternate app icon picker explaining the limits of disguise") // periphery:ignore - iOS App Info settings UI
 
             static let connectivityTitle = String(localized: "app_info.settings.connectivity.title", defaultValue: "CONNECTIVITY", comment: "Section header (uppercase) for the connectivity toggles: mesh bridge, internet gateway, tor routing")
 
@@ -356,6 +362,51 @@ struct AppInfoView: View {
                     .accessibilityAddTraits(selectedTheme == theme ? .isSelected : [])
                 }
             }
+
+            #if os(iOS)
+            // Low-profile home-screen icons for the opsec / disguise path (#1447).
+            // macOS has no alternate-icon API equivalent, so this stays iOS-only.
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader(verbatim: Strings.Settings.iconTitle)
+
+                settingsCard {
+                    Text(verbatim: Strings.Settings.iconSubtitle)
+                        .bitchatFont(size: 11)
+                        .foregroundColor(secondaryTextColor)
+
+                    HStack(spacing: 8) {
+                        ForEach(AlternateAppIconSettings.Icon.allCases) { icon in
+                            Button {
+                                selectedAppIcon = icon
+                                AlternateAppIconSettings.setSelected(icon, in: .standard, applySystem: true)
+                            } label: {
+                                Text(verbatim: icon.title)
+                                    .bitchatFont(
+                                        size: 12,
+                                        weight: selectedAppIcon == icon ? .semibold : .regular
+                                    )
+                                    .foregroundColor(
+                                        selectedAppIcon == icon ? palette.accent : secondaryTextColor
+                                    )
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                            .fill(
+                                                selectedAppIcon == icon
+                                                    ? palette.accent.opacity(0.15)
+                                                    : Color.clear
+                                            )
+                                    )
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(selectedAppIcon == icon ? .isSelected : [])
+                        }
+                    }
+                }
+            }
+            #endif
 
             // Language — an in-app override so the UI language can differ
             // from the device language (takes effect on next launch).
