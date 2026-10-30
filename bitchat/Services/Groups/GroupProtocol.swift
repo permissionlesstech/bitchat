@@ -409,7 +409,163 @@ struct GroupMessagePlaintext: Equatable {
     let senderSigningKey: Data
     let senderNickname: String
     let timestampMs: UInt64
+    /// Empty for a shared-list update.
     let content: String
+    /// Encoded `GroupListDelta` when this message edits the group's list
+    /// instead of saying something in chat.
+    var listUpdate: Data?
+}
+
+// MARK: - Shared list wire form
+
+/// A decoded list update: one person's edit, or a full resend of someone's
+/// list that should merge without posting activity lines.
+struct GroupListUpdate: Equatable {
+    let delta: GroupListDelta
+    let isSnapshot: Bool
+}
+
+/// Binary form of a `GroupListUpdate`, carried sealed inside a group message:
+/// version byte, kind byte (edit or snapshot), 16-bit record count, then per
+/// record the item ID, a flags byte naming the registers present, and each
+/// register as a big-endian timestamp, the author's 32-byte signing key, and
+/// its value.
+enum GroupListCoding {
+    static let version: UInt8 = 1
+
+    private enum Kind {
+        static let edit: UInt8 = 0
+        static let snapshot: UInt8 = 1
+    }
+
+    private enum Flag {
+        static let added: UInt8 = 0x01
+        static let checked: UInt8 = 0x02
+        static let removed: UInt8 = 0x04
+        static let all: UInt8 = added | checked | removed
+    }
+
+    private static let authorLength = 32
+
+    static func encode(_ delta: GroupListDelta, isSnapshot: Bool = false) -> Data? {
+        guard !delta.isEmpty, delta.count <= GroupList.maxRecords else { return nil }
+        var out = Data([version, isSnapshot ? Kind.snapshot : Kind.edit])
+        appendUInt16(UInt16(delta.count), to: &out)
+        // Sorted so the same delta always encodes to the same bytes.
+        for (id, state) in delta.sorted(by: { $0.key.lexicographicallyPrecedes($1.key) }) {
+            guard id.count == GroupList.itemIDLength else { return nil }
+            var flags: UInt8 = 0
+            if state.added != nil { flags |= Flag.added }
+            if state.checked != nil { flags |= Flag.checked }
+            if state.removed != nil { flags |= Flag.removed }
+            out.append(id)
+            out.append(flags)
+            if let added = state.added {
+                let text = Data(added.text.utf8)
+                guard text.count <= GroupList.maxTextBytes, appendStamp(added.stamp, to: &out) else { return nil }
+                appendUInt16(UInt16(text.count), to: &out)
+                out.append(text)
+            }
+            if let checked = state.checked {
+                guard appendStamp(checked.stamp, to: &out) else { return nil }
+                out.append(checked.value ? 1 : 0)
+            }
+            if let removed = state.removed {
+                guard appendStamp(removed, to: &out) else { return nil }
+            }
+        }
+        return out
+    }
+
+    /// Decodes a delta, rejecting anything malformed outright. Registers
+    /// stamped after `notAfterMs` are dropped: a future-dated register would
+    /// otherwise win every later edit to its row.
+    static func decode(_ data: Data, notAfterMs: UInt64) -> GroupListUpdate? {
+        var reader = Reader(data: data)
+        guard reader.byte() == version,
+              let kind = reader.byte(), kind == Kind.edit || kind == Kind.snapshot,
+              let count = reader.uint16(),
+              count > 0, Int(count) <= GroupList.maxRecords else { return nil }
+        var delta: GroupListDelta = [:]
+        for _ in 0..<count {
+            guard let id = reader.bytes(GroupList.itemIDLength),
+                  let flags = reader.byte(),
+                  flags & ~Flag.all == 0 else { return nil }
+            var state = GroupListItemState()
+            if flags & Flag.added != 0 {
+                guard let stamp = reader.stamp(),
+                      let length = reader.uint16(),
+                      Int(length) <= GroupList.maxTextBytes,
+                      let textData = reader.bytes(Int(length)),
+                      let text = String(data: textData, encoding: .utf8),
+                      GroupList.sanitizedText(text) == text else { return nil }
+                if stamp.timestampMs <= notAfterMs {
+                    state.added = .init(stamp: stamp, text: text)
+                }
+            }
+            if flags & Flag.checked != 0 {
+                guard let stamp = reader.stamp(), let value = reader.byte(), value <= 1 else { return nil }
+                if stamp.timestampMs <= notAfterMs {
+                    state.checked = .init(stamp: stamp, value: value == 1)
+                }
+            }
+            if flags & Flag.removed != 0 {
+                guard let stamp = reader.stamp() else { return nil }
+                if stamp.timestampMs <= notAfterMs {
+                    state.removed = stamp
+                }
+            }
+            delta[id] = delta[id].map { $0.merged(with: state) } ?? state
+        }
+        guard reader.isAtEnd else { return nil }
+        return GroupListUpdate(delta: delta, isSnapshot: kind == Kind.snapshot)
+    }
+
+    private static func appendUInt16(_ value: UInt16, to out: inout Data) {
+        out.append(UInt8(value >> 8))
+        out.append(UInt8(value & 0xFF))
+    }
+
+    private static func appendStamp(_ stamp: GroupListStamp, to out: inout Data) -> Bool {
+        guard stamp.author.count == authorLength else { return false }
+        out.append(GroupTLV.timestampData(stamp.timestampMs))
+        out.append(stamp.author)
+        return true
+    }
+
+    private struct Reader {
+        let data: Data
+        var offset: Data.Index
+
+        init(data: Data) {
+            self.data = data
+            self.offset = data.startIndex
+        }
+
+        var isAtEnd: Bool { offset == data.endIndex }
+
+        mutating func bytes(_ count: Int) -> Data? {
+            guard data.distance(from: offset, to: data.endIndex) >= count else { return nil }
+            let end = data.index(offset, offsetBy: count)
+            defer { offset = end }
+            return Data(data[offset..<end])
+        }
+
+        mutating func byte() -> UInt8? {
+            bytes(1)?.first
+        }
+
+        mutating func uint16() -> UInt16? {
+            guard let raw = bytes(2) else { return nil }
+            return raw.reduce(UInt16(0)) { ($0 << 8) | UInt16($1) }
+        }
+
+        mutating func stamp() -> GroupListStamp? {
+            guard let raw = bytes(8), let timestampMs = GroupTLV.timestamp(from: raw),
+                  let author = bytes(GroupListCoding.authorLength) else { return nil }
+            return GroupListStamp(timestampMs: timestampMs, author: author)
+        }
+    }
 }
 
 // MARK: - Crypto
@@ -424,6 +580,9 @@ enum GroupCryptoError: Error, Equatable {
 
 enum GroupCrypto {
     static let messageSigningDomain = Data("bitchat-group-msg-v1".utf8)
+    /// Separate domain for list updates, so a signature over list bytes can
+    /// never verify as a chat message and vice versa.
+    static let listSigningDomain = Data("bitchat-group-list-v1".utf8)
 
     private enum InnerField: UInt8 {
         case messageID = 0x01
@@ -432,6 +591,21 @@ enum GroupCrypto {
         case timestamp = 0x04
         case content = 0x05
         case signature = 0x06
+        /// Replaces `content` on a list update. Clients without lists find no
+        /// content field and drop the message instead of showing a blank one.
+        case listUpdate = 0x07
+    }
+
+    /// Bytes the sender signs for a list update: the chat layout under the
+    /// list domain, with the encoded delta in place of the content.
+    static func listSigningContent(groupID: Data, epoch: UInt32, messageID: String, timestampMs: UInt64, update: Data) -> Data {
+        var data = listSigningDomain
+        data.append(groupID)
+        data.append(GroupTLV.epochData(epoch))
+        data.append(Data(messageID.utf8))
+        data.append(GroupTLV.timestampData(timestampMs))
+        data.append(update)
+        return data
     }
 
     /// Bytes the sender signs: domain | groupID | epoch | messageID | timestamp | content.
@@ -475,6 +649,67 @@ enum GroupCrypto {
             timestampMs: timestampMs,
             content: content
         )
+        return try seal(
+            body: (InnerField.content, Data(content.utf8)),
+            signingContent: signingContent,
+            messageID: messageID,
+            senderNickname: senderNickname,
+            senderSigningKey: senderSigningKey,
+            timestampMs: timestampMs,
+            groupID: groupID,
+            epoch: epoch,
+            key: key,
+            sign: sign
+        )
+    }
+
+    /// Seals an encoded `GroupListDelta` as a group message. Same envelope,
+    /// AEAD binding, and sender signature as chat, under the list domain.
+    static func sealListUpdate(
+        _ update: Data,
+        messageID: String,
+        senderNickname: String,
+        senderSigningKey: Data,
+        timestampMs: UInt64,
+        groupID: Data,
+        epoch: UInt32,
+        key: Data,
+        sign: (Data) -> Data?
+    ) throws -> Data {
+        guard !update.isEmpty else { throw GroupCryptoError.malformedPayload }
+        let signingContent = listSigningContent(
+            groupID: groupID,
+            epoch: epoch,
+            messageID: messageID,
+            timestampMs: timestampMs,
+            update: update
+        )
+        return try seal(
+            body: (InnerField.listUpdate, update),
+            signingContent: signingContent,
+            messageID: messageID,
+            senderNickname: senderNickname,
+            senderSigningKey: senderSigningKey,
+            timestampMs: timestampMs,
+            groupID: groupID,
+            epoch: epoch,
+            key: key,
+            sign: sign
+        )
+    }
+
+    private static func seal(
+        body: (field: InnerField, value: Data),
+        signingContent: Data,
+        messageID: String,
+        senderNickname: String,
+        senderSigningKey: Data,
+        timestampMs: UInt64,
+        groupID: Data,
+        epoch: UInt32,
+        key: Data,
+        sign: (Data) -> Data?
+    ) throws -> Data {
         guard let signature = sign(signingContent), signature.count == 64 else {
             throw GroupCryptoError.signingFailed
         }
@@ -484,7 +719,7 @@ enum GroupCrypto {
         try GroupTLV.put(InnerField.senderSigningKey.rawValue, senderSigningKey, into: &inner)
         try GroupTLV.put(InnerField.senderNickname.rawValue, Data(senderNickname.utf8), into: &inner)
         try GroupTLV.put(InnerField.timestamp.rawValue, GroupTLV.timestampData(timestampMs), into: &inner)
-        try GroupTLV.put(InnerField.content.rawValue, Data(content.utf8), into: &inner)
+        try GroupTLV.put(body.field.rawValue, body.value, into: &inner)
         try GroupTLV.put(InnerField.signature.rawValue, signature, into: &inner)
 
         do {
@@ -533,6 +768,7 @@ enum GroupCrypto {
         var timestampMs: UInt64?
         var content: String?
         var signature: Data?
+        var listUpdate: Data?
         for (type, value) in fields {
             switch InnerField(rawValue: type) {
             case .messageID:
@@ -547,6 +783,8 @@ enum GroupCrypto {
                 content = String(data: value, encoding: .utf8)
             case .signature where value.count == 64:
                 signature = value
+            case .listUpdate where !value.isEmpty:
+                listUpdate = value
             default:
                 break
             }
@@ -555,16 +793,30 @@ enum GroupCrypto {
               let senderSigningKey,
               let senderNickname,
               let timestampMs,
-              let content,
               let signature else { throw GroupCryptoError.malformedPayload }
 
-        let signingContent = messageSigningContent(
-            groupID: envelope.groupID,
-            epoch: envelope.epoch,
-            messageID: messageID,
-            timestampMs: timestampMs,
-            content: content
-        )
+        // Exactly one body: chat content or a list update, never both.
+        let signingContent: Data
+        switch (content, listUpdate) {
+        case let (content?, nil):
+            signingContent = messageSigningContent(
+                groupID: envelope.groupID,
+                epoch: envelope.epoch,
+                messageID: messageID,
+                timestampMs: timestampMs,
+                content: content
+            )
+        case let (nil, update?):
+            signingContent = listSigningContent(
+                groupID: envelope.groupID,
+                epoch: envelope.epoch,
+                messageID: messageID,
+                timestampMs: timestampMs,
+                update: update
+            )
+        default:
+            throw GroupCryptoError.malformedPayload
+        }
         guard verify(signature: signature, for: signingContent, publicKey: senderSigningKey) else {
             throw GroupCryptoError.badSenderSignature
         }
@@ -574,7 +826,8 @@ enum GroupCrypto {
             senderSigningKey: senderSigningKey,
             senderNickname: senderNickname,
             timestampMs: timestampMs,
-            content: content
+            content: content ?? "",
+            listUpdate: listUpdate
         )
     }
 }

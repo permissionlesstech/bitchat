@@ -26,7 +26,8 @@ struct CommandSuggestionsView: View {
         guard messageText.hasPrefix("/") else { return [] }
         let isGeoPublic = locationChannelsModel.selectedChannel.isLocation
         let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true
-        let commands = CommandInfo.all(isGeoPublic: isGeoPublic, isGeoDM: isGeoDM)
+        let isGroupChat = privateConversationModel.selectedPeerID?.isGroup == true
+        let commands = CommandInfo.all(isGeoPublic: isGeoPublic, isGeoDM: isGeoDM, isGroupChat: isGroupChat)
         // While arguments are being typed, keep the matched command's usage
         // row visible instead of vanishing at the first space.
         if let typed = typedCommandAlias {
