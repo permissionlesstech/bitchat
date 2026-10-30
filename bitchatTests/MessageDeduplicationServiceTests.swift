@@ -122,22 +122,112 @@ struct LRUDeduplicationCacheTests {
         #expect(cache.contains("b"))
     }
 
-    @Test func eviction_skipsRemovedKeys() {
+    @Test func ordinaryEvictionBoundsOrderStorage() {
+        let cache = LRUDeduplicationCache<Int>(capacity: 2)
+        var peakStorage = 0
+
+        for value in 0..<10_000 {
+            cache.record("key\(value)", value: value)
+            peakStorage = max(peakStorage, cache.orderStorageCountForTesting)
+            #expect(cache.count == min(value + 1, 2))
+            #expect(cache.orderStorageCountForTesting <= 33)
+        }
+
+        #expect(peakStorage == 33)
+        #expect(cache.value(for: "key9998") == 9_998)
+        #expect(cache.value(for: "key9999") == 9_999)
+    }
+
+    @Test func removal_thenReplacementPreservesLiveCapacity() {
         let cache = LRUDeduplicationCache<Int>(capacity: 3)
         cache.record("a", value: 1)
         cache.record("b", value: 2)
         cache.record("c", value: 3)
 
-        // Remove "a" manually
         cache.remove("a")
-
-        // Add new entry - should evict "b" (next oldest still in map)
         cache.record("d", value: 4)
 
-        // Cache should have b, c, d (a was removed)
-        // Actually after eviction it should have c, d and maybe b depending on implementation
+        #expect(cache.count == 3)
         #expect(!cache.contains("a"))
-        #expect(cache.count <= 3)
+        #expect(cache.contains("b"))
+        #expect(cache.contains("c"))
+        #expect(cache.contains("d"))
+    }
+
+    @Test func removal_thenReinsertionKeepsNewGenerationLive() {
+        let cache = LRUDeduplicationCache<Int>(capacity: 3)
+        cache.record("a", value: 1)
+        cache.record("b", value: 2)
+        cache.record("c", value: 3)
+
+        cache.remove("a")
+        cache.record("a", value: 4)
+
+        #expect(cache.count == 3)
+        #expect(cache.value(for: "a") == 4)
+        #expect(cache.contains("b"))
+        #expect(cache.contains("c"))
+
+        cache.record("d", value: 5)
+
+        #expect(cache.count == 3)
+        #expect(!cache.contains("b"))
+        #expect(cache.value(for: "a") == 4)
+        #expect(cache.contains("c"))
+        #expect(cache.contains("d"))
+    }
+
+    @Test func updatingLiveKeyDoesNotRefreshInsertionOrder() {
+        let cache = LRUDeduplicationCache<Int>(capacity: 2)
+        cache.record("a", value: 1)
+        cache.record("b", value: 2)
+        cache.record("a", value: 3)
+
+        cache.record("c", value: 4)
+
+        #expect(!cache.contains("a"))
+        #expect(cache.contains("b"))
+        #expect(cache.contains("c"))
+    }
+
+    @Test func repeatedRemovalAndReinsertionCompactsStaleNodes() {
+        let cache = LRUDeduplicationCache<Int>(capacity: 3)
+        cache.record("a", value: 0)
+        cache.record("b", value: 1)
+        cache.record("c", value: 2)
+        var peakStorage = cache.orderStorageCountForTesting
+
+        for value in 1...1_001 {
+            cache.remove("a")
+            peakStorage = max(peakStorage, cache.orderStorageCountForTesting)
+            #expect(cache.orderStorageCountForTesting <= 34)
+            cache.record("a", value: value)
+            peakStorage = max(peakStorage, cache.orderStorageCountForTesting)
+            #expect(cache.orderStorageCountForTesting <= 34)
+            #expect(cache.count == 3)
+            #expect(cache.value(for: "b") == 1)
+            #expect(cache.value(for: "c") == 2)
+        }
+
+        #expect(peakStorage == 34)
+        #expect(cache.count == 3)
+        #expect(cache.value(for: "a") == 1_001)
+
+        cache.record("d", value: 3)
+        #expect(!cache.contains("b"))
+        #expect(cache.contains("c"))
+        #expect(cache.value(for: "a") == 1_001)
+
+        cache.record("e", value: 4)
+        #expect(!cache.contains("c"))
+        #expect(cache.value(for: "a") == 1_001)
+
+        cache.record("f", value: 5)
+        #expect(!cache.contains("a"))
+        #expect(cache.count == 3)
+        #expect(cache.contains("d"))
+        #expect(cache.contains("e"))
+        #expect(cache.contains("f"))
     }
 
     // MARK: - Edge Cases
@@ -321,6 +411,24 @@ struct MessageDeduplicationServiceTests {
         service.forgetContent(content, ifRecordedAt: timestamp)
 
         #expect(service.contentTimestamp(for: content) == nil)
+    }
+
+    @Test func forgetContent_thenRerecordKeepsReplacementDeduplicatedAtCapacity() {
+        let service = MessageDeduplicationService(contentCapacity: 3, nostrEventCapacity: 3)
+        let first = Date(timeIntervalSince1970: 1_000)
+        let replacement = Date(timeIntervalSince1970: 2_000)
+        service.recordContent("content a", timestamp: first)
+        service.recordContent("content b", timestamp: first)
+        service.recordContent("content c", timestamp: first)
+
+        service.forgetContent("content a", ifRecordedAt: first)
+        service.recordContent("content a", timestamp: replacement)
+        service.recordContent("content d", timestamp: replacement)
+
+        #expect(service.contentTimestamp(for: "content a") == replacement)
+        #expect(service.contentTimestamp(for: "content b") == nil)
+        #expect(service.contentTimestamp(for: "content c") == first)
+        #expect(service.contentTimestamp(for: "content d") == replacement)
     }
 
     @Test func forgetContent_doesNotEraseNewerSameContentMarker() {
