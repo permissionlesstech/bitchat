@@ -9,10 +9,16 @@
 import BitLogger
 import Foundation
 
-/// Missing backing files are already erased; other removal errors keep panic pending.
+/// Missing files succeed; unresolved persistent locations and removal errors fail.
 enum PanicFileDeletion {
+    static func remove(_ fileURL: inout URL?, resolvingWith resolve: () -> URL?) -> Bool {
+        // Retry a failed lookup and retain the recovered location for later persistence.
+        if fileURL == nil { fileURL = resolve() }
+        return remove(fileURL)
+    }
+
     static func remove(_ fileURL: URL?) -> Bool {
-        guard let fileURL else { return true }
+        guard let fileURL else { return false }
         do {
             try FileManager.default.removeItem(at: fileURL)
             return true

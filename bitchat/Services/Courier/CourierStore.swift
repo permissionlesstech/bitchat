@@ -121,7 +121,9 @@ final class CourierStore {
 
     private var envelopes: [StoredEnvelope] = []
     private let queue = DispatchQueue(label: "chat.bitchat.courier.store")
-    private let fileURL: URL?
+    private var fileURL: URL?
+    private let resolveDefaultFileURL: () -> URL?
+    private let persistsToDisk: Bool
     private let now: () -> Date
     private let readData: (URL) throws -> Data
     /// A protected file can be present but unreadable during an iOS
@@ -139,10 +141,14 @@ final class CourierStore {
         persistsToDisk: Bool = true,
         fileURL: URL? = nil,
         now: @escaping () -> Date = Date.init,
-        readData: @escaping (URL) throws -> Data = { try Data(contentsOf: $0) }
+        readData: @escaping (URL) throws -> Data = { try Data(contentsOf: $0) },
+        resolveDefaultFileURL: (() -> URL?)? = nil
     ) {
         self.now = now
-        self.fileURL = persistsToDisk ? (fileURL ?? Self.defaultFileURL()) : nil
+        let resolver = resolveDefaultFileURL ?? Self.defaultFileURL
+        self.resolveDefaultFileURL = resolver
+        self.persistsToDisk = persistsToDisk
+        self.fileURL = persistsToDisk ? (fileURL ?? resolver()) : nil
         self.readData = readData
         loadFromDisk()
         #if os(iOS)
@@ -421,7 +427,7 @@ final class CourierStore {
         let removed = queue.sync {
             envelopes.removeAll()
             diskLoadDeferred = false
-            let removed = PanicFileDeletion.remove(fileURL)
+            let removed = !persistsToDisk || PanicFileDeletion.remove(&fileURL, resolvingWith: resolveDefaultFileURL)
             publishCountLocked()
             return removed
         }

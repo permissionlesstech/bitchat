@@ -78,12 +78,21 @@ final class BridgeDropDedupStore {
         var seenDropEventIDs: [String: Date]
     }
 
-    private let fileURL: URL?
+    private var fileURL: URL?
+    private let resolveDefaultFileURL: () -> URL?
+    private let persistsToDisk: Bool
 
     /// - Parameter fileURL: Overrides the on-disk location (tests). Ignored
     ///   when `persistsToDisk` is false.
-    init(persistsToDisk: Bool = true, fileURL: URL? = nil) {
-        self.fileURL = persistsToDisk ? (fileURL ?? Self.defaultFileURL()) : nil
+    init(
+        persistsToDisk: Bool = true,
+        fileURL: URL? = nil,
+        resolveDefaultFileURL: (() -> URL?)? = nil
+    ) {
+        let resolver = resolveDefaultFileURL ?? Self.defaultFileURL
+        self.resolveDefaultFileURL = resolver
+        self.persistsToDisk = persistsToDisk
+        self.fileURL = persistsToDisk ? (fileURL ?? resolver()) : nil
     }
 
     func load() -> Snapshot {
@@ -120,7 +129,7 @@ final class BridgeDropDedupStore {
     /// Panic wipe: forget which drops we published or handled.
     @discardableResult
     func wipe() -> Bool {
-        return PanicFileDeletion.remove(fileURL)
+        return !persistsToDisk || PanicFileDeletion.remove(&fileURL, resolvingWith: resolveDefaultFileURL)
     }
 
     private static func defaultFileURL() -> URL? {

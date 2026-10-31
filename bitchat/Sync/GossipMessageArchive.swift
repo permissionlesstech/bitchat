@@ -18,10 +18,13 @@ import Foundation
 /// range — so file protection (no additional sealing) is the right at-rest
 /// posture. Wiped on panic.
 final class GossipMessageArchive {
-    private let fileURL: URL?
+    private var fileURL: URL?
+    private let resolveDefaultFileURL: () -> URL?
 
-    init(fileURL: URL? = nil) {
-        self.fileURL = fileURL ?? Self.defaultFileURL()
+    init(fileURL: URL? = nil, resolveDefaultFileURL: (() -> URL?)? = nil) {
+        let resolver = resolveDefaultFileURL ?? Self.defaultFileURL
+        self.resolveDefaultFileURL = resolver
+        self.fileURL = fileURL ?? resolver()
     }
 
     /// Raw binary packets, decoded and freshness-filtered by the caller.
@@ -58,13 +61,13 @@ final class GossipMessageArchive {
 
     @discardableResult
     func wipe() -> Bool {
-        return PanicFileDeletion.remove(fileURL)
+        return PanicFileDeletion.remove(&fileURL, resolvingWith: resolveDefaultFileURL)
     }
 
     /// Panic-wipe hook for callers that don't hold the live instance.
     @discardableResult
-    static func wipeDefault() -> Bool {
-        GossipMessageArchive().wipe()
+    static func wipeDefault(resolveDefaultFileURL: (() -> URL?)? = nil) -> Bool {
+        GossipMessageArchive(resolveDefaultFileURL: resolveDefaultFileURL).wipe()
     }
 
     private static func defaultFileURL() -> URL? {

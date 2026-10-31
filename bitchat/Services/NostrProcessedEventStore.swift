@@ -21,7 +21,8 @@ import Foundation
 /// file must also load during a locked-background restoration relaunch.
 /// Wiped on panic via the dedup service's clear paths.
 final class NostrProcessedEventStore {
-    private let fileURL: URL?
+    private var fileURL: URL?
+    private let resolveDefaultFileURL: () -> URL?
     // All file access is serialized here: appends are read-modify-write, and
     // overlapping debounced flushes would otherwise race and drop IDs.
     private let ioQueue: DispatchQueue
@@ -29,9 +30,12 @@ final class NostrProcessedEventStore {
     /// The I/O queue must be serial to preserve append and wipe ordering.
     init(
         fileURL: URL? = nil,
-        ioQueue: DispatchQueue = DispatchQueue(label: "chat.bitchat.nostr-processed-events", qos: .utility)
+        ioQueue: DispatchQueue = DispatchQueue(label: "chat.bitchat.nostr-processed-events", qos: .utility),
+        resolveDefaultFileURL: (() -> URL?)? = nil
     ) {
-        self.fileURL = fileURL ?? Self.defaultFileURL()
+        let resolver = resolveDefaultFileURL ?? Self.defaultFileURL
+        self.resolveDefaultFileURL = resolver
+        self.fileURL = fileURL ?? resolver()
         self.ioQueue = ioQueue
     }
 
@@ -62,7 +66,7 @@ final class NostrProcessedEventStore {
 
     @discardableResult
     func wipe() -> Bool {
-        ioQueue.sync { PanicFileDeletion.remove(fileURL) }
+        ioQueue.sync { PanicFileDeletion.remove(&fileURL, resolvingWith: resolveDefaultFileURL) }
     }
 
     private func loadLocked() -> [String] {

@@ -22,13 +22,23 @@ final class GroupStore: ObservableObject {
     @Published private(set) var groups: [BitchatGroup] = []
 
     private let keychain: KeychainManagerProtocol
-    private let fileURL: URL?
+    private var fileURL: URL?
+    private let resolveDefaultFileURL: () -> URL?
+    private let persistsToDisk: Bool
 
     /// - Parameter fileURL: Overrides the on-disk location (tests). Ignored
     ///   when `persistsToDisk` is false.
-    init(keychain: KeychainManagerProtocol, persistsToDisk: Bool = true, fileURL: URL? = nil) {
+    init(
+        keychain: KeychainManagerProtocol,
+        persistsToDisk: Bool = true,
+        fileURL: URL? = nil,
+        resolveDefaultFileURL: (() -> URL?)? = nil
+    ) {
         self.keychain = keychain
-        self.fileURL = persistsToDisk ? (fileURL ?? Self.defaultFileURL()) : nil
+        let resolver = resolveDefaultFileURL ?? Self.defaultFileURL
+        self.resolveDefaultFileURL = resolver
+        self.persistsToDisk = persistsToDisk
+        self.fileURL = persistsToDisk ? (fileURL ?? resolver()) : nil
         loadFromDisk()
     }
 
@@ -136,7 +146,7 @@ final class GroupStore: ObservableObject {
             _ = keychain.deleteIdentityKey(forKey: Self.keychainKey(for: group.groupID))
         }
         groups.removeAll()
-        return PanicFileDeletion.remove(fileURL)
+        return !persistsToDisk || PanicFileDeletion.remove(&fileURL, resolvingWith: resolveDefaultFileURL)
     }
 
     // MARK: - Internals
