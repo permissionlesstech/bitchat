@@ -44,6 +44,7 @@ A new component (`Sync/RequestSyncManager.swift`) responsible for:
 *   **Conditional Exemption**: If `packet.isRSR` is true (or packet is a legacy TTL=0 response), it queries `RequestSyncManager`.
     *   **Valid**: If solicited, timestamp check is skipped (allowing historical data sync).
     *   **Invalid**: If unsolicited or timed out, the packet is rejected.
+*   **Recipient Check**: A directed `REQUEST_SYNC` is answered only by its recipient. Ingress drops a copy addressed to another peer before the duplicate checks. Copies of one periodic round can share a packet ID, so a stray copy must not hide the right one. Other clients must address a directed request with the responder's 8-byte peer ID.
 
 ## Usage
 

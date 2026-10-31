@@ -7,6 +7,7 @@ enum BLEIngressPacketGuard {
         case directSenderMismatch(boundPeerID: PeerID, claimedSenderID: PeerID)
         case invalidRSR(peerID: PeerID)
         case timestampSkew(peerID: PeerID, skewMs: UInt64, maxSkewMs: UInt64)
+        case requestSyncForAnotherPeer(peerID: PeerID)
     }
 
     static func evaluate(
@@ -40,6 +41,7 @@ enum BLEIngressPacketGuard {
         switch validatePayload(
             packet,
             from: context.validationPeerID,
+            localPeerID: localPeerID,
             nowMs: nowMs,
             maxTimestampSkewMs: maxTimestampSkewMs,
             isValidSyncResponse: isValidSyncResponse
@@ -54,10 +56,22 @@ enum BLEIngressPacketGuard {
     static func validatePayload(
         _ packet: BitchatPacket,
         from peerID: PeerID,
+        localPeerID: PeerID,
         nowMs: UInt64 = UInt64(Date().timeIntervalSince1970 * 1000),
         maxTimestampSkewMs: UInt64 = TransportConfig.bleMaxTimestampSkewMs,
         isValidSyncResponse: (PeerID) -> Bool
     ) -> Result<Void, Rejection> {
+        // A directed REQUEST_SYNC is for its recipient only. A copy for
+        // another peer reaches us when the requester has no link to that
+        // peer: the send then falls back to every link. Reject it before
+        // the ingress and duplicate records. Its packet ID has no recipient,
+        // so it can hide the copy addressed to us from the same round.
+        if packet.type == MessageType.requestSync.rawValue,
+           !BLEPacketFreshnessPolicy.isBroadcastRecipient(packet.recipientID),
+           packet.recipientID != localPeerID.routingData {
+            return .failure(.requestSyncForAnotherPeer(peerID: peerID))
+        }
+
         let packetTime = packet.timestamp
         if packet.isRSR {
             guard isValidSyncResponse(peerID) else {

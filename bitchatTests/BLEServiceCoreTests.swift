@@ -292,6 +292,68 @@ struct BLEServiceCoreTests {
         #expect(!ble._test_acceptsIngress(packet: packet, boundPeerID: boundPeer))
     }
 
+    /// A directed REQUEST_SYNC is for its recipient only. One periodic round
+    /// sends a copy to each connected peer, and the copies can share a packet
+    /// ID, because the ID has no recipient. A copy for a peer without a link
+    /// goes out on every link. We must not answer it, and it must not make our
+    /// own copy look like a duplicate.
+    @Test
+    func requestSyncIsAnsweredOnlyByItsRecipient() async throws {
+        let ble = makeService()
+        // Our own announce goes into the gossip store, so a request with an
+        // empty filter has something to receive.
+        ble.setNickname("tester")
+        ble._test_fenceEngine()
+
+        let requester = NoiseEncryptionService(keychain: MockKeychain())
+        let requesterID = PeerID(publicKey: requester.getStaticPublicKeyData())
+        let now = UInt64(Date().timeIntervalSince1970 * 1000)
+        func signed(_ type: MessageType, to recipient: PeerID?, payload: Data, ttl: UInt8) throws -> BitchatPacket {
+            let unsigned = BitchatPacket(
+                type: type.rawValue,
+                senderID: Data(hexString: requesterID.id) ?? Data(),
+                recipientID: recipient?.routingData,
+                timestamp: now,
+                payload: payload,
+                signature: nil,
+                ttl: ttl
+            )
+            return try #require(requester.signPacket(unsigned), "Failed to sign \(type)")
+        }
+
+        // The requester announces on the link first, so its requests verify.
+        let link = BLEIngressLinkID.central("central-requester")
+        let announcement = AnnouncementPacket(
+            nickname: "requester",
+            noisePublicKey: requester.getStaticPublicKeyData(),
+            signingPublicKey: requester.getSigningPublicKeyData(),
+            directNeighbors: nil
+        )
+        let announcePayload = try #require(announcement.encode(), "Failed to encode announcement")
+        ble._test_ingestFrame(try signed(.announce, to: nil, payload: announcePayload, ttl: 7), link: link)
+        ble._test_fenceEngine()
+
+        let outbound = OutboundPacketTap()
+        ble._test_onOutboundPacket = outbound.record
+        let sentSyncReply = { outbound.snapshot().contains { $0.isRSR } }
+        let request = RequestSyncPacket(p: 4, m: 1, data: Data(), types: .publicMessages).encode()
+
+        ble._test_ingestFrame(
+            try signed(.requestSync, to: PeerID(str: "8899aabbccddeeff"), payload: request, ttl: 0),
+            link: link
+        )
+        let answeredForAnotherPeer = await TestHelpers.waitUntil(
+            sentSyncReply,
+            timeout: TestConstants.negativeWaitWindow
+        )
+        #expect(!answeredForAnotherPeer)
+
+        // The same packet ID, addressed to us.
+        ble._test_ingestFrame(try signed(.requestSync, to: ble.myPeerID, payload: request, ttl: 0), link: link)
+        let answeredForUs = await TestHelpers.waitUntil(sentSyncReply, timeout: TestConstants.longTimeout)
+        #expect(answeredForUs)
+    }
+
     @Test
     func verifiedDirectAnnounceRebindsRotatedLinkAndRetiresOldPeer() async throws {
         let ble = makeService()

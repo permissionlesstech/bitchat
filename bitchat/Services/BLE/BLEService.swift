@@ -1914,6 +1914,9 @@ final class BLEService: NSObject {
         case .failure(.timestampSkew(let peerID, let skewMs, let maxSkewMs)):
             SecureLogger.warning("Packet timestamp skewed by \(skewMs)ms (max \(maxSkewMs)ms) from \(peerID.id.prefix(8))…", category: .security)
             return nil
+        case .failure(.requestSyncForAnotherPeer(let peerID)):
+            logRequestSyncForAnotherPeer(from: peerID)
+            return nil
         }
     }
 
@@ -1921,6 +1924,7 @@ final class BLEService: NSObject {
         switch BLEIngressPacketGuard.validatePayload(
             packet,
             from: peerID,
+            localPeerID: myPeerID,
             isValidSyncResponse: { [requestSyncManager] peerID in
                 requestSyncManager.isValidResponse(from: peerID, isRSR: true)
             }
@@ -1936,6 +1940,9 @@ final class BLEService: NSObject {
         case .failure(.timestampSkew(let peerID, let skewMs, let maxSkewMs)):
             SecureLogger.warning("Packet timestamp skewed by \(skewMs)ms (max \(maxSkewMs)ms) from \(peerID.id.prefix(8))…", category: .security)
             return false
+        case .failure(.requestSyncForAnotherPeer(let peerID)):
+            logRequestSyncForAnotherPeer(from: peerID)
+            return false
         case .failure(.selfLoopback), .failure(.directSenderMismatch):
             return false
         }
@@ -1944,6 +1951,11 @@ final class BLEService: NSObject {
     private func logValidRSR(from peerID: PeerID) {
         guard logRateLimiter.shouldLog(key: "valid-rsr:\(peerID.id)") else { return }
         SecureLogger.debug("Valid RSR packet from \(peerID.id.prefix(8))… - skipping past-timestamp check", category: .security)
+    }
+
+    private func logRequestSyncForAnotherPeer(from peerID: PeerID) {
+        guard logRateLimiter.shouldLog(key: "sync-recipient:\(peerID.id)") else { return }
+        SecureLogger.debug("Ignoring REQUEST_SYNC addressed to another peer from \(peerID.id.prefix(8))…", category: .sync)
     }
 
     private func logSelfLoopback(packetType: UInt8, linkDescription: String) {
