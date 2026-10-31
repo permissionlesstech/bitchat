@@ -769,6 +769,7 @@ final class BLEService: NSObject {
         }
         onEngine {
             pendingNoiseSessionQueues.removeAll()
+            pendingPrekeyBundles.removeAll()
         }
 
         let panicReset = onEngine {

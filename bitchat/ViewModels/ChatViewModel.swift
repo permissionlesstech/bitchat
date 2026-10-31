@@ -1641,7 +1641,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         // counters describing all of it
         var metadataWipeCompleted = (panicMetadataWipeOperations?.wipeCourier() ?? CourierStore.shared.wipe())
         metadataWipeCompleted = (panicMetadataWipeOperations?.wipeBridge() ?? BridgeCourierService.shared.wipe()) && metadataWipeCompleted
-        messageRouter.wipeOutbox()
+        metadataWipeCompleted = messageRouter.wipeOutbox() && metadataWipeCompleted
         metadataWipeCompleted = (panicMetadataWipeOperations?.wipeGossip() ?? GossipMessageArchive.wipeDefault()) && metadataWipeCompleted
         StoreAndForwardMetrics.shared.reset()
 
@@ -1661,7 +1661,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         // Drop cached peers' prekey bundles (who we could write to is
         // metadata too). Our own prekey privates are keychain-backed and go
         // with deleteAllKeychainData above plus the identity reset below.
-        PrekeyBundleStore.shared.wipe()
+        metadataWipeCompleted = (panicMetadataWipeOperations?.wipePrekeys() ?? PrekeyBundleStore.shared.wipe()) && metadataWipeCompleted
         // Drop bulletin-board posts and tombstones (memory and disk); board
         // posts are signed with our identity key and persist for days.
         metadataWipeCompleted = (panicMetadataWipeOperations?.wipeBoard() ?? BoardStore.shared.wipe()) && metadataWipeCompleted

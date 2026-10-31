@@ -14,4 +14,5 @@ struct PanicMetadataWipeOperations {
     var wipeGroups: () -> Bool
     var wipeBoard: () -> Bool
     var wipeEvents: () -> Bool
+    var wipePrekeys: () -> Bool = { PrekeyBundleStore.shared.wipe() }
 }

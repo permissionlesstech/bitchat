@@ -21,7 +21,8 @@ private func makeTestableViewModel(
     panicRecoveryOperations: PanicRecoveryOperations? = nil,
     panicNetworkLifecycle: PanicNetworkLifecycle = .noop,
     panicMetadataWipeOperations: PanicMetadataWipeOperations? = nil,
-    locationManager: LocationChannelManager = .shared
+    locationManager: LocationChannelManager = .shared,
+    outboxStore: MessageOutboxStore? = nil
 ) -> (viewModel: ChatViewModel, transport: MockTransport) {
     let keychain = injectedKeychain ?? MockKeychain()
     let keychainHelper = MockKeychainHelper()
@@ -35,6 +36,7 @@ private func makeTestableViewModel(
         identityManager: identityManager,
         transport: transport,
         locationManager: locationManager,
+        outboxStore: outboxStore,
         panicMediaWipe: panicMediaWipe,
         panicRecoveryOperations: panicRecoveryOperations,
         panicMetadataWipeOperations: panicMetadataWipeOperations,
@@ -2629,5 +2631,182 @@ struct ChatViewModelLifecycleTests {
         let (_, transport) = makeTestableViewModel()
 
         #expect(transport.startServicesCallCount == 1)
+    }
+}
+
+
+@Suite(.serialized)
+struct PrekeyPanicCompletionTests {
+    @Test(arguments: [false, true], [false, true]) @MainActor
+    func failedPrekeyCleanupRetainsRecoveryUntilRetry(_ unresolved: Bool, _ bootstrap: Bool) throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let directory = root.appendingPathComponent("prekeys")
+        try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("bundles.json")
+        let sibling = directory.appendingPathComponent("keep")
+        let oldPeer = Data(repeating: 0x71, count: 32)
+        let seed = PrekeyBundleStore(fileURL: file)
+        #expect(seed.ingest(PrekeyBundle(
+            noiseStaticPublicKey: oldPeer,
+            prekeys: [.init(id: 1, publicKey: Data(repeating: 0x72, count: 32))],
+            generatedAt: UInt64(Date().timeIntervalSince1970 * 1000),
+            signature: Data(repeating: 0, count: 64)
+        )))
+        let bytes = try Data(contentsOf: file)
+        var denied = true
+        defer {
+            try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+            try? fm.removeItem(at: root)
+        }
+        let store = PrekeyBundleStore(resolveDefaultFileURL: { unresolved && denied ? nil : file })
+        try bytes.write(to: file)
+        try Data("KEEP".utf8).write(to: sibling)
+        if !unresolved { try fm.setAttributes([.posixPermissions: 0o500], ofItemAtPath: directory.path) }
+        var attempts: [String] = []
+        func cleaned(_ name: String) -> Bool { attempts.append(name); return true }
+        let operations = PanicMetadataWipeOperations(
+            wipeCourier: { cleaned("courier") }, wipeBridge: { cleaned("bridge") },
+            wipeGossip: { cleaned("gossip") }, wipeGroups: { cleaned("groups") },
+            wipeBoard: { cleaned("board") }, wipeEvents: { cleaned("events") },
+            wipePrekeys: { attempts.append("prekeys"); return store.wipe() }
+        )
+        var pending = bootstrap
+        var completion: [String] = []
+        var media = 0
+        let recovery = PanicRecoveryOperations(isPending: { pending }, begin: {
+            pending = true
+            return PanicRecoveryIntent(fileMarkerEstablished: true, externalMarkerEstablished: true)
+        }, wipeMedia: { _ in media += 1 }, complete: {
+            pending = false; completion.append("complete")
+        })
+        let keychain = MockKeychain()
+        let (viewModel, transport) = makeTestableViewModel(
+            keychain: keychain, panicRecoveryOperations: recovery,
+            panicNetworkLifecycle: .init(stop: {}, restart: {
+                #expect(!pending)
+                completion.append("restart")
+            }), panicMetadataWipeOperations: operations
+        )
+        let starts = bootstrap ? 0 : transport.startServicesCallCount
+        if !bootstrap {
+            #expect(!viewModel.panicClearAllData(), "Prekey removal failure must keep panic incomplete")
+        }
+        #expect(attempts == ["courier", "bridge", "gossip", "groups", "prekeys", "board", "events"])
+        #expect(keychain.deleteAllCallCount == 1 && media == 1)
+        #expect(!store.hasUsableBundle(for: oldPeer))
+        #expect(pending && completion.isEmpty)
+        #expect(!viewModel.networkActivationAllowed)
+        #expect(transport.startServicesCallCount == starts)
+        #expect(try Data(contentsOf: file) == bytes)
+        denied = false
+        try fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+        attempts.removeAll()
+        #expect(viewModel.panicClearAllData())
+        #expect(attempts == ["courier", "bridge", "gossip", "groups", "prekeys", "board", "events"])
+        #expect(keychain.deleteAllCallCount == 2 && media == 2)
+        #expect(!pending && completion == ["complete", "restart"])
+        #expect(viewModel.networkActivationAllowed)
+        #expect(transport.startServicesCallCount == starts + 1)
+        #expect(!fm.fileExists(atPath: file.path))
+        #expect(try Data(contentsOf: sibling) == Data("KEEP".utf8))
+        #expect(viewModel.panicClearAllData(), "Repeated absent prekey file cleanup must succeed")
+        let freshPeer = Data(repeating: 0x73, count: 32)
+        #expect(store.ingest(PrekeyBundle(
+            noiseStaticPublicKey: freshPeer,
+            prekeys: [.init(id: 1, publicKey: Data(repeating: 0x74, count: 32))],
+            generatedAt: UInt64(Date().timeIntervalSince1970 * 1000),
+            signature: Data(repeating: 0, count: 64)
+        )))
+        let reopened = PrekeyBundleStore(fileURL: file)
+        #expect(reopened.hasUsableBundle(for: freshPeer),
+                "The recovered prekey location must support future persistence after controller recovery")
+        #expect(!reopened.hasUsableBundle(for: oldPeer))
+    }
+}
+
+@Suite(.serialized)
+struct OutboxPanicCompletionTests {
+    @Test(arguments: [false, true], [false, true]) @MainActor
+    func failedOutboxCleanupRetainsRecoveryUntilRetry(_ unresolved: Bool, _ bootstrap: Bool) throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let directory = root.appendingPathComponent("outbox")
+        try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("outbox.sealed")
+        let sibling = directory.appendingPathComponent("keep")
+        let keychain = MockKeychain()
+        let oldPeer = PeerID(str: "0000000000000071")
+        MessageOutboxStore(keychain: keychain, fileURL: file).save([
+            oldPeer: [.init(content: "SYNTHETIC_OLD_OUTBOX", nickname: "synthetic",
+                           messageID: "synthetic-before-recovery", timestamp: Date())]
+        ])
+        let bytes = try Data(contentsOf: file)
+        var denied = true
+        defer {
+            try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+            try? fm.removeItem(at: root)
+        }
+        let store = MessageOutboxStore(keychain: keychain, resolveDefaultFileURL: { unresolved && denied ? nil : file })
+        try bytes.write(to: file)
+        try Data("KEEP".utf8).write(to: sibling)
+        if !unresolved { try fm.setAttributes([.posixPermissions: 0o500], ofItemAtPath: directory.path) }
+        var attempts: [String] = []
+        func cleaned(_ name: String) -> Bool { attempts.append(name); return true }
+        let operations = PanicMetadataWipeOperations(
+            wipeCourier: { cleaned("courier") }, wipeBridge: { cleaned("bridge") },
+            wipeGossip: { cleaned("gossip") }, wipeGroups: { cleaned("groups") },
+            wipeBoard: { cleaned("board") }, wipeEvents: { cleaned("events") },
+            wipePrekeys: { cleaned("prekeys") }
+        )
+        var pending = bootstrap
+        var completion: [String] = []
+        var media = 0
+        let recovery = PanicRecoveryOperations(isPending: { pending }, begin: {
+            pending = true
+            return PanicRecoveryIntent(fileMarkerEstablished: true, externalMarkerEstablished: true)
+        }, wipeMedia: { _ in media += 1 }, complete: {
+            pending = false; completion.append("complete")
+        })
+        let (viewModel, transport) = makeTestableViewModel(
+            keychain: keychain, panicRecoveryOperations: recovery,
+            panicNetworkLifecycle: .init(stop: {}, restart: {
+                #expect(!pending)
+                completion.append("restart")
+            }), panicMetadataWipeOperations: operations, outboxStore: store
+        )
+        let starts = bootstrap ? 0 : transport.startServicesCallCount
+        if !bootstrap {
+            #expect(!viewModel.panicClearAllData(), "Outbox removal failure must keep panic incomplete")
+        }
+        #expect(attempts == ["courier", "bridge", "gossip", "groups", "prekeys", "board", "events"])
+        #expect(keychain.deleteAllCallCount == 1 && media == 1)
+        #expect(store.load().isEmpty)
+        #expect(keychain.load(key: "outbox-encryption-key", service: "chat.bitchat.outbox") == nil)
+        #expect(pending && completion.isEmpty)
+        #expect(!viewModel.networkActivationAllowed)
+        #expect(transport.startServicesCallCount == starts)
+        #expect(try Data(contentsOf: file) == bytes)
+        denied = false
+        try fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+        attempts.removeAll()
+        #expect(viewModel.panicClearAllData())
+        #expect(attempts == ["courier", "bridge", "gossip", "groups", "prekeys", "board", "events"])
+        #expect(keychain.deleteAllCallCount == 2 && media == 2)
+        #expect(!pending && completion == ["complete", "restart"])
+        #expect(viewModel.networkActivationAllowed)
+        #expect(transport.startServicesCallCount == starts + 1)
+        #expect(!fm.fileExists(atPath: file.path))
+        #expect(try Data(contentsOf: sibling) == Data("KEEP".utf8))
+        #expect(viewModel.panicClearAllData(), "Repeated absent outbox file cleanup must succeed")
+        let freshPeer = PeerID(str: "0000000000000073")
+        viewModel.messageRouter.sendPrivate(
+            "SYNTHETIC_FRESH_OUTBOX", to: freshPeer,
+            recipientNickname: "synthetic", messageID: "synthetic-after-recovery"
+        )
+        let fresh = MessageOutboxStore(keychain: keychain, fileURL: file).load()
+        #expect(fresh[oldPeer] == nil)
+        #expect(fresh[freshPeer]?.map(\.messageID) == ["synthetic-after-recovery"],
+                "The router must persist fresh mail after controller recovery")
     }
 }
