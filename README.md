@@ -105,6 +105,10 @@ For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.m
 
 ## Setup
 
+**Just want it on your iPhone?** Connect the iPhone to a Mac and follow
+[Installing bitchat on an iPhone with a Mac](docs/INSTALL-ON-IPHONE.md). One
+script builds, signs, and installs the app, and tells you which buttons to tap.
+
 ### Option 1: Using Xcode
 
 ```bash

@@ -80,4 +80,5 @@ build.log
 
 # Local configs
 Local.xcconfig
+Local.xcconfig.backup-*
 *.profraw
