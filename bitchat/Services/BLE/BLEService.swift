@@ -724,7 +724,7 @@ final class BLEService: NSObject {
     func suspendForPanicReset() {
         setPanicSuspended(true)
         noisePacketHandler.resetForPanic()
-        gossipSyncManager?.stop()
+        gossipSyncManager?.stopForPanic()
         gossipSyncManager = nil
         // Stop the radio and drain CoreBluetooth's delegate queue first. A
         // callback may already have passed its initial suspension check; the
@@ -760,7 +760,7 @@ final class BLEService: NSObject {
         currentNickname: String,
         restartServices: Bool = true
     ) {
-        gossipSyncManager?.stop()
+        gossipSyncManager?.stopForPanic()
         gossipSyncManager = nil
         // Discard deferred pre-panic ciphertext behind any in-flight receive
         // handlers so none can repopulate the handler's bounded queue.
@@ -2929,12 +2929,9 @@ final class BLEService: NSObject {
 
 // MARK: - GossipSyncManager Delegate
 extension BLEService: GossipSyncManager.Delegate {
-    // Gossip calls arrive on the manager's own serial queue; sends read
-    // the engine-owned bindings, so they enter an engine slot. The sync
-    // hop is safe: mesh.sync sits above the engine in the sync order —
-    // production engine code only ever queue.async's into the manager
-    // (the queue.sync helpers are DEBUG test entry points that run on
-    // test threads), so no reverse edge exists.
+    // Gossip delegate calls synchronously enter the engine. Engine callers
+    // must enqueue manager work asynchronously to avoid reversing that order.
+    // Keep the synchronous panic-retirement drain outside the engine queue.
     func sendPacket(_ packet: BitchatPacket) {
         onEngine {
             broadcastPacket(packet)
