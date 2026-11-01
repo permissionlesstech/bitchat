@@ -12,8 +12,9 @@
     "magnitude regressions while never flaking on a slow runner.",
     "Raise floors deliberately after intentional performance improvements;",
     "lower them only with a written justification in the PR. If a benchmark is",
-    "renamed or removed, update this file in the same change - the gate fails",
-    "when a floored benchmark stops reporting.",
+    "added, renamed or removed, update this file in the same change - the gate",
+    "fails when a floored benchmark stops reporting or when a benchmark reports",
+    "with no floor.",
     "Checked by scripts/check-perf-floors.sh against captured swift-test output."
   ],
   "_units": "operations per second, matching each benchmark's PERF line",
