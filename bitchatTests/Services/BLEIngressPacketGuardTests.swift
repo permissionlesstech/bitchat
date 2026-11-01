@@ -186,6 +186,7 @@ struct BLEIngressPacketGuardTests {
         let innerResult = BLEIngressPacketGuard.validatePayload(
             innerPacket,
             from: sender,
+            localPeerID: local,
             nowMs: nowMs,
             maxTimestampSkewMs: skewMs,
             isValidSyncResponse: { _ in true }
@@ -217,16 +218,100 @@ struct BLEIngressPacketGuardTests {
         #expect(result == .failure(.invalidRSR(peerID: bound)))
     }
 
+    @Test("a REQUEST_SYNC addressed to another peer is rejected, also after reassembly")
+    func requestSyncForAnotherPeerIsRejected() {
+        let local = PeerID(str: "0011223344556677")
+        let sender = PeerID(str: "8899aabbccddeeff")
+        let packet = makePacket(
+            type: .requestSync,
+            sender: sender,
+            timestamp: 1_000,
+            ttl: 0,
+            recipient: Data(hexString: "1122334455667788")
+        )
+
+        let result = BLEIngressPacketGuard.evaluate(
+            packet: packet,
+            claimedSenderID: sender,
+            boundPeerID: nil,
+            localPeerID: local,
+            directAnnounceTTL: 7,
+            nowMs: 1_000,
+            isValidSyncResponse: { _ in false }
+        )
+        #expect(result == .failure(.requestSyncForAnotherPeer(peerID: sender)))
+
+        // Reassembled inner packets are checked through validatePayload alone.
+        let innerResult = BLEIngressPacketGuard.validatePayload(
+            packet,
+            from: sender,
+            localPeerID: local,
+            nowMs: 1_000,
+            isValidSyncResponse: { _ in false }
+        )
+        guard case .failure(.requestSyncForAnotherPeer(peerID: sender)) = innerResult else {
+            Issue.record("Expected a reassembled REQUEST_SYNC for another peer to be rejected, got \(innerResult)")
+            return
+        }
+    }
+
+    @Test(
+        "a REQUEST_SYNC passes when it is a broadcast or addressed to us",
+        arguments: [nil, Data(repeating: 0xFF, count: 8), Data(hexString: "0011223344556677")]
+    )
+    func requestSyncForUsOrEveryonePasses(recipient: Data?) {
+        let local = PeerID(str: "0011223344556677")
+        let sender = PeerID(str: "8899aabbccddeeff")
+        let packet = makePacket(type: .requestSync, sender: sender, timestamp: 1_000, ttl: 0, recipient: recipient)
+
+        let result = BLEIngressPacketGuard.evaluate(
+            packet: packet,
+            claimedSenderID: sender,
+            boundPeerID: nil,
+            localPeerID: local,
+            directAnnounceTTL: 7,
+            nowMs: 1_000,
+            isValidSyncResponse: { _ in false }
+        )
+
+        #expect(success(result) != nil)
+    }
+
+    @Test("other packets addressed to another peer still pass, so they can be relayed")
+    func directedPacketsForOtherPeersStillPass() {
+        let local = PeerID(str: "0011223344556677")
+        let sender = PeerID(str: "8899aabbccddeeff")
+        let packet = makePacket(
+            type: .noiseEncrypted,
+            sender: sender,
+            timestamp: 1_000,
+            recipient: Data(hexString: "1122334455667788")
+        )
+
+        let result = BLEIngressPacketGuard.evaluate(
+            packet: packet,
+            claimedSenderID: sender,
+            boundPeerID: nil,
+            localPeerID: local,
+            directAnnounceTTL: 7,
+            nowMs: 1_000,
+            isValidSyncResponse: { _ in false }
+        )
+
+        #expect(success(result) != nil)
+    }
+
     private func makePacket(
         type: MessageType = .message,
         sender: PeerID,
         timestamp: UInt64,
-        ttl: UInt8 = 3
+        ttl: UInt8 = 3,
+        recipient: Data? = nil
     ) -> BitchatPacket {
         BitchatPacket(
             type: type.rawValue,
             senderID: Data(hexString: sender.id) ?? Data(),
-            recipientID: nil,
+            recipientID: recipient,
             timestamp: timestamp,
             payload: Data([0x01, 0x02, 0x03]),
             signature: nil,

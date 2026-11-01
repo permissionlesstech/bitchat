@@ -385,17 +385,12 @@ final class GossipSyncManager {
     }
 
     private func sendRequestSync(to peerID: PeerID, types: SyncTypeFlags, fragmentIdFilter: String? = nil) {
+        // Responders answer only a request addressed to their 8-byte peer ID.
+        guard let recipient = peerID.routingData else { return }
         // Register the request for RSR validation
         requestSyncManager.registerRequest(to: peerID)
 
         let payload = buildGcsPayload(for: types, fragmentIdFilter: fragmentIdFilter)
-        var recipient = Data()
-        var temp = peerID.id
-        while temp.count >= 2 && recipient.count < 8 {
-            let hexByte = String(temp.prefix(2))
-            if let b = UInt8(hexByte, radix: 16) { recipient.append(b) }
-            temp = String(temp.dropFirst(2))
-        }
         let pkt = BitchatPacket(
             type: MessageType.requestSync.rawValue,
             senderID: Data(hexString: myPeerID.id) ?? Data(),
