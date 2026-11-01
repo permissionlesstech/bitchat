@@ -149,7 +149,7 @@ final class PrekeyBundleStore {
 
     // MARK: - Maintenance
 
-    /// Clears cached bundles; returns whether the persistent file was removed or absent.
+    /// Clears cached bundles; returns whether required persistent cleanup succeeded.
     @discardableResult
     func wipe() -> Bool {
         queue.sync {

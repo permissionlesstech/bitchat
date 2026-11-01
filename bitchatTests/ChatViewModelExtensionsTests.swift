@@ -19,7 +19,9 @@ import BitFoundation
 // MARK: - Test Helpers
 
 @MainActor
-private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: MockTransport) {
+private func makeTestableViewModel(
+    locationManager: LocationChannelManager = .shared
+) -> (viewModel: ChatViewModel, transport: MockTransport) {
     let keychain = MockKeychain()
     let keychainHelper = MockKeychainHelper()
     let idBridge = NostrIdentityBridge(keychain: keychainHelper)
@@ -30,7 +32,8 @@ private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: Mo
         keychain: keychain,
         idBridge: idBridge,
         identityManager: identityManager,
-        transport: transport
+        transport: transport,
+        locationManager: locationManager
     )
 
     return (viewModel, transport)
@@ -273,16 +276,21 @@ struct ChatViewModelNostrExtensionTests {
     func subscribeNostrEvent_addsToTimeline_ifMatchesGeohash() async throws {
         let geohash = "u4pruydq"
         let channel = ChannelID.location(GeohashChannel(level: .city, geohash: geohash))
+        let suiteName = "NostrTimeline.\(UUID().uuidString)"
+        let storage = try #require(UserDefaults(suiteName: suiteName))
+        defer { storage.removePersistentDomain(forName: suiteName) }
+        let locationManager = LocationChannelManager(storage: storage)
+        let (viewModel, _) = makeTestableViewModel(locationManager: locationManager)
 
-        LocationChannelManager.shared.select(channel)
-        defer { LocationChannelManager.shared.select(.mesh) }
+        // Channel selection is asynchronous. This fixture owns its manager,
+        // so parallel tests cannot change the channel before event delivery.
+        locationManager.select(channel)
+        let channelReady = await TestHelpers.waitUntil({
+            locationManager.selectedChannel == channel && viewModel.activeChannel == channel
+                && viewModel.currentGeohash == geohash
+        }, timeout: TestConstants.settleTimeout)
+        try #require(channelReady, "The location-channel fixture must settle before delivering an event")
 
-        _ = await TestHelpers.waitUntil({ LocationChannelManager.shared.selectedChannel == channel }, timeout: TestConstants.settleTimeout)
-
-        let (viewModel, _) = makeTestableViewModel()
-        
-        _ = await TestHelpers.waitUntil({ viewModel.activeChannel == channel }, timeout: TestConstants.settleTimeout)
-        
         let signer = try NostrIdentity.generate()
         let event = NostrEvent(
             pubkey: signer.publicKeyHex,
@@ -293,27 +301,13 @@ struct ChatViewModelNostrExtensionTests {
         )
         let signed = try event.sign(with: signer.schnorrSigningKey())
         viewModel.handleNostrEvent(signed)
-        
+
         let didAppend = await TestHelpers.waitUntil({
             viewModel.publicMessagePipeline.flushIfNeeded()
-            if viewModel.messages.contains(where: { $0.content == "Hello Geo" }) { return true }
-            // LocationChannelManager is a process-wide singleton: a suite
-            // running in parallel (e.g. CommandProcessorTests) can flip the
-            // selected channel mid-test, which reroutes or drops the event
-            // permanently — no amount of waiting recovers it. Re-assert the
-            // channel and redeliver on each poll: every channel switch clears
-            // the processed-event set and the store dedups by message ID, so
-            // redelivery is idempotent and interference heals on the next
-            // poll while a genuine failure still times out.
-            if LocationChannelManager.shared.selectedChannel != channel {
-                LocationChannelManager.shared.select(channel)
-            }
-            if viewModel.activeChannel == channel {
-                viewModel.handleNostrEvent(signed)
-            }
-            return false
+            return viewModel.messages.contains { $0.id == signed.id && $0.content == "Hello Geo" }
         }, timeout: TestConstants.settleTimeout)
         #expect(didAppend)
+        #expect(viewModel.conversations.conversationIDs(forMessageID: signed.id) == [.geohash(geohash)])
     }
 
     @Test @MainActor
