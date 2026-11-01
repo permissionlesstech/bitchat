@@ -296,7 +296,9 @@ struct LocationChannelsSheet: View {
 
     private var channelListContent: some View {
         ScrollView {
-            LazyVStack(spacing: 0) {
+            // Not lazy: a LazyVStack drops the focused geohash field's row
+            // when the keyboard opens (#1797).
+            VStack(spacing: 0) {
                 channelRow(title: Strings.meshTitle(peerListModel.reachableMeshPeerCount), subtitlePrefix: Strings.subtitlePrefix(geohash: "bluetooth", coverage: bluetoothRangeString()), isSelected: isMeshSelected, titleColor: standardBlue, titleBold: peerListModel.reachableMeshPeerCount > 0) {
                     locationChannelsModel.select(ChannelID.mesh)
                     isPresented = false
