@@ -89,9 +89,10 @@ class CheckPerfFloorsTests(unittest.TestCase):
 
     def test_best_value_across_appended_attempts_is_what_counts(self) -> None:
         # Re-measurements append to the same log, so one line clearing the
-        # floor is enough even when an earlier attempt sat under it.
+        # floor is enough. The clearing line comes first: a gate that kept the
+        # last value instead of the best would fail here.
         result = self.run_gate(
-            self.log("PERF[a.one]: 50 ops/sec", "PERF[a.one]: 500 ops/sec"),
+            self.log("PERF[a.one]: 500 ops/sec", "PERF[a.one]: 50 ops/sec"),
             self.floors(**{"a.one": 100}),
         )
 
