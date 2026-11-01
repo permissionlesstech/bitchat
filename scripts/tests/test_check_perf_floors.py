@@ -148,6 +148,29 @@ class CheckPerfFloorsTests(unittest.TestCase):
         self.assertIn("NO-FLOOR c.new: 1000 ops/sec reports a PERF line but has no floor", result.stdout)
         self.assertEqual(self.remeasure_count(), 0)
 
+    def test_malformed_floors_file_fails_without_a_retry(self) -> None:
+        # A broken floors file is a setup error, not runner noise: the gate
+        # must report it at once, without a re-measurement. The PERF line is
+        # there only so the gate does not skip for "no PERF lines".
+        cases = {
+            "invalid JSON": '{"floors": {"a.one": 100,}}',
+            "top level that is not an object": '[{"floors": {"a.one": 100}}]',
+            "no floors object": '{"limits": {"a.one": 100}}',
+            "floor that is not a number": '{"floors": {"a.one": "100"}}',
+            "floor that is a boolean": '{"floors": {"a.one": true}}',
+            "floor that is not finite": '{"floors": {"a.one": NaN}}',
+        }
+        for case, text in cases.items():
+            with self.subTest(case):
+                self.invocations.unlink(missing_ok=True)
+                floors = self.tmp / "floors.json"
+                floors.write_text(text, encoding="utf-8")
+                result = self.run_gate(self.log("PERF[a.one]: 50 ops/sec"), floors)
+
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertIn("malformed floors file", result.stderr)
+                self.assertEqual(self.remeasure_count(), 0)
+
     def test_output_without_perf_lines_skips(self) -> None:
         # Package-only matrix entries produce no benchmarks; the gate must
         # not fail them for it.
