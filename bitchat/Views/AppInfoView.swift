@@ -29,7 +29,9 @@ struct AppInfoView: View {
     /// Sticky across opens: first-ever open lands on Info (the gentler
     /// introduction), and afterwards the sheet reopens wherever it was left.
     @AppStorage("appInfo.selectedPane") private var selectedPane: Pane = .info
-    @State private var showPanicConfirmation = false
+    /// Read here only so the privacy-pane row can describe the gesture; the
+    /// setting itself lives in PanicDangerZoneSection.
+    @AppStorage(PanicGestureSettings.storageKey) private var panicGestureRawValue = PanicGestureSettings.installDefault.rawValue
     @AppStorage(AppLanguageSettings.overrideKey) private var languageOverride = ""
     /// The override changed this session; localization resolves at process
     /// start, so surface the restart hint.
@@ -42,6 +44,10 @@ struct AppInfoView: View {
 
     private var selectedTheme: AppTheme {
         AppTheme(rawValue: appThemeRawValue) ?? .matrix
+    }
+
+    private var panicGestureMode: PanicGestureMode {
+        PanicGestureMode(rawValue: panicGestureRawValue) ?? PanicGestureSettings.installDefault
     }
 
     private var textColor: Color { palette.primary }
@@ -118,11 +124,18 @@ struct AppInfoView: View {
             static let hidePreviewsTitle = String(localized: "app_info.settings.hide_previews.title", defaultValue: "hide message previews", comment: "Title of the setting that keeps message text, sender names, and geohashes out of lock-screen notifications")
             static let hidePreviewsSubtitle = String(localized: "app_info.settings.hide_previews.subtitle", defaultValue: "notifications say that something arrived without showing the message, who sent it, or which location channel it came from. anyone holding your locked phone learns nothing from the lock screen. on by default.", comment: "Subtitle explaining what hiding notification message previews does")
 
-            static let dangerTitle = String(localized: "app_info.settings.danger.title", defaultValue: "DANGER ZONE", comment: "Section header (uppercase) for destructive actions in settings")
-            static let panicButton = String(localized: "app_info.settings.danger.panic_button", defaultValue: "panic wipe", comment: "Button in the settings danger zone that erases all local data after confirmation")
-            static let panicNote = String(localized: "app_info.settings.danger.panic_note", defaultValue: "erases all messages, keys, and identity. triple-tapping the bitchat/ logo does the same, instantly.", comment: "Caption under the panic wipe button explaining what it does and the triple-tap shortcut")
-            static let panicConfirmTitle = String(localized: "app_info.settings.danger.panic_confirm_title", defaultValue: "wipe all data?", comment: "Title of the confirmation dialog before a panic wipe")
-            static let panicConfirmAction = String(localized: "app_info.settings.danger.panic_confirm_action", defaultValue: "wipe everything", comment: "Destructive confirmation button that performs the panic wipe")
+            /// The privacy-pane one-liner has to track the mode too, or it
+            /// promises behavior the gesture no longer has.
+            static func privacyPanicDescription(_ mode: PanicGestureMode) -> String {
+                switch mode {
+                case .instant:
+                    return String(localized: "app_info.privacy.panic.description_instant", defaultValue: "triple-tap logo to wipe all data instantly", comment: "Privacy-pane description of the panic gesture when a triple-tap wipes immediately")
+                case .confirm:
+                    return String(localized: "app_info.privacy.panic.description", defaultValue: "triple-tap logo to wipe all data (asks to confirm)", comment: "Privacy-pane description of the panic gesture when a triple-tap asks for confirmation")
+                case .off:
+                    return String(localized: "app_info.privacy.panic.description_off", defaultValue: "panic wipe available in settings; the logo shortcut is off", comment: "Privacy-pane description of the panic gesture when the triple-tap shortcut is disabled")
+                }
+            }
         }
 
         enum Features {
@@ -220,11 +233,6 @@ struct AppInfoView: View {
                 icon: "shuffle",
                 title: "app_info.privacy.ephemeral.title",
                 description: "app_info.privacy.ephemeral.description"
-            )
-            static let panic = AppInfoFeatureInfo(
-                icon: "hand.raised.fill",
-                title: "app_info.privacy.panic.title",
-                description: "app_info.privacy.panic.description"
             )
         }
 
@@ -338,22 +346,9 @@ struct AppInfoView: View {
                 SectionHeader(Strings.appearanceTitle)
                 Spacer()
                 ForEach(AppTheme.allCases) { theme in
-                    Button {
+                    OptionChip(Text(theme.displayNameKey), isSelected: selectedTheme == theme) {
                         appThemeRawValue = theme.rawValue
-                    } label: {
-                        Text(theme.displayNameKey)
-                            .bitchatFont(size: 13, weight: selectedTheme == theme ? .semibold : .regular)
-                            .foregroundColor(selectedTheme == theme ? palette.accent : secondaryTextColor)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(selectedTheme == theme ? palette.accent.opacity(0.15) : Color.clear)
-                            )
-                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(selectedTheme == theme ? .isSelected : [])
                 }
             }
 
@@ -362,7 +357,7 @@ struct AppInfoView: View {
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(verbatim: Strings.Settings.languageTitle)
 
-                settingsCard {
+                SettingsCard {
                     Menu {
                         Button {
                             selectLanguage(nil)
@@ -407,7 +402,7 @@ struct AppInfoView: View {
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(Strings.Voice.title)
 
-                settingsCard {
+                SettingsCard {
                     settingToggle(
                         title: Text("app_info.voice.live.title"),
                         subtitle: Text("app_info.voice.live.description"),
@@ -426,7 +421,7 @@ struct AppInfoView: View {
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(verbatim: Strings.Settings.connectivityTitle)
 
-                settingsCard {
+                SettingsCard {
                     settingToggle(
                         title: Text(Strings.Settings.bridgeTitle),
                         subtitle: Text(Strings.Settings.bridgeSubtitle),
@@ -442,7 +437,7 @@ struct AppInfoView: View {
                     }
                 }
 
-                settingsCard {
+                SettingsCard {
                     settingToggle(
                         title: Text(Strings.Settings.torTitle),
                         subtitle: Text(verbatim: Strings.Settings.torSubtitle),
@@ -465,7 +460,7 @@ struct AppInfoView: View {
                 // layout into the shared card + pill style). Turning it on
                 // may need the location prompt; the permission control below
                 // covers the denied path.
-                settingsCard {
+                SettingsCard {
                     settingToggle(
                         title: Strings.Location.notes.title,
                         subtitle: Strings.Location.notes.description,
@@ -511,7 +506,7 @@ struct AppInfoView: View {
                     }
                     .buttonStyle(.plain)
                 case .denied, .restricted:
-                    settingsCard {
+                    SettingsCard {
                         Text("location_channels.permission_denied")
                             .bitchatFont(size: 11)
                             .foregroundColor(secondaryTextColor)
@@ -528,7 +523,7 @@ struct AppInfoView: View {
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(verbatim: Strings.Settings.privacyTitle)
 
-                settingsCard {
+                SettingsCard {
                     settingToggle(
                         title: Text(verbatim: Strings.Settings.hidePreviewsTitle),
                         subtitle: Text(verbatim: Strings.Settings.hidePreviewsSubtitle),
@@ -543,37 +538,10 @@ struct AppInfoView: View {
                 }
             }
 
-            // Danger zone
-            if onPanicWipe != nil {
-                VStack(alignment: .leading, spacing: 12) {
-                    SectionHeader(verbatim: Strings.Settings.dangerTitle)
-
-                    Button(action: { showPanicConfirmation = true }) {
-                        Text(Strings.Settings.panicButton)
-                            .bitchatFont(size: 12)
-                            .foregroundColor(palette.alertRed)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                            .background(Color.red.opacity(0.08))
-                            .cornerRadius(6)
-                    }
-                    .buttonStyle(.plain)
-                    .confirmationDialog(
-                        Strings.Settings.panicConfirmTitle,
-                        isPresented: $showPanicConfirmation,
-                        titleVisibility: .visible
-                    ) {
-                        Button(Strings.Settings.panicConfirmAction, role: .destructive) {
-                            onPanicWipe?()
-                        }
-                        Button("common.cancel", role: .cancel) {}
-                    }
-
-                    Text(Strings.Settings.panicNote)
-                        .bitchatFont(size: 11)
-                        .foregroundColor(secondaryTextColor)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+            // Danger zone — its own view: the confirmed wipe button and the
+            // logo-gesture setting, gated on a wipe hook being wired.
+            if let onPanicWipe {
+                PanicDangerZoneSection(onPanicWipe: onPanicWipe)
             }
         }
         .padding()
@@ -609,7 +577,7 @@ struct AppInfoView: View {
     /// adding one here is the only fix that does not need a new build.
     @ViewBuilder
     private var relaySettingsCard: some View {
-        settingsCard {
+        SettingsCard {
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: Strings.Settings.relaysTitle)
                     .bitchatFont(size: 12, weight: .semibold)
@@ -713,15 +681,6 @@ struct AppInfoView: View {
         )
     }
 
-    /// The padded card every connectivity setting sits in (moved look from
-    /// LocationChannelsSheet's toggle sections).
-    private func settingsCard<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8, content: content)
-            .padding(12)
-            .background(palette.secondary.opacity(0.12))
-            .cornerRadius(8)
-    }
-
     /// A title+subtitle row driving an IRC-style on/off pill — the one
     /// toggle style every setting uses.
     private func settingToggle(title: Text, subtitle: Text, isOn: Binding<Bool>) -> some View {
@@ -736,6 +695,16 @@ struct AppInfoView: View {
             }
         }
         .toggleStyle(IRCToggleStyle(accent: palette.accent, onLabel: Strings.Settings.toggleOn, offLabel: Strings.Settings.toggleOff))
+    }
+
+    /// Privacy-pane panic row, rebuilt per mode so its one-liner cannot
+    /// promise a gesture the user has changed or switched off.
+    private var panicPrivacyRow: AppInfoFeatureInfo {
+        AppInfoFeatureInfo(
+            icon: "hand.raised.fill",
+            resolvedTitle: String(localized: "app_info.privacy.panic.title", comment: "Title of the privacy-pane row describing the panic wipe"),
+            resolvedDescription: Strings.Settings.privacyPanicDescription(panicGestureMode)
+        )
     }
 
     // MARK: - Info pane
@@ -814,7 +783,7 @@ struct AppInfoView: View {
 
                 FeatureRow(info: Strings.Privacy.ephemeral)
 
-                FeatureRow(info: Strings.Privacy.panic)
+                FeatureRow(info: panicPrivacyRow)
             }
 
             // Symbols legend

@@ -124,7 +124,7 @@ No cryptographic system can protect content after a recipient reads, copies, scr
 
 ## Your Controls
 
-- **Panic wipe:** Triple-tap the logo to synchronously cancel in-flight media work and clear local keys, sessions, preferences, groups, queues, carried mail, public archives, board data, and media managed by the app.
+- **Panic wipe:** Triple-tap the logo to synchronously cancel in-flight media work and clear local keys, sessions, preferences, groups, queues, carried mail, public archives, board data, and media managed by the app. The gesture asks to confirm by default; settings can make it wipe instantly or disable it. The panic button in settings always confirms and works in every mode. A completed wipe sets the gesture back to instant.
 - **Notification previews:** Hidden by default, so lock-screen alerts do not show message text, sender names, or geohashes. Full previews can be turned on in settings.
 - **Clearing a conversation:** Clearing the mesh timeline also deletes the recent public gossip this device had stored on disk.
 - **Feature controls:** Location channels, mesh bridge, internet gateway, and related internet behaviors can be disabled in the app. Some already-published relay data cannot be recalled.

@@ -334,7 +334,10 @@ struct ConversationUIModelTests {
 
         // The wipe reseeds every geohash identity and returns to the mesh,
         // which takes the retired key out of the memo too.
+        let gestureMode = PanicGestureModeSnapshot()
         viewModel.panicClearAllData()
+        // Before the next `await`, so no other test can save the armed value.
+        gestureMode.restore()
         #expect(await TestHelpers.waitUntil({ uiModel.ownGeoChatSender == nil }, timeout: TestConstants.settleTimeout))
         Self.show(geohash: Self.geohash, in: viewModel)
         let newHex = try Self.myGeoHex(viewModel)

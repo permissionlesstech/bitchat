@@ -30,7 +30,7 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 - **Private Message End-to-End Encryption**: [Noise Protocol](https://noiseprotocol.org) for mesh, BitChat private envelopes for Nostr fallback
 - **IRC-Style Commands**: Familiar `/slap`, `/msg`, `/who` style interface
 - **Universal App**: Native support for iOS and macOS
-- **Emergency Wipe**: Triple-tap to instantly clear all data
+- **Emergency Wipe**: Triple-tap the logo to clear all data — asks to confirm by default; can be set to wipe instantly, or off, in settings
 - **Performance Optimizations**: LZ4 message compression, adaptive battery modes, and optimized networking
 
 ## [Technical Architecture](https://deepwiki.com/permissionlesstech/bitchat)
