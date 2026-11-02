@@ -38,10 +38,9 @@ struct MeshPeerList: View {
 
     var body: some View {
         let currentIDs = peerListModel.meshRows.map(\.id)
-        let displayIDs = orderedIDs.filter { currentIDs.contains($0) } + currentIDs.filter { !orderedIDs.contains($0) }
-        let peers: [MeshPeerRow] = displayIDs.compactMap { id in
-            peerListModel.meshRows.first(where: { $0.id == id })
-        }
+        let rowByID = Dictionary(peerListModel.meshRows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let peers: [MeshPeerRow] = PeopleListOrdering.stableOrder(previous: orderedIDs, current: currentIDs)
+            .compactMap { rowByID[$0] }
 
         if peerListModel.meshRows.isEmpty {
             // Match the section's row rhythm (same size, indent, and vertical
@@ -54,8 +53,7 @@ struct MeshPeerList: View {
                 .padding(.vertical, 4)
         } else {
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(0..<peers.count, id: \.self) { idx in
-                    let peer = peers[idx]
+                ForEach(peers) { peer in
                     let isMe = peer.isMe
                     HStack(spacing: 4) {
                         let assigned = peerListModel.colorForMeshPeer(id: peer.peerID, isDark: colorScheme == .dark)
@@ -234,9 +232,7 @@ struct MeshPeerList: View {
                 orderedIDs = currentIDs
             }
             .onChange(of: currentIDs) { ids in
-                var newOrder = orderedIDs
-                newOrder.removeAll { !ids.contains($0) }
-                for id in ids where !newOrder.contains(id) { newOrder.append(id) }
+                let newOrder = PeopleListOrdering.stableOrder(previous: orderedIDs, current: ids)
                 if newOrder != orderedIDs { orderedIDs = newOrder }
             }
         }

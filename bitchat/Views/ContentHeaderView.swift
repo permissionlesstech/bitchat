@@ -277,7 +277,10 @@ struct ContentHeaderView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "person.2.fill")
                             .font(.system(size: headerPeerIconSize, weight: .regular))
-                        Text("\(headerOtherPeersCount)")
+                        // Format style, not Text("\(count)"): same locale digits
+                        // and grouping, and no letterless key for Xcode's
+                        // localization export to add back to the catalog.
+                        Text(headerOtherPeersCount, format: .number)
                             .font(.system(size: headerPeerCountFontSize, weight: .regular, design: theme.bodyFontDesign))
                             .accessibilityHidden(true)
                     }
