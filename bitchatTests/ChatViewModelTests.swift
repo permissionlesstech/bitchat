@@ -2455,6 +2455,8 @@ struct ChatViewModelPanicTests {
 
     @Test @MainActor
     func panicClearAllData_wipesTheLocationStateOfItsOwnManager() throws {
+        let gestureMode = PanicGestureModeSnapshot()
+        defer { gestureMode.restore() }
         // Where the device has been, persisted the way the location manager
         // writes it: a teleport and a bookmark.
         let suiteName = "ChatViewModelPanicTests.\(UUID().uuidString)"
