@@ -1093,6 +1093,22 @@ final class NoiseEncryptionService {
     func _test_fireSuppressedInitiationRecovery(for peerID: PeerID) {
         sessionManager._test_fireSuppressedInitiationRecovery(for: peerID)
     }
+
+    func _test_fireOrdinaryInitiatorTimeout(for peerID: PeerID) -> Bool {
+        sessionManager._test_fireOrdinaryInitiatorTimeout(for: peerID)
+    }
+
+    func _test_fireOrdinaryResponderTimeout(for peerID: PeerID) -> Bool {
+        sessionManager._test_fireOrdinaryResponderTimeout(for: peerID)
+    }
+
+    func _test_ordinaryResponderDeadline(for peerID: PeerID) -> DispatchTime? {
+        sessionManager._test_ordinaryResponderDeadline(for: peerID)
+    }
+
+    func _test_hasPendingHandshakeRecovery(for peerID: PeerID) -> Bool {
+        sessionManager._test_hasPendingHandshakeRecovery(for: peerID)
+    }
     #endif
     
     deinit {
