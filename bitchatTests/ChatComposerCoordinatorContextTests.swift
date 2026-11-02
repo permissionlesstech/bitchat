@@ -22,11 +22,13 @@ import BitFoundation
 /// `ChatComposerCoordinator` is testable without a `ChatViewModel`.
 @MainActor
 private final class MockChatComposerContext: ChatComposerContext {
-    // Autocomplete UI state
-    var autocompleteSuggestions: [String] = []
-    var autocompleteRange: NSRange?
-    var showAutocomplete = false
-    var selectedAutocompleteIndex = -1
+    // Autocomplete UI state. Every write is counted: each one republishes the
+    // composer state (and re-renders the message rows) in the real owner.
+    var autocompleteSuggestions: [String] = [] { didSet { autocompleteStateWrites += 1 } }
+    var autocompleteRange: NSRange? { didSet { autocompleteStateWrites += 1 } }
+    var showAutocomplete = false { didSet { autocompleteStateWrites += 1 } }
+    var selectedAutocompleteIndex = -1 { didSet { autocompleteStateWrites += 1 } }
+    private(set) var autocompleteStateWrites = 0
     var queryResult: (suggestions: [String], range: NSRange?) = ([], nil)
     private(set) var queriedPeerCandidates: [[String]] = []
     private(set) var appliedSuggestions: [(suggestion: String, text: String, range: NSRange)] = []
@@ -156,6 +158,57 @@ struct ChatComposerCoordinatorContextTests {
 
         geoCoordinator.updateAutocomplete(for: "@", cursorPosition: 1)
         #expect(geoContext.queriedPeerCandidates == [["carol#dddd"]])
+    }
+
+    @Test @MainActor
+    func updateAutocomplete_withoutMentionTokenAtCursor_skipsCandidateQuery() {
+        let context = MockChatComposerContext()
+        let coordinator = ChatComposerCoordinator(context: context)
+        context.meshNicknamesByPeerID = [PeerID(str: "1111111111111111"): "alice"]
+        context.queryResult = (["@alice"], NSRange(location: 3, length: 3))
+
+        // Plain text, and a mention that no longer ends at the cursor: the
+        // query could not suggest anything, so it never runs.
+        coordinator.updateAutocomplete(for: "plain text", cursorPosition: 10)
+        coordinator.updateAutocomplete(for: "hi @al there", cursorPosition: 12)
+        #expect(context.queriedPeerCandidates.isEmpty)
+        #expect(context.autocompleteSuggestions.isEmpty)
+        #expect(!context.showAutocomplete)
+
+        // The same text with the cursor right after the token queries.
+        coordinator.updateAutocomplete(for: "hi @al there", cursorPosition: 6)
+        #expect(context.queriedPeerCandidates == [["alice"]])
+        #expect(context.autocompleteSuggestions == ["@alice"])
+        #expect(context.showAutocomplete)
+    }
+
+    @Test @MainActor
+    func updateAutocomplete_rewritesNothingWhenStateIsUnchanged() {
+        let context = MockChatComposerContext()
+        let coordinator = ChatComposerCoordinator(context: context)
+        context.meshNicknamesByPeerID = [PeerID(str: "1111111111111111"): "alice"]
+
+        // The first clear only has to reset the highlight index.
+        coordinator.updateAutocomplete(for: "hello", cursorPosition: 5)
+        #expect(context.autocompleteStateWrites == 1)
+        #expect(context.selectedAutocompleteIndex == 0)
+
+        // Typing pauses in plain text then leave the state untouched.
+        coordinator.updateAutocomplete(for: "hello there", cursorPosition: 11)
+        #expect(context.autocompleteStateWrites == 1)
+
+        // Showing suggestions writes; re-querying the same result does not.
+        context.queryResult = (["@alice"], NSRange(location: 0, length: 2))
+        coordinator.updateAutocomplete(for: "@a", cursorPosition: 2)
+        let writesAfterShowing = context.autocompleteStateWrites
+        #expect(writesAfterShowing == 4)
+        coordinator.updateAutocomplete(for: "@a", cursorPosition: 2)
+        #expect(context.autocompleteStateWrites == writesAfterShowing)
+
+        // A moved highlight is still reset to the first suggestion.
+        context.selectedAutocompleteIndex = 2
+        coordinator.updateAutocomplete(for: "@a", cursorPosition: 2)
+        #expect(context.selectedAutocompleteIndex == 0)
     }
 
     @Test @MainActor

@@ -186,8 +186,8 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.upsertCalls.isEmpty)
         #expect(recorder.topologyUpdates.isEmpty)
         #expect(recorder.afterglowDelays.isEmpty)
-        // Original behavior: list refresh, identity persistence, sync tracking
-        // and announce-back still occur for unverified announces.
+        // Original behavior: list refresh and announce-back still occur for
+        // unverified announces.
         #expect(recorder.uiEventDeliveries.count == 1)
         #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
         #expect(recorder.uiEventDeliveries.first?.scheduleInitialSync == false)
@@ -195,7 +195,9 @@ struct BLEAnnounceHandlerTests {
         // persisting would let an attacker who replays a victim's noisePublicKey
         // overwrite the victim's stored signing key/nickname (identity poisoning).
         #expect(recorder.persistedIdentities.isEmpty)
-        #expect(recorder.trackedPackets.count == 1)
+        // Nor gossip tracking: an unsigned announce is free to mint, so
+        // tracking it let junk identities fill the sync store and filter.
+        #expect(recorder.trackedPackets.isEmpty)
         #expect(recorder.announceBacks == 1)
     }
 
@@ -222,6 +224,7 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.upsertCalls.isEmpty)
         #expect(recorder.uiEventDeliveries.count == 1)
         #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
+        #expect(recorder.trackedPackets.isEmpty)
     }
 
     @Test
@@ -542,6 +545,8 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.topologyUpdates.isEmpty)
         #expect(recorder.uiEventDeliveries.count == 1)
         #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
+        // The impersonation announce is not carried for sync either.
+        #expect(recorder.trackedPackets.isEmpty)
     }
 
     @Test
@@ -736,14 +741,14 @@ struct BLEAnnounceHandlerTests {
         )
         let handler = BLEAnnounceHandler(environment: environment)
 
-        func makeSignedAnnounce(nickname: String, signer: NoiseEncryptionService) throws -> BitchatPacket {
+        func makeSignedAnnounce(nickname: String, signer: NoiseEncryptionService) -> BitchatPacket? {
             let announcement = AnnouncementPacket(
                 nickname: nickname,
                 noisePublicKey: victimNoiseKey,
                 signingPublicKey: signer.getSigningPublicKeyData(),
                 directNeighbors: nil
             )
-            let payload = try #require(announcement.encode())
+            guard let payload = announcement.encode() else { return nil }
             let packet = BitchatPacket(
                 type: MessageType.announce.rawValue,
                 senderID: Data(hexString: peerID.id) ?? Data(),
@@ -753,11 +758,11 @@ struct BLEAnnounceHandlerTests {
                 signature: nil,
                 ttl: TransportConfig.messageTTLDefault
             )
-            return try #require(signer.signPacket(packet))
+            return signer.signPacket(packet)
         }
 
         // Legitimate announce from the victim is accepted and pinned.
-        let victimAnnounce = try makeSignedAnnounce(nickname: "victim", signer: victim)
+        let victimAnnounce = try #require(makeSignedAnnounce(nickname: "victim", signer: victim))
         handler.handle(victimAnnounce, from: peerID)
 
         #expect(box.registry.info(for: peerID)?.nickname == "victim")
@@ -765,7 +770,7 @@ struct BLEAnnounceHandlerTests {
         #expect(box.persistedIdentities.count == 1)
 
         // Attacker announce with a valid self-signature must be rejected.
-        let attackerAnnounce = try makeSignedAnnounce(nickname: "attacker", signer: attacker)
+        let attackerAnnounce = try #require(makeSignedAnnounce(nickname: "attacker", signer: attacker))
         handler.handle(attackerAnnounce, from: peerID)
 
         #expect(box.registry.info(for: peerID)?.nickname == "victim")
@@ -773,7 +778,7 @@ struct BLEAnnounceHandlerTests {
         #expect(box.persistedIdentities.count == 1)
 
         // The victim's subsequent announces (same pinned key) still work.
-        let victimRename = try makeSignedAnnounce(nickname: "victim-renamed", signer: victim)
+        let victimRename = try #require(makeSignedAnnounce(nickname: "victim-renamed", signer: victim))
         handler.handle(victimRename, from: peerID)
 
         #expect(box.registry.info(for: peerID)?.nickname == "victim-renamed")
@@ -857,14 +862,14 @@ struct BLEAnnounceHandlerTests {
         }
         let handler = BLEAnnounceHandler(environment: makeEnvironment(identityManager: identityManager))
 
-        func makeSignedAnnounce(nickname: String, signer: NoiseEncryptionService) throws -> BitchatPacket {
+        func makeSignedAnnounce(nickname: String, signer: NoiseEncryptionService) -> BitchatPacket? {
             let announcement = AnnouncementPacket(
                 nickname: nickname,
                 noisePublicKey: victimNoiseKey,
                 signingPublicKey: signer.getSigningPublicKeyData(),
                 directNeighbors: nil
             )
-            let payload = try #require(announcement.encode())
+            guard let payload = announcement.encode() else { return nil }
             let packet = BitchatPacket(
                 type: MessageType.announce.rawValue,
                 senderID: Data(hexString: peerID.id) ?? Data(),
@@ -874,7 +879,7 @@ struct BLEAnnounceHandlerTests {
                 signature: nil,
                 ttl: TransportConfig.messageTTLDefault
             )
-            return try #require(signer.signPacket(packet))
+            return signer.signPacket(packet)
         }
 
         func persistedIdentity() -> CryptographicIdentity? {
@@ -883,7 +888,7 @@ struct BLEAnnounceHandlerTests {
         }
 
         // 1. Victim announces: pinned in the registry and persisted.
-        handler.handle(try makeSignedAnnounce(nickname: "victim", signer: victim), from: peerID)
+        handler.handle(try #require(makeSignedAnnounce(nickname: "victim", signer: victim)), from: peerID)
         #expect(box.registry.info(for: peerID)?.signingPublicKey == victim.getSigningPublicKeyData())
         #expect(persistedIdentity()?.signingPublicKey == victim.getSigningPublicKeyData())
 
@@ -893,13 +898,13 @@ struct BLEAnnounceHandlerTests {
 
         // 3. Attacker replay with own signing key: rejected via the persisted
         //    pin, and neither the registry nor the persisted identity change.
-        handler.handle(try makeSignedAnnounce(nickname: "attacker", signer: attacker), from: peerID)
+        handler.handle(try #require(makeSignedAnnounce(nickname: "attacker", signer: attacker)), from: peerID)
         #expect(box.registry.info(for: peerID) == nil)
         #expect(persistedIdentity()?.signingPublicKey == victim.getSigningPublicKeyData())
         #expect(identityManager.getSocialIdentity(for: victimNoiseKey.sha256Fingerprint())?.claimedNickname == "victim")
 
         // 4. Victim re-announces with the same signing key: accepted again.
-        handler.handle(try makeSignedAnnounce(nickname: "victim", signer: victim), from: peerID)
+        handler.handle(try #require(makeSignedAnnounce(nickname: "victim", signer: victim)), from: peerID)
         #expect(box.registry.info(for: peerID)?.nickname == "victim")
         #expect(box.registry.info(for: peerID)?.signingPublicKey == victim.getSigningPublicKeyData())
 
@@ -914,7 +919,7 @@ struct BLEAnnounceHandlerTests {
         )
         box.registry = BLEPeerRegistry()
         let restartedHandler = BLEAnnounceHandler(environment: makeEnvironment(identityManager: reloadedManager))
-        restartedHandler.handle(try makeSignedAnnounce(nickname: "attacker", signer: attacker), from: peerID)
+        restartedHandler.handle(try #require(makeSignedAnnounce(nickname: "attacker", signer: attacker)), from: peerID)
         #expect(box.registry.info(for: peerID) == nil)
         #expect(
             reloadedManager.getCryptoIdentitiesByPeerIDPrefix(peerID).first?.signingPublicKey
@@ -922,7 +927,7 @@ struct BLEAnnounceHandlerTests {
         )
 
         // ...while the victim is accepted after the restart.
-        restartedHandler.handle(try makeSignedAnnounce(nickname: "victim", signer: victim), from: peerID)
+        restartedHandler.handle(try #require(makeSignedAnnounce(nickname: "victim", signer: victim)), from: peerID)
         #expect(box.registry.info(for: peerID)?.signingPublicKey == victim.getSigningPublicKeyData())
     }
 

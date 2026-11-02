@@ -1943,7 +1943,7 @@ final class BLEService: NSObject {
 
     private func logValidRSR(from peerID: PeerID) {
         guard logRateLimiter.shouldLog(key: "valid-rsr:\(peerID.id)") else { return }
-        SecureLogger.debug("Valid RSR packet from \(peerID.id.prefix(8))… - skipping timestamp check", category: .security)
+        SecureLogger.debug("Valid RSR packet from \(peerID.id.prefix(8))… - skipping past-timestamp check", category: .security)
     }
 
     private func logSelfLoopback(packetType: UInt8, linkDescription: String) {
@@ -2488,7 +2488,7 @@ final class BLEService: NSObject {
             }
             // Signature verification and registry lookups run on messageQueue
             // like the live receive path.
-            self.messageQueue.async {
+            self.messageQueue.async { [self] in
                 guard self.isCurrentPanicLifecycleGeneration(generation) else {
                     return
                 }

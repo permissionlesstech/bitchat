@@ -362,6 +362,10 @@ struct PeerIDTests {
     @Test func rejects_invalid_characters() {
         #expect(!PeerID(str: "peer!@#").isValid)
         #expect(!PeerID(str: "gggggggggggggggg").isValid) // not hex for short form
+        // A 64-character id is only valid because it decodes to a Noise key, so
+        // it has to be rejected on the same grounds a short one is.
+        #expect(!PeerID(str: String(repeating: "+b", count: 32)).isValid)
+        #expect(!PeerID(str: String(repeating: "gg", count: 32)).isValid)
     }
     
     @Test func rejects_too_long() {
@@ -388,6 +392,13 @@ struct PeerIDTests {
         let badPeerID = PeerID(str: bad)
         #expect(!badPeerID.isNoiseKeyHex)
         #expect(badPeerID.noiseKey == nil)
+
+        // isHex and isNoiseKeyHex have to agree: a signed pair is not hex, so it
+        // must not decode to a Noise key either.
+        let signedPeerID = PeerID(str: String(repeating: "+b", count: 32))
+        #expect(!signedPeerID.isHex)
+        #expect(!signedPeerID.isNoiseKeyHex)
+        #expect(signedPeerID.noiseKey == nil)
     }
     
     @Test func prefixes() {

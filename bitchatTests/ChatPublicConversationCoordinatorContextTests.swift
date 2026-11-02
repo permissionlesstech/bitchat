@@ -30,12 +30,7 @@ private final class MockChatPublicConversationContext: ChatPublicConversationCon
     var currentGeohash: String?
     var nickname = "me"
     var myPeerID = PeerID(str: "0011223344556677")
-    private(set) var isBatchingPublic = false
     private(set) var notifyUIChangedCount = 0
-
-    func setPublicBatching(_ isBatching: Bool) {
-        isBatchingPublic = isBatching
-    }
 
     func notifyUIChanged() {
         notifyUIChangedCount += 1
@@ -350,6 +345,68 @@ struct ChatPublicConversationCoordinatorContextTests {
         #expect(context.enqueuedMessages.first?.conversationID == .geohash(geohash))
     }
 
+    /// A peer-chosen wire timestamp near UInt64.max comes back from Date as
+    /// 2^64 ms; keying an archived echo on it used to trap the main actor —
+    /// a remote crash on receipt, and on every launch once archived.
+    @Test @MainActor
+    func handlePublicMessage_uint64MaxTimestamp_neitherTrapsNorBreaksEchoDedup() async {
+        let context = MockChatPublicConversationContext()
+        let coordinator = ChatPublicConversationCoordinator(context: context)
+        let senderPeerID = PeerID(str: "aabbccddeeff0011")
+        // Same conversion as BLEPublicMessageHandler / the archive decoder.
+        let wireMax = Date(timeIntervalSince1970: Double(UInt64.max) / 1000)
+
+        // Launch-time echo seeding path.
+        coordinator.registerArchivedEcho(senderPeerID: senderPeerID, timestamp: wireMax, content: "echoed")
+        // Live path: a copy of the seeded echo is still recognized...
+        coordinator.handlePublicMessage(BitchatMessage(
+            id: "live-copy",
+            sender: "alice",
+            content: "echoed",
+            timestamp: wireMax,
+            isRelay: false,
+            senderPeerID: senderPeerID
+        ))
+        #expect(context.enqueuedMessageIDs.isEmpty)
+
+        // ...and a fresh message with the same timestamp is delivered.
+        coordinator.handlePublicMessage(BitchatMessage(
+            id: "live-new",
+            sender: "alice",
+            content: "new",
+            timestamp: wireMax,
+            isRelay: false,
+            senderPeerID: senderPeerID
+        ))
+        #expect(context.enqueuedMessageIDs == ["live-new"])
+    }
+
+    @Test @MainActor
+    func archivedEchoKey_isTotalForAnyDate() async {
+        let sender = PeerID(str: "aabbccddeeff0011")
+        func key(_ date: Date) -> String {
+            ChatPublicConversationCoordinator.archivedEchoKey(senderPeerID: sender, timestamp: date, content: "x")
+        }
+
+        // Ordinary timestamps keep the integer-millisecond key.
+        #expect(key(Date(timeIntervalSince1970: 1_700_000_000.123)) == "aabbccddeeff0011|1700000000123|x")
+
+        // Out-of-range dates key deterministically instead of trapping.
+        let extremes = [
+            Date(timeIntervalSince1970: Double(UInt64.max) / 1000),
+            Date(timeIntervalSince1970: -1),
+            Date(timeIntervalSince1970: .infinity),
+            Date(timeIntervalSince1970: -.infinity),
+            Date(timeIntervalSince1970: .nan),
+            .distantFuture,
+            .distantPast
+        ]
+        for date in extremes {
+            #expect(key(date).hasPrefix("aabbccddeeff0011|"))
+        }
+        #expect(key(extremes[0]) != key(Date(timeIntervalSince1970: 1_700_000_000)))
+    }
+
     /// `/clear` on the mesh timeline used to only record a watermark, leaving
     /// the archive on disk for up to its freshness window — so someone who
     /// cleared before a police stop had deleted nothing. It must now erase the
@@ -479,9 +536,6 @@ struct ChatPublicConversationCoordinatorContextTests {
 
         coordinator.pipelinePrewarmMessage(pipeline, message: message)
         #expect(context.prewarmedMessageIDs == ["pipeline-msg"])
-
-        coordinator.pipelineSetBatchingState(pipeline, isBatching: true)
-        #expect(context.isBatchingPublic)
     }
 
     @Test @MainActor
@@ -544,7 +598,8 @@ struct ChatPublicConversationCoordinatorContextTests {
         )
         #expect(context.mentionNotifications.count == 1)
 
-        // My own message mentioning myself does not notify.
+        // My own message mentioning myself (a gossip replay of my mesh text,
+        // stamped with my peer ID) does not notify.
         coordinator.checkForMentions(
             BitchatMessage(
                 id: "mention-3",
@@ -552,10 +607,65 @@ struct ChatPublicConversationCoordinatorContextTests {
                 content: "talking about @me",
                 timestamp: Date(),
                 isRelay: false,
+                senderPeerID: context.myPeerID,
                 mentions: ["me"]
             )
         )
         #expect(context.mentionNotifications.count == 1)
+    }
+
+    @Test @MainActor
+    func checkForMentions_tellsMyOwnMessagesFromNamesakesBySenderID() async {
+        let context = MockChatPublicConversationContext()
+        let coordinator = ChatPublicConversationCoordinator(context: context)
+        let myGeoHex = MockChatPublicConversationContext.dummyIdentity.publicKeyHex
+        let namesakeHex = String(repeating: "ef", count: 32)
+
+        // A namesake shown by my bare nickname (multi-hop mesh, or the
+        // signed-name fallback) mentioning me still notifies.
+        coordinator.checkForMentions(
+            BitchatMessage(
+                id: "namesake-mesh",
+                sender: "me",
+                content: "hi @me",
+                timestamp: Date(),
+                isRelay: false,
+                senderPeerID: PeerID(str: "8899aabbccddeeff"),
+                mentions: ["me"]
+            )
+        )
+        #expect(context.mentionNotifications.map(\.message) == ["hi @me"])
+
+        // In a location channel, a relay echo of my own geochat message
+        // (NostrInboundPipeline.subscribeNostrEvent) stays quiet...
+        context.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pruy"))
+        context.currentGeohash = "u4pruy"
+        coordinator.checkForMentions(
+            BitchatMessage(
+                id: "own-geo-echo",
+                sender: "me#\(myGeoHex.suffix(4))",
+                content: "note to @me",
+                timestamp: Date(),
+                isRelay: false,
+                senderPeerID: PeerID(nostr: myGeoHex),
+                mentions: ["me"]
+            )
+        )
+        #expect(context.mentionNotifications.map(\.message) == ["hi @me"])
+
+        // ...while a geochat namesake mentioning me notifies.
+        coordinator.checkForMentions(
+            BitchatMessage(
+                id: "namesake-geo",
+                sender: "me#\(namesakeHex.suffix(4))",
+                content: "yo @me",
+                timestamp: Date(),
+                isRelay: false,
+                senderPeerID: PeerID(nostr: namesakeHex),
+                mentions: ["me"]
+            )
+        )
+        #expect(context.mentionNotifications.map(\.message) == ["hi @me", "yo @me"])
     }
 
 }

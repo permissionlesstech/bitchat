@@ -226,10 +226,11 @@ extension ChatViewModel: ChatPrivateConversationContext {
         NotificationService.shared.sendPrivateMessageNotification(from: senderName, message: message, peerID: peerID)
     }
 
+    /// Deliberately no `senderPeerID`: geohash envelopes (and the acks for
+    /// inbound account DMs sent through here) must never carry the mesh
+    /// peer ID. The recipient-less encoders fill that field with random bytes.
     private func makeGeohashNostrTransport() -> NostrTransport {
-        let transport = NostrTransport(keychain: keychain, idBridge: idBridge)
-        transport.senderPeerID = meshService.myPeerID
-        return transport
+        NostrTransport(keychain: keychain, idBridge: idBridge)
     }
 }
 
@@ -491,18 +492,21 @@ final class ChatPrivateConversationCoordinator {
         guard let pm = PrivateMessagePacket.decode(from: payload.data) else { return }
         let messageId = pm.messageID
 
-        // Ack before the dedup guard: a re-sent copy means the sender may not
-        // have our DELIVERED yet, and markGeoDeliveryAckSent dedups the
-        // actual sends.
-        sendDeliveryAckIfNeeded(to: messageId, senderPubKey: senderPubkey, from: id)
+        // Block check before anything that answers the sender: a blocked
+        // sender gets no DELIVERED or READ ack back (not even a liveness
+        // signal) and doesn't consume a dedup slot.
+        if context.isNostrBlocked(pubkeyHexLowercased: senderPubkey) {
+            return
+        }
 
         guard markInboundGeoDMSeen(messageId) else { return }
 
         SecureLogger.info("GeoDM: recv PM <- sender=\(senderPubkey.prefix(8))… mid=\(messageId.prefix(8))…", category: .session)
 
-        if context.isNostrBlocked(pubkeyHexLowercased: senderPubkey) {
-            return
-        }
+        // Ack only once the block and dedup checks pass. Outbox retries of a
+        // message we've already acked are dropped by the dedup guard, and
+        // markGeoDeliveryAckSent dedups the actual sends by message ID.
+        sendDeliveryAckIfNeeded(to: messageId, senderPubKey: senderPubkey, from: id)
 
         // Prefer the favorite's stored nickname when the sender resolved to a
         // known noise key; the Nostr display name is a geohash-scoped
@@ -852,6 +856,7 @@ final class ChatPrivateConversationCoordinator {
             var oldPeerIDsToRemove: [PeerID] = []
             var didMigrate = false
             let cutoffTime = Date().addingTimeInterval(-TransportConfig.uiMigrationCutoffSeconds)
+            let myPeerID = context.myPeerID
 
             for (oldPeerID, messages) in context.privateChats where oldPeerID != peerID {
                 let oldFingerprint = context.storedFingerprint(for: oldPeerID)
@@ -877,9 +882,20 @@ final class ChatPrivateConversationCoordinator {
                         category: .session
                     )
                 } else if currentFingerprint == nil || oldFingerprint == nil {
+                    // Which rows are mine goes by sender ID: after a rename my
+                    // older rows carry my previous name, and a stranger who
+                    // takes that name must not read as their author. My
+                    // geo-DM rows name me, not the peer, as their recipient
+                    // (sendGeohashDM), so they say nothing about who a geo-DM
+                    // thread is with: there only the peer's rows count.
+                    // Otherwise a namesake (or someone who took my old name)
+                    // would take the thread, and my next reply, along.
+                    let isGeoDMThread = oldPeerID.isGeoDM
                     let isRelevantChat = recentMessages.contains { msg in
-                        (msg.sender == senderNickname && msg.sender != context.nickname)
-                            || (msg.sender == context.nickname && msg.recipientNickname == senderNickname)
+                        if msg.isOwn(myPeerID: myPeerID, myGeoChatPeerID: nil) {
+                            return !isGeoDMThread && msg.recipientNickname == senderNickname
+                        }
+                        return msg.sender == senderNickname
                     }
 
                     if isRelevantChat {

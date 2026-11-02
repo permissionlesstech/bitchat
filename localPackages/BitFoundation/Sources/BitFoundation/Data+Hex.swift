@@ -9,12 +9,27 @@
 import struct Foundation.Data
 
 public extension Data {
+    /// Lowercase hex, two digits per byte, no separators.
+    ///
+    /// Table lookup instead of `String(format:)` per byte: Nostr public keys
+    /// are re-encoded on hot paths (geochat roster rebuilds touch one per
+    /// participant), and the formatted version cost ~14 µs per 32-byte key.
     func hexEncodedString() -> String {
         if self.isEmpty {
             return ""
         }
-        return self.map { String(format: "%02x", $0) }.joined()
+        return String(unsafeUninitializedCapacity: count * 2) { buffer in
+            var index = 0
+            for byte in self {
+                buffer[index] = Self.lowercaseHexDigits[Int(byte >> 4)]
+                buffer[index + 1] = Self.lowercaseHexDigits[Int(byte & 0x0F)]
+                index += 2
+            }
+            return index
+        }
     }
+
+    private static let lowercaseHexDigits: [UInt8] = Array("0123456789abcdef".utf8)
 
     /// Initialize Data from a hex string.
     /// - Parameter hexString: A hex string, optionally prefixed with "0x" or "0X".
@@ -45,7 +60,12 @@ public extension Data {
 
         for _ in 0..<len {
             let nextIndex = hex.index(index, offsetBy: 2)
-            guard let byte = UInt8(String(hex[index..<nextIndex]), radix: 16) else {
+            let pair = hex[index..<nextIndex]
+            // UInt8(_:radix:) accepts a leading sign, so "+f" parses as 0x0f.
+            // That gives an identity-bearing hex string a second spelling which
+            // decodes to the same bytes, so require two hex digits first.
+            guard pair.allSatisfy(\.isHexDigit),
+                  let byte = UInt8(pair, radix: 16) else {
                 return nil
             }
             data.append(byte)

@@ -197,7 +197,13 @@ struct ThemedRootBackground: View {
             }
             .ignoresSafeArea()
         } else {
+            // Full-bleed like the gradient above. Passed to .background(_:)
+            // as a view, a backdrop stops at the safe area (a bare Color
+            // passed as a ShapeStyle would not). In a sheet, the sheet's own
+            // background (#1C1C1E in dark mode) then shows through the
+            // home-indicator inset and under the navigation bar.
             palette.background
+                .ignoresSafeArea()
         }
     }
 }

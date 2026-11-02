@@ -267,7 +267,14 @@ final class LocationNotesManager: ObservableObject {
             if let expiresAt, expiresAt <= self.dependencies.now() { return }
             self.noteIDs.insert(event.id)
             let nick = event.tags.first(where: { $0.first?.lowercased() == "n" && $0.count >= 2 })?.dropFirst().first
-            let ts = Date(timeIntervalSince1970: TimeInterval(event.created_at))
+            // created_at is author-chosen; clamp so a future-dated note can't
+            // hold the top of the newest-first list past the memory cap. The
+            // bound is the board's clock-skew allowance: a bridged copy of an
+            // accepted board post must keep its timestamp, or
+            // UnifiedNotices.merge no longer recognizes it as the same notice.
+            let latestAccepted = self.dependencies.now()
+                .addingTimeInterval(TimeInterval(BoardStore.Limits.clockSkewMs) / 1000)
+            let ts = min(Date(timeIntervalSince1970: TimeInterval(event.created_at)), latestAccepted)
             let urgent = event.tags.contains { $0.count >= 2 && $0[0].lowercased() == "t" && $0[1].lowercased() == "urgent" }
             let note = Note(id: event.id, pubkey: event.pubkey, content: event.content, createdAt: ts, nickname: nick, geohash: matchedGeohash, expiresAt: expiresAt, isUrgent: urgent)
             self.notes.append(note)

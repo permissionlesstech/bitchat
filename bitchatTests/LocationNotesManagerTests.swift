@@ -236,6 +236,65 @@ struct LocationNotesManagerTests {
         #expect(manager.notes.first?.expiresAt == Date(timeIntervalSince1970: TimeInterval(Int(now.timeIntervalSince1970) + 3600)))
     }
 
+    /// created_at is author-chosen: a note dated 2100 used to sort above
+    /// every real note forever and survive the newest-first memory cap.
+    @Test
+    func ingestClampsFutureDatedNotesToTheBoardSkew() throws {
+        var storedHandler: ((NostrEvent) -> Void)?
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        var currentNow = start
+        let deps = LocationNotesDependencies(
+            relayLookup: { _, _ in ["wss://relay.one"] },
+            subscribe: { _, _, _, handler, _ in
+                storedHandler = handler
+            },
+            unsubscribe: { _ in },
+            sendEvent: { _, _ in },
+            deriveIdentity: { _ in throw TestError.shouldNotDerive },
+            now: { currentNow }
+        )
+
+        let manager = LocationNotesManager(geohash: "u4pruydq", dependencies: deps)
+        let identity = try NostrIdentity.generate()
+        let skew = TimeInterval(BoardStore.Limits.clockSkewMs) / 1000
+
+        // Within the board's skew allowance the author's timestamp is kept,
+        // so a bridged copy of a board post still dedupes against the post.
+        let slightlyAhead = start.addingTimeInterval(30 * 60)
+        let bridged = NostrEvent(
+            pubkey: identity.publicKeyHex,
+            createdAt: slightlyAhead,
+            kind: .textNote,
+            tags: [["g", "u4pruydq"]],
+            content: "bridged"
+        )
+        storedHandler?(try bridged.sign(with: identity.schnorrSigningKey()))
+        #expect(manager.notes.first(where: { $0.content == "bridged" })?.createdAt == slightlyAhead)
+
+        // Far-future timestamps are clamped to the edge of that allowance.
+        let futureDated = NostrEvent(
+            pubkey: identity.publicKeyHex,
+            createdAt: Date(timeIntervalSince1970: 4_102_444_800), // 2100-01-01
+            kind: .textNote,
+            tags: [["g", "u4pruydq"]],
+            content: "pinned"
+        )
+        storedHandler?(try futureDated.sign(with: identity.schnorrSigningKey()))
+        #expect(manager.notes.first(where: { $0.content == "pinned" })?.createdAt == start.addingTimeInterval(skew))
+
+        // Once local time passes that edge, newer notes sort above it.
+        currentNow = start.addingTimeInterval(skew + 120)
+        let later = NostrEvent(
+            pubkey: identity.publicKeyHex,
+            createdAt: start.addingTimeInterval(skew + 60),
+            kind: .textNote,
+            tags: [["g", "u4pruydq"]],
+            content: "later"
+        )
+        storedHandler?(try later.sign(with: identity.schnorrSigningKey()))
+        #expect(manager.notes.map(\.content) == ["later", "pinned", "bridged"])
+    }
+
     @Test
     func postDrop_sendsExpiringNoteToGeoRelays() throws {
         var sentEvents: [NostrEvent] = []

@@ -1,0 +1,137 @@
+{
+  "_comment": [
+    "Golden vectors for the bitchat courier wire format. Generated from the iOS",
+    "implementation and asserted by CourierVectorTests in the BitFoundation test",
+    "target, so these cannot drift from the code without a test failing.",
+    "All hex is lowercase. All multi-byte integers are big-endian.",
+    "",
+    "These exist because three courier encoding mistakes fail SILENTLY — the",
+    "client builds, connects, and delivers nothing, with no error at either end:",
+    "  1. treating `expiry` as seconds when it is milliseconds",
+    "  2. signing the wire bytes instead of the padded, ttl-zeroed pre-image",
+    "  3. reaching for X25519 key agreement because CryptoKit spells Ed25519",
+    "     as `Curve25519.Signing`"
+  ],
+
+  "inputs": {
+    "_comment": "Synthetic. Not derived from any real key.",
+    "recipientTag": "000102030405060708090a0b0c0d0e0f",
+    "noiseStaticKey": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+    "ciphertextUTF8": "courier-vector-ciphertext-0001",
+    "ciphertext": "636f75726965722d766563746f722d636970686572746578742d30303031",
+    "expiryMillis": 1800000000000,
+    "epochDay": 20833,
+    "senderID": "1122334455667788",
+    "recipientID": "99aabbccddeeff00",
+    "timestampMillis": 1750000000000,
+    "signingSeed": "4242424242424242424242424242424242424242424242424242424242424242"
+  },
+
+  "envelopeTLV": {
+    "_comment": [
+      "TLV records are type(1) length(2, big-endian) value(length).",
+      "0x01 recipientTag(16) 0x02 expiry(8) 0x03 ciphertext 0x04 copies(1) 0x05 prekeyID(4).",
+      "Lengths are checked exactly, not as minimums. Unknown types are skipped",
+      "using the length field.",
+      "NOTE the 0x02 value below is 000001a3185c5000 = 1800000000000 MILLISECONDS.",
+      "Emitting seconds yields a value ~1000x too small, so every envelope reads",
+      "as long expired and is dropped at deposit with nothing logged."
+    ],
+    "copies": 4,
+    "prekeyID": 287454020,
+    "encoded": "010010000102030405060708090a0b0c0d0e0f020008000001a3185c500003001e636f75726965722d766563746f722d636970686572746578742d303030310400010405000411223344",
+    "encodedLength": 74
+  },
+
+  "copiesClamping": {
+    "_comment": [
+      "`copies` is clamped into 1...maxCopies by the initializer, never rejected.",
+      "An implementation that rejects out-of-range values will drop envelopes",
+      "this one accepts."
+    ],
+    "maxCopies": 8,
+    "cases": [
+      { "requested": 0, "stored": 1 },
+      { "requested": 4, "stored": 4 },
+      { "requested": 200, "stored": 8 }
+    ]
+  },
+
+  "recipientTagDerivation": {
+    "_comment": [
+      "HMAC-SHA256(key = recipient noise static key,",
+      "            message = \"bitchat-courier-tag-v1\" || BE32(epochDay))",
+      "truncated to the first 16 bytes. The label is ASCII with no terminator.",
+      "epochDay = floor(unixSeconds / 86400).",
+      "A matcher computes tags for the previous, current and next epoch day and",
+      "accepts any of the three, so mail crossing UTC midnight still resolves."
+    ],
+    "label": "bitchat-courier-tag-v1",
+    "epochDay": 20833,
+    "expected": "ad8514c90ca1fa6bf44e38c8a6252482"
+  },
+
+  "packetSigning": {
+    "_comment": [
+      "THE trap. The signature does NOT cover the bytes as they appear on the",
+      "wire. It covers a re-encoding in which ttl is set to 0, the isRSR flag is",
+      "cleared, the signature is omitted (so the hasSignature flag bit 0x02 is",
+      "CLEAR in the signed bytes although SET on the wire) — and the result is",
+      "then PKCS#7-padded.",
+      "",
+      "Padding target is the smallest of [256, 512, 1024, 2048] that fits",
+      "size + 16, applied only when the shortfall is 1...255, every pad byte",
+      "equal to the shortfall. Here: 104 + 16 = 120 <= 256, so target 256,",
+      "shortfall 152 = 0x98.",
+      "",
+      "Signing the 104 unpadded bytes produces a signature that never verifies,",
+      "and nothing in any log points at the cause."
+    ],
+    "packet": {
+      "_comment": "A real courierEnvelope deposit frame: type 0x04 carrying the encoded envelope from envelopeTLV.encoded above as its payload.",
+      "version": 1,
+      "type": "0x04",
+      "ttlOnWire": 7,
+      "payloadIs": "envelopeTLV.encoded (74 bytes)"
+    },
+    "unsignedUnpaddedLength": 104,
+    "unsignedUnpadded": "010407000001977420dc0001004a112233445566778899aabbccddeeff00010010000102030405060708090a0b0c0d0e0f020008000001a3185c500003001e636f75726965722d766563746f722d636970686572746578742d303030310400010405000411223344",
+    "signingPreimageLength": 256,
+    "signingPreimagePadByte": "0x98",
+    "signingPreimagePadCount": 152,
+    "signingPreimage": "010400000001977420dc0001004a112233445566778899aabbccddeeff00010010000102030405060708090a0b0c0d0e0f020008000001a3185c500003001e636f75726965722d766563746f722d636970686572746578742d3030303104000104050004112233449898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898989898",
+    "signedWireLength": 168,
+    "flags": {
+      "_comment": [
+        "Flag bits: hasRecipient 0x01, hasSignature 0x02, isCompressed 0x04,",
+        "hasRoute 0x08, isRSR 0x10. Byte lives at offset 11.",
+        "The unsignedUnpadded and signingPreimage vectors above both carry 0x01",
+        "because the signature is absent from each. Only the finished 168-byte",
+        "wire packet sets 0x02 as well — which is exactly why re-signing a",
+        "received packet requires clearing that bit before re-encoding."
+      ],
+      "unsignedUnpadded": "0x01",
+      "signingPreimage": "0x01",
+      "signedWirePacket": "0x03"
+    }
+  },
+
+  "signature": {
+    "_comment": [
+      "Ed25519. CryptoKit spells the type `Curve25519.Signing.PrivateKey`, which",
+      "IS Ed25519 — reaching for a primitive named 'Curve25519' in another",
+      "language gets you X25519 key agreement, the wrong algorithm.",
+      "",
+      "Signature BYTES are deliberately not pinned here. CryptoKit's Ed25519",
+      "signing is RANDOMIZED rather than the deterministic RFC 8032",
+      "construction, so two signatures over identical input differ and both",
+      "verify. A second implementation using a deterministic Ed25519 library",
+      "will not reproduce iOS's bytes and does not need to. Pin the pre-image;",
+      "verification is the contract."
+    ],
+    "publicKey": "2152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db12",
+    "signatureLength": 64,
+    "deterministic": false,
+    "verify": "Ed25519 verify(publicKey, signature, packetSigning.signingPreimage) must succeed"
+  }
+}

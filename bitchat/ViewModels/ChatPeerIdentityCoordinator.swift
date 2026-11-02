@@ -518,12 +518,15 @@ final class ChatPeerIdentityCoordinator {
         let nickname = nickname.normalizedNickname
         switch context.activeChannel {
         case .location:
-            if nickname.contains("#"),
-               let person = context.visibleGeohashPeople()
-                .first(where: { $0.displayName == nickname }) {
-                let conversationKey = PeerID(nostr_: person.id)
-                context.registerNostrKeyMapping(person.id, for: conversationKey)
-                return conversationKey
+            if nickname.contains("#") {
+                let people = context.visibleGeohashPeople().filter {
+                    $0.displayName.normalizedNickname == nickname
+                }
+                if people.count == 1, let person = people.first {
+                    let conversationKey = PeerID(nostr_: person.id)
+                    context.registerNostrKeyMapping(person.id, for: conversationKey)
+                    return conversationKey
+                }
             }
 
             let base = nickname
@@ -531,10 +534,14 @@ final class ChatPeerIdentityCoordinator {
                 .first
                 .map(String.init)?
                 .lowercased() ?? nickname.lowercased()
-            if let pubkey = context.geoNicknames.first(where: { $0.value.lowercased() == base })?.key {
+            let geoMatches = context.geoNicknames.filter { $0.value.lowercased() == base }
+            if geoMatches.count == 1, let pubkey = geoMatches.keys.first {
                 let conversationKey = PeerID(nostr_: pubkey)
                 context.registerNostrKeyMapping(pubkey, for: conversationKey)
                 return conversationKey
+            }
+            if geoMatches.count > 1 {
+                return nil
             }
 
         case .mesh:

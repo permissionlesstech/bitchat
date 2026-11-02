@@ -6,6 +6,7 @@
 // This is free and unencumbered software released into the public domain.
 //
 
+import Combine
 import Testing
 import Foundation
 @testable import bitchat
@@ -270,6 +271,189 @@ struct GeohashParticipantTrackerTests {
         tracker.setActiveGeohash("abc123")
 
         #expect(tracker.visiblePeople.count == 1)
+    }
+
+    // MARK: - Membership Revision Tests
+
+    @Test func membershipRevision_bumpsWhenSomeoneJoins() async {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        tracker.setActiveGeohash("abc123")
+        let before = tracker.visibleMembershipRevision
+
+        tracker.recordParticipant(pubkeyHex: "pubkey1")
+
+        #expect(tracker.visibleMembershipRevision != before)
+    }
+
+    @Test func membershipRevision_staysPutOnRepeatActivity() async {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        tracker.setActiveGeohash("abc123")
+        tracker.recordParticipant(pubkeyHex: "pubkey1")
+        tracker.recordParticipant(pubkeyHex: "pubkey2")
+        let before = tracker.visibleMembershipRevision
+
+        // Heartbeats from people already present only move timestamps.
+        tracker.recordParticipant(pubkeyHex: "pubkey1")
+        tracker.recordParticipant(pubkeyHex: "pubkey2")
+        tracker.refresh()
+
+        #expect(tracker.visibleMembershipRevision == before)
+    }
+
+    @Test func membershipRevision_bumpsWhenSomeoneLeaves() async {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        tracker.setActiveGeohash("abc123")
+        tracker.recordParticipant(pubkeyHex: "pubkey1")
+        tracker.recordParticipant(pubkeyHex: "pubkey2")
+        let afterJoins = tracker.visibleMembershipRevision
+
+        tracker.removeParticipant(pubkeyHex: "pubkey1")
+        #expect(tracker.visibleMembershipRevision != afterJoins)
+
+        let afterRemoval = tracker.visibleMembershipRevision
+        tracker.setActiveGeohash(nil)
+        #expect(tracker.visibleMembershipRevision != afterRemoval)
+    }
+
+    // MARK: - Activity Semantics
+
+    @Test func recordParticipant_ignoresActivityOlderThanTheWindow() async {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        tracker.setActiveGeohash("abc123")
+
+        var changes = 0
+        let cancellable = tracker.objectWillChange.sink { _ in changes += 1 }
+        // Replayed history from ten minutes ago doesn't make its author present
+        // (nor announce a count change or rebuild the roster).
+        tracker.recordParticipant(pubkeyHex: "pubkey1", seenAt: Date().addingTimeInterval(-600))
+
+        #expect(tracker.participantCount(for: "abc123") == 0)
+        #expect(tracker.visiblePeople.isEmpty)
+        #expect(changes == 0)
+        _ = cancellable
+    }
+
+    /// The inbound pipeline marks a teleport tag only when the activity
+    /// carrying it counted. Activity that makes no one present must report
+    /// false, or its tag leaves a marker the roster never prunes; activity
+    /// from someone already present must report true, or their live teleport
+    /// tags would stop marking them.
+    @Test func recordParticipant_reportsWhetherTheActivityCounted() async {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        let now = Date()
+
+        // No channel open: nothing is recorded.
+        #expect(!tracker.recordParticipant(pubkeyHex: "pubkey1"))
+
+        tracker.setActiveGeohash("abc123")
+        #expect(!tracker.recordParticipant(pubkeyHex: "pubkey1", seenAt: now.addingTimeInterval(-600)))
+        // Arriving, then a heartbeat from someone already present.
+        #expect(tracker.recordParticipant(pubkeyHex: "pubkey1", seenAt: now.addingTimeInterval(-60)))
+        #expect(tracker.recordParticipant(pubkeyHex: "pubkey1"))
+        // A late copy of earlier activity that is still inside the window.
+        #expect(tracker.recordParticipant(pubkeyHex: "pubkey1", seenAt: now.addingTimeInterval(-200)))
+        #expect(tracker.participantCount(for: "abc123") == 1)
+    }
+
+    @Test func recordParticipant_neverMovesActivityBackwards() async {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        tracker.setActiveGeohash("abc123")
+        let now = Date()
+
+        tracker.recordParticipant(pubkeyHex: "older", seenAt: now.addingTimeInterval(-120))
+        tracker.recordParticipant(pubkeyHex: "newer", seenAt: now.addingTimeInterval(-60))
+        // A late copy of an earlier event from "newer" must not demote them.
+        tracker.recordParticipant(pubkeyHex: "newer", seenAt: now.addingTimeInterval(-200))
+
+        #expect(tracker.getVisiblePeople().map(\.id) == ["newer", "older"])
+    }
+
+    @Test func recordParticipant_clampsFutureTimestampsToNow() async {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        tracker.setActiveGeohash("abc123")
+
+        tracker.recordParticipant(pubkeyHex: "skewed", seenAt: Date().addingTimeInterval(3600))
+
+        #expect(tracker.getVisiblePeople().first.map { $0.lastSeen <= Date() } == true)
+    }
+
+    @Test func repeatActivity_doesNotRepublishTheRoster() async {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        tracker.setActiveGeohash("abc123")
+        tracker.recordParticipant(pubkeyHex: "pubkey1")
+        tracker.recordParticipant(pubkeyHex: "pubkey2")
+
+        var publishes = 0
+        let cancellable = tracker.$visiblePeople.dropFirst().sink { _ in publishes += 1 }
+        // Heartbeats and messages from people already present.
+        tracker.recordParticipant(pubkeyHex: "pubkey1")
+        tracker.recordParticipant(pubkeyHex: "pubkey2")
+        tracker.refresh()
+
+        #expect(publishes == 0)
+        _ = cancellable
+    }
+
+    @Test func displayNameChange_republishesTheRoster() async {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        tracker.setActiveGeohash("abc123")
+        tracker.recordParticipant(pubkeyHex: "pubkey1")
+        #expect(tracker.visiblePeople.first?.displayName.hasPrefix("anon#") == true)
+
+        context.nicknameMap["pubkey1"] = "alice"
+        tracker.noteDisplayNameChanged(pubkeyHex: "pubkey1")
+
+        #expect(tracker.visiblePeople.first?.displayName.hasPrefix("alice#") == true)
+    }
+
+    @Test func pruneExpired_dropsEntriesThatAgedOut() async {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        let now = Date()
+        tracker.recordParticipant(pubkeyHex: "quiet", geohash: "geo1", seenAt: now.addingTimeInterval(-200))
+        tracker.recordParticipant(pubkeyHex: "chatty", geohash: "geo1", seenAt: now)
+        tracker.recordParticipant(pubkeyHex: "gone", geohash: "geo2", seenAt: now.addingTimeInterval(-200))
+
+        // Two minutes on, "quiet" and "gone" are past the five-minute window.
+        tracker.pruneExpired(now: now.addingTimeInterval(120))
+
+        #expect(tracker.participantCount(for: "geo1") == 1)
+        #expect(tracker.participantCount(for: "geo2") == 0)
+    }
+
+    @Test func objectWillChange_firesOnlyWhenSomeoneNewlyCounts() async {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+
+        var changes = 0
+        let cancellable = tracker.objectWillChange.sink { _ in changes += 1 }
+        tracker.recordParticipant(pubkeyHex: "pubkey1", geohash: "geo1")
+        let afterJoin = changes
+        tracker.recordParticipant(pubkeyHex: "pubkey1", geohash: "geo1")
+
+        #expect(afterJoin >= 1)
+        #expect(changes == afterJoin)
+        _ = cancellable
     }
 
     // MARK: - GeoPerson Tests

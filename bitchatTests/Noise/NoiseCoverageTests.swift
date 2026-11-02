@@ -893,6 +893,44 @@ struct NoiseCoverageTests {
         }
     }
 
+    @Test("A continuously active session still schedules a rekey before it hard-expires")
+    func continuouslyActiveSessionStillNeedsRenegotiationBeforeExpiry() throws {
+        // A session with steady traffic never goes idle, so lastActivityTime
+        // stays fresh right up to the moment sessionStartTime crosses the
+        // hard sessionTimeout cutoff above and encrypt/decrypt start throwing
+        // sessionExpired on every call. needsRenegotiation() has to notice
+        // the session is old on its own -- it can't rely on the idle check,
+        // because there is no idle time to find.
+        let session = SecureNoiseSession(
+            peerID: alicePeerID,
+            role: .initiator,
+            keychain: keychain,
+            localStaticKey: aliceStaticKey
+        )
+        let responder = SecureNoiseSession(
+            peerID: bobPeerID,
+            role: .responder,
+            keychain: keychain,
+            localStaticKey: bobStaticKey
+        )
+        try establishSessions(initiator: session, responder: responder)
+
+        // Just under the hard cutoff, but past the 90% rekey threshold.
+        session.setSessionStartTimeForTesting(
+            Date().addingTimeInterval(-(NoiseSecurityConstants.sessionTimeout * 0.95))
+        )
+        session.setLastActivityTimeForTesting(Date())
+        session.setMessageCountForTesting(0)
+
+        #expect(session.needsRenegotiation())
+
+        // The session is still within its hard cutoff, so it must keep
+        // working right up until a rekey actually replaces it -- the fix is
+        // to schedule the rekey earlier, not to expire the session sooner.
+        let ciphertext = try session.encrypt(Data("still working".utf8))
+        #expect(try responder.decrypt(ciphertext) == Data("still working".utf8))
+    }
+
     @Test("Rate limiter handles global message caps and per-peer resets")
     func rateLimiterGlobalMessageCapAndReset() async throws {
         let globalLimiter = NoiseRateLimiter()
