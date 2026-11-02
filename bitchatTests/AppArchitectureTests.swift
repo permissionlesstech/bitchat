@@ -527,6 +527,8 @@ struct AppArchitectureTests {
     @Test("Instant mode wipes without asking")
     @MainActor
     func panicGestureInstantWipesImmediately() {
+        let gestureMode = PanicGestureModeSnapshot()
+        defer { gestureMode.restore() }
         let viewModel = makeArchitectureViewModel()
         let defaults = makeIsolatedPanicGestureDefaults()
         PanicGestureSettings.setMode(.instant, in: defaults)
@@ -568,6 +570,8 @@ struct AppArchitectureTests {
     @Test("Panic wipe dismisses chrome sheets so its outcome is visible")
     @MainActor
     func panicWipeDismissesChromePresentation() {
+        let gestureMode = PanicGestureModeSnapshot()
+        defer { gestureMode.restore() }
         let viewModel = makeArchitectureViewModel()
         let privateInboxModel = PrivateInboxModel(conversations: ConversationStore())
         let chromeModel = AppChromeModel(chatViewModel: viewModel, privateInboxModel: privateInboxModel)

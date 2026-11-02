@@ -1993,6 +1993,8 @@ struct ChatViewModelPrivateMediaDeletionTests {
 
     @Test @MainActor
     func panicInvalidatesActiveAndQueuedPrivateChatClears() {
+        let gestureMode = PanicGestureModeSnapshot()
+        defer { gestureMode.restore() }
         let (viewModel, transport) = makeTestableViewModel()
         transport.deferDeletedPrivateMediaPersistence = true
         let firstPeerID = PeerID(str: String(repeating: "4", count: 64))
@@ -2075,20 +2077,17 @@ struct ChatViewModelPrivateMediaDeletionTests {
 
 // MARK: - Panic Clear Tests
 
-/// Two tests here write `panic.gestureMode` in UserDefaults.standard (the
-/// view model's store is fixed). They cannot interleave today because both
-/// are synchronous @MainActor bodies, but that is incidental — serialize so
+/// Most tests here write `panic.gestureMode` in UserDefaults.standard (the
+/// view model's store is fixed). They cannot interleave today because none
+/// awaits inside its @MainActor body, but that is incidental — serialize so
 /// an `await` added later cannot reintroduce the race.
 @Suite(.serialized)
 struct ChatViewModelPanicTests {
 
     @Test @MainActor
     func panicClearAllData_armsTheLogoGestureForTheNextWipe() {
-        // ChatViewModel's store is hardcoded to .standard, so this test must
-        // write the shared preference — restore it, or it leaks into every
-        // later test (and into the developer's test host).
-        let previous = PanicGestureSettings.mode
-        defer { PanicGestureSettings.mode = previous }
+        let gestureMode = PanicGestureModeSnapshot()
+        defer { gestureMode.restore() }
         PanicGestureSettings.mode = .off
         let (viewModel, _) = makeTestableViewModel()
 
@@ -2101,10 +2100,8 @@ struct ChatViewModelPanicTests {
 
     @Test @MainActor
     func panicClearAllData_leavesTheGestureAloneWhenTheWipeDoesNotCommit() {
-        // Writes the shared preference (ChatViewModel's store is fixed), so
-        // restore it — otherwise it leaks into later tests and the test host.
-        let previous = PanicGestureSettings.mode
-        defer { PanicGestureSettings.mode = previous }
+        let gestureMode = PanicGestureModeSnapshot()
+        defer { gestureMode.restore() }
         PanicGestureSettings.mode = .off
         let keychain = MockKeychain()
         keychain.simulatedDeleteAllResult = false
@@ -2121,10 +2118,8 @@ struct ChatViewModelPanicTests {
 
     @Test @MainActor
     func panicClearAllData_armsTheGestureBeforeClearingRecoveryMarkers() {
-        // Writes the shared preference (ChatViewModel's store is fixed), so
-        // restore it — otherwise it leaks into later tests and the test host.
-        let previous = PanicGestureSettings.mode
-        defer { PanicGestureSettings.mode = previous }
+        let gestureMode = PanicGestureModeSnapshot()
+        defer { gestureMode.restore() }
         PanicGestureSettings.mode = .off
         var modeWhenMarkersCleared: PanicGestureMode?
         let operations = PanicRecoveryOperations(
@@ -2151,6 +2146,8 @@ struct ChatViewModelPanicTests {
 
     @Test @MainActor
     func panicClearAllData_finishesMediaWipeBeforeReturning() {
+        let gestureMode = PanicGestureModeSnapshot()
+        defer { gestureMode.restore() }
         var wipeFinished = false
         let (viewModel, _) = makeTestableViewModel(panicMediaWipe: {
             wipeFinished = true
@@ -2163,6 +2160,8 @@ struct ChatViewModelPanicTests {
 
     @Test @MainActor
     func panicClearAllData_stopsNetworkBeforeWipeAndRestartsAfterCommit() {
+        let gestureMode = PanicGestureModeSnapshot()
+        defer { gestureMode.restore() }
         var events: [String] = []
         let lifecycle = PanicNetworkLifecycle(
             stop: { events.append("stop") },
@@ -2219,6 +2218,8 @@ struct ChatViewModelPanicTests {
 
     @Test @MainActor
     func pendingPanicRecoveryCompletesBeforeTransportBootstrap() {
+        let gestureMode = PanicGestureModeSnapshot()
+        defer { gestureMode.restore() }
         var events: [String] = []
         let operations = PanicRecoveryOperations(
             isPending: {
@@ -2304,6 +2305,8 @@ struct ChatViewModelPanicTests {
 
     @Test @MainActor
     func panicClearAllData_delegatesToTransport() async {
+        let gestureMode = PanicGestureModeSnapshot()
+        defer { gestureMode.restore() }
         let (viewModel, transport) = makeTestableViewModel()
 
         // Set up some state
@@ -2345,6 +2348,8 @@ struct ChatViewModelPanicTests {
 
     @Test @MainActor
     func panicClearAllData_resetsLiveGeohashAndNostrState() async throws {
+        let gestureMode = PanicGestureModeSnapshot()
+        defer { gestureMode.restore() }
         let (viewModel, _) = makeTestableViewModel()
         let geohash = "u4pruy"
         let channel = GeohashChannel(level: .city, geohash: geohash)
