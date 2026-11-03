@@ -2173,7 +2173,8 @@ struct ChatViewModelPanicTests {
             wipeGossip: { wipe(2) },
             wipeGroups: { wipe(3) },
             wipeBoard: { wipe(4) },
-            wipeEvents: { wipe(5) }
+            wipeEvents: { wipe(5) },
+            wipePrekeys: { true }
         )
         let recovery = PanicRecoveryOperations(
             isPending: { pending },
@@ -2257,7 +2258,8 @@ struct ChatViewModelPanicTests {
         let metadata = PanicMetadataWipeOperations(
             wipeCourier: { wipe(0) }, wipeBridge: { wipe(1) },
             wipeGossip: { wipe(2) }, wipeGroups: { wipe(3) },
-            wipeBoard: { wipe(4) }, wipeEvents: { wipe(5) }
+            wipeBoard: { wipe(4) }, wipeEvents: { wipe(5) },
+            wipePrekeys: { true }
         )
         var pending = false
         var mediaAttempts = 0
@@ -2331,7 +2333,8 @@ struct ChatViewModelPanicTests {
         let metadata = PanicMetadataWipeOperations(
             wipeCourier: { wipe(0) }, wipeBridge: { wipe(1) },
             wipeGossip: { wipe(2) }, wipeGroups: { wipe(3) },
-            wipeBoard: { wipe(4) }, wipeEvents: { wipe(5) }
+            wipeBoard: { wipe(4) }, wipeEvents: { wipe(5) },
+            wipePrekeys: { true }
         )
         let recovery = PanicRecoveryOperations(
             isPending: { pending },
