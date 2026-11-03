@@ -91,7 +91,8 @@ final class MessageOutboxStore {
         let unseenDurable: Snapshot
     }
 
-    private let fileURL: URL?
+    private var fileURL: URL?
+    private let resolveDefaultFileURL: () -> URL?
     private let keychain: KeychainManagerProtocol
     private let readData: (URL) throws -> Data
     private let writeData: (Data, URL, Data.WritingOptions) throws -> Void
@@ -149,10 +150,13 @@ final class MessageOutboxStore {
         writeData: @escaping (Data, URL, Data.WritingOptions) throws -> Void = {
             try $0.write(to: $1, options: $2)
         },
-        beforeRecoveryNotification: @escaping () -> Void = {}
+        beforeRecoveryNotification: @escaping () -> Void = {},
+        resolveDefaultFileURL: (() -> URL?)? = nil
     ) {
         self.keychain = keychain
-        self.fileURL = fileURL ?? Self.defaultFileURL()
+        let resolver = resolveDefaultFileURL ?? Self.defaultFileURL
+        self.resolveDefaultFileURL = resolver
+        self.fileURL = fileURL ?? resolver()
         self.readData = readData
         self.writeData = writeData
         self.beforeRecoveryNotification = beforeRecoveryNotification
@@ -593,8 +597,9 @@ final class MessageOutboxStore {
         return recovered?.snapshot
     }
 
-    /// Panic wipe: drop the queued mail and the key that could ever read it.
-    func wipe() {
+    /// Clears queued mail and attempts key removal; returns the file-cleanup result.
+    @discardableResult
+    func wipe() -> Bool {
         lock.lock()
         diskState = .loaded
         cachedSnapshot = [:]
@@ -608,11 +613,10 @@ final class MessageOutboxStore {
         recoveryRouterSnapshot = [:]
         unreportedRecoveredSnapshot = nil
         lifecycleGeneration &+= 1
-        if let fileURL {
-            try? FileManager.default.removeItem(at: fileURL)
-        }
+        let removed = PanicFileDeletion.remove(&fileURL, resolvingWith: resolveDefaultFileURL)
         keychain.delete(key: Self.keychainKey, service: Self.keychainService)
         lock.unlock()
+        return removed
     }
 
     // MARK: - Internals

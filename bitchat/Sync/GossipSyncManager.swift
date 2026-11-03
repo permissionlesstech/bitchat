@@ -135,6 +135,7 @@ final class GossipSyncManager {
     // sender while the owner is away.
     private var latestPrekeyBundleByPeer: [PeerID: (id: String, packet: BitchatPacket)] = [:]
     private var archiveDirty = false
+    private var stoppedForPanic = false
 
     // Timer
     private var periodicTimer: DispatchSourceTimer?
@@ -197,6 +198,15 @@ final class GossipSyncManager {
 
     func stop() {
         periodicTimer?.cancel(); periodicTimer = nil
+    }
+
+    /// Retire this owner after its earlier persistence finishes. The caller
+    /// removes the archive after this returns, while transport admission is closed.
+    func stopForPanic() {
+        stop()
+        queue.sync {
+            stoppedForPanic = true
+        }
     }
 
     func scheduleInitialSyncToPeer(_ peerID: PeerID, delaySeconds: TimeInterval = 5.0) {
@@ -685,6 +695,7 @@ final class GossipSyncManager {
     }
 
     private func persistArchiveIfDirty() {
+        guard !stoppedForPanic else { return }
         guard archiveDirty, let archive else { return }
         archiveDirty = false
         let packets = messages.allPackets(isFresh: isPacketFresh)
