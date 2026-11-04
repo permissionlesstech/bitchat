@@ -28,13 +28,16 @@ struct ContentComposerView: View {
     @Binding var showMacImagePicker: Bool
     #endif
 
+    @State private var mentionSelection = NSRange(location: 0, length: 0)
+    @State private var mentionInputText: String?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if conversationUIModel.showAutocomplete && !conversationUIModel.autocompleteSuggestions.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(conversationUIModel.autocompleteSuggestions.prefix(4).enumerated()), id: \.element) { index, suggestion in
                         Button(action: {
-                            _ = conversationUIModel.completeNickname(suggestion, in: &messageText)
+                            completeMention(suggestion)
                         }) {
                             HStack {
                                 Text(suggestion)
@@ -66,12 +69,7 @@ struct ContentComposerView: View {
             }
 
             HStack(alignment: .center, spacing: 4) {
-                TextField(
-                    "",
-                    text: $messageText,
-                    prompt: Text(placeholderText)
-                        .foregroundColor(palette.secondary.opacity(0.6))
-                )
+                composerField
                 .textFieldStyle(.plain)
                 .bitchatFont(size: 15)
                 .foregroundColor(palette.primary)
@@ -88,7 +86,7 @@ struct ContentComposerView: View {
                         conversationUIModel.moveAutocompleteSelection(by: delta)
                     },
                     onAccept: {
-                        conversationUIModel.completeSelectedSuggestion(in: &messageText)
+                        completeHighlightedMention()
                     },
                     onDismiss: {
                         conversationUIModel.dismissAutocomplete()
@@ -100,7 +98,7 @@ struct ContentComposerView: View {
                 .onSubmit {
                     if conversationUIModel.showAutocomplete,
                        !conversationUIModel.autocompleteSuggestions.isEmpty,
-                       conversationUIModel.completeSelectedSuggestion(in: &messageText) {
+                       completeHighlightedMention() {
                         return
                     }
                     onSendMessage()
@@ -116,13 +114,20 @@ struct ContentComposerView: View {
                 .modifier(FocusEffectDisabledModifier())
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .onChange(of: messageText) { newValue in
+                    #if os(iOS)
+                    if newValue != mentionInputText {
+                        mentionSelection = NSRange(location: newValue.utf16.count, length: 0)
+                        conversationUIModel.dismissAutocomplete()
+                    }
+                    #else
                     autocompleteDebounceTimer?.invalidate()
                     autocompleteDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
-                        let cursorPosition = newValue.count
+                        let cursorPosition = mentionCursor(in: newValue)
                         Task { @MainActor in
                             conversationUIModel.updateAutocomplete(for: newValue, cursorPosition: cursorPosition)
                         }
                     }
+                    #endif
                 }
 
                 HStack(alignment: .center, spacing: 4) {
@@ -142,13 +147,79 @@ struct ContentComposerView: View {
         .padding(.top, theme.usesGlassChrome ? 8 : 6)
         .padding(.bottom, 8)
         .themedChromePanel(edge: .bottom)
+        .onAppear {
+            #if os(iOS)
+            mentionSelection = NSRange(location: messageText.utf16.count, length: 0)
+            conversationUIModel.dismissAutocomplete()
+            #endif
+        }
+        .onChange(of: locationChannelsModel.selectedChannel) { _ in
+            #if os(iOS)
+            conversationUIModel.dismissAutocomplete()
+            #endif
+        }
+        .onChange(of: privateConversationModel.selectedPeerID) { _ in
+            #if os(iOS)
+            conversationUIModel.dismissAutocomplete()
+            #endif
+        }
         .onDisappear {
             autocompleteDebounceTimer?.invalidate()
+            #if os(iOS)
+            conversationUIModel.dismissAutocomplete()
+            #endif
         }
     }
 }
 
 private extension ContentComposerView {
+    @ViewBuilder
+    var composerField: some View {
+        #if os(iOS)
+        MentionTextField(text: $messageText, selection: $mentionSelection,
+                         focused: Binding(get: { isTextFieldFocused.wrappedValue }, set: { isTextFieldFocused.wrappedValue = $0 }),
+                         placeholder: placeholderText, placeholderColor: UIColor(palette.secondary.opacity(0.6)),
+                         color: UIColor(palette.primary), monospaced: !theme.usesGlassChrome,
+                         hasSuggestions: { conversationUIModel.showAutocomplete },
+                         moveSuggestion: { conversationUIModel.moveAutocompleteSelection(by: $0) },
+                         acceptSuggestion: { _ = completeHighlightedMention() },
+                         dismissSuggestions: { conversationUIModel.dismissAutocomplete() },
+                         onSelection: { text, cursor in
+                             mentionInputText = text
+                             if cursor < 0 { conversationUIModel.dismissAutocomplete() }
+                             else { conversationUIModel.updateAutocomplete(for: text, cursorPosition: cursor) }
+                         }, onReturn: {
+                             if !completeHighlightedMention() { onSendMessage() }
+                         })
+        #else
+        TextField("", text: $messageText, prompt: Text(placeholderText).foregroundColor(palette.secondary.opacity(0.6)))
+        #endif
+    }
+
+    func mentionCursor(in text: String) -> Int {
+        #if os(iOS)
+        let offset = min(mentionSelection.location, text.utf16.count)
+        let index = String.Index(utf16Offset: offset, in: text)
+        return text.distance(from: text.startIndex, to: index)
+        #else
+        return text.count
+        #endif
+    }
+
+    func completeMention(_ suggestion: String) {
+        let range = conversationUIModel.mentionReplacementRange
+        _ = conversationUIModel.completeNickname(suggestion, in: &messageText)
+        mentionInputText = messageText
+        if let range { mentionSelection = NSRange(location: range.location + suggestion.utf16.count, length: 0) }
+    }
+
+    func completeHighlightedMention() -> Bool {
+        guard conversationUIModel.showAutocomplete,
+              conversationUIModel.autocompleteSuggestions.indices.contains(conversationUIModel.selectedAutocompleteIndex) else { return false }
+        completeMention(conversationUIModel.autocompleteSuggestions[conversationUIModel.selectedAutocompleteIndex])
+        return true
+    }
+
     /// The nearby-only scope toggle appears only where it means something:
     /// the public mesh channel with the bridge on.
     var showsNearbyOnlyToggle: Bool {
@@ -504,3 +575,129 @@ private struct AutocompleteKeyboardNavigationModifier: ViewModifier {
     }
     #endif
 }
+
+#if os(iOS)
+/// Selection is supplied by UIKit on the minimum supported iOS version.
+private struct MentionTextField: UIViewRepresentable {
+    @Binding var text: String
+    @Binding var selection: NSRange
+    @Binding var focused: Bool
+    let placeholder: String
+    let placeholderColor: UIColor
+    let color: UIColor
+    let monospaced: Bool
+    let hasSuggestions: () -> Bool
+    let moveSuggestion: (Int) -> Void
+    let acceptSuggestion: () -> Void
+    let dismissSuggestions: () -> Void
+    let onSelection: (String, Int) -> Void
+    let onReturn: () -> Void
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    func makeUIView(context: Context) -> UITextField {
+        let field = MentionNativeField()
+        field.delegate = context.coordinator
+        field.addTarget(context.coordinator, action: #selector(Coordinator.edit(_:)), for: .editingChanged)
+        field.adjustsFontForContentSizeCategory = true
+        field.autocorrectionType = .no
+        field.autocapitalizationType = .sentences
+        field.returnKeyType = .send
+        field.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return field
+    }
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextField, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? max(0, uiView.intrinsicContentSize.width),
+               height: uiView.intrinsicContentSize.height)
+    }
+
+    func updateUIView(_ field: UITextField, context: Context) {
+        context.coordinator.parent = self
+        context.coordinator.updating = true
+        defer { context.coordinator.updating = false }
+        if let native = field as? MentionNativeField {
+            native.hasSuggestions = hasSuggestions
+            native.moveSuggestion = moveSuggestion
+            native.acceptSuggestion = acceptSuggestion
+            native.dismissSuggestions = dismissSuggestions
+        }
+        field.textColor = color
+        let descriptor = UIFont.preferredFont(forTextStyle: .subheadline).fontDescriptor
+        field.font = UIFont(descriptor: monospaced ? (descriptor.withDesign(.monospaced) ?? descriptor) : descriptor, size: 0)
+        field.attributedPlaceholder = NSAttributedString(
+            string: placeholder, attributes: [.foregroundColor: placeholderColor]
+        )
+        if field.text != text {
+            if field.markedTextRange != nil { field.unmarkText() }
+            field.text = text
+        }
+        if field.markedTextRange == nil {
+            if let a = field.position(from: field.beginningOfDocument, offset: min(selection.location, text.utf16.count)),
+               let b = field.position(from: a, offset: min(selection.length, text.utf16.count - min(selection.location, text.utf16.count))) {
+                field.selectedTextRange = field.textRange(from: a, to: b)
+            }
+        }
+
+    }
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        var parent: MentionTextField
+        var updating = false
+        init(_ parent: MentionTextField) { self.parent = parent }
+        @objc func edit(_ field: UITextField) { publish(field) }
+        func textFieldDidChangeSelection(_ field: UITextField) { publish(field) }
+        func publish(_ field: UITextField) {
+            guard !updating else { return }
+            if field.markedTextRange != nil {
+                parent.text = field.text ?? ""
+                parent.onSelection(parent.text, -1)
+                return
+            }
+            guard let range = field.selectedTextRange else { return }
+            parent.selection = NSRange(location: field.offset(from: field.beginningOfDocument, to: range.start), length: field.offset(from: range.start, to: range.end))
+            parent.text = field.text ?? ""
+            // Completion replaces the fragment before the caret, not selected text or a name suffix.
+            guard parent.selection.length == 0,
+                  let caret = Range(parent.selection, in: parent.text)?.lowerBound else {
+                parent.onSelection(parent.text, -1)
+                return
+            }
+            if let next = parent.text[caret...].first,
+               next.isLetter || next.isNumber || next == "_" || next == "#" {
+                parent.onSelection(parent.text, -1)
+                return
+            }
+            parent.onSelection(parent.text, parent.text[..<caret].count)
+        }
+        func textFieldDidBeginEditing(_ field: UITextField) { if !updating { parent.focused = true } }
+        func textFieldDidEndEditing(_ field: UITextField) { if !updating { parent.focused = false } }
+        func textFieldShouldReturn(_ field: UITextField) -> Bool { parent.onReturn(); return false }
+    }
+}
+#endif
+
+#if os(iOS)
+private final class MentionNativeField: UITextField {
+    var hasSuggestions: () -> Bool = { false }
+    var moveSuggestion: (Int) -> Void = { _ in }
+    var acceptSuggestion: () -> Void = {}
+    var dismissSuggestions: () -> Void = {}
+    override var keyCommands: [UIKeyCommand]? {
+        guard hasSuggestions(), markedTextRange == nil else { return super.keyCommands }
+        let keys = [UIKeyCommand.inputUpArrow, UIKeyCommand.inputDownArrow, "\t", UIKeyCommand.inputEscape]
+        return keys.map {
+            let command = UIKeyCommand(input: $0, modifierFlags: [], action: #selector(mentionKey(_:)))
+            command.wantsPriorityOverSystemBehavior = true
+            return command
+        }
+    }
+    @objc private func mentionKey(_ command: UIKeyCommand) {
+        guard hasSuggestions(), markedTextRange == nil else { return }
+        switch command.input {
+        case UIKeyCommand.inputUpArrow: moveSuggestion(-1)
+        case UIKeyCommand.inputDownArrow: moveSuggestion(1)
+        case "\t": acceptSuggestion()
+        case UIKeyCommand.inputEscape: dismissSuggestions()
+        default: break
+        }
+    }
+}
+#endif
