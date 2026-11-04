@@ -322,6 +322,15 @@ final class MessageDeduplicationService {
         return nostrEventStore?.wipe() ?? true
     }
 
+    @MainActor
+    func clearAllAsync() async -> Bool {
+        contentCache.clear()
+        nostrEventCache.clear()
+        nostrAckCache.clear()
+        pendingPersistIDs.removeAll()
+        return await nostrEventStore?.wipeAsync() ?? true
+    }
+
     /// Clears only the in-memory Nostr caches (events and ACKs). Runs on
     /// every geohash channel switch, so the disk record deliberately
     /// survives — wiping it here would forfeit cross-launch private-envelope dedup

@@ -649,6 +649,7 @@ private struct SeededGenerator: RandomNumberGenerator {
 /// the coordinator's own pipeline.
 @MainActor
 private final class PerfNostrContext: ChatNostrContext {
+    var networkActivationAllowed: Bool { true }
     var activeChannel: ChannelID = .location(GeohashChannel(level: .neighborhood, geohash: "u4pruyd"))
     var currentGeohash: String? = "u4pruyd"
     var geoSubscriptionID: String?

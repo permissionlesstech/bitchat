@@ -13,5 +13,5 @@ struct PanicMetadataWipeOperations {
     var wipeGossip: () -> Bool
     var wipeGroups: () -> Bool
     var wipeBoard: () -> Bool
-    var wipeEvents: () -> Bool
+    var wipeEvents: @MainActor () async -> Bool
 }

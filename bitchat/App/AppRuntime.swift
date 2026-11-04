@@ -32,6 +32,7 @@ final class AppRuntime: ObservableObject {
     private let idBridge: NostrIdentityBridge
     private var cancellables = Set<AnyCancellable>()
     private var started = false
+    private var startRequested = false
     private var lastNostrRelayConnectedState = false
     private var didHandleInitialNostrConnection = false
 
@@ -127,6 +128,7 @@ final class AppRuntime: ObservableObject {
     }
 
     func start() {
+        startRequested = true
         guard chatViewModel.networkActivationAllowed else { return }
         guard !started else {
             checkForSharedContent()
@@ -297,6 +299,16 @@ final class AppRuntime: ObservableObject {
 
 private extension AppRuntime {
     func bindRuntimeObservers() {
+        chatViewModel.$panicRecoveryBlocked
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] blocked in
+                guard !blocked, let self, self.startRequested else { return }
+                self.start()
+            }
+            .store(in: &cancellables)
+
         NostrRelayManager.shared.$isConnected
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isConnected in

@@ -199,7 +199,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     let unifiedPeerService: UnifiedPeerService
     let autocompleteService: AutocompleteService
     let deduplicationService: MessageDeduplicationService  // internal for test access
-    private lazy var outgoingCoordinator = ChatOutgoingCoordinator(context: self)
+    private(set) lazy var outgoingCoordinator = ChatOutgoingCoordinator(context: self)
     private lazy var lifecycleCoordinator = ChatLifecycleCoordinator(context: self)
     private lazy var transportEventCoordinator = ChatTransportEventCoordinator(context: self)
     private lazy var peerListCoordinator = ChatPeerListCoordinator(context: self)
@@ -332,7 +332,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     private let panicMetadataWipeOperations: PanicMetadataWipeOperations?
     private let panicRecoveryOperations: PanicRecoveryOperations
     private let panicNetworkLifecycle: PanicNetworkLifecycle
-    private var isPanicResetting = false
+    @Published private(set) var isPanicResetting = false
+    private(set) var startupPanicRecovery: Task<Bool, Never>?
+    private var bootstrapConfigured = false
     /// Private group membership: keys in the keychain, metadata on disk.
     let groupStore: GroupStore
     private let nicknameKey = "bitchat.nickname"
@@ -1238,12 +1240,18 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
                 "Pending panic recovery detected; wiping before runtime services start",
                 category: .security
             )
-            _ = panicClearAllData(restartServices: false)
+            startupPanicRecovery = beginPanicClearAllData(restartServices: false)
         }
 
         if networkActivationAllowed {
-            ChatViewModelBootstrapper(viewModel: self).configure()
+            configureAfterRecoveryIfNeeded()
         }
+    }
+
+    private func configureAfterRecoveryIfNeeded() {
+        guard !bootstrapConfigured else { return }
+        bootstrapConfigured = true
+        ChatViewModelBootstrapper(viewModel: self).configure()
     }
 
     // MARK: - Deinitialization
@@ -1315,12 +1323,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     ///         Routes to private chat if one is selected, otherwise broadcasts
     @MainActor
     func sendMessage(_ content: String) {
+        guard networkActivationAllowed else { return }
         outgoingCoordinator.sendMessage(content)
     }
 
     /// Sends a 👋 to the mesh channel regardless of the active channel.
     @MainActor
     func sendMeshWave() {
+        guard networkActivationAllowed else { return }
         outgoingCoordinator.sendMeshWave()
     }
 
@@ -1561,27 +1571,41 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     // PANIC: Emergency data clearing for activist safety
     @MainActor
     @discardableResult
-    func panicClearAllData(restartServices: Bool = true) -> Bool {
+    func panicClearAllData(restartServices: Bool = true) async -> Bool {
+        guard let task = beginPanicClearAllData(restartServices: restartServices) else { return false }
+        return await task.value
+    }
+
+    /// Establish the recovery boundary synchronously at the confirmed UI action.
+    /// The returned task owns cleanup even if its caller stops awaiting it.
+    @MainActor
+    func beginPanicClearAllData(restartServices: Bool = true) -> Task<Bool, Never>? {
+        guard !isPanicResetting else { return nil }
         panicRecoveryBlocked = true
         isPanicResetting = true
-        defer { isPanicResetting = false }
 
         // Stop internet and location-presence work before clearing identity or
         // state. These services cancel their subscriptions and delayed tasks,
         // so old callbacks cannot reconnect during the transaction.
         panicNetworkLifecycle.stop()
 
+        // IMPORTANT: Clear Nostr-related state
+        // Drop relay subscriptions, handlers, pending sends, and replay state.
+        // Geohash DM handlers can capture pre-wipe Nostr identities, so a plain
+        // disconnect is not enough here.
+        NostrRelayManager.shared.resetForPanicWipe()
+        // Clearing relay handlers stops NEW events, but a detached gift-wrap
+        // decrypt spawned just before the wipe still holds a pre-wipe key and
+        // ciphertext; bump the pipeline's wipe generation so its result is
+        // dropped at the main-actor delivery hop instead of landing here.
+        nostrCoordinator.inbound.invalidateInFlightDecrypts()
+        outgoingCoordinator.resetForPanic()
+        nostrRelayManager = nil
+
+
         // Establish both independent durable intents before erasing anything.
         // `wipeMedia` will still attempt deletion if neither write succeeds.
         let recoveryIntent = panicRecoveryOperations.begin()
-
-        // Quiesce the mesh before clearing stores. Identity replacement below
-        // deliberately stays stopped until media deletion and marker commit.
-        if let panicTransport = meshService as? PanicResettingTransport {
-            panicTransport.suspendForPanicReset()
-        } else {
-            meshService.emergencyDisconnectAll()
-        }
 
         // Invalidate detached media preparation and close live capture file
         // handles before clearing state or removing the media directory.
@@ -1598,9 +1622,31 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         // Clear all messages (public timelines and private chats live in the
         // single-writer ConversationStore; the derived `messages` view and
         // the legacy mirror empty with it)
+        publicMessagePipeline.resetForPanic()
         conversations.clearAll()
         pendingGeohashSystemMessages.removeAll()
 
+        // Quiesce the mesh before clearing stores. Identity replacement below
+        // deliberately stays stopped until media deletion and marker commit.
+        let retirement: Task<Void, Never>?
+        if let panicTransport = meshService as? PanicResettingTransport {
+            retirement = panicTransport.beginPanicReset()
+        } else {
+            meshService.emergencyDisconnectAll()
+            retirement = nil
+        }
+        return Task { @MainActor [self] in
+            defer { isPanicResetting = false }
+            await retirement?.value
+            return await finishPanicClearAllData(recoveryIntent, restartServices: restartServices)
+        }
+    }
+
+    @MainActor
+    private func finishPanicClearAllData(
+        _ recoveryIntent: PanicRecoveryIntent,
+        restartServices: Bool
+    ) async -> Bool {
         // Delete all keychain data (including Noise and Nostr keys)
         let keychainWipeCompleted = keychain.deleteAllKeychainData()
         if !keychainWipeCompleted {
@@ -1700,19 +1746,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
         // Clear read receipt tracking
         sentReadReceipts.removeAll()
-        metadataWipeCompleted = (panicMetadataWipeOperations?.wipeEvents() ?? deduplicationService.clearAll()) && metadataWipeCompleted
-
-        // IMPORTANT: Clear Nostr-related state
-        // Drop relay subscriptions, handlers, pending sends, and replay state.
-        // Geohash DM handlers can capture pre-wipe Nostr identities, so a plain
-        // disconnect is not enough here.
-        NostrRelayManager.shared.resetForPanicWipe()
-        // Clearing relay handlers stops NEW events, but a detached gift-wrap
-        // decrypt spawned just before the wipe still holds a pre-wipe key and
-        // ciphertext; bump the pipeline's wipe generation so its result is
-        // dropped at the main-actor delivery hop instead of landing here.
-        nostrCoordinator.inbound.invalidateInFlightDecrypts()
-        nostrRelayManager = nil
+        let eventCleanupCompleted: Bool
+        if let operations = panicMetadataWipeOperations {
+            eventCleanupCompleted = await operations.wipeEvents()
+        } else {
+            eventCleanupCompleted = await deduplicationService.clearAllAsync()
+        }
+        metadataWipeCompleted = eventCleanupCompleted && metadataWipeCompleted
 
         // Clear Nostr identity associations
         idBridge.clearAllAssociations()
@@ -1728,9 +1768,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             meshService.setNickname(nickname)
         }
 
-        // The wipe must finish before this security action returns. A detached
-        // task could otherwise lose a race with a new capture or app exit and
-        // leave pre-panic media behind.
+        // Keep admission closed and recovery pending until file cleanup and
+        // the recovery-marker commit have both finished.
         let panicCompleted: Bool
         do {
             try panicRecoveryOperations.wipeMedia(recoveryIntent)
@@ -1766,18 +1805,23 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         guard panicCompleted else { return false }
 
         if let panicTransport = meshService as? PanicResettingTransport {
-            // Startup recovery reopens admission but leaves actual service
-            // start to the bootstrapper immediately after this method.
+            // Startup recovery reopens admission here; the bootstrapper below
+            // starts services if initialization has not finished yet.
             panicTransport.completePanicReset(
-                restartServices: restartServices
+                restartServices: restartServices && bootstrapConfigured
             )
         }
+
+        // A failed startup attempt leaves the service graph unwired. The first
+        // successful retry must configure it before ordinary runtime work resumes.
+        let wasConfigured = bootstrapConfigured
+        configureAfterRecoveryIfNeeded()
 
         if restartServices {
             // All persistent state and media are gone. Bring each service back
             // only now, under the new identity — a panic-resetting transport
             // owns its own restart sequencing above.
-            if !(meshService is PanicResettingTransport) {
+            if wasConfigured && !(meshService is PanicResettingTransport) {
                 meshService.startServices()
             }
 
@@ -2054,6 +2098,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
     @MainActor
     func didReceiveTransportEvent(_ event: TransportEvent) {
+        guard networkActivationAllowed else { return }
         switch event {
         case .messageReceived(let message):
             _ = didReceiveTransportMessageSynchronously(message)
@@ -2159,13 +2204,15 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
     func didReceiveGroupMessage(payload: Data, timestamp: Date) {
         Task { @MainActor [weak self] in
-            self?.groupCoordinator.handleGroupMessagePayload(payload, timestamp: timestamp)
+            guard let self, self.networkActivationAllowed else { return }
+            self.groupCoordinator.handleGroupMessagePayload(payload, timestamp: timestamp)
         }
     }
 
     func didReceivePublicVoiceFrame(from peerID: PeerID, nickname: String, payload: Data, timestamp: Date) {
         Task { @MainActor [weak self] in
-            self?.liveVoiceCoordinator.handlePublicVoiceFramePayload(
+            guard let self, self.networkActivationAllowed else { return }
+            self.liveVoiceCoordinator.handlePublicVoiceFramePayload(
                 from: peerID,
                 nickname: nickname,
                 payload: payload,
@@ -2332,6 +2379,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     /// Handle incoming public message
     @MainActor
     func handlePublicMessage(_ message: BitchatMessage) {
+        guard networkActivationAllowed else { return }
         // Bridge hints are unauthenticated and may never suppress a genuine
         // BLE sender. Once the radio packet has passed BLE signature checks,
         // replace any earlier bridge alias before this row is enqueued.
@@ -2350,6 +2398,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     /// difficulty; sufficient PoW relaxes the per-sender rate limit.
     @MainActor
     func handlePublicMessage(_ message: BitchatMessage, powBits: Int) {
+        guard networkActivationAllowed else { return }
         publicConversationCoordinator.handlePublicMessage(message, powBits: powBits)
     }
 

@@ -139,12 +139,14 @@ final class GossipSyncManager {
 
     // Timer
     private var periodicTimer: DispatchSourceTimer?
-    private let queue = DispatchQueue(label: "mesh.sync", qos: .utility)
+    private let queue: DispatchQueue
     private var lastStalePeerCleanup: Date = .distantPast
     private var syncSchedules: [SyncSchedule] = []
     private var responseRateLimiter: SyncResponseRateLimiter
 
-    init(myPeerID: PeerID, config: Config = Config(), requestSyncManager: RequestSyncManager, archive: GossipMessageArchive? = nil) {
+    init(myPeerID: PeerID, config: Config = Config(), requestSyncManager: RequestSyncManager, archive: GossipMessageArchive? = nil,
+         queue: DispatchQueue = DispatchQueue(label: "mesh.sync", qos: .utility)) {
+        self.queue = queue
         self.myPeerID = myPeerID
         self.config = config
         self.requestSyncManager = requestSyncManager
@@ -200,12 +202,28 @@ final class GossipSyncManager {
         periodicTimer?.cancel(); periodicTimer = nil
     }
 
-    /// Retire this owner after its earlier persistence finishes. The caller
-    /// removes the archive after this returns, while transport admission is closed.
+    /// Retire this owner after its earlier persistence finishes.
+    /// The panic controller deletes the archive after this method returns.
     func stopForPanic() {
         stop()
         queue.sync {
             stoppedForPanic = true
+        }
+    }
+
+    /// Retires persistence in queue order without blocking the caller.
+    @MainActor
+    func stopForPanicAsync() async {
+        stop()
+        await withCheckedContinuation { continuation in
+            enqueuePanicRetirement { continuation.resume() }
+        }
+    }
+
+    private func enqueuePanicRetirement(_ completion: @escaping () -> Void) {
+        queue.async { [self] in
+            stoppedForPanic = true
+            completion()
         }
     }
 

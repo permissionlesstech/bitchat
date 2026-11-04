@@ -69,6 +69,19 @@ final class NostrProcessedEventStore {
         ioQueue.sync { PanicFileDeletion.remove(&fileURL, resolvingWith: resolveDefaultFileURL) }
     }
 
+    /// Completes in FIFO order without occupying the caller's executor.
+    func wipeAsync() async -> Bool {
+        await withCheckedContinuation { continuation in
+            enqueueWipe { continuation.resume(returning: $0) }
+        }
+    }
+
+    private func enqueueWipe(_ completion: @escaping (Bool) -> Void) {
+        ioQueue.async { [self] in
+            completion(PanicFileDeletion.remove(&fileURL, resolvingWith: resolveDefaultFileURL))
+        }
+    }
+
     private func loadLocked() -> [String] {
         guard let fileURL,
               let data = try? Data(contentsOf: fileURL),

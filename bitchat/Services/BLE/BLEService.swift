@@ -742,6 +742,28 @@ final class BLEService: NSObject {
         clearEmergencySessionState()
     }
 
+    #if DEBUG
+    func _test_replaceGossipManager(_ manager: GossipSyncManager) {
+        gossipSyncManager?.stop()
+        gossipSyncManager = manager
+    }
+    #endif
+
+    /// Close admission and stop radio activity before yielding for gossip retirement.
+    @MainActor
+    func beginPanicReset() -> Task<Void, Never> {
+        setPanicSuspended(true)
+        let retiringGossip = gossipSyncManager
+        gossipSyncManager = nil
+        noisePacketHandler.resetForPanic()
+        stopServicesImmediatelyForPanic()
+        return Task { @MainActor [self] in
+            await retiringGossip?.stopForPanicAsync()
+            onEngine { noisePacketHandler.resetForPanic() }
+            clearEmergencySessionState()
+        }
+    }
+
     /// Reopen the radio only after media deletion and recovery-marker commit.
     func completePanicReset(restartServices: Bool) {
         // The media wipe ran on the recovery operations' own file store; this
@@ -1040,7 +1062,7 @@ final class BLEService: NSObject {
 
     /// Panic cannot spend its security boundary sending a signed LEAVE or
     /// pumping the main run loop. Close the radio and timers immediately;
-    /// the identity/session cleanup follows synchronously.
+    /// the caller completes the remaining identity/session cleanup.
     private func stopServicesImmediatelyForPanic() {
         bleQueue.sync {
             pendingNotifications.removeAll()

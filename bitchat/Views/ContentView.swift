@@ -228,6 +228,7 @@ struct ContentView: View {
 
     var body: some View {
         mainContent
+            .disabled(appChromeModel.panicInProgress)
             .onAppear { [conversationUIModel, voiceRecordingVM] in
                 conversationUIModel.setCurrentColorScheme(colorScheme)
                 conversationUIModel.setCurrentTheme(appTheme)
