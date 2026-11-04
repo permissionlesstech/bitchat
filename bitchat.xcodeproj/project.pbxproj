@@ -18,6 +18,54 @@
 		A6E3EA812E7706A80032EA8A /* Tor in Frameworks */ = {isa = PBXBuildFile; productRef = A6E3EA802E7706A80032EA8A /* Tor */; };
 		E0A1B2C3D4E5F6012345678D /* relays/online_relays_gps.csv in Resources */ = {isa = PBXBuildFile; fileRef = E0A1B2C3D4E5F6012345678A /* relays/online_relays_gps.csv */; };
 		E0A1B2C3D4E5F6012345678E /* relays/online_relays_gps.csv in Resources */ = {isa = PBXBuildFile; fileRef = E0A1B2C3D4E5F6012345678A /* relays/online_relays_gps.csv */; };
+		0FD4A61C59153C14A7E41F99 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 0E031A6E35CC942D8998CAAB;
+		};
+		704AE3894D3872BD06BFD5DE /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = C7E25ADA1B2E5D6FAC0E6B7B;
+		};
+		A1584175E603B034F59EEBE8 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 3EDD4711E8FF79150AA1F463;
+		};
+		C5A83E309071A1B25F4A7B46 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 4557AAEAF8277C07CF9648F9;
+		};
+		2EB562838CAFF2C214C4A189 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 9568547CCECD17A7F35B21C9;
+		};
+		44DE06A7899F0A80FB446311 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = B9D1E848D0F09986D6BDF447;
+		};
+		03D7BEB420EFFDB87EF450FD /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			productRef = A6E3E56F2E77036A0032EA8A;
+		};
+		01F06966C2E1F698E0F4E7BD /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			productRef = 4EB6BA1B8464F1EA38F4E286;
+		};
+		9529347D1824DB0C0CD93BCD /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			productRef = A6E3EA7E2E7706720032EA8A;
+		};
+		8DC675D15220FD342892A8B2 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			productRef = A6BCF9472F80953E001CF9B9;
+		};
+		C24F2C16BB66381A86F79579 /* PBXBuildFile */ = {
+			fileRef = 49CC0C4E8EA444D12CE9AE33;
+			isa = PBXBuildFile;
+		};
+		E5DDAD1A300237EA659306EA /* PBXBuildFile */ = {
+			fileRef = 4719F0588C7C709762CEC0A1;
+			isa = PBXBuildFile;
+		};
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -42,6 +90,13 @@
 			remoteGlobalIDString = 0576A29205865664C0937536;
 			remoteInfo = bitchat_macOS;
 		};
+		29F4623BA5DFCA2CF4012F08 /* PBXContainerItemProxy */ = {
+			containerPortal = 475D96681D0EA0AE57A4E06E;
+			isa = PBXContainerItemProxy;
+			proxyType = 1;
+			remoteGlobalIDString = F65577E1D5BDF44B0CC114F2;
+			remoteInfo = ComposerLayoutHost;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -64,6 +119,70 @@
 		A6F183FC2E948783006A9046 /* tor-nolzma.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = "tor-nolzma.xcframework"; path = "localPackages/Tor/Frameworks/tor-nolzma.xcframework"; sourceTree = "<group>"; };
 		C0DB1DE27F0AAB5092663E8E /* bitchatTests_iOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = bitchatTests_iOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E0A1B2C3D4E5F6012345678A /* relays/online_relays_gps.csv */ = {isa = PBXFileReference; lastKnownFileType = text; path = relays/online_relays_gps.csv; sourceTree = "<group>"; };
+		BBA3A27A331606CFD602F2F3 /* ComposerLayoutHost.app */ = {
+			isa = PBXFileReference;
+			explicitFileType = wrapper.application;
+			includeInIndex = 0;
+			path = ComposerLayoutHost.app;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		0E031A6E35CC942D8998CAAB /* composerLayoutTests/ComposerLayoutFixture/ComposerLayoutFixture.swift */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = composerLayoutTests/ComposerLayoutFixture/ComposerLayoutFixture.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		C7E25ADA1B2E5D6FAC0E6B7B /* bitchatTests/ComposerSupport/Models.swift */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = bitchatTests/ComposerSupport/Models.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		3EDD4711E8FF79150AA1F463 /* composerLayoutTests/NetworkIsolation.c */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			path = composerLayoutTests/NetworkIsolation.c;
+			sourceTree = SOURCE_ROOT;
+		};
+		4557AAEAF8277C07CF9648F9 /* bitchatTests/Mocks/MockKeychain.swift */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = bitchatTests/Mocks/MockKeychain.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		9568547CCECD17A7F35B21C9 /* bitchatTests/Mocks/MockIdentityManager.swift */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = bitchatTests/Mocks/MockIdentityManager.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		B9D1E848D0F09986D6BDF447 /* bitchatTests/Mocks/MockTransport.swift */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = bitchatTests/Mocks/MockTransport.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		4719F0588C7C709762CEC0A1 /* ComposerLayoutUITests.swift */ = {
+			includeInIndex = 1;
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = ComposerLayoutUITests.swift;
+			sourceTree = "<group>";
+		};
+		49CC0C4E8EA444D12CE9AE33 /* Foundation.framework */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = wrapper.framework;
+			name = Foundation.framework;
+			path = System/Library/Frameworks/Foundation.framework;
+			sourceTree = SDKROOT;
+		};
+		52BF462027D179E22A8016EA /* ComposerLayoutUITests.xctest */ = {
+			explicitFileType = wrapper.cfbundle;
+			includeInIndex = 0;
+			isa = PBXFileReference;
+			path = ComposerLayoutUITests.xctest;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -78,6 +197,8 @@
 		A6E32D1C2E762EA70032EA8A /* Exceptions for "bitchat" folder in "bitchat_iOS" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				_ComposerTestHost/BitchatApp.swift,
+				_ComposerTestHost/FrameProbes.swift,
 				Info.plist,
 			);
 			target = AF077EA0474EDEDE2C72716C /* bitchat_iOS */;
@@ -85,6 +206,8 @@
 		A6E32D1D2E762EA70032EA8A /* Exceptions for "bitchat" folder in "bitchat_macOS" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				_ComposerTestHost/BitchatApp.swift,
+				_ComposerTestHost/FrameProbes.swift,
 				Info.plist,
 				LaunchScreen.storyboard,
 			);
@@ -100,6 +223,8 @@
 		C5E027A52ECCDFD700BD6012 /* Exceptions for "bitchatTests" folder in "bitchatTests_macOS" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				ComposerMacTests/MacButtonTests.swift,
+				ComposerSupport/Models.swift,
 				Info.plist,
 				Localization/PrimaryLocalizationKeys.json,
 				README.md,
@@ -109,11 +234,21 @@
 		C5E027A82ECCDFE200BD6012 /* Exceptions for "bitchatTests" folder in "bitchatTests_iOS" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				ComposerMacTests/MacButtonTests.swift,
+				ComposerSupport/Models.swift,
 				Info.plist,
 				Localization/PrimaryLocalizationKeys.json,
 				README.md,
 			);
 			target = 6CB97DF2EA57234CB3E563B8 /* bitchatTests_iOS */;
+		};
+		F4D6D685ACB53521D888A8CA /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				BitchatApp.swift,
+			);
+			target = F65577E1D5BDF44B0CC114F2;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -121,6 +256,7 @@
 		A6E32C972E762EA70032EA8A /* bitchat */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
+				F4D6D685ACB53521D888A8CA,
 				A6E32D1B2E762EA70032EA8A /* Exceptions for "bitchat" folder in "bitchatShareExtension" target */,
 				A6E32D1C2E762EA70032EA8A /* Exceptions for "bitchat" folder in "bitchat_iOS" target */,
 				A6E32D1D2E762EA70032EA8A /* Exceptions for "bitchat" folder in "bitchat_macOS" target */,
@@ -171,12 +307,31 @@
 				A6BCF9482F80953E001CF9B9 /* BitFoundation in Frameworks */,
 			);
 		};
+		0CA636AF6AD4692FF9F554B9 /* PBXFrameworksBuildPhase */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+				03D7BEB420EFFDB87EF450FD,
+				01F06966C2E1F698E0F4E7BD,
+				9529347D1824DB0C0CD93BCD,
+				8DC675D15220FD342892A8B2,
+			);
+		};
+		B8A938D2ED42FD359E6328D7 /* PBXFrameworksBuildPhase */ = {
+			buildActionMask = 2147483647;
+			files = (
+				C24F2C16BB66381A86F79579,
+			);
+			isa = PBXFrameworksBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		18198ED912AAF495D8AF7763 = {
 			isa = PBXGroup;
 			children = (
+				44305818FCC51418B841EDAC,
+				592EAA93ECCC78828EFE5E3E,
 				A6E32C972E762EA70032EA8A /* bitchat */,
 				E0A1B2C3D4E5F6012345678A /* relays/online_relays_gps.csv */,
 				A6E32D212E762EAB0032EA8A /* bitchatShareExtension */,
@@ -190,6 +345,8 @@
 		9F37F9F2C353B58AC809E93B /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				BBA3A27A331606CFD602F2F3,
+				52BF462027D179E22A8016EA,
 				96D0D41CA19EE5A772AA8434 /* bitchat.app */,
 				8F3A7C058C2C8E1A06C8CF8B /* bitchat.app */,
 				61F92EBA29C47C0FCC482F1F /* bitchatShareExtension.appex */,
@@ -205,6 +362,28 @@
 				A6F183FC2E948783006A9046 /* tor-nolzma.xcframework */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		592EAA93ECCC78828EFE5E3E /* ComposerLayoutUITests */ = {
+			children = (
+				4719F0588C7C709762CEC0A1,
+			);
+			isa = PBXGroup;
+			name = ComposerLayoutUITests;
+			path = composerLayoutTests/ComposerLayoutUITests;
+			sourceTree = "<group>";
+		};
+		44305818FCC51418B841EDAC /* Composer Test Support */ = {
+			isa = PBXGroup;
+			children = (
+				0E031A6E35CC942D8998CAAB,
+				C7E25ADA1B2E5D6FAC0E6B7B,
+				3EDD4711E8FF79150AA1F463,
+				4557AAEAF8277C07CF9648F9,
+				9568547CCECD17A7F35B21C9,
+				B9D1E848D0F09986D6BDF447,
+			);
+			name = "Composer Test Support";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -319,6 +498,50 @@
 			productReference = 96D0D41CA19EE5A772AA8434 /* bitchat.app */;
 			productType = "com.apple.product-type.application";
 		};
+		F65577E1D5BDF44B0CC114F2 /* ComposerLayoutHost */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 787803C0514BE47521F990F6;
+			buildPhases = (
+				332CE32F0337F80ADC04D86A,
+				004B96E941C3E8D88136608F,
+				0CA636AF6AD4692FF9F554B9,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A6E32C972E762EA70032EA8A,
+			);
+			name = ComposerLayoutHost;
+			packageProductDependencies = (
+				4EB6BA1B8464F1EA38F4E286,
+				A6E3E56F2E77036A0032EA8A,
+				A6E3EA7E2E7706720032EA8A,
+				A6BCF9472F80953E001CF9B9,
+			);
+			productName = ComposerLayoutHost;
+			productReference = BBA3A27A331606CFD602F2F3;
+			productType = "com.apple.product-type.application";
+		};
+		E811F30D87EDB22592FB266C /* ComposerLayoutUITests */ = {
+			buildConfigurationList = 2C45D2A775A3939BE73AE20D;
+			buildPhases = (
+				4EA274B470AC5BA59C442462,
+				B8A938D2ED42FD359E6328D7,
+				5C4DA50EF358A683465A00BA,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				27620291E1D248BC8328DA70,
+			);
+			isa = PBXNativeTarget;
+			name = ComposerLayoutUITests;
+			productName = ComposerLayoutUITests;
+			productReference = 52BF462027D179E22A8016EA;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -362,6 +585,8 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				F65577E1D5BDF44B0CC114F2,
+				E811F30D87EDB22592FB266C,
 				57CA17A36A2532A6CFF367BB /* bitchatShareExtension */,
 				6CB97DF2EA57234CB3E563B8 /* bitchatTests_iOS */,
 				47FF23248747DD7CB666CB91 /* bitchatTests_macOS */,
@@ -399,6 +624,19 @@
 				E0A1B2C3D4E5F6012345678E /* relays/online_relays_gps.csv in Resources */,
 			);
 		};
+		004B96E941C3E8D88136608F /* PBXResourcesBuildPhase */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+				E0A1B2C3D4E5F6012345678E,
+			);
+		};
+		5C4DA50EF358A683465A00BA /* PBXResourcesBuildPhase */ = {
+			buildActionMask = 2147483647;
+			files = (
+			);
+			isa = PBXResourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -427,6 +665,27 @@
 			files = (
 			);
 		};
+		332CE32F0337F80ADC04D86A /* PBXSourcesBuildPhase */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0FD4A61C59153C14A7E41F99,
+				704AE3894D3872BD06BFD5DE,
+				A1584175E603B034F59EEBE8,
+				C5A83E309071A1B25F4A7B46,
+				2EB562838CAFF2C214C4A189,
+				44DE06A7899F0A80FB446311,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4EA274B470AC5BA59C442462 /* PBXSourcesBuildPhase */ = {
+			buildActionMask = 2147483647;
+			files = (
+				E5DDAD1A300237EA659306EA,
+			);
+			isa = PBXSourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -444,6 +703,12 @@
 			isa = PBXTargetDependency;
 			target = AF077EA0474EDEDE2C72716C /* bitchat_iOS */;
 			targetProxy = 96415D4F989854F908EAD303 /* PBXContainerItemProxy */;
+		};
+		27620291E1D248BC8328DA70 /* ComposerLayoutHost */ = {
+			isa = PBXTargetDependency;
+			name = ComposerLayoutHost;
+			target = F65577E1D5BDF44B0CC114F2;
+			targetProxy = 29F4623BA5DFCA2CF4012F08;
 		};
 /* End PBXTargetDependency section */
 
@@ -861,6 +1126,111 @@
 			};
 			name = Debug;
 		};
+		F0F4729775306C17EFAE4310 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "";
+				SUPPORTED_PLATFORMS = iphonesimulator;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
+				PRODUCT_BUNDLE_IDENTIFIER = local.composerlayout.host;
+				INFOPLIST_KEY_CFBundleDisplayName = bitchat;
+				DEVELOPMENT_ASSET_PATHS = bitchat/_PreviewHelpers;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+				CODE_SIGN_STYLE = "$(CODE_SIGN_STYLE)";
+				CODE_SIGNING_ALLOWED = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIconDebug;
+				SDKROOT = iphoneos;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				SWIFT_VERSION = "$(SWIFT_VERSION)";
+				PRODUCT_NAME = ComposerLayoutHost;
+				CODE_SIGNING_REQUIRED = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = "$(IPHONEOS_DEPLOYMENT_TARGET)";
+				ENABLE_PREVIEWS = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				INFOPLIST_FILE = bitchat/Info.plist;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				PRODUCT_MODULE_NAME = bitchat;
+				APP_GROUP_ID = group.local.composerlayout.host;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) COMPOSER_TEST_HOST";
+				SKIP_INSTALL = YES;
+			};
+			baseConfigurationReferenceRelativePath = Debug.xcconfig;
+			name = Debug;
+			baseConfigurationReferenceAnchor = A6E367C92E76469E0032EA8A;
+		};
+		A2380C9BBF6AE66E935DB853 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "";
+				SUPPORTED_PLATFORMS = iphonesimulator;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
+				PRODUCT_BUNDLE_IDENTIFIER = local.composerlayout.host;
+				INFOPLIST_KEY_CFBundleDisplayName = bitchat;
+				DEVELOPMENT_ASSET_PATHS = bitchat/_PreviewHelpers;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+				CODE_SIGN_STYLE = "$(CODE_SIGN_STYLE)";
+				CODE_SIGNING_ALLOWED = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				SDKROOT = iphoneos;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				SWIFT_VERSION = "$(SWIFT_VERSION)";
+				PRODUCT_NAME = ComposerLayoutHost;
+				CODE_SIGNING_REQUIRED = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = "$(IPHONEOS_DEPLOYMENT_TARGET)";
+				ENABLE_PREVIEWS = YES;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				INFOPLIST_FILE = bitchat/Info.plist;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				PRODUCT_MODULE_NAME = bitchat;
+				APP_GROUP_ID = group.local.composerlayout.host;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) COMPOSER_TEST_HOST";
+				SKIP_INSTALL = YES;
+			};
+			baseConfigurationReferenceRelativePath = Release.xcconfig;
+			name = Release;
+			baseConfigurationReferenceAnchor = A6E367C92E76469E0032EA8A;
+		};
+		5D81D204EEA1DB5D410F8E84 /* Debug */ = {
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGNING_ALLOWED = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				PRODUCT_BUNDLE_IDENTIFIER = local.composerlayout.ComposerLayoutUITests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = ComposerLayoutHost;
+				SUPPORTED_PLATFORMS = iphonesimulator;
+			};
+			isa = XCBuildConfiguration;
+			name = Debug;
+		};
+		BEF31AA2576A5065892A6695 /* Release */ = {
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGNING_ALLOWED = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				PRODUCT_BUNDLE_IDENTIFIER = local.composerlayout.ComposerLayoutUITests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = ComposerLayoutHost;
+				VALIDATE_PRODUCT = YES;
+				SUPPORTED_PLATFORMS = iphonesimulator;
+			};
+			isa = XCBuildConfiguration;
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -911,6 +1281,23 @@
 				3DCF45111852FB2AEBE05E31 /* Release configuration for PBXNativeTarget "bitchatShareExtension" */,
 			);
 			defaultConfigurationName = Debug;
+		};
+		787803C0514BE47521F990F6 /* XCConfigurationList */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F0F4729775306C17EFAE4310,
+				A2380C9BBF6AE66E935DB853,
+			);
+			defaultConfigurationName = Debug;
+		};
+		2C45D2A775A3939BE73AE20D /* XCConfigurationList */ = {
+			buildConfigurations = (
+				BEF31AA2576A5065892A6695,
+				5D81D204EEA1DB5D410F8E84,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+			isa = XCConfigurationList;
 		};
 /* End XCConfigurationList section */
 

@@ -28,6 +28,8 @@ struct ContentComposerView: View {
     @Binding var showMacImagePicker: Bool
     #endif
 
+    @ScaledMetric(relativeTo: .title2) private var composerActionSize: CGFloat = 36
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if conversationUIModel.showAutocomplete && !conversationUIModel.autocompleteSuggestions.isEmpty {
@@ -132,9 +134,15 @@ struct ContentComposerView: View {
 
                     if conversationUIModel.canSendMediaInCurrentContext {
                         attachmentButton
+                        #if COMPOSER_TEST_HOST && os(macOS)
+                            .localComposerProbeFrame("attachment")
+                        #endif
                     }
 
                     sendOrMicButton
+                    #if COMPOSER_TEST_HOST && os(macOS)
+                        .localComposerProbeFrame("action")
+                    #endif
                 }
             }
         }
@@ -261,7 +269,7 @@ private extension ContentComposerView {
         Image(systemName: "camera.circle.fill")
             .font(.bitchatSystem(size: 24))
             .foregroundColor(composerAccentColor)
-            .frame(width: 36, height: 36)
+            .frame(width: composerActionSize, height: composerActionSize)
             .contentShape(Circle())
             .onTapGesture {
                 imagePickerSourceType = .photoLibrary
@@ -289,7 +297,7 @@ private extension ContentComposerView {
             Image(systemName: "photo.circle.fill")
                 .font(.bitchatSystem(size: 24))
                 .foregroundColor(composerAccentColor)
-                .frame(width: 36, height: 36)
+                .frame(width: composerActionSize, height: composerActionSize)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(
@@ -310,10 +318,10 @@ private extension ContentComposerView {
                     .opacity(hasText ? 1 : 0)
                     .allowsHitTesting(hasText)
             }
-            .frame(width: 36, height: 36)
+            .frame(width: composerActionSize, height: composerActionSize)
         } else {
             sendButtonView(enabled: hasText)
-                .frame(width: 36, height: 36)
+                .frame(width: composerActionSize, height: composerActionSize)
         }
     }
 
@@ -339,7 +347,7 @@ private extension ContentComposerView {
             .font(.bitchatSystem(size: 24))
             .foregroundColor(micColor)
             .modifier(PulsingOpacityModifier(active: busyTalker != nil && !voiceRecordingVM.state.isActive))
-            .frame(width: 36, height: 36)
+            .frame(width: composerActionSize, height: composerActionSize)
             .contentShape(Circle())
             .overlay(
                 Color.clear
@@ -389,7 +397,7 @@ private extension ContentComposerView {
             Image(systemName: "arrow.up.circle.fill")
                 .font(.bitchatSystem(size: 24))
                 .foregroundColor(enabled ? activeColor : Color.gray)
-                .frame(width: 36, height: 36)
+                .frame(width: composerActionSize, height: composerActionSize)
         }
         .buttonStyle(.plain)
         .disabled(!enabled)

@@ -31,7 +31,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     private let idBridge: NostrIdentityBridge
     private let identityManager: SecureIdentityStateManagerProtocol
     weak var messageRouter: MessageRouter?
-    private let favoritesService = FavoritesPersistenceService.shared
+    private let favoritesService: FavoritesPersistenceService
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Initialization
@@ -39,11 +39,13 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     init(
         meshService: Transport,
         idBridge: NostrIdentityBridge,
-        identityManager: SecureIdentityStateManagerProtocol
+        identityManager: SecureIdentityStateManagerProtocol,
+        favoritesService: FavoritesPersistenceService? = nil
     ) {
         self.meshService = meshService
         self.idBridge = idBridge
         self.identityManager = identityManager
+        self.favoritesService = favoritesService ?? .shared
         
         // Subscribe to changes from both services
         setupSubscriptions()

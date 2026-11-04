@@ -3,6 +3,22 @@ import BitLogger
 import Combine
 import Foundation
 
+/// Dependencies resolved before the model's service graph is constructed.
+/// Callers can mount the model with inert services without bypassing its wiring.
+@MainActor
+struct ChatViewModelDependencies {
+    var nostrTransport: NostrTransport.Dependencies?
+    var makeDeduplicationService: () -> MessageDeduplicationService = {
+        MessageDeduplicationService(nostrEventStore: NostrProcessedEventStore())
+    }
+    var relayManager: () -> NostrRelayManager? = { .shared }
+    var makeGeoCoordinator: (LocationChannelManager, any GeoChannelContext) -> GeoChannelCoordinator = {
+        GeoChannelCoordinator(locationManager: $0, context: $1)
+    }
+    var favoritesService: FavoritesPersistenceService?
+    var userDefaults: UserDefaults = .standard
+}
+
 struct ChatViewModelServiceBundle {
     let commandProcessor: CommandProcessor
     let messageRouter: MessageRouter
@@ -19,16 +35,20 @@ struct ChatViewModelServiceBundle {
         identityManager: SecureIdentityStateManagerProtocol,
         meshService: Transport,
         outboxStore: MessageOutboxStore? = nil,
-        sfMetrics: StoreAndForwardMetrics? = nil
+        sfMetrics: StoreAndForwardMetrics? = nil,
+        dependencies: ChatViewModelDependencies
     ) {
         let commandProcessor = CommandProcessor(identityManager: identityManager)
         let privateChatManager = PrivateChatManager(meshService: meshService)
         let unifiedPeerService = UnifiedPeerService(
             meshService: meshService,
             idBridge: idBridge,
-            identityManager: identityManager
+            identityManager: identityManager,
+            favoritesService: dependencies.favoritesService
         )
-        let nostrTransport = NostrTransport(keychain: keychain, idBridge: idBridge)
+        let nostrTransport = NostrTransport(
+            keychain: keychain, idBridge: idBridge, dependencies: dependencies.nostrTransport
+        )
         nostrTransport.senderPeerID = meshService.myPeerID
         let messageRouter = MessageRouter(
             transports: [meshService, nostrTransport],
@@ -41,11 +61,11 @@ struct ChatViewModelServiceBundle {
         self.privateChatManager = privateChatManager
         self.unifiedPeerService = unifiedPeerService
         self.autocompleteService = AutocompleteService()
-        // Persist processed gift-wrap event IDs: NIP-59 randomizes their
+        // The live dependency persists processed gift-wrap event IDs: NIP-59 randomizes their
         // timestamps, so the 24h-lookback DM subscriptions redeliver the same
         // events on every launch and only a cross-launch record stops the
         // reprocessing (re-sent DELIVERED bursts, phantom-ack noise).
-        self.deduplicationService = MessageDeduplicationService(nostrEventStore: NostrProcessedEventStore())
+        self.deduplicationService = dependencies.makeDeduplicationService()
         self.publicMessagePipeline = PublicMessagePipeline()
     }
 }
@@ -53,9 +73,11 @@ struct ChatViewModelServiceBundle {
 @MainActor
 final class ChatViewModelBootstrapper {
     private unowned let viewModel: ChatViewModel
+    private let dependencies: ChatViewModelDependencies
 
-    init(viewModel: ChatViewModel) {
+    init(viewModel: ChatViewModel, dependencies: ChatViewModelDependencies? = nil) {
         self.viewModel = viewModel
+        self.dependencies = dependencies ?? ChatViewModelDependencies()
     }
 
     static func loadPersistedReadReceipts(userDefaults: UserDefaults = .standard) -> Set<String> {
@@ -205,7 +227,7 @@ private extension ChatViewModelBootstrapper {
             viewModel.updateBluetoothState(radio.getCurrentBluetoothState())
         }
 
-        viewModel.nostrRelayManager = NostrRelayManager.shared
+        viewModel.nostrRelayManager = dependencies.relayManager()
         viewModel.messageRouter.flushAllOutbox()
 
         Task { @MainActor [weak viewModel] in
@@ -324,10 +346,7 @@ private extension ChatViewModelBootstrapper {
     }
 
     func configureGeoChannels() {
-        viewModel.geoChannelCoordinator = GeoChannelCoordinator(
-            locationManager: viewModel.locationManager,
-            context: viewModel
-        )
+        viewModel.geoChannelCoordinator = dependencies.makeGeoCoordinator(viewModel.locationManager, viewModel)
     }
 
     /// Wires the gateway-mode policy layer (`GatewayService`) to the mesh

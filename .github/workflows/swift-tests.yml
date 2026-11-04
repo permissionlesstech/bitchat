@@ -15,7 +15,7 @@ jobs:
     # The long steps carry tighter individual bounds (5-minute test watchdog,
     # 6-minute benchmark step, 10-minute floor gate that may re-run the
     # benchmarks up to twice on a noisy runner); this is the backstop.
-    timeout-minutes: 25
+    timeout-minutes: 40
 
     strategy:
       fail-fast: false # Don't cancel other matrix jobs when one fails
@@ -133,6 +133,23 @@ jobs:
         timeout-minutes: 10
         run: ./scripts/check-perf-floors.sh perf-output.log
 
+
+      - name: Check composer test infrastructure
+        if: matrix.name == 'app'
+        run: |
+          python3 -m unittest discover -s composerLayoutTests -p 'test_*.py' -v
+          python3 composerLayoutTests/check_invariants.py --source .
+
+      # Run native composer UI events serially after coverage and benchmarks.
+      # Resolved packages are copied into a separate composer configuration cache.
+      - name: Run macOS composer button tests
+        if: matrix.name == 'app'
+        timeout-minutes: 15
+        run: |
+          python3 composerLayoutTests/run-macos.py \
+            --output "$RUNNER_TEMP/composer-macos" \
+            --scratch-path "$GITHUB_WORKSPACE/.build"
+
   # SPM tests do not link the shipping app targets. This job covers the
   # iOS-conditional paths and both universal Release link configurations.
   ios-build:
@@ -157,6 +174,7 @@ jobs:
             -configuration Release \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/composer-shipping-ios" \
             ARCHS='arm64 x86_64' \
             ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_ALLOWED=NO \
@@ -169,10 +187,17 @@ jobs:
             -scheme "bitchat (macOS)" \
             -configuration Release \
             -destination 'generic/platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/composer-shipping-macos" \
             ARCHS='arm64 x86_64' \
             ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_ALLOWED=NO \
             build
+
+      - name: Check shipping excludes composer test infrastructure
+        run: |
+          python3 composerLayoutTests/check_invariants.py --source . \
+            --shipping-derived "$RUNNER_TEMP/composer-shipping-ios" \
+            --shipping-derived "$RUNNER_TEMP/composer-shipping-macos"
 
   # The SwiftPM matrix runs on macOS and cannot execute UIKit/CoreBluetooth
   # conditional tests. Build the shared iOS test target and run it on the first
@@ -184,7 +209,7 @@ jobs:
   ios-tests:
     name: Run iOS simulator tests
     runs-on: macos-latest
-    timeout-minutes: 20
+    timeout-minutes: 65
 
     steps:
       - name: Checkout code
@@ -199,7 +224,7 @@ jobs:
         id: destination
         run: |
           set -uo pipefail
-          destinations=$(xcodebuild -project bitchat.xcodeproj -scheme "bitchat (iOS)" -showdestinations 2>/dev/null || true)
+          destinations=$(xcodebuild -project bitchat.xcodeproj -scheme "bitchat (iOS)" -clonedSourcePackagesDirPath "$RUNNER_TEMP/composer-packages" -showdestinations 2>/dev/null || true)
           destination_id=$(awk -F'id:' '
             /platform:iOS Simulator/ && /name:iPhone/ \
               && !/error/ && !/unavailable/ && !found {
@@ -254,6 +279,7 @@ jobs:
           echo "id=$destination_id" >> "$GITHUB_OUTPUT"
 
       - name: Run iOS tests
+        timeout-minutes: 20
         run: |
           set -o pipefail
           xcodebuild -project bitchat.xcodeproj \
@@ -261,8 +287,21 @@ jobs:
             -sdk iphonesimulator \
             -destination "platform=iOS Simulator,id=${{ steps.destination.outputs.id }}" \
             -parallel-testing-enabled NO \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/composer-packages" \
             CODE_SIGNING_ALLOWED=NO \
             test
+
+      # Use the selected simulator type/runtime for an owned clean device; reuse packages.
+      # The runner rejects missing/skipped cases and propagates test failures.
+      - name: Run composer layout and photo-picker tests
+        timeout-minutes: 40
+        env:
+          SIMULATOR_UUID: ${{ steps.destination.outputs.id }}
+        run: |
+          python3 composerLayoutTests/run.py \
+            --output "$RUNNER_TEMP/composer-layout" \
+            --simulator "$SIMULATOR_UUID" \
+            --packages "$RUNNER_TEMP/composer-packages"
 
   # Blocking since the backlog reached zero (all violations fixed; rules the
   # codebase deliberately breaks are disabled in .swiftlint.yml). --strict

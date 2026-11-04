@@ -327,7 +327,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     let locationManager: LocationChannelManager
 
     var nostrRelayManager: NostrRelayManager?
-    private let userDefaults = UserDefaults.standard
+    private let userDefaults: UserDefaults
     let keychain: KeychainManagerProtocol
     private let panicRecoveryOperations: PanicRecoveryOperations
     private let panicNetworkLifecycle: PanicNetworkLifecycle
@@ -1163,8 +1163,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         sfMetrics: StoreAndForwardMetrics? = nil,
         panicMediaWipe: (() throws -> Void)? = nil,
         panicRecoveryOperations: PanicRecoveryOperations? = nil,
-        panicNetworkLifecycle: PanicNetworkLifecycle = .noop
+        panicNetworkLifecycle: PanicNetworkLifecycle = .noop,
+        dependencies: ChatViewModelDependencies? = nil
     ) {
+        let dependencies = dependencies ?? ChatViewModelDependencies()
         let conversations = conversations ?? ConversationStore()
         let peerIdentityStore = peerIdentityStore ?? PeerIdentityStore()
         let locationPresenceStore = locationPresenceStore ?? LocationPresenceStore()
@@ -1174,10 +1176,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             identityManager: identityManager,
             meshService: transport,
             outboxStore: outboxStore,
-            sfMetrics: sfMetrics
+            sfMetrics: sfMetrics,
+            dependencies: dependencies
         )
 
         self.keychain = keychain
+        self.userDefaults = dependencies.userDefaults
         self.panicRecoveryOperations = panicRecoveryOperations
             ?? .ephemeral(wipeMedia: panicMediaWipe ?? {})
         self.panicNetworkLifecycle = panicNetworkLifecycle
@@ -1239,7 +1243,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         }
 
         if networkActivationAllowed {
-            ChatViewModelBootstrapper(viewModel: self).configure()
+            ChatViewModelBootstrapper(viewModel: self, dependencies: dependencies).configure()
         }
     }
 
