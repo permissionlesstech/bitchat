@@ -13,7 +13,7 @@ import BitFoundation
 @testable import bitchat
 
 @MainActor
-private func makeSmokeViewModel() -> (viewModel: ChatViewModel, transport: MockTransport, identityManager: MockIdentityManager) {
+func makeSmokeViewModel() -> (viewModel: ChatViewModel, transport: MockTransport, identityManager: MockIdentityManager) {
     let keychain = MockKeychain()
     let keychainHelper = MockKeychainHelper()
     let idBridge = NostrIdentityBridge(keychain: keychainHelper)
@@ -31,7 +31,7 @@ private func makeSmokeViewModel() -> (viewModel: ChatViewModel, transport: MockT
 }
 
 @MainActor
-private struct SmokeFeatureModels {
+struct SmokeFeatureModels {
     let publicChatModel: PublicChatModel
     let appChromeModel: AppChromeModel
     let locationChannelsModel: LocationChannelsModel
@@ -53,7 +53,7 @@ private func makeSmokeLocationManager() -> LocationChannelManager {
 }
 
 @MainActor
-private func makeSmokeFeatureModels(for viewModel: ChatViewModel) -> SmokeFeatureModels {
+func makeSmokeFeatureModels(for viewModel: ChatViewModel) -> SmokeFeatureModels {
     let locationManager = makeSmokeLocationManager()
     let conversations = viewModel.conversations
     let publicChatModel = PublicChatModel(conversations: conversations)
@@ -106,7 +106,7 @@ private func makeSmokeFeatureModels(for viewModel: ChatViewModel) -> SmokeFeatur
 }
 
 @MainActor
-private func installSmokeEnvironment<V: View>(
+func installSmokeEnvironment<V: View>(
     _ view: V,
     featureModels: SmokeFeatureModels
 ) -> some View {
@@ -200,7 +200,7 @@ private func mount<V: View>(_ view: V) -> AnyObject {
     #endif
 }
 
-private func makeSnapshot(
+func makeSnapshot(
     peerID: PeerID,
     nickname: String,
     connected: Bool = true,

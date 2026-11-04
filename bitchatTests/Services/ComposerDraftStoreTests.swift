@@ -3,6 +3,8 @@ import Testing
 @testable import bitchat
 import BitFoundation
 
+// These tests share process-wide drafts with the mounted conversation tests.
+extension ViewSmokeTests {
 @Suite(.serialized)
 struct ComposerDraftStoreTests {
     /// Isolate each test from leftover in-memory drafts.
@@ -99,4 +101,6 @@ struct ComposerDraftStoreTests {
             #expect(ComposerDraftStore.load(.mesh).isEmpty)
         }
     }
+}
+
 }
