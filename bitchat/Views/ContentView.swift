@@ -228,7 +228,7 @@ struct ContentView: View {
 
     var body: some View {
         mainContent
-            .onAppear {
+            .onAppear { [conversationUIModel, voiceRecordingVM] in
                 conversationUIModel.setCurrentColorScheme(colorScheme)
                 conversationUIModel.setCurrentTheme(appTheme)
                 voiceRecordingVM.sessionProvider = { [weak conversationUIModel] in

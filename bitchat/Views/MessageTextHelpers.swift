@@ -3,7 +3,26 @@
 // Shared text parsing helpers for message rendering.
 //
 
+import BitFoundation
 import Foundation
+
+extension BitchatMessage {
+    /// The row's payment chips and collapse decision, scanned on first use
+    /// and cached on the message: a row re-renders far more often than its
+    /// immutable `content` could change.
+    var contentScan: ContentScan {
+        if let cached = getCachedContentScan() {
+            return cached
+        }
+        let scan = ContentScan(
+            cashuLinks: content.extractCashuLinks(),
+            lightningLinks: content.extractLightningLinks(),
+            isLongForDisplay: content.isLongForDisplay()
+        )
+        setCachedContentScan(scan)
+        return scan
+    }
+}
 
 extension String {
     // Detect if there is an extremely long token (no whitespace/newlines) that could break layout
