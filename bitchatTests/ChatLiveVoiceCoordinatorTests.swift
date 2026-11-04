@@ -272,7 +272,7 @@ struct ChatLiveVoiceCoordinatorTests {
         #expect(context.removedMessageIDs == [bubble.id])
     }
 
-    @Test func ignoresBlockedPeersAndUnknownControlPackets() throws {
+    @Test func blockedPeersAndUnknownControlsDoNotCreateBubbles() throws {
         let context = MockChatLiveVoiceContext()
         let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
 
@@ -281,7 +281,7 @@ struct ChatLiveVoiceCoordinatorTests {
         #expect(context.handledPrivateMessages.isEmpty)
 
         context.blockedPeers = []
-        // END/CANCELED for a burst that never started must not create state.
+        // END/CANCELED without an active burst must not create a bubble.
         send(try #require(VoiceBurstPacket(burstID: makeBurstID(0xE6), seq: 5, kind: .end(totalDataPackets: 4, durationMs: 256))), to: coordinator, from: peer)
         send(try #require(VoiceBurstPacket(burstID: makeBurstID(0xE7), seq: 5, kind: .canceled)), to: coordinator, from: peer)
         #expect(context.handledPrivateMessages.isEmpty)
@@ -657,5 +657,496 @@ struct ChatLiveVoiceCoordinatorTests {
         store.enforceQuota(reservingBytes: 0)
 
         #expect(!FileManager.default.fileExists(atPath: fallbackURL.path))
+    }
+}
+
+@MainActor
+private final class TerminalBurstFixture {
+    let context = MockChatLiveVoiceContext()
+    let store: BLEIncomingFileStore
+    let coordinator: ChatLiveVoiceCoordinator
+    let base: URL
+    let peer = PeerID(str: "aaaabbbbcccc0001")
+    private final class Clock { var now: TimeInterval = 0 }
+    private let clock: Clock
+    var now: TimeInterval {
+        get { clock.now }
+        set { clock.now = newValue }
+    }
+
+    init() {
+        base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        store = BLEIncomingFileStore(baseDirectory: base)
+        let clock = Clock()
+        self.clock = clock
+        coordinator = ChatLiveVoiceCoordinator(
+            context: context, fileStore: store, sweepsOnInit: false, monotonicNow: { clock.now }
+        )
+    }
+
+    func cleanup() {
+        coordinator.resetForPanic()
+        try? FileManager.default.removeItem(at: base)
+    }
+
+    func send(
+        _ kind: VoiceBurstPacket.Kind, seq: UInt16 = 1, burst: UInt16 = 1,
+        scope: VoiceBurstScope = .publicMesh, from sender: PeerID? = nil
+    ) throws {
+        var id = Data(repeating: 0, count: 8)
+        id[0] = UInt8(truncatingIfNeeded: burst)
+        id[1] = UInt8(truncatingIfNeeded: burst >> 8)
+        let payload = try #require(VoiceBurstPacket(burstID: id, seq: seq, kind: kind)).encode()
+        if scope == .publicMesh {
+            coordinator.handlePublicVoiceFramePayload(from: sender ?? peer, nickname: "sender", payload: payload, timestamp: Date())
+        } else {
+            coordinator.handleVoiceFramePayload(from: sender ?? peer, payload: payload, timestamp: Date())
+        }
+    }
+
+    func appendedRows(_ scope: VoiceBurstScope) -> [BitchatMessage] {
+        scope == .publicMesh ? context.appendedPublicMessages : context.handledPrivateMessages
+    }
+
+    func fallback() throws -> URL {
+        let files = try FileManager.default.contentsOfDirectory(
+            at: store.incomingDirectory(subdirectory: "voicenotes/incoming"), includingPropertiesForKeys: nil
+        )
+        return try #require(files.first { $0.lastPathComponent.hasPrefix("voice_") && !$0.lastPathComponent.hasPrefix("voice_live_") })
+    }
+
+    func waitForCompletion(of row: BitchatMessage) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(TestConstants.settleTimeout))
+        while coordinator.isLiveVoiceMessage(row), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(!coordinator.isLiveVoiceMessage(row))
+    }
+}
+
+@MainActor
+struct LiveVoiceTerminalBurstTests {
+    private var frames: VoiceBurstPacket.Kind { .frames([Data([1, 2, 3])]) }
+
+    @Test(arguments: [VoiceBurstScope.directMessage, .publicMesh])
+    func canceledBurstRejectsLateStartAndData(scope: VoiceBurstScope) throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        try fixture.send(frames, scope: scope)
+        let original = try #require(fixture.appendedRows(scope).first)
+        try fixture.send(.canceled, seq: 3, scope: scope)
+        try fixture.send(frames, seq: 2, scope: scope)
+        try fixture.send(.start(codec: .aacLC16kMono), seq: 0, scope: scope)
+        #expect(fixture.appendedRows(scope).count == 1)
+        #expect(!fixture.coordinator.isLiveVoiceMessage(original))
+        #expect(fixture.context.removedMessageIDs.contains(original.id))
+        #expect((fixture.context.talkerUpdates.last ?? nil) == nil)
+    }
+
+    @Test(arguments: [VoiceBurstScope.directMessage, .publicMesh])
+    func completedReorderedBurstRejectsTheSkippedPacket(scope: VoiceBurstScope) async throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        try fixture.send(frames, seq: 2, scope: scope)
+        let row = try #require(fixture.appendedRows(scope).first)
+        try fixture.send(.end(totalDataPackets: 2, durationMs: 128), seq: 3, scope: scope)
+        #expect(fixture.coordinator.isLiveVoiceMessage(row))
+        try await fixture.waitForCompletion(of: row)
+        let file = try fixture.fallback()
+        let before = try Data(contentsOf: file)
+        try fixture.send(frames, scope: scope)
+        #expect(fixture.appendedRows(scope).count == 1)
+        #expect(!fixture.coordinator.isLiveVoiceMessage(row))
+        #expect(try Data(contentsOf: file) == before)
+        #expect((fixture.context.talkerUpdates.last ?? nil) == nil)
+    }
+
+    @Test func endAcceptsMissingDataBeforeCompletion() async throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        try fixture.send(.frames([Data([4, 5, 6])]), seq: 2)
+        try fixture.send(.end(totalDataPackets: 2, durationMs: 128), seq: 3)
+        let row = try #require(fixture.appendedRows(.publicMesh).first)
+        #expect(fixture.coordinator.isLiveVoiceMessage(row))
+        try fixture.send(frames)
+        try await fixture.waitForCompletion(of: row)
+        let expectedAudio = ADTSFramer.frame(Data([1, 2, 3])) + ADTSFramer.frame(Data([4, 5, 6]))
+        #expect(try Data(contentsOf: fixture.fallback()) == expectedAudio)
+    }
+
+    @Test func unseenCancelAndEmptyEndPreventLaterData() throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        try fixture.send(.canceled)
+        try fixture.send(frames, seq: 2)
+        try fixture.send(.start(codec: .aacLC16kMono), seq: 0, burst: 3)
+        try fixture.send(.end(totalDataPackets: 0, durationMs: 0), burst: 3)
+        try fixture.send(frames, burst: 3)
+        #expect(fixture.appendedRows(.publicMesh).count == 1)
+        #expect(!fixture.coordinator.isLiveVoiceMessage(try #require(fixture.appendedRows(.publicMesh).first)))
+    }
+
+    @Test(arguments: [VoiceBurstScope.directMessage, .publicMesh])
+    func unseenEndPreservesMissingStartRecovery(scope: VoiceBurstScope) throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        try fixture.send(.end(totalDataPackets: 1, durationMs: 64), seq: 2, scope: scope)
+        try fixture.send(frames, scope: scope)
+        let row = try #require(fixture.appendedRows(scope).first)
+        #expect(fixture.coordinator.isLiveVoiceMessage(row))
+    }
+
+    @Test(arguments: [VoiceBurstScope.directMessage, .publicMesh])
+    func finalizedNoteClosesStartOnlyBurst(scope: VoiceBurstScope) throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        try fixture.send(.start(codec: .aacLC16kMono), seq: 0, scope: scope)
+        let original = try #require(fixture.appendedRows(scope).first)
+        let note = BitchatMessage(
+            sender: "sender", content: "[voice] voice_0100000000000000.m4a",
+            timestamp: Date(), isRelay: false, isPrivate: scope == .directMessage, senderPeerID: fixture.peer
+        )
+        #expect(!fixture.coordinator.absorbFinalizedVoiceNote(note))
+        #expect(fixture.context.removedMessageIDs.contains(original.id))
+        // A false absorption result leaves normal note insertion to the caller.
+        if scope == .directMessage { fixture.context.handlePrivateMessage(note) }
+        else { fixture.context.appendPublicMeshMessage(note) }
+        try fixture.send(frames, scope: scope)
+        #expect(fixture.appendedRows(scope).map(\.id) == [original.id, note.id])
+        #expect(!fixture.coordinator.isLiveVoiceMessage(original))
+        #expect((fixture.context.talkerUpdates.last ?? nil) == nil)
+    }
+
+    @Test func noteWithoutSenderBeforeAudioAllowsLaterRecovery() throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        try fixture.send(.start(codec: .aacLC16kMono), seq: 0)
+        let note = BitchatMessage(
+            sender: "sender", content: "[voice] voice_0100000000000000.m4a",
+            timestamp: Date(), isRelay: false, isPrivate: false, senderPeerID: nil
+        )
+        #expect(!fixture.coordinator.absorbFinalizedVoiceNote(note))
+        try fixture.send(frames)
+        #expect(fixture.appendedRows(.publicMesh).count == 2)
+        #expect(fixture.coordinator.isLiveVoiceMessage(try #require(fixture.appendedRows(.publicMesh).last)))
+    }
+
+    @Test(arguments: [VoiceBurstScope.directMessage, .publicMesh])
+    func noteWithoutSenderAfterAudioReplacesMessageAndBlocksLatePackets(scope: VoiceBurstScope) throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        try fixture.send(frames, scope: scope)
+        let original = try #require(fixture.appendedRows(scope).first)
+        let note = BitchatMessage(
+            sender: "sender", content: "[voice] voice_0100000000000000.m4a",
+            timestamp: Date(), isRelay: false, isPrivate: scope == .directMessage, senderPeerID: nil
+        )
+        #expect(fixture.coordinator.absorbFinalizedVoiceNote(note))
+        let replacement = try #require(scope == .directMessage
+            ? fixture.context.upsertedMessages.last?.message
+            : fixture.context.upsertedPublicMessages.last)
+        #expect(replacement.content == note.content)
+        #expect(replacement.senderPeerID == fixture.peer)
+        #expect(replacement.isPrivate == (scope == .directMessage))
+        #expect(replacement.id == (scope == .directMessage ? note.id : original.id))
+        #expect(!fixture.coordinator.isLiveVoiceMessage(replacement))
+        try fixture.send(.start(codec: .aacLC16kMono), seq: 0, scope: scope)
+        try fixture.send(frames, seq: 2, scope: scope)
+        #expect(fixture.appendedRows(scope).count == 1)
+        #expect(!fixture.coordinator.isLiveVoiceMessage(original))
+        #expect((fixture.context.talkerUpdates.last ?? nil) == nil)
+    }
+
+    @Test func terminalIdentityAllowsOtherPeersScopesAndFreshBursts() throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        try fixture.send(.canceled)
+        try fixture.send(frames, from: PeerID(str: "ddddeeeeffff0002"))
+        try fixture.send(frames, scope: .directMessage)
+        try fixture.send(frames, burst: 2)
+        #expect(fixture.appendedRows(.publicMesh).count == 2)
+        #expect(fixture.appendedRows(.directMessage).count == 1)
+        for row in fixture.appendedRows(.publicMesh) + fixture.appendedRows(.directMessage) {
+            #expect(fixture.coordinator.isLiveVoiceMessage(row))
+        }
+    }
+
+    @Test func idleWithoutEndAllowsRecovery() async throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        try fixture.send(frames)
+        let row = try #require(fixture.appendedRows(.publicMesh).first)
+        try await fixture.waitForCompletion(of: row)
+        try fixture.send(frames, seq: 2)
+        #expect(fixture.appendedRows(.publicMesh).count == 2)
+        #expect(fixture.coordinator.isLiveVoiceMessage(try #require(fixture.appendedRows(.publicMesh).last)))
+    }
+
+    @Test(arguments: [false, true])
+    func absorptionKeepsTerminalAdmissionClosed(endFirst: Bool) throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        try fixture.send(frames)
+        if endFirst { try fixture.send(.end(totalDataPackets: 1, durationMs: 64), seq: 2) }
+        let row = try #require(fixture.appendedRows(.publicMesh).first)
+        let note = BitchatMessage(
+            sender: "sender", content: "[voice] voice_0100000000000000.m4a",
+            timestamp: Date(), isRelay: false, isPrivate: false, senderPeerID: fixture.peer
+        )
+        #expect(fixture.coordinator.absorbFinalizedVoiceNote(note))
+        try fixture.send(frames, seq: 3)
+        #expect(fixture.appendedRows(.publicMesh).count == 1)
+        #expect(!fixture.coordinator.isLiveVoiceMessage(row))
+    }
+
+    @Test(arguments: [VoiceBurstScope.directMessage, .publicMesh])
+    func idleFinalizedNoteClosesAdmission(scope: VoiceBurstScope) async throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        try fixture.send(frames, scope: scope)
+        let row = try #require(fixture.appendedRows(scope).first)
+        try await fixture.waitForCompletion(of: row)
+        let note = BitchatMessage(
+            sender: "sender", content: "[voice] voice_0100000000000000.m4a",
+            timestamp: Date(), isRelay: false, isPrivate: scope == .directMessage, senderPeerID: fixture.peer
+        )
+        #expect(fixture.coordinator.absorbFinalizedVoiceNote(note))
+        try fixture.send(frames, seq: 2, scope: scope)
+        #expect(fixture.appendedRows(scope).count == 1)
+        #expect(!fixture.coordinator.isLiveVoiceMessage(row))
+    }
+
+    @Test func terminalRecordsExpireWithoutRepeatedPacketsExtendingThem() throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        try fixture.send(.canceled)
+        fixture.now = 599.999
+        try fixture.send(.canceled)
+        try fixture.send(frames)
+        #expect(fixture.appendedRows(.publicMesh).isEmpty)
+        fixture.now = 600
+        try fixture.send(frames)
+        #expect(fixture.appendedRows(.publicMesh).count == 1)
+    }
+
+    @Test func capacityEvictsOldestTerminalRecord() throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        for burst in UInt16(1)...257 {
+            try fixture.send(.canceled, burst: burst)
+            fixture.now += 1
+        }
+        try fixture.send(frames, burst: 2)
+        #expect(fixture.appendedRows(.publicMesh).isEmpty)
+        try fixture.send(frames, burst: 1)
+        #expect(fixture.appendedRows(.publicMesh).count == 1)
+    }
+
+    @Test func resetClearsTerminalRecords() throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        try fixture.send(.canceled)
+        fixture.coordinator.resetForPanic()
+        try fixture.send(frames)
+        #expect(fixture.appendedRows(.publicMesh).count == 1)
+    }
+}
+
+// Receiver lifecycle checks use synthetic frame bytes to test state, not audio.
+@MainActor
+extension LiveVoiceTerminalBurstTests {
+    @Test(arguments: [VoiceBurstScope.directMessage, .publicMesh])
+    func matchingNoteRefreshesTerminalExpiryOnlyWhileFallbackExists(scope: VoiceBurstScope) throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        try fixture.send(frames, scope: scope)
+        try fixture.send(.end(totalDataPackets: 1, durationMs: 64), seq: 2, scope: scope)
+        let original = try #require(fixture.appendedRows(scope).first)
+        #expect(!fixture.coordinator.isLiveVoiceMessage(original))
+        let note = BitchatMessage(
+            sender: "sender", content: "[voice] voice_0100000000000000.m4a",
+            timestamp: Date(), isRelay: false, isPrivate: scope == .directMessage, senderPeerID: fixture.peer
+        )
+        // Only the terminal monotonic clock advances; fallback wall-clock age stays short.
+        fixture.now = 599
+        #expect(fixture.coordinator.absorbFinalizedVoiceNote(note))
+        fixture.now = 600
+        try fixture.send(frames, seq: 2, scope: scope)
+        #expect(fixture.appendedRows(scope).count == 1)
+        fixture.now = 1000
+        #expect(!fixture.coordinator.absorbFinalizedVoiceNote(note))
+        fixture.now = 1198.999
+        try fixture.send(.start(codec: .aacLC16kMono), seq: 0, scope: scope)
+        #expect(fixture.appendedRows(scope).count == 1)
+        fixture.now = 1199
+        try fixture.send(frames, seq: 2, scope: scope)
+        #expect(fixture.appendedRows(scope).count == 2)
+        #expect(fixture.coordinator.isLiveVoiceMessage(try #require(fixture.appendedRows(scope).last)))
+    }
+
+    @Test(arguments: [VoiceBurstScope.directMessage, .publicMesh])
+    func unmatchedFinalizedNoteDoesNotCloseLaterLiveAdmission(scope: VoiceBurstScope) throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        let note = BitchatMessage(
+            sender: "sender", content: "[voice] voice_0100000000000000.m4a",
+            timestamp: Date(), isRelay: false, isPrivate: scope == .directMessage, senderPeerID: fixture.peer
+        )
+        #expect(!fixture.coordinator.absorbFinalizedVoiceNote(note))
+        try fixture.send(frames, scope: scope)
+        #expect(fixture.appendedRows(scope).count == 1)
+        #expect(fixture.coordinator.isLiveVoiceMessage(try #require(fixture.appendedRows(scope).first)))
+    }
+
+    @Test(arguments: [VoiceBurstScope.directMessage, .publicMesh])
+    func terminalAdmissionStaysClosedAfterFallbackRegistryEviction(scope: VoiceBurstScope) throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        try fixture.send(frames, scope: scope)
+        try fixture.send(.end(totalDataPackets: 1, durationMs: 64), seq: 2, scope: scope)
+        let file = try fixture.fallback()
+        let before = try Data(contentsOf: file)
+        for burst in UInt16(2)...34 {
+            try fixture.send(frames, burst: burst, scope: scope)
+            try fixture.send(.end(totalDataPackets: 1, durationMs: 64), seq: 2, burst: burst, scope: scope)
+        }
+        #expect(fixture.appendedRows(scope).count == 34)
+        let note = BitchatMessage(
+            sender: "sender", content: "[voice] voice_0100000000000000.m4a",
+            timestamp: Date(), isRelay: false, isPrivate: scope == .directMessage, senderPeerID: fixture.peer
+        )
+        // Failed absorption confirms the original fallback entry was evicted.
+        #expect(!fixture.coordinator.absorbFinalizedVoiceNote(note))
+        try fixture.send(frames, seq: 2, scope: scope)
+        try fixture.send(.start(codec: .aacLC16kMono), seq: 0, scope: scope)
+        #expect(fixture.appendedRows(scope).count == 34)
+        #expect(try Data(contentsOf: file) == before)
+        try fixture.send(frames, burst: 35, scope: scope)
+        #expect(fixture.appendedRows(scope).count == 35)
+        #expect(fixture.coordinator.isLiveVoiceMessage(try #require(fixture.appendedRows(scope).last)))
+    }
+
+    @Test func capacityRetainsNewestClosedIdentity() throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        for burst in UInt16(1)...257 {
+            try fixture.send(.canceled, burst: burst)
+            fixture.now += 1
+        }
+        try fixture.send(frames, burst: 257)
+        try fixture.send(frames, burst: 2)
+        #expect(fixture.appendedRows(.publicMesh).isEmpty)
+        try fixture.send(frames, burst: 1)
+        #expect(fixture.appendedRows(.publicMesh).count == 1)
+    }
+}
+
+@MainActor
+extension LiveVoiceTerminalBurstTests {
+    @Test(arguments: [VoiceBurstScope.directMessage, .publicMesh])
+    func resetPreservesReplacementGapPastOriginalRedrainDeadline(scope: VoiceBurstScope) async throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        try fixture.send(frames, seq: 2, scope: scope)
+        let original = try #require(fixture.appendedRows(scope).first)
+        let directory = try fixture.store.incomingDirectory(subdirectory: "voicenotes/incoming")
+        let capture = try #require(FileManager.default.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: nil
+        ).first { $0.lastPathComponent.hasPrefix("voice_live_") })
+        // Separate the old and replacement gap timers, which currently fire after 550 ms.
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(fixture.coordinator.isLiveVoiceMessage(original))
+        #expect(try Data(contentsOf: capture).isEmpty)
+        fixture.coordinator.resetForPanic()
+        #expect(!fixture.coordinator.isLiveVoiceMessage(original))
+        #expect(!FileManager.default.fileExists(atPath: capture.path))
+        try fixture.send(.frames([Data([4, 5, 6])]), seq: 2, scope: scope)
+        try fixture.send(.end(totalDataPackets: 2, durationMs: 128), seq: 3, scope: scope)
+        let replacement = try #require(fixture.appendedRows(scope).last)
+        let replacementCapture = try #require(FileManager.default.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: nil
+        ).first { $0.lastPathComponent.hasPrefix("voice_live_") })
+        // Cross the old deadline while the replacement still waits for its first packet.
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(fixture.appendedRows(scope).count == 2)
+        #expect(fixture.coordinator.isLiveVoiceMessage(replacement))
+        #expect(try Data(contentsOf: replacementCapture).isEmpty)
+        try fixture.send(frames, scope: scope)
+        try await fixture.waitForCompletion(of: replacement)
+        let expectedAudio = ADTSFramer.frame(Data([1, 2, 3])) + ADTSFramer.frame(Data([4, 5, 6]))
+        #expect(try Data(contentsOf: fixture.fallback()) == expectedAudio)
+        #expect(fixture.appendedRows(scope).count == 2)
+    }
+
+    @Test(arguments: [VoiceBurstScope.directMessage, .publicMesh])
+    func resetPreservesSameKeyRecoveryPastOriginalIdleDeadline(scope: VoiceBurstScope) async throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        let idleTimeout = TransportConfig.pttBurstEndTimeoutSeconds
+        try fixture.send(frames, scope: scope)
+        let original = try #require(fixture.appendedRows(scope).first)
+        // Let the original idle timer start and separate the two deadlines.
+        try await Task.sleep(for: .seconds(idleTimeout / 2))
+        #expect(fixture.coordinator.isLiveVoiceMessage(original))
+        fixture.coordinator.resetForPanic()
+        #expect(!fixture.coordinator.isLiveVoiceMessage(original))
+        try fixture.send(frames, scope: scope)
+        let replacement = try #require(fixture.appendedRows(scope).last)
+        #expect(fixture.appendedRows(scope).count == 2)
+        #expect(fixture.coordinator.isLiveVoiceMessage(replacement))
+        // Cross the original deadline while remaining before the replacement's deadline.
+        try await Task.sleep(for: .seconds(idleTimeout / 2 + 0.5))
+        #expect(fixture.appendedRows(scope).count == 2)
+        #expect(fixture.coordinator.isLiveVoiceMessage(replacement))
+    }
+}
+
+// Admission checks at expiry and after mixed-age closure history reaches capacity.
+@MainActor
+extension LiveVoiceTerminalBurstTests {
+    @Test(arguments: [VoiceBurstScope.directMessage, .publicMesh])
+    func lookupExpiryBoundaryAndCancelRenewal(scope: VoiceBurstScope) throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        try fixture.send(.canceled, scope: scope)
+        fixture.now = 599.999
+        try fixture.send(.start(codec: .aacLC16kMono), scope: scope)
+        #expect(fixture.appendedRows(scope).isEmpty)
+        fixture.now = 600
+        // An expired cancel is a new closure, not a refresh of a still-retained record.
+        try fixture.send(.canceled, scope: scope)
+        fixture.now = 1199.999
+        try fixture.send(frames, scope: scope)
+        #expect(fixture.appendedRows(scope).isEmpty)
+        fixture.now = 1200
+        try fixture.send(frames, scope: scope)
+        #expect(fixture.appendedRows(scope).count == 1)
+        #expect(fixture.coordinator.isLiveVoiceMessage(try #require(fixture.appendedRows(scope).last)))
+    }
+
+    @Test(arguments: [VoiceBurstScope.directMessage, .publicMesh])
+    func lookupExpiryMixedAgeCapacity(scope: VoiceBurstScope) throws {
+        let fixture = TerminalBurstFixture()
+        defer { fixture.cleanup() }
+        // Fill the registry, with distinct deadlines and 129 expired at time 728.
+        for burst in UInt16(1)...256 {
+            fixture.now = Double(burst - 1)
+            try fixture.send(.canceled, burst: burst, scope: scope)
+        }
+        fixture.now = 728
+        // An unrelated END must not create an assembly or close admission.
+        try fixture.send(.end(totalDataPackets: 1, durationMs: 64), burst: 500, scope: scope)
+        for burst in UInt16(257)...385 {
+            try fixture.send(.canceled, burst: burst, scope: scope)
+        }
+        // The 127 unexpired old records plus 129 new records exactly fill the cap.
+        try fixture.send(frames, burst: 130, scope: scope)
+        try fixture.send(frames, burst: 256, scope: scope)
+        try fixture.send(frames, burst: 385, scope: scope)
+        #expect(fixture.appendedRows(scope).isEmpty)
+        try fixture.send(frames, burst: 129, scope: scope)
+        #expect(fixture.appendedRows(scope).count == 1)
+        try fixture.send(frames, burst: 500, scope: scope)
+        #expect(fixture.appendedRows(scope).count == 2)
     }
 }
