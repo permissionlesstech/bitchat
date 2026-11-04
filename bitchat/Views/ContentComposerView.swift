@@ -28,7 +28,11 @@ struct ContentComposerView: View {
     @Binding var showMacImagePicker: Bool
     #endif
 
-    @ScaledMetric(relativeTo: .title2) private var composerActionSize: CGFloat = 36
+    @ScaledMetric(relativeTo: .title2) private var scaledComposerActionSize: CGFloat = 36
+
+    private var composerActionSize: CGFloat {
+        max(36, scaledComposerActionSize)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
