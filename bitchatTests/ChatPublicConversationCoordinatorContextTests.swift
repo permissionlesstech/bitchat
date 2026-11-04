@@ -416,6 +416,9 @@ struct ChatPublicConversationCoordinatorContextTests {
         let context = MockChatPublicConversationContext()
         let coordinator = ChatPublicConversationCoordinator(context: context)
         context.activeChannel = .mesh
+        // Clearing the mesh timeline writes MeshEchoSettings.clearedThrough to
+        // UserDefaults.standard; don't leak that into other tests or the host app.
+        defer { MeshEchoSettings.reset() }
 
         coordinator.clearCurrentPublicTimeline()
 
@@ -433,6 +436,7 @@ struct ChatPublicConversationCoordinatorContextTests {
 
         coordinator.clearCurrentPublicTimeline()
 
+        #expect(context.clearedConversations == [.geohash("u4pruy")])
         #expect(context.archivePurgeCount == 0)
     }
 
