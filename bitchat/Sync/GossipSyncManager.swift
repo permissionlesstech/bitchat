@@ -279,13 +279,18 @@ final class GossipSyncManager {
 
         switch messageType {
         case .announce:
+            let sender = PeerID(hexData: packet.senderID)
+            // Arrival order is not sender order: sync replies can deliver an
+            // older announce after a newer one. Keep the newest known record.
+            if let existing = latestAnnouncementByPeer[sender],
+               existing.timestamp > packet.timestamp {
+                return
+            }
             guard isPacketFresh(packet) else { return }
             guard isAnnouncementFresh(packet) else {
-                let sender = PeerID(hexData: packet.senderID)
                 removeState(for: sender)
                 return
             }
-            let sender = PeerID(hexData: packet.senderID)
             latestAnnouncementByPeer[sender] = packet
         case .message:
             guard isBroadcastRecipient else { return }
