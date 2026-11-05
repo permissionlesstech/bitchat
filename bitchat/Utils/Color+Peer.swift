@@ -10,12 +10,22 @@ import SwiftUI
 
 extension Color {
     private static var peerColorCache: [String: Color] = [:]
-    
+
+    #if DEBUG
+    /// Counts cache-miss computations; exposed only so regression tests can
+    /// verify a repeated seed hits the cache instead of recomputing.
+    static var _peerColorComputeCountForTesting = 0
+    #endif
+
     init(peerSeed: String, isDark: Bool) {
         let cacheKey = peerSeed + (isDark ? "|dark" : "|light")
         if let cached = Self.peerColorCache[cacheKey] {
             self = cached
+            return
         }
+        #if DEBUG
+        Self._peerColorComputeCountForTesting += 1
+        #endif
         let h = peerSeed.djb2()
         var hue = Double(h % 1000) / 1000.0
         let orange = 30.0 / 360.0
