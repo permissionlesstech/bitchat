@@ -5,6 +5,22 @@ struct BLEAuthenticatedPeerStateObservation {
     let fingerprint: String
     let sessionGeneration: UUID
     let capabilities: PeerCapabilities
+    /// The peer's own reassembly bound, if it advertised one. Bound to the
+    /// generation like every other field here: a replacement session must
+    /// re-state its ceiling rather than inherit the previous one.
+    let maxReassemblyFragments: UInt16?
+
+    init(
+        fingerprint: String,
+        sessionGeneration: UUID,
+        capabilities: PeerCapabilities,
+        maxReassemblyFragments: UInt16? = nil
+    ) {
+        self.fingerprint = fingerprint
+        self.sessionGeneration = sessionGeneration
+        self.capabilities = capabilities
+        self.maxReassemblyFragments = maxReassemblyFragments
+    }
 }
 
 struct BLEPrivateMediaProofTimeoutMarker {
@@ -163,14 +179,16 @@ final class BLEPrivateMediaSessionStore: @unchecked Sendable {
         for peerID: PeerID,
         fingerprint: String,
         generation: UUID,
-        capabilities: PeerCapabilities
+        capabilities: PeerCapabilities,
+        maxReassemblyFragments: UInt16? = nil
     ) -> [@MainActor (PrivateMediaSendPolicy) -> Void]? {
         lock.withLock {
             guard sessionGenerations[peerID] == generation else { return nil }
             authenticatedStates[peerID] = BLEAuthenticatedPeerStateObservation(
                 fingerprint: fingerprint,
                 sessionGeneration: generation,
-                capabilities: capabilities
+                capabilities: capabilities,
+                maxReassemblyFragments: maxReassemblyFragments
             )
             proofTimeoutMarkers.removeValue(forKey: peerID)
             proofWatchdogs.removeValue(forKey: peerID)
@@ -347,6 +365,22 @@ final class BLEPrivateMediaSessionStore: @unchecked Sendable {
 }
 
 extension BLEPrivateMediaSessionStore {
+    /// The recipient's advertised reassembly ceiling, or nil when it did not
+    /// advertise one.
+    ///
+    /// Only honoured for an observation pinned to the peer's *current*
+    /// generation. A ceiling read off a superseded session is a statement by
+    /// whoever held that session, and after a rekey the counterpart may be a
+    /// different client entirely — falling back to the type proxy is the
+    /// conservative answer, not reusing a stale number.
+    func negotiatedFragmentCeiling(for peerID: PeerID) -> UInt16? {
+        let inputs = policyInputs(for: peerID)
+        guard let generation = inputs.sessionGeneration,
+              let authenticated = inputs.authenticatedState,
+              authenticated.sessionGeneration == generation else { return nil }
+        return authenticated.maxReassemblyFragments
+    }
+
     /// The current generation iff its authenticated peer state proved the
     /// private-media capability (and, when required, durable receipts).
     func provenGeneration(for peerID: PeerID, requireReceipts: Bool) -> UUID? {

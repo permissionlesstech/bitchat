@@ -35,7 +35,8 @@ struct BLEFragmentHeader: Equatable {
         let index = Int((UInt16(packet.payload[8]) << 8) | UInt16(packet.payload[9]))
         let total = Int((UInt16(packet.payload[10]) << 8) | UInt16(packet.payload[11]))
 
-        guard total > 0 && total <= 10_000 && index >= 0 && index < total else {
+        guard total > 0 && total <= BLEFragmentAssemblyBuffer.maxReassemblyFragments
+                && index >= 0 && index < total else {
             return nil
         }
 
@@ -54,6 +55,11 @@ struct BLEFragmentHeader: Equatable {
 }
 
 struct BLEFragmentAssemblyBuffer {
+    /// Header sanity bound, independent of the per-type byte budget below.
+    /// This is not an advertised capacity: 10,000 large fragments would exceed
+    /// that byte budget long before reaching the count limit.
+    static let maxReassemblyFragments = 10_000
+
     enum AppendResult: Equatable {
         case stored(header: BLEFragmentHeader, started: Bool)
         case complete(header: BLEFragmentHeader, reassembledData: Data, started: Bool)

@@ -179,6 +179,81 @@ struct PacketsTests {
     }
 
     @Test
+    func authenticatedPeerStateRoundTripsTheReassemblyCeiling() throws {
+        let packet = AuthenticatedPeerStatePacket(
+            capabilities: [.privateMedia],
+            signingPublicKey: Data(repeating: 0xA5, count: 32),
+            maxReassemblyFragments: 256
+        )
+
+        let encoded = try #require(packet.encode())
+        #expect(encoded.suffix(4) == Data([0x03, 0x02, 0x01, 0x00]))
+        #expect(AuthenticatedPeerStatePacket.decode(from: encoded) == packet)
+    }
+
+    @Test
+    func authenticatedPeerStateOmitsAnAbsentCeilingAndDecodesLegacyPayloadsAsNil() throws {
+        let packet = AuthenticatedPeerStatePacket(
+            capabilities: [.privateMedia],
+            signingPublicKey: Data(repeating: 0xA5, count: 32)
+        )
+
+        let encoded = try #require(packet.encode())
+        // Every client released before TLV 0x03 emits exactly this — version
+        // byte, 2-byte capability TLV, 32-byte key TLV, nothing else — and it
+        // must decode as "did not advertise", not as a ceiling of 0.
+        #expect(encoded.count == 1 + (2 + 2) + (2 + 32))
+        let decoded = try #require(AuthenticatedPeerStatePacket.decode(from: encoded))
+        #expect(decoded.maxReassemblyFragments == nil)
+    }
+
+    @Test
+    func malformedOptionalCeilingsPreserveAuthenticatedIdentity() throws {
+        let key = Data(repeating: 0x44, count: 32)
+        let prefix = Data([0x01]) + makeTLV(type: 0x01, value: Data([0x00, 0x01]))
+            + makeTLV(type: 0x02, value: key)
+        let valid = makeTLV(type: 0x03, value: Data([0x04, 0x00]))
+        let malformed: [Data] = [
+            makeTLV(type: 0x03, value: Data([0x00, 0x00])),
+            makeTLV(type: 0x03, value: Data([0x01])),
+            makeTLV(type: 0x03, value: Data([0x00, 0x00, 0x01, 0x00])),
+            valid + valid,
+            makeTLV(type: 0x03, value: Data([0x01])) + valid,
+            Data([0x03]),
+            Data([0x03, 0x02, 0x01])
+        ]
+        for tail in malformed {
+            let decoded = try #require(AuthenticatedPeerStatePacket.decode(from: prefix + tail))
+            #expect(decoded.signingPublicKey == key)
+            #expect(decoded.capabilities.contains(.privateMedia))
+            #expect(decoded.maxReassemblyFragments == 256)
+        }
+    }
+
+    @Test
+    func malformedCeilingBeforeRequiredFieldsDoesNotHideThem() throws {
+        let key = Data(repeating: 0x44, count: 32)
+        let payload = Data([0x01]) + makeTLV(type: 0x03, value: Data([0x01]))
+            + makeTLV(type: 0x01, value: Data([0x00, 0x01]))
+            + makeTLV(type: 0x02, value: key)
+        let decoded = try #require(AuthenticatedPeerStatePacket.decode(from: payload))
+        #expect(decoded.signingPublicKey == key)
+        #expect(decoded.capabilities.contains(.privateMedia))
+        #expect(decoded.maxReassemblyFragments == 256)
+    }
+
+    @Test
+    func authenticatedPeerStateRefusesToEncodeAZeroCeiling() {
+        #expect(
+            AuthenticatedPeerStatePacket(
+                capabilities: [.privateMedia],
+                signingPublicKey: Data(repeating: 0xA5, count: 32),
+                maxReassemblyFragments: 0
+            ).encode() == nil
+        )
+    }
+
+    @Test
     func privateMessagePacketRejectsUnknownTypeAndTruncation() {
         let unknownTLV = Data([0x7F, 0x01, 0x41])
         #expect(PrivateMessagePacket.decode(from: unknownTLV) == nil)
