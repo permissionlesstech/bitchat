@@ -445,6 +445,51 @@ struct GossipSyncManagerTests {
         #expect(delegate.packets.isEmpty)
     }
 
+    @Test func olderAnnounceDoesNotReplaceNewerGossipRecord() throws {
+        var config = GossipSyncManager.Config()
+        config.messageSyncIntervalSeconds = 0
+        config.fragmentSyncIntervalSeconds = 0
+        config.fileTransferSyncIntervalSeconds = 0
+        config.prekeyBundleSyncIntervalSeconds = 0
+
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: RequestSyncManager())
+        let delegate = RecordingDelegate()
+        manager.delegate = delegate
+
+        let sender = try #require(Data(hexString: "aabbccddeeff0011"))
+        let newerTimestamp = UInt64(Date().timeIntervalSince1970 * 1000)
+        let newer = BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: newerTimestamp,
+            payload: Data([0x02]),
+            signature: nil,
+            ttl: 1
+        )
+        let older = BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: newerTimestamp - 1,
+            payload: Data([0x01]),
+            signature: nil,
+            ttl: 1
+        )
+
+        manager.onPublicPacketSeen(newer)
+        manager.onPublicPacketSeen(older)
+        manager._performMaintenanceSynchronously()
+
+        let emptyFilter = GCSFilter.buildFilter(ids: [], maxBytes: 256, targetFpr: 0.01)
+        let request = RequestSyncPacket(p: emptyFilter.p, m: emptyFilter.m, data: emptyFilter.data, types: .announce)
+        manager.handleRequestSync(from: PeerID(str: "FFFFFFFFFFFFFFFF"), request: request)
+        manager._performMaintenanceSynchronously()
+
+        let response = try #require(delegate.packets.first)
+        #expect(response.timestamp == newerTimestamp)
+    }
+
     @Test func handleRequestSyncIsRateLimitedPerPeer() async throws {
         var config = GossipSyncManager.Config()
         config.seenCapacity = 5

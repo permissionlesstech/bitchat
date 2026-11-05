@@ -44,6 +44,37 @@ struct BLEPeerRegistryTests {
         #expect(registry.info(for: peerID)?.nickname == "alice-renamed")
     }
 
+    @Test("older announces cannot replace newer peer state")
+    func upsertVerifiedAnnounceRejectsOlderTimestamp() throws {
+        var registry = BLEPeerRegistry()
+        let peerID = PeerID(str: "1122334455667788")
+        let noiseKey = Data(repeating: 0x11, count: 32)
+        let firstSeen = Date(timeIntervalSince1970: 100)
+
+        _ = registry.upsertVerifiedAnnounce(
+            peerID: peerID,
+            nickname: "bobby",
+            noisePublicKey: noiseKey,
+            signingPublicKey: nil,
+            isConnected: true,
+            now: firstSeen,
+            announceTimestamp: 200
+        )
+        let stale = try #require(registry.upsertVerifiedAnnounce(
+            peerID: peerID,
+            nickname: "bob",
+            noisePublicKey: noiseKey,
+            signingPublicKey: nil,
+            isConnected: true,
+            now: firstSeen.addingTimeInterval(1),
+            announceTimestamp: 100
+        ))
+
+        #expect(stale.wasOlderAnnouncement)
+        #expect(registry.info(for: peerID)?.nickname == "bobby")
+        #expect(registry.info(for: peerID)?.announceTimestamp == 200)
+    }
+
     @Test("pinned signing key cannot be silently replaced by a later announce")
     func upsertVerifiedAnnounceRefusesToReplacePinnedSigningKey() throws {
         var registry = BLEPeerRegistry()

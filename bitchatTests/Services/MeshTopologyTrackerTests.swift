@@ -29,6 +29,25 @@ struct MeshTopologyTrackerTests {
         #expect(route == [])
     }
 
+    @Test func olderAnnounceDoesNotReplaceNeighborClaims() throws {
+        let tracker = MeshTopologyTracker()
+        let source = try hex("0102030405060708")
+        let currentNeighbor = try hex("1112131415161718")
+        let staleNeighbor = try hex("2122232425262728")
+
+        #expect(tracker.updateNeighbors(
+            for: source,
+            neighbors: [currentNeighbor],
+            announceTimestamp: 200
+        ))
+        #expect(!tracker.updateNeighbors(
+            for: source,
+            neighbors: [staleNeighbor],
+            announceTimestamp: 100
+        ))
+        #expect(tracker.adjacencySnapshot()[source] == [currentNeighbor])
+    }
+
     @Test func multiHopRouteComputation() throws {
         let tracker = MeshTopologyTracker()
         let a = try hex("0001020304050607")

@@ -15,12 +15,16 @@ struct BLEPeerInfo: Equatable {
     var capabilitiesWereExplicitlyAdvertised: Bool = false
     /// Rendezvous cell from the peer's announce when it advertises `.bridge`.
     var bridgeGeohash: String?
+    /// Sender timestamp of the newest accepted announce. Arrival time is not
+    /// sufficient here: a delayed sync reply can arrive after newer state.
+    var announceTimestamp: UInt64? = nil
 }
 
 struct BLEPeerAnnounceUpdate: Equatable {
     let isNewPeer: Bool
     let wasDisconnected: Bool
     let previousNickname: String?
+    let wasOlderAnnouncement: Bool = false
 }
 
 struct BLEPeerLinkPresence: Equatable {
@@ -205,9 +209,21 @@ struct BLEPeerRegistry {
         isConnected: Bool,
         now: Date,
         capabilities: PeerCapabilities? = nil,
-        bridgeGeohash: String? = nil
+        bridgeGeohash: String? = nil,
+        announceTimestamp: UInt64? = nil
     ) -> BLEPeerAnnounceUpdate? {
         let existing = peers[peerID]
+
+        if let announceTimestamp,
+           let previousTimestamp = existing?.announceTimestamp,
+           announceTimestamp < previousTimestamp {
+            return BLEPeerAnnounceUpdate(
+                isNewPeer: false,
+                wasDisconnected: false,
+                previousNickname: existing?.nickname,
+                wasOlderAnnouncement: true
+            )
+        }
 
         if let pinnedSigningKey = existing?.signingPublicKey,
            let announcedSigningKey = signingPublicKey,
@@ -232,7 +248,8 @@ struct BLEPeerRegistry {
             lastSeen: now,
             capabilities: capabilities ?? [],
             capabilitiesWereExplicitlyAdvertised: capabilities != nil,
-            bridgeGeohash: bridgeGeohash
+            bridgeGeohash: bridgeGeohash,
+            announceTimestamp: announceTimestamp ?? existing?.announceTimestamp
         )
 
         return update

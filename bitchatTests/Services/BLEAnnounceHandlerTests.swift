@@ -56,7 +56,7 @@ struct BLEAnnounceHandlerTests {
                 recorder.barrierCount += 1
                 body()
             },
-            upsertVerifiedAnnounce: { peerID, announcement, isConnected, now in
+            upsertVerifiedAnnounce: { peerID, announcement, isConnected, now, _ in
                 recorder.upsertCalls.append((peerID, announcement, isConnected, now))
                 return recorder.upsertResult
             },
@@ -64,7 +64,7 @@ struct BLEAnnounceHandlerTests {
                 recorder.reconnectLogQueries.append(peerID)
                 return recorder.shouldEmitReconnectLogResult
             },
-            updateTopology: { peerID, neighbors in
+            updateTopology: { peerID, neighbors, _ in
                 recorder.topologyUpdates.append((peerID, neighbors))
             },
             persistIdentity: { announcement in
@@ -717,18 +717,19 @@ struct BLEAnnounceHandlerTests {
             linkState: { _ in (hasPeripheral: true, hasCentral: false) },
             linkBoundToOtherPeer: { _, _ in false },
             withRegistryBarrier: { body in body() },
-            upsertVerifiedAnnounce: { peerID, announcement, isConnected, now in
+            upsertVerifiedAnnounce: { peerID, announcement, isConnected, now, packetTimestamp in
                 box.registry.upsertVerifiedAnnounce(
                     peerID: peerID,
                     nickname: announcement.nickname,
                     noisePublicKey: announcement.noisePublicKey,
                     signingPublicKey: announcement.signingPublicKey,
                     isConnected: isConnected,
-                    now: now
+                    now: now,
+                    announceTimestamp: packetTimestamp
                 )
             },
             shouldEmitReconnectLog: { _, _ in false },
-            updateTopology: { _, _ in },
+            updateTopology: { _, _, _ in },
             persistIdentity: { announcement in
                 box.persistedIdentities.append(announcement)
             },
@@ -832,18 +833,19 @@ struct BLEAnnounceHandlerTests {
                 linkState: { _ in (hasPeripheral: true, hasCentral: false) },
                 linkBoundToOtherPeer: { _, _ in false },
                 withRegistryBarrier: { body in body() },
-                upsertVerifiedAnnounce: { peerID, announcement, isConnected, now in
+                upsertVerifiedAnnounce: { peerID, announcement, isConnected, now, packetTimestamp in
                     box.registry.upsertVerifiedAnnounce(
                         peerID: peerID,
                         nickname: announcement.nickname,
                         noisePublicKey: announcement.noisePublicKey,
                         signingPublicKey: announcement.signingPublicKey,
                         isConnected: isConnected,
-                        now: now
+                        now: now,
+                        announceTimestamp: packetTimestamp
                     )
                 },
                 shouldEmitReconnectLog: { _, _ in false },
-                updateTopology: { _, _ in },
+                updateTopology: { _, _, _ in },
                 persistIdentity: { announcement in
                     identityManager.upsertCryptographicIdentity(
                         fingerprint: announcement.noisePublicKey.sha256Fingerprint(),
