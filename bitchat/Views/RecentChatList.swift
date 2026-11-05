@@ -45,24 +45,37 @@ struct RecentChatList: View {
                 )
 
                 ForEach(chats) { chat in
-                    HStack(spacing: 4) {
-                        Text(verbatim: chat.displayName)
-                            .bitchatFont(size: 14)
-                            .foregroundColor(palette.primary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 4) {
+                            Text(verbatim: chat.displayName)
+                                .bitchatFont(size: 14)
+                                .foregroundColor(palette.primary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
 
-                        Text(verbatim: Self.relativeFormatter.localizedString(for: chat.lastActivity, relativeTo: Date()))
-                            .bitchatFont(size: 11)
-                            .foregroundColor(palette.secondary.opacity(0.8))
+                            Text(verbatim: Self.relativeFormatter.localizedString(for: chat.lastActivity, relativeTo: Date()))
+                                .bitchatFont(size: 11)
+                                .foregroundColor(palette.secondary.opacity(0.8))
 
-                        Spacer()
+                            Spacer()
 
-                        if chat.hasUnread {
-                            Image(systemName: "envelope.fill")
-                                .font(.bitchatSystem(size: 10))
-                                .foregroundColor(.orange)
-                                .help(Strings.newMessagesTooltip)
+                            if chat.hasUnread {
+                                Image(systemName: "envelope.fill")
+                                    .font(.bitchatSystem(size: 10))
+                                    .foregroundColor(.orange)
+                                    .help(Strings.newMessagesTooltip)
+                            }
+                        }
+
+                        // Only when there is something to show: an empty
+                        // second line reserves height and reads as a
+                        // rendering fault rather than an empty conversation.
+                        if let preview = chat.preview {
+                            Text(verbatim: preview)
+                                .bitchatFont(size: 11)
+                                .foregroundColor(palette.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
                         }
                     }
                     .padding(.horizontal)
@@ -83,6 +96,9 @@ struct RecentChatList: View {
             chat.displayName,
             Self.relativeFormatter.localizedString(for: chat.lastActivity, relativeTo: Date())
         ]
+        // The row ignores its children for accessibility, so a preview left
+        // out here is a line sighted users can read and VoiceOver cannot.
+        if let preview = chat.preview { parts.append(preview) }
         if chat.hasUnread { parts.append(Strings.unread) }
         return parts.joined(separator: ", ")
     }
