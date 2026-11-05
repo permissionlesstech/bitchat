@@ -34,6 +34,7 @@ struct MeshPeerList: View {
         static let directMessage = String(localized: "content.actions.direct_message", comment: "Action that opens a private chat with the person")
         static let block = String(localized: "geohash_people.action.block", comment: "Context menu action to block a person")
         static let unblock = String(localized: "geohash_people.action.unblock", comment: "Context menu action to unblock a person")
+        static let copyNickname = String(localized: "mesh_peers.action.copy_nickname", comment: "Context menu action that copies a peer's display name")
     }
 
     var body: some View {
@@ -187,6 +188,9 @@ struct MeshPeerList: View {
                             Button(Strings.directMessage) {
                                 onTapPeer(peer.peerID)
                             }
+                            Button(Strings.copyNickname) {
+                                NicknameClipboard.copy(peer.displayName)
+                            }
                             Button(peer.isFavorite ? Strings.removeFavorite : Strings.addFavorite) {
                                 onToggleFavorite(peer.peerID)
                             }
@@ -212,6 +216,9 @@ struct MeshPeerList: View {
                     .accessibilityHint(isMe ? "" : Strings.openDMHint)
                     .accessibilityActions {
                         if !isMe {
+                            Button(Strings.copyNickname) {
+                                NicknameClipboard.copy(peer.displayName)
+                            }
                             Button(peer.isFavorite ? Strings.removeFavorite : Strings.addFavorite) {
                                 onToggleFavorite(peer.peerID)
                             }
