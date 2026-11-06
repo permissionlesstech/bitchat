@@ -106,6 +106,7 @@ private final class MockChatNostrContext: ChatNostrContext {
 
     // Nostr identity & blocking
     var geohashIdentities: [String: NostrIdentity] = [:]
+    var networkActivationAllowed = true
     var nostrIdentity: NostrIdentity?
     var blockedNostrPubkeys: Set<String> = []
     var displayNamesByPubkey: [String: String] = [:]
@@ -117,7 +118,13 @@ private final class MockChatNostrContext: ChatNostrContext {
         return identity
     }
 
-    func currentNostrIdentity() -> NostrIdentity? { nostrIdentity }
+    var identityReads = 0
+    var onIdentityRead: (() -> Void)?
+    func currentNostrIdentity() -> NostrIdentity? {
+        identityReads += 1
+        onIdentityRead?()
+        return nostrIdentity
+    }
 
     func isNostrBlocked(pubkeyHexLowercased: String) -> Bool {
         blockedNostrPubkeys.contains(pubkeyHexLowercased.lowercased())
@@ -274,6 +281,23 @@ private func teleportedGeohashEvent(from sender: NostrIdentity, sentAt: Date) th
 /// (`NostrRelayManager.shared` subscriptions, `TorManager`) remain covered by
 /// the full view-model tests.
 struct ChatNostrCoordinatorContextTests {
+
+    @Test(arguments: [false, true]) @MainActor
+    func queuedPublicNostrDeliveryRespectsPanicBoundary(_ sampled: Bool) async throws {
+        let context = MockChatNostrContext()
+        let coordinator = ChatNostrCoordinator(context: context)
+        let sender = try NostrIdentity.generate()
+        let event = try NostrProtocol.createEphemeralGeohashEvent(
+            content: "pre-panic public message", geohash: "u4pruyd",
+            senderIdentity: sender, nickname: "synthetic")
+        if sampled { coordinator.inbound.subscribeNostrEvent(event) }
+        else { coordinator.inbound.handleNostrEvent(event) }
+        coordinator.inbound.invalidateInFlightDecrypts()
+        await drainMainQueue()
+        #expect(context.handledPublicMessages.isEmpty)
+        #expect(context.mentionCheckedMessageIDs.isEmpty)
+        #expect(context.hapticMessageIDs.isEmpty)
+    }
 
     @Test @MainActor
     func handleNostrEvent_ingestsPublicMessageOnceAndDeduplicates() async throws {
@@ -543,6 +567,51 @@ struct ChatNostrCoordinatorContextTests {
     // `test_receiveGiftWrap_tamperedSignatureIsDroppedAndDoesNotPoisonDedup`.
     // The inbound pipeline only ever sees verified events.
 
+    @Test(arguments: [false, true]) @MainActor
+    func mailboxRejectsIdentityAcquisitionAcrossPanic(_ blocked: Bool) async throws {
+        let context = MockChatNostrContext()
+        let coordinator = ChatNostrCoordinator(context: context)
+        let recipient = try NostrIdentity.generate()
+        let sender = try NostrIdentity.generate()
+        context.nostrIdentity = recipient
+        let embedded = try #require(NostrEmbeddedBitChat.encodePMForNostrNoRecipient(
+            content: "old mailbox plaintext", messageID: "mailbox-boundary"))
+        let giftWrap = try NostrProtocol.createPrivateMessage(content: embedded,
+            recipientPubkey: recipient.publicKeyHex, senderIdentity: sender)
+        let generation = coordinator.inbound.wipeGeneration
+        if blocked { context.networkActivationAllowed = false }
+        else { coordinator.inbound.invalidateInFlightDecrypts() }
+        await coordinator.inbound.processNostrMessage(giftWrap, wipeGeneration: generation)
+        #expect(context.identityReads == 0)
+        #expect(context.recordedNostrEventIDs.isEmpty)
+        #expect(context.handledPrivateMessages.isEmpty)
+
+        context.networkActivationAllowed = true
+        await coordinator.inbound.processNostrMessage(giftWrap,
+            wipeGeneration: coordinator.inbound.wipeGeneration)
+        #expect(context.identityReads == 1)
+        #expect(context.handledPrivateMessages.count == 1)
+    }
+
+    @Test @MainActor
+    func mailboxDropsDeliveryIfPanicFollowsIdentityAcquisition() async throws {
+        let context = MockChatNostrContext()
+        let coordinator = ChatNostrCoordinator(context: context)
+        let recipient = try NostrIdentity.generate()
+        let sender = try NostrIdentity.generate()
+        context.nostrIdentity = recipient
+        let embedded = try #require(NostrEmbeddedBitChat.encodePMForNostrNoRecipient(
+            content: "old mailbox plaintext", messageID: "mailbox-delivery"))
+        let giftWrap = try NostrProtocol.createPrivateMessage(content: embedded,
+            recipientPubkey: recipient.publicKeyHex, senderIdentity: sender)
+        context.onIdentityRead = { coordinator.inbound.invalidateInFlightDecrypts() }
+        await coordinator.inbound.processNostrMessage(giftWrap,
+            wipeGeneration: coordinator.inbound.wipeGeneration)
+        #expect(context.identityReads == 1)
+        #expect(context.handledPrivateMessages.isEmpty)
+        #expect(context.nostrKeyMapping.isEmpty)
+    }
+
     @Test @MainActor
     func processNostrMessage_duplicateDeliveryProcessesOnce() async throws {
         let context = MockChatNostrContext()
@@ -559,10 +628,10 @@ struct ChatNostrCoordinatorContextTests {
 
         // Fan-in of the same (already verified) gift wrap from several relays
         // records and processes exactly once.
-        await coordinator.inbound.processNostrMessage(giftWrap)
+        await coordinator.inbound.processNostrMessage(giftWrap, wipeGeneration: coordinator.inbound.wipeGeneration)
         #expect(context.recordedNostrEventIDs == [giftWrap.id])
 
-        await coordinator.inbound.processNostrMessage(giftWrap)
+        await coordinator.inbound.processNostrMessage(giftWrap, wipeGeneration: coordinator.inbound.wipeGeneration)
         #expect(context.recordedNostrEventIDs == [giftWrap.id])
     }
 
