@@ -15,6 +15,8 @@ from runner_support import Interrupted, bounded, install_signal_handlers, manife
 # This inventory is intentionally independent of source discovery: removing or
 # replacing a case must require an explicit coverage update, even for subset runs.
 EXPECTED = {
+    'testMinimumSizeMatrix',
+    'testMinimumSizeGlass',
     'testAccessibilityXXXL',
     'testAccessibilityXXXLWide',
     'testActualPhotoPickerGlassLarge',
@@ -154,6 +156,24 @@ def main():
         command = common + ['-resultBundlePath', str(output / 'result.xcresult')] + filters + ['test-without-building']
         code = bounded(command, host, env, output, 'run', args.test_timeout)
         reason = 'tests passed' if code == 0 else 'tests failed'
+        if code != 0:
+            try:
+                with (output / 'run.log').open(errors='replace') as log:
+                    failures = [
+                        line.rstrip()
+                        for line in log
+                        if ': error:' in line
+                        or (line.startswith('Test Case ') and "' failed (" in line)
+                    ]
+                print('Failure details from the test log:', flush=True)
+                print(
+                    '\n'.join(failures)
+                    if failures
+                    else 'No matching assertion errors or failed test cases were recorded.',
+                    flush=True,
+                )
+            except OSError as error:
+                print(f'Could not read test failure details: {error}', flush=True)
         if code == 0:
             summary = json.loads(require(['xcrun', 'xcresulttool', 'get', 'test-results', 'summary', '--path',
                                           str(output / 'result.xcresult')], source, env, output, 'summary', 30))

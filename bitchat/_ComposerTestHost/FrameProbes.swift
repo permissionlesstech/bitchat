@@ -1,4 +1,4 @@
-#if COMPOSER_TEST_HOST && os(macOS)
+#if COMPOSER_TEST_HOST
 import SwiftUI
 
 // Compiled only into the inert composer host, never the shipping app.
@@ -9,14 +9,34 @@ struct LocalComposerProbeFrames: PreferenceKey {
     }
 }
 
-extension View {
-    func localComposerProbeFrame(_ name: String) -> some View {
-        background(GeometryReader { geometry in
+private struct LocalComposerProbeStateKey: EnvironmentKey {
+    static let defaultValue = ""
+}
+
+extension EnvironmentValues {
+    var localComposerProbeState: String {
+        get { self[LocalComposerProbeStateKey.self] }
+        set { self[LocalComposerProbeStateKey.self] = newValue }
+    }
+}
+
+private struct LocalComposerFrameProbe: View {
+    let name: String
+    @Environment(\.localComposerProbeState) private var state
+
+    var body: some View {
+        GeometryReader { geometry in
             Color.clear.preference(
                 key: LocalComposerProbeFrames.self,
-                value: [name: geometry.frame(in: .named("LocalComposerProbe"))]
+                value: [state + name: geometry.frame(in: .named("LocalComposerProbe"))]
             )
-        }.allowsHitTesting(false))
+        }.allowsHitTesting(false)
+    }
+}
+
+extension View {
+    func localComposerProbeFrame(_ name: String) -> some View {
+        background(LocalComposerFrameProbe(name: name))
     }
 }
 #endif

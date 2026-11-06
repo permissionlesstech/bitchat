@@ -22,6 +22,50 @@ final class ComposerLayoutUITests: XCTestCase {
     super.tearDown()
   }
 
+  func testMinimumSizeMatrix() { checkMinimumSize(glass: false) }
+  func testMinimumSizeGlass() { checkMinimumSize(glass: true) }
+
+  private func checkMinimumSize(glass: Bool) {
+    continueAfterFailure = false
+    let app = XCUIApplication()
+    activeApp = app
+    app.launchEnvironment = ["CI": "1", "GLASS": glass ? "1" : "0", "NARROW": "1"]
+    app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US",
+                           "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryXS"]
+    app.launch()
+    XCTAssertTrue(app.staticTexts["Dynamic Type: xSmall"].waitForExistence(timeout: 10))
+    assertMinimumAllocations(app, state: "true-false", attachment: true, action: "send")
+    app.buttons["Empty draft"].tap()
+    XCTAssertTrue(app.buttons["record voice note"].waitForExistence(timeout: 3))
+    assertMinimumAllocations(app, state: "true-true", attachment: true, action: "microphone")
+    app.buttons["No media context"].tap()
+    XCTAssertFalse(app.buttons["send message"].isEnabled)
+    assertMinimumAllocations(app, state: "false-true", attachment: false, action: "disabled send")
+    app.buttons["Fill draft"].tap()
+    XCTAssertTrue(app.buttons["send message"].isEnabled)
+    assertMinimumAllocations(app, state: "false-false", attachment: false, action: "send-only")
+  }
+
+  private func assertMinimumAllocations(_ app: XCUIApplication, state: String,
+                                        attachment: Bool, action: String) {
+    let report = app.staticTexts["controlAllocations"]
+    let ready = NSPredicate { _, _ in
+      (report.value as? String)?.hasPrefix(state + "|") == true
+    }
+    expectation(for: ready, evaluatedWith: report)
+    waitForExpectations(timeout: 10)
+    let value = report.value as? String ?? ""
+    print("MINIMUM_ALLOCATION \(action): \(value)")
+    for name in attachment ? ["attachment", "action"] : ["action"] {
+      let entry = value.split(separator: "|").dropFirst().first { $0.hasPrefix(name + ":") }
+      let dimensions = entry?.split(separator: ":").last?.split(separator: ",").compactMap { Double($0) } ?? []
+      XCTAssertEqual(dimensions.count, 2, "Missing measured allocation for \(name): \(value)")
+      guard dimensions.count == 2 else { return }
+      XCTAssertEqual(dimensions[0], 36, accuracy: 0.5, "\(name) \(action) width must retain the 36-point minimum")
+      XCTAssertEqual(dimensions[1], 36, accuracy: 0.5, "\(name) \(action) height must retain the 36-point minimum")
+    }
+  }
+
   func testActualPhotoPickerMatrixOrdinary() { checkActualPhotoPicker(glass: false, large: false) }
   func testActualPhotoPickerMatrixLarge() { checkActualPhotoPicker(glass: false, large: true) }
   func testActualPhotoPickerGlassOrdinary() { checkActualPhotoPicker(glass: true, large: false) }

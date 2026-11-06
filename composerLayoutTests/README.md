@@ -2,13 +2,14 @@
 
 The Build & Test workflow runs these checks automatically in its existing jobs:
 
-- The iOS simulator job runs 27 XCUITest cases after the standard app tests,
+- The iOS simulator job runs 29 XCUITest cases after the standard app tests,
   using a fresh disposable simulator of the selected type/runtime and the resolved Xcode package cache. Eleven cases cover
   attachment/send and attachment/microphone bounds, ordinary/accessibility XXXL
   text, both themes, 280/390-point rows, attachment bindings, sending, synthetic
   recording/cancel and narrow text entry. Four additional cases use the actual
   production photo picker in both themes at ordinary/accessibility XXXL text. Twelve
   selected-language cases add Arabic/Hebrew/German layout coverage described below.
+  Two minimum-size cases check 36-point control allocations at extra-small text in both themes, covering attachment, send, microphone and disabled/enabled send-only states.
 - The native app matrix job runs four macOS button cases serially after coverage
   and performance checks, copying resolved dependencies into a separate composer build directory. They send native
   in-process mouse events to the fully mounted composer, checking attachment,
@@ -24,9 +25,7 @@ extension dependency.
 
 The macOS runner selects the explicit `COMPOSER_TEST_HOST=1` SwiftPM configuration.
 That configuration uses the inert entry point and includes composer support in
-the existing app test target; the runner selects its four composer cases. Frame readers are declared behind `COMPOSER_TEST_HOST && os(macOS)`;
-normal builds exclude their implementation and calls. The readers do not receive
-hit tests and report layout allocations, not accessibility bounds.
+the existing app test target; the runner selects its four composer cases. Frame readers are declared behind `COMPOSER_TEST_HOST` and used by both test hosts; normal builds exclude their implementation and calls. The readers do not receive hit tests and report layout allocations, not accessibility bounds.
 
 Normal runs do not copy or rewrite source/project files. The macOS runner copies
 resolved package inputs, not ordinary build products, into its own configuration
@@ -42,7 +41,7 @@ resolved package cache matching `Package.resolved`. Record inputs without buildi
 python3 composerLayoutTests/run.py --output /tmp/composer-layout
 ```
 
-Build and run all 27 cases:
+Build and run all 29 cases:
 
 ```sh
 python3 composerLayoutTests/run.py --output /tmp/composer-layout-run \

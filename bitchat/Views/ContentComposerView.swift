@@ -138,13 +138,13 @@ struct ContentComposerView: View {
 
                     if conversationUIModel.canSendMediaInCurrentContext {
                         attachmentButton
-                        #if COMPOSER_TEST_HOST && os(macOS)
+                        #if COMPOSER_TEST_HOST
                             .localComposerProbeFrame("attachment")
                         #endif
                     }
 
                     sendOrMicButton
-                    #if COMPOSER_TEST_HOST && os(macOS)
+                    #if COMPOSER_TEST_HOST
                         .localComposerProbeFrame("action")
                     #endif
                 }

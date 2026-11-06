@@ -5,6 +5,8 @@
   struct ComposerLayoutFixture: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.layoutDirection) private var layoutDirection
+    @State private var controlFrames: [String: CGRect] = [:]
+    @State private var measuredState = ""
     @State private var composerFrame = CGRect.zero
     @State private var text = "hello"
     @State private var selection = "not selected"
@@ -29,6 +31,7 @@
       models = makeLayoutFeatureModels(for: vm, displayLocationManager: makeLayoutLocationManager())
     }
     private var dynamicTypeName: String {
+      if dynamicTypeSize == .xSmall { return "xSmall" }
       if dynamicTypeSize == .large { return "large" }
       if dynamicTypeSize == .accessibility5 { return "accessibility5" }
       return "unexpected \(String(describing: dynamicTypeSize))"
@@ -39,6 +42,15 @@
       [composerFrame.minX, composerFrame.minY, composerFrame.width, composerFrame.height]
         .map { String(Double($0)) }.joined(separator: ",")
     }
+    private var measurementState: String {
+      "\(viewModel.canSendMediaInCurrentContext)-\(text.isEmpty)"
+    }
+    private var controlBoundsValue: String {
+      measuredState + "|" + ["attachment", "action"].map { name in
+        guard let frame = controlFrames[name] else { return name + ":missing" }
+        return name + ":" + [frame.width, frame.height].map { String(Double($0)) }.joined(separator: ",")
+      }.joined(separator: "|")
+    }
     var body: some View {
       VStack {
         Group {
@@ -47,6 +59,9 @@
             .accessibilityIdentifier("languageDirection")
           Text("Dynamic Type: " + dynamicTypeName)
             .accessibilityIdentifier("dynamicType")
+          Text("Control allocations")
+            .accessibilityIdentifier("controlAllocations")
+            .accessibilityValue(controlBoundsValue)
           Text("Composer bounds")
             .accessibilityIdentifier("composerBounds")
             .accessibilityValue(composerBoundsValue)
@@ -86,6 +101,16 @@
               text = ""
             }, showImagePicker: $picker, imagePickerSourceType: $source), featureModels: models
         )
+        .coordinateSpace(name: "LocalComposerProbe")
+        .onPreferenceChange(LocalComposerProbeFrames.self) { [state = measurementState] frames in
+          let prefix = state + "|"
+          guard !frames.isEmpty, frames.keys.allSatisfy({ $0.hasPrefix(prefix) }) else { return }
+          controlFrames = Dictionary(uniqueKeysWithValues: frames.map {
+            (String($0.key.dropFirst(prefix.count)), $0.value)
+          })
+          measuredState = state
+        }
+        .environment(\.localComposerProbeState, measurementState + "|")
         .frame(width: ProcessInfo.processInfo.environment["NARROW"] == "1" ? 280 : 390)
         .background(GeometryReader { geometry in
           Color.clear
