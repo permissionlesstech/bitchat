@@ -36,6 +36,14 @@ struct GlobeView: View {
     @ObservedObject var state: GlobeState
     let colors: GlobeColors
     let world: GlobeWorldData
+    /// Live chat activity drawn as markers; tapping one calls `onMarkerTap`
+    /// instead of focusing the tapped point.
+    var activity: [GeohashChannelActivity] = []
+    var activityColors: GlobeActivityColors?
+    var markerLayer: GlobeMarkerLayer?
+    var onMarkerTap: (GlobeMarker) -> Void = { _ in }
+    /// A tap that hit no marker (the globe still focuses the tapped point).
+    var onBackgroundTap: () -> Void = {}
 
     @Environment(\.displayScale) private var displayScale
     @Environment(\.appTheme) private var theme
@@ -68,7 +76,11 @@ struct GlobeView: View {
                     renderer.draw(in: &context, size: size)
                 }
 
-                GlobeTouchLayer(state: state)
+                if let activityColors, let markerLayer {
+                    GlobeActivityOverlay(state: state, channels: activity, colors: activityColors, layer: markerLayer)
+                }
+
+                GlobeTouchLayer(state: state, onTap: handleTap)
 
                 // Isolated so its pulse does not redraw the globe geometry.
                 GlobeCrosshair(color: colors.accent, isInMotion: state.isInMotion)
@@ -92,6 +104,16 @@ struct GlobeView: View {
             @unknown default: break
             }
         }
+    }
+
+    /// Returns true when the tap hit a marker and was handled.
+    private func handleTap(at point: CGPoint) -> Bool {
+        if let marker = markerLayer?.hitTest(point) {
+            onMarkerTap(marker)
+            return true
+        }
+        onBackgroundTap()
+        return false
     }
 
     private func updateViewport(_ size: CGSize) {
@@ -576,20 +598,25 @@ private struct GlobeRenderer {
 #if os(iOS)
 private struct GlobeTouchLayer: UIViewRepresentable {
     let state: GlobeState
+    let onTap: (CGPoint) -> Bool
 
     func makeUIView(context: Context) -> GlobeTouchSurface {
         let view = GlobeTouchSurface()
         view.state = state
+        view.onTap = onTap
         return view
     }
 
     func updateUIView(_ view: GlobeTouchSurface, context: Context) {
         view.state = state
+        view.onTap = onTap
     }
 }
 
 private final class GlobeTouchSurface: UIView {
     weak var state: GlobeState?
+    /// Offered every single tap first; returning true skips focusing the point.
+    var onTap: (CGPoint) -> Bool = { _ in false }
 
     private static let touchSlop: CGFloat = 8
     private var touches: Set<UITouch> = []
@@ -692,7 +719,10 @@ private final class GlobeTouchSurface: UIView {
             centerLat: state.centerLat,
             centerLon: state.centerLon
         ) : nil
-        if isTap, let location = tapLocation {
+        if isTap, onTap(downPosition) {
+            lastTapTime = 0
+            state.endInteraction()
+        } else if isTap, let location = tapLocation {
             let isDouble = upTime - lastTapTime < 0.35
                 && hypot(downPosition.x - lastTapPosition.x, downPosition.y - lastTapPosition.y) < Self.touchSlop * 4
             lastTapTime = upTime
@@ -747,15 +777,18 @@ private final class GlobeTouchSurface: UIView {
 #else
 private struct GlobeTouchLayer: NSViewRepresentable {
     let state: GlobeState
+    let onTap: (CGPoint) -> Bool
 
     func makeNSView(context: Context) -> GlobeTouchSurface {
         let view = GlobeTouchSurface()
         view.state = state
+        view.onTap = onTap
         return view
     }
 
     func updateNSView(_ view: GlobeTouchSurface, context: Context) {
         view.state = state
+        view.onTap = onTap
     }
 }
 
@@ -763,6 +796,8 @@ private struct GlobeTouchLayer: NSViewRepresentable {
 /// double click zooms in.
 private final class GlobeTouchSurface: NSView {
     weak var state: GlobeState?
+    /// Offered every single click first; returning true skips focusing the point.
+    var onTap: (CGPoint) -> Bool = { _ in false }
 
     private var lastDrag: CGPoint?
     private var dragDistance: CGFloat = 0
@@ -796,7 +831,9 @@ private final class GlobeTouchSurface: NSView {
         let p = convert(event.locationInWindow, from: nil)
         let r = state.globeRadius
         if dragDistance < 4 {
-            if r > 0, let location = GlobeMath.unproject(
+            if event.clickCount < 2, onTap(p) {
+                // Handled (a marker).
+            } else if r > 0, let location = GlobeMath.unproject(
                 x: Double((p.x - bounds.midX) / r),
                 y: Double((p.y - bounds.midY) / r),
                 centerLat: state.centerLat,

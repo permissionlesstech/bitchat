@@ -735,6 +735,23 @@ final class NostrRelayManager: ObservableObject {
         return connection
     }
     
+    /// Closes relays a transient observer opened (the globe picker's activity
+    /// sweep) once nothing else needs them: not a default relay, not targeted by
+    /// any remaining subscription, and not holding a queued send.
+    func releaseRelays(_ relayUrls: [String]) {
+        var keep = defaultRelaySet
+        for state in subscriptionRequestState.values {
+            keep.formUnion(state.relayURLs)
+        }
+        messageQueueLock.lock()
+        for item in messageQueue {
+            keep.formUnion(item.pendingRelays)
+        }
+        messageQueueLock.unlock()
+        let releasable = Set(relayUrls.compactMap { NostrRelayURL.normalized($0) }).subtracting(keep)
+        dropRelays(releasable)
+    }
+
     /// Subscribe to events matching a filter. If `relayUrls` provided, targets only those relays.
     func subscribe(
         filter: NostrFilter,
@@ -1861,6 +1878,16 @@ struct NostrFilter: Encodable {
         }
     }
     
+    /// Geohash chat (20000) or presence (20001) events from anywhere, with no `g`
+    /// filter, so the request reveals nothing about where the user is looking.
+    static func worldwideGeohashActivity(kind: Int, since: Date, limit: Int) -> NostrFilter {
+        var filter = NostrFilter()
+        filter.kinds = [kind]
+        filter.since = since.timeIntervalSince1970.toInt()
+        filter.limit = limit
+        return filter
+    }
+
     // For NIP-17 gift wraps
     static func giftWrapsFor(pubkey: String, since: Date? = nil) -> NostrFilter {
         var filter = NostrFilter()

@@ -104,6 +104,10 @@ final class PeerListModel: ObservableObject {
         chatViewModel.geohashParticipantCount(for: geohash)
     }
 
+    func isGeohashUserBlocked(_ pubkeyHexLowercased: String) -> Bool {
+        chatViewModel.isGeohashUserBlocked(pubkeyHexLowercased: pubkeyHexLowercased)
+    }
+
     func startConversation(with peerID: PeerID) {
         chatViewModel.startPrivateChat(with: peerID)
     }

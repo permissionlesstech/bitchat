@@ -130,13 +130,22 @@ enum GlobeMath {
     /// for the current zoom: the largest precision whose cell is at least ~22% of the
     /// screen's smallest dimension.
     static func autoPrecision(globeRadius: Double, screenMin: Double) -> Int {
-        let target = screenMin * 0.22
+        let target = screenMin * autoPrecisionCellFraction
         var best = 1
         for p in 1...maxPrecision {
             let span = cellSpanLat(precision: p) * .pi / 180 * globeRadius
             if span >= target { best = p } else { break }
         }
         return min(max(best, 1), maxPrecision)
+    }
+
+    /// A cell is selectable once it spans this share of the screen's short side.
+    static let autoPrecisionCellFraction = 0.22
+
+    /// The zoom at which `autoPrecision` first reaches `precision`.
+    static func thresholdZoom(forPrecision precision: Int, baseRadius: Double, screenMin: Double) -> Double {
+        let spanRadians = cellSpanLat(precision: precision) * .pi / 180
+        return screenMin * autoPrecisionCellFraction / (spanRadians * baseRadius)
     }
 
     /// Zoom factor (globe radius multiplier over the fit-to-screen base radius) that frames
