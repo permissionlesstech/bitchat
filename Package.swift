@@ -1,6 +1,11 @@
 // swift-tools-version: 5.9
 
+import Foundation
 import PackageDescription
+
+// The serial composer runner selects the declared inert host. Normal builds
+// exclude its entry point and frame probes, and omit the composer test folders.
+let composerTestHost = ProcessInfo.processInfo.environment["COMPOSER_TEST_HOST"] == "1"
 
 let package = Package(
     name: "bitchat",
@@ -42,10 +47,11 @@ let package = Package(
                 // Globe picker geometry, bundled by the Xcode app targets and read
                 // from Bundle.main; the SwiftPM build only runs tests.
                 "Resources/Globe"
-            ],
+            ] + (composerTestHost ? ["BitchatApp.swift"] : ["_ComposerTestHost"]),
             resources: [
                 .process("Localizable.xcstrings")
-            ]
+            ],
+            swiftSettings: composerTestHost ? [.define("COMPOSER_TEST_HOST")] : []
         ),
         .testTarget(
             name: "bitchatTests",
@@ -60,7 +66,7 @@ let package = Package(
                 // CI perf gate data (read by scripts/check-perf-floors.sh),
                 // not a test resource.
                 "Performance/perf-floors.json"
-            ],
+            ] + (composerTestHost ? [] : ["ComposerSupport", "ComposerMacTests"]),
             resources: [
                 .process("Localization"),
                 // Only the vector fixture: declaring the whole "Noise"
