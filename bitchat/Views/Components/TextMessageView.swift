@@ -13,9 +13,13 @@ struct TextMessageView: View {
     @Environment(\.colorScheme) private var colorScheme: ColorScheme
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
+    @Environment(\.chatStyle) private var chatStyle
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
 
     let message: BitchatMessage
+    /// Whether this row starts its author's run of messages; the bubble
+    /// layout names the sender only on the first bubble of a run.
+    let startsRun: Bool
     /// Value snapshot of the message's mutable delivery status, captured at
     /// construction. `BitchatMessage` is a reference type mutated in place by
     /// `ConversationStore`, and SwiftUI compares reference-typed view fields
@@ -27,12 +31,34 @@ struct TextMessageView: View {
     @State private var expandedMessageIDs: Set<String> = []
     @State private var showDeliveryDetail = false
 
-    init(message: BitchatMessage) {
+    init(message: BitchatMessage, startsRun: Bool = true) {
         self.message = message
+        self.startsRun = startsRun
         self.deliveryStatus = message.deliveryStatus
     }
 
     var body: some View {
+        Group {
+            if chatStyle.usesBubbles {
+                bubbleBody
+            } else {
+                ircBody
+            }
+        }
+        // Collapse the revealed caption when the status advances (e.g.
+        // sending → sent → delivered) so a detail opened for one state
+        // doesn't linger and silently morph into another. Guarded write:
+        // under a message storm many rows change status within one frame,
+        // and an unconditional state write per change trips SwiftUI's
+        // "tried to update multiple times per frame" re-entrancy warning.
+        .onChange(of: deliveryStatus) { _ in
+            if showDeliveryDetail {
+                showDeliveryDetail = false
+            }
+        }
+    }
+
+    private var ircBody: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Heavy token scans run once per message, not once per render
             let scan = message.contentScan
@@ -111,40 +137,112 @@ struct TextMessageView: View {
             
             // Expand/Collapse for very long messages
             if scan.isLongForDisplay {
-                let isExpanded = expandedMessageIDs.contains(message.id)
-                let labelKey = isExpanded ? LocalizedStringKey("content.message.show_less") : LocalizedStringKey("content.message.show_more")
-                Button(labelKey) {
-                    if isExpanded { expandedMessageIDs.remove(message.id) }
-                    else { expandedMessageIDs.insert(message.id) }
-                }
-                .bitchatFont(size: 11, weight: .medium)
-                .foregroundColor(palette.accentBlue)
-                .padding(.top, 4)
+                expandToggle
+                    .padding(.top, 4)
             }
 
             // Render payment chips (Lightning / Cashu) with rounded background
             if !scan.lightningLinks.isEmpty || !scan.cashuLinks.isEmpty {
-                HStack(spacing: 8) {
-                    ForEach(scan.lightningLinks, id: \.self) { link in
-                        PaymentChipView(paymentType: .lightning(link))
-                    }
-                    ForEach(scan.cashuLinks, id: \.self) { link in
-                        PaymentChipView(paymentType: .cashu(link))
-                    }
-                }
-                .padding(.top, 6)
-                .padding(.leading, 2)
+                paymentChips(for: scan)
+                    .padding(.top, 6)
+                    .padding(.leading, 2)
             }
         }
-        // Collapse the revealed caption when the status advances (e.g.
-        // sending → sent → delivered) so a detail opened for one state
-        // doesn't linger and silently morph into another. Guarded write:
-        // under a message storm many rows change status within one frame,
-        // and an unconditional state write per change trips SwiftUI's
-        // "tried to update multiple times per frame" re-entrancy warning.
-        .onChange(of: deliveryStatus) { _ in
-            if showDeliveryDetail {
-                showDeliveryDetail = false
+    }
+
+    /// Messenger layout: the content in a bubble washed with the author's
+    /// color, the sender named on the first bubble of their run (never on my
+    /// own), and the time plus delivery status in the bottom-trailing corner.
+    private var bubbleBody: some View {
+        let scan = message.contentScan
+        let isOwn = conversationUIModel.isSentByCurrentUser(message)
+        let isCollapsed = scan.isLongForDisplay && !expandedMessageIDs.contains(message.id)
+        let status: DeliveryStatus? = message.isPrivate && isOwn && deliveryStatus != .notSentYet ? deliveryStatus : nil
+        let time = MessageBubbleMetrics.timestamp(for: message.timestamp)
+        // Only the inline cluster sits beside a placeholder that reads the
+        // time; the one under a collapsed message must read it itself.
+        func meta(timeIsSpokenByBody: Bool) -> MessageBubbleMeta {
+            MessageBubbleMeta(time: time, isBridged: message.isBridged, status: status, timeIsSpokenByBody: timeIsSpokenByBody) {
+                showDeliveryDetail.toggle()
+            }
+        }
+
+        return VStack(alignment: isOwn ? .trailing : .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
+                if startsRun && !isOwn {
+                    bubbleSenderLine
+                }
+
+                let bodyText = Text(conversationUIModel.formatBubbleBody(message, colorScheme: colorScheme, theme: theme))
+                // A collapsed long message hangs its meta off the toggle row
+                // instead: the truncated last line has no room to reserve.
+                (isCollapsed
+                    ? bodyText
+                    : bodyText + MessageBubbleMeta.placeholder(time: time, isBridged: message.isBridged, status: status, design: theme.bodyFontDesign))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(isCollapsed ? TransportConfig.uiLongMessageLineLimit : nil)
+                    .overlay(alignment: Alignment(horizontal: .trailing, vertical: .lastTextBaseline)) {
+                        if !isCollapsed {
+                            meta(timeIsSpokenByBody: true)
+                        }
+                    }
+
+                if scan.isLongForDisplay {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        expandToggle
+                        if isCollapsed {
+                            meta(timeIsSpokenByBody: false)
+                        }
+                    }
+                    .padding(.top, 2)
+                }
+
+                if !scan.lightningLinks.isEmpty || !scan.cashuLinks.isEmpty {
+                    paymentChips(for: scan)
+                        .padding(.top, 4)
+                }
+            }
+            .messageBubbleChrome(tint: conversationUIModel.bubbleTint(for: message, colorScheme: colorScheme), isOwn: isOwn)
+
+            if let status {
+                MessageBubbleDeliveryCaption(status: status, showsDetail: showDeliveryDetail)
+            }
+        }
+    }
+
+    private var bubbleSenderLine: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(conversationUIModel.formatBubbleSender(message, colorScheme: colorScheme, theme: theme))
+                .lineLimit(1)
+            if conversationUIModel.showsVerifiedSeal(for: message) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.bitchatSystem(size: 9))
+                    .foregroundColor(Color.green.opacity(0.85))
+                    .accessibilityLabel(
+                        String(localized: "content.accessibility.verified_sender", defaultValue: "Verified sender", comment: "Accessibility label for the seal next to a verified peer's name on a private message")
+                    )
+            }
+        }
+    }
+
+    private var expandToggle: some View {
+        let isExpanded = expandedMessageIDs.contains(message.id)
+        let labelKey = isExpanded ? LocalizedStringKey("content.message.show_less") : LocalizedStringKey("content.message.show_more")
+        return Button(labelKey) {
+            if isExpanded { expandedMessageIDs.remove(message.id) }
+            else { expandedMessageIDs.insert(message.id) }
+        }
+        .bitchatFont(size: 11, weight: .medium)
+        .foregroundColor(palette.accentBlue)
+    }
+
+    private func paymentChips(for scan: BitchatMessage.ContentScan) -> some View {
+        HStack(spacing: 8) {
+            ForEach(scan.lightningLinks, id: \.self) { link in
+                PaymentChipView(paymentType: .lightning(link))
+            }
+            ForEach(scan.cashuLinks, id: \.self) { link in
+                PaymentChipView(paymentType: .cashu(link))
             }
         }
     }

@@ -6,6 +6,9 @@ struct VoiceNoteView: View {
     private let isSending: Bool
     private let sendProgress: Double?
     private let isLive: Bool
+    /// Draws the rounded card behind the player. Off inside a message
+    /// bubble, which already frames it.
+    private let showsCard: Bool
     private let onCancel: (() -> Void)?
 
     @Environment(\.colorScheme) private var colorScheme
@@ -13,11 +16,12 @@ struct VoiceNoteView: View {
     @StateObject private var playback: VoiceNotePlaybackController
     @State private var waveform: [Float] = []
 
-    init(url: URL, isSending: Bool, sendProgress: Double?, isLive: Bool = false, onCancel: (() -> Void)?) {
+    init(url: URL, isSending: Bool, sendProgress: Double?, isLive: Bool = false, showsCard: Bool = true, onCancel: (() -> Void)?) {
         self.url = url
         self.isSending = isSending
         self.sendProgress = sendProgress
         self.isLive = isLive
+        self.showsCard = showsCard
         self.onCancel = onCancel
         _playback = StateObject(wrappedValue: VoiceNotePlaybackController(url: url))
     }
@@ -93,15 +97,15 @@ struct VoiceNoteView: View {
                 )
             }
         }
-        .padding(12)
+        .padding(showsCard ? 12 : 0)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(backgroundColor)
-                .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.1), radius: 6, x: 0, y: 2)
+                .fill(showsCard ? backgroundColor : .clear)
+                .shadow(color: Color.black.opacity(showsCard ? (colorScheme == .dark ? 0.3 : 0.1) : 0), radius: 6, x: 0, y: 2)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14)
-                .stroke(borderColor, lineWidth: 1)
+                .stroke(showsCard ? borderColor : .clear, lineWidth: 1)
         )
         .task {
             // Defer loading to let UI settle after view appears
