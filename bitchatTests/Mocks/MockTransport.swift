@@ -16,7 +16,7 @@ import BitFoundation
 /// Records all method calls and allows test code to verify interactions.
 final class MockTransport: Transport, PrivateMediaDeletionPersisting,
     MeshFileTransferring, MeshVerifying, MeshCourierTransporting,
-    MeshDiagnosing, MeshPublicArchiving, MeshVoiceStreaming,
+    MeshDiagnosing, MeshPublicArchiving, MeshVoiceStreaming, MeshVideoStreaming,
     MeshGroupMessaging, MeshBoardBroadcasting {
 
     // MARK: - Protocol Properties
@@ -348,6 +348,22 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting,
     }
     func sendVoiceFrameBroadcast(_ burstContent: Data) {
         sentVoiceBroadcasts.append(burstContent)
+    }
+
+    private(set) var sentVideoFrames: [(Data, PeerID)] = []
+    private(set) var sentVideoBroadcasts: [Data] = []
+    private(set) var liveMediaLinkBoostHolders = 0
+    var stubbedLiveSendBacklog = 0
+    func sendVideoFrame(_ packetContent: Data, to peerID: PeerID) {
+        sentVideoFrames.append((packetContent, peerID))
+    }
+    func sendVideoFrameBroadcast(_ packetContent: Data) {
+        sentVideoBroadcasts.append(packetContent)
+    }
+    func liveSendBacklog() -> Int { stubbedLiveSendBacklog }
+    func liveSendPacketBudget(to _: PeerID?) -> Int { TransportConfig.liveVideoBLEPacketBudget }
+    func setLiveMediaLinkBoost(_ active: Bool) {
+        liveMediaLinkBoostHolders += active ? 1 : -1
     }
 
     private(set) var sentGroupInvites: [(Data, PeerID)] = []

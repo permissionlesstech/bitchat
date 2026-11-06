@@ -12,9 +12,9 @@ enum BLEOutboundPacketPolicy {
         switch MessageType(rawValue: packetType) {
         case .noiseEncrypted, .noiseHandshake:
             return true
-        // voiceFrame is deliberately unpadded: padding to the 512 block would
-        // push every ~490-byte signed voice packet over the MTU into the
-        // fragment path.
+        // voiceFrame and videoFrame are deliberately unpadded: padding to the
+        // 512 block would push every ~490-byte signed live packet over the MTU
+        // into the fragment path.
         //
         // announceV2 is unpadded too, but for a different reason and it is worth
         // revisiting: it is ~75 bytes, so the smallest bucket would triple the
@@ -23,7 +23,7 @@ enum BLEOutboundPacketPolicy {
         // width); the residual variation is the capability width and whether a
         // bridge geohash is present. Making those fixed-width would be cheaper
         // than padding. See docs/PEER-ID-ROTATION.md.
-        case .none, .announce, .announceV2, .message, .leave, .requestSync, .fragment, .fileTransfer, .courierEnvelope, .boardPost, .ping, .pong, .nostrCarrier, .prekeyBundle, .groupMessage, .voiceFrame:
+        case .none, .announce, .announceV2, .message, .leave, .requestSync, .fragment, .fileTransfer, .courierEnvelope, .boardPost, .ping, .pong, .nostrCarrier, .prekeyBundle, .groupMessage, .voiceFrame, .videoFrame:
             return false
         }
     }
@@ -44,6 +44,18 @@ enum BLEOutboundPacketPolicy {
             return .high
         default:
             return .high
+        }
+    }
+
+    /// How long a public live voice/video packet may wait in a link queue
+    /// before it is dropped rather than sent late. Directed live packets are
+    /// opaque `noiseEncrypted` here; their sender's pacing deadline bounds them.
+    static func liveQueueDeadline(for packet: BitchatPacket, uptime: TimeInterval) -> TimeInterval? {
+        switch MessageType(rawValue: packet.type) {
+        case .voiceFrame, .videoFrame:
+            return uptime + TransportConfig.liveMediaLinkQueueDeadlineSeconds
+        default:
+            return nil
         }
     }
 

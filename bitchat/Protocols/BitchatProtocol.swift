@@ -83,6 +83,8 @@ enum NoisePayloadType: UInt8 {
     case groupKeyUpdate = 0x07      // Creator-signed group state (key rotation / roster update)
     // Live voice (push-to-talk)
     case voiceFrame = 0x08          // One live voice-burst packet (see VoiceBurstPacket)
+    // Live video (0x09 is the prerelease private-file alias below)
+    case videoFrame = 0x0A          // One live video packet (see VideoBurstPacket)
     // Finalized private media. `0x20` is the value already deployed by the
     // Android client. The complete BitchatFilePacket is encrypted inside
     // Noise before the outer noiseEncrypted packet is fragmented.
@@ -120,6 +122,7 @@ enum NoisePayloadType: UInt8 {
         case .groupInvite: return "groupInvite"
         case .groupKeyUpdate: return "groupKeyUpdate"
         case .voiceFrame: return "voiceFrame"
+        case .videoFrame: return "videoFrame"
         case .privateFile: return "privateFile"
         case .authenticatedPeerState: return "authenticatedPeerState"
         case .verifyChallenge: return "verifyChallenge"
@@ -162,6 +165,9 @@ protocol BitchatDelegate: AnyObject {
     // Public live-voice burst packet (signature-verified by the transport)
     func didReceivePublicVoiceFrame(from peerID: PeerID, nickname: String, payload: Data, timestamp: Date)
 
+    // Public live-video packet (signature-verified by the transport)
+    func didReceivePublicVideoFrame(from peerID: PeerID, nickname: String, payload: Data, timestamp: Date)
+
     // Bluetooth state updates for user notifications
     func didUpdateBluetoothState(_ state: CBManagerState)
     func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?)
@@ -186,6 +192,10 @@ extension BitchatDelegate {
     }
 
     func didReceivePublicVoiceFrame(from peerID: PeerID, nickname: String, payload: Data, timestamp: Date) {
+        // Default empty implementation
+    }
+
+    func didReceivePublicVideoFrame(from peerID: PeerID, nickname: String, payload: Data, timestamp: Date) {
         // Default empty implementation
     }
 

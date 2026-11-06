@@ -70,7 +70,8 @@ struct BLEReceivePipeline {
             // announce-class TTL headroom so alerts travel the extra hop.
             isUrgentBoardPost: packet.type == MessageType.boardPost.rawValue
                 && BoardWire.urgentFlag(in: packet.payload),
-            isVoiceFrame: packet.type == MessageType.voiceFrame.rawValue,
+            isLiveMedia: packet.type == MessageType.voiceFrame.rawValue
+                || packet.type == MessageType.videoFrame.rawValue,
             degree: degree,
             highDegreeThreshold: highDegreeThreshold
         )

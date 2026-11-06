@@ -85,26 +85,35 @@ private final class SystemPTTPlaybackEngine: PTTPlaybackEngine {
         }
         let scheduledEngine = engine
         node.scheduleBuffer(buffer, completionCallbackType: callbackType) { [weak scheduledEngine] callbackType in
-            // The API invokes this callback when the player is stopped as
-            // well. A configuration change can stop the engine before its
-            // notification reaches MainActor, so do not misclassify that
-            // flushed tail as audible playback.
-            guard scheduledEngine?.isRunning == true else {
-                completionHandler(.playbackStopped)
-                return
-            }
-            switch callbackType {
-            case .dataConsumed:
-                completionHandler(.dataConsumed)
-            case .dataRendered:
-                completionHandler(.dataConsumed)
-            case .dataPlayedBack:
-                completionHandler(.dataPlayedBack)
-            @unknown default:
-                completionHandler(.playbackStopped)
+            // Never touch the engine on the node's completion queue:
+            // `AVAudioPlayerNode.stop()` holds the engine lock while it waits
+            // synchronously for that queue, so `isRunning` here deadlocks a
+            // main-thread stop (category-escalation rebuild, teardown).
+            Self.completionClassifier.async {
+                // The API invokes this callback when the player is stopped as
+                // well. A configuration change can stop the engine before its
+                // notification reaches MainActor, so do not misclassify that
+                // flushed tail as audible playback.
+                guard scheduledEngine?.isRunning == true else {
+                    completionHandler(.playbackStopped)
+                    return
+                }
+                switch callbackType {
+                case .dataConsumed:
+                    completionHandler(.dataConsumed)
+                case .dataRendered:
+                    completionHandler(.dataConsumed)
+                case .dataPlayedBack:
+                    completionHandler(.dataPlayedBack)
+                @unknown default:
+                    completionHandler(.playbackStopped)
+                }
             }
         }
     }
+
+    /// Serial so completions keep their scheduling order.
+    nonisolated private static let completionClassifier = DispatchQueue(label: "chat.bitchat.ptt.playback-completion")
 }
 
 /// Completion callbacks arrive off the main actor, while engine rebuilds are

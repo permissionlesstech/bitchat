@@ -397,7 +397,7 @@ extension ChatViewModel: ChatMediaTransferContext {
     private func incomingMediaRelativePath(
         for message: BitchatMessage
     ) -> String? {
-        let categories: [MimeType.Category] = [.audio, .image, .file]
+        let categories: [MimeType.Category] = [.audio, .image, .video, .file]
         guard let category = categories.first(where: {
             message.content.hasPrefix($0.messagePrefix)
         }),
@@ -495,6 +495,7 @@ final class ChatMediaTransferCoordinator {
     private let prepareImagePacket: @Sendable (URL) throws -> ChatPreparedImage
     private let imagePreparationBarrier = ImagePreparationBarrier()
     private let prepareVoiceNotePacket: @Sendable (URL) throws -> BitchatFilePacket
+    private let prepareVideoPacket: @Sendable (URL) throws -> BitchatFilePacket
     private let reconnectRetryLimits: PrivateMediaReconnectRetryLimits
     private let now: () -> Date
     private let transferIDFactory: (String) -> String
@@ -532,6 +533,9 @@ final class ChatMediaTransferCoordinator {
         prepareVoiceNotePacket: @escaping @Sendable (URL) throws -> BitchatFilePacket = {
             try ChatMediaPreparation.prepareVoiceNotePacket(at: $0)
         },
+        prepareVideoPacket: @escaping @Sendable (URL) throws -> BitchatFilePacket = {
+            try ChatMediaPreparation.prepareVideoPacket(at: $0)
+        },
         reconnectRetryLimits: PrivateMediaReconnectRetryLimits =
             PrivateMediaReconnectRetryLimits(),
         now: @escaping () -> Date = Date.init,
@@ -542,16 +546,70 @@ final class ChatMediaTransferCoordinator {
         self.context = context
         self.prepareImagePacket = prepareImagePacket
         self.prepareVoiceNotePacket = prepareVoiceNotePacket
+        self.prepareVideoPacket = prepareVideoPacket
         self.reconnectRetryLimits = reconnectRetryLimits
         self.now = now
         self.transferIDFactory = transferIDFactory
     }
 
     func sendVoiceNote(at url: URL) {
+        sendFinishedMedia(
+            at: url,
+            category: .audio,
+            prepare: prepareVoiceNotePacket,
+            blockedMessage: String(localized: "Voice notes are only available in mesh chats.", comment: "System message when a voice note is attempted outside mesh chats"),
+            tooLargeReason: String(localized: "content.delivery.reason.voice_too_large", comment: "Failure reason shown when a voice note exceeds the size limit"),
+            failedReason: String(localized: "content.delivery.reason.voice_send_failed", comment: "Failure reason shown when a voice note could not be sent")
+        )
+    }
+
+    /// Sends a finished `video/mp4` (a live stream's recording or a recorded
+    /// or imported clip) that already sits in `videos/outgoing`.
+    func sendVideo(at url: URL) {
+        sendFinishedMedia(
+            at: url,
+            category: .video,
+            prepare: prepareVideoPacket,
+            blockedMessage: String(localized: "content.video.only_mesh", defaultValue: "Videos are only available in mesh chats.", comment: "System message when a video is attempted outside mesh chats"),
+            tooLargeReason: String(localized: "content.delivery.reason.video_too_large", defaultValue: "Video is too large to send over the mesh", comment: "Failure reason shown when a video exceeds the size limit"),
+            failedReason: String(localized: "content.delivery.reason.video_send_failed", defaultValue: "Video could not be sent", comment: "Failure reason shown when a video could not be sent")
+        )
+    }
+
+    /// Shows a recording the sender keeps locally (a live stream too long to
+    /// resend as one file transfer) without sending anything.
+    func addLocalVideoMessage(at url: URL) {
+        let message = BitchatMessage(
+            sender: context.nickname,
+            content: "\(MimeType.Category.video.messagePrefix)\(url.lastPathComponent)",
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: context.selectedPrivateChatPeer != nil,
+            recipientNickname: context.selectedPrivateChatPeer.map { context.nicknameForPeer($0) },
+            senderPeerID: context.myPeerID,
+            deliveryStatus: context.selectedPrivateChatPeer != nil ? .sent : nil
+        )
+        if let peerID = context.selectedPrivateChatPeer {
+            context.appendPrivateMessage(message, to: peerID)
+        } else {
+            context.appendPublicMessage(message, to: ConversationID(channelID: context.activeChannel))
+        }
+        context.notifyUIChanged()
+    }
+
+    private func sendFinishedMedia(
+        at url: URL,
+        category: MimeType.Category,
+        prepare: @escaping @Sendable (URL) throws -> BitchatFilePacket,
+        blockedMessage: String,
+        tooLargeReason: String,
+        failedReason: String
+    ) {
         guard context.canSendMediaInCurrentContext else {
-            SecureLogger.info("Voice note blocked outside mesh/private context", category: .session)
+            SecureLogger.info("\(category.rawValue) send blocked outside mesh/private context", category: .session)
             try? FileManager.default.removeItem(at: url)
-            context.addSystemMessage(String(localized: "Voice notes are only available in mesh chats.", comment: "System message when a voice note is attempted outside mesh chats"))
+            context.addSystemMessage(blockedMessage)
             return
         }
 
@@ -564,7 +622,7 @@ final class ChatMediaTransferCoordinator {
             )
         }
         let message = enqueueMediaMessage(
-            content: "\(MimeType.Category.audio.messagePrefix)\(url.lastPathComponent)",
+            content: "\(category.messagePrefix)\(url.lastPathComponent)",
             targetPeer: targetPeer,
             messageID: privateMessageID
         )
@@ -574,14 +632,13 @@ final class ChatMediaTransferCoordinator {
         // must be able to invalidate this exact invocation even while file I/O
         // is still running off the main actor.
         registerTransfer(transferId: transferId, messageID: messageID)
-        let prepareVoiceNotePacket = self.prepareVoiceNotePacket
         let barrier = imagePreparationBarrier
         let generation = barrier.currentGeneration
 
         Task.detached(priority: .userInitiated) { [weak self, barrier] in
             do {
                 let packet = try await runBlockingMediaPreparation {
-                    try prepareVoiceNotePacket(url)
+                    try prepare(url)
                 }
 
                 await MainActor.run { [weak self, barrier] in
@@ -601,8 +658,8 @@ final class ChatMediaTransferCoordinator {
                         self.context.sendFileBroadcast(packet, transferId: transferId)
                     }
                 }
-            } catch ChatMediaPreparationError.voiceNoteTooLarge(let size) {
-                SecureLogger.warning("Voice note exceeds size limit (\(size) bytes)", category: .session)
+            } catch let error as ChatMediaPreparationError where error.isTooLarge {
+                SecureLogger.warning("\(category.rawValue) exceeds size limit: \(error)", category: .session)
                 try? FileManager.default.removeItem(at: url)
                 await MainActor.run { [weak self, barrier] in
                     guard let self,
@@ -610,17 +667,17 @@ final class ChatMediaTransferCoordinator {
                           self.isRegisteredTransfer(transferId, messageID: messageID) else {
                         return
                     }
-                    self.handleMediaSendFailure(messageID: messageID, reason: String(localized: "content.delivery.reason.voice_too_large", comment: "Failure reason shown when a voice note exceeds the size limit"))
+                    self.handleMediaSendFailure(messageID: messageID, reason: tooLargeReason)
                 }
             } catch {
-                SecureLogger.error("Voice note send failed: \(error)", category: .session)
+                SecureLogger.error("\(category.rawValue) send failed: \(error)", category: .session)
                 await MainActor.run { [weak self, barrier] in
                     guard let self,
                           barrier.isCurrent(generation),
                           self.isRegisteredTransfer(transferId, messageID: messageID) else {
                         return
                     }
-                    self.handleMediaSendFailure(messageID: messageID, reason: String(localized: "content.delivery.reason.voice_send_failed", comment: "Failure reason shown when a voice note could not be sent"))
+                    self.handleMediaSendFailure(messageID: messageID, reason: failedReason)
                 }
             }
         }
@@ -1129,7 +1186,7 @@ final class ChatMediaTransferCoordinator {
         directions: [String],
         searchAllCategories: Bool
     ) {
-        let categories: [MimeType.Category] = [.audio, .image, .file]
+        let categories: [MimeType.Category] = [.audio, .image, .video, .file]
         guard let category = categories.first(where: { message.content.hasPrefix($0.messagePrefix) }),
               let rawFilename = String(message.content.dropFirst(category.messagePrefix.count)).trimmedOrNilIfEmpty,
               let base = try? applicationFilesDirectory(),

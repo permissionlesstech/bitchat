@@ -135,7 +135,7 @@ struct RelayControllerTests {
     }
 
     @Test
-    func voiceFrame_relaysWithFragmentPolicy() async {
+    func liveMedia_relaysWithFragmentPolicy() async {
         // Sparse graph: fragment cap, tight jitter (multi-hop latency must
         // stay inside the receiver's jitter buffer).
         let sparse = RelayController.decide(
@@ -147,7 +147,7 @@ struct RelayControllerTests {
             isDirectedFragment: false,
             isHandshake: false,
             isAnnounce: false,
-            isVoiceFrame: true,
+            isLiveMedia: true,
             degree: 3,
             highDegreeThreshold: TransportConfig.bleHighDegreeThreshold
         )
@@ -166,7 +166,7 @@ struct RelayControllerTests {
             isDirectedFragment: false,
             isHandshake: false,
             isAnnounce: false,
-            isVoiceFrame: true,
+            isLiveMedia: true,
             degree: TransportConfig.bleHighDegreeThreshold,
             highDegreeThreshold: TransportConfig.bleHighDegreeThreshold
         )

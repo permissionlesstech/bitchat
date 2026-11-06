@@ -55,6 +55,25 @@ enum TransportConfig {
     // stragglers or replays, not audio anyone should start hearing.
     static let pttPublicFrameMaxAgeSeconds: TimeInterval = 30
 
+    // Live video (see docs/LIVE_VIDEO_V1.md)
+    // Public live voice/video older than this in a BLE link queue is dropped
+    // rather than sent late.
+    static let liveMediaLinkQueueDeadlineSeconds: TimeInterval = 1.5
+    // Live packets per second a BLE route carries without building hidden
+    // queues (~two dozen 512-byte writes per link per second).
+    static let liveVideoBLEPacketBudget: Int = 24
+    static let liveVideoMaxConcurrentStreams: Int = 4
+    static let liveVideoMaxStreamBytes: Int = 24 * 1024 * 1024
+    // Inbound flood guard per stream, with a settling allowance.
+    static let liveVideoInboundMaxBytesPerSecond: Int = 96_000
+    static let liveVideoInboundAllowanceSeconds: Double = 3
+    // A quiet stream shows as reconnecting after this, and closes (reopenable)
+    // after the reconnect window when its END never arrived.
+    static let liveVideoQuietSeconds: TimeInterval = 4
+    static let liveVideoReconnectWindowSeconds: TimeInterval = 90
+    static let liveVideoFinishedRegistrySeconds: TimeInterval = 30 * 60
+    static let liveVideoPublicFrameMaxAgeSeconds: TimeInterval = 30
+
     // Mesh diagnostics (/ping)
     static let meshPingTimeoutSeconds: TimeInterval = 10    // Give up on a probe after this window
     static let meshPingInboundMaxPerLink: Int = 5           // Inbound ping budget per ingress link (claimed sender is spoofable)...

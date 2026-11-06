@@ -24,6 +24,8 @@ struct ContentComposerView: View {
     #if os(iOS)
     @Binding var showImagePicker: Bool
     @Binding var imagePickerSourceType: UIImagePickerController.SourceType
+    /// The camera button expanded into its Image / Video choice.
+    @State private var showsAttachmentChoices = false
     #else
     @Binding var showMacImagePicker: Bool
     #endif
@@ -258,32 +260,30 @@ private extension ContentComposerView {
 
     var attachmentButton: some View {
         #if os(iOS)
-        Image(systemName: "camera.circle.fill")
-            .font(.bitchatSystem(size: 24))
-            .foregroundColor(composerAccentColor)
-            .frame(width: 36, height: 36)
-            .contentShape(Circle())
-            .onTapGesture {
-                imagePickerSourceType = .photoLibrary
-                showImagePicker = true
+        HStack(spacing: 2) {
+            if showsAttachmentChoices {
+                attachmentChoice(
+                    systemImage: "photo",
+                    label: String(localized: "content.attachment.image", defaultValue: "Image", comment: "Composer attachment choice that opens the photo library")
+                ) {
+                    imagePickerSourceType = .photoLibrary
+                    showImagePicker = true
+                }
+                attachmentChoice(
+                    systemImage: "video",
+                    label: String(localized: "content.attachment.video", defaultValue: "Video", comment: "Composer attachment choice that opens the video screen (live stream or clip)")
+                ) {
+                    conversationUIModel.isVideoStudioPresented = true
+                }
             }
-            .onLongPressGesture(minimumDuration: 0.3) {
-                imagePickerSourceType = .camera
-                showImagePicker = true
-            }
-            .accessibilityLabel(
-                String(localized: "content.accessibility.attach_photo", comment: "Accessibility label for the photo attachment button")
-            )
-            .accessibilityHint(
-                String(localized: "content.accessibility.attach_photo_hint", comment: "Accessibility hint explaining the attachment button opens the photo library")
-            )
-            .accessibilityAddTraits(.isButton)
-            // The long-press → camera path is unreachable for VoiceOver users;
-            // mirror it as a named action.
-            .accessibilityAction(named: Text("content.accessibility.take_photo", comment: "Accessibility action name for taking a photo with the camera")) {
-                imagePickerSourceType = .camera
-                showImagePicker = true
-            }
+            cameraButton
+        }
+        // The expanded choices take room from the text field (whose long
+        // placeholder would otherwise draw over them and take their taps).
+        .fixedSize()
+        .layoutPriority(1)
+        .zIndex(1)
+        .animation(.easeOut(duration: 0.15), value: showsAttachmentChoices)
         #else
         Button(action: { showMacImagePicker = true }) {
             Image(systemName: "photo.circle.fill")
@@ -297,6 +297,53 @@ private extension ContentComposerView {
         )
         #endif
     }
+
+    #if os(iOS)
+    private func attachmentChoice(systemImage: String, label: String, action: @escaping () -> Void) -> some View {
+        Button {
+            showsAttachmentChoices = false
+            action()
+        } label: {
+            Image(systemName: systemImage)
+                .font(.bitchatSystem(size: 15, weight: .semibold))
+                .foregroundColor(composerAccentColor)
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(palette.background))
+                .overlay(Circle().stroke(composerAccentColor.opacity(0.5), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .transition(.scale.combined(with: .opacity))
+    }
+
+    private var cameraButton: some View {
+        Image(systemName: showsAttachmentChoices ? "xmark.circle.fill" : "camera.circle.fill")
+            .font(.bitchatSystem(size: 24))
+            .foregroundColor(composerAccentColor)
+            .frame(width: 36, height: 36)
+            .contentShape(Circle())
+            .onTapGesture {
+                showsAttachmentChoices.toggle()
+            }
+            .onLongPressGesture(minimumDuration: 0.3) {
+                imagePickerSourceType = .camera
+                showImagePicker = true
+            }
+            .accessibilityLabel(
+                String(localized: "content.accessibility.attach_photo", comment: "Accessibility label for the photo attachment button")
+            )
+            .accessibilityHint(
+                String(localized: "content.accessibility.attach_media_hint", defaultValue: "Shows image and video options", comment: "Accessibility hint explaining the attachment button expands into image and video choices")
+            )
+            .accessibilityAddTraits(.isButton)
+            // The long-press → camera path is unreachable for VoiceOver users;
+            // mirror it as a named action.
+            .accessibilityAction(named: Text("content.accessibility.take_photo", comment: "Accessibility action name for taking a photo with the camera")) {
+                imagePickerSourceType = .camera
+                showImagePicker = true
+            }
+    }
+    #endif
 
     @ViewBuilder
     var sendOrMicButton: some View {

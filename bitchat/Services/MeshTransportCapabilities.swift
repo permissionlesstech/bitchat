@@ -65,6 +65,21 @@ protocol MeshVoiceStreaming: AnyObject {
     func sendVoiceFrameBroadcast(_ burstContent: Data)
 }
 
+/// Live video: one encoded `VideoBurstPacket`, fire-and-forget inside the
+/// Noise session (private) or as a signed ephemeral broadcast (public), plus
+/// the signals a live sender paces and backs off on.
+protocol MeshVideoStreaming: AnyObject {
+    func sendVideoFrame(_ packetContent: Data, to peerID: PeerID)
+    func sendVideoFrameBroadcast(_ packetContent: Data)
+    /// Packets queued on the busiest outbound link (0 when unknown).
+    func liveSendBacklog() -> Int
+    /// Live packets per second the route to `peerID` (nil: public mesh)
+    /// carries without building hidden queues.
+    func liveSendPacketBudget(to peerID: PeerID?) -> Int
+    /// Reference-counted fast-link request while a stream is sent or watched.
+    func setLiveMediaLinkBoost(_ active: Bool)
+}
+
 /// Courier store-and-forward: seal a message to the recipient's static
 /// key and hand it to connected couriers for physical delivery while the
 /// recipient is offline. Returns false when the transport cannot courier.

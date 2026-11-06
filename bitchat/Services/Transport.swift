@@ -75,6 +75,9 @@ enum TransportEvent: @unchecked Sendable {
     /// Public live-voice burst packet (MessageType 0x29), already
     /// signature-verified against the claimed sender.
     case publicVoiceFrameReceived(peerID: PeerID, nickname: String, payload: Data, timestamp: Date)
+    /// Public live-video packet (MessageType 0x2D), already
+    /// signature-verified against the claimed sender.
+    case publicVideoFrameReceived(peerID: PeerID, nickname: String, payload: Data, timestamp: Date)
     case peerConnected(PeerID)
     case peerDisconnected(PeerID)
     case peerListUpdated([PeerID])
@@ -288,6 +291,8 @@ extension BitchatDelegate {
             didReceiveGroupMessage(payload: payload, timestamp: timestamp)
         case let .publicVoiceFrameReceived(peerID, nickname, payload, timestamp):
             didReceivePublicVoiceFrame(from: peerID, nickname: nickname, payload: payload, timestamp: timestamp)
+        case let .publicVideoFrameReceived(peerID, nickname, payload, timestamp):
+            didReceivePublicVideoFrame(from: peerID, nickname: nickname, payload: payload, timestamp: timestamp)
         case .peerConnected(let peerID):
             didConnectToPeer(peerID)
         case .peerDisconnected(let peerID):
@@ -307,6 +312,7 @@ extension BitchatDelegate {
 extension BLEService: Transport {}
 extension BLEService: MeshFileTransferring {}
 extension BLEService: MeshVoiceStreaming {}
+extension BLEService: MeshVideoStreaming {}
 extension BLEService: MeshCourierTransporting {}
 extension BLEService: MeshGroupMessaging {}
 extension BLEService: MeshBoardBroadcasting {}

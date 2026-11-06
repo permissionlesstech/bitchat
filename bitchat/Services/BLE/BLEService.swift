@@ -420,6 +420,9 @@ final class BLEService: NSObject {
     var pendingWriteBuffers = BLEInboundWriteBuffer()
     // Relay jitter scheduling to reduce redundant floods
     private var scheduledRelays = BLEScheduledRelayStore()
+    /// bleQueue-owned count of live streams sent or watched (see
+    /// `setLiveMediaLinkBoost`).
+    var liveMediaBoostHolders = 0
     // Track short-lived traffic bursts to adapt announces/scanning under load
     // (lock-backed: written by the receive pipeline, read on bleQueue)
     private let recentTrafficTracker = BLERecentTrafficMonitor()
@@ -2163,15 +2166,17 @@ final class BLEService: NSObject {
         sendOnAllLinks(packet: packet, data: data, pad: pad, directedOnlyPeer: nil)
     }
 
-    private func enqueuePendingNotification(data: Data, centrals: [CBCentral]?, context: String, attempt: Int = 0) {
+    private func enqueuePendingNotification(data: Data, centrals: [CBCentral]?, context: String, attempt: Int = 0, deadline: TimeInterval? = nil) {
         guard !isPanicSuspended else { return }
         bleQueue.async { [weak self] in
             guard let self = self else { return }
             guard !self.isPanicSuspended else { return }
+            if let deadline, ProcessInfo.processInfo.systemUptime > deadline { return }
             let result = self.pendingNotifications.enqueue(
                 data: data,
                 targets: centrals,
-                capCount: TransportConfig.blePendingNotificationsCapCount
+                capCount: TransportConfig.blePendingNotificationsCapCount,
+                deadline: deadline
             )
 
             if case let .enqueued(count) = result {
@@ -2186,7 +2191,7 @@ final class BLEService: NSObject {
 
             let backoff = TransportConfig.bleNotificationRetryDelayMs * max(1, attempt + 1)
             self.engineScheduler.schedule(after: Double(backoff) / 1_000) { [weak self] in
-                self?.enqueuePendingNotification(data: data, centrals: centrals, context: context, attempt: attempt + 1)
+                self?.enqueuePendingNotification(data: data, centrals: centrals, context: context, attempt: attempt + 1, deadline: deadline)
             }
         }
     }
@@ -2278,6 +2283,13 @@ final class BLEService: NSObject {
             excludedPeerLinks.formUnion(boundLinks.subtracting(authenticatedLinks))
         }
         let outboundPriority = BLEOutboundPacketPolicy.priority(for: packet, data: data)
+        let liveDeadline = BLEOutboundPacketPolicy.liveQueueDeadline(
+            for: packet,
+            uptime: ProcessInfo.processInfo.systemUptime
+        )
+        if packet.type == MessageType.videoFrame.rawValue {
+            excludedPeerLinks.formUnion(videoRelayPrunedLinks(for: packet))
+        }
 
         let states = snapshotPeripheralStates()
         // A link without a discovered characteristic cannot be written to
@@ -2346,7 +2358,7 @@ final class BLEService: NSObject {
                         requiredAuthenticatedPeer: requireNoiseAuthenticatedPeerLink ? directedOnlyPeer : nil
                     ) || acceptedByPhysicalLink
                 } else {
-                    writeOrEnqueue(data, to: s.peripheral, characteristic: ch, priority: outboundPriority)
+                    writeOrEnqueue(data, to: s.peripheral, characteristic: ch, priority: outboundPriority, deadline: liveDeadline)
                 }
             }
         }
@@ -2368,7 +2380,7 @@ final class BLEService: NSObject {
                         // Notification queue full - queue for retry to prevent silent packet loss
                         // This is critical for fragment delivery reliability
                         let context = packet.type == MessageType.fragment.rawValue ? "fragment" : "broadcast"
-                        enqueuePendingNotification(data: data, centrals: targets, context: context)
+                        enqueuePendingNotification(data: data, centrals: targets, context: context, deadline: liveDeadline)
                     }
                 }
             }
@@ -2918,6 +2930,98 @@ final class BLEService: NSObject {
             self.messageDeduplicator.markProcessed(dedupID)
             self.broadcastPacket(signedPacket)
         }
+    }
+
+    // MARK: Live Video
+
+    /// Sends one live video packet inside the Noise session; like voice it
+    /// never queues behind a handshake.
+    func sendVideoFrame(_ packetContent: Data, to peerID: PeerID) {
+        messageQueue.async { [weak self] in
+            guard let self else { return }
+            guard self.noiseService.hasEstablishedSession(with: peerID) else { return }
+            do {
+                let typedPayload = NoisePayload(type: .videoFrame, data: packetContent).encode()
+                self.broadcastPacket(try self.makeEncryptedNoisePacket(typedPayload, to: peerID))
+            } catch {
+                SecureLogger.error("Failed to send video frame: \(error)", category: .session)
+            }
+        }
+    }
+
+    /// Broadcasts one signed live video packet to the public mesh. Ephemeral:
+    /// never tracked for gossip sync.
+    func sendVideoFrameBroadcast(_ packetContent: Data) {
+        guard !packetContent.isEmpty else { return }
+        messageQueue.async { [weak self] in
+            guard let self else { return }
+            let packet = BitchatPacket(
+                type: MessageType.videoFrame.rawValue,
+                senderID: self.myPeerIDData,
+                recipientID: nil,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: packetContent,
+                signature: nil,
+                ttl: self.messageTTL
+            )
+            guard let signedPacket = self.noiseService.signPacket(packet) else {
+                SecureLogger.error("❌ Failed to sign video frame", category: .security)
+                return
+            }
+            self.messageDeduplicator.markProcessed(BLESelfBroadcastTracker.dedupID(for: signedPacket))
+            self.broadcastPacket(signedPacket)
+        }
+    }
+
+    /// Packets waiting on the busiest outbound link: the congestion signal
+    /// live video senders back off on.
+    func liveSendBacklog() -> Int {
+        readLinkState { _ in
+            max(pendingPeripheralWrites.deepestQueueCount, pendingNotifications.count)
+        }
+    }
+
+    /// Live packets per second the route sustains without queueing.
+    func liveSendPacketBudget(to _: PeerID?) -> Int {
+        TransportConfig.liveVideoBLEPacketBudget
+    }
+
+    /// Reference-counted request for low-latency connection intervals while
+    /// a stream is sent or watched. CoreBluetooth only lets the peripheral
+    /// role ask (per subscribed central); central links keep the system's
+    /// interval.
+    func setLiveMediaLinkBoost(_ active: Bool) {
+        bleQueue.async { [weak self] in
+            guard let self else { return }
+            self.liveMediaBoostHolders = max(0, self.liveMediaBoostHolders + (active ? 1 : -1))
+            // bleQueue owns the physical central list; the bindings-aware
+            // snapshot is engine-confined and not needed here.
+            self.applyLiveMediaConnectionLatency(to: self.linkStateStore.subscribedCentrals)
+        }
+    }
+
+    func applyLiveMediaConnectionLatency(to centrals: [CBCentral]) {
+        guard let peripheralManager, peripheralManager.state == .poweredOn else { return }
+        let latency: CBPeripheralManagerConnectionLatency = liveMediaBoostHolders > 0 ? .low : .medium
+        for central in centrals {
+            peripheralManager.setDesiredConnectionLatency(latency, for: central)
+        }
+    }
+
+    /// Links to neighbours that the mesh graph shows hear a live video
+    /// packet's origin directly: relaying to them only spends airtime on a
+    /// duplicate. Only confirmed (both-sides-announced) adjacency counts, and
+    /// our own originated packets are never pruned.
+    private func videoRelayPrunedLinks(for packet: BitchatPacket) -> Set<BLEIngressLinkID> {
+        guard packet.senderID != myPeerIDData else { return [] }
+        let adjacency = meshTopology.adjacencySnapshot()
+        let origin = packet.senderID
+        guard let originNeighbors = adjacency[origin], !originNeighbors.isEmpty else { return [] }
+        var pruned = Set<BLEIngressLinkID>()
+        for neighbor in originNeighbors where adjacency[neighbor]?.contains(origin) == true {
+            pruned.formUnion(links(to: PeerID(hexData: neighbor)))
+        }
+        return pruned
     }
 
     func addPeerAuthenticatedObserver(_ handler: @escaping (PeerID, String) -> Void) {
@@ -5064,7 +5168,7 @@ extension BLEService {
     
     // MARK: Helpers: IDs, selection, and write backpressure
     
-    private func writeOrEnqueue(_ data: Data, to peripheral: CBPeripheral, characteristic: CBCharacteristic, priority: BLEOutboundWritePriority) {
+    private func writeOrEnqueue(_ data: Data, to peripheral: CBPeripheral, characteristic: CBCharacteristic, priority: BLEOutboundWritePriority, deadline: TimeInterval? = nil) {
         // BLE operations run on bleQueue; keep queue affinity
         bleQueue.async { [weak self] in
             guard let self = self else { return }
@@ -5076,7 +5180,8 @@ extension BLEService {
                     data: data,
                     for: uuid,
                     priority: priority,
-                    capBytes: TransportConfig.blePendingWriteBufferCapBytes
+                    capBytes: TransportConfig.blePendingWriteBufferCapBytes,
+                    deadline: deadline
                 )
 
                 switch result {
@@ -6029,6 +6134,10 @@ extension BLEService {
             // the relay step below, like invalid board posts.
             guard handleVoiceFrame(packet, from: senderID) else { return }
 
+        case .videoFrame:
+            // Same admission as live voice: rejected packets are not relayed.
+            guard handleVideoFrame(packet, from: senderID) else { return }
+
         case .ping:
             // Rate limiting must key on the ingress link (`peerID`), not the
             // packet-claimed sender: pings are unsigned, so `senderID` is
@@ -6730,31 +6839,12 @@ extension BLEService {
     /// Returns whether the packet was accepted; rejected packets must not be
     /// relayed either, or spoofed 0x29 floods would still amplify.
     private func handleVoiceFrame(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
-        guard peerID != myPeerID else { return false }
-        guard BLEPacketFreshnessPolicy.isBroadcastRecipient(packet.recipientID) else { return false }
-        guard !BLEPacketFreshnessPolicy.isStale(
-            timestampMilliseconds: packet.timestamp,
-            now: Date(),
-            maxAgeSeconds: TransportConfig.pttPublicFrameMaxAgeSeconds
+        guard let senderNickname = authenticatedLiveFrameSender(
+            packet,
+            from: peerID,
+            maxAgeSeconds: TransportConfig.pttPublicFrameMaxAgeSeconds,
+            kind: "voice frame"
         ) else { return false }
-
-        let peersSnapshot = peerRegistry.snapshotByID
-        let registrySigningKey = peersSnapshot[peerID]?.signingPublicKey
-        let verifiedViaRegistry = registrySigningKey.map { noiseService.verifyPacketSignature(packet, publicKey: $0) } ?? false
-        let signedDisplayName = verifiedViaRegistry ? nil : signedSenderDisplayName(for: packet, from: peerID)
-        guard verifiedViaRegistry || signedDisplayName != nil else {
-            SecureLogger.warning("🚫 Dropping voice frame with missing/invalid signature for claimed sender \(peerID.id.prefix(8))…", category: .security)
-            return false
-        }
-        guard let senderNickname = BLEPeerSenderDisplayName.resolveKnownPeer(
-            peerID: peerID,
-            localPeerID: myPeerID,
-            localNickname: myNickname,
-            peers: peersSnapshot,
-            allowConnectedUnverified: false
-        ) ?? signedDisplayName else {
-            return false
-        }
 
         let payload = packet.payload
         let timestamp = Date(timeIntervalSince1970: TimeInterval(packet.timestamp) / 1000)
@@ -6767,6 +6857,66 @@ extension BLEService {
             ))
         }
         return true
+    }
+
+    /// Inbound public live-video packet: the same admission as live voice
+    /// (broadcast-only, fresh, signed by a known peer), plus a structural
+    /// decode so malformed packets are neither shown nor relayed.
+    private func handleVideoFrame(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
+        guard VideoBurstPacket.decode(packet.payload) != nil,
+              let senderNickname = authenticatedLiveFrameSender(
+                packet,
+                from: peerID,
+                maxAgeSeconds: TransportConfig.liveVideoPublicFrameMaxAgeSeconds,
+                kind: "video frame"
+              )
+        else { return false }
+
+        let payload = packet.payload
+        let timestamp = Date(timeIntervalSince1970: TimeInterval(packet.timestamp) / 1000)
+        notifyUI { [weak self] in
+            self?.deliverTransportEvent(.publicVideoFrameReceived(
+                peerID: peerID,
+                nickname: senderNickname,
+                payload: payload,
+                timestamp: timestamp
+            ))
+        }
+        return true
+    }
+
+    /// Shared gate for public live media: returns the sender's display name
+    /// when the packet is a fresh broadcast whose signature verifies against
+    /// the claimed sender, nil otherwise.
+    private func authenticatedLiveFrameSender(
+        _ packet: BitchatPacket,
+        from peerID: PeerID,
+        maxAgeSeconds: TimeInterval,
+        kind: String
+    ) -> String? {
+        guard peerID != myPeerID else { return nil }
+        guard BLEPacketFreshnessPolicy.isBroadcastRecipient(packet.recipientID) else { return nil }
+        guard !BLEPacketFreshnessPolicy.isStale(
+            timestampMilliseconds: packet.timestamp,
+            now: Date(),
+            maxAgeSeconds: maxAgeSeconds
+        ) else { return nil }
+
+        let peersSnapshot = peerRegistry.snapshotByID
+        let registrySigningKey = peersSnapshot[peerID]?.signingPublicKey
+        let verifiedViaRegistry = registrySigningKey.map { noiseService.verifyPacketSignature(packet, publicKey: $0) } ?? false
+        let signedDisplayName = verifiedViaRegistry ? nil : signedSenderDisplayName(for: packet, from: peerID)
+        guard verifiedViaRegistry || signedDisplayName != nil else {
+            SecureLogger.warning("🚫 Dropping \(kind) with missing/invalid signature for claimed sender \(peerID.id.prefix(8))…", category: .security)
+            return nil
+        }
+        return BLEPeerSenderDisplayName.resolveKnownPeer(
+            peerID: peerID,
+            localPeerID: myPeerID,
+            localNickname: myNickname,
+            peers: peersSnapshot,
+            allowConnectedUnverified: false
+        ) ?? signedDisplayName
     }
 
     private func handleNoiseHandshake(_ packet: BitchatPacket, from peerID: PeerID) {

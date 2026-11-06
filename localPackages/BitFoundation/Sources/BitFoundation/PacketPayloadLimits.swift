@@ -40,6 +40,7 @@
 /// | prekeyBundle                 | ~400 B: 8 prekeys + key + signature (iOS only)               | 4 KiB              |
 /// | announceV2                   | ~340 B: 64 B tag block + capabilities + cell (iOS only)      | 4 KiB              |
 /// | voiceFrame                   | ~210 B burst budget (both platforms)                         | 4 KiB              |
+/// | videoFrame                   | ≤ 352 B live video packet (both platforms)                   | 4 KiB              |
 /// | noiseHandshake               | 96 B (XX with empty payloads, both platforms)                | 4 KiB              |
 /// | leave                        | ≤ 255 B: empty on iOS, nickname from Android Wi-Fi Aware     | 4 KiB              |
 /// | ping, pong                   | 9 B (iOS only)                                               | 4 KiB              |
@@ -91,7 +92,7 @@ public enum PacketPayloadLimits {
         case .fragment:
             return fragmentBytes
         case .announce, .announceV2, .leave, .boardPost, .prekeyBundle,
-             .voiceFrame, .noiseHandshake, .ping, .pong:
+             .voiceFrame, .videoFrame, .noiseHandshake, .ping, .pong:
             return controlBytes
         }
     }

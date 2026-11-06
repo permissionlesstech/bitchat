@@ -16,6 +16,8 @@ final class ConversationUIModel: ObservableObject {
     /// Who is talking live in the public mesh channel right now (floor
     /// courtesy: the composer mic tints "busy" while someone holds the floor).
     @Published private(set) var activeLiveVoiceTalker: String?
+    /// The full-screen video capture screen (live streams and clips).
+    @Published var isVideoStudioPresented = false
 
     private let chatViewModel: ChatViewModel
     private let privateConversationModel: PrivateConversationModel
@@ -251,6 +253,37 @@ final class ConversationUIModel: ObservableObject {
     /// Whether this message is a live voice burst still streaming in.
     func isLiveVoiceMessage(_ message: BitchatMessage) -> Bool {
         chatViewModel.liveVoiceCoordinator.isLiveVoiceMessage(message)
+    }
+
+    /// The live model of a video bubble still streaming in (or just ended).
+    func liveVideoStream(for message: BitchatMessage) -> LiveVideoStreamModel? {
+        chatViewModel.liveVideoCoordinator.streamModel(forMessageID: message.id)
+    }
+
+    func setLiveVideoMuted(_ muted: Bool, messageID: String) {
+        chatViewModel.liveVideoCoordinator.setMuted(muted, messageID: messageID)
+    }
+
+    /// Where a live stream would go now, or nil when only clips are possible.
+    func makeLiveVideoTarget() -> LiveVideoTarget? {
+        chatViewModel.makeLiveVideoTarget()
+    }
+
+    var liveVideoAudienceName: String {
+        if let peerID = privateConversationModel.selectedPeerID {
+            return chatViewModel.nicknameForPeer(peerID)
+        }
+        return "#mesh"
+    }
+
+    func outgoingVideoDirectory() throws -> URL {
+        try chatViewModel.outgoingVideoDirectory()
+    }
+
+    /// Sends (or, when too large for one transfer, keeps locally) a finished
+    /// live recording or clip from `videos/outgoing`.
+    func finishOutgoingVideo(at url: URL) {
+        chatViewModel.finishOutgoingVideo(at: url)
     }
 
     func cancelMediaSend(messageID: String) {
