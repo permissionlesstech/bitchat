@@ -67,10 +67,9 @@ private extension GeoRelayDirectoryDependencies {
             userDefaults: .standard,
             notificationCenter: .default,
             now: Date.init,
-            // Runtime refreshes only from bitchat's reviewed copy. Upstream
-            // georelays/main is imported by a validator-backed pull request,
-            // so an upstream mutation cannot immediately retarget clients.
-            remoteURL: URL(string: "https://raw.githubusercontent.com/permissionlesstech/bitchat/refs/heads/main/relays/online_relays_gps.csv")!,
+            // Use the same upstream directory as Android so runtime updates
+            // do not depend on merging a separate relay snapshot into bitchat.
+            remoteURL: URL(string: "https://raw.githubusercontent.com/permissionlesstech/georelays/refs/heads/main/nostr_relays.csv")!,
             fetchInterval: TransportConfig.geoRelayFetchIntervalSeconds,
             refreshCheckInterval: TransportConfig.geoRelayRefreshCheckIntervalSeconds,
             retryInitialSeconds: TransportConfig.geoRelayRetryInitialSeconds,
@@ -129,8 +128,8 @@ private extension GeoRelayDirectoryDependencies {
                     )
                     let dir = base.appendingPathComponent("bitchat", isDirectory: true)
                     try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-                    // v2 ignores caches populated from the old direct-upstream
-                    // trust path and subjects every load to strict validation.
+                    // v2 ignores legacy caches populated without strict
+                    // validation and subjects every load to strict validation.
                     let legacyCache = dir.appendingPathComponent("georelays_cache.csv")
                     try? FileManager.default.removeItem(at: legacyCache)
                     return dir.appendingPathComponent("georelays_cache_v2.csv")
