@@ -148,6 +148,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         contentRefillPerSec: TransportConfig.uiContentRateBucketRefillPerSec
     )
 
+    /// Hides public spam on the mesh and geohash timelines. Under test each
+    /// view model gets its own, so parallel tests don't share sender history.
+    let spamFilter: SpamFilter = TestEnvironment.isRunningTests ? SpamFilter() : .shared
+
     // MARK: - Published Properties
 
     /// Read-only derived view of the ACTIVE public channel's conversation in
@@ -1648,6 +1652,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         MeshSightingsTracker.shared.clear()
         MeshEchoSettings.reset()
         NotificationPrivacySettings.reset()
+        // The spam filter keeps recent message text and sender keys for its repeat checks
+        SpamFilterSettings.reset(filter: spamFilter)
         ComposerDraftStore.reset()
         // A hand-added relay names an operator someone chose to route through,
         // which is the kind of trace a wipe should not leave behind.

@@ -74,6 +74,7 @@ private final class MockChatNostrContext: ChatNostrContext {
     func checkForMentions(_ message: BitchatMessage) { mentionCheckedMessageIDs.append(message.id) }
     func sendHapticFeedback(for message: BitchatMessage) { hapticMessageIDs.append(message.id) }
     func parseMentions(from content: String) -> [String] { [] }
+    let spamFilter = SpamFilter()
 
     // Inbound private (geohash DM) payloads
     var selectedPrivateChatPeer: PeerID?

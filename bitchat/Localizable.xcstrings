@@ -31798,6 +31798,564 @@
         }
       }
     },
+    "app_info.settings.public_chats.title" : {
+      "comment" : "Section header (uppercase) for settings about public chats, such as the spam filter",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الدردشات العامة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "পাবলিক চ্যাট"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ÖFFENTLICHE CHATS"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PUBLIC CHATS"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CHATS PÚBLICOS"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "گفتگوهای عمومی"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MGA PUBLIC NA CHAT"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DISCUSSIONS PUBLIQUES"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "צ'אטים ציבוריים"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सार्वजनिक चैट"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OBROLAN PUBLIK"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CHAT PUBBLICHE"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "公開チャット"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "공개 채팅"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SEMBANG AWAM"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सार्वजनिक च्याट"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OPENBARE CHATS"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CZATY PUBLICZNE"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CONVERSAS PÚBLICAS"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CHATS PÚBLICOS"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ПУБЛИЧНЫЕ ЧАТЫ"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OFFENTLIGA CHATTAR"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "பொது அரட்டைகள்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "แชทสาธารณะ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HERKESE AÇIK SOHBETLER"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ПУБЛІЧНІ ЧАТИ"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عوامی چیٹس"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TRÒ CHUYỆN CÔNG KHAI"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "公开聊天"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "公開聊天"
+          }
+        }
+      }
+    },
+    "app_info.settings.spam_filter.title" : {
+      "comment" : "Title of the setting that hides spam in public mesh and location channels",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مرشّح الرسائل المزعجة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "স্প্যাম ফিল্টার"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "spamfilter"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "spam filter"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "filtro de spam"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فیلتر هرزنامه"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "spam filter"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "filtre anti-spam"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מסנן ספאם"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "स्पैम फ़िल्टर"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "filter spam"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "filtro antispam"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "スパムフィルター"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "스팸 필터"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "penapis spam"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "स्प्याम फिल्टर"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "spamfilter"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "filtr spamu"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "filtro de spam"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "filtro de spam"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "фильтр спама"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "spamfilter"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ஸ்பேம் வடிகட்டி"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ตัวกรองสแปม"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "spam filtresi"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "фільтр спаму"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اسپام فلٹر"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bộ lọc spam"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "垃圾消息过滤"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "垃圾訊息過濾"
+          }
+        }
+      }
+    },
+    "app_info.settings.spam_filter.subtitle" : {
+      "comment" : "Subtitle explaining what the spam filter hides and that private messages are never filtered",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يخفي الرسائل العامة من الأشخاص الذين ينشرون بسرعة كبيرة أو يكررون أنفسهم أو يغرقون الدردشة بالروابط. لا تتم تصفية الرسائل الخاصة أبدًا. مفعّل افتراضيًا."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "যারা খুব দ্রুত পোস্ট করে, একই কথা বারবার বলে বা লিংকে ভরিয়ে দেয়, তাদের পাবলিক বার্তা লুকায়। ব্যক্তিগত বার্তা কখনো ফিল্টার হয় না। ডিফল্টভাবে চালু।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "blendet öffentliche nachrichten von leuten aus, die zu schnell posten, sich wiederholen oder links fluten. private nachrichten werden nie gefiltert. standardmäßig an."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hides public messages from people who post too fast, repeat themselves, or flood links. private messages are never filtered. on by default."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "oculta mensajes públicos de quienes publican demasiado rápido, se repiten o inundan el chat de enlaces. los mensajes privados nunca se filtran. activado por defecto."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پیام‌های عمومی افرادی را که خیلی سریع پست می‌کنند، حرفشان را تکرار می‌کنند یا گفتگو را با پیوند پر می‌کنند پنهان می‌کند. پیام‌های خصوصی هرگز فیلتر نمی‌شوند. به‌طور پیش‌فرض روشن است."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "itinatago ang mga public na mensahe mula sa mga taong masyadong mabilis mag-post, paulit-ulit, o nagbabaha ng link. hindi kailanman sinasala ang mga pribadong mensahe. naka-on bilang default."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "masque les messages publics des personnes qui publient trop vite, se répètent ou inondent le chat de liens. les messages privés ne sont jamais filtrés. activé par défaut."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מסתיר הודעות ציבוריות של אנשים שמפרסמים מהר מדי, חוזרים על עצמם או מציפים בקישורים. הודעות פרטיות אף פעם לא מסוננות. פעיל כברירת מחדל."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "बहुत तेज़ी से पोस्ट करने वालों, बार-बार एक ही बात दोहराने वालों या लिंक की बाढ़ लाने वालों के सार्वजनिक संदेश छुपाता है। निजी संदेश कभी फ़िल्टर नहीं होते। डिफ़ॉल्ट रूप से चालू।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "menyembunyikan pesan publik dari orang yang memposting terlalu cepat, mengulang-ulang, atau membanjiri tautan. pesan pribadi tidak pernah difilter. aktif secara default."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nasconde i messaggi pubblici di chi scrive troppo in fretta, si ripete o inonda la chat di link. i messaggi privati non vengono mai filtrati. attivo per impostazione predefinita."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "投稿が速すぎる人、同じ内容を繰り返す人、リンクを大量に送る人の公開メッセージを非表示にします。プライベートメッセージがフィルタされることはありません。デフォルトでオン。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "너무 빠르게 올리거나, 같은 말을 반복하거나, 링크를 도배하는 사람의 공개 메시지를 숨깁니다. 비공개 메시지는 절대 필터링되지 않습니다. 기본값은 켜짐입니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "menyembunyikan mesej awam daripada orang yang menghantar terlalu laju, mengulang-ulang, atau membanjiri pautan. mesej peribadi tidak pernah ditapis. dihidupkan secara lalai."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "धेरै छिटो पोस्ट गर्ने, एउटै कुरा दोहोर्‍याउने वा लिङ्कले भरिदिने मानिसहरूका सार्वजनिक सन्देश लुकाउँछ। निजी सन्देश कहिल्यै फिल्टर हुँदैनन्। पूर्वनिर्धारित रूपमा अन।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "verbergt openbare berichten van mensen die te snel posten, zichzelf herhalen of links spammen. privéberichten worden nooit gefilterd. standaard aan."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ukrywa publiczne wiadomości od osób, które piszą za szybko, powtarzają się lub zalewają czat linkami. wiadomości prywatne nigdy nie są filtrowane. domyślnie włączony."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "oculta mensagens públicas de quem publica depressa demais, se repete ou inunda a conversa de ligações. as mensagens privadas nunca são filtradas. ativado por predefinição."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "oculta mensagens públicas de quem posta rápido demais, se repete ou inunda o chat de links. mensagens privadas nunca são filtradas. ativado por padrão."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "скрывает публичные сообщения тех, кто пишет слишком часто, повторяется или заваливает чат ссылками. личные сообщения никогда не фильтруются. включено по умолчанию."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "döljer offentliga meddelanden från personer som skriver för snabbt, upprepar sig eller översvämmar chatten med länkar. privata meddelanden filtreras aldrig. på som standard."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "மிக வேகமாகப் பதிவிடுபவர்கள், திரும்பத் திரும்ப ஒரே செய்தியை அனுப்புபவர்கள் அல்லது இணைப்புகளால் நிரப்புபவர்களின் பொதுச் செய்திகளை மறைக்கிறது. தனிப்பட்ட செய்திகள் ஒருபோதும் வடிகட்டப்படாது. இயல்பாக இயக்கத்தில் உள்ளது."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ซ่อนข้อความสาธารณะจากคนที่โพสต์เร็วเกินไป พูดซ้ำ หรือส่งลิงก์รัว ๆ ข้อความส่วนตัวจะไม่ถูกกรองเลย เปิดเป็นค่าเริ่มต้น"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "çok hızlı yazan, kendini tekrarlayan veya bağlantı yağdıran kişilerin herkese açık mesajlarını gizler. özel mesajlar asla filtrelenmez. varsayılan olarak açık."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "приховує публічні повідомлення тих, хто пише надто часто, повторюється або засипає чат посиланнями. особисті повідомлення ніколи не фільтруються. увімкнено за замовчуванням."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بہت تیزی سے پوسٹ کرنے والوں، بار بار ایک ہی بات دہرانے والوں یا لنکس کی بھرمار کرنے والوں کے عوامی پیغامات چھپاتا ہے۔ نجی پیغامات کبھی فلٹر نہیں ہوتے۔ پہلے سے آن۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ẩn tin nhắn công khai của những người đăng quá nhanh, lặp lại chính mình hoặc spam liên kết. tin nhắn riêng không bao giờ bị lọc. bật theo mặc định."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏发言太快、重复刷屏或大量发链接的人的公开消息。私信永远不会被过滤。默认开启。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隱藏發言太快、重複洗版或大量貼連結的人的公開訊息。私訊永遠不會被過濾。預設開啟。"
+          }
+        }
+      }
+    },
     "app_info.tab.info" : {
       "extractionState" : "manual",
       "localizations" : {
