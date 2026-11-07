@@ -2314,7 +2314,11 @@ struct ChatViewModelPanicTests {
     }
 
     @Test @MainActor
-    func metadataFailureDuringBootstrapKeepsIntentForRetry() async {
+    func metadataFailureDuringBootstrapKeepsIntentForRetry() async throws {
+        let suiteName = "PanicBootstrapLocation." + UUID().uuidString
+        let storage = try #require(UserDefaults(suiteName: suiteName))
+        defer { storage.removePersistentDomain(forName: suiteName) }
+        let locationManager = LocationChannelManager(storage: storage)
         let names = ["courier", "bridge", "gossip", "groups", "board", "events"]
         var attempts: [String] = []
         var denyBoardDeletion = true
@@ -2345,7 +2349,8 @@ struct ChatViewModelPanicTests {
             keychain: keychain,
             panicRecoveryOperations: recovery,
             panicNetworkLifecycle: PanicNetworkLifecycle(stop: {}, restart: { restarts += 1 }),
-            panicMetadataWipeOperations: metadata
+            panicMetadataWipeOperations: metadata,
+            locationManager: locationManager
         )
 
         _ = await viewModel.startupPanicRecovery?.value
@@ -2708,6 +2713,10 @@ struct PanicResponsivenessTests {
 struct GossipPanicResponsivenessTests {
     @Test(arguments: [false, true]) @MainActor
     func pendingRetirementYieldsAndRejectsOverlappingPanic(_ denyEvents: Bool) async throws {
+        let suiteName = "PanicGossipLocation." + UUID().uuidString
+        let storage = try #require(UserDefaults(suiteName: suiteName))
+        defer { storage.removePersistentDomain(forName: suiteName) }
+        let locationManager = LocationChannelManager(storage: storage)
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -2737,6 +2746,7 @@ struct GossipPanicResponsivenessTests {
             wipeGossip: { archive.wipe() }, wipeGroups: { true }, wipeBoard: { true }, wipeEvents: { !deny })
         let viewModel = ChatViewModel(keychain: keychain, idBridge: idBridge,
             identityManager: identityManager, transport: transport,
+            locationManager: locationManager,
             panicRecoveryOperations: recovery, panicMetadataWipeOperations: metadata)
         transport._test_replaceGossipManager(manager)
         defer { transport.suspendForPanicReset() }
