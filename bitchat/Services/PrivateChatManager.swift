@@ -140,11 +140,15 @@ final class PrivateChatManager: ObservableObject {
         return hasUnreadMessages
     }
 
-    /// Syncs the read receipt tracking between manager and view model for sent messages
+    /// Syncs the read receipt tracking between manager and view model for sent
+    /// messages. "Sent" means carrying my peer ID, never merely my nickname:
+    /// a namesake's delivered message still gets its READ receipt, and my
+    /// messages from before a rename still count as mine.
     @MainActor
-    func syncReadReceiptsForSentMessages(peerID: PeerID, nickname: String, externalReceipts: inout Set<String>) {
+    func syncReadReceiptsForSentMessages(peerID: PeerID, externalReceipts: inout Set<String>) {
+        guard let myPeerID = meshService?.myPeerID else { return }
         for message in messages(for: peerID) {
-            if message.sender == nickname {
+            if message.isOwn(myPeerID: myPeerID, myGeoChatPeerID: nil) {
                 switch message.deliveryStatus {
                 case .read, .delivered:
                     externalReceipts.insert(message.id)

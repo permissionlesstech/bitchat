@@ -940,8 +940,8 @@ struct ChatViewModelGeoDMTests {
 
 /// Contracts for the owner-side intent ops that are the sole mutation paths
 /// for `ChatViewModel`'s shared coordinator state (`nostrKeyMapping`,
-/// `sentReadReceipts`, `sentGeoDeliveryAcks`, `isBatchingPublic`, the geo
-/// subscription IDs, and the selected private chat hand-off).
+/// `sentReadReceipts`, `sentGeoDeliveryAcks`, the geo subscription IDs, and
+/// the selected private chat hand-off).
 struct ChatViewModelIntentOperationTests {
 
     @Test @MainActor
@@ -1005,17 +1005,6 @@ struct ChatViewModelIntentOperationTests {
         #expect(viewModel.nostrKeyMapping[PeerID(nostr: hex)] == nil)
         #expect(viewModel.nostrKeyMapping[PeerID(nostr_: hex)] == nil)
         #expect(viewModel.nostrKeyMapping[PeerID(nostr_: otherHex)] == otherHex)
-    }
-
-    @Test @MainActor
-    func setPublicBatching_publishesBatchingState() async {
-        let (viewModel, _) = makeTestableViewModel()
-
-        #expect(!viewModel.isBatchingPublic)
-        viewModel.setPublicBatching(true)
-        #expect(viewModel.isBatchingPublic)
-        viewModel.setPublicBatching(false)
-        #expect(!viewModel.isBatchingPublic)
     }
 
     @Test @MainActor
@@ -1824,5 +1813,86 @@ struct ConversationUIBlockIdentityTests {
         uiModel(viewModel).block(peerID: peer, displayName: "bob")
         #expect(viewModel.identityManager.isBlocked(fingerprint: key.sha256Fingerprint()))
         #expect(!viewModel.identityManager.isBlocked(fingerprint: "other-fingerprint"))
+    }
+}
+
+struct ChatViewModelSwitchBackIdentityTests {
+    @Test(arguments: ["bob", "Unknown"]) @MainActor
+    func repeatedSameNameArrivalsKeepHistoryAndFinalReplyWithTheirPeer(name: String) async throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let keyA = Data(repeating: 0x71, count: 32)
+        let keyB = Data(repeating: 0x72, count: 32)
+        let peerA = PeerID(publicKey: keyA)
+        let peerB = PeerID(publicKey: keyB)
+        transport.peerFingerprints[peerA] = keyA.sha256Fingerprint()
+        transport.peerFingerprints[peerB] = keyB.sha256Fingerprint()
+        transport.peerNicknames[peerA] = name
+        transport.peerNicknames[peerB] = name
+        transport.reachablePeers = [peerA, peerB]
+        let now = Date()
+        func incoming(_ id: String, from peer: PeerID, secondsAgo: Double) -> BitchatMessage {
+            BitchatMessage(id: id, sender: name, content: id,
+                           timestamp: now.addingTimeInterval(-secondsAgo), isRelay: false,
+                           isPrivate: true, senderPeerID: peer)
+        }
+
+        viewModel.handlePrivateMessage(incoming("a-first", from: peerA, secondsAgo: 60))
+        try #require(viewModel.storedFingerprint(for: peerA) == nil)
+        try #require(viewModel.privateChats[peerB]?.isEmpty ?? true)
+        try #require(viewModel.selectedPrivateChatPeer == nil)
+
+        viewModel.handlePrivateMessage(incoming("b-first", from: peerB, secondsAgo: 30))
+        #expect(viewModel.privateChats[peerA]?.map(\.id) ?? [] == ["a-first"])
+        #expect(viewModel.privateChats[peerB]?.map(\.id) ?? [] == ["b-first"])
+        try #require(viewModel.storedFingerprint(for: peerB) == nil)
+        try #require(viewModel.selectedPrivateChatPeer == nil)
+
+        viewModel.handlePrivateMessage(incoming("a-second", from: peerA, secondsAgo: 0))
+        #expect(viewModel.privateChats[peerA]?.map(\.id) ?? [] == ["a-first", "a-second"])
+        #expect(viewModel.privateChats[peerB]?.map(\.id) ?? [] == ["b-first"])
+
+        viewModel.startPrivateChat(with: peerA)
+        try #require(viewModel.selectedPrivateChatPeer == peerA)
+        viewModel.sendMessage("Reply after A returns")
+        let reply = try #require(transport.sentPrivateMessages.last)
+        #expect(reply.peerID == peerA)
+        #expect(reply.content == "Reply after A returns")
+    }
+}
+
+struct ChatViewModelOpenReplyIdentityTests {
+    @Test(arguments: ["bob", "Unknown"]) @MainActor
+    func openChatReplyStaysWithBAfterSameNameAReturns(name: String) async throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerA = PeerID(publicKey: Data(repeating: 0x73, count: 32))
+        let keyB = Data(repeating: 0x74, count: 32)
+        let peerB = PeerID(publicKey: keyB)
+        transport.peerFingerprints[peerB] = keyB.sha256Fingerprint()
+        transport.peerNicknames[peerA] = name
+        transport.peerNicknames[peerB] = name
+        transport.reachablePeers = [peerA, peerB]
+        let now = Date()
+        func incoming(_ id: String, from peer: PeerID, secondsAgo: Double) -> BitchatMessage {
+            BitchatMessage(id: id, sender: name, content: id,
+                           timestamp: now.addingTimeInterval(-secondsAgo), isRelay: false,
+                           isPrivate: true, senderPeerID: peer)
+        }
+
+        viewModel.handlePrivateMessage(incoming("a-first", from: peerA, secondsAgo: 60))
+        viewModel.handlePrivateMessage(incoming("b-first", from: peerB, secondsAgo: 30))
+        viewModel.startPrivateChat(with: peerB)
+        try #require(viewModel.selectedPrivateChatPeer == peerB)
+        try #require(viewModel.storedFingerprint(for: peerB) == keyB.sha256Fingerprint())
+        try #require(viewModel.getFingerprint(for: peerA) == nil)
+
+        viewModel.handlePrivateMessage(incoming("a-second", from: peerA, secondsAgo: 0))
+        #expect(viewModel.selectedPrivateChatPeer == peerB)
+        // Send from the existing open chat, without selecting a recipient again.
+        viewModel.sendMessage("Reply intended for B")
+        let reply = try #require(transport.sentPrivateMessages.last)
+        #expect(reply.peerID == peerB)
+        #expect(reply.content == "Reply intended for B")
+        #expect(viewModel.privateChats[peerB]?.contains { $0.content == "Reply intended for B" } == true)
+        #expect(viewModel.privateChats[peerA]?.contains { $0.content == "Reply intended for B" } != true)
     }
 }

@@ -48,6 +48,9 @@ protocol CommandContextProvider: AnyObject {
     func getPeerIDForNickname(_ nickname: String) -> PeerID?
     func getVisibleGeoParticipants() -> [CommandGeoParticipant]
     func nostrPubkeyForDisplayName(_ displayName: String) -> String?
+    /// A /block or /unblock by name changed which geohash participants are
+    /// hidden; the roster re-filters instead of waiting for its timer.
+    func geohashBlockListDidChange()
 
     // MARK: - Chat Actions
     func startPrivateChat(with peerID: PeerID)
@@ -368,6 +371,7 @@ final class CommandProcessor {
                 return .success(message: String(format: String(localized: "command.block.already", defaultValue: "%@ is already blocked", comment: "Reply when /block targets an already-blocked nickname"), locale: .current, nickname))
             }
             identityManager.setNostrBlocked(pub, isBlocked: true)
+            contextProvider?.geohashBlockListDidChange()
             return .success(message: String(format: String(localized: "command.block.done_geo", defaultValue: "blocked %@ in geohash chats", comment: "Confirmation after blocking a geohash participant"), locale: .current, nickname))
         }
         
@@ -396,6 +400,7 @@ final class CommandProcessor {
                 return .success(message: String(format: String(localized: "command.unblock.not_blocked", defaultValue: "%@ is not blocked", comment: "Reply when /unblock targets a nickname that isn't blocked"), locale: .current, nickname))
             }
             identityManager.setNostrBlocked(pub, isBlocked: false)
+            contextProvider?.geohashBlockListDidChange()
             return .success(message: String(format: String(localized: "command.unblock.done_geo", defaultValue: "unblocked %@ in geohash chats", comment: "Confirmation after unblocking a geohash participant"), locale: .current, nickname))
         }
         return .error(message: String(format: String(localized: "command.unblock.failed", defaultValue: "cannot unblock %@: not found", comment: "Error when /unblock can't resolve the target"), locale: .current, nickname))

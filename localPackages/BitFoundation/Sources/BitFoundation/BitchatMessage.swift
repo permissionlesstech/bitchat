@@ -44,7 +44,19 @@ public final class BitchatMessage: Codable {
     public func setCachedFormattedText(_ text: AttributedString, isDark: Bool, isSelf: Bool, variant: String = "") {
         _cachedFormattedText["\(variant)\(isDark)-\(isSelf)"] = text
     }
-    
+
+    // Cached content scan for row rendering (not included in Codable).
+    // `content` is immutable, so a cached scan never goes stale.
+    private var _cachedContentScan: ContentScan?
+
+    public func getCachedContentScan() -> ContentScan? {
+        _cachedContentScan
+    }
+
+    public func setCachedContentScan(_ scan: ContentScan) {
+        _cachedContentScan = scan
+    }
+
     // Codable implementation
     enum CodingKeys: String, CodingKey {
         case id, sender, content, timestamp, isRelay, originalSender
@@ -97,6 +109,26 @@ public final class BitchatMessage: Codable {
         self.mentions = mentions
         self.deliveryStatus = deliveryStatus ?? (isPrivate ? .sending : .notSentYet)
         self.isBridged = isBridged
+    }
+}
+
+// MARK: - Content Scan
+
+extension BitchatMessage {
+    /// What a message row derives from `content`: the payment links rendered
+    /// as chips and whether the text collapses behind "show more". Deriving
+    /// them takes several regex passes over the content, so the renderer
+    /// computes them once and caches the result on the message.
+    public struct ContentScan: Equatable {
+        public let cashuLinks: [String]
+        public let lightningLinks: [String]
+        public let isLongForDisplay: Bool
+
+        public init(cashuLinks: [String], lightningLinks: [String], isLongForDisplay: Bool) {
+            self.cashuLinks = cashuLinks
+            self.lightningLinks = lightningLinks
+            self.isLongForDisplay = isLongForDisplay
+        }
     }
 }
 
