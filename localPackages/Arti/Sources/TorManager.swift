@@ -415,7 +415,11 @@ public final class TorManager: ObservableObject {
             self.lastRestartAt = Date()
         }
 
-        _ = arti_stop()
+        // arti_stop() blocks its caller for ~200 ms, and this method runs on
+        // the main actor (every return to the foreground restarts Tor). Await
+        // the stop off the main actor so the UI stays responsive; it still
+        // completes before the restart continues.
+        _ = await Task.detached(priority: .userInitiated) { arti_stop() }.value
 
         // Wait for stop
         var waited = 0
