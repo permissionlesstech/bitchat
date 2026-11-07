@@ -1,0 +1,26 @@
+name: macOS release tooling
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/package-macos-release.py'
+      - 'scripts/tests/test_macos_release.py'
+      - '.github/workflows/macos-release-tools.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/package-macos-release.py'
+      - 'scripts/tests/test_macos_release.py'
+      - '.github/workflows/macos-release-tools.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check packaging contracts using synthetic inputs
+        run: python3 -m unittest discover -s scripts/tests -p test_macos_release.py
