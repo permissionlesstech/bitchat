@@ -179,6 +179,42 @@ struct PrivateChatManagerTests {
     }
 
     @Test @MainActor
+    func markAsRead_fullKeyChatIncludesShortSenderAndRetriesFailedRoute() async {
+        let transport = MockTransport()
+        let router = MessageRouter(transports: [transport])
+        let (manager, store) = Self.makeManager(transport: transport)
+        manager.messageRouter = router
+        let fullID = PeerID(hexData: Data(repeating: 0xCC, count: 32))
+        let shortID = fullID.toShort()
+        let otherID = PeerID(hexData: Data(repeating: 0xDD, count: 32)).toShort()
+        for (id, sender, relay) in [
+            ("mesh", Optional(shortID), false), ("courier", Optional(fullID), false),
+            ("other", Optional(otherID), false), ("self", Optional(transport.myPeerID), false),
+            ("relay", Optional(shortID), true), ("missing", nil, false)
+        ] {
+            store.append(BitchatMessage(id: id, sender: "bob", content: id,
+                timestamp: Date(), isRelay: relay, isPrivate: true, senderPeerID: sender),
+                to: .directPeer(fullID))
+        }
+
+        manager.startChat(with: fullID)
+        // The router runs in a queued main-actor task; wait for its failed claims to clear.
+        for _ in 0..<100 where !manager.sentReadReceipts.isEmpty { await Task.yield() }
+        #expect(manager.sentReadReceipts.isEmpty)
+        #expect(transport.sentReadReceipts.isEmpty)
+
+        transport.reachablePeers = [shortID, fullID]
+        manager.markAsRead(from: fullID)
+        manager.markAsRead(from: fullID)
+        for _ in 0..<100 where transport.sentReadReceipts.count < 2 { await Task.yield() }
+        #expect(Set(transport.sentReadReceipts.map { $0.receipt.originalMessageID }) == ["mesh", "courier"])
+        #expect(transport.sentReadReceipts.count == 2)
+        #expect(manager.sentReadReceipts == ["mesh", "courier"])
+        #expect(transport.sentReadReceipts.first { $0.receipt.originalMessageID == "mesh" }?.peerID == shortID)
+        #expect(manager.privateChats[fullID]?.first { $0.id == "mesh" }?.senderPeerID == shortID)
+    }
+
+    @Test @MainActor
     func consolidateMessages_mergesStableNoiseKeyHistoryAndMarksUnread() async {
         let transport = MockTransport()
         let (manager, store) = Self.makeManager(transport: transport)
@@ -217,7 +253,7 @@ struct PrivateChatManagerTests {
         )
         store.markUnread(.directPeer(stablePeerID))
 
-        let hadUnread = manager.consolidateMessages(for: peerID, peerNickname: "Alice", persistedReadReceipts: [])
+        let hadUnread = manager.consolidateMessages(for: peerID, persistedReadReceipts: [])
 
         #expect(hadUnread)
         #expect(manager.privateChats[stablePeerID] == nil)
@@ -227,16 +263,57 @@ struct PrivateChatManagerTests {
     }
 
     @Test @MainActor
-    func consolidateMessages_movesTemporaryGeoDMHistoryByNickname() async {
+    func consolidateMessages_stableKeyHistoryKeepsMyRowsMine() async throws {
+        // A row sent locally while the peer was offline sits in the stable-key
+        // chat. Folding that chat must not re-attribute it to the peer.
+        let transport = MockTransport()
+        transport.myPeerID = PeerID(str: "a1b2c3d4e5f60718")
+        let (manager, store) = Self.makeManager(transport: transport)
+        let identityManager = MockIdentityManager(MockKeychain())
+        let idBridge = NostrIdentityBridge(keychain: MockKeychainHelper())
+        let unifiedPeerService = UnifiedPeerService(meshService: transport, idBridge: idBridge, identityManager: identityManager)
+        manager.unifiedPeerService = unifiedPeerService
+
+        let peerID = PeerID(str: "0123456789abcdef")
+        let noiseKey = Data((0..<32).map(UInt8.init))
+        let stablePeerID = PeerID(hexData: noiseKey)
+        transport.updatePeerSnapshots([
+            TransportPeerSnapshot(peerID: peerID, nickname: "Alice", isConnected: true, noisePublicKey: noiseKey, lastSeen: Date())
+        ])
+        let peerResolved = await TestHelpers.waitUntil(
+            { unifiedPeerService.getPeer(by: peerID)?.noisePublicKey == noiseKey },
+            timeout: TestConstants.settleTimeout
+        )
+        try #require(peerResolved)
+
+        for (id, sender) in [("mine", transport.myPeerID), ("theirs", stablePeerID)] {
+            store.append(
+                BitchatMessage(id: id, sender: "Alice", content: id, timestamp: Date(), isRelay: false,
+                               isPrivate: true, recipientNickname: "Alice", senderPeerID: sender),
+                to: .directPeer(stablePeerID)
+            )
+        }
+
+        _ = manager.consolidateMessages(for: peerID, persistedReadReceipts: [])
+
+        let joined = manager.privateChats[peerID] ?? []
+        #expect(joined.first { $0.id == "mine" }?.senderPeerID == transport.myPeerID)
+        #expect(joined.first { $0.id == "theirs" }?.senderPeerID == peerID)
+    }
+
+    @Test @MainActor
+    func consolidateMessages_keepsGeoDMHistoryAndUnreadWithItsSender() async {
         let transport = MockTransport()
         let (manager, store) = Self.makeManager(transport: transport)
         let peerID = PeerID(str: "0011223344556677")
         let tempPeerID = PeerID(nostr_: "0000000000000000000000000000000000000000000000000000000000000042")
 
+        transport.peerNicknames[peerID] = "anon#0042"
+
         store.append(
             BitchatMessage(
                 id: "geo-msg",
-                sender: "Alice",
+                sender: "anon#0042",
                 content: "Geo hello",
                 timestamp: Date(),
                 isRelay: false,
@@ -248,14 +325,14 @@ struct PrivateChatManagerTests {
         )
         store.markUnread(.directPeer(tempPeerID))
 
-        let hadUnread = manager.consolidateMessages(for: peerID, peerNickname: "alice", persistedReadReceipts: [])
+        let hadUnread = manager.consolidateMessages(for: peerID, persistedReadReceipts: [])
 
-        #expect(hadUnread)
-        #expect(manager.privateChats[tempPeerID] == nil)
-        #expect(manager.privateChats[peerID]?.count == 1)
-        #expect(manager.privateChats[peerID]?.first?.senderPeerID == peerID)
-        #expect(manager.unreadMessages.contains(peerID))
-        #expect(!manager.unreadMessages.contains(tempPeerID))
+        #expect(!hadUnread)
+        #expect(manager.privateChats[peerID] == nil)
+        #expect(manager.privateChats[tempPeerID]?.count == 1)
+        #expect(manager.privateChats[tempPeerID]?.first?.senderPeerID == tempPeerID)
+        #expect(!manager.unreadMessages.contains(peerID))
+        #expect(manager.unreadMessages.contains(tempPeerID))
     }
 
     @Test @MainActor
@@ -286,7 +363,7 @@ struct PrivateChatManagerTests {
             to: .directPeer(tempPeerID)
         )
 
-        _ = manager.consolidateMessages(for: namesakePeerID, peerNickname: "alice", persistedReadReceipts: [])
+        _ = manager.consolidateMessages(for: namesakePeerID, persistedReadReceipts: [])
 
         // The thread stays where it is, my row still mine...
         #expect(manager.privateChats[tempPeerID]?.map(\.id) == ["my-geo-dm"])
@@ -305,9 +382,9 @@ struct PrivateChatManagerTests {
     }
 
     @Test @MainActor
-    func consolidateMessages_stillMovesThePeersOwnGeoDMThreadBesideMine() async {
-        // Skipping my thread is per thread: the peer's own thread, with the
-        // same nickname, still folds into their chat.
+    func consolidateMessages_keepsBothGeoDMThreadsWithoutIdentityProof() async {
+        // Matching display names do not identify either geohash thread as
+        // belonging to this mesh peer.
         let transport = MockTransport()
         transport.myPeerID = PeerID(str: "a1b2c3d4e5f60718")
         let (manager, store) = Self.makeManager(transport: transport)
@@ -344,13 +421,14 @@ struct PrivateChatManagerTests {
         )
         store.markUnread(.directPeer(theirThread))
 
-        let hadUnread = manager.consolidateMessages(for: peerID, peerNickname: "alice", persistedReadReceipts: [])
+        let hadUnread = manager.consolidateMessages(for: peerID, persistedReadReceipts: [])
 
-        #expect(hadUnread)
-        #expect(manager.privateChats[theirThread] == nil)
-        #expect(manager.privateChats[peerID]?.map(\.id) == ["their-geo-dm"])
-        #expect(manager.privateChats[peerID]?.first?.senderPeerID == peerID)
-        #expect(manager.unreadMessages.contains(peerID))
+        #expect(!hadUnread)
+        #expect(manager.privateChats[theirThread]?.map(\.id) == ["their-geo-dm"])
+        #expect(manager.privateChats[theirThread]?.first?.senderPeerID == theirThread)
+        #expect(manager.privateChats[peerID] == nil)
+        #expect(manager.unreadMessages.contains(theirThread))
+        #expect(!manager.unreadMessages.contains(peerID))
         #expect(manager.privateChats[myThread]?.map(\.id) == ["my-geo-dm"])
     }
 
@@ -393,7 +471,7 @@ struct PrivateChatManagerTests {
             to: .directPeer(thread)
         )
 
-        _ = manager.consolidateMessages(for: namesakePeerID, peerNickname: "alice", persistedReadReceipts: [])
+        _ = manager.consolidateMessages(for: namesakePeerID, persistedReadReceipts: [])
 
         #expect(manager.privateChats[thread]?.map(\.id) == ["their-geo-dm", "my-reply"])
         #expect(manager.privateChats[namesakePeerID] == nil)

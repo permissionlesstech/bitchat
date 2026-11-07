@@ -188,8 +188,8 @@ extension ChatViewModel {
     }
 
     @MainActor
-    func migratePrivateChatsIfNeeded(for peerID: PeerID, senderNickname: String) {
-        privateConversationCoordinator.migratePrivateChatsIfNeeded(for: peerID, senderNickname: senderNickname)
+    func migratePrivateChatsIfNeeded(for peerID: PeerID) {
+        privateConversationCoordinator.migratePrivateChatsIfNeeded(for: peerID)
     }
 
     @MainActor

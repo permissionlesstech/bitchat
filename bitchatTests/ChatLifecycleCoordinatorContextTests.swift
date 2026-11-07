@@ -314,6 +314,43 @@ struct ChatLifecycleCoordinatorContextTests {
         #expect(context.scheduledDelays == [TransportConfig.uiAnimationMediumSeconds])
         #expect(context.ownerLevelReadPasses == [peerID])
     }
+    @Test(arguments: [false, true], [false, true]) @MainActor
+    func markPrivateMessagesAsRead_keyAliasesRetryAndDeduplicate(useShortConversation: Bool, isFavorite: Bool) {
+        let context = MockChatLifecycleContext()
+        let coordinator = ChatLifecycleCoordinator(context: context)
+        let key = Data(repeating: 0xCC, count: 32)
+        let fullID = PeerID(hexData: key)
+        let shortID = fullID.toShort()
+        let otherID = PeerID(hexData: Data(repeating: 0xDD, count: 32)).toShort()
+        if isFavorite {
+            context.favoriteRelationshipsByNoiseKey[key] = makeFavoriteRelationship(noiseKey: key)
+        }
+        let conversationID = useShortConversation ? shortID : fullID
+        if useShortConversation {
+            context.peersByID[shortID] = BitchatPeer(peerID: shortID, noisePublicKey: key, nickname: "bob")
+        }
+        context.privateChats[conversationID] = [
+            makePrivateMessage(id: "mesh", senderPeerID: shortID),
+            makePrivateMessage(id: "courier", senderPeerID: fullID),
+            makePrivateMessage(id: "other", senderPeerID: otherID),
+            makePrivateMessage(id: "self", senderPeerID: context.myPeerID),
+            makePrivateMessage(id: "relay", senderPeerID: shortID, isRelay: true),
+            makePrivateMessage(id: "missing")
+        ]
+        context.routeReadReceiptResult = false
+        coordinator.markPrivateMessagesAsRead(from: conversationID)
+        #expect(context.sentReadReceipts.isEmpty)
+        #expect(Set(context.routedReadReceipts.map(\.messageID)) == ["mesh", "courier"])
+
+        context.routeReadReceiptResult = true
+        coordinator.markPrivateMessagesAsRead(from: conversationID)
+        #expect(context.sentReadReceipts == ["mesh", "courier"])
+        #expect(context.routedReadReceipts.count == 4)
+        #expect(context.routedReadReceipts.allSatisfy { $0.peerID == conversationID })
+        coordinator.markPrivateMessagesAsRead(from: conversationID)
+        #expect(context.routedReadReceipts.count == 4)
+    }
+
     @Test @MainActor
     func markPrivateMessagesAsRead_routesReceiptsForFavoritesAndNonFavorites() {
         let context = MockChatLifecycleContext()
