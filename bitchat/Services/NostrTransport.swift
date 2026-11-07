@@ -260,7 +260,6 @@ final class NostrTransport: Transport, @unchecked Sendable {
             SecureLogger.debug("NostrTransport: preparing PM to \(recipientNpub.prefix(16))… id=\(messageID.prefix(8))…", category: .session)
             guard let embedded = NostrEmbeddedBitChat.encodePMForNostr(content: content, messageID: messageID, recipientPeerID: peerID, senderPeerID: senderPeerID) else {
                 SecureLogger.error("NostrTransport: failed to embed PM packet", category: .session)
-                reportPrivateMessageSendFailure(messageID)
                 return
             }
             sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: senderIdentity)
@@ -319,7 +318,6 @@ extension NostrTransport {
             SecureLogger.debug("GeoDM: send PM mid=\(messageID.prefix(8))…", category: .session)
             guard let embedded = NostrEmbeddedBitChat.encodePMForNostrNoRecipient(content: content, messageID: messageID) else {
                 SecureLogger.error("NostrTransport: failed to embed geohash PM packet", category: .session)
-                reportPrivateMessageSendFailure(messageID)
                 return
             }
             sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
@@ -330,21 +328,6 @@ extension NostrTransport {
 // MARK: - Private Helpers
 
 extension NostrTransport {
-    /// A private message that cannot be embedded never leaves, so the bubble
-    /// must leave "sending". Same reason string the mesh path uses.
-    @MainActor
-    fileprivate func reportPrivateMessageSendFailure(_ messageID: String) {
-        let event = TransportEvent.messageDeliveryStatusUpdated(
-            messageID: messageID,
-            status: .failed(reason: String(localized: "content.delivery.reason.send_error", comment: "Failure reason for a generic send error"))
-        )
-        if let eventDelegate {
-            eventDelegate.didReceiveTransportEvent(event)
-        } else {
-            delegate?.receiveTransportEvent(event)
-        }
-    }
-
     /// Converts npub bech32 string to hex pubkey
     @MainActor
     private func npubToHex(_ npub: String) -> String? {
