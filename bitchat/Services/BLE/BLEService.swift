@@ -5245,6 +5245,17 @@ extension BLEService {
         let recipientID = recipientID.toShort()
         SecureLogger.debug("📨 Sending PM to \(recipientID.id.prefix(8))… id=\(messageID.prefix(8))… chars=\(content.count) bytes=\(content.utf8.count)", category: .session)
 
+        guard PrivateMessagePacket.contentFitsOnWire(content) else {
+            SecureLogger.error("Private message is \(content.utf8.count) UTF-8 bytes; the wire limit is \(PrivateMessagePacket.maxContentUTF8Bytes)", category: .session)
+            notifyUI { [weak self] in
+                self?.deliverTransportEvent(.messageDeliveryStatusUpdated(
+                    messageID: messageID,
+                    status: .failed(reason: String(localized: "content.delivery.reason.send_error", comment: "Failure reason for a generic send error"))
+                ))
+            }
+            return
+        }
+
         // Check if we have an established Noise session
         if noiseService.hasEstablishedSession(with: recipientID) {
             // Encrypt and send
@@ -5375,7 +5386,12 @@ extension BLEService {
                 // Use the same TLV format as normal sends to keep receiver decoding consistent
                 guard let messagePayload = BLENoisePayloadFactory.privateMessage(content: message.content, messageID: message.messageID) else {
                     SecureLogger.error("Failed to encode pending private message TLV")
-                    failedMessages.append(message)
+                    notifyUI { [weak self] in
+                        self?.deliverTransportEvent(.messageDeliveryStatusUpdated(
+                            messageID: message.messageID,
+                            status: .failed(reason: String(localized: "content.delivery.reason.send_error", comment: "Failure reason for a generic send error"))
+                        ))
+                    }
                     continue
                 }
 

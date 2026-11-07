@@ -410,16 +410,18 @@ struct CommandProcessorTests {
         let peerID = PeerID(str: "abcd1234abcd1234")
         context.selectedPrivateChatPeer = peerID
         let processor = makePayProcessor(context: context)
+        let token = Self.cashuV3Token(mint: "https://mint.example.com", amounts: [16])
+        #expect(token.utf8.count <= PrivateMessagePacket.maxContentUTF8Bytes)
 
         // cashu: URI form must be normalized to the bare token before sending
-        switch processor.process("/pay cashu:\(Self.validV3Token)") {
+        switch processor.process("/pay cashu:\(token)") {
         case .success(let message):
-            #expect(message?.contains("21 sat") == true)
+            #expect(message?.contains("16 sat") == true)
         default:
             Issue.record("Expected success result")
         }
         #expect(context.sentPrivateMessages.count == 1)
-        #expect(context.sentPrivateMessages.first?.content == Self.validV3Token)
+        #expect(context.sentPrivateMessages.first?.content == token)
         #expect(context.sentPrivateMessages.first?.peerID == peerID)
         #expect(context.sentPublicMessages.isEmpty)
     }
@@ -486,12 +488,31 @@ struct CommandProcessorTests {
         #expect(context.sentPrivateMessages.first?.content == Self.validV4Token)
     }
 
+    @MainActor
+    @Test func payRefusesAPrivateTokenThatDoesNotFitTheWire() {
+        let context = MockCommandContextProvider()
+        context.selectedPrivateChatPeer = PeerID(str: "abcd1234abcd1234")
+        let processor = makePayProcessor(context: context)
+        let token = Self.cashuV3Token(mint: "https://mint.example.com/" + String(repeating: "a", count: 240))
+        #expect(token.utf8.count > PrivateMessagePacket.maxContentUTF8Bytes)
+
+        switch processor.process("/pay \(token)") {
+        case .error(let message):
+            #expect(message == "send error")
+        default:
+            Issue.record("Expected the oversized token to be refused")
+        }
+        #expect(context.sentPrivateMessages.isEmpty)
+    }
+
     /// 21-sat single-mint V3 token (proofs of 1+4+16).
-    private static let validV3Token: String = {
+    private static let validV3Token = cashuV3Token(mint: "https://mint.example.com")
+
+    private static func cashuV3Token(mint: String, amounts: [Int] = [1, 4, 16]) -> String {
         let json: [String: Any] = [
             "token": [[
-                "mint": "https://mint.example.com",
-                "proofs": [1, 4, 16].map { ["amount": $0, "id": "009a1f293253e41e", "secret": "s", "C": "02c"] }
+                "mint": mint,
+                "proofs": amounts.map { ["amount": $0, "id": "009a1f293253e41e", "secret": "s", "C": "02c"] }
             ]],
             "unit": "sat"
         ]
@@ -501,7 +522,7 @@ struct CommandProcessorTests {
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
         return "cashuA" + b64
-    }()
+    }
 
     /// 21-sat single-mint definite-length V4 (CBOR) token (proofs of 1+4+16).
     private static let validV4Token: String = {

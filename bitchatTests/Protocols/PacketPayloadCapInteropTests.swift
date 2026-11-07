@@ -35,6 +35,22 @@ struct PacketPayloadCapInteropTests {
         #expect(BinaryProtocol.decode(try inflatedFrame(type: .message)) == nil)
     }
 
+    @Test func privateMessageOver255UTF8BytesDoesNotEncode() {
+        let within = String(repeating: "é", count: 127)
+        #expect(within.utf8.count == 254)
+        #expect(PrivateMessagePacket.contentFitsOnWire(within))
+        #expect(PrivateMessagePacket(messageID: "m", content: within).encode() != nil)
+
+        let over = String(repeating: "é", count: 128)
+        #expect(over.utf8.count == 256)
+        #expect(PrivateMessagePacket.contentFitsOnWire(over) == false)
+        #expect(PrivateMessagePacket(messageID: "m", content: over).encode() == nil)
+
+        let ascii = String(repeating: "x", count: PrivateMessagePacket.maxContentUTF8Bytes)
+        #expect(PrivateMessagePacket(messageID: "m", content: ascii).encode() != nil)
+        #expect(PrivateMessagePacket(messageID: "m", content: ascii + "y").encode() == nil)
+    }
+
     @Test func androidAndIOSSizedFragmentsStillDecode() throws {
         // Every byte value once, then zeros: the inner packet stays
         // uncompressed (its bytes are 100% unique) while the zero-filled

@@ -1233,4 +1233,31 @@ struct ChatPrivateConversationCoordinatorContextTests {
         #expect(context.routedPrivateMessages.map(\.content) == ["hello?"])
         #expect(context.privateChats[peerID]?.first?.deliveryStatus == .sending)
     }
+
+    @Test(arguments: [false, true]) @MainActor
+    func oversizedPrivateMessageFailsWithoutRouting(isGeohash: Bool) {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let peerID: PeerID
+        if isGeohash {
+            let pubkey = String(repeating: "a", count: 64)
+            peerID = PeerID(str: "nostr_" + String(pubkey.prefix(16)))
+            context.activeChannel = .location(GeohashChannel(level: .region, geohash: "0000"))
+            context.nostrKeyMapping[peerID] = pubkey
+        } else {
+            // An unreachable mesh peer would normally cause the router to retain the message.
+            peerID = PeerID(str: "abcd1234abcd1234")
+        }
+
+        let content = String(repeating: "é", count: 128)
+        coordinator.sendPrivateMessage(content, to: peerID)
+
+        #expect(context.privateChats[peerID]?.map(\.content) == [content])
+        guard case .failed? = context.privateChats[peerID]?.first?.deliveryStatus else {
+            Issue.record("Expected oversized content to fail delivery")
+            return
+        }
+        #expect(context.routedPrivateMessages.isEmpty)
+        #expect(context.geoPrivateMessages.isEmpty)
+    }
 }
