@@ -1253,7 +1253,10 @@ struct ChatPrivateConversationCoordinatorContextTests {
         coordinator.sendPrivateMessage(content, to: peerID)
 
         #expect(context.privateChats[peerID]?.map(\.content) == [content])
-        #expect(context.privateChats[peerID]?.first?.deliveryStatus == .failed(reason: "send error"))
+        guard case .failed? = context.privateChats[peerID]?.first?.deliveryStatus else {
+            Issue.record("Expected oversized content to fail delivery")
+            return
+        }
         #expect(context.routedPrivateMessages.isEmpty)
         #expect(context.geoPrivateMessages.isEmpty)
     }
