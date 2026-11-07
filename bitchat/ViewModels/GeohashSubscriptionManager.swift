@@ -11,6 +11,7 @@ import Tor
 protocol GeohashSubscriptionContext: AnyObject {
     // MARK: Channel & subscription state
     var activeChannel: ChannelID { get set }
+    var networkActivationAllowed: Bool { get }
     var currentGeohash: String? { get set }
     var geoSubscriptionID: String? { get }
     var geoDmSubscriptionID: String? { get }
@@ -132,6 +133,43 @@ final class GeohashSubscriptionManager {
         self.presence = presence
     }
 
+    #if DEBUG
+    /// Lets tests hold the outer callback before it enters the inbound pipeline.
+    @MainActor var relayCallbackScheduler: ((@escaping @MainActor () async -> Void) -> Void)?
+    #endif
+
+    @MainActor
+    func giftWrapHandler(identity: NostrIdentity, resubscribing: Bool) -> (NostrEvent) -> Void {
+        relayEventHandler { manager, event in
+            if resubscribing {
+                await manager.inbound.subscribeGiftWrap(event, id: identity)?.value
+            } else {
+                await manager.inbound.handleGiftWrap(event, id: identity)?.value
+            }
+        }
+    }
+
+    @MainActor
+    private func relayEventHandler(
+        _ receive: @escaping @MainActor (GeohashSubscriptionManager, NostrEvent) async -> Void
+    ) -> (NostrEvent) -> Void {
+        let generation = inbound.wipeGeneration
+        #if DEBUG
+        let scheduler = relayCallbackScheduler
+        #endif
+        return { [weak self] event in
+            let delivery: @MainActor () async -> Void = { [weak self] in
+                guard let self, self.inbound.wipeGeneration == generation,
+                      self.context?.networkActivationAllowed == true else { return }
+                await receive(self, event)
+            }
+            #if DEBUG
+            if let scheduler { scheduler(delivery); return }
+            #endif
+            Task { @MainActor in await delivery() }
+        }
+    }
+
     @MainActor
     func resubscribeCurrentGeohash() {
         guard let context else { return }
@@ -153,17 +191,15 @@ final class GeohashSubscriptionManager {
             count: TransportConfig.nostrGeoRelayCount
         )
         replayingGeoSubscriptionID = subID
-        NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays, handler: { [weak self] event in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.inbound.subscribeNostrEvent(event, isHistoryReplay: self.replayingGeoSubscriptionID == subID)
-                // Gateway downlink: rebroadcast relay events for the viewed
-                // channel onto the mesh (no-op unless gateway mode is on).
-                GatewayService.shared.rebroadcastRelayEvent(event, geohash: channel.geohash)
-            }
+        let generation = inbound.wipeGeneration
+        NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays, handler: relayEventHandler { manager, event in
+            manager.inbound.subscribeNostrEvent(event, isHistoryReplay: manager.replayingGeoSubscriptionID == subID)
+            // Gateway downlink shares the callback's panic-generation check.
+            GatewayService.shared.rebroadcastRelayEvent(event, geohash: channel.geohash)
         }, onEOSE: { [weak self] in
             Task { @MainActor [weak self] in
-                self?.endHistoryReplay(for: subID)
+                guard let self, self.inbound.wipeGeneration == generation else { return }
+                self.endHistoryReplay(for: subID)
             }
         })
 
@@ -179,11 +215,8 @@ final class GeohashSubscriptionManager {
                 pubkey: identity.publicKeyHex,
                 since: Date().addingTimeInterval(-TransportConfig.nostrDMSubscribeLookbackSeconds)
             )
-            NostrRelayManager.shared.subscribe(filter: dmFilter, id: dmSub) { [weak self] giftWrap in
-                Task { @MainActor [weak self] in
-                    self?.inbound.subscribeGiftWrap(giftWrap, id: identity)
-                }
-            }
+            NostrRelayManager.shared.subscribe(filter: dmFilter, id: dmSub,
+                handler: giftWrapHandler(identity: identity, resubscribing: true))
         }
     }
 
@@ -252,17 +285,15 @@ final class GeohashSubscriptionManager {
         let filter = NostrFilter.geohashEphemeral(channel.geohash, since: ts, limit: TransportConfig.nostrGeohashInitialLimit)
         let subRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: channel.geohash, count: 5)
         replayingGeoSubscriptionID = subID
-        NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays, handler: { [weak self] event in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.inbound.handleNostrEvent(event, isHistoryReplay: self.replayingGeoSubscriptionID == subID)
-                // Gateway downlink: rebroadcast relay events for the viewed
-                // channel onto the mesh (no-op unless gateway mode is on).
-                GatewayService.shared.rebroadcastRelayEvent(event, geohash: channel.geohash)
-            }
+        let generation = inbound.wipeGeneration
+        NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays, handler: relayEventHandler { manager, event in
+            manager.inbound.handleNostrEvent(event, isHistoryReplay: manager.replayingGeoSubscriptionID == subID)
+            // Gateway downlink shares the callback's panic-generation check.
+            GatewayService.shared.rebroadcastRelayEvent(event, geohash: channel.geohash)
         }, onEOSE: { [weak self] in
             Task { @MainActor [weak self] in
-                self?.endHistoryReplay(for: subID)
+                guard let self, self.inbound.wipeGeneration == generation else { return }
+                self.endHistoryReplay(for: subID)
             }
         })
 
@@ -283,11 +314,8 @@ final class GeohashSubscriptionManager {
             pubkey: identity.publicKeyHex,
             since: Date().addingTimeInterval(-TransportConfig.nostrDMSubscribeLookbackSeconds)
         )
-        NostrRelayManager.shared.subscribe(filter: dmFilter, id: dmSub) { [weak self] giftWrap in
-            Task { @MainActor [weak self] in
-                self?.inbound.handleGiftWrap(giftWrap, id: identity)
-            }
-        }
+        NostrRelayManager.shared.subscribe(filter: dmFilter, id: dmSub,
+            handler: giftWrapHandler(identity: identity, resubscribing: false))
     }
 
     @MainActor
@@ -384,11 +412,10 @@ final class GeohashSubscriptionManager {
             limit: TransportConfig.nostrGeohashSampleLimit
         )
         let subRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: gh, count: 5)
-        NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays) { [weak self] event in
-            Task { @MainActor [weak self] in
-                self?.presence.subscribeNostrEvent(event, gh: gh)
-            }
-        }
+        NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays,
+            handler: relayEventHandler { manager, event in
+                manager.presence.subscribeNostrEvent(event, gh: gh)
+            })
     }
 
     @MainActor
@@ -418,10 +445,9 @@ final class GeohashSubscriptionManager {
             since: Date().addingTimeInterval(-TransportConfig.nostrDMSubscribeLookbackSeconds)
         )
 
-        context.nostrRelayManager?.subscribe(filter: filter, id: "chat-messages") { [weak self] event in
-            Task { @MainActor [weak self] in
-                self?.inbound.handleNostrMessage(event)
-            }
-        }
+        context.nostrRelayManager?.subscribe(filter: filter, id: "chat-messages",
+            handler: relayEventHandler { manager, event in
+                await manager.inbound.handleNostrMessage(event)?.value
+            })
     }
 }

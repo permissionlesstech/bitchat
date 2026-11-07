@@ -667,42 +667,63 @@ struct NoiseEncryptionServiceTests {
     @Test("Claim gives an attempt a full on-wire timeout window")
     func handshakeClaimRearmsDeadline() async throws {
         let timeoutInterval: TimeInterval = 1
-        let service = NoiseEncryptionService(
-            keychain: MockKeychain(),
-            ordinaryHandshakeTimeout: timeoutInterval
-        )
-        let peerID = PeerID(str: "1021324354657687")
-        let recorder = HandshakeStartRecorder()
-        service.onHandshakeRecoveryRequired = { [weak service] request in
-            let firedAt = DispatchTime.now().uptimeNanoseconds
-            service?.cancelHandshakeRecovery(request)
-            recorder.recordTimeout(at: firedAt)
-        }
-
-        let attempt = try #require(
-            try service.initiateHandshakeIfNeeded(
-                with: peerID,
-                retryOnTimeout: true
+        // Expired preparations do not satisfy this test: a claim must succeed.
+        for _ in 0..<5 {
+            let service = NoiseEncryptionService(
+                keychain: MockKeychain(),
+                ordinaryHandshakeTimeout: timeoutInterval
             )
-        )
-        try? await Task.sleep(nanoseconds: 500_000_000)
-        let claimed = service.claimHandshakeInitiation(attempt, for: peerID)
-        let claimedAt = DispatchTime.now().uptimeNanoseconds
-        #expect(claimed == attempt.payload)
-        let expired = await TestHelpers.waitUntil(
-            { recorder.timeoutCount == 1 },
-            timeout: 5
-        )
-        #expect(expired)
-        let firedAt = try #require(recorder.firstTimeoutUptimeNanoseconds)
-        try #require(firedAt >= claimedAt)
-        let elapsed = TimeInterval(firedAt - claimedAt) / 1_000_000_000
-        // A non-rearmed deadline would fire roughly 0.5 seconds after the
-        // claim. Measure on the timeout queue instead of relying on a task to
-        // resume inside a narrow pre-deadline window under parallel CI load.
-        #expect(elapsed >= timeoutInterval * 0.75)
-        #expect(!service.hasSession(with: peerID))
-        #expect(recorder.timeoutCount == 1)
+            let peerID = PeerID(str: "1021324354657687")
+            let recorder = HandshakeStartRecorder()
+            service.onHandshakeRecoveryRequired = { [weak service] request in
+                let firedAt = DispatchTime.now().uptimeNanoseconds
+                service?.cancelHandshakeRecovery(request)
+                recorder.recordTimeout(at: firedAt)
+            }
+
+            let preparedAt = DispatchTime.now().uptimeNanoseconds
+            let attempt = try #require(
+                try service.initiateHandshakeIfNeeded(
+                    with: peerID,
+                    retryOnTimeout: true
+                )
+            )
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            let claimedAt = DispatchTime.now().uptimeNanoseconds
+            let claimed = service.claimHandshakeInitiation(attempt, for: peerID)
+            let claimReturnedAt = DispatchTime.now().uptimeNanoseconds
+            if claimed == nil {
+                // Waiting for recovery could hide a false nil while the session is live.
+                let missElapsed = TimeInterval(claimReturnedAt - preparedAt) / 1_000_000_000
+                try #require(missElapsed >= timeoutInterval)
+                try #require(!service.hasSession(with: peerID))
+            }
+            let expired = await TestHelpers.waitUntil(
+                { recorder.timeoutCount == 1 },
+                timeout: 5
+            )
+            #expect(expired)
+            let firedAt = try #require(recorder.firstTimeoutUptimeNanoseconds)
+            if claimed == nil {
+                // A delayed test task can miss the preparation window. Verify
+                // expiry before retrying; an expired attempt does not test rearm.
+                try #require(firedAt >= preparedAt)
+                let preparationElapsed = TimeInterval(firedAt - preparedAt) / 1_000_000_000
+                try #require(preparationElapsed >= timeoutInterval)
+                continue
+            }
+            #expect(claimed == attempt.payload)
+            try #require(firedAt >= claimedAt)
+            let elapsed = TimeInterval(firedAt - claimedAt) / 1_000_000_000
+            // A non-rearmed deadline would fire roughly 0.5 seconds after the
+            // claim. The timestamp is captured in the recovery callback; callback
+            // delay can hide early expiry, so it is not an exact timer measurement.
+            #expect(elapsed >= timeoutInterval * 0.75)
+            #expect(!service.hasSession(with: peerID))
+            #expect(recorder.timeoutCount == 1)
+            return
+        }
+        Issue.record("No claim succeeded before preparation expired in five attempts")
     }
 
     @Test("Duplicate spoofed message one cannot extend rollback or repause during cooldown")

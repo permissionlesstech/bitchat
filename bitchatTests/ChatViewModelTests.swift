@@ -20,6 +20,7 @@ private func makeTestableViewModel(
     panicMediaWipe: (() throws -> Void)? = nil,
     panicRecoveryOperations: PanicRecoveryOperations? = nil,
     panicNetworkLifecycle: PanicNetworkLifecycle = .noop,
+    panicMetadataWipeOperations: PanicMetadataWipeOperations? = nil,
     locationManager: LocationChannelManager = .shared
 ) -> (viewModel: ChatViewModel, transport: MockTransport) {
     let keychain = injectedKeychain ?? MockKeychain()
@@ -36,6 +37,7 @@ private func makeTestableViewModel(
         locationManager: locationManager,
         panicMediaWipe: panicMediaWipe,
         panicRecoveryOperations: panicRecoveryOperations,
+        panicMetadataWipeOperations: panicMetadataWipeOperations,
         panicNetworkLifecycle: panicNetworkLifecycle
     )
 
@@ -2065,7 +2067,7 @@ struct ChatViewModelPrivateMediaDeletionTests {
     }
 
     @Test @MainActor
-    func panicInvalidatesActiveAndQueuedPrivateChatClears() {
+    func panicInvalidatesActiveAndQueuedPrivateChatClears() async {
         let (viewModel, transport) = makeTestableViewModel()
         transport.deferDeletedPrivateMediaPersistence = true
         let firstPeerID = PeerID(str: String(repeating: "4", count: 64))
@@ -2097,7 +2099,7 @@ struct ChatViewModelPrivateMediaDeletionTests {
             transport.deletedPrivateMediaMessageIDBatches == [[firstID]]
         )
 
-        _ = viewModel.panicClearAllData(restartServices: false)
+        _ = await viewModel.panicClearAllData(restartServices: false)
         viewModel.seedPrivateChat([
             privateMediaMessage(
                 id: firstID,
@@ -2150,20 +2152,257 @@ struct ChatViewModelPrivateMediaDeletionTests {
 
 struct ChatViewModelPanicTests {
 
+    @Test(arguments: 0...6) @MainActor
+    func metadataFailureAttemptsRemainingCleanupAndRetryCommits(_ failedStore: Int) async {
+        let names = ["courier", "bridge", "gossip", "groups", "board", "events"]
+        var attempts: [String] = []
+        var denyDeletion = true
+        var pending = false
+        var commits = 0
+        var mediaAttempts = 0
+        var restarts = 0
+        func wipe(_ index: Int) -> Bool {
+            attempts.append(names[index])
+            return !denyDeletion || (failedStore != index && failedStore != 6)
+        }
+        let metadata = PanicMetadataWipeOperations(
+            wipeCourier: { wipe(0) },
+            wipeBridge: { wipe(1) },
+            wipeGossip: { wipe(2) },
+            wipeGroups: { wipe(3) },
+            wipeBoard: { wipe(4) },
+            wipeEvents: { wipe(5) }
+        )
+        let recovery = PanicRecoveryOperations(
+            isPending: { pending },
+            begin: {
+                pending = true
+                return PanicRecoveryIntent(fileMarkerEstablished: true, externalMarkerEstablished: true)
+            },
+            wipeMedia: { _ in mediaAttempts += 1 },
+            complete: { commits += 1; pending = false }
+        )
+        let keychain = MockKeychain()
+        let (viewModel, transport) = makeTestableViewModel(
+            keychain: keychain,
+            panicRecoveryOperations: recovery,
+            panicNetworkLifecycle: PanicNetworkLifecycle(stop: {}, restart: { restarts += 1 }),
+            panicMetadataWipeOperations: metadata
+        )
+        let starts = transport.startServicesCallCount
+
+        #expect(!(await viewModel.panicClearAllData()), "A denied metadata store must keep panic incomplete")
+        #expect(attempts == names, "A denied store must not skip the later metadata stores")
+        #expect(keychain.deleteAllCallCount == 1)
+        #expect(mediaAttempts == 1, "Metadata failure must not skip media cleanup")
+        #expect(pending)
+        #expect(commits == 0)
+        #expect(restarts == 0)
+        #expect(transport.startServicesCallCount == starts)
+        #expect(!viewModel.networkActivationAllowed)
+
+        denyDeletion = false
+        attempts.removeAll()
+        #expect(await viewModel.panicClearAllData())
+        #expect(attempts == names, "Retry must attempt the full metadata cleanup again")
+        #expect(keychain.deleteAllCallCount == 2)
+        #expect(mediaAttempts == 2)
+        #expect(!pending)
+        #expect(commits == 1)
+        #expect(restarts == 1)
+        #expect(transport.startServicesCallCount == starts + 1)
+        #expect(viewModel.networkActivationAllowed)
+    }
+
+    @Test(arguments: 0..<6) @MainActor
+    func unresolvedMetadataLocationKeepsPanicPendingUntilRetry(_ failedStore: Int) async throws {
+        let names = ["courier", "bridge", "gossip", "groups", "board", "events"]
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+        let files = names.map { root.appendingPathComponent("\($0).json") }
+        let sibling = root.appendingPathComponent("keep.txt")
+        let bytes = Data("SYNTHETIC_UNRESOLVED_METADATA".utf8)
+        let siblingBytes = Data("KEEP".utf8)
+        var denyLookup = true
+        var lookups = Array(repeating: 0, count: names.count)
+        func resolve(_ index: Int) -> URL? {
+            lookups[index] += 1
+            return denyLookup && index == failedStore ? nil : files[index]
+        }
+        let keychain = MockKeychain()
+        let courier = CourierStore(resolveDefaultFileURL: { resolve(0) })
+        let bridge = BridgeDropDedupStore(resolveDefaultFileURL: { resolve(1) })
+        let gossip = GossipMessageArchive(resolveDefaultFileURL: { resolve(2) })
+        let groups = GroupStore(keychain: keychain, resolveDefaultFileURL: { resolve(3) })
+        let board = BoardStore(resolveDefaultFileURL: { resolve(4) })
+        let events = NostrProcessedEventStore(resolveDefaultFileURL: { resolve(5) })
+        let bridgeService = BridgeCourierService(dedupStore: bridge)
+        let deduplicationService = MessageDeduplicationService(nostrEventStore: events)
+        let wipes: [() -> Bool] = [
+            { courier.wipe() }, { bridgeService.wipe() }, { gossip.wipe() },
+            { groups.wipe() }, { board.wipe() }, { deduplicationService.clearAll() }
+        ]
+        // File removal does not depend on decoding; seed after constructing the stores.
+        for file in files { try bytes.write(to: file) }
+        try siblingBytes.write(to: sibling)
+        var attempts: [String] = []
+        func wipe(_ index: Int) -> Bool {
+            attempts.append(names[index])
+            return wipes[index]()
+        }
+        let metadata = PanicMetadataWipeOperations(
+            wipeCourier: { wipe(0) }, wipeBridge: { wipe(1) },
+            wipeGossip: { wipe(2) }, wipeGroups: { wipe(3) },
+            wipeBoard: { wipe(4) }, wipeEvents: { wipe(5) }
+        )
+        var pending = false
+        var mediaAttempts = 0
+        var completionOrder: [String] = []
+        let recovery = PanicRecoveryOperations(
+            isPending: { pending },
+            begin: {
+                pending = true
+                return PanicRecoveryIntent(fileMarkerEstablished: true, externalMarkerEstablished: true)
+            },
+            wipeMedia: { _ in mediaAttempts += 1 },
+            complete: { completionOrder.append("complete"); pending = false }
+        )
+        let lifecycle = PanicNetworkLifecycle(stop: {}, restart: {
+            #expect(!pending, "Recovery must complete before service restart")
+            completionOrder.append("restart")
+        })
+        let (viewModel, transport) = makeTestableViewModel(
+            keychain: keychain,
+            panicRecoveryOperations: recovery,
+            panicNetworkLifecycle: lifecycle,
+            panicMetadataWipeOperations: metadata
+        )
+        let starts = transport.startServicesCallCount
+        #expect(keychain.saveIdentityKey(Data("SYNTHETIC_KEY".utf8), forKey: "panic-url-resolution-test"))
+
+        #expect(!(await viewModel.panicClearAllData()), "An unresolved persistent location must keep panic incomplete")
+        #expect(attempts == names, "A failed lookup must not skip other metadata stores")
+        #expect(keychain.deleteAllCallCount == 1)
+        #expect(keychain.getIdentityKey(forKey: "panic-url-resolution-test") == nil)
+        #expect(mediaAttempts == 1)
+        #expect(pending)
+        #expect(completionOrder.isEmpty, "An unresolved store must not complete recovery or restart services")
+        #expect(transport.startServicesCallCount == starts)
+        #expect(!viewModel.networkActivationAllowed)
+        #expect(try Data(contentsOf: files[failedStore]) == bytes)
+        for index in names.indices where index != failedStore {
+            #expect(!fm.fileExists(atPath: files[index].path), "Other metadata stores must still be deleted")
+        }
+        #expect(try Data(contentsOf: sibling) == siblingBytes)
+
+        let failedLookups = lookups[failedStore]
+        denyLookup = false
+        attempts.removeAll()
+        #expect(await viewModel.panicClearAllData(), "Retry must resolve the location and finish cleanup")
+        #expect(lookups[failedStore] > failedLookups, "Retry must attempt the failed lookup again")
+        #expect(attempts == names)
+        #expect(keychain.deleteAllCallCount == 2)
+        #expect(mediaAttempts == 2)
+        #expect(!pending)
+        #expect(completionOrder == ["complete", "restart"])
+        #expect(transport.startServicesCallCount == starts + 1)
+        #expect(viewModel.networkActivationAllowed)
+        for file in files { #expect(!fm.fileExists(atPath: file.path)) }
+        #expect(try Data(contentsOf: sibling) == siblingBytes)
+    }
+
     @Test @MainActor
-    func panicClearAllData_finishesMediaWipeBeforeReturning() {
+    func metadataFailureDuringBootstrapKeepsIntentForRetry() async throws {
+        let suiteName = "PanicBootstrapLocation." + UUID().uuidString
+        let storage = try #require(UserDefaults(suiteName: suiteName))
+        defer { storage.removePersistentDomain(forName: suiteName) }
+        let locationManager = LocationChannelManager(storage: storage)
+        let names = ["courier", "bridge", "gossip", "groups", "board", "events"]
+        var attempts: [String] = []
+        var denyBoardDeletion = true
+        var pending = true
+        var commits = 0
+        var mediaAttempts = 0
+        var restarts = 0
+        func wipe(_ index: Int) -> Bool {
+            attempts.append(names[index])
+            return index != 4 || !denyBoardDeletion
+        }
+        let metadata = PanicMetadataWipeOperations(
+            wipeCourier: { wipe(0) }, wipeBridge: { wipe(1) },
+            wipeGossip: { wipe(2) }, wipeGroups: { wipe(3) },
+            wipeBoard: { wipe(4) }, wipeEvents: { wipe(5) }
+        )
+        let recovery = PanicRecoveryOperations(
+            isPending: { pending },
+            begin: {
+                pending = true
+                return PanicRecoveryIntent(fileMarkerEstablished: true, externalMarkerEstablished: true)
+            },
+            wipeMedia: { _ in mediaAttempts += 1 },
+            complete: { commits += 1; pending = false }
+        )
+        let keychain = MockKeychain()
+        let (viewModel, transport) = makeTestableViewModel(
+            keychain: keychain,
+            panicRecoveryOperations: recovery,
+            panicNetworkLifecycle: PanicNetworkLifecycle(stop: {}, restart: { restarts += 1 }),
+            panicMetadataWipeOperations: metadata,
+            locationManager: locationManager
+        )
+
+        _ = await viewModel.startupPanicRecovery?.value
+
+        #expect(attempts == names, "Bootstrap recovery must attempt each metadata operation")
+        #expect(keychain.deleteAllCallCount == 1)
+        #expect(mediaAttempts == 1)
+        #expect(pending)
+        #expect(commits == 0)
+        #expect(restarts == 0)
+        #expect(transport.startServicesCallCount == 0)
+        #expect(!viewModel.networkActivationAllowed)
+
+        #expect(transport.delegate == nil)
+        #expect(viewModel.publicMessagePipeline.delegate == nil)
+        denyBoardDeletion = false
+        attempts.removeAll()
+        #expect(await viewModel.panicClearAllData())
+        #expect(attempts == names)
+        #expect(keychain.deleteAllCallCount == 2)
+        #expect(mediaAttempts == 2)
+        #expect(!pending)
+        #expect(commits == 1)
+        #expect(restarts == 1)
+        #expect(transport.startServicesCallCount == 1)
+        #expect(viewModel.networkActivationAllowed)
+        #expect(transport.delegate === viewModel)
+        #expect(transport.eventDelegate === viewModel)
+        #expect(viewModel.publicMessagePipeline.delegate != nil)
+        let fresh = BitchatMessage(sender: "synthetic", content: "after startup retry", timestamp: Date(), isRelay: false)
+        viewModel.handlePublicMessage(fresh)
+        viewModel.publicMessagePipeline.flushIfNeeded()
+        #expect(viewModel.messages.contains(where: { $0.id == fresh.id }))
+        let bindings = viewModel.cancellables.count
+        #expect(await viewModel.panicClearAllData())
+        #expect(viewModel.cancellables.count == bindings, "A later wipe must not bootstrap twice")
+    }
+
+    @Test @MainActor
+    func panicClearAllData_finishesMediaWipeBeforeReturning() async {
         var wipeFinished = false
         let (viewModel, _) = makeTestableViewModel(panicMediaWipe: {
             wipeFinished = true
         })
 
-        viewModel.panicClearAllData()
+        await viewModel.panicClearAllData()
 
         #expect(wipeFinished)
     }
 
     @Test @MainActor
-    func panicClearAllData_stopsNetworkBeforeWipeAndRestartsAfterCommit() {
+    func panicClearAllData_stopsNetworkBeforeWipeAndRestartsAfterCommit() async {
         var events: [String] = []
         let lifecycle = PanicNetworkLifecycle(
             stop: { events.append("stop") },
@@ -2174,7 +2413,7 @@ struct ChatViewModelPanicTests {
             panicNetworkLifecycle: lifecycle
         )
 
-        let completed = viewModel.panicClearAllData()
+        let completed = await viewModel.panicClearAllData()
 
         #expect(completed)
         #expect(events == ["stop", "wipe", "restart"])
@@ -2182,7 +2421,7 @@ struct ChatViewModelPanicTests {
     }
 
     @Test @MainActor
-    func panicKeychainFailureKeepsRecoveryPendingAndServicesStopped() {
+    func panicKeychainFailureKeepsRecoveryPendingAndServicesStopped() async {
         let keychain = MockKeychain()
         keychain.simulatedDeleteAllResult = false
         var events: [String] = []
@@ -2209,7 +2448,7 @@ struct ChatViewModelPanicTests {
         )
         let startsBeforePanic = transport.startServicesCallCount
 
-        let completed = viewModel.panicClearAllData()
+        let completed = await viewModel.panicClearAllData()
 
         #expect(!completed)
         #expect(events == ["stop", "begin", "wipe"])
@@ -2219,7 +2458,7 @@ struct ChatViewModelPanicTests {
     }
 
     @Test @MainActor
-    func pendingPanicRecoveryCompletesBeforeTransportBootstrap() {
+    func pendingPanicRecoveryCompletesBeforeTransportBootstrap() async {
         var events: [String] = []
         let operations = PanicRecoveryOperations(
             isPending: {
@@ -2241,6 +2480,8 @@ struct ChatViewModelPanicTests {
             panicRecoveryOperations: operations
         )
 
+        _ = await viewModel.startupPanicRecovery?.value
+
         #expect(events == ["read", "begin", "wipe", "complete"])
         #expect(transport.emergencyDisconnectCallCount == 1)
         #expect(transport.startServicesCallCount == 1)
@@ -2248,7 +2489,7 @@ struct ChatViewModelPanicTests {
     }
 
     @Test @MainActor
-    func failedStartupRecoveryLeavesTransportAndNetworkBlocked() {
+    func failedStartupRecoveryLeavesTransportAndNetworkBlocked() async {
         enum WipeFailure: Error { case failed }
         var completedMarker = false
         let operations = PanicRecoveryOperations(
@@ -2267,6 +2508,8 @@ struct ChatViewModelPanicTests {
             panicRecoveryOperations: operations
         )
 
+        _ = await viewModel.startupPanicRecovery?.value
+
         #expect(!completedMarker)
         #expect(transport.emergencyDisconnectCallCount == 1)
         #expect(transport.startServicesCallCount == 0)
@@ -2274,7 +2517,7 @@ struct ChatViewModelPanicTests {
     }
 
     @Test @MainActor
-    func failedStartupKeychainRecoveryLeavesIntentAndTransportBlocked() {
+    func failedStartupKeychainRecoveryLeavesIntentAndTransportBlocked() async {
         let keychain = MockKeychain()
         keychain.simulatedDeleteAllResult = false
         var events: [String] = []
@@ -2295,6 +2538,8 @@ struct ChatViewModelPanicTests {
             keychain: keychain,
             panicRecoveryOperations: operations
         )
+
+        _ = await viewModel.startupPanicRecovery?.value
 
         #expect(events == ["begin", "wipe"])
         #expect(keychain.deleteAllCallCount == 1)
@@ -2332,7 +2577,7 @@ struct ChatViewModelPanicTests {
         ], for: PeerID(str: "PEER1"))
         viewModel.markPrivateChatUnread(PeerID(str: "PEER1"))
 
-        viewModel.panicClearAllData()
+        await viewModel.panicClearAllData()
 
         // After panic, emergency disconnect should be called
         #expect(transport.emergencyDisconnectCallCount == 1)
@@ -2363,7 +2608,7 @@ struct ChatViewModelPanicTests {
         viewModel.geoNicknames = [pubkey: "alice"]
         viewModel.teleportedGeo = [pubkey]
 
-        viewModel.panicClearAllData()
+        await viewModel.panicClearAllData()
 
         #expect(viewModel.activeChannel == .mesh)
         #expect(viewModel.geoSubscriptionID == nil)
@@ -2377,7 +2622,7 @@ struct ChatViewModelPanicTests {
     }
 
     @Test @MainActor
-    func panicClearAllData_wipesTheLocationStateOfItsOwnManager() throws {
+    func panicClearAllData_wipesTheLocationStateOfItsOwnManager() async throws {
         // Where the device has been, persisted the way the location manager
         // writes it: a teleport and a bookmark.
         let suiteName = "ChatViewModelPanicTests.\(UUID().uuidString)"
@@ -2389,7 +2634,7 @@ struct ChatViewModelPanicTests {
         #expect(locationManager.bookmarks == ["u4pruy"])
         let (viewModel, _) = makeTestableViewModel(locationManager: locationManager)
 
-        viewModel.panicClearAllData()
+        await viewModel.panicClearAllData()
 
         // The wipe lands on the manager the view model runs on: `.shared` in
         // the app, this test's own here, which leaves the process-wide one to
@@ -2409,5 +2654,241 @@ struct ChatViewModelLifecycleTests {
         let (_, transport) = makeTestableViewModel()
 
         #expect(transport.startServicesCallCount == 1)
+    }
+}
+
+// Private responsiveness regression: synthetic files and mocked lifecycle/recovery.
+struct PanicResponsivenessTests {
+    @Test(arguments: [false, true]) @MainActor
+    func eventQueueWaitAllowsMainActorProgressBeforeCompletion(_ cancelCaller: Bool) async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = root.appendingPathComponent("events.json")
+        try Data("[]".utf8).write(to: file)
+        let queue = DispatchQueue(label: "panic.test.events")
+        let store = NostrProcessedEventStore(fileURL: file, ioQueue: queue)
+        let dedup = MessageDeduplicationService(nostrEventStore: store)
+        let release = DispatchSemaphore(value: 0)
+        queue.async { release.wait() }
+        // Bounded watchdog releases the synthetic slow operation even if main blocks.
+        var pending = false
+        var committed = false
+        var restarted = false
+        var heartbeatWhilePending = false
+        var duringWipe: () -> Void = {}
+        var heartbeat: Task<Void, Never>?
+        var wipeTask: Task<Bool, Never>?
+        let recovery = PanicRecoveryOperations(isPending: { false }, begin: {
+            pending = true
+            duringWipe()
+            return PanicRecoveryIntent(fileMarkerEstablished: true, externalMarkerEstablished: true)
+        }, wipeMedia: { _ in }, complete: { committed = true; pending = false })
+        let metadata = PanicMetadataWipeOperations(wipeCourier: { true }, wipeBridge: { true },
+            wipeGossip: { true }, wipeGroups: { true }, wipeBoard: { true }, wipeEvents: {
+                DispatchQueue.global().asyncAfter(deadline: .now() + 2.0) { release.signal() }
+                return await dedup.clearAllAsync()
+            })
+        let (viewModel, _) = makeTestableViewModel(panicRecoveryOperations: recovery,
+            panicNetworkLifecycle: PanicNetworkLifecycle(stop: {}, restart: { restarted = true }),
+            panicMetadataWipeOperations: metadata)
+        duringWipe = {
+            heartbeat = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 50_000_000)
+                heartbeatWhilePending = pending && !committed && !restarted && !viewModel.networkActivationAllowed
+                if cancelCaller { wipeTask?.cancel() }
+                release.signal()
+            }
+        }
+        wipeTask = Task { @MainActor in await viewModel.panicClearAllData() }
+        let result = await wipeTask!.value
+        await heartbeat?.value
+        #expect(heartbeatWhilePending, "Main actor must run while queued deletion is pending")
+        #expect(result)
+        #expect(committed && restarted)
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+    }
+}
+
+struct GossipPanicResponsivenessTests {
+    @Test(arguments: [false, true]) @MainActor
+    func pendingRetirementYieldsAndRejectsOverlappingPanic(_ denyEvents: Bool) async throws {
+        let suiteName = "PanicGossipLocation." + UUID().uuidString
+        let storage = try #require(UserDefaults(suiteName: suiteName))
+        defer { storage.removePersistentDomain(forName: suiteName) }
+        let locationManager = LocationChannelManager(storage: storage)
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = root.appendingPathComponent("gossip.json")
+        let queue = DispatchQueue(label: "panic.test.gossip")
+        let archive = GossipMessageArchive(fileURL: file)
+        let manager = GossipSyncManager(myPeerID: PeerID(str: "1122334455667788"),
+            requestSyncManager: RequestSyncManager(), archive: archive, queue: queue)
+        let release = DispatchSemaphore(value: 0)
+        queue.async { release.wait(); archive.save([Data("synthetic queued save".utf8)]) }
+        let keychain = MockKeychain()
+        let idBridge = NostrIdentityBridge(keychain: MockKeychainHelper())
+        let identityManager = MockIdentityManager(keychain)
+        let transport = BLEService(keychain: keychain, idBridge: idBridge,
+            identityManager: identityManager, initializeBluetoothManagers: false)
+        var pending = false
+        var begins = 0
+        var commits = 0
+        var mediaAttempts = 0
+        var deny = denyEvents
+        let recovery = PanicRecoveryOperations(isPending: { false }, begin: {
+            begins += 1; pending = true
+            DispatchQueue.global().asyncAfter(deadline: .now() + 2.0) { release.signal() }
+            return PanicRecoveryIntent(fileMarkerEstablished: true, externalMarkerEstablished: true)
+        }, wipeMedia: { _ in mediaAttempts += 1 }, complete: { commits += 1; pending = false })
+        let metadata = PanicMetadataWipeOperations(wipeCourier: { true }, wipeBridge: { true },
+            wipeGossip: { archive.wipe() }, wipeGroups: { true }, wipeBoard: { true }, wipeEvents: { !deny })
+        let viewModel = ChatViewModel(keychain: keychain, idBridge: idBridge,
+            identityManager: identityManager, transport: transport,
+            locationManager: locationManager,
+            panicRecoveryOperations: recovery, panicMetadataWipeOperations: metadata)
+        transport._test_replaceGossipManager(manager)
+        defer { transport.suspendForPanicReset() }
+        let buffered = BitchatMessage(sender: "synthetic", content: "buffered before wipe", timestamp: Date(), isRelay: false)
+        viewModel.handlePublicMessage(buffered)
+        #expect(viewModel.publicMessagePipeline.containsMessage(withID: buffered.id))
+        let chrome = AppChromeModel(chatViewModel: viewModel,
+            privateInboxModel: PrivateInboxModel(conversations: viewModel.conversations))
+        let recipient = try NostrIdentity.generate()
+        let sender = try NostrIdentity.generate()
+        let embedded = try #require(NostrEmbeddedBitChat.encodePMForNostrNoRecipient(
+            content: "old mailbox plaintext", messageID: "old-mailbox"))
+        let giftWrap = try NostrProtocol.createPrivateMessage(content: embedded,
+            recipientPubkey: recipient.publicKeyHex, senderIdentity: sender)
+        let mailboxTask = viewModel.nostrCoordinator.inbound.handleNostrMessage(giftWrap)
+        let heartbeat = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            #expect(pending && transport.radioIsPanicSuspended())
+            #expect(!viewModel.networkActivationAllowed)
+            #expect(!(await viewModel.panicClearAllData()), "Overlapping panic must not begin another transaction")
+            #expect(begins == 1)
+            // The pre-panic task reaches identity acquisition while retirement
+            // remains pending. It must not add an event ID to the new generation.
+            await mailboxTask?.value
+            #expect(!viewModel.hasProcessedNostrEvent(giftWrap.id))
+            release.signal()
+            #expect(!viewModel.publicMessagePipeline.containsMessage(withID: buffered.id))
+            viewModel.publicMessagePipeline.flushIfNeeded()
+            #expect(!viewModel.messages.contains(where: { $0.id == buffered.id }))
+            let late = BitchatMessage(sender: "synthetic", content: "during wipe", timestamp: Date(), isRelay: false)
+            viewModel.handlePublicMessage(late)
+            #expect(!viewModel.publicMessagePipeline.containsMessage(withID: late.id))
+            #expect(!viewModel.messages.contains(where: { $0.id == late.id }), "Pending wipe must reject inbound state")
+            viewModel.sendMessage("during wipe")
+            #expect(!viewModel.messages.contains(where: { $0.content == "during wipe" }), "Pending wipe must reject user sends")
+        }
+        chrome.panicClearAllData()
+        // No actor yield between confirmation and these boundary assertions.
+        #expect(pending && begins == 1)
+        #expect(transport.radioIsPanicSuspended())
+        #expect(!viewModel.networkActivationAllowed && chrome.panicInProgress)
+        await chrome.panicTask?.value
+        await heartbeat.value
+        #expect(!chrome.panicInProgress)
+        #expect(mediaAttempts == 1)
+        #expect(!FileManager.default.fileExists(atPath: file.path), "Delete must follow queued save")
+        #expect(pending == denyEvents)
+        #expect(commits == (denyEvents ? 0 : 1))
+        #expect(transport.radioIsPanicSuspended() == denyEvents)
+        manager.persistNow()
+        _ = manager._messageCount(for: PeerID(str: "1122334455667788"))
+        #expect(!FileManager.default.fileExists(atPath: file.path), "Retired owner must not recreate the archive")
+        if denyEvents {
+            deny = false
+            #expect(await viewModel.panicClearAllData())
+            #expect(!pending && commits == 1 && !transport.radioIsPanicSuspended())
+        }
+        let fresh = BitchatMessage(sender: "synthetic", content: "new after recovery", timestamp: Date(), isRelay: false)
+        viewModel.handlePublicMessage(fresh)
+        viewModel.publicMessagePipeline.flushIfNeeded()
+        #expect(viewModel.messages.contains(where: { $0.id == fresh.id }))
+    }
+}
+
+
+@Suite(.serialized)
+struct PanicTaskBoundaryTests {
+    @Test(arguments: [false, true]) @MainActor
+    func queuedRelayCallbackCannotAdoptPostPanicGeneration(_ resubscribing: Bool) async throws {
+        let recovery = PanicRecoveryOperations(isPending: { false }, begin: {
+            PanicRecoveryIntent(fileMarkerEstablished: true, externalMarkerEstablished: true)
+        }, wipeMedia: { _ in }, complete: {})
+        let metadata = PanicMetadataWipeOperations(wipeCourier: { true }, wipeBridge: { true },
+            wipeGossip: { true }, wipeGroups: { true }, wipeBoard: { true }, wipeEvents: { true })
+        let suiteName = "PanicTaskBoundaryTests.\(UUID().uuidString)"
+        let storage = try #require(UserDefaults(suiteName: suiteName))
+        defer { storage.removePersistentDomain(forName: suiteName) }
+        let (viewModel, _) = makeTestableViewModel(panicRecoveryOperations: recovery,
+            panicMetadataWipeOperations: metadata, locationManager: LocationChannelManager(storage: storage))
+        let recipient = try NostrIdentity.generate()
+        let sender = try NostrIdentity.generate()
+        let embedded = try #require(NostrEmbeddedBitChat.encodePMForNostrNoRecipient(
+            content: "synthetic old relay callback", messageID: "old-callback"))
+        let event = try NostrProtocol.createPrivateMessage(content: embedded,
+            recipientPubkey: recipient.publicKeyHex, senderIdentity: sender)
+        var callbacks: [@MainActor () async -> Void] = []
+        let subscriptions = viewModel.nostrCoordinator.subscriptions
+        subscriptions.relayCallbackScheduler = { callbacks.append($0) }
+        let handler = subscriptions.giftWrapHandler(identity: recipient, resubscribing: resubscribing)
+        handler(event)
+        #expect(callbacks.count == 1)
+        #expect(await viewModel.panicClearAllData())
+        // Model an already-enqueued outer callback not scheduled until after
+        // recovery. It must not acquire the pipeline's new wipe generation.
+        let oldCallback = callbacks.removeFirst()
+        await oldCallback()
+        #expect(!viewModel.hasProcessedNostrEvent(event.id))
+        let oldMessages = viewModel.conversations.conversationsByID.values.flatMap(\.messages)
+        #expect(!oldMessages.contains { $0.content == "synthetic old relay callback" })
+        // A new registration after recovery can deliver the same test event.
+        let freshHandler = subscriptions.giftWrapHandler(identity: recipient, resubscribing: resubscribing)
+        freshHandler(event)
+        await callbacks.removeFirst()()
+        let freshMessages = viewModel.conversations.conversationsByID.values.flatMap(\.messages)
+        #expect(freshMessages.contains { $0.content == "synthetic old relay callback" })
+    }
+
+    @Test @MainActor
+    func pendingGeohashSendCannotRestoreClearedConversation() async throws {
+        var releaseCleanup: CheckedContinuation<Bool, Never>?
+        let recovery = PanicRecoveryOperations(isPending: { false }, begin: {
+            PanicRecoveryIntent(fileMarkerEstablished: true, externalMarkerEstablished: true)
+        }, wipeMedia: { _ in }, complete: {})
+        let metadata = PanicMetadataWipeOperations(wipeCourier: { true }, wipeBridge: { true },
+            wipeGossip: { true }, wipeGroups: { true }, wipeBoard: { true }, wipeEvents: {
+                await withCheckedContinuation { releaseCleanup = $0 }
+            })
+        let suiteName = "PanicTaskBoundaryTests.\(UUID().uuidString)"
+        let storage = try #require(UserDefaults(suiteName: suiteName))
+        defer { storage.removePersistentDomain(forName: suiteName) }
+        let (viewModel, _) = makeTestableViewModel(panicRecoveryOperations: recovery,
+            panicMetadataWipeOperations: metadata, locationManager: LocationChannelManager(storage: storage))
+        let channel = GeohashChannel(level: .city, geohash: "u4pruydq")
+        viewModel.activeChannel = .location(channel)
+        viewModel.sendMessage("synthetic pre-panic send")
+        let send = try #require(viewModel.outgoingCoordinator.geohashMiningTask)
+        // Begin panic without yielding to the outgoing task. Mining and its
+        // continuation then run while the controller waits for cleanup.
+        let wipe = try #require(viewModel.beginPanicClearAllData())
+        await send.value
+        for _ in 0..<100 where releaseCleanup == nil { await Task.yield() }
+        let release = try #require(releaseCleanup)
+        let retained = viewModel.conversations.conversationsByID[.geohash(channel.geohash)]?.messages ?? []
+        #expect(!retained.contains { $0.content == "synthetic pre-panic send" })
+        #expect(!viewModel.networkActivationAllowed)
+        release.resume(returning: true)
+        #expect(await wipe.value)
+        // A fresh outgoing task after successful recovery must still work.
+        viewModel.activeChannel = .location(channel)
+        viewModel.sendMessage("synthetic fresh send")
+        await viewModel.outgoingCoordinator.geohashMiningTask?.value
+        let fresh = viewModel.conversations.conversationsByID[.geohash(channel.geohash)]?.messages ?? []
+        #expect(fresh.contains { $0.content == "synthetic fresh send" })
     }
 }

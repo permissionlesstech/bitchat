@@ -9,6 +9,7 @@ import Foundation
 @MainActor
 protocol NostrInboundPipelineContext: AnyObject {
     var currentGeohash: String? { get }
+    var networkActivationAllowed: Bool { get }
 
     // MARK: Event dedup
     func hasProcessedNostrEvent(_ eventID: String) -> Bool
@@ -127,7 +128,7 @@ final class NostrInboundPipeline {
     /// count when they arrive, which keeps senders with skewed clocks visible.
     @MainActor
     func subscribeNostrEvent(_ event: NostrEvent, isHistoryReplay: Bool = false) {
-        guard let context else { return }
+        guard let context, context.networkActivationAllowed else { return }
         // Cheap rejects (kind, dedup lookup) — duplicates dominate real
         // traffic. The signature was already verified (exactly once, off the
         // main actor) by NostrRelayManager before delivery.
@@ -200,8 +201,10 @@ final class NostrInboundPipeline {
             mentions: mentions.isEmpty ? nil : mentions
         )
 
-        Task { @MainActor [weak context] in
-            guard let context else { return }
+        let generation = wipeGeneration
+        Task { @MainActor [weak self, weak context] in
+            guard let self, let context, context.networkActivationAllowed,
+                  self.wipeGeneration == generation else { return }
             let isBlocked = context.isNostrBlocked(pubkeyHexLowercased: event.pubkey.lowercased())
             context.handlePublicMessage(message, powBits: powBits)
             if !isBlocked {
@@ -214,7 +217,7 @@ final class NostrInboundPipeline {
     /// See `subscribeNostrEvent(_:isHistoryReplay:)` for `isHistoryReplay`.
     @MainActor
     func handleNostrEvent(_ event: NostrEvent, isHistoryReplay: Bool = false) {
-        guard let context else { return }
+        guard let context, context.networkActivationAllowed else { return }
         // Cheap rejects (kind, dedup lookup) — the signature was already
         // verified (exactly once, off the main actor) by NostrRelayManager.
         guard (event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue
@@ -298,45 +301,51 @@ final class NostrInboundPipeline {
             mentions: mentions.isEmpty ? nil : mentions
         )
 
-        Task { @MainActor [weak context] in
-            guard let context else { return }
+        let generation = wipeGeneration
+        Task { @MainActor [weak self, weak context] in
+            guard let self, let context, context.networkActivationAllowed,
+                  self.wipeGeneration == generation else { return }
             context.handlePublicMessage(message, powBits: powBits)
             context.checkForMentions(message)
             context.sendHapticFeedback(for: message)
         }
     }
 
+    @discardableResult
     @MainActor
-    func subscribeGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) {
-        guard let context else { return }
+    func subscribeGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) -> Task<Void, Never>? {
+        guard let context, context.networkActivationAllowed else { return nil }
         // Cheap dedup pre-check only; processGeohashGiftWrap does the
         // authoritative main-actor check-and-record before the off-main
         // NIP-17 unwrap. The outer signature was already verified (exactly
         // once, off the main actor) by NostrRelayManager.
-        guard !context.hasProcessedNostrEvent(giftWrap.id) else { return }
+        guard !context.hasProcessedNostrEvent(giftWrap.id) else { return nil }
 
         // Capture the wipe generation at spawn, alongside the per-geohash
         // identity (private key) the detached task strongly captures. A panic
         // wipe between spawn and delivery bumps the generation, and the task
         // drops its result instead of delivering plaintext post-wipe.
         let wipeGeneration = self.wipeGeneration
-        Task.detached(priority: .userInitiated) { [weak self] in
-            await self?.processGeohashGiftWrap(giftWrap, id: id, verbose: false, wipeGeneration: wipeGeneration)
+        return Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            await self.processGeohashGiftWrap(giftWrap, id: id, verbose: false, wipeGeneration: wipeGeneration)
         }
     }
 
+    @discardableResult
     @MainActor
-    func handleGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) {
-        guard let context else { return }
+    func handleGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) -> Task<Void, Never>? {
+        guard let context, context.networkActivationAllowed else { return nil }
         // Cheap dedup pre-check only; see subscribeGiftWrap.
         if context.hasProcessedNostrEvent(giftWrap.id) {
-            return
+            return nil
         }
 
         // Spawn-time wipe-generation capture; see subscribeGiftWrap.
         let wipeGeneration = self.wipeGeneration
-        Task.detached(priority: .userInitiated) { [weak self] in
-            await self?.processGeohashGiftWrap(giftWrap, id: id, verbose: true, wipeGeneration: wipeGeneration)
+        return Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            await self.processGeohashGiftWrap(giftWrap, id: id, verbose: true, wipeGeneration: wipeGeneration)
         }
     }
 
@@ -361,7 +370,7 @@ final class NostrInboundPipeline {
         // Authoritative check-and-record, atomic on the main actor so two
         // concurrent detached tasks can't both process the same event.
         let alreadyProcessed: Bool = await MainActor.run {
-            guard self.wipeGeneration == wipeGeneration else { return true }
+            guard context.networkActivationAllowed, self.wipeGeneration == wipeGeneration else { return true }
             if context.hasProcessedNostrEvent(giftWrap.id) { return true }
             context.recordProcessedNostrEvent(giftWrap.id)
             return false
@@ -396,7 +405,7 @@ final class NostrInboundPipeline {
             // A panic wipe during the off-main decrypt must not let the
             // pre-wipe plaintext reach post-wipe state; drop it here, atomic
             // with the wipe on the main actor.
-            guard self.wipeGeneration == wipeGeneration else { return }
+            guard context.networkActivationAllowed, self.wipeGeneration == wipeGeneration else { return }
             guard let packet = Self.decodeEmbeddedBitChatPacket(from: content),
                   packet.type == MessageType.noiseEncrypted.rawValue,
                   let payload = NoisePayload.decode(packet.payload)
@@ -432,38 +441,35 @@ final class NostrInboundPipeline {
     }
 
     @MainActor
-    func handleNostrMessage(_ giftWrap: NostrEvent) {
-        guard let context else { return }
+    @discardableResult
+    func handleNostrMessage(_ giftWrap: NostrEvent) -> Task<Void, Never>? {
+        guard let context, context.networkActivationAllowed else { return nil }
         // Cheap dedup pre-check only; processNostrMessage does the
         // authoritative check-and-record before the off-main NIP-17 unwrap.
         // The outer signature was already verified (exactly once, off the
         // main actor) by NostrRelayManager, and only verified events are
         // recorded, so a forged-signature copy can never poison the dedup
         // set and suppress the genuine event.
-        if context.hasProcessedNostrEvent(giftWrap.id) { return }
+        if context.hasProcessedNostrEvent(giftWrap.id) { return nil }
 
-        Task.detached(priority: .userInitiated) { [weak self] in
-            await self?.processNostrMessage(giftWrap)
+        let generation = wipeGeneration
+        return Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            await self.processNostrMessage(giftWrap, wipeGeneration: generation)
         }
     }
 
-    func processNostrMessage(_ giftWrap: NostrEvent) async {
+    func processNostrMessage(_ giftWrap: NostrEvent, wipeGeneration: UInt64) async {
         guard let context else { return }
-        // Authoritative check-and-record, atomic on the main actor so two
-        // concurrent detached tasks can't both process the same event.
-        let alreadyProcessed: Bool = await MainActor.run {
-            if context.hasProcessedNostrEvent(giftWrap.id) { return true }
+        // Admission, dedup and identity acquisition share one main-actor hop.
+        // A task admitted before panic must not acquire the old identity under
+        // the new generation while asynchronous cleanup is still pending.
+        let currentIdentity: NostrIdentity? = await MainActor.run {
+            guard context.networkActivationAllowed,
+                  self.wipeGeneration == wipeGeneration,
+                  !context.hasProcessedNostrEvent(giftWrap.id) else { return nil }
             context.recordProcessedNostrEvent(giftWrap.id)
-            return false
-        }
-        if alreadyProcessed { return }
-        // Fetch the identity and the wipe generation in ONE main-actor hop:
-        // the generation then vouches for exactly this identity. A wipe after
-        // this point bumps the generation and the delivery hop below drops
-        // the decrypted result (same guard as processGeohashGiftWrap; this
-        // account-mailbox path had the identical hazard).
-        let (currentIdentity, wipeGeneration): (NostrIdentity?, UInt64) = await MainActor.run {
-            (context.currentNostrIdentity(), self.wipeGeneration)
+            return context.currentNostrIdentity()
         }
         guard let currentIdentity else { return }
 
@@ -502,7 +508,7 @@ final class NostrInboundPipeline {
                     await MainActor.run {
                         // Drop pre-wipe plaintext if a panic wipe landed
                         // during the off-main decrypt (see above).
-                        guard self.wipeGeneration == wipeGeneration else { return }
+                        guard context.networkActivationAllowed, self.wipeGeneration == wipeGeneration else { return }
                         context.registerNostrKeyMapping(senderPubkey, for: targetPeerID)
 
                         switch payload.type {
