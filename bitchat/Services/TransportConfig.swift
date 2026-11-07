@@ -220,11 +220,18 @@ enum TransportConfig {
     static let nostrGeoRelayCount: Int = 5
     static let nostrGeohashSampleLookbackSeconds: TimeInterval = 300
     static let nostrGeohashSampleLimit: Int = 100
+    // Inner-rumor lookback: senders stamp the rumor with real send time.
     static let nostrDMSubscribeLookbackSeconds: TimeInterval = 86400
-    // Tolerated clock skew for the client-side rumor-timestamp window on
-    // inbound Nostr DMs (senders stamp the inner rumor with real time; only
-    // the outer gift wrap is randomized per NIP-17).
+    // Tolerated clock skew for client-side Nostr DM timestamp windows.
     static let nostrDMMaxClockSkewSeconds: TimeInterval = 900
+    // Outer gift-wrap age ceiling. Android (and NIP-17-style clients) may
+    // randomize the wrap's created_at up to 48h into the past; relays that
+    // honor `since` will not deliver those wraps under a 24h filter. The
+    // envelope may then wait offline for the full inner-rumor delivery window.
+    // Keep that grace in the outer gate and relay filter; the inner timestamp
+    // still independently enforces message freshness after decryption.
+    static let nostrGiftWrapMaxAgeSeconds: TimeInterval = 172_800
+        + nostrDMSubscribeLookbackSeconds + nostrDMMaxClockSkewSeconds
     // A sampled chat message this recent means "a conversation is happening
     // there" for the empty-timeline nearby-activity hint.
     static let uiGeohashChatActivityWindowSeconds: TimeInterval = 900
