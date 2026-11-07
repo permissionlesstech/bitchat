@@ -453,6 +453,27 @@ struct NostrProtocolTests {
         #expect(!signed.isValidSignature())
     }
 
+    @Test func giftWrapFilter_requestsExpandedBoundedBackfill() throws {
+        let since = Date(timeIntervalSince1970: 1_699_739_900)
+        let filter = NostrFilter.giftWrapsFor(pubkey: "recipient", since: since)
+        let data = try JSONEncoder().encode(filter)
+        let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let limit = try #require(object["limit"] as? Int)
+
+        #expect(object["kinds"] as? [Int] == [1059])
+        #expect(object["#p"] as? [String] == ["recipient"])
+        #expect(object["since"] as? Int == 1_699_739_900)
+        #expect(limit == 1000)
+
+        // Model a relay honoring the requested cap and sorting by outer created_at.
+        // A freshly sent rumor can have an older envelope than 100 retained wraps.
+        let recentRumorEnvelope = 1_699_920_800
+        let retainedEnvelopes = (0..<100).map { 1_699_990_000 + $0 }
+        let newestFirst = (retainedEnvelopes + [recentRumorEnvelope]).sorted(by: >)
+        #expect(!newestFirst.prefix(100).contains(recentRumorEnvelope))
+        #expect(newestFirst.prefix(limit).contains(recentRumorEnvelope))
+    }
+
     @Test func geohashNotesSingleFilter_encodesExpectedTagShape() throws {
         let since = Date(timeIntervalSince1970: 1_234_567)
         let filter = NostrFilter.geohashNotes("u4pruyd", since: since, limit: 42)

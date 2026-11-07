@@ -220,11 +220,28 @@ enum TransportConfig {
     static let nostrGeoRelayCount: Int = 5
     static let nostrGeohashSampleLookbackSeconds: TimeInterval = 300
     static let nostrGeohashSampleLimit: Int = 100
+    // Inner-rumor lookback: senders stamp the rumor with real send time.
     static let nostrDMSubscribeLookbackSeconds: TimeInterval = 86400
-    // Tolerated clock skew for the client-side rumor-timestamp window on
-    // inbound Nostr DMs (senders stamp the inner rumor with real time; only
-    // the outer gift wrap is randomized per NIP-17).
+    // Tolerated clock skew for client-side Nostr DM timestamp windows.
     static let nostrDMMaxClockSkewSeconds: TimeInterval = 900
+    /// Outer gift-wrap `created_at` randomization floor when *sending*.
+    /// Match Android's `NIP17_DEFAULT_MAX_PAST_SECONDS` (79_200 = 22h): every
+    /// installed build still subscribes `since: now − 86400`, and that window
+    /// keeps receding after send, so lookback − skew (85_500) still loses DMs
+    /// to a peer who comes online hours later. The two-hour margin reserves
+    /// room for that recession until #1706's wider subscribe is everywhere.
+    /// Receive-side age limits independently allow queued older wraps.
+    /// The true send time lives on the inner rumor either way.
+    static let nostrGiftWrapTimestampRandomizationSeconds: TimeInterval = 79_200
+
+    // Outer gift-wrap age ceiling. Android (and NIP-17-style clients) may
+    // randomize the wrap's created_at up to 48h into the past; relays that
+    // honor `since` will not deliver those wraps under a 24h filter. The
+    // envelope may then wait offline for the full inner-rumor delivery window.
+    // Keep that grace in the outer gate and relay filter; the inner timestamp
+    // still independently enforces message freshness after decryption.
+    static let nostrGiftWrapMaxAgeSeconds: TimeInterval = 172_800
+        + nostrDMSubscribeLookbackSeconds + nostrDMMaxClockSkewSeconds
     // A sampled chat message this recent means "a conversation is happening
     // there" for the empty-timeline nearby-activity hint.
     static let uiGeohashChatActivityWindowSeconds: TimeInterval = 900
@@ -252,7 +269,10 @@ enum TransportConfig {
     // Reconnect delays get ±20% random jitter so relays that dropped together
     // (e.g. a network blip) don't thundering-herd the same reconnect instant.
     static let nostrRelayBackoffJitterRatio: Double = 0.2
-    static let nostrRelayDefaultFetchLimit: Int = 100
+    // Randomized envelope timestamps can put a recent DM behind older rumors.
+    // Match the existing location backfill allowance, while keeping requests bounded.
+    // Relays may impose a lower cap; this is not complete history pagination.
+    static let nostrGiftWrapFetchLimit: Int = 1000
     // How many consecutive Tor-readiness waits (each bounded by TorManager's
     // bootstrap deadline) to attempt before unblocking pending EOSE callers.
     static let nostrTorReadyMaxWaitAttempts: Int = 3
