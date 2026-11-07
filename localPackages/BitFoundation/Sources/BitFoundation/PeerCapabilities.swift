@@ -40,6 +40,15 @@ public struct PeerCapabilities: OptionSet, Equatable, Hashable, Sendable {
     /// this bit; keep it decodable so the wire assignment is never reused.
     public static let nonDestructiveNoiseReplacement =
         PeerCapabilities(rawValue: 1 << 10)
+    /// Sends and understands signed courier spray receipts (ack / decline), so
+    /// a giver can defer spending a spray copy's budget until the taker either
+    /// confirms it stored the copy or reports a deterministic refusal.
+    ///
+    /// Bits 8-10 are deliberately skipped: they are claimed by in-flight work
+    /// (`privateMedia` 8, `privateMediaReceipts` 9, `nonDestructiveNoiseReplacement`
+    /// 10). The gap costs nothing on the wire — `encoded()` drops only trailing
+    /// zero bytes, so every bit in 8...15 encodes to the same two bytes.
+    public static let courierAck = PeerCapabilities(rawValue: 1 << 12)
 
     /// Minimal little-endian byte encoding; always at least one byte so an
     /// empty set is distinguishable from an absent TLV.

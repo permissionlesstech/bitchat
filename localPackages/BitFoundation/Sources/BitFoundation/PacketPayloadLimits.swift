@@ -91,7 +91,8 @@ public enum PacketPayloadLimits {
         case .fragment:
             return fragmentBytes
         case .announce, .announceV2, .leave, .boardPost, .prekeyBundle,
-             .voiceFrame, .noiseHandshake, .ping, .pong:
+             .voiceFrame, .noiseHandshake, .ping, .pong,
+             .courierSprayAck, .courierSprayDecline:
             return controlBytes
         }
     }
