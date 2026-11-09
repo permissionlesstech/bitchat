@@ -6,6 +6,7 @@
 // For more information, see <https://unlicense.org>
 //
 
+import BitFoundation
 import Foundation
 
 /// Persistent mute preferences for individual conversations (#1594).

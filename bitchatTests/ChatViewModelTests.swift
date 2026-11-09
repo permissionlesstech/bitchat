@@ -19,7 +19,8 @@ private func makeTestableViewModel(
     keychain injectedKeychain: MockKeychain? = nil,
     panicMediaWipe: (() throws -> Void)? = nil,
     panicRecoveryOperations: PanicRecoveryOperations? = nil,
-    panicNetworkLifecycle: PanicNetworkLifecycle = .noop
+    panicNetworkLifecycle: PanicNetworkLifecycle = .noop,
+    locationManager: LocationChannelManager = .shared
 ) -> (viewModel: ChatViewModel, transport: MockTransport) {
     let keychain = injectedKeychain ?? MockKeychain()
     let keychainHelper = MockKeychainHelper()
@@ -32,6 +33,7 @@ private func makeTestableViewModel(
         idBridge: idBridge,
         identityManager: identityManager,
         transport: transport,
+        locationManager: locationManager,
         panicMediaWipe: panicMediaWipe,
         panicRecoveryOperations: panicRecoveryOperations,
         panicNetworkLifecycle: panicNetworkLifecycle
@@ -691,6 +693,37 @@ struct ChatViewModelFormattingTests {
 
         #expect(String(header.characters) == "<@Alice#a1b2> ")
     }
+
+    @Test @MainActor
+    func formatMessageHeader_isCachedApartFromTheFullText() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let message = BitchatMessage(
+            id: "fmt-3",
+            sender: "Alice#a1b2",
+            content: "hello",
+            timestamp: Date(),
+            isRelay: false,
+            senderPeerID: PeerID(str: "00000000000000b3")
+        )
+
+        // The full text is cached first under the same scheme, theme and
+        // sender flags; the header lookup must not pick it up.
+        let fullText = viewModel.formatMessageAsText(message, colorScheme: .dark, theme: .matrix)
+        let header = viewModel.formatMessageHeader(message, colorScheme: .dark, theme: .matrix)
+
+        #expect(String(header.characters) == "<@Alice#a1b2> ")
+        #expect(String(fullText.characters).hasPrefix("<@Alice#a1b2> hello"))
+        #expect(
+            message.getCachedFormattedText(
+                isDark: true,
+                isSelf: false,
+                variant: ChatMessageFormatter.headerCacheNamespace
+            ) == header
+        )
+        // Later lookups are answered from each one's own cache entry.
+        #expect(viewModel.formatMessageHeader(message, colorScheme: .dark, theme: .matrix) == header)
+        #expect(viewModel.formatMessageAsText(message, colorScheme: .dark, theme: .matrix) == fullText)
+    }
 }
 
 // MARK: - Verification Tests
@@ -1067,6 +1100,46 @@ struct ChatViewModelPrivateChatTests {
         // The message routing depends on connection state and other factors
         // At minimum, it should not crash
         #expect(Bool(true)) // If we get here without crash, the test passes
+    }
+
+    @Test @MainActor
+    func syncReadReceiptsForSentMessages_judgesMineBySenderIDNotNickname() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        viewModel.nickname = "alice"
+        let peerID = PeerID(str: "0011223344556677")
+        viewModel.seedPrivateChat([
+            // A namesake's file, delivered to me (BLEFileTransferHandler.incomingMessage):
+            // it still needs my READ receipt.
+            BitchatMessage(
+                id: "namesake-delivered",
+                sender: "alice",
+                content: "[image] theirs.jpg",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "alice",
+                senderPeerID: peerID,
+                deliveryStatus: .delivered(to: "alice", at: Date())
+            ),
+            // My own message from before a rename, already read.
+            BitchatMessage(
+                id: "mine-before-rename",
+                sender: "al",
+                content: "hi",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "bob",
+                senderPeerID: transport.myPeerID,
+                deliveryStatus: .read(by: "bob", at: Date())
+            )
+        ], for: peerID)
+
+        viewModel.syncReadReceiptsForSentMessages(for: peerID)
+
+        #expect(!viewModel.hasSentReadReceipt("namesake-delivered"))
+        #expect(!viewModel.privateChatManager.sentReadReceipts.contains("namesake-delivered"))
+        #expect(viewModel.hasSentReadReceipt("mine-before-rename"))
     }
 }
 
@@ -2301,6 +2374,29 @@ struct ChatViewModelPanicTests {
         #expect(viewModel.currentGeohash == nil)
         #expect(viewModel.geoNicknames.isEmpty)
         #expect(viewModel.teleportedGeo.isEmpty)
+    }
+
+    @Test @MainActor
+    func panicClearAllData_wipesTheLocationStateOfItsOwnManager() throws {
+        // Where the device has been, persisted the way the location manager
+        // writes it: a teleport and a bookmark.
+        let suiteName = "ChatViewModelPanicTests.\(UUID().uuidString)"
+        let storage = try #require(UserDefaults(suiteName: suiteName))
+        defer { storage.removePersistentDomain(forName: suiteName) }
+        storage.set(try JSONEncoder().encode(["u4pruy"]), forKey: "locationChannel.teleportedSet")
+        storage.set(try JSONEncoder().encode(["u4pruy"]), forKey: "locationChannel.bookmarks")
+        let locationManager = LocationChannelManager(storage: storage)
+        #expect(locationManager.bookmarks == ["u4pruy"])
+        let (viewModel, _) = makeTestableViewModel(locationManager: locationManager)
+
+        viewModel.panicClearAllData()
+
+        // The wipe lands on the manager the view model runs on: `.shared` in
+        // the app, this test's own here, which leaves the process-wide one to
+        // the tests that select channels on it.
+        #expect(locationManager.bookmarks.isEmpty)
+        #expect(storage.object(forKey: "locationChannel.teleportedSet") == nil)
+        #expect(storage.object(forKey: "locationChannel.bookmarks") == nil)
     }
 }
 

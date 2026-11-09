@@ -30,7 +30,7 @@ struct GroupChatList: View {
 
                 ForEach(groups) { group in
                     HStack(spacing: 4) {
-                        Text("#\(group.name)")
+                        hashtagText(for: group)
                             .bitchatFont(size: 14)
                             .foregroundColor(palette.primary)
                             .lineLimit(1)
@@ -67,6 +67,19 @@ struct GroupChatList: View {
                 }
             }
         }
+    }
+
+    /// "#name", not localized: there is nothing to translate, and a
+    /// letterless "#%@" catalog key breaks string catalog symbol generation
+    /// (SwiftPM's default build system). It renders as the localized lookup
+    /// did: the name is isolated (the lookup isolates names containing
+    /// right-to-left text; isolating every name renders the same), so the
+    /// "#" stays on the same side of RTL names, and the text is tagged with
+    /// the app language, as text from a localization table is.
+    private func hashtagText(for group: GroupChatRow) -> Text {
+        var hashtag = AttributedString("#\u{2068}\(group.name)\u{2069}")
+        hashtag.languageIdentifier = Bundle.main.preferredLocalizations.first ?? "en"
+        return Text(hashtag)
     }
 
     private func accessibilityDescription(for group: GroupChatRow) -> String {

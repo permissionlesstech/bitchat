@@ -33,11 +33,19 @@ extension BitchatMessage {
     }
 
     func mediaAttachment(for nickname: String) -> Media? {
+        // Files only travel over the mesh radio; geochats, geo DMs and
+        // bridged messages (internet-relayed from a rendezvous) carry text
+        // alone. A "[image] " line from such a sender names no file it sent
+        // us, so it stays a text row.
+        if let senderPeerID, senderPeerID.isGeoChat || senderPeerID.isGeoDM || senderPeerID.isBridge {
+            return nil
+        }
         guard let baseDirectory = Cache.shared.filesDir else { return nil }
 
         func url(for category: MimeType.Category) -> URL? {
             guard content.hasPrefix(category.messagePrefix),
-                  let filename = String(content.dropFirst(category.messagePrefix.count)).trimmedOrNilIfEmpty
+                  let filename = String(content.dropFirst(category.messagePrefix.count)).trimmedOrNilIfEmpty,
+                  Self.isSafeMediaFilename(filename)
             else {
                 return nil
             }
@@ -58,5 +66,20 @@ extension BitchatMessage {
             return .image(url)
         }
         return nil
+    }
+
+    /// Whether a media filename taken from message text is one plain path
+    /// component. Anything else ("../outgoing/x.jpg", "a/b", "..") would
+    /// resolve outside the media directory, so it is rejected, not repaired:
+    /// sanitizing would still point the row at some other local file.
+    static func isSafeMediaFilename(_ filename: String) -> Bool {
+        guard !filename.isEmpty,
+              filename != ".",
+              filename != "..",
+              !filename.unicodeScalars.contains(where: { $0 == "/" || $0 == "\\" })
+        else {
+            return false
+        }
+        return (filename as NSString).lastPathComponent == filename
     }
 }
