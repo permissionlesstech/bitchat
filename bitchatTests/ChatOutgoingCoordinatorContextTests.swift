@@ -208,6 +208,8 @@ struct ChatOutgoingCoordinatorContextTests {
         let echo = context.appendedPublicMessages[0].message
         #expect(context.appendedPublicMessages[0].conversationID == .geohash("u4pruydq"))
         #expect(echo.sender == "me#2222")
+        // The echo is told apart as mine by this ID, not by its name.
+        #expect(echo.senderPeerID == PeerID(nostr: MockChatOutgoingContext.dummyIdentity.publicKeyHex))
         #expect(context.recordedActivityKeys == ["geo:u4pruydq"])
         #expect(context.sentGeohashContexts.count == 1)
         let geoContext = context.sentGeohashContexts[0]

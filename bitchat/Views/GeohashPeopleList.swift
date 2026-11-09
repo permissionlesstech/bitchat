@@ -1,17 +1,28 @@
 import SwiftUI
 
-struct GeohashPeopleList: View {
+struct GeohashPeopleList: View, Equatable {
     @EnvironmentObject private var peerListModel: PeerListModel
     @ThemedPalette private var palette
     let onTapPerson: () -> Void
     /// People-sheet search query; empty means show every row.
-    var nameFilter: String = ""
+    nonisolated let nameFilter: String
     @Environment(\.colorScheme) var colorScheme
     @State private var orderedIDs: [String] = []
 
+    init(onTapPerson: @escaping () -> Void, nameFilter: String = "") {
+        self.onTapPerson = onTapPerson
+        self.nameFilter = nameFilter
+    }
+
+    /// Roster changes arrive through PeerListModel. Search is the input
+    /// that must invalidate this view when the sheet re-renders.
+    nonisolated static func == (lhs: GeohashPeopleList, rhs: GeohashPeopleList) -> Bool {
+        lhs.nameFilter == rhs.nameFilter
+    }
+
     private enum Strings {
         static let noneNearby: LocalizedStringKey = "geohash_people.none_nearby"
-        static let noMatches: LocalizedStringKey = "content.people.search.no_matches"
+        static let noMatches = String(localized: "content.people.search.no_matches", comment: "Empty people search result")
         static let youSuffix: LocalizedStringKey = "geohash_people.you_suffix"
         static let blockedTooltip = String(localized: "geohash_people.tooltip.blocked", comment: "Tooltip shown next to people blocked in geohash channels")
         static let unblock: LocalizedStringKey = "geohash_people.action.unblock"
@@ -35,51 +46,25 @@ struct GeohashPeopleList: View {
                     .padding(.top, 12)
             }
         } else {
-            let allPeople = peerListModel.geohashPeople
-            // Sticky order must track the unfiltered roster — filtering before
-            // `currentIDs` would prune orderedIDs and reshuffle on clear (#1589 Codex).
-            let allIDs = allPeople.map(\.id)
-            let filterActive = !nameFilter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            let people = allPeople.filter {
-                PeopleNameFilter.matches($0.displayName, query: nameFilter)
-            }
-            if people.isEmpty && filterActive {
-                VStack(alignment: .leading, spacing: 0) {
+            let people = peerListModel.geohashPeople
+            let currentIDs = people.map(\.id)
+            let personByID = Dictionary(people.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            let displayed = PeopleListOrdering.stableOrder(previous: orderedIDs, current: currentIDs)
+                .compactMap { personByID[$0] }
+                .filter { PeopleNameFilter.matches($0.displayName, query: nameFilter) }
+            // People physically here first, then those who teleported in.
+            let rows = displayed.filter { !$0.isTeleported } + displayed.filter(\.isTeleported)
+            let firstID = rows.first?.id
+
+            LazyVStack(alignment: .leading, spacing: 0) {
+                if rows.isEmpty {
                     Text(Strings.noMatches)
                         .bitchatFont(size: 14)
                         .foregroundColor(palette.secondary)
                         .padding(.horizontal)
                         .padding(.top, 12)
                 }
-                .onAppear {
-                    orderedIDs = allIDs
-                }
-                .onChange(of: allIDs) { ids in
-                    var newOrder = orderedIDs
-                    newOrder.removeAll { !ids.contains($0) }
-                    for id in ids where !newOrder.contains(id) { newOrder.append(id) }
-                    if newOrder != orderedIDs { orderedIDs = newOrder }
-                }
-            } else {
-            let currentIDs = allIDs
-
-            let displayIDs = orderedIDs.filter { currentIDs.contains($0) } + currentIDs.filter { !orderedIDs.contains($0) }
-            let visibleIDs = displayIDs.filter { id in
-                people.contains(where: { $0.id == id })
-            }
-            let nonTele = visibleIDs.filter { id in
-                !(people.first(where: { $0.id == id })?.isTeleported ?? false)
-            }
-            let tele = visibleIDs.filter { id in
-                people.first(where: { $0.id == id })?.isTeleported ?? false
-            }
-            let finalOrder: [String] = nonTele + tele
-            let firstID = finalOrder.first
-            let personByID = Dictionary(uniqueKeysWithValues: people.map { ($0.id, $0) })
-
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(finalOrder.filter { personByID[$0] != nil }, id: \.self) { pid in
-                    let person = personByID[pid]!
+                ForEach(rows) { person in
                     HStack(spacing: 4) {
                         let icon = person.isTeleported ? "face.dashed" : "mappin.and.ellipse"
                         let assignedColor = peerListModel.colorForGeohashPerson(id: person.id, isDark: colorScheme == .dark)
@@ -173,17 +158,20 @@ struct GeohashPeopleList: View {
                     }
                 }
             }
-            // Seed and update order outside result builder — always from the
-            // full unfiltered ID list so search does not reshuffle sticky order.
+            // Track the full roster so a search never changes sticky order.
             .onAppear {
-                orderedIDs = currentIDs
+                // The roster republishes only when membership or names
+                // change, so its recency order can be stale. Rebuild once so
+                // the sheet opens with the most recently active people first.
+                peerListModel.refreshNow()
+                orderedIDs = PeopleListOrdering.stableOrder(
+                    previous: [],
+                    current: peerListModel.geohashPeople.map(\.id)
+                )
             }
             .onChange(of: currentIDs) { ids in
-                var newOrder = orderedIDs
-                newOrder.removeAll { !ids.contains($0) }
-                for id in ids where !newOrder.contains(id) { newOrder.append(id) }
+                let newOrder = PeopleListOrdering.stableOrder(previous: orderedIDs, current: ids)
                 if newOrder != orderedIDs { orderedIDs = newOrder }
-            }
             }
         }
     }

@@ -82,6 +82,14 @@ final class ChatComposerCoordinator {
     }
 
     func updateAutocomplete(for text: String, cursorPosition: Int) {
+        // The query can only suggest for an @-token ending at the cursor, so
+        // skip assembling the candidates (a pass over every mesh peer or
+        // geohash participant) after each typing pause in plain text.
+        guard AutocompleteService.hasMentionToken(in: text, cursorPosition: cursorPosition) else {
+            setAutocompleteState(suggestions: [], range: nil)
+            return
+        }
+
         let peerCandidates = autocompleteCandidates()
         let (suggestions, range) = context.autocompleteQuery(
             for: text,
@@ -89,17 +97,7 @@ final class ChatComposerCoordinator {
             cursorPosition: cursorPosition
         )
 
-        if !suggestions.isEmpty {
-            context.autocompleteSuggestions = suggestions
-            context.autocompleteRange = range
-            context.showAutocomplete = true
-            context.selectedAutocompleteIndex = 0
-        } else {
-            context.autocompleteSuggestions = []
-            context.autocompleteRange = nil
-            context.showAutocomplete = false
-            context.selectedAutocompleteIndex = 0
-        }
+        setAutocompleteState(suggestions: suggestions, range: suggestions.isEmpty ? nil : range)
     }
 
     func completeNickname(_ nickname: String, in text: inout String) -> Int {
@@ -143,6 +141,25 @@ final class ChatComposerCoordinator {
 }
 
 private extension ChatComposerCoordinator {
+    /// Shows `suggestions` (hidden when empty) with the highlight reset to the
+    /// first one. Writes only the properties that change: each write
+    /// republishes the composer state, which re-renders every message row.
+    func setAutocompleteState(suggestions: [String], range: NSRange?) {
+        let isShown = !suggestions.isEmpty
+        if context.autocompleteSuggestions != suggestions {
+            context.autocompleteSuggestions = suggestions
+        }
+        if context.autocompleteRange != range {
+            context.autocompleteRange = range
+        }
+        if context.showAutocomplete != isShown {
+            context.showAutocomplete = isShown
+        }
+        if context.selectedAutocompleteIndex != 0 {
+            context.selectedAutocompleteIndex = 0
+        }
+    }
+
     func autocompleteCandidates() -> [String] {
         switch context.activeChannel {
         case .mesh:

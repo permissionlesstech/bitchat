@@ -19,4 +19,12 @@ struct PeopleNameFilterTests {
     @Test func matchesSubstringInsideNickname() {
         #expect(PeopleNameFilter.matches("cool_alice", query: "ali"))
     }
+
+    @Test @MainActor func geohashListEqualityTracksSearchQuery() {
+        let first = GeohashPeopleList(onTapPerson: {}, nameFilter: "alice")
+        let sameQuery = GeohashPeopleList(onTapPerson: {}, nameFilter: "alice")
+        let differentQuery = GeohashPeopleList(onTapPerson: {}, nameFilter: "bob")
+        #expect(first == sameQuery)
+        #expect(first != differentQuery)
+    }
 }

@@ -18,7 +18,7 @@ struct MeshPeerList: View {
 
     private enum Strings {
         static let noneNearby: LocalizedStringKey = "geohash_people.none_nearby"
-        static let noMatches: LocalizedStringKey = "content.people.search.no_matches"
+        static let noMatches = String(localized: "content.people.search.no_matches", comment: "Empty people search result")
         static let blockedTooltip = String(localized: "geohash_people.tooltip.blocked", comment: "Tooltip shown next to a blocked peer indicator")
         static let newMessagesTooltip = String(localized: "mesh_peers.tooltip.new_messages", comment: "Tooltip for the unread messages indicator")
         static let connected = String(localized: "content.accessibility.connected_mesh", comment: "Accessibility label for mesh-connected peer indicator")
@@ -41,11 +41,10 @@ struct MeshPeerList: View {
 
     var body: some View {
         let currentIDs = peerListModel.meshRows.map(\.id)
-        let displayIDs = orderedIDs.filter { currentIDs.contains($0) } + currentIDs.filter { !orderedIDs.contains($0) }
-        let peers: [MeshPeerRow] = displayIDs.compactMap { id in
-            peerListModel.meshRows.first(where: { $0.id == id })
-        }.filter { PeopleNameFilter.matches($0.displayName, query: nameFilter) }
-        let filterActive = !nameFilter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let rowByID = Dictionary(peerListModel.meshRows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let peers: [MeshPeerRow] = PeopleListOrdering.stableOrder(previous: orderedIDs, current: currentIDs)
+            .compactMap { rowByID[$0] }
+            .filter { PeopleNameFilter.matches($0.displayName, query: nameFilter) }
 
         if peerListModel.meshRows.isEmpty {
             // Match the section's row rhythm (same size, indent, and vertical
@@ -56,25 +55,16 @@ struct MeshPeerList: View {
                 .foregroundColor(palette.secondary)
                 .padding(.horizontal)
                 .padding(.vertical, 4)
-        } else if peers.isEmpty && filterActive {
-            Text(Strings.noMatches)
-                .bitchatFont(size: 14)
-                .foregroundColor(palette.secondary)
-                .padding(.horizontal)
-                .padding(.vertical, 4)
-                .onAppear {
-                    orderedIDs = currentIDs
-                }
-                .onChange(of: currentIDs) { ids in
-                    var newOrder = orderedIDs
-                    newOrder.removeAll { !ids.contains($0) }
-                    for id in ids where !newOrder.contains(id) { newOrder.append(id) }
-                    if newOrder != orderedIDs { orderedIDs = newOrder }
-                }
         } else {
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(0..<peers.count, id: \.self) { idx in
-                    let peer = peers[idx]
+                if peers.isEmpty {
+                    Text(Strings.noMatches)
+                        .bitchatFont(size: 14)
+                        .foregroundColor(palette.secondary)
+                        .padding(.horizontal)
+                        .padding(.vertical, 4)
+                }
+                ForEach(peers) { peer in
                     let isMe = peer.isMe
                     HStack(spacing: 4) {
                         let assigned = peerListModel.colorForMeshPeer(id: peer.peerID, isDark: colorScheme == .dark)
@@ -253,9 +243,7 @@ struct MeshPeerList: View {
                 orderedIDs = currentIDs
             }
             .onChange(of: currentIDs) { ids in
-                var newOrder = orderedIDs
-                newOrder.removeAll { !ids.contains($0) }
-                for id in ids where !newOrder.contains(id) { newOrder.append(id) }
+                let newOrder = PeopleListOrdering.stableOrder(previous: orderedIDs, current: ids)
                 if newOrder != orderedIDs { orderedIDs = newOrder }
             }
         }

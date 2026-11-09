@@ -81,6 +81,11 @@ extension ChatViewModel {
     }
 
     @MainActor
+    func geohashBlockListDidChange() {
+        participantTracker.refresh()
+    }
+
+    @MainActor
     func startGeohashDM(withPubkeyHex hex: String) {
         nostrCoordinator.startGeohashDM(withPubkeyHex: hex)
     }
