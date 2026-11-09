@@ -39,6 +39,8 @@ struct PeopleSectionHeader: View {
 struct BridgePeopleList: View {
     @ObservedObject private var bridgeService = BridgeService.shared
     @ThemedPalette private var palette
+    /// People-sheet search query; empty means show every row.
+    var nameFilter: String = ""
 
     private enum Strings {
         static let sectionTitle = String(localized: "bridge_people.section_title", defaultValue: "across the bridge", comment: "Section header in the people sheet for participants reachable via the mesh bridge")
@@ -50,7 +52,10 @@ struct BridgePeopleList: View {
         // (a serving neighbor's carriers) even while this device's own
         // bridge is off — whoever is visible in the timeline belongs in the
         // sheet.
-        if !bridgeService.bridgedParticipants.isEmpty {
+        let people = bridgeService.bridgedParticipants.filter {
+            PeopleNameFilter.matches($0.displayName, query: nameFilter)
+        }
+        if !people.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 PeopleSectionHeader(
                     icon: "network",
@@ -58,7 +63,7 @@ struct BridgePeopleList: View {
                     title: Strings.sectionTitle
                 )
 
-                ForEach(bridgeService.bridgedParticipants) { person in
+                ForEach(people) { person in
                     HStack(spacing: 4) {
                         Text(person.displayName)
                             .bitchatFont(size: 14)

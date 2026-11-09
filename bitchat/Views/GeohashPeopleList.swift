@@ -4,22 +4,27 @@ struct GeohashPeopleList: View, Equatable {
     @EnvironmentObject private var peerListModel: PeerListModel
     @ThemedPalette private var palette
     let onTapPerson: () -> Void
+    /// People-sheet search query; empty means show every row.
+    nonisolated let nameFilter: String
     @Environment(\.colorScheme) var colorScheme
     @State private var orderedIDs: [String] = []
 
-    /// The only input is the tap action, which always reveals the DM pane
-    /// and can't be compared. Treating it as equal lets SwiftUI skip this
-    /// list when the presenting view re-renders for models the list doesn't
-    /// read (message batches, chrome, verification); roster changes still
-    /// arrive through the observed PeerListModel.
+    init(onTapPerson: @escaping () -> Void, nameFilter: String = "") {
+        self.onTapPerson = onTapPerson
+        self.nameFilter = nameFilter
+    }
+
+    /// Roster changes arrive through PeerListModel. Search is the input
+    /// that must invalidate this view when the sheet re-renders.
     nonisolated static func == (lhs: GeohashPeopleList, rhs: GeohashPeopleList) -> Bool {
-        true
+        lhs.nameFilter == rhs.nameFilter
     }
 
     private enum Strings {
         static let noneNearby: LocalizedStringKey = "geohash_people.none_nearby"
+        static let noMatches = String(localized: "content.people.search.no_matches", comment: "Empty people search result")
         static let youSuffix: LocalizedStringKey = "geohash_people.you_suffix"
-        static let blockedTooltip = String(localized: "geohash_people.tooltip.blocked", comment: "Tooltip shown next to users blocked in geohash channels")
+        static let blockedTooltip = String(localized: "geohash_people.tooltip.blocked", comment: "Tooltip shown next to people blocked in geohash channels")
         static let unblock: LocalizedStringKey = "geohash_people.action.unblock"
         static let block: LocalizedStringKey = "geohash_people.action.block"
         static let unblockText = String(localized: "geohash_people.action.unblock", comment: "Context menu action to unblock a person")
@@ -46,13 +51,19 @@ struct GeohashPeopleList: View, Equatable {
             let personByID = Dictionary(people.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
             let displayed = PeopleListOrdering.stableOrder(previous: orderedIDs, current: currentIDs)
                 .compactMap { personByID[$0] }
+                .filter { PeopleNameFilter.matches($0.displayName, query: nameFilter) }
             // People physically here first, then those who teleported in.
             let rows = displayed.filter { !$0.isTeleported } + displayed.filter(\.isTeleported)
             let firstID = rows.first?.id
 
-            // Lazy: a busy room has hundreds of rows, each with a context
-            // menu and accessibility actions; only the visible ones are built.
             LazyVStack(alignment: .leading, spacing: 0) {
+                if rows.isEmpty {
+                    Text(Strings.noMatches)
+                        .bitchatFont(size: 14)
+                        .foregroundColor(palette.secondary)
+                        .padding(.horizontal)
+                        .padding(.top, 12)
+                }
                 ForEach(rows) { person in
                     HStack(spacing: 4) {
                         let icon = person.isTeleported ? "face.dashed" : "mappin.and.ellipse"
@@ -147,7 +158,7 @@ struct GeohashPeopleList: View, Equatable {
                     }
                 }
             }
-            // Seed and update order outside result builder
+            // Track the full roster so a search never changes sticky order.
             .onAppear {
                 // The roster republishes only when membership or names
                 // change, so its recency order can be stale. Rebuild once so
