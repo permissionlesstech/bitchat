@@ -122,6 +122,11 @@ struct PrivateConversationHeaderState: Equatable {
 final class PrivateConversationModel: ObservableObject {
     @Published private(set) var selectedPeerID: PeerID?
     @Published private(set) var selectedHeaderState: PrivateConversationHeaderState?
+    @Published private(set) var selectedConversationNotificationsMuted = false
+    /// False until a handshake yields a fingerprint. Mute preferences are keyed
+    /// on that fingerprint, so before it exists there is nothing durable to key
+    /// on and the control is disabled rather than silently no-op'ing (#1606).
+    @Published private(set) var canToggleSelectedConversationNotificationMute = false
 
     private let chatViewModel: ChatViewModel
     private let conversations: ConversationStore
@@ -177,6 +182,23 @@ final class PrivateConversationModel: ObservableObject {
     func toggleFavoriteForSelectedConversation() {
         guard let headerPeerID = selectedHeaderState?.headerPeerID else { return }
         toggleFavorite(peerID: headerPeerID)
+    }
+
+    func toggleSelectedConversationNotificationMute() {
+        guard
+            let peerID = selectedPeerID,
+            let scope = selectedConversationMuteScope(for: peerID)
+        else { return }
+        let next = !ConversationNotificationMuteStore.isMuted(scope)
+        ConversationNotificationMuteStore.setMuted(next, for: scope)
+        selectedConversationNotificationsMuted = next
+    }
+
+    /// Mute scope for the selected DM, resolved through the same helper the
+    /// notification path uses so the key written and the key looked up match.
+    /// `nil` before a handshake: see `ConversationNotificationMuteStore.Scope.direct`.
+    private func selectedConversationMuteScope(for peerID: PeerID) -> ConversationNotificationMuteStore.Scope? {
+        .direct(fingerprint: chatViewModel.stableConversationIdentity(for: peerID))
     }
 
     func markMessagesAsRead(from peerID: PeerID) {
@@ -239,6 +261,9 @@ final class PrivateConversationModel: ObservableObject {
         selectedHeaderState = selectedPeerID.flatMap { peerID in
             makeHeaderState(for: peerID)
         }
+        let scope = selectedPeerID.flatMap { selectedConversationMuteScope(for: $0) }
+        canToggleSelectedConversationNotificationMute = scope != nil
+        selectedConversationNotificationsMuted = scope.map { ConversationNotificationMuteStore.isMuted($0) } ?? false
     }
 
     private func makeHeaderState(for conversationPeerID: PeerID) -> PrivateConversationHeaderState {
