@@ -30,12 +30,7 @@ private final class MockChatPublicConversationContext: ChatPublicConversationCon
     var currentGeohash: String?
     var nickname = "me"
     var myPeerID = PeerID(str: "0011223344556677")
-    private(set) var isBatchingPublic = false
     private(set) var notifyUIChangedCount = 0
-
-    func setPublicBatching(_ isBatching: Bool) {
-        isBatchingPublic = isBatching
-    }
 
     func notifyUIChanged() {
         notifyUIChangedCount += 1
@@ -541,9 +536,6 @@ struct ChatPublicConversationCoordinatorContextTests {
 
         coordinator.pipelinePrewarmMessage(pipeline, message: message)
         #expect(context.prewarmedMessageIDs == ["pipeline-msg"])
-
-        coordinator.pipelineSetBatchingState(pipeline, isBatching: true)
-        #expect(context.isBatchingPublic)
     }
 
     @Test @MainActor
@@ -606,7 +598,8 @@ struct ChatPublicConversationCoordinatorContextTests {
         )
         #expect(context.mentionNotifications.count == 1)
 
-        // My own message mentioning myself does not notify.
+        // My own message mentioning myself (a gossip replay of my mesh text,
+        // stamped with my peer ID) does not notify.
         coordinator.checkForMentions(
             BitchatMessage(
                 id: "mention-3",
@@ -614,10 +607,65 @@ struct ChatPublicConversationCoordinatorContextTests {
                 content: "talking about @me",
                 timestamp: Date(),
                 isRelay: false,
+                senderPeerID: context.myPeerID,
                 mentions: ["me"]
             )
         )
         #expect(context.mentionNotifications.count == 1)
+    }
+
+    @Test @MainActor
+    func checkForMentions_tellsMyOwnMessagesFromNamesakesBySenderID() async {
+        let context = MockChatPublicConversationContext()
+        let coordinator = ChatPublicConversationCoordinator(context: context)
+        let myGeoHex = MockChatPublicConversationContext.dummyIdentity.publicKeyHex
+        let namesakeHex = String(repeating: "ef", count: 32)
+
+        // A namesake shown by my bare nickname (multi-hop mesh, or the
+        // signed-name fallback) mentioning me still notifies.
+        coordinator.checkForMentions(
+            BitchatMessage(
+                id: "namesake-mesh",
+                sender: "me",
+                content: "hi @me",
+                timestamp: Date(),
+                isRelay: false,
+                senderPeerID: PeerID(str: "8899aabbccddeeff"),
+                mentions: ["me"]
+            )
+        )
+        #expect(context.mentionNotifications.map(\.message) == ["hi @me"])
+
+        // In a location channel, a relay echo of my own geochat message
+        // (NostrInboundPipeline.subscribeNostrEvent) stays quiet...
+        context.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pruy"))
+        context.currentGeohash = "u4pruy"
+        coordinator.checkForMentions(
+            BitchatMessage(
+                id: "own-geo-echo",
+                sender: "me#\(myGeoHex.suffix(4))",
+                content: "note to @me",
+                timestamp: Date(),
+                isRelay: false,
+                senderPeerID: PeerID(nostr: myGeoHex),
+                mentions: ["me"]
+            )
+        )
+        #expect(context.mentionNotifications.map(\.message) == ["hi @me"])
+
+        // ...while a geochat namesake mentioning me notifies.
+        coordinator.checkForMentions(
+            BitchatMessage(
+                id: "namesake-geo",
+                sender: "me#\(namesakeHex.suffix(4))",
+                content: "yo @me",
+                timestamp: Date(),
+                isRelay: false,
+                senderPeerID: PeerID(nostr: namesakeHex),
+                mentions: ["me"]
+            )
+        )
+        #expect(context.mentionNotifications.map(\.message) == ["hi @me", "yo @me"])
     }
 
 }
