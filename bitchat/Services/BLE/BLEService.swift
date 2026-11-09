@@ -2488,7 +2488,7 @@ final class BLEService: NSObject {
             }
             // Signature verification and registry lookups run on messageQueue
             // like the live receive path.
-            self.messageQueue.async {
+            self.messageQueue.async { [self] in
                 guard self.isCurrentPanicLifecycleGeneration(generation) else {
                     return
                 }
