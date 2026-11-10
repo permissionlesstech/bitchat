@@ -34,14 +34,12 @@ struct TextMessageView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Precompute heavy token scans once per row
-            let cashuLinks = message.content.extractCashuLinks()
-            let lightningLinks = message.content.extractLightningLinks()
+            // Heavy token scans run once per message, not once per render
+            let scan = message.contentScan
             // Baseline alignment keeps the lock and delivery glyphs on the
             // first text line; a fixed top padding left the lock's solid body
             // hanging below the line's visual center.
             HStack(alignment: .firstTextBaseline, spacing: 0) {
-                let isLong = message.content.isLongForDisplay()
                 let isExpanded = expandedMessageIDs.contains(message.id)
                 if message.isPrivate {
                     Image(systemName: "lock.fill")
@@ -70,7 +68,7 @@ struct TextMessageView: View {
                 }
                 Text(conversationUIModel.formatMessage(message, colorScheme: colorScheme, theme: theme))
                     .fixedSize(horizontal: false, vertical: true)
-                    .lineLimit(isLong && !isExpanded ? TransportConfig.uiLongMessageLineLimit : nil)
+                    .lineLimit(scan.isLongForDisplay && !isExpanded ? TransportConfig.uiLongMessageLineLimit : nil)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 
                 // Delivery status indicator for private messages. Tappable:
@@ -112,7 +110,7 @@ struct TextMessageView: View {
             }
             
             // Expand/Collapse for very long messages
-            if message.content.isLongForDisplay() {
+            if scan.isLongForDisplay {
                 let isExpanded = expandedMessageIDs.contains(message.id)
                 let labelKey = isExpanded ? LocalizedStringKey("content.message.show_less") : LocalizedStringKey("content.message.show_more")
                 Button(labelKey) {
@@ -125,12 +123,12 @@ struct TextMessageView: View {
             }
 
             // Render payment chips (Lightning / Cashu) with rounded background
-            if !lightningLinks.isEmpty || !cashuLinks.isEmpty {
+            if !scan.lightningLinks.isEmpty || !scan.cashuLinks.isEmpty {
                 HStack(spacing: 8) {
-                    ForEach(lightningLinks, id: \.self) { link in
+                    ForEach(scan.lightningLinks, id: \.self) { link in
                         PaymentChipView(paymentType: .lightning(link))
                     }
-                    ForEach(cashuLinks, id: \.self) { link in
+                    ForEach(scan.cashuLinks, id: \.self) { link in
                         PaymentChipView(paymentType: .cashu(link))
                     }
                 }
