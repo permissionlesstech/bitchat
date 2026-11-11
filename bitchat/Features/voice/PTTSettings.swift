@@ -16,12 +16,32 @@ import AppKit
 /// User preference for live push-to-talk voice. One switch controls both
 /// directions: streaming your holds live, and auto-playing inbound bursts.
 /// Off means voice messages behave exactly like classic voice notes.
+///
+/// Off by default: live mode sends audio to other people before the hold is
+/// released and plays strangers' voices out of the speaker unprompted. Both
+/// are consequences someone must opt into, not discover.
 enum PTTSettings {
-    private static let liveVoiceEnabledKey = "ptt.liveVoiceEnabled"
+    static let liveVoiceEnabledKey = "ptt.liveVoiceEnabled"
 
     static var liveVoiceEnabled: Bool {
-        get { UserDefaults.standard.object(forKey: liveVoiceEnabledKey) as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: liveVoiceEnabledKey) }
+        get { liveVoiceEnabled(in: .standard) }
+        set { setLiveVoiceEnabled(newValue, in: .standard) }
+    }
+
+    /// Store-injecting forms, so tests can assert the default and both settings
+    /// without touching the shared preferences other tests read.
+    static func liveVoiceEnabled(in defaults: UserDefaults) -> Bool {
+        defaults.object(forKey: liveVoiceEnabledKey) as? Bool ?? false
+    }
+
+    static func setLiveVoiceEnabled(_ enabled: Bool, in defaults: UserDefaults) {
+        defaults.set(enabled, forKey: liveVoiceEnabledKey)
+    }
+
+    /// Panic-wipe hook. Removing the key restores the off default, so a wiped
+    /// device cannot come back streaming live.
+    static func reset(in defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: liveVoiceEnabledKey)
     }
 
     /// Autoplay is foreground-only: audio must never start from the
