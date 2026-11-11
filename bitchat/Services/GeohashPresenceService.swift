@@ -39,6 +39,9 @@ private final class GeohashPresenceTimerAdapter: GeohashPresenceTimerProtocol {
 /// - Broadcasts Kind 20001 events to low-precision geohash channels
 /// - Uses randomized timing (40-80s loop) and decorrelated bursts
 /// - Respects privacy by NOT broadcasting to Neighborhood/Block/Building levels
+/// - Sends nothing while location access is not authorized, so revoking it
+///   mid-session stops presence; the loop keeps running and resumes once
+///   access returns
 @MainActor
 final class GeohashPresenceService: ObservableObject {
     static let shared = GeohashPresenceService()
@@ -49,6 +52,7 @@ final class GeohashPresenceService: ObservableObject {
     private var heartbeatGeneration: UInt64 = 0
     private var started = false
     private let availableChannelsProvider: () -> [GeohashChannel]
+    private let isLocationAuthorized: () -> Bool
     private let locationChanges: AnyPublisher<[GeohashChannel], Never>
     private let torReadyPublisher: AnyPublisher<Void, Never>
     private let torIsReady: () -> Bool
@@ -79,6 +83,7 @@ final class GeohashPresenceService: ObservableObject {
     private init() {
         let idBridge = NostrIdentityBridge()
         self.availableChannelsProvider = { LocationStateManager.shared.availableChannels }
+        self.isLocationAuthorized = { LocationStateManager.shared.permissionState == .authorized }
         self.locationChanges = LocationStateManager.shared.$availableChannels.eraseToAnyPublisher()
         self.torReadyPublisher = NotificationCenter.default.publisher(for: .TorDidBecomeReady)
             .map { _ in () }
@@ -111,6 +116,7 @@ final class GeohashPresenceService: ObservableObject {
 
     internal init(
         availableChannelsProvider: @escaping () -> [GeohashChannel],
+        isLocationAuthorized: @escaping () -> Bool,
         locationChanges: AnyPublisher<[GeohashChannel], Never>,
         torReadyPublisher: AnyPublisher<Void, Never>,
         torIsReady: @escaping () -> Bool,
@@ -132,6 +138,7 @@ final class GeohashPresenceService: ObservableObject {
         burstMaxDelay: TimeInterval = 5.0
     ) {
         self.availableChannelsProvider = availableChannelsProvider
+        self.isLocationAuthorized = isLocationAuthorized
         self.locationChanges = locationChanges
         self.torReadyPublisher = torReadyPublisher
         self.torIsReady = torIsReady
@@ -250,7 +257,11 @@ final class GeohashPresenceService: ObservableObject {
             return
         }
 
-        // 2. Get channels
+        // 2. Get channels. They say where the device was at its last fix,
+        // so they are only announced while location is still authorized.
+        // Like geohash sampling, this checks the permission itself instead
+        // of trusting the channel list to have been cleared.
+        guard isLocationAuthorized() else { return }
         let channels = availableChannelsProvider()
         guard !channels.isEmpty else { return }
 
@@ -274,9 +285,11 @@ final class GeohashPresenceService: ObservableObject {
                 await sleeper(nanoseconds)
 
                 guard let self else { return }
+                // Access can be revoked during the decorrelation delay.
                 guard !Task.isCancelled,
                       self.started,
-                      self.heartbeatGeneration == generation else {
+                      self.heartbeatGeneration == generation,
+                      self.isLocationAuthorized() else {
                     self.pendingBroadcastTasks.removeValue(forKey: taskID)
                     return
                 }

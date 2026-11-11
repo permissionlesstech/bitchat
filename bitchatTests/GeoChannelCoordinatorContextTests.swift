@@ -259,7 +259,6 @@ struct GeoChannelCoordinatorContextTests {
         #expect(await waitUntil {
             context.beginSamplingCalls.last?.count == GeohashChannelLevel.allCases.count
         })
-        let cachedChannels = locationManager.availableChannels
         let endCountBeforeRevocation = context.endSamplingCount
 
         locationManager.locationManager(CLLocationManager(), didChangeAuthorization: .denied)
@@ -268,7 +267,9 @@ struct GeoChannelCoordinatorContextTests {
             locationManager.permissionState == .denied &&
             context.endSamplingCount > endCountBeforeRevocation
         })
-        #expect(locationManager.availableChannels == cachedChannels)
+        // Revocation also clears the cached channels; the coordinator's own
+        // permission check would end sampling either way.
+        #expect(locationManager.availableChannels.isEmpty)
 
         // A bookmark is an explicit remote scope and does not derive from
         // the now-revoked device location.

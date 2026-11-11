@@ -451,9 +451,11 @@ private extension ChatViewModelBootstrapper {
         }
         bridge.relaysConnected = { NostrRelayManager.shared.isConnected }
         bridge.locationCell = { [weak viewModel] in
-            viewModel?.locationManager.availableChannels
-                .first { $0.level == .neighborhood }?
-                .geohash
+            guard let location = viewModel?.locationManager else { return nil }
+            return BridgeService.ownLocationCell(
+                from: location.availableChannels,
+                permission: location.permissionState
+            )
         }
         bridge.requestLocationFix = { [weak viewModel] in
             viewModel?.locationManager.refreshChannels()

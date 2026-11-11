@@ -85,9 +85,9 @@ final class NearbyNotesCounter: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.retarget() }
         // CoreLocation can revoke authorization while the view remains
-        // mounted. `availableChannels` deliberately retains its last value,
-        // so permission must be an independent invalidation signal or the
-        // building REQ survives on stale coordinates.
+        // mounted. Revocation also clears `availableChannels`, but
+        // permission stays an independent invalidation signal so the
+        // building REQ never depends on that list being current.
         permissionCancellable = locationManager.$permissionState
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.retarget() }

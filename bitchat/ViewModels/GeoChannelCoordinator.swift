@@ -139,9 +139,9 @@ final class GeoChannelCoordinator {
                 if state == .authorized {
                     self.locationManager.refreshChannels()
                 }
-                // Cached channels outlive authorization by design. Recompute
-                // regardless of direction so revocation tears down regional
-                // sampling instead of continuing from stale coordinates.
+                // Revocation also clears the cached channels, but recompute
+                // regardless of direction so tearing down regional sampling
+                // never depends on that list being current.
                 self.updateSampling()
             }
             .store(in: &cancellables)
