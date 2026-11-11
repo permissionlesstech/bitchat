@@ -79,6 +79,11 @@ enum VoiceBurstScope: Hashable {
 /// bubble so nobody sees a duplicate.
 @MainActor
 final class ChatLiveVoiceCoordinator {
+    /// Injectable so tests exercise the live path without racing other
+    /// suites through the shared UserDefaults-backed preference (which now
+    /// defaults OFF).
+    var liveVoiceEnabled: () -> Bool = { PTTSettings.liveVoiceEnabled }
+
     /// Burst IDs are sender-chosen, so they only identify a burst *within*
     /// an authenticated (peer, scope) pair: keying assemblies by the full
     /// triple stops an attacker who observed a public burst ID from racing
@@ -187,7 +192,7 @@ final class ChatLiveVoiceCoordinator {
         // Live voice off means classic-notes-only in both directions: no live
         // bubble, no partial file, no early notification — the finalized
         // voice note still arrives through the normal pipeline.
-        guard PTTSettings.liveVoiceEnabled else {
+        guard liveVoiceEnabled() else {
             SecureLogger.debug("PTT: dropping inbound voice frame — live voice is toggled off", category: .session)
             return
         }
@@ -403,7 +408,7 @@ final class ChatLiveVoiceCoordinator {
         case .directMessage: context.selectedPrivateChatPeer == peerID
         case .publicMesh: context.isViewingPublicMeshTimeline
         }
-        if PTTSettings.liveVoiceEnabled, PTTSettings.isAppActive, isViewing {
+        if liveVoiceEnabled(), PTTSettings.isAppActive, isViewing {
             assembly.player = PTTBurstPlayer()
         }
 

@@ -1652,6 +1652,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         // A hand-added relay names an operator someone chose to route through,
         // which is the kind of trace a wipe should not leave behind.
         NostrRelaySettings.reset()
+        // Live voice streams before release and plays strangers out loud, so a
+        // wiped device comes back with it off, like a fresh install.
+        PTTSettings.reset()
 
         // Drop private group keys and rosters (keychain + disk)
         groupStore.wipe()
