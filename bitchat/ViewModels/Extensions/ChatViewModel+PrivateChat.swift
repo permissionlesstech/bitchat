@@ -69,7 +69,7 @@ extension ChatViewModel {
 
     @MainActor
     private func liveVoiceTarget() -> LiveVoiceTarget? {
-        guard PTTSettings.liveVoiceEnabled else { return nil }
+        guard liveVoiceCoordinator.liveVoiceEnabled() else { return nil }
 
         if let selectedPeer = selectedPrivateChatPeer {
             guard !selectedPeer.isGeoDM, !selectedPeer.isGeoChat, !selectedPeer.isGroup else { return nil }
@@ -110,7 +110,7 @@ extension ChatViewModel {
                 voiceTransport?.sendVoiceFrameBroadcast(packet)
             })
         case nil:
-            SecureLogger.info("PTT: hold uses classic voice note (liveVoiceEnabled=\(PTTSettings.liveVoiceEnabled), dmSelected=\(selectedPrivateChatPeer != nil))", category: .session)
+            SecureLogger.info("PTT: hold uses classic voice note (liveVoiceEnabled=\(liveVoiceCoordinator.liveVoiceEnabled()), dmSelected=\(selectedPrivateChatPeer != nil))", category: .session)
             return VoiceNoteCaptureSession()
         }
     }
