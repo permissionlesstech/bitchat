@@ -336,6 +336,19 @@ final class BridgeService: ObservableObject {
         return nil
     }
 
+    /// What `locationCell` should return: the neighborhood channel from this
+    /// device's last location fix, or nil while location access is not
+    /// authorized. Revoking access clears the channel list too, but the
+    /// cell is published to relays, so it is checked here as well rather
+    /// than trusting that list to be current.
+    static func ownLocationCell(
+        from channels: [GeohashChannel],
+        permission: LocationChannelManager.PermissionState
+    ) -> String? {
+        guard permission == .authorized else { return nil }
+        return channels.first { $0.level == .neighborhood }?.geohash
+    }
+
     // One switch does the right thing: while bridging, a device with
     // internet automatically serves its island (accepts deposits, carries
     // remote messages onto the radio). The marginal cost over bridging

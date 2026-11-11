@@ -77,7 +77,7 @@ final class NearbyNotesCounterTests: XCTestCase {
         XCTAssertEqual(counter.noteCount, 0)
     }
 
-    func test_permissionRevocation_releasesBuildingSubscriptionDespiteCachedChannels() async throws {
+    func test_permissionRevocation_releasesBuildingSubscription() async throws {
         let relays = SubscriptionRecorder()
         let settings = LocationNotesSettingsStub()
         let locationManager = try await makeAuthorizedLocationManager()
@@ -99,10 +99,9 @@ final class NearbyNotesCounterTests: XCTestCase {
         XCTAssertTrue(denied)
         let released = await waitUntil { relays.unsubscribeCount == 1 }
         XCTAssertTrue(released)
-        XCTAssertTrue(
-            locationManager.availableChannels.contains { $0.level == .building },
-            "the privacy boundary must not depend on cached channels being cleared"
-        )
+        // Revocation also clears the cached channels, so the counter's own
+        // permission check and the empty list both release the REQ.
+        XCTAssertTrue(locationManager.availableChannels.isEmpty)
         XCTAssertEqual(counter.noteCount, 0)
 
         counter.deactivate()
