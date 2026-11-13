@@ -489,16 +489,18 @@ struct CommandProcessorTests {
     }
 
     @MainActor
-    @Test func payRefusesAPrivateTokenThatDoesNotFitTheWire() {
+    @Test(arguments: [false, true]) func payRefusesAPrivateTokenThatDoesNotFitTheWire(isGeohash: Bool) {
         let context = MockCommandContextProvider()
-        context.selectedPrivateChatPeer = PeerID(str: "abcd1234abcd1234")
+        context.selectedPrivateChatPeer = isGeohash
+            ? PeerID(nostr_: String(repeating: "a", count: 64))
+            : PeerID(str: "abcd1234abcd1234")
         let processor = makePayProcessor(context: context)
         let token = Self.cashuV3Token(mint: "https://mint.example.com/" + String(repeating: "a", count: 240))
         #expect(token.utf8.count > PrivateMessagePacket.maxContentUTF8Bytes)
 
         switch processor.process("/pay \(token)") {
         case .error(let message):
-            #expect(message == "send error")
+            #expect(message == String(localized: "content.delivery.reason.too_long", defaultValue: "message too long"))
         default:
             Issue.record("Expected the oversized token to be refused")
         }

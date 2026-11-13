@@ -531,7 +531,7 @@ final class CommandProcessor {
 
         if let peerID = contextProvider?.selectedPrivateChatPeer {
             guard PrivateMessagePacket.contentFitsOnWire(token) else {
-                return .error(message: String(localized: "content.delivery.reason.send_error", defaultValue: "send error", comment: "Failure reason for a generic send error"))
+                return .error(message: String(localized: "content.delivery.reason.too_long", defaultValue: "message too long", comment: "Failure reason when a private message exceeds the wire size limit"))
             }
             contextProvider?.sendPrivateMessage(token, to: peerID)
             return .success(message: String(format: String(localized: "command.pay.sent_private", defaultValue: "sent %@ — cashu is a bearer token; whoever redeems it first gets the funds", comment: "Confirmation after sending a cashu token in a private chat; placeholder is the amount summary"), locale: .current, summary))

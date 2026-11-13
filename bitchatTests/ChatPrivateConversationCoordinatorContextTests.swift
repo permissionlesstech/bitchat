@@ -1253,11 +1253,20 @@ struct ChatPrivateConversationCoordinatorContextTests {
         coordinator.sendPrivateMessage(content, to: peerID)
 
         #expect(context.privateChats[peerID]?.map(\.content) == [content])
-        guard case .failed? = context.privateChats[peerID]?.first?.deliveryStatus else {
-            Issue.record("Expected oversized content to fail delivery")
-            return
-        }
+        #expect(context.privateChats[peerID]?.first?.deliveryStatus == .failed(
+            reason: String(localized: "content.delivery.reason.too_long", defaultValue: "message too long")
+        ))
         #expect(context.routedPrivateMessages.isEmpty)
         #expect(context.geoPrivateMessages.isEmpty)
+
+        // The multibyte UTF-8 boundary still sends: 127 × 2 + 1 = 255 bytes.
+        let boundaryContent = String(repeating: "é", count: 127) + "a"
+        #expect(boundaryContent.utf8.count == PrivateMessagePacket.maxContentUTF8Bytes)
+        coordinator.sendPrivateMessage(boundaryContent, to: peerID)
+
+        #expect(context.privateChats[peerID]?.map(\.content) == [content, boundaryContent])
+        #expect(context.privateChats[peerID]?.last?.deliveryStatus == (isGeohash ? .sent : .sending))
+        #expect(context.routedPrivateMessages.map(\.content) == (isGeohash ? [] : [boundaryContent]))
+        #expect(context.geoPrivateMessages.map(\.content) == (isGeohash ? [boundaryContent] : []))
     }
 }

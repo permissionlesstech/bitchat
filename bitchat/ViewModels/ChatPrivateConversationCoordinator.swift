@@ -397,7 +397,7 @@ final class ChatPrivateConversationCoordinator {
 
     private func initialDeliveryStatus(for content: String) -> DeliveryStatus {
         guard PrivateMessagePacket.contentFitsOnWire(content) else {
-            return .failed(reason: String(localized: "content.delivery.reason.send_error", comment: "Failure reason for a generic send error"))
+            return .failed(reason: String(localized: "content.delivery.reason.too_long", defaultValue: "message too long", comment: "Failure reason when a private message exceeds the wire size limit"))
         }
         return .sending
     }
