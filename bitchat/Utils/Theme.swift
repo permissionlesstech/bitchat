@@ -34,7 +34,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Whether chrome surfaces (header/composer bars, input field) render as
+    /// Whether chrome surfaces (header bar, overlay panels) render as
     /// translucent glass/material instead of the flat matrix background.
     var usesGlassChrome: Bool {
         self == .liquidGlass
@@ -233,7 +233,7 @@ private struct GlassPanel<S: Shape>: ViewModifier {
     }
 }
 
-/// Chrome surface for the header and composer. Matrix keeps the original flat
+/// Chrome surface for the header bars. Matrix keeps the original flat
 /// edge-to-edge wash; glass floats the content as an inset Liquid Glass panel
 /// (content is expected to scroll underneath via safe-area insets).
 private struct ThemedChromePanelModifier: ViewModifier {
@@ -254,29 +254,6 @@ private struct ThemedChromePanelModifier: ViewModifier {
     }
 }
 
-/// Background for the composer input field. Matrix keeps its translucent fill;
-/// glass leaves it clear — the field sits inside the composer's glass panel,
-/// and glass cannot sample other glass.
-private struct ThemedInputBackgroundModifier: ViewModifier {
-    @Environment(\.appTheme) private var theme
-    @Environment(\.colorScheme) private var colorScheme
-
-    private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-    }
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if theme.usesGlassChrome {
-            content
-        } else {
-            content.background(
-                shape.fill(colorScheme == .dark ? Color.black.opacity(0.35) : Color.white.opacity(0.7))
-            )
-        }
-    }
-}
-
 extension View {
     func bitchatFont(size: CGFloat, weight: Font.Weight = .regular) -> some View {
         modifier(ThemedFontModifier(size: size, weight: weight))
@@ -286,8 +263,11 @@ extension View {
         modifier(ThemedChromePanelModifier(edge: edge))
     }
 
-    func themedInputBackground() -> some View {
-        modifier(ThemedInputBackgroundModifier())
+    /// Native-style floating control (composer capsule, "+" button): Liquid
+    /// Glass on OS 26+, frosted material below. Same in both themes, so the
+    /// parent must not be glass itself.
+    func themedGlassControl<S: Shape>(_ shape: S) -> some View {
+        modifier(GlassPanel(shape: shape))
     }
 
     /// Floating surface for popover-style boxes (autocomplete, command
