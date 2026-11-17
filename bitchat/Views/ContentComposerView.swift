@@ -177,7 +177,6 @@ private extension ContentComposerView {
     var composerField: some View {
         #if os(iOS)
         MentionTextField(text: $messageText, selection: $mentionSelection,
-                         focused: Binding(get: { isTextFieldFocused.wrappedValue }, set: { isTextFieldFocused.wrappedValue = $0 }),
                          placeholder: placeholderText, placeholderColor: UIColor(palette.secondary.opacity(0.6)),
                          color: UIColor(palette.primary), monospaced: !theme.usesGlassChrome,
                          hasSuggestions: { conversationUIModel.showAutocomplete },
@@ -578,10 +577,9 @@ private struct AutocompleteKeyboardNavigationModifier: ViewModifier {
 
 #if os(iOS)
 /// Selection is supplied by UIKit on the minimum supported iOS version.
-private struct MentionTextField: UIViewRepresentable {
+struct MentionTextField: UIViewRepresentable {
     @Binding var text: String
     @Binding var selection: NSRange
-    @Binding var focused: Bool
     let placeholder: String
     let placeholderColor: UIColor
     let color: UIColor
@@ -626,21 +624,37 @@ private struct MentionTextField: UIViewRepresentable {
         field.attributedPlaceholder = NSAttributedString(
             string: placeholder, attributes: [.foregroundColor: placeholderColor]
         )
-        if field.text != text {
-            if field.markedTextRange != nil { field.unmarkText() }
-            field.text = text
-        }
-        if field.markedTextRange == nil {
-            if let a = field.position(from: field.beginningOfDocument, offset: min(selection.location, text.utf16.count)),
-               let b = field.position(from: a, offset: min(selection.length, text.utf16.count - min(selection.location, text.utf16.count))) {
-                field.selectedTextRange = field.textRange(from: a, to: b)
-            }
-        }
-
+        context.coordinator.synchronize(field)
     }
+
     final class Coordinator: NSObject, UITextFieldDelegate {
         var parent: MentionTextField
         var updating = false
+        var synchronizationPending = false
+        func synchronize(_ field: UITextField) {
+            guard !synchronizationPending else { return }
+            synchronizationPending = true
+            // Read the current bindings after SwiftUI finishes rendering, not its older snapshot.
+            DispatchQueue.main.async { [weak self, weak field] in
+                guard let self else { return }
+                self.synchronizationPending = false
+                guard let field else { return }
+                self.updating = true
+                defer { self.updating = false }
+                let text = self.parent.text
+                let selection = self.parent.selection
+                if field.text != text {
+                    if field.markedTextRange != nil { field.unmarkText() }
+                    field.text = text
+                }
+                if field.markedTextRange == nil {
+                    if let a = field.position(from: field.beginningOfDocument, offset: min(selection.location, text.utf16.count)),
+                       let b = field.position(from: a, offset: min(selection.length, text.utf16.count - min(selection.location, text.utf16.count))) {
+                        field.selectedTextRange = field.textRange(from: a, to: b)
+                    }
+                }
+            }
+        }
         init(_ parent: MentionTextField) { self.parent = parent }
         @objc func edit(_ field: UITextField) { publish(field) }
         func textFieldDidChangeSelection(_ field: UITextField) { publish(field) }
@@ -667,8 +681,6 @@ private struct MentionTextField: UIViewRepresentable {
             }
             parent.onSelection(parent.text, parent.text[..<caret].count)
         }
-        func textFieldDidBeginEditing(_ field: UITextField) { if !updating { parent.focused = true } }
-        func textFieldDidEndEditing(_ field: UITextField) { if !updating { parent.focused = false } }
         func textFieldShouldReturn(_ field: UITextField) -> Bool { parent.onReturn(); return false }
     }
 }

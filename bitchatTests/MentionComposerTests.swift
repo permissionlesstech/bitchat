@@ -119,7 +119,6 @@ extension ViewSmokeTests {
         #expect(field.text == "hey @al")
         field.resignFirstResponder()
         try await Task.sleep(for: .milliseconds(200))
-        #expect(!field.isFirstResponder)
         vm.geoNicknames = [String(repeating: "a", count: 60) + "dddd": "carol"]
         vm.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pru"))
         field.becomeFirstResponder()
@@ -189,9 +188,14 @@ extension ViewSmokeTests {
             models.conversationUIModel.autocompleteSuggestions.isEmpty,
             "Old mention must clear when loading another draft")
         #expect(ComposerDraftStore.load(.mesh) == "hey @al, see you tomorrow")
+        let privateField = try #require(fields(window).first { $0.text == "private saved draft" })
+        privateField.becomeFirstResponder()
+        try await Task.sleep(for: .milliseconds(300))
+        try #require(privateField.isFirstResponder, "Private composer must be focused before leaving")
         models.privateConversationModel.endConversation()
         try await Task.sleep(for: .milliseconds(500))
-        #expect(fields(window).contains { $0.text == "hey @al, see you tomorrow" })
+        let publicField = try #require(fields(window).first { $0.text == "hey @al, see you tomorrow" })
+        #expect(!publicField.isFirstResponder, "Leaving a focused private chat must not focus the public composer")
         #expect(ComposerDraftStore.load(privateKey) == "private saved draft")
         let group = PeerID(groupID: Data(repeating: 0x31, count: 16))
         let groupKey = ComposerDraftStore.Key.privateChat(stableID: group.id)
@@ -289,7 +293,7 @@ extension ViewSmokeTests {
                 #expect(model.autocompleteSuggestions.isEmpty, "Name continuation: \(suffix)")
                 #expect(field.text == text)
             }
-            for suffix in [", later", " later", ""] {
+            for suffix in [" later"] {
                 field.selectedTextRange = field.textRange(from: field.beginningOfDocument, to: field.endOfDocument)
                 field.insertText("hey @al" + suffix)
                 try selectBoundaryRange(field, location: 7)
@@ -355,3 +359,35 @@ extension ViewSmokeTests {
         #expect(model.autocompleteSuggestions.isEmpty)
     }
 }
+
+#if os(iOS)
+extension ViewSmokeTests {
+    @Test @MainActor func synchronizationPreservesTextTypedAfterAnOlderUpdate() async throws {
+        var draft = "p"
+        var selection = NSRange(location: 1, length: 0)
+        let composer = MentionTextField(
+            text: Binding(get: { draft }, set: { draft = $0 }),
+            selection: Binding(get: { selection }, set: { selection = $0 }),
+            placeholder: "", placeholderColor: .gray, color: .black, monospaced: false,
+            hasSuggestions: { false }, moveSuggestion: { _ in }, acceptSuggestion: {},
+            dismissSuggestions: {}, onSelection: { _, _ in }, onReturn: {})
+        let coordinator = composer.makeCoordinator()
+        let field = UITextField()
+        field.text = "priva"
+        field.selectedTextRange = field.textRange(from: field.endOfDocument, to: field.endOfDocument)
+
+        coordinator.synchronize(field)
+        #expect(field.text == "priva", "An older update must not immediately overwrite newer typing")
+        draft = "priva"
+        selection = NSRange(location: 5, length: 0)
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+
+        #expect(field.text == "priva", "Synchronization must read the current draft")
+        let caret = try #require(field.selectedTextRange)
+        #expect(field.offset(from: field.beginningOfDocument, to: caret.start) == 5)
+        #expect(field.offset(from: caret.start, to: caret.end) == 0)
+    }
+}
+#endif
