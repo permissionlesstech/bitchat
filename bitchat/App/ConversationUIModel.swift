@@ -113,22 +113,16 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.updateAutocomplete(for: text, cursorPosition: cursorPosition)
     }
 
+    var mentionReplacementRange: NSRange? { chatViewModel.autocompleteRange }
+
     func completeNickname(_ nickname: String, in text: inout String) -> Int {
         chatViewModel.completeNickname(nickname, in: &text)
     }
 
-    /// Accept the currently highlighted mention suggestion, if any.
-    func completeSelectedSuggestion(in text: inout String) -> Bool {
-        guard showAutocomplete,
-              autocompleteSuggestions.indices.contains(selectedAutocompleteIndex)
-        else { return false }
-        _ = completeNickname(autocompleteSuggestions[selectedAutocompleteIndex], in: &text)
-        return true
-    }
-
-    /// Dismiss the mention suggestion panel without inserting (Escape).
+    /// Dismiss the mention suggestion panel without inserting.
     func dismissAutocomplete() {
-        guard showAutocomplete else { return }
+        // The published UI mirror can lag behind a native selection change.
+        guard chatViewModel.showAutocomplete else { return }
         chatViewModel.showAutocomplete = false
         chatViewModel.autocompleteSuggestions = []
         chatViewModel.autocompleteRange = nil
