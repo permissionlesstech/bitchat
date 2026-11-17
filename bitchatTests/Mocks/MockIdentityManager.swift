@@ -8,9 +8,7 @@
 
 import Foundation
 import BitFoundation
-#if !COMPOSER_TEST_HOST
 @testable import bitchat
-#endif
 
 final class MockIdentityManager: SecureIdentityStateManagerProtocol {
     private var blockedFingerprints: Set<String> = []

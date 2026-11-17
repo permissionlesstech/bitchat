@@ -28,12 +28,6 @@ struct ContentComposerView: View {
     @Binding var showMacImagePicker: Bool
     #endif
 
-    @ScaledMetric(relativeTo: .title2) private var scaledComposerActionSize: CGFloat = 36
-
-    private var composerActionSize: CGFloat {
-        max(36, scaledComposerActionSize)
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if conversationUIModel.showAutocomplete && !conversationUIModel.autocompleteSuggestions.isEmpty {
@@ -138,15 +132,9 @@ struct ContentComposerView: View {
 
                     if conversationUIModel.canSendMediaInCurrentContext {
                         attachmentButton
-                        #if COMPOSER_TEST_HOST
-                            .localComposerProbeFrame("attachment")
-                        #endif
                     }
 
                     sendOrMicButton
-                    #if COMPOSER_TEST_HOST
-                        .localComposerProbeFrame("action")
-                    #endif
                 }
             }
         }
@@ -273,7 +261,7 @@ private extension ContentComposerView {
         Image(systemName: "camera.circle.fill")
             .font(.bitchatSystem(size: 24))
             .foregroundColor(composerAccentColor)
-            .frame(width: composerActionSize, height: composerActionSize)
+            .modifier(ComposerActionFrame())
             .contentShape(Circle())
             .onTapGesture {
                 imagePickerSourceType = .photoLibrary
@@ -301,7 +289,7 @@ private extension ContentComposerView {
             Image(systemName: "photo.circle.fill")
                 .font(.bitchatSystem(size: 24))
                 .foregroundColor(composerAccentColor)
-                .frame(width: composerActionSize, height: composerActionSize)
+                .modifier(ComposerActionFrame())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(
@@ -322,10 +310,10 @@ private extension ContentComposerView {
                     .opacity(hasText ? 1 : 0)
                     .allowsHitTesting(hasText)
             }
-            .frame(width: composerActionSize, height: composerActionSize)
+            .modifier(ComposerActionFrame())
         } else {
             sendButtonView(enabled: hasText)
-                .frame(width: composerActionSize, height: composerActionSize)
+                .modifier(ComposerActionFrame())
         }
     }
 
@@ -351,7 +339,7 @@ private extension ContentComposerView {
             .font(.bitchatSystem(size: 24))
             .foregroundColor(micColor)
             .modifier(PulsingOpacityModifier(active: busyTalker != nil && !voiceRecordingVM.state.isActive))
-            .frame(width: composerActionSize, height: composerActionSize)
+            .modifier(ComposerActionFrame())
             .contentShape(Circle())
             .overlay(
                 Color.clear
@@ -401,7 +389,7 @@ private extension ContentComposerView {
             Image(systemName: "arrow.up.circle.fill")
                 .font(.bitchatSystem(size: 24))
                 .foregroundColor(enabled ? activeColor : Color.gray)
-                .frame(width: composerActionSize, height: composerActionSize)
+                .modifier(ComposerActionFrame())
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
@@ -515,4 +503,12 @@ private struct AutocompleteKeyboardNavigationModifier: ViewModifier {
         }
     }
     #endif
+}
+
+struct ComposerActionFrame: ViewModifier {
+    // Match the .title2 scaling used by the composer's size-24 icons.
+    @ScaledMetric(relativeTo: .title2) private var scaledSize: CGFloat = 36
+    func body(content: Content) -> some View {
+        content.frame(width: max(36, scaledSize), height: max(36, scaledSize))
+    }
 }

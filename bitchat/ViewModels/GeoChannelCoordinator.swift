@@ -32,7 +32,7 @@ extension ChatViewModel: GeoChannelContext {}
 final class GeoChannelCoordinator {
     private let locationManager: LocationChannelManager
     private let bookmarksStore: GeohashBookmarksStore
-    private let isForeground: () -> Bool
+    private let torManager: TorManager
 
     private weak var context: (any GeoChannelContext)?
 
@@ -53,7 +53,6 @@ final class GeoChannelCoordinator {
         locationManager: LocationChannelManager? = nil,
         bookmarksStore: GeohashBookmarksStore? = nil,
         torManager: TorManager? = nil,
-        isForeground: (() -> Bool)? = nil,
         notesRevealed: AnyPublisher<Bool, Never>? = nil,
         locationNotesEnabled: Bool? = nil,
         locationNotesSettings: AnyPublisher<Bool, Never>? = nil,
@@ -62,12 +61,7 @@ final class GeoChannelCoordinator {
         let resolvedLocationManager = locationManager ?? Self.defaultLocationManager()
         self.locationManager = resolvedLocationManager
         self.bookmarksStore = bookmarksStore ?? GeohashBookmarksStore.shared
-        if let isForeground {
-            self.isForeground = isForeground
-        } else {
-            let resolvedTorManager = torManager ?? Self.defaultTorManager()
-            self.isForeground = { resolvedTorManager.isForeground() }
-        }
+        self.torManager = torManager ?? Self.defaultTorManager()
         self.permissionState = resolvedLocationManager.permissionState
         self.locationNotesEnabled = locationNotesEnabled ?? LocationNotesSettings.enabled
         self.notesRevealedPublisher = notesRevealed
@@ -178,7 +172,7 @@ final class GeoChannelCoordinator {
             context?.endGeohashSampling()
             return
         }
-        if isForeground() {
+        if torManager.isForeground() {
             context?.beginGeohashSampling(for: union)
         } else {
             context?.endGeohashSampling()
