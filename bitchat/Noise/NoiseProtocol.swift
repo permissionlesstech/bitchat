@@ -196,15 +196,15 @@ final class NoiseCipherState {
                 // Clear entire window - shift is too large
                 replayWindow = Array(repeating: 0, count: Self.REPLAY_WINDOW_BYTES)
             } else {
-                // Shift window right by `shift` bits
+                // Shift window left by `shift` bits: offset o becomes o + shift
                 for i in stride(from: Self.REPLAY_WINDOW_BYTES - 1, through: 0, by: -1) {
                     let sourceByteIndex = i - shift / 8
                     var newByte: UInt8 = 0
                     
                     if sourceByteIndex >= 0 {
-                        newByte = replayWindow[sourceByteIndex] >> (shift % 8)
+                        newByte = replayWindow[sourceByteIndex] << (shift % 8)
                         if sourceByteIndex > 0 && shift % 8 != 0 {
-                            newByte |= replayWindow[sourceByteIndex - 1] << (8 - shift % 8)
+                            newByte |= replayWindow[sourceByteIndex - 1] >> (8 - shift % 8)
                         }
                     }
                     
