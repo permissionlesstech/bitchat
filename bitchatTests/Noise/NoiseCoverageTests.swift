@@ -94,6 +94,45 @@ struct NoiseCoverageTests {
         }
     }
 
+    @Test("Cipher state rejects every replay inside the window")
+    func cipherStateRejectsEveryReplayInsideTheWindow() throws {
+        let key = SymmetricKey(size: .bits256)
+        let receiver = NoiseCipherState(key: key, useExtractedNonce: true)
+        let payloads = try (0...100).map { nonce in
+            try makeExtractedNoncePayload(
+                key: key,
+                nonce: UInt64(nonce),
+                plaintext: Data("nonce-\(nonce)".utf8)
+            )
+        }
+        for payload in payloads {
+            _ = try receiver.decrypt(ciphertext: payload)
+        }
+
+        for payload in payloads {
+            #expect(throws: NoiseError.replayDetected) {
+                try receiver.decrypt(ciphertext: payload)
+            }
+        }
+    }
+
+    @Test("Cipher state accepts a late nonce it has not seen")
+    func cipherStateAcceptsLateUnseenNonce() throws {
+        let key = SymmetricKey(size: .bits256)
+        let receiver = NoiseCipherState(key: key, useExtractedNonce: true)
+
+        // 5, 11 and 12 arrive after newer nonces.
+        for nonce in [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 5, 13, 11, 12] {
+            let payload = try makeExtractedNoncePayload(
+                key: key,
+                nonce: UInt64(nonce),
+                plaintext: Data("nonce-\(nonce)".utf8)
+            )
+            let plaintext = try receiver.decrypt(ciphertext: payload)
+            #expect(plaintext == Data("nonce-\(nonce)".utf8))
+        }
+    }
+
     @Test("Cipher state handles large nonce jumps and associated-data mismatches")
     func cipherStateHandlesLargeJumpsAndAADMismatch() throws {
         let key = SymmetricKey(size: .bits256)
