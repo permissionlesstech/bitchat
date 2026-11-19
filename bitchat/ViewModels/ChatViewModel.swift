@@ -1583,6 +1583,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         // handles before clearing state or removing the media directory.
         mediaTransferCoordinator.resetForPanic()
         liveVoiceCoordinator.resetForPanic()
+        privateMediaDecodeFailureThrottle = PrivateMediaDecodeFailureThrottle()
         privateChatClearGeneration &+= 1
         queuedPrivateChatClears.removeAll(keepingCapacity: false)
         privateChatClearInFlight = false

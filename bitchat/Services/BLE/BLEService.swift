@@ -2635,7 +2635,7 @@ final class BLEService: NSObject {
                 )
             },
             reportPrivateMediaDecodeFailure: { [weak self] reason, peerID in
-                DispatchQueue.main.async {
+                self?.notifyUI { [weak self] in
                     self?.delegate?.didFailPrivateMediaDecode(from: peerID, reason: reason)
                 }
             }
