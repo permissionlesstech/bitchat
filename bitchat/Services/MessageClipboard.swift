@@ -28,9 +28,7 @@ enum MessageClipboard {
     }
 
     /// Builds a composer-ready quote block (`> line` per line, trailing blank).
-    /// Sender header is plain text (`> alice:`), not `@alice`, so quoting does
-    /// not re-fire mention notifications for the quoted person or for names
-    /// inside the quoted body (those stay behind `> ` and are not live tokens).
+    /// Render mentions as plain names so quoting does not notify peers.
     static func quoteForComposer(_ content: String, sender: String?) -> String {
         let body = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !body.isEmpty else { return "" }
@@ -44,7 +42,13 @@ enum MessageClipboard {
             .split(separator: "\n", omittingEmptySubsequences: false)
             .map { "> \($0)" }
             .joined(separator: "\n")
-        return header + quoted + "\n\n"
+        let quote = header + quoted + "\n\n"
+        // Use one ASCII space in place of @ to preserve the private packet byte budget.
+        return MessageFormattingEngine.Patterns.mention.stringByReplacingMatches(
+            in: quote,
+            range: NSRange(quote.startIndex..., in: quote),
+            withTemplate: " $1"
+        )
     }
 
     /// Appends a quote to an existing composer draft without wiping it.
