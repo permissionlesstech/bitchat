@@ -24,6 +24,7 @@ struct BLEFileTransferHandlerTests {
         var finishedIncomingFileDeliveries: [URL] = []
         var lastSeenUpdates: [PeerID] = []
         var deliveryAcks: [(messageID: String, peerID: PeerID)] = []
+        var decodeFailures: [(PrivateMediaDecodeFailureReason, PeerID)] = []
         var deliveredMessages: [BitchatMessage] = []
         var shouldAcceptDelivery = true
         var deliveryOutcome = TransportEventDeliveryOutcome.accepted
@@ -188,6 +189,9 @@ struct BLEFileTransferHandlerTests {
                 }
                 outcome = .accepted
                 completion()
+            },
+            reportPrivateMediaDecodeFailure: { reason, peerID in
+                recorder.decodeFailures.append((reason, peerID))
             }
         )
         return BLEFileTransferHandler(environment: environment)
@@ -927,6 +931,21 @@ struct BLEFileTransferHandlerTests {
         #expect(recorder.saveCalls.count == 1)
         #expect(recorder.deliveredMessages.count == 1)
         #expect(recorder.deliveryAcks.count == 1)
+    }
+
+    @Test
+    func blockedPrivateMediaDecodeFailureDoesNotPostSystemLine() {
+        let recorder = Recorder()
+        recorder.blockedPeers = [remotePeerID]
+        let handler = makeHandler(recorder: recorder)
+        let payload = Data([0x00])
+
+        #expect(handler.handlePrivatePayload(
+            payload,
+            from: remotePeerID,
+            timestamp: Date(timeIntervalSince1970: 1_234)
+        ))
+        #expect(recorder.decodeFailures.isEmpty)
     }
 
     @Test

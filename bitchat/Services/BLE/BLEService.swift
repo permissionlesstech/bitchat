@@ -2633,6 +2633,11 @@ final class BLEService: NSObject {
                     completion: completion,
                     finalization: finalization
                 )
+            },
+            reportPrivateMediaDecodeFailure: { [weak self] reason, peerID in
+                self?.notifyUI { [weak self] in
+                    self?.delegate?.didFailPrivateMediaDecode(from: peerID, reason: reason)
+                }
             }
         )
     }
