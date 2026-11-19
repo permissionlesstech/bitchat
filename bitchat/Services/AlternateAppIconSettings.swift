@@ -67,10 +67,16 @@ enum AlternateAppIconSettings {
         }
     }
 
-    static func selected(in defaults: UserDefaults) -> Icon {
-        let raw = defaults.string(forKey: storageKey) ?? Icon.primary.rawValue
-        return Icon(rawValue: raw) ?? .primary
+    static func storedSelection(in defaults: UserDefaults) -> Icon? {
+        defaults.string(forKey: storageKey).flatMap(Icon.init(rawValue:))
     }
+
+    #if os(iOS)
+    @MainActor
+    static var currentIcon: Icon {
+        UIApplication.shared.alternateIconName.flatMap(Icon.init(rawValue:)) ?? .primary
+    }
+    #endif
 
     static func setSelected(_ icon: Icon, in defaults: UserDefaults, applySystem: Bool = true) {
         if icon == .primary {
@@ -83,15 +89,18 @@ enum AlternateAppIconSettings {
         }
     }
 
-    /// Apply the stored preference to the system (iOS only). Safe no-op elsewhere.
-    static func applyStoredPreference() {
-        apply(selected(in: .standard))
+    /// Reapply an explicit preference. After panic wipe iOS retains the
+    /// current icon, so an absent preference must leave it alone on relaunch.
+    static func applyStoredPreference(
+        in defaults: UserDefaults = .standard,
+        updateSystemIcon: (Icon) -> Void = apply
+    ) {
+        guard let icon = storedSelection(in: defaults) else { return }
+        updateSystemIcon(icon)
     }
 
-    /// Panic wipe clears the *stored* preference only — do not call `apply`.
-    /// `setAlternateIconName` pops a system alert that names "bitchat", which
-    /// would un-disguise the phone at the worst moment. The home-screen glyph
-    /// stays until the next intentional picker change or relaunch policy.
+    /// Clear local preferences without changing the system icon. Changing the
+    /// icon can display an alert naming "bitchat".
     static func reset(in defaults: UserDefaults = .standard) {
         defaults.removeObject(forKey: storageKey)
     }

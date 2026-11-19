@@ -30,23 +30,28 @@ struct AlternateAppIconSettingsTests {
     @Test func selectedPersistsRawValueWithoutTouchingSystem() {
         let (suite, defaults) = makeDefaults()
         defer { cleanup(suite) }
-        #expect(AlternateAppIconSettings.selected(in: defaults) == .primary)
+        #expect(AlternateAppIconSettings.storedSelection(in: defaults) == nil)
 
         AlternateAppIconSettings.setSelected(.notes, in: defaults, applySystem: false)
         #expect(defaults.string(forKey: AlternateAppIconSettings.storageKey) == "AppIconNotes")
-        #expect(AlternateAppIconSettings.selected(in: defaults) == .notes)
+        #expect(AlternateAppIconSettings.storedSelection(in: defaults) == .notes)
 
         AlternateAppIconSettings.setSelected(.primary, in: defaults, applySystem: false)
         #expect(defaults.string(forKey: AlternateAppIconSettings.storageKey) == nil)
-        #expect(AlternateAppIconSettings.selected(in: defaults) == .primary)
+        #expect(AlternateAppIconSettings.storedSelection(in: defaults) == nil)
     }
 
     @Test func resetClearsStoredPreferenceWithoutApplyingPrimary() {
         let (suite, defaults) = makeDefaults()
         defer { cleanup(suite) }
         AlternateAppIconSettings.setSelected(.quiet, in: defaults, applySystem: false)
+        var applied: [AlternateAppIconSettings.Icon] = []
+        AlternateAppIconSettings.applyStoredPreference(in: defaults) { applied.append($0) }
+        #expect(applied == [.quiet])
+
         AlternateAppIconSettings.reset(in: defaults)
+        AlternateAppIconSettings.applyStoredPreference(in: defaults) { applied.append($0) }
         #expect(defaults.string(forKey: AlternateAppIconSettings.storageKey) == nil)
-        #expect(AlternateAppIconSettings.selected(in: defaults) == .primary)
+        #expect(applied == [.quiet])
     }
 }
