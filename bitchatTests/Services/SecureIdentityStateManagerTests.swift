@@ -195,6 +195,28 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         XCTAssertFalse(manager.isBlocked(fingerprint: String(repeating: "ff", count: 32)))
     }
 
+    func test_nearbyNotificationMute_persistsAndSuppressesWithoutBlocking() async {
+        let keychain = MockKeychain()
+        let manager = SecureIdentityStateManager(keychain)
+        let fingerprint = String(repeating: "ab", count: 32)
+
+        XCTAssertFalse(manager.isNearbyNotificationMuted(fingerprint: fingerprint))
+        XCTAssertFalse(manager.suppressesNearbyNotification(fingerprint: fingerprint))
+
+        manager.setNearbyNotificationMuted(fingerprint, muted: true)
+        let muted = await waitUntil { manager.isNearbyNotificationMuted(fingerprint: fingerprint) }
+        XCTAssertTrue(muted)
+        XCTAssertTrue(manager.suppressesNearbyNotification(fingerprint: fingerprint))
+        XCTAssertFalse(manager.isBlocked(fingerprint: fingerprint))
+
+        let reloaded = SecureIdentityStateManager(keychain)
+        XCTAssertTrue(reloaded.isNearbyNotificationMuted(fingerprint: fingerprint))
+
+        manager.setNearbyNotificationMuted(fingerprint, muted: false)
+        let unmuted = await waitUntil { !manager.isNearbyNotificationMuted(fingerprint: fingerprint) }
+        XCTAssertTrue(unmuted)
+    }
+
     func test_setVerified_updatesTrustLevelAndVerifiedSet() async {
         let manager = SecureIdentityStateManager(MockKeychain())
         let fingerprint = String(repeating: "cd", count: 32)

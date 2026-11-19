@@ -37,6 +37,11 @@ protocol ChatPeerListContext: AnyObject {
     /// Posts the "bitchatters nearby" local notification.
     func notifyNetworkAvailable(peerCount: Int)
 
+    /// True when this peer should not count toward the nearby-notification
+    /// empty→populated transition (blocked peers, or peers the user muted
+    /// for proximity alerts — typically their own other devices).
+    func suppressesNearbyNotification(for peerID: PeerID) -> Bool
+
     /// Records peers seen within range for the daily ambient sightings tally.
     func recordMeshSightings(peerIDs: [PeerID])
 }
@@ -52,10 +57,13 @@ extension ChatViewModel: ChatPeerListContext {
     // call.
 
     func activeMeshPeerCount() -> Int {
+        // Exclude blocked / proximity-muted peers so a muted-only mesh
+        // still counts as empty for the notification reset timers.
         meshService
             .currentPeerSnapshots()
             .filter { snapshot in
-                snapshot.isConnected || meshService.isPeerReachable(snapshot.peerID)
+                (snapshot.isConnected || meshService.isPeerReachable(snapshot.peerID))
+                    && !suppressesNearbyNotification(for: snapshot.peerID)
             }
             .count
     }
@@ -84,13 +92,16 @@ final class ChatPeerListCoordinator: @unchecked Sendable {
     private var networkEmptyTimer: Timer?
     private let networkResetGraceSeconds = TransportConfig.networkResetGraceSeconds
     private let notificationCooldownSeconds: TimeInterval
+    private let networkEmptyConfirmationSeconds: TimeInterval
 
     init(
         context: any ChatPeerListContext,
-        notificationCooldownSeconds: TimeInterval = TransportConfig.networkNotificationCooldownSeconds
+        notificationCooldownSeconds: TimeInterval = TransportConfig.networkNotificationCooldownSeconds,
+        networkEmptyConfirmationSeconds: TimeInterval = TransportConfig.uiMeshEmptyConfirmationSeconds
     ) {
         self.context = context
         self.notificationCooldownSeconds = notificationCooldownSeconds
+        self.networkEmptyConfirmationSeconds = networkEmptyConfirmationSeconds
     }
 
     deinit {
@@ -110,7 +121,7 @@ final class ChatPeerListCoordinator: @unchecked Sendable {
     }
 }
 
-private extension ChatPeerListCoordinator {
+extension ChatPeerListCoordinator {
     @MainActor
     func handlePeerListUpdate(_ peers: [PeerID]) {
         context.isConnected = !peers.isEmpty
@@ -142,15 +153,27 @@ private extension ChatPeerListCoordinator {
             return
         }
 
-        invalidateNetworkEmptyTimer()
         context.recordMeshSightings(peerIDs: meshPeers)
 
-        let newPeers = meshPeerSet.subtracting(recentlySeenPeers)
-        // Record every sighted peer even when no notification fires. A peer
+        // Only peers that aren't blocked / proximity-muted count toward the
+        // empty→populated notification and the reset-path emptiness check.
+        // A muted-only mesh stays "empty" so a stranger joining later still
+        // alerts, and so meshWasEmpty can reset after the first alert.
+        let countablePeers = meshPeers.filter { !context.suppressesNearbyNotification(for: $0) }
+        if countablePeers.isEmpty {
+            scheduleNetworkEmptyTimer()
+            return
+        }
+
+        invalidateNetworkEmptyTimer()
+
+        let countableSet = Set(countablePeers)
+        let newPeers = countableSet.subtracting(recentlySeenPeers)
+        // Record every countable peer even when no notification fires. A peer
         // first seen during the cooldown (or while already meshed) must not
         // still count as "new" at some later peer-list event — that re-fired
         // the notification while devices sat idle and connected.
-        recentlySeenPeers.formUnion(meshPeerSet)
+        recentlySeenPeers.formUnion(countableSet)
 
         let cameFromEmpty = meshWasEmpty
         meshWasEmpty = false
@@ -159,9 +182,9 @@ private extension ChatPeerListCoordinator {
 
         if Date().timeIntervalSince(lastNetworkNotificationTime) >= notificationCooldownSeconds {
             lastNetworkNotificationTime = Date()
-            context.notifyNetworkAvailable(peerCount: meshPeers.count)
+            context.notifyNetworkAvailable(peerCount: countablePeers.count)
             SecureLogger.info(
-                "👥 Sent bitchatters nearby notification for \(meshPeers.count) mesh peers (new: \(newPeers.count))",
+                "👥 Sent bitchatters nearby notification for \(countablePeers.count) mesh peers (new: \(newPeers.count))",
                 category: .session
             )
         }
@@ -230,11 +253,21 @@ private extension ChatPeerListCoordinator {
     }
 
     @MainActor
+    func nearbyNotificationMuteDidChange() {
+        // A mute can make the existing mesh count as empty without changing the transport peer list.
+        if context.activeMeshPeerCount() == 0 {
+            scheduleNetworkEmptyTimer()
+        } else {
+            invalidateNetworkEmptyTimer()
+        }
+    }
+
+    @MainActor
     func scheduleNetworkEmptyTimer() {
         guard networkEmptyTimer == nil else { return }
 
         networkEmptyTimer = Timer.scheduledTimer(
-            withTimeInterval: TransportConfig.uiMeshEmptyConfirmationSeconds,
+            withTimeInterval: networkEmptyConfirmationSeconds,
             repeats: false
         ) { [weak self] _ in
             MainActor.assumeIsolated { [weak self] in
