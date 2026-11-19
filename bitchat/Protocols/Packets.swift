@@ -240,6 +240,13 @@ struct AuthenticatedPeerStatePacket: Equatable {
 }
 
 struct PrivateMessagePacket {
+    /// Content TLV length is one byte. Longer private messages cannot be encoded.
+    static let maxContentUTF8Bytes = 255
+
+    static func contentFitsOnWire(_ content: String) -> Bool {
+        content.utf8.count <= maxContentUTF8Bytes
+    }
+
     let messageID: String
     let content: String
 
@@ -259,7 +266,7 @@ struct PrivateMessagePacket {
         data.append(messageIDData)
 
         // TLV for content
-        guard let contentData = content.data(using: .utf8), contentData.count <= 255 else { return nil }
+        guard let contentData = content.data(using: .utf8), contentData.count <= Self.maxContentUTF8Bytes else { return nil }
         data.append(TLVType.content.rawValue)
         data.append(UInt8(contentData.count))
         data.append(contentData)

@@ -5230,6 +5230,18 @@ extension BLEService {
     
     // MARK: Private Message Handling
     
+    private func reportPrivateMessageEncodingFailure(content: String, messageID: String) {
+        let reason = PrivateMessagePacket.contentFitsOnWire(content)
+            ? String(localized: "content.delivery.reason.send_error", comment: "Failure reason for a generic send error")
+            : String(localized: "content.delivery.reason.too_long", defaultValue: "message too long", comment: "Failure reason when a private message exceeds the wire size limit")
+        notifyUI { [weak self] in
+            self?.deliverTransportEvent(.messageDeliveryStatusUpdated(
+                messageID: messageID,
+                status: .failed(reason: reason)
+            ))
+        }
+    }
+
     private func sendPrivateMessage(_ content: String, to recipientID: PeerID, messageID: String) {
         // Hop like sendMessage: the Transport-facing wrappers call this from
         // the main actor (router sends, favorite notifications), and the send
@@ -5245,12 +5257,19 @@ extension BLEService {
         let recipientID = recipientID.toShort()
         SecureLogger.debug("📨 Sending PM to \(recipientID.id.prefix(8))… id=\(messageID.prefix(8))… chars=\(content.count) bytes=\(content.utf8.count)", category: .session)
 
+        guard PrivateMessagePacket.contentFitsOnWire(content) else {
+            SecureLogger.error("Private message is \(content.utf8.count) UTF-8 bytes; the wire limit is \(PrivateMessagePacket.maxContentUTF8Bytes)", category: .session)
+            reportPrivateMessageEncodingFailure(content: content, messageID: messageID)
+            return
+        }
+
         // Check if we have an established Noise session
         if noiseService.hasEstablishedSession(with: recipientID) {
             // Encrypt and send
             do {
                 guard let messagePayload = BLENoisePayloadFactory.privateMessage(content: content, messageID: messageID) else {
                     SecureLogger.error("Failed to encode private message with TLV")
+                    reportPrivateMessageEncodingFailure(content: content, messageID: messageID)
                     return
                 }
                 
@@ -5375,7 +5394,7 @@ extension BLEService {
                 // Use the same TLV format as normal sends to keep receiver decoding consistent
                 guard let messagePayload = BLENoisePayloadFactory.privateMessage(content: message.content, messageID: message.messageID) else {
                     SecureLogger.error("Failed to encode pending private message TLV")
-                    failedMessages.append(message)
+                    reportPrivateMessageEncodingFailure(content: message.content, messageID: message.messageID)
                     continue
                 }
 

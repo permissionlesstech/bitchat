@@ -355,6 +355,7 @@ final class ChatPrivateConversationCoordinator {
             ?? "anon"
 
         let messageID = UUID().uuidString
+        let status = initialDeliveryStatus(for: content)
         let message = BitchatMessage(
             id: messageID,
             sender: context.nickname,
@@ -366,11 +367,12 @@ final class ChatPrivateConversationCoordinator {
             recipientNickname: recipientNickname,
             senderPeerID: context.myPeerID,
             mentions: nil,
-            deliveryStatus: .sending
+            deliveryStatus: status
         )
 
         context.appendPrivateMessage(message, to: peerID)
         context.notifyUIChanged()
+        guard status == .sending else { return }
 
         // Always hand the message to the router — it owns delivery. A live
         // link sends now; an unreachable peer gets the retained-outbox path
@@ -393,6 +395,13 @@ final class ChatPrivateConversationCoordinator {
         // acks, or failed when the outbox TTL expires.
     }
 
+    private func initialDeliveryStatus(for content: String) -> DeliveryStatus {
+        guard PrivateMessagePacket.contentFitsOnWire(content) else {
+            return .failed(reason: String(localized: "content.delivery.reason.too_long", defaultValue: "message too long", comment: "Failure reason when a private message exceeds the wire size limit"))
+        }
+        return .sending
+    }
+
     func sendGeohashDM(_ content: String, to peerID: PeerID) {
         guard case .location(let channel) = context.activeChannel else {
             // The failure happened inside a geoDM thread — surface it there,
@@ -406,6 +415,7 @@ final class ChatPrivateConversationCoordinator {
         }
 
         let messageID = UUID().uuidString
+        let status = initialDeliveryStatus(for: content)
         let message = BitchatMessage(
             id: messageID,
             sender: context.nickname,
@@ -415,11 +425,12 @@ final class ChatPrivateConversationCoordinator {
             isPrivate: true,
             recipientNickname: context.nickname,
             senderPeerID: context.myPeerID,
-            deliveryStatus: .sending
+            deliveryStatus: status
         )
 
         context.appendPrivateMessage(message, to: peerID)
         context.notifyUIChanged()
+        guard status == .sending else { return }
 
         guard let recipientHex = context.nostrKeyMapping[peerID] else {
             context.setPrivateDeliveryStatus(
