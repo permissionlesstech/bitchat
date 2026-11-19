@@ -99,10 +99,11 @@ struct ChatViewModelInitializationTests {
         // Task, UnifiedPeerService, a receive(on: main), and another Task —
         // all contending with every parallel worker, so a loaded CI runner
         // can exceed defaultTimeout (observed: one 5s miss on a run where
-        // the whole suite took 10s instead of the usual ~4s).
+        // the whole suite took 10s instead of the usual ~4s) and longTimeout
+        // (one 10s miss in CI; about 3s inside a full local run).
         let updated = await TestHelpers.waitUntil({
             viewModel.allPeers.contains { $0.peerID == peerID && $0.nickname == "Alice" }
-        }, timeout: TestConstants.longTimeout)
+        }, timeout: TestConstants.settleTimeout)
 
         #expect(updated)
     }
@@ -134,10 +135,10 @@ struct ChatViewModelIdentityTests {
             )
         ])
 
-        // Same multi-hop snapshot pipeline as above: longTimeout for load.
+        // Same multi-hop snapshot pipeline as above: settleTimeout for load.
         let oldPeerBound = await TestHelpers.waitUntil({
             viewModel.connectedPeers.contains(oldPeerID)
-        }, timeout: TestConstants.longTimeout)
+        }, timeout: TestConstants.settleTimeout)
         #expect(oldPeerBound)
 
         let existingMessage = BitchatMessage(
@@ -171,7 +172,7 @@ struct ChatViewModelIdentityTests {
 
         let newPeerBound = await TestHelpers.waitUntil({
             viewModel.connectedPeers.contains(newPeerID) && !viewModel.connectedPeers.contains(oldPeerID)
-        }, timeout: TestConstants.longTimeout)
+        }, timeout: TestConstants.settleTimeout)
         #expect(newPeerBound)
 
         viewModel.updatePrivateChatPeerIfNeeded()
