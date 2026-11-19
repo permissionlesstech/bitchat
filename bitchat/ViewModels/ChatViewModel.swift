@@ -1322,6 +1322,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             return
         }
         identityManager.setNearbyNotificationMuted(fingerprint, muted: muted)
+        peerListCoordinator.nearbyNotificationMuteDidChange()
         objectWillChange.send()
     }
 

@@ -92,13 +92,16 @@ final class ChatPeerListCoordinator: @unchecked Sendable {
     private var networkEmptyTimer: Timer?
     private let networkResetGraceSeconds = TransportConfig.networkResetGraceSeconds
     private let notificationCooldownSeconds: TimeInterval
+    private let networkEmptyConfirmationSeconds: TimeInterval
 
     init(
         context: any ChatPeerListContext,
-        notificationCooldownSeconds: TimeInterval = TransportConfig.networkNotificationCooldownSeconds
+        notificationCooldownSeconds: TimeInterval = TransportConfig.networkNotificationCooldownSeconds,
+        networkEmptyConfirmationSeconds: TimeInterval = TransportConfig.uiMeshEmptyConfirmationSeconds
     ) {
         self.context = context
         self.notificationCooldownSeconds = notificationCooldownSeconds
+        self.networkEmptyConfirmationSeconds = networkEmptyConfirmationSeconds
     }
 
     deinit {
@@ -250,11 +253,21 @@ extension ChatPeerListCoordinator {
     }
 
     @MainActor
+    func nearbyNotificationMuteDidChange() {
+        // A mute can make the existing mesh count as empty without changing the transport peer list.
+        if context.activeMeshPeerCount() == 0 {
+            scheduleNetworkEmptyTimer()
+        } else {
+            invalidateNetworkEmptyTimer()
+        }
+    }
+
+    @MainActor
     func scheduleNetworkEmptyTimer() {
         guard networkEmptyTimer == nil else { return }
 
         networkEmptyTimer = Timer.scheduledTimer(
-            withTimeInterval: TransportConfig.uiMeshEmptyConfirmationSeconds,
+            withTimeInterval: networkEmptyConfirmationSeconds,
             repeats: false
         ) { [weak self] _ in
             MainActor.assumeIsolated { [weak self] in
