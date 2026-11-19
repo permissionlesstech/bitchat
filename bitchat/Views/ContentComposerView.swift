@@ -10,7 +10,6 @@ struct ContentComposerView: View {
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
-    @EnvironmentObject private var publicChatModel: PublicChatModel
     @ObservedObject private var bridgeService = BridgeService.shared
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
@@ -175,8 +174,7 @@ private extension ContentComposerView {
         }
         return MeshPlaintextNoticeSettings.shouldShow(
             dismissed: meshPlaintextNoticeDismissed,
-            isPublicMesh: onPublicMesh,
-            timelineEmpty: publicChatModel.messages.isEmpty
+            isPublicMesh: onPublicMesh
         )
     }
 

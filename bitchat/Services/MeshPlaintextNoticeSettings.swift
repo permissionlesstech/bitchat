@@ -33,10 +33,9 @@ enum MeshPlaintextNoticeSettings {
         NotificationCenter.default.post(name: .meshPlaintextNoticeSettingsChanged, object: nil)
     }
 
-    /// Visible on the public mesh composer once there is a live timeline.
-    /// An empty mesh already has the empty-state hint; don't stack both.
-    static func shouldShow(dismissed: Bool, isPublicMesh: Bool, timelineEmpty: Bool) -> Bool {
-        !dismissed && isPublicMesh && !timelineEmpty
+    /// Show the warning before the first public mesh message can be sent.
+    static func shouldShow(dismissed: Bool, isPublicMesh: Bool) -> Bool {
+        !dismissed && isPublicMesh
     }
 }
 

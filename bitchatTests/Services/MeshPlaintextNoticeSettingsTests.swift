@@ -43,10 +43,9 @@ struct MeshPlaintextNoticeSettingsTests {
         #expect(!MeshPlaintextNoticeSettings.isDismissed(in: defaults))
     }
 
-    @Test func hiddenOnAnEmptyMeshTimeline() {
-        #expect(MeshPlaintextNoticeSettings.shouldShow(dismissed: false, isPublicMesh: true, timelineEmpty: true) == false)
-        #expect(MeshPlaintextNoticeSettings.shouldShow(dismissed: false, isPublicMesh: true, timelineEmpty: false) == true)
-        #expect(MeshPlaintextNoticeSettings.shouldShow(dismissed: true, isPublicMesh: true, timelineEmpty: false) == false)
-        #expect(MeshPlaintextNoticeSettings.shouldShow(dismissed: false, isPublicMesh: false, timelineEmpty: false) == false)
+    @Test func showsOnlyInPublicMeshUntilDismissed() {
+        #expect(MeshPlaintextNoticeSettings.shouldShow(dismissed: false, isPublicMesh: true))
+        #expect(!MeshPlaintextNoticeSettings.shouldShow(dismissed: true, isPublicMesh: true))
+        #expect(!MeshPlaintextNoticeSettings.shouldShow(dismissed: false, isPublicMesh: false))
     }
 }
