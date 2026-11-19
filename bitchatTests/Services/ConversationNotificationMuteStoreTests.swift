@@ -60,6 +60,39 @@ struct ConversationNotificationMuteStoreTests {
         )
     }
 
+    @Test func muteChangesNotifyBadgeObserversAfterPersistence() throws {
+        let suite = "ConversationNotificationMuteStoreNotifications-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let scope = try #require(ConversationNotificationMuteStore.Scope.direct(fingerprint: "fp"))
+        let changes = DispatchSemaphore(value: 0)
+        let token = NotificationCenter.default.addObserver(
+            forName: ConversationNotificationMuteStore.settingsDidChange,
+            object: defaults,
+            queue: nil
+        ) { _ in
+            changes.signal()
+        }
+        defer { NotificationCenter.default.removeObserver(token) }
+
+        ConversationNotificationMuteStore.setMuted(true, for: scope, in: defaults)
+        #expect(changes.wait(timeout: .now()) == .success)
+        #expect(ConversationNotificationMuteStore.isMuted(scope, in: defaults))
+
+        ConversationNotificationMuteStore.setMuted(true, for: scope, in: defaults)
+        #expect(changes.wait(timeout: .now()) == .timedOut)
+
+        ConversationNotificationMuteStore.setMuted(false, for: scope, in: defaults)
+        #expect(changes.wait(timeout: .now()) == .success)
+        #expect(!ConversationNotificationMuteStore.isMuted(scope, in: defaults))
+
+        ConversationNotificationMuteStore.setMuted(true, for: scope, in: defaults)
+        #expect(changes.wait(timeout: .now()) == .success)
+        ConversationNotificationMuteStore.reset(in: defaults)
+        #expect(changes.wait(timeout: .now()) == .success)
+        #expect(!ConversationNotificationMuteStore.isMuted(scope, in: defaults))
+    }
+
     @Test func unmuteRemovesKeyAndResetClearsAll() throws {
         let defaults = isolatedDefaults()
         let dm = try #require(ConversationNotificationMuteStore.Scope.direct(fingerprint: "fp"))

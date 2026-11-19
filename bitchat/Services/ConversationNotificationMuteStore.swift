@@ -16,6 +16,7 @@ import Foundation
 /// lowercase geohashes for location channels.
 enum ConversationNotificationMuteStore {
     private static let mutedKeysDefaultsKey = "notifications.mutedConversationKeys"
+    static let settingsDidChange = Notification.Name("conversationNotificationMuteSettingsDidChange")
 
     enum Scope: Hashable, Equatable {
         case direct(identityKey: String)
@@ -53,12 +54,15 @@ enum ConversationNotificationMuteStore {
 
     static func setMuted(_ muted: Bool, for scope: Scope, in defaults: UserDefaults = .standard) {
         var keys = mutedKeys(in: defaults)
+        let changed: Bool
         if muted {
-            keys.insert(scope.storageKey)
+            changed = keys.insert(scope.storageKey).inserted
         } else {
-            keys.remove(scope.storageKey)
+            changed = keys.remove(scope.storageKey) != nil
         }
+        guard changed else { return }
         defaults.set(Array(keys).sorted(), forKey: mutedKeysDefaultsKey)
+        NotificationCenter.default.post(name: settingsDidChange, object: defaults)
     }
 
     static func mutedKeys(in defaults: UserDefaults = .standard) -> Set<String> {
@@ -68,6 +72,10 @@ enum ConversationNotificationMuteStore {
     /// Panic-wipe hook: a wiped device should not inherit another person's
     /// notification preferences.
     static func reset(in defaults: UserDefaults = .standard) {
+        let hadMutedConversations = !mutedKeys(in: defaults).isEmpty
         defaults.removeObject(forKey: mutedKeysDefaultsKey)
+        if hadMutedConversations {
+            NotificationCenter.default.post(name: settingsDidChange, object: defaults)
+        }
     }
 }

@@ -193,6 +193,16 @@ final class PeerListModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        NotificationCenter.default.publisher(
+            for: ConversationNotificationMuteStore.settingsDidChange,
+            object: UserDefaults.standard
+        )
+        .receive(on: DispatchQueue.main)
+        .sink { [weak self] _ in
+            self?.setNeedsRefresh()
+        }
+        .store(in: &cancellables)
+
         peerIdentityStore.$verifiedFingerprints
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
