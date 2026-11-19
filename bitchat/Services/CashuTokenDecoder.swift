@@ -140,9 +140,11 @@ enum CashuTokenDecoder {
             }
             for proof in (entry["proofs"] as? [[String: Any]]) ?? [] {
                 guard let number = proof["amount"] as? NSNumber,
-                      CFGetTypeID(number) != CFBooleanGetTypeID() else { continue }
-                // NSNumber.int64Value truncates fractions and wraps oversized values.
-                // Compare the converted integer with the original number before counting it.
+                      CFGetTypeID(number) != CFBooleanGetTypeID(),
+                      !CFNumberIsFloatType(number) else { continue }
+                // Require integer-typed JSON amounts, even for integral float spellings:
+                // floating-point values may already have rounded before reaching NSNumber.
+                // The comparison below also guards int64Value overflow.
                 let value = number.int64Value
                 guard value > 0, value <= maxAmount,
                       number.compare(NSNumber(value: value)) == .orderedSame else { continue }

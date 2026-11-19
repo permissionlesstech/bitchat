@@ -322,12 +322,26 @@ struct CashuTokenDecoderTests {
 
     // MARK: - Ambiguous Numeric and CBOR Input
 
-    @Test func v3DoesNotCoerceBooleansOrFractionsToMoney() {
-        for amount in ["true", "1.5", "2100000000000000.5", "18446744073709551617"] {
+    @Test func v3RequiresIntegerTypedAmounts() {
+        // Integral float/exponent spellings are deliberately refused too: their
+        // NSNumber representation cannot distinguish them from rounded fractions.
+        for amount in [
+            "true", "1.0", "1e0", "1e2", "1.5", "1.0000000000000001",
+            "2100000000000000.1", "2100000000000000.5", "2100000000000001",
+            "9223372036854775807", "9223372036854775808", "18446744073709551617"
+        ] {
             let json = "{\"token\":[{\"proofs\":[{\"amount\":\(amount)}]}]}"
             let token = "cashuA" + base64URL(Data(json.utf8))
             #expect(CashuTokenDecoder.decode(token)?.amount == nil)
             #expect(CashuTokenDecoder.decode(token, strict: true) == nil)
+        }
+    }
+
+    @Test func v3AcceptsIntegerAmountBoundaries() {
+        for amount in [1, 255, 256, 2_100_000_000_000_000] {
+            let token = makeV3Token(entries: [("https://mint.example.com", [amount])])
+            #expect(CashuTokenDecoder.decode(token)?.amount == amount)
+            #expect(CashuTokenDecoder.decode(token, strict: true)?.amount == amount)
         }
     }
 
