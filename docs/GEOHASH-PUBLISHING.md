@@ -54,7 +54,7 @@ Create a normal signed Nostr event with these fields:
 | `created_at` | Current Unix time in seconds |
 | `pubkey` | Publisher's 32-byte secp256k1 public key, hex encoded |
 | `tags` | Required `g` tag for the exact geohash; optional `n` nickname |
-| `content` | Plaintext message text |
+| `content` | Plaintext message text. The iOS and macOS client drops an ordinary message whose text exceeds 16,000 Swift characters (`String.count`, extended grapheme clusters), even after a relay has accepted the event. |
 | `id`, `sig` | Standard Nostr event ID and BIP-340 signature |
 
 For a synthetic channel, tags could be `[["g", "s000"], ["n", "synthetic publisher"]]`.
