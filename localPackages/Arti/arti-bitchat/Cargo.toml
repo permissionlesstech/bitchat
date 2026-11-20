@@ -12,6 +12,7 @@ crate-type = ["staticlib"]
 arti-client = { version = "0.38", default-features = false, features = [
     "tokio",
     "rustls",
+    "onion-service-client",
 ] }
 
 # Async runtime
