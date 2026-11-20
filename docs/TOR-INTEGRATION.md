@@ -46,7 +46,7 @@ On iOS, `AppRuntime` puts Tor dormant when the scene enters the background — t
 
 macOS App Nap can still freeze that work when the window is minimized or fully occluded by another app. `MacRelayActivityController` therefore holds a `ProcessInfo` activity (`.userInitiatedAllowingIdleSystemSleep`) only while App Nap would apply *and* a transport is actually relaying — Tor switched on (including bootstrap), or BLE mesh work allowed by activation policy with the radio powered on. A visible window or an idle configuration does not hold the assertion.
 
-Closing the last window still quits the app, so stopping bitchat still stops the radios. See #1593.
+Closing the last window quits the app by default. Enable **keep running when window is closed** in the macOS settings to keep active transports running after the last window closes. Quit the app to stop them. A panic wipe resets the setting to its default. See #1593.
 
 ## Known gap: no bridges or pluggable transports
 
