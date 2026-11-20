@@ -213,7 +213,7 @@ struct LocalizationCoverageTests {
     /// English also needs one/other. Dropping `%lld` used to stay green
     /// because coverage only checks that a locale entry exists.
     @Test func privateMediaFragmentLimitKeepsACountSpecifier() throws {
-        let url = repoRoot.appendingPathComponent(Self.mainCatalogPath)
+        let url = Self.repoRoot.appendingPathComponent(Self.mainCatalogPath)
         let data = try Data(contentsOf: url)
         let root = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
         let strings = try #require(root["strings"] as? [String: Any])
