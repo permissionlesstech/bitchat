@@ -22,6 +22,9 @@ struct AppInfoView: View {
     @State private var liveVoiceEnabled = PTTSettings.liveVoiceEnabled
     @State private var locationNotesEnabled = LocationNotesSettings.enabled
     @State private var hideMessagePreviews = NotificationPrivacySettings.hideMessagePreviews
+    #if os(macOS)
+    @State private var keepRunningWhenWindowClosed = MacKeepRunningSettings.enabled
+    #endif
     @State private var customRelays = NostrRelaySettings.customRelays()
     @State private var relayInput = ""
     @State private var relayError: String?
@@ -117,6 +120,11 @@ struct AppInfoView: View {
             static let privacyTitle = String(localized: "app_info.settings.privacy.title", defaultValue: "PRIVACY", comment: "Section header (uppercase) for privacy settings such as hiding notification previews")
             static let hidePreviewsTitle = String(localized: "app_info.settings.hide_previews.title", defaultValue: "hide message previews", comment: "Title of the setting that keeps message text, sender names, and geohashes out of lock-screen notifications")
             static let hidePreviewsSubtitle = String(localized: "app_info.settings.hide_previews.subtitle", defaultValue: "notifications say that something arrived without showing the message, who sent it, or which location channel it came from. anyone holding your locked phone learns nothing from the lock screen. on by default.", comment: "Subtitle explaining what hiding notification message previews does")
+
+            #if os(macOS)
+            static let keepRunningTitle = String(localized: "app_info.settings.keep_running.title", defaultValue: "keep running when window is closed", comment: "Title of the macOS setting that keeps Tor and the BLE mesh relaying after the last window is closed")
+            static let keepRunningSubtitle = String(localized: "app_info.settings.keep_running.subtitle", defaultValue: "closing the window normally quits bitchat and stops tor and the bluetooth mesh. turn this on to keep relaying from the dock — off by default so closing means quit.", comment: "Subtitle explaining the macOS keep-running-when-window-closed setting and its default-off privacy posture")
+            #endif
 
             static let dangerTitle = String(localized: "app_info.settings.danger.title", defaultValue: "DANGER ZONE", comment: "Section header (uppercase) for destructive actions in settings")
             static let panicButton = String(localized: "app_info.settings.danger.panic_button", defaultValue: "panic wipe", comment: "Button in the settings danger zone that erases all local data after confirmation")
@@ -541,6 +549,22 @@ struct AppInfoView: View {
                         )
                     )
                 }
+
+                #if os(macOS)
+                settingsCard {
+                    settingToggle(
+                        title: Text(verbatim: Strings.Settings.keepRunningTitle),
+                        subtitle: Text(verbatim: Strings.Settings.keepRunningSubtitle),
+                        isOn: Binding(
+                            get: { keepRunningWhenWindowClosed },
+                            set: { newValue in
+                                keepRunningWhenWindowClosed = newValue
+                                MacKeepRunningSettings.enabled = newValue
+                            }
+                        )
+                    )
+                }
+                #endif
             }
 
             // Danger zone
