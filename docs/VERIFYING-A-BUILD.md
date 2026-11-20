@@ -4,15 +4,16 @@ This document is about a specific risk: getting a copy of bitchat that someone h
 
 It matters because the repository has been the target of takedown demands. When a repository or a releases page becomes unavailable, mirrors appear, and people who need the app during a shutdown install whatever they can find. That is exactly the moment a trojaned build reaches the people with the most to lose. A modified bitchat can log plaintext, ship keys off the device, or weaken the mesh, and it will look and behave normally while doing it.
 
-The honest summary is short. **Source can be verified. Compiled apps cannot, unless they come from the App Store.** Everything below elaborates on that.
+The honest summary is short. **Source can be verified. Compiled iOS and macOS apps cannot, unless they come from the App Store. Official Android APKs from the Android project's GitHub releases can be checked against that project's published signing-certificate pin; the matching unsigned artifacts are reproducible. A compiled build from anywhere else cannot.** Everything below elaborates on that.
 
 ## Getting the app
 
 In order of how much verification is possible:
 
-1. **The App Store.** Apple verifies the developer signature, and the binary cannot be altered without breaking it. This is the only channel where a compiled build is verifiable end to end, and it is the right recommendation for almost everyone.
-2. **Build it yourself from verified source.** See below. Requires a Mac and Xcode, and gives you the strongest guarantee if you can do it.
-3. **A compiled build from anywhere else.** Not verifiable. See "Builds from other sources".
+1. **The App Store.** Apple verifies the developer signature, and the binary cannot be altered without breaking it. This is the right recommendation for almost everyone on iOS.
+2. **An official Android APK from the Android project's GitHub releases.** Compare the signer certificate with the pin published in that repository and follow its reproducible-build instructions. That check does not make an APK from any other site trustworthy.
+3. **Build it yourself from verified source.** See below. Requires a Mac and Xcode, and gives you the strongest guarantee if you can do it.
+4. **A compiled build from anywhere else.** Not verifiable. See "Builds from other sources".
 
 ## Verifying source
 
@@ -90,5 +91,5 @@ Cutting a release:
 Known gaps, so nobody assumes more protection than exists:
 
 - **No published signing key.** Tags are not currently verifiable against a known key. Publishing a fingerprint through channels independent of GitHub, and signing tags with it from then on, is the missing piece.
-- **No verifiable compiled builds outside the App Store.** Closing this needs either a signed-and-notarized release pipeline or a reproducible build, and until one exists the guidance above stands.
+- **No verifiable compiled iOS or macOS builds outside the App Store.** Official Android GitHub releases are the exception: the unsigned artifacts are reproducible and the release signing certificate is pinned in the Android repository. iOS and macOS still need a signed-and-notarized pipeline or a reproducible build.
 - **No non-GitHub source mirror.** Every remote for this project is on the platform the takedown demands were served to. A mirror on independent infrastructure, published before it is needed, would mean a takedown does not remove the ability to verify.
