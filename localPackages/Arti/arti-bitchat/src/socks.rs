@@ -206,3 +206,62 @@ async fn send_reply(stream: &mut TcpStream, rep: u8) -> io::Result<()> {
     ];
     stream.write_all(&reply).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arti_client::config::TorClientConfigBuilder;
+    use std::time::Duration;
+
+    fn error_chain(err: &dyn std::error::Error) -> String {
+        let mut parts = vec![err.to_string()];
+        let mut src = err.source();
+        while let Some(e) = src {
+            parts.push(e.to_string());
+            src = e.source();
+        }
+        parts.join(" | ")
+    }
+
+    /// Parsing a .onion succeeds even when onion services are compiled out.
+    /// The rejection happens inside `TorClient::connect`, which is what the
+    /// SOCKS shim calls, and it is immediate (no bootstrap).
+    #[tokio::test]
+    async fn onion_connect_is_not_compiled_out() {
+        let onion = "duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion:443";
+        let dir = std::env::temp_dir().join(format!("arti-bitchat-onion-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let config = TorClientConfigBuilder::from_directories(dir.join("state"), dir.join("cache"))
+            .build()
+            .unwrap();
+        let client = TorClient::builder()
+            .config(config)
+            .create_unbootstrapped()
+            .unwrap();
+
+        // Without the feature this returns in milliseconds. A short timeout
+        // only covers the case where connect moves on to building a circuit.
+        let result = tokio::time::timeout(Duration::from_secs(1), client.connect(onion)).await;
+        let _ = std::fs::remove_dir_all(&dir);
+
+        match result {
+            Ok(Err(e)) => {
+                let chain = error_chain(&e);
+                assert!(
+                    !chain.contains("onion-service-client not compiled in"),
+                    "hand-added .onion relays are rejected before any circuit: {chain}"
+                );
+                assert!(
+                    !chain.contains("allow_onion_addrs"),
+                    "default client config still blocks .onion: {chain}"
+                );
+            }
+            Ok(Ok(_)) => panic!("onion connect succeeded with no network"),
+            Err(_) => {
+                // Timed out building a circuit, so the address was accepted.
+            }
+        }
+    }
+}
