@@ -10,6 +10,20 @@ import SwiftUI
 import UserNotifications
 
 @main
+enum BitchatLauncher {
+    static func main() {
+        #if os(macOS)
+        if CommandLine.arguments.contains("--cli") {
+            MainActor.assumeIsolated {
+                TerminalCLI.run()
+            }
+            return
+        }
+        #endif
+        BitchatApp.main()
+    }
+}
+
 struct BitchatApp: App {
     static let bundleID = Bundle.main.bundleIdentifier ?? "chat.bitchat"
     static let groupID = "group.\(bundleID)"
