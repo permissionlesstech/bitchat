@@ -14,6 +14,90 @@ import Combine
 import Darwin
 import Foundation
 
+// MARK: - Terminal Sanitization
+
+enum TerminalSanitizer {
+    /// Strips ANSI escape sequences and neutralizes control characters from
+    /// untrusted text (e.g. remote messages, nicknames, geohashes) before
+    /// writing it to the terminal so remote peers cannot inject control
+    /// sequences or spoof prompts/status lines.
+    static func sanitize(_ text: String, allowNewlines: Bool = false) -> String {
+        var result = ""
+        result.reserveCapacity(text.count)
+
+        let scalars = Array(text.unicodeScalars)
+        var i = 0
+        while i < scalars.count {
+            let v = scalars[i].value
+
+            // Strip ANSI escape sequences beginning with ESC (0x1B).
+            if v == 0x1B {
+                i += 1
+                if i < scalars.count {
+                    let next = scalars[i].value
+                    if next == 0x5B { // CSI: ESC [ ... (0x40...0x7E)
+                        i += 1
+                        while i < scalars.count {
+                            let c = scalars[i].value
+                            i += 1
+                            if c >= 0x40 && c <= 0x7E { break }
+                        }
+                    } else if next == 0x5D { // OSC: ESC ] ... (BEL or ESC \)
+                        i += 1
+                        while i < scalars.count {
+                            let c = scalars[i].value
+                            if c == 0x07 {
+                                i += 1
+                                break
+                            }
+                            if c == 0x1B, i + 1 < scalars.count, scalars[i + 1].value == 0x5C {
+                                i += 2
+                                break
+                            }
+                            i += 1
+                        }
+                    } else if next >= 0x40 && next <= 0x5F {
+                        // Two-byte Fe escape sequence
+                        i += 1
+                    }
+                }
+                continue
+            }
+
+            // Strip C1 CSI (0x9B ... 0x40-0x7E).
+            if v == 0x9B {
+                i += 1
+                while i < scalars.count {
+                    let c = scalars[i].value
+                    i += 1
+                    if c >= 0x40 && c <= 0x7E { break }
+                }
+                continue
+            }
+
+            if v == 0x0A { // LF
+                result.append(allowNewlines ? "\n" : " ")
+                i += 1
+                continue
+            }
+            if v == 0x09 { // TAB
+                result.append(" ")
+                i += 1
+                continue
+            }
+            // Drop remaining C0 (including CR 0x0D), DEL (0x7F), and C1 (0x80...0x9F) control chars.
+            if v < 0x20 || v == 0x7F || (v >= 0x80 && v <= 0x9F) {
+                i += 1
+                continue
+            }
+
+            result.unicodeScalars.append(scalars[i])
+            i += 1
+        }
+        return result
+    }
+}
+
 // MARK: - Command Catalog & Autosuggest
 
 struct TerminalCommandSpec: Equatable {
@@ -30,6 +114,18 @@ struct TerminalSuggestion: Equatable {
     let label: String
     /// Right column description shown in dim text.
     let detail: String
+}
+
+struct TerminalPeerEntry: Equatable {
+    let name: String
+    let peerID: String
+    let status: String
+}
+
+enum TerminalPeerMatchResult<Peer> {
+    case unique(Peer)
+    case ambiguous([Peer])
+    case none
 }
 
 enum TerminalCommandCatalog {
@@ -126,10 +222,44 @@ enum TerminalCommandCatalog {
         )
     ]
 
+    /// Resolves a peer query against a list of peers, rejecting ambiguous matches
+    /// instead of silently picking the first colliding peer.
+    static func resolvePeer<Peer>(
+        matching query: String,
+        in peers: [Peer],
+        names: (Peer) -> [String],
+        peerID: (Peer) -> String
+    ) -> TerminalPeerMatchResult<Peer> {
+        let lower = query.lowercased()
+        guard !lower.isEmpty else { return .none }
+
+        // Exact peer ID match is always unique.
+        let exactIDMatches = peers.filter { peerID($0).lowercased() == lower }
+        if exactIDMatches.count == 1 { return .unique(exactIDMatches[0]) }
+        if exactIDMatches.count > 1 { return .ambiguous(exactIDMatches) }
+
+        // Exact nickname / petname match.
+        let exactNameMatches = peers.filter { peer in
+            names(peer).contains { $0.lowercased() == lower }
+        }
+        if exactNameMatches.count == 1 { return .unique(exactNameMatches[0]) }
+        if exactNameMatches.count > 1 { return .ambiguous(exactNameMatches) }
+
+        // Prefix match fallback across names and peer ID.
+        let prefixMatches = peers.filter { peer in
+            peerID(peer).lowercased().hasPrefix(lower) ||
+            names(peer).contains { $0.lowercased().hasPrefix(lower) }
+        }
+        if prefixMatches.count == 1 { return .unique(prefixMatches[0]) }
+        if prefixMatches.count > 1 { return .ambiguous(prefixMatches) }
+
+        return .none
+    }
+
     /// Computes live command and peer suggestions for the current input buffer.
     static func suggestions(
         for input: String,
-        peers: [(name: String, peerID: String, status: String)]
+        peers: [TerminalPeerEntry]
     ) -> [TerminalSuggestion] {
         guard input.hasPrefix("/") else { return [] }
 
@@ -147,17 +277,37 @@ enum TerminalCommandCatalog {
             let rawQuery = afterSpace.hasPrefix("@") ? String(afterSpace.dropFirst()) : afterSpace
             let lowerQuery = rawQuery.lowercased()
 
+            // Count duplicate display names so `/dm` disambiguates collisions using peer IDs.
+            var nameCounts: [String: Int] = [:]
+            for peer in peers {
+                nameCounts[peer.name.lowercased(), default: 0] += 1
+            }
+
             let matched = peers.filter { peer in
                 lowerQuery.isEmpty ||
                 peer.name.lowercased().hasPrefix(lowerQuery) ||
                 peer.peerID.lowercased().hasPrefix(lowerQuery)
             }
             return matched.map { peer in
-                let token = useAtPrefix ? "@\(peer.name)" : peer.name
+                let safeName = TerminalSanitizer.sanitize(peer.name)
+                let safeID = TerminalSanitizer.sanitize(peer.peerID)
+                let isDuplicateName = (nameCounts[peer.name.lowercased()] ?? 0) > 1
+                let completionToken: String
+                let label: String
+                if useAtPrefix {
+                    completionToken = "@\(safeName)"
+                    label = "\(cmd) @\(safeName)"
+                } else if isDuplicateName {
+                    completionToken = safeID
+                    label = "\(cmd) \(safeName) (\(safeID))"
+                } else {
+                    completionToken = safeName
+                    label = "\(cmd) \(safeName)"
+                }
                 return TerminalSuggestion(
-                    completion: "\(cmd) \(token) ",
-                    label: "\(cmd) \(token)",
-                    detail: "\(peer.status) (\(peer.peerID))"
+                    completion: "\(cmd) \(completionToken) ",
+                    label: label,
+                    detail: "\(peer.status) (\(safeID))"
                 )
             }
         }
@@ -185,7 +335,9 @@ private final class TermiosGuard {
     nonisolated(unsafe) static var original: termios?
 
     static func enableRawMode() -> Bool {
-        guard isatty(STDIN_FILENO) == 1 else { return false }
+        // Require both stdin and stdout to be TTYs so redirected output
+        // (e.g. `bitchat --cli >log`) doesn't disable terminal echo blindly.
+        guard isatty(STDIN_FILENO) == 1 && isatty(STDOUT_FILENO) == 1 else { return false }
         var orig = termios()
         guard tcgetattr(STDIN_FILENO, &orig) == 0 else { return false }
         original = orig
@@ -222,8 +374,6 @@ final class TerminalCLI {
     private var cancellables = Set<AnyCancellable>()
     private var knownConnectedPeerIDs: Set<PeerID> = []
     private var printedMessageIDs: Set<String> = []
-    private var activeDMPeerID: PeerID?
-    private var activeDMPeerName: String?
     private var sigintSource: DispatchSourceSignal?
     private var sigtermSource: DispatchSourceSignal?
     private var isShuttingDown = false
@@ -279,8 +429,8 @@ final class TerminalCLI {
         bindObservers()
         runtime.start()
 
-        let nick = runtime.chatViewModel.nickname
-        let peerID = runtime.chatViewModel.meshService.myPeerID.id
+        let nick = TerminalSanitizer.sanitize(runtime.chatViewModel.nickname)
+        let peerID = TerminalSanitizer.sanitize(runtime.chatViewModel.meshService.myPeerID.id)
         let hint = isInteractiveTTY
             ? "Type a message for #mesh, or / for live command suggestions (Tab to autocomplete, ↑/↓ to select)."
             : "Type a message to broadcast on #mesh, or /help for commands (/peers, /dm, /mesh, /quit)."
@@ -323,6 +473,16 @@ final class TerminalCLI {
             }
             .store(in: &cancellables)
 
+        // Keep the prompt aligned with the store's selected conversation
+        // (covers `/msg @nick`, `/dm`, `/mesh`, and rejected blocked peers).
+        runtime.conversations.$selectedConversationID
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.redrawInput()
+            }
+            .store(in: &cancellables)
+
         runtime.chatViewModel.$allPeers
             .receive(on: RunLoop.main)
             .sink { [weak self] peers in
@@ -331,12 +491,15 @@ final class TerminalCLI {
                 let connectedIDs = Set(connected.map(\.peerID))
 
                 for peer in connected where !self.knownConnectedPeerIDs.contains(peer.peerID) {
-                    let name = peer.localPetname ?? peer.nickname
-                    self.printLine("\(self.green)● peer connected:\(self.reset) \(self.bold)\(name)\(self.reset) \(self.dim)(\(peer.peerID.id))\(self.reset)")
+                    let name = TerminalSanitizer.sanitize(peer.localPetname ?? peer.nickname)
+                    let safeID = TerminalSanitizer.sanitize(peer.peerID.id)
+                    self.printLine("\(self.green)● peer connected:\(self.reset) \(self.bold)\(name)\(self.reset) \(self.dim)(\(safeID))\(self.reset)")
                 }
                 for oldID in self.knownConnectedPeerIDs where !connectedIDs.contains(oldID) {
-                    let name = peers.first(where: { $0.peerID == oldID }).map { $0.localPetname ?? $0.nickname } ?? oldID.id
-                    self.printLine("\(self.yellow)○ peer disconnected:\(self.reset) \(name) \(self.dim)(\(oldID.id))\(self.reset)")
+                    let rawName = peers.first(where: { $0.peerID == oldID }).map { $0.localPetname ?? $0.nickname } ?? oldID.id
+                    let name = TerminalSanitizer.sanitize(rawName)
+                    let safeID = TerminalSanitizer.sanitize(oldID.id)
+                    self.printLine("\(self.yellow)○ peer disconnected:\(self.reset) \(name) \(self.dim)(\(safeID))\(self.reset)")
                 }
                 self.knownConnectedPeerIDs = connectedIDs
 
@@ -358,26 +521,30 @@ final class TerminalCLI {
         case .mesh:
             tag = "\(cyan)[mesh]\(reset)"
         case .geohash(let gh):
-            tag = "\(yellow)[#\(gh)]\(reset)"
+            let safeGH = TerminalSanitizer.sanitize(gh)
+            tag = "\(yellow)[#\(safeGH)]\(reset)"
         case .direct(let handle):
             let peerName = displayName(for: handle.routingPeerID)
             tag = "\(magenta)[DM \(peerName)]\(reset)"
         }
 
+        let safeSender = TerminalSanitizer.sanitize(message.sender)
+        let safeContent = TerminalSanitizer.sanitize(message.content, allowNewlines: true)
+
         if message.sender == "system" {
-            printLine("\(dim)[\(ts)]\(reset) \(tag) \(dim)* \(message.content)\(reset)")
+            printLine("\(dim)[\(ts)]\(reset) \(tag) \(dim)* \(safeContent)\(reset)")
         } else {
             let isSelf = runtime.chatViewModel.isSelfSender(peerID: message.senderPeerID, displayName: message.sender)
             let senderColor = isSelf ? green : bold
-            printLine("\(dim)[\(ts)]\(reset) \(tag) \(senderColor)\(message.sender)\(reset): \(message.content)")
+            printLine("\(dim)[\(ts)]\(reset) \(tag) \(senderColor)\(safeSender)\(reset): \(safeContent)")
         }
     }
 
     private func displayName(for peerID: PeerID) -> String {
         if let peer = runtime.chatViewModel.allPeers.first(where: { $0.peerID == peerID }) {
-            return peer.localPetname ?? peer.nickname
+            return TerminalSanitizer.sanitize(peer.localPetname ?? peer.nickname)
         }
-        return peerID.id
+        return TerminalSanitizer.sanitize(peerID.id)
     }
 
     // MARK: - Input Loops
@@ -653,14 +820,14 @@ final class TerminalCLI {
             return
         }
         let current = String(inputChars)
-        let peerTuples = runtime.chatViewModel.allPeers.map { peer in
-            (
+        let peerEntries = runtime.chatViewModel.allPeers.map { peer in
+            TerminalPeerEntry(
                 name: peer.localPetname ?? peer.nickname,
                 peerID: peer.peerID.id,
                 status: peerStatusLabel(peer.connectionState)
             )
         }
-        let next = TerminalCommandCatalog.suggestions(for: current, peers: peerTuples)
+        let next = TerminalCommandCatalog.suggestions(for: current, peers: peerEntries)
         suggestions = next
         if selectedSuggestionIndex >= next.count {
             selectedSuggestionIndex = 0
@@ -703,9 +870,7 @@ final class TerminalCLI {
         }
 
         if trimmed == "/mesh" || trimmed == "/back" {
-            if activeDMPeerID != nil {
-                activeDMPeerID = nil
-                activeDMPeerName = nil
+            if runtime.chatViewModel.selectedPrivateChatPeer != nil {
                 runtime.chatViewModel.endPrivateChat()
                 printRaw("\(dim)Switched back to #mesh public chat.\(reset)")
             } else {
@@ -719,7 +884,8 @@ final class TerminalCLI {
             let newNick = String(trimmed.dropFirst(6)).trimmingCharacters(in: .whitespacesAndNewlines)
             if !newNick.isEmpty {
                 runtime.chatViewModel.nickname = newNick
-                printRaw("\(dim)Nickname set to \(bold)\(newNick)\(reset)")
+                let safeNick = TerminalSanitizer.sanitize(newNick)
+                printRaw("\(dim)Nickname set to \(bold)\(safeNick)\(reset)")
             }
             redrawInput()
             return
@@ -747,37 +913,53 @@ final class TerminalCLI {
         let targetQuery = String(parts[0]).trimmingCharacters(in: CharacterSet(charactersIn: "@"))
         let inlineMessage = parts.count > 1 ? String(parts[1]) : nil
 
-        guard let peer = findPeer(matching: targetQuery) else {
-            printRaw("\(yellow)No peer matching '\(targetQuery)'. Use /peers to list visible peers.\(reset)")
+        let resolution = TerminalCommandCatalog.resolvePeer(
+            matching: targetQuery,
+            in: runtime.chatViewModel.allPeers,
+            names: { peer in
+                var list = [peer.nickname]
+                if let petname = peer.localPetname { list.append(petname) }
+                return list
+            },
+            peerID: { $0.peerID.id }
+        )
+
+        let peer: BitchatPeer
+        switch resolution {
+        case .unique(let matched):
+            peer = matched
+        case .ambiguous(let matches):
+            let safeQuery = TerminalSanitizer.sanitize(targetQuery)
+            printRaw("\(yellow)Ambiguous peer '\(safeQuery)'. Specify a peer ID instead:\(reset)")
+            for candidate in matches {
+                let name = TerminalSanitizer.sanitize(candidate.localPetname ?? candidate.nickname)
+                let id = TerminalSanitizer.sanitize(candidate.peerID.id)
+                printRaw("  • \(bold)\(name)\(reset) \(dim)(\(id))\(reset)")
+            }
+            return
+        case .none:
+            let safeQuery = TerminalSanitizer.sanitize(targetQuery)
+            printRaw("\(yellow)No peer matching '\(safeQuery)'. Use /peers to list visible peers.\(reset)")
             return
         }
 
-        let peerName = peer.localPetname ?? peer.nickname
-        activeDMPeerID = peer.peerID
-        activeDMPeerName = peerName
         runtime.chatViewModel.startPrivateChat(with: peer.peerID)
-        printRaw("\(magenta)Private encrypted chat (Noise) with \(bold)\(peerName)\(reset)\(magenta) (\(peer.peerID.id)). Type /mesh to return.\(reset)")
+
+        // Only report DM mode and send an inline message if the model actually selected the peer
+        // (e.g. startPrivateChat rejects blocked peers).
+        guard runtime.chatViewModel.selectedPrivateChatPeer == peer.peerID else {
+            let peerName = TerminalSanitizer.sanitize(peer.localPetname ?? peer.nickname)
+            printRaw("\(yellow)Could not start private chat with \(peerName) (peer may be blocked).\(reset)")
+            return
+        }
+
+        let peerName = TerminalSanitizer.sanitize(peer.localPetname ?? peer.nickname)
+        let safeID = TerminalSanitizer.sanitize(peer.peerID.id)
+        printRaw("\(magenta)Private encrypted chat (Noise) with \(bold)\(peerName)\(reset)\(magenta) (\(safeID)). Type /mesh to return.\(reset)")
 
         if let inlineMessage, !inlineMessage.isEmpty {
             runtime.chatViewModel.sendMessage(inlineMessage)
         }
-    }
-
-    private func findPeer(matching query: String) -> BitchatPeer? {
-        let lower = query.lowercased()
-        let peers = runtime.chatViewModel.allPeers
-        if let exact = peers.first(where: {
-            $0.nickname.lowercased() == lower ||
-            ($0.localPetname?.lowercased() == lower) ||
-            $0.peerID.id.lowercased() == lower
-        }) {
-            return exact
-        }
-        return peers.first(where: {
-            $0.nickname.lowercased().hasPrefix(lower) ||
-            ($0.localPetname?.lowercased().hasPrefix(lower) ?? false) ||
-            $0.peerID.id.lowercased().hasPrefix(lower)
-        })
     }
 
     private func printPeers() {
@@ -788,7 +970,8 @@ final class TerminalCLI {
         }
         printRaw("\(bold)Peers (\(peers.count)):\(reset)")
         for peer in peers {
-            let name = peer.localPetname ?? peer.nickname
+            let name = TerminalSanitizer.sanitize(peer.localPetname ?? peer.nickname)
+            let safeID = TerminalSanitizer.sanitize(peer.peerID.id)
             let status: String
             switch peer.connectionState {
             case .bluetoothConnected: status = "\(green)BLE connected\(reset)"
@@ -796,7 +979,7 @@ final class TerminalCLI {
             case .nostrAvailable: status = "\(yellow)nostr available\(reset)"
             case .offline: status = "\(dim)offline\(reset)"
             }
-            printRaw("  • \(bold)\(name)\(reset) \(dim)(\(peer.peerID.id))\(reset) — \(status)")
+            printRaw("  • \(bold)\(name)\(reset) \(dim)(\(safeID))\(reset) — \(status)")
         }
     }
 
@@ -814,16 +997,18 @@ final class TerminalCLI {
     // MARK: - Terminal Rendering
 
     private func promptString() -> String {
-        let nick = runtime.chatViewModel.nickname
-        if let dmName = activeDMPeerName {
+        let nick = TerminalSanitizer.sanitize(runtime.chatViewModel.nickname)
+        if let dmPeerID = runtime.chatViewModel.selectedPrivateChatPeer {
+            let dmName = displayName(for: dmPeerID)
             return "\(magenta)[DM \(dmName)]\(reset) \(green)\(nick)\(reset) ❯ "
         }
         return "\(cyan)[mesh]\(reset) \(green)\(nick)\(reset) ❯ "
     }
 
     private func visiblePromptLength() -> Int {
-        let nick = runtime.chatViewModel.nickname
-        if let dmName = activeDMPeerName {
+        let nick = TerminalSanitizer.sanitize(runtime.chatViewModel.nickname)
+        if let dmPeerID = runtime.chatViewModel.selectedPrivateChatPeer {
+            let dmName = displayName(for: dmPeerID)
             return "[DM \(dmName)] \(nick) ❯ ".count
         }
         return "[mesh] \(nick) ❯ ".count
