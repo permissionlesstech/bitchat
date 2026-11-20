@@ -16184,7 +16184,7 @@
       }
     },
     "content.delivery.reason.private_media_too_many_fragments" : {
-      "comment" : "Failure reason when private media exceeds the recipient's fragment limit; %lld is that limit",
+      "comment" : "Failure reason when private media exceeds the recipient's fragment limit; %lld is that limit. English has one/other. Other locales keep a single form until a native plural review.",
       "extractionState" : "manual",
       "localizations" : {
         "ar" : {
@@ -16206,9 +16206,21 @@
           }
         },
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "File is too large for this contact's client (more than %lld mesh fragments)"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "File is too large for this contact's client (more than %lld mesh fragment)"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "File is too large for this contact's client (more than %lld mesh fragments)"
+                }
+              }
+            }
           }
         },
         "es" : {

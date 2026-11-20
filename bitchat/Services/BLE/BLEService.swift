@@ -2032,11 +2032,11 @@ final class BLEService: NSObject {
                 )
                 TransferProgressManager.shared.rejectBeforeStart(
                     id: transferId,
-                    reason: String(
-                        format: String(
-                            localized: "content.delivery.reason.private_media_too_many_fragments",
-                            defaultValue: "File is too large for this contact's client (more than %lld mesh fragments)",
-                            comment: "Failure reason when private media exceeds the recipient's fragment limit; %lld is that limit"
+                    reason: String.localizedStringWithFormat(
+                        NSLocalizedString(
+                            "content.delivery.reason.private_media_too_many_fragments",
+                            value: "File is too large for this contact's client (more than %lld mesh fragments)",
+                            comment: "Failure reason when private media exceeds the recipient's fragment limit; %lld is that limit. English uses one/other so a count of 1 is singular."
                         ),
                         ceiling.maxFragments
                     )
