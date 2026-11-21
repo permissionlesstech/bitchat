@@ -387,6 +387,70 @@ struct CashuTokenDecoderTests {
         #expect(CashuTokenDecoder.decode(token, strict: true) == nil)
     }
 
+    @Test func strictV3RejectsMalformedNeighboringProofs() {
+        let valid = "{\"amount\":7}"
+        for malformed in [
+            "{}", "{\"amount\":true}", "{\"amount\":\"1\"}", "{\"amount\":0}",
+            "{\"amount\":-1}", "{\"amount\":1.0}", "{\"amount\":1.0000000000000001}",
+            "{\"amount\":2100000000000001}"
+        ] {
+            for proofs in ["\(valid),\(malformed)", "\(malformed),\(valid)"] {
+                let json = "{\"token\":[{\"proofs\":[\(proofs)]}]}"
+                let token = "cashuA" + base64URL(Data(json.utf8))
+                #expect(CashuTokenDecoder.decode(token)?.amount == 7)
+                #expect(CashuTokenDecoder.decode(token, strict: true) == nil)
+            }
+        }
+    }
+
+    @Test func strictV3RejectsMalformedNeighboringEntries() {
+        let valid = "{\"proofs\":[{\"amount\":7}]}"
+        for malformed in ["{}", "{\"proofs\":[]}", "{\"proofs\":1}", "{\"proofs\":[1]}"] {
+            for entries in ["\(valid),\(malformed)", "\(malformed),\(valid)"] {
+                let token = "cashuA" + base64URL(Data("{\"token\":[\(entries)]}".utf8))
+                #expect(CashuTokenDecoder.decode(token)?.amount == 7)
+                #expect(CashuTokenDecoder.decode(token, strict: true) == nil)
+            }
+        }
+    }
+
+    @Test func strictV4RejectsMalformedNeighboringProofs() {
+        let valid = CBOREncode.map([("a", CBOREncode.uint(7))])
+        let malformedProofs = [
+            CBOREncode.map([]), CBOREncode.uint(1),
+            CBOREncode.map([("a", [0xF5])]), CBOREncode.map([("a", [0x20])]),
+            CBOREncode.map([("a", CBOREncode.text("1"))]),
+            CBOREncode.map([("a", CBOREncode.uint(0))])
+        ]
+        for malformed in malformedProofs {
+            for proofs in [[valid, malformed], [malformed, valid]] {
+                let group = CBOREncode.map([("p", CBOREncode.array(proofs))])
+                let payload = CBOREncode.map([("t", CBOREncode.array([group]))])
+                let token = "cashuB" + base64URL(Data(payload))
+                #expect(CashuTokenDecoder.decode(token)?.amount == 7)
+                #expect(CashuTokenDecoder.decode(token, strict: true) == nil)
+            }
+        }
+    }
+
+    @Test func strictV4RejectsMalformedNeighboringGroups() {
+        let proof = CBOREncode.map([("a", CBOREncode.uint(7))])
+        let valid = CBOREncode.map([("p", CBOREncode.array([proof]))])
+        let malformedGroups = [
+            CBOREncode.uint(1), CBOREncode.map([]),
+            CBOREncode.map([("p", CBOREncode.uint(1))]),
+            CBOREncode.map([("p", CBOREncode.array([]))])
+        ]
+        for malformed in malformedGroups {
+            for groups in [[valid, malformed], [malformed, valid]] {
+                let payload = CBOREncode.map([("t", CBOREncode.array(groups))])
+                let token = "cashuB" + base64URL(Data(payload))
+                #expect(CashuTokenDecoder.decode(token)?.amount == 7)
+                #expect(CashuTokenDecoder.decode(token, strict: true) == nil)
+            }
+        }
+    }
+
     // MARK: - Detection Ranges (message scanning)
 
     @Test func detectionFindsWholeMessageToken() {

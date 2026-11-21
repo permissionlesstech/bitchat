@@ -76,9 +76,9 @@ enum CashuTokenDecoder {
     /// unknown chip is fine for display.
     ///
     /// In `strict` mode (used by the `/pay` SEND path) there is no permissive
-    /// fallback: the token must cleanly decode to a known version *and* carry
-    /// a positive amount, otherwise this returns nil. This stops base64 junk
-    /// and truncated V4 tokens from being relayed as if they were valid money.
+    /// fallback: every entry must have a nonempty proof list, and every proof
+    /// must carry a positive, sane integer amount. A valid subtotal must not
+    /// authorize malformed neighboring proofs. This is not mint verification.
     static func decode(_ raw: String, strict: Bool = false) -> TokenInfo? {
         guard let token = bareToken(from: raw) else { return nil }
         let version = String(token[token.index(token.startIndex, offsetBy: 5)])
@@ -88,9 +88,9 @@ enum CashuTokenDecoder {
         let info: TokenInfo?
         switch version {
         case "A":
-            info = decodeV3(payload)
+            info = decodeV3(payload, strict: strict)
         case "B":
-            if let walked = decodeV4(payload) {
+            if let walked = decodeV4(payload, strict: strict) {
                 info = walked
             } else if strict {
                 // Couldn't cleanly walk the CBOR — refuse to send it.
@@ -125,7 +125,7 @@ enum CashuTokenDecoder {
 
     // MARK: - V3 (JSON)
 
-    private static func decodeV3(_ payload: Data) -> TokenInfo? {
+    private static func decodeV3(_ payload: Data, strict: Bool) -> TokenInfo? {
         guard let obj = (try? JSONSerialization.jsonObject(with: payload)) as? [String: Any],
               let entries = obj["token"] as? [[String: Any]],
               !entries.isEmpty else {
@@ -138,16 +138,26 @@ enum CashuTokenDecoder {
             if mintHost == nil, let mint = entry["mint"] as? String {
                 mintHost = sanitizedHost(from: mint)
             }
-            for proof in (entry["proofs"] as? [[String: Any]]) ?? [] {
+            guard let proofs = entry["proofs"] as? [[String: Any]], !proofs.isEmpty else {
+                if strict { return nil }
+                continue
+            }
+            for proof in proofs {
                 guard let number = proof["amount"] as? NSNumber,
                       CFGetTypeID(number) != CFBooleanGetTypeID(),
-                      !CFNumberIsFloatType(number) else { continue }
+                      !CFNumberIsFloatType(number) else {
+                    if strict { return nil }
+                    continue
+                }
                 // Require integer-typed JSON amounts, even for integral float spellings:
                 // floating-point values may already have rounded before reaching NSNumber.
                 // The comparison below also guards int64Value overflow.
                 let value = number.int64Value
                 guard value > 0, value <= maxAmount,
-                      number.compare(NSNumber(value: value)) == .orderedSame else { continue }
+                      number.compare(NSNumber(value: value)) == .orderedSame else {
+                    if strict { return nil }
+                    continue
+                }
                 total += value
                 guard total <= maxAmount else { return nil }
                 sawAmount = true
@@ -166,7 +176,7 @@ enum CashuTokenDecoder {
 
     /// Minimal walk of the NUT-00 TokenV4 CBOR map:
     /// { "m": mint, "u": unit, "d": memo, "t": [ { "i": bytes, "p": [ { "a": amount, … } ] } ] }
-    private static func decodeV4(_ payload: Data) -> TokenInfo? {
+    private static func decodeV4(_ payload: Data, strict: Bool) -> TokenInfo? {
         var reader = CBORReader(data: payload)
         guard case .map(let pairs)? = reader.parseComplete() else { return nil }
         var mintHost: String?
@@ -184,16 +194,22 @@ enum CashuTokenDecoder {
             case ("d", .text(let d)):
                 memo = sanitizedMemo(d)
             case ("t", .array(let groups)):
-                for case .map(let group) in groups {
-                    for case (.text("p"), .array(let proofs)) in group {
-                        for case .map(let proof) in proofs {
-                            for case (.text("a"), .unsigned(let amount)) in proof {
-                                guard amount > 0, amount <= UInt64(maxAmount) else { continue }
-                                total += Int64(amount)
-                                guard total <= maxAmount else { return nil }
-                                sawAmount = true
-                            }
+                for value in groups {
+                    guard case .map(let group) = value,
+                          case .array(let proofs)? = cborValue("p", in: group), !proofs.isEmpty else {
+                        if strict { return nil }
+                        continue
+                    }
+                    for value in proofs {
+                        guard case .map(let proof) = value,
+                              case .unsigned(let amount)? = cborValue("a", in: proof),
+                              amount > 0, amount <= UInt64(maxAmount) else {
+                            if strict { return nil }
+                            continue
                         }
+                        total += Int64(amount)
+                        guard total <= maxAmount else { return nil }
+                        sawAmount = true
                     }
                 }
             default:
@@ -207,6 +223,13 @@ enum CashuTokenDecoder {
             mintHost: mintHost,
             memo: memo
         )
+    }
+
+    private static func cborValue(_ name: String, in pairs: [(CBORReader.Value, CBORReader.Value)]) -> CBORReader.Value? {
+        pairs.first { key, _ in
+            if case .text(let candidate) = key { return candidate == name }
+            return false
+        }?.1
     }
 
     // MARK: - Display Sanitization (values are attacker-controlled)
