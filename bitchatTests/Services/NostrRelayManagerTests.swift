@@ -974,6 +974,7 @@ final class NostrRelayManagerTests: XCTestCase {
         let firstRelayURL = "wss://giftwrap-one.example"
         let secondRelayURL = "wss://giftwrap-two.example"
         let context = makeContext(permission: .denied)
+        defer { context.manager.disconnect() }
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
         let giftWrap = try NostrProtocol.createPrivateMessage(
@@ -982,35 +983,67 @@ final class NostrRelayManagerTests: XCTestCase {
             senderIdentity: sender
         )
         let tampered = invalidSignatureCopy(of: giftWrap)
+        XCTAssertTrue(giftWrap.isValidSignature())
+        XCTAssertFalse(tampered.isValidSignature())
         var receivedIDs: [String] = []
+        var receivedSignatures: [String?] = []
+        var eoseCount = 0
 
         context.manager.subscribe(
             filter: makeFilter(),
             id: "gift-wraps",
-            relayUrls: [firstRelayURL, secondRelayURL]
-        ) { event in
-            receivedIDs.append(event.id)
-        }
+            relayUrls: [firstRelayURL, secondRelayURL],
+            handler: { event in
+                receivedIDs.append(event.id)
+                receivedSignatures.append(event.sig)
+            },
+            onEOSE: { eoseCount += 1 }
+        )
         let subscriptionsSent = await waitUntil {
             context.sessionFactory.latestConnection(for: firstRelayURL)?.sentStrings.count == 1 &&
             context.sessionFactory.latestConnection(for: secondRelayURL)?.sentStrings.count == 1
         }
         XCTAssertTrue(subscriptionsSent)
+        let firstConnection = try XCTUnwrap(context.sessionFactory.latestConnection(for: firstRelayURL))
+        let secondConnection = try XCTUnwrap(context.sessionFactory.latestConnection(for: secondRelayURL))
 
-        try context.sessionFactory.latestConnection(for: firstRelayURL)?.emitEventMessage(subscriptionID: "gift-wraps", event: tampered)
-        try context.sessionFactory.latestConnection(for: secondRelayURL)?.emitEventMessage(subscriptionID: "gift-wraps", event: giftWrap)
+        try firstConnection.emitEventMessage(subscriptionID: "gift-wraps", event: tampered)
+        // EOSE shares each relay's serial consumer with EVENT. Both EOSEs
+        // therefore prove the tampered frame finished, not just its precheck.
+        // This context's mock scheduler cannot fire the fallback on its own.
+        try firstConnection.emitEOSE(subscriptionID: "gift-wraps")
+        try secondConnection.emitEOSE(subscriptionID: "gift-wraps")
+        let tamperedSettled = await waitUntil { eoseCount == 1 }
+        XCTAssertTrue(tamperedSettled)
+        guard tamperedSettled else { return }
+        XCTAssertTrue(receivedIDs.isEmpty, "the tampered wrap must never reach the handler")
+        XCTAssertEqual(context.manager.debugDuplicateInboundEventDropCount, 0)
 
-        // Wait on the DELIVERY-side state (second main hop, after off-main
-        // verification), not just messagesReceived (first main hop) — the
-        // handler only fires after verify + a second hop.
+        try secondConnection.emitEventMessage(subscriptionID: "gift-wraps", event: giftWrap)
         let genuineDelivered = await waitUntil {
             context.manager.relays.first(where: { $0.url == firstRelayURL })?.messagesReceived == 1 &&
             context.manager.relays.first(where: { $0.url == secondRelayURL })?.messagesReceived == 1 &&
             receivedIDs == [giftWrap.id]
         }
         XCTAssertTrue(genuineDelivered)
+        guard genuineDelivered else { return }
         XCTAssertEqual(receivedIDs, [giftWrap.id])
+        XCTAssertEqual(receivedSignatures, [giftWrap.sig])
         XCTAssertEqual(context.manager.debugDuplicateInboundEventDropCount, 0)
+        XCTAssertEqual(context.manager.debugDuplicateInboundEventDropCount(forSubscriptionID: "gift-wraps"), 0)
+
+        // Once the genuine wrap is recorded, a later tampered copy is a
+        // duplicate lookup drop. Cover that order without changing its count.
+        try firstConnection.emitEventMessage(subscriptionID: "gift-wraps", event: tampered)
+        let lateTamperedSettled = await waitUntil {
+            context.manager.relays.first(where: { $0.url == firstRelayURL })?.messagesReceived == 2 &&
+            context.manager.debugDuplicateInboundEventDropCount == 1
+        }
+        XCTAssertTrue(lateTamperedSettled)
+        XCTAssertEqual(receivedIDs, [giftWrap.id])
+        XCTAssertEqual(receivedSignatures, [giftWrap.sig])
+        XCTAssertEqual(context.manager.debugDuplicateInboundEventDropCount, 1)
+        XCTAssertEqual(context.manager.debugDuplicateInboundEventDropCount(forSubscriptionID: "gift-wraps"), 1)
     }
 
     /// Signature verification runs off-main in a per-relay serial consumer;
