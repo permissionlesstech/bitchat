@@ -70,6 +70,32 @@ struct ClearUnreadConversationTests {
         #expect(!viewModel.hasUnreadMessages(for: peerID))
     }
 
+    #if os(macOS)
+    // Source-wiring guard only: this does not render the lists or exercise
+    // context-menu and accessibility behavior on either platform.
+    @Test("Both recent-chat sections forward unread clearing (source wiring)")
+    func recentChatSections_forwardClearUnread() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("bitchat/Views/ContentSheetViews.swift"),
+            encoding: .utf8
+        )
+        let calls = try NSRegularExpression(pattern: #"RecentChatList\([\s\S]*?\n\s*\)"#)
+        let matches = calls.matches(in: source, range: NSRange(source.startIndex..., in: source))
+        #expect(matches.count == 2, "Keep both location and mesh recent-chat sections covered")
+        for match in matches {
+            let callRange = try #require(Range(match.range, in: source))
+            let call = String(source[callRange])
+            #expect(call.range(
+                of: #"onClearUnread:\s*\{\s*peerID\s+in\s+peerListModel\.clearUnread\(for:\s*peerID\)\s*\}"#,
+                options: .regularExpression
+            ) != nil, "Every recent-chat section must forward unread clearing to PeerListModel")
+        }
+    }
+    #endif
+
     @Test("markPrivateChatRead is a no-op when the conversation is already read")
     func markPrivateChatRead_idempotent() {
         let viewModel = makeViewModel()

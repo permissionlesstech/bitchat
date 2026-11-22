@@ -439,6 +439,9 @@ private struct ContentPeopleListView: View {
                             onTapChat: { peerID in
                                 peerListModel.startConversation(with: peerID)
                                 showSidebar = true
+                            },
+                            onClearUnread: { peerID in
+                                peerListModel.clearUnread(for: peerID)
                             }
                         )
                     }
