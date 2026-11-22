@@ -97,12 +97,13 @@ struct ChatViewModelInitializationTests {
 
         // The snapshot → allPeers binding hops the transport's unstructured
         // Task, UnifiedPeerService, a receive(on: main), and another Task —
-        // all contending with every parallel worker, so a loaded CI runner
-        // can exceed defaultTimeout (observed: one 5s miss on a run where
-        // the whole suite took 10s instead of the usual ~4s).
+        // all contending with every parallel worker. longTimeout (10s) still
+        // missed on a loaded runner whose suite took ~61s (Run Swift Tests
+        // (app), 2026-11-19). settleTimeout is the deadline for that
+        // starvation; the wait returns as soon as Alice is bound.
         let updated = await TestHelpers.waitUntil({
             viewModel.allPeers.contains { $0.peerID == peerID && $0.nickname == "Alice" }
-        }, timeout: TestConstants.longTimeout)
+        }, timeout: TestConstants.settleTimeout)
 
         #expect(updated)
     }
