@@ -75,10 +75,15 @@ final class MinimalDistancePalette {
     @MainActor
     func color(for identifier: String, isDark: Bool) -> Color? {
         guard let entry = entries[identifier] else { return nil }
-        let saturation = isDark ? config.saturationDark : config.saturationLight
+        var saturation = isDark ? config.saturationDark : config.saturationLight
         let baseBrightness = isDark ? config.baseBrightnessDark : config.baseBrightnessLight
         let ringDelta = isDark ? config.ringBrightnessDeltaDark : config.ringBrightnessDeltaLight
-        let brightness = min(1.0, max(0.0, baseBrightness + ringDelta * Double(entry.ring)))
+        var brightness = min(1.0, max(0.0, baseBrightness + ringDelta * Double(entry.ring)))
+        if isDark {
+            let adjusted = PeerColorContrast.adjustForDarkMode(hue: entry.hue, saturation: saturation, brightness: brightness)
+            saturation = adjusted.saturation
+            brightness = adjusted.brightness
+        }
         return Color(hue: entry.hue, saturation: saturation, brightness: brightness)
     }
 
