@@ -184,6 +184,12 @@
             "state": "translated",
             "value": "張貼公告"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Aushang posten"
+          }
         }
       }
     },
@@ -369,6 +375,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "來自 %@ 的公告：%@"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Aushang von %@: %@"
           }
         }
       }
@@ -556,6 +568,12 @@
             "state": "translated",
             "value": "刪除"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "löschen"
+          }
         }
       }
     },
@@ -741,6 +759,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "有效期限"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "läuft ab in"
           }
         }
       }
@@ -928,6 +952,12 @@
             "state": "translated",
             "value": "%lld天"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%lldT"
+          }
         }
       }
     },
@@ -1113,6 +1143,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "張貼一則公告…"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "einen aushang posten…"
           }
         }
       }
@@ -1300,6 +1336,12 @@
             "state": "translated",
             "value": "緊急"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "dringend"
+          }
         }
       }
     },
@@ -1485,6 +1527,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "為附近的人釘上第一則公告吧。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "pinne den ersten aushang für die leute hier in der gegend an."
           }
         }
       }
@@ -1672,6 +1720,12 @@
             "state": "translated",
             "value": "還沒有公告"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "noch keine aushänge"
+          }
         }
       }
     },
@@ -1857,6 +1911,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "緊急"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "dringend"
           }
         }
       }
@@ -2044,6 +2104,12 @@
             "state": "translated",
             "value": "加入"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "hinzufügen"
+          }
         }
       }
     },
@@ -2229,6 +2295,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "內建"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "eingebaut"
           }
         }
       }
@@ -2416,6 +2488,12 @@
             "state": "translated",
             "value": "該中繼已在清單中。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "dieses relay steht schon in der liste."
+          }
         }
       }
     },
@@ -2601,6 +2679,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "最多可以加入 %d 個中繼。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "du kannst bis zu %d relays hinzufügen."
           }
         }
       }
@@ -2788,6 +2872,12 @@
             "state": "translated",
             "value": "這看起來不像中繼位址。試試 wss://host。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "das sieht nicht wie eine relay-adresse aus. versuch wss://host."
+          }
         }
       }
     },
@@ -2972,6 +3062,12 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
+            "value": "wss://relay.example.com"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
             "value": "wss://relay.example.com"
           }
         }
@@ -3160,6 +3256,12 @@
             "state": "translated",
             "value": "移除中繼"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "relay entfernen"
+          }
         }
       }
     },
@@ -3345,6 +3447,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "當 mesh 無法觸及某人時，私密訊息會經這些中繼傳遞。內建中繼是眾所周知的位址，網路過濾可以封鎖它們 — 所以你可以加入自己的中繼，包括 .onion 位址。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "wenn das mesh jemanden nicht erreicht, laufen private nachrichten über diese relays. die eingebauten sind bekannte adressen, die ein netzwerkfilter blockieren kann — du kannst also eigene hinzufügen, auch .onion-adressen."
           }
         }
       }
@@ -3532,6 +3640,12 @@
             "state": "translated",
             "value": "私密訊息中繼"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "relays für private nachrichten"
+          }
         }
       }
     },
@@ -3717,6 +3831,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tor 已關閉：你連線的每個中繼都能看到你的 IP 位址，包括承載你私密訊息的中繼。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "tor ist aus: jedes relay, mit dem du dich verbindest, kann deine ip-adresse sehen, auch die relays, die deine privaten nachrichten tragen."
           }
         }
       }
@@ -3904,6 +4024,12 @@
             "state": "translated",
             "value": "透過 tor 傳送網際網路流量，中繼營運方看到的是 tor 的位址而不是你的。適用於位置頻道和經網際網路投遞的私密訊息。推薦：開啟。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "sendet internetverkehr über tor, sodass relay-betreiber die adresse von tor statt deiner sehen. gilt für standortkanäle und private nachrichten, die über das internet zugestellt werden. empfohlen: an."
+          }
         }
       }
     },
@@ -4089,6 +4215,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "開啟此對話"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "öffnet diese unterhaltung"
           }
         }
       }
@@ -4276,6 +4408,12 @@
             "state": "translated",
             "value": "聊天"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "chats"
+          }
         }
       }
     },
@@ -4461,6 +4599,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "無法 %1$@ %2$@：找不到"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%1$@ %2$@ geht nicht: nicht gefunden"
           }
         }
       }
@@ -4648,6 +4792,12 @@
             "state": "translated",
             "value": "無法 %1$@ %2$@：在 mesh 上找不到"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%1$@ %2$@ geht nicht: nicht im mesh gefunden"
+          }
         }
       }
     },
@@ -4833,6 +4983,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "用法：/%@ <暱稱>"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verwendung: /%@ <nickname>"
           }
         }
       }
@@ -5020,6 +5176,12 @@
             "state": "translated",
             "value": "%@ 已被封鎖"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ ist bereits blockiert"
+          }
         }
       }
     },
@@ -5205,6 +5367,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已封鎖 %@，你不會再看到對方的訊息"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ blockiert. du siehst die nachrichten dieser person nicht mehr"
           }
         }
       }
@@ -5392,6 +5560,12 @@
             "state": "translated",
             "value": "已在 geohash 聊天中封鎖 %@"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ in geohash-chats blockiert"
+          }
         }
       }
     },
@@ -5577,6 +5751,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "無法封鎖 %@：找不到或無法驗證身分"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "kann %@ nicht blockieren: nicht gefunden oder identität nicht überprüfbar"
           }
         }
       }
@@ -5764,6 +5944,12 @@
             "state": "translated",
             "value": "已封鎖的人：%1$@ | geohash 封鎖：%2$@"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "blockierte peers: %1$@ | geohash-blockierungen: %2$@"
+          }
         }
       }
     },
@@ -5949,6 +6135,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "還在定位這個地方 — 請稍後再試"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "dieser ort wird noch gesucht — versuch es gleich nochmal"
           }
         }
       }
@@ -6136,6 +6328,12 @@
             "state": "translated",
             "value": "📍 便箋已留在這裡 — 24 小時後會消失"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "📍 notiz hier hinterlassen — sie verblasst in 24h"
+          }
         }
       }
     },
@@ -6321,6 +6519,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "留下便箋需要位置資訊 — 請在資訊畫面開啟"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "eine notiz zu hinterlassen braucht den standort — aktiviere ihn im info-bildschirm"
           }
         }
       }
@@ -6508,6 +6712,12 @@
             "state": "translated",
             "value": "沒有可連上的地理中繼 — 便箋沒有留下"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "keine geo-relays erreichbar — notiz nicht hinterlassen"
+          }
         }
       }
     },
@@ -6693,6 +6903,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "位置便箋已關閉 — 請在資訊畫面開啟"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "orts-notizen sind aus — aktiviere sie im info-bildschirm"
           }
         }
       }
@@ -6880,6 +7096,12 @@
             "state": "translated",
             "value": "用法：/drop <訊息>"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verwendung: /drop <nachricht>"
+          }
         }
       }
     },
@@ -7065,6 +7287,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "最愛只限 #mesh 裡的 mesh 成員使用"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "favoriten gibt es nur für mesh-peers in #mesh"
           }
         }
       }
@@ -7252,6 +7480,12 @@
             "state": "translated",
             "value": "群組只限 #mesh 裡的 mesh 成員使用"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "gruppen gibt es nur für mesh-peers in #mesh"
+          }
         }
       }
     },
@@ -7437,6 +7671,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "無效的指令"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ungültiger befehl"
           }
         }
       }
@@ -7624,6 +7864,12 @@
             "state": "translated",
             "value": "ping 只對 #mesh 裡的 mesh 成員有效"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ping funktioniert nur für mesh-peers in #mesh"
+          }
         }
       }
     },
@@ -7809,6 +8055,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "trace 只對 #mesh 裡的 mesh 成員有效"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "trace funktioniert nur für mesh-peers in #mesh"
           }
         }
       }
@@ -7996,6 +8248,12 @@
             "state": "translated",
             "value": "未知的指令：%@ — 輸入 /help 查看指令"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "unbekannter befehl: %@ — tippe /help für alle befehle"
+          }
         }
       }
     },
@@ -8181,6 +8439,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已將 %@ 加入最愛"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ zu den favoriten hinzugefügt"
           }
         }
       }
@@ -8368,6 +8632,12 @@
             "state": "translated",
             "value": "%@ 已在最愛中"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ ist bereits ein favorit"
+          }
         }
       }
     },
@@ -8553,6 +8823,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ 不在最愛中"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ ist kein favorit"
           }
         }
       }
@@ -8740,6 +9016,12 @@
             "state": "translated",
             "value": "找不到這個人：%@"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "peer nicht gefunden: %@"
+          }
         }
       }
     },
@@ -8925,6 +9207,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已將 %@ 移出最愛"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ aus den favoriten entfernt"
           }
         }
       }
@@ -9112,6 +9400,12 @@
             "state": "translated",
             "value": "用法：/group create <名稱> · invite @name · remove @name · leave · list"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verwendung: /group create <name> · invite @name · remove @name · leave · list"
+          }
         }
       }
     },
@@ -9297,6 +9591,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "指令：\n/msg @name [message] — 開始私人聊天\n/who — 列出誰在這裡\n/clear — 清除這個聊天\n/hug @name — 送出一個擁抱\n/slap @name — 用一條大鱒魚巴下去\n/block @name · /unblock @name\n/fav @name · /unfav @name — 最愛（僅限 mesh）\n/group create <name> — 建立加密群組\n/group invite @name · /group remove @name — 管理成員（建立者）\n/group leave · /group list — 離開或列出你的群組\n/ping @name — 測量來回時間（僅限 mesh）\n/trace @name — 估計的 mesh 路徑（僅限 mesh）\n/pay <token> — 在這個聊天中傳送 cashu ecash 代幣\n/drop <message> — 在這個地方釘一張便箋 24 小時（需要位置）\n/help — 這份清單"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "befehle:\n/msg @name [message] — privaten chat starten\n/who — zeigen, wer hier ist\n/clear — diesen chat leeren\n/hug @name — eine umarmung senden\n/slap @name — mit einer großen forelle ohrfeigen\n/block @name · /unblock @name\n/fav @name · /unfav @name — favoriten (nur mesh)\n/group create <name> — eine verschlüsselte gruppe starten\n/group invite @name · /group remove @name — mitglieder verwalten (ersteller)\n/group leave · /group list — gruppen verlassen oder auflisten\n/ping @name — round-trip-zeit messen (nur mesh)\n/trace @name — geschätzter mesh-pfad (nur mesh)\n/pay <token> — einen cashu-ecash-token in diesem chat senden\n/drop <message> — eine notiz für 24h an diesem ort anpinnen (braucht standort)\n/help — diese liste"
           }
         }
       }
@@ -9484,6 +9784,12 @@
             "state": "translated",
             "value": "找不到 '%@'"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "'%@' nicht gefunden"
+          }
         }
       }
     },
@@ -9669,6 +9975,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已與 %@ 開始私人聊天"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "privater chat mit %@ gestartet"
           }
         }
       }
@@ -9856,6 +10168,12 @@
             "state": "translated",
             "value": "用法：/msg @nickname [message]"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verwendung: /msg @nickname [nachricht]"
+          }
         }
       }
     },
@@ -10041,6 +10359,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "無效的 cashu 代幣 — 無法解碼成帶金額的已知代幣，不會送出"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ungültiger cashu-token — er lässt sich nicht zu einem bekannten token mit betrag dekodieren, wird nicht gesendet"
           }
         }
       }
@@ -10228,6 +10552,12 @@
             "state": "translated",
             "value": "這看起來不像 cashu 代幣 — 應該是 cashuA… 或 cashuB…"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "das sieht nicht nach einem cashu-token aus — erwartet wird cashuA… oder cashuB…"
+          }
         }
       }
     },
@@ -10413,6 +10743,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "這是公開頻道 — 任何看到的人都能兌換這個代幣。仍要送出：/pay <代幣> public"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "dies ist ein öffentlicher kanal — alle, die mitlesen, können den token einlösen. trotzdem senden: /pay <token> public"
           }
         }
       }
@@ -10600,6 +10936,12 @@
             "state": "translated",
             "value": "已送出 %@ — cashu 是不記名代幣，誰先兌換錢就是誰的"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ gesendet — cashu ist ein inhaber-token; wer ihn zuerst einlöst, bekommt das geld"
+          }
         }
       }
     },
@@ -10785,6 +11127,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已把 %@ 送到公開頻道 — 這裡任何人都能兌換"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ in den öffentlichen kanal gesendet — alle hier können ihn einlösen"
           }
         }
       }
@@ -10972,6 +11320,12 @@
             "state": "translated",
             "value": "用法：/pay <代幣> — 貼上 cashu 代幣：/pay cashuA…"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verwendung: /pay <token> — füge einen cashu-token ein: /pay cashuA…"
+          }
         }
       }
     },
@@ -11157,6 +11511,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在 ping %@…"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "pinge %@…"
           }
         }
       }
@@ -11344,6 +11704,12 @@
             "state": "translated",
             "value": "沒有通往 %@ 的已知路徑"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "kein bekannter pfad zu %@"
+          }
         }
       }
     },
@@ -11529,6 +11895,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "估計路徑：%1$@（%2$lld 跳）"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "geschätzter pfad: %1$@ (%2$lld hops)"
           }
         }
       }
@@ -11716,6 +12088,12 @@
             "state": "translated",
             "value": "估計路徑：%@（1 跳）"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "geschätzter pfad: %@ (1 hop)"
+          }
         }
       }
     },
@@ -11901,6 +12279,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "你"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "du"
           }
         }
       }
@@ -12088,6 +12472,12 @@
             "state": "translated",
             "value": "已解除封鎖 %@"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "blockierung von %@ aufgehoben"
+          }
         }
       }
     },
@@ -12273,6 +12663,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已在 geohash 聊天中解除封鎖 %@"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "blockierung von %@ in geohash-chats aufgehoben"
           }
         }
       }
@@ -12460,6 +12856,12 @@
             "state": "translated",
             "value": "無法解除封鎖 %@：找不到"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "kann %@ nicht entblocken: nicht gefunden"
+          }
         }
       }
     },
@@ -12645,6 +13047,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ 沒有被封鎖"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ ist nicht blockiert"
           }
         }
       }
@@ -12832,6 +13240,12 @@
             "state": "translated",
             "value": "用法：/unblock <暱稱>"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verwendung: /unblock <nickname>"
+          }
         }
       }
     },
@@ -13017,6 +13431,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "附近沒有人"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "niemand in der nähe"
           }
         }
       }
@@ -13204,6 +13624,12 @@
             "state": "translated",
             "value": "現在沒有其他人在線上"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "gerade ist sonst niemand online"
+          }
         }
       }
     },
@@ -13389,6 +13815,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "在線上：%@"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "online: %@"
           }
         }
       }
@@ -13576,6 +14008,12 @@
             "state": "translated",
             "value": "未選擇圖片"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "kein bild ausgewählt"
+          }
         }
       }
     },
@@ -13761,6 +14199,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "附近有 %lld 個人"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%lld personen in der nähe"
           }
         }
       }
@@ -13948,6 +14392,12 @@
             "state": "translated",
             "value": "附近有 1 個人"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "1 person in der nähe"
+          }
         }
       }
     },
@@ -14133,6 +14583,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "👥 附近有 bitchat 夥伴！"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "👥 bitchatter in der nähe!"
           }
         }
       }
@@ -14320,6 +14776,12 @@
             "state": "translated",
             "value": "你截圖了"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "du hast einen screenshot gemacht"
+          }
         }
       }
     },
@@ -14505,6 +14967,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "錄製語音訊息需要麥克風權限。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "mikrofonzugriff wird benötigt, um sprachnotizen aufzunehmen."
           }
         }
       }
@@ -14692,6 +15160,12 @@
             "state": "translated",
             "value": "錄音儲存失敗。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "aufnahme konnte nicht gespeichert werden."
+          }
         }
       }
     },
@@ -14877,6 +15351,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "無法開始錄音。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "aufnahme konnte nicht gestartet werden."
           }
         }
       }
@@ -15064,6 +15544,12 @@
             "state": "translated",
             "value": "錄音錯誤"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "aufnahmefehler"
+          }
         }
       }
     },
@@ -15249,6 +15735,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "錄音太短了。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "aufnahme ist zu kurz."
           }
         }
       }
@@ -15436,6 +15928,12 @@
             "state": "translated",
             "value": "在沒有端對端加密的情況下傳送前需要確認"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Bestätigung erforderlich, bevor ohne Ende-zu-Ende-Verschlüsselung gesendet wird"
+          }
         }
       }
     },
@@ -15621,6 +16119,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "缺少端對端加密,未傳送"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ohne Ende-zu-Ende-Verschlüsselung nicht gesendet"
           }
         }
       }
@@ -15808,6 +16312,12 @@
             "state": "translated",
             "value": "媒體傳輸在開始前就已逾時"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Zeitüberschreitung, bevor die Medienübertragung starten konnte"
+          }
         }
       }
     },
@@ -15993,6 +16503,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "等待中的媒體傳輸過多,請稍後再試"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Zu viele Medienübertragungen warten gerade; versuch es gleich noch mal"
           }
         }
       }
@@ -16180,6 +16696,12 @@
             "state": "translated",
             "value": "需要加密媒體;請讓這位聯絡人升級用戶端"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Verschlüsselte Medien erforderlich; bitte diesen Kontakt um ein Update"
+          }
         }
       }
     },
@@ -16365,6 +16887,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "檔案太大,這位聯絡人的用戶端無法接收(超過 256 個網狀網路分段)"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Datei ist zu groß für den Client dieses Kontakts (mehr als 256 Mesh-Fragmente)"
           }
         }
       }
@@ -16552,6 +17080,12 @@
             "state": "translated",
             "value": "%@ 的用戶端未聲明支援加密私人媒體。這個檔案會經過簽署,但不會端對端加密,因此網狀中繼可以看到內容。仍要傳送這個檔案嗎?"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Der Client von %@ gibt keine Unterstützung für verschlüsselte private Medien an. Diese Datei wird signiert, aber nicht Ende-zu-Ende-verschlüsselt – Mesh-Relays können sie also sehen. Datei trotzdem senden?"
+          }
         }
       }
     },
@@ -16737,6 +17271,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "傳送可見檔案"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "sichtbare datei senden"
           }
         }
       }
@@ -16924,6 +17464,12 @@
             "state": "translated",
             "value": "要在沒有端對端加密的情況下傳送嗎?"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ohne Ende-zu-Ende-Verschlüsselung senden?"
+          }
         }
       }
     },
@@ -17109,6 +17655,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在為朋友攜帶 %lld 則密封訊息"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Du trägst %lld versiegelte Nachrichten für Freunde"
           }
         }
       }
@@ -17296,6 +17848,12 @@
             "state": "translated",
             "value": "由可能遇見他們的朋友代為攜帶"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Wird von einem Freund getragen, der sie vielleicht trifft"
+          }
         }
       }
     },
@@ -17481,6 +18039,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "尚未傳送"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Noch nicht gesendet"
           }
         }
       }
@@ -17668,6 +18232,12 @@
             "state": "translated",
             "value": "無法準備媒體"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Medien konnten nicht vorbereitet werden"
+          }
         }
       }
     },
@@ -17853,6 +18423,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "無法驗證媒體"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Medien konnten nicht authentifiziert werden"
           }
         }
       }
@@ -18040,6 +18616,12 @@
             "state": "translated",
             "value": "正在攜帶要送給朋友的密封訊息"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Du trägst versiegelte Nachrichten, um sie für Freunde zuzustellen"
+          }
         }
       }
     },
@@ -18225,6 +18807,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "藍牙權限遭拒 — 網狀網路已離線。點按開啟設定。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bluetooth-zugriff verweigert — mesh ist offline. tippen, um die einstellungen zu öffnen."
           }
         }
       }
@@ -18412,6 +19000,12 @@
             "state": "translated",
             "value": "藍牙已關閉 — 附近的人無法聯繫到你。點按以修復。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bluetooth ist aus — niemand in der nähe kann dich erreichen. zum beheben tippen."
+          }
         }
       }
     },
@@ -18597,6 +19191,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "此裝置沒有藍牙 — 網狀網路無法使用。位置頻道仍可透過網際網路使用。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "kein bluetooth auf diesem gerät — mesh ist nicht verfügbar. standortkanäle funktionieren weiter übers internet."
           }
         }
       }
@@ -18784,6 +19384,12 @@
             "state": "translated",
             "value": "tor 無法連線 — 網際網路功能已暫停。網狀網路仍可使用。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "tor kann sich nicht verbinden — internetfunktionen pausieren. mesh funktioniert weiter."
+          }
         }
       }
     },
@@ -18969,6 +19575,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "清除未完成 — 可能仍有資料殘留。請結束並重新開啟 bitchat 重試。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "löschen unvollständig — einige daten könnten übrig sein. bitchat beenden und erneut öffnen, um es noch einmal zu versuchen."
           }
         }
       }
@@ -19156,6 +19768,12 @@
             "state": "needs_review",
             "value": "部分媒體無法刪除。請先嘗試刪除較舊的媒體。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "einige medien konnten nicht gelöscht werden. versuche zuerst, ältere medien zu löschen."
+          }
         }
       }
     },
@@ -19341,6 +19959,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "揮手 👋"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "winken 👋"
           }
         }
       }
@@ -19528,6 +20152,12 @@
             "state": "translated",
             "value": "活躍使用者 %@ 位"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ aktiv"
+          }
         }
       }
     },
@@ -19711,6 +20341,12 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
+            "value": "bitchat"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
             "value": "bitchat"
           }
         }
@@ -19898,6 +20534,12 @@
             "state": "translated",
             "value": "液態玻璃"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "liquid glass"
+          }
         }
       }
     },
@@ -20082,6 +20724,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "矩陣"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "matrix"
           }
         }
       }
@@ -20268,6 +20916,12 @@
             "state": "translated",
             "value": "外觀"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ERSCHEINUNGSBILD"
+          }
         }
       }
     },
@@ -20452,6 +21106,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "完成"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "FERTIG"
           }
         }
       }
@@ -20638,6 +21298,12 @@
             "state": "translated",
             "value": "透過網際網路連接附近的 mesh 孤島，讓同一群人不被無線電範圍隔開"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verbindet nahe mesh-inseln über das internet, damit eine menge nicht durch die funkreichweite geteilt wird"
+          }
         }
       }
     },
@@ -20822,6 +21488,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "mesh 橋接"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "mesh-bridging"
           }
         }
       }
@@ -21008,6 +21680,12 @@
             "state": "translated",
             "value": "私密訊息使用 noise 協議加密"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "private nachrichten werden mit dem noise-protokoll verschlüsselt"
+          }
         }
       }
     },
@@ -21192,6 +21870,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "端到端加密"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "end-to-end-verschlüsselung"
           }
         }
       }
@@ -21378,6 +22062,12 @@
             "state": "translated",
             "value": "訊息透過同伴中繼，傳得更遠"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "nachrichten werden zwischen peers weitergeleitet und reichen weiter"
+          }
         }
       }
     },
@@ -21562,6 +22252,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "擴展範圍"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "erweiterte reichweite"
           }
         }
       }
@@ -21748,6 +22444,12 @@
             "state": "translated",
             "value": "你喜歡的人加入時立刻提醒"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "erhalte hinweise, wenn deine lieblingsmenschen online kommen"
+          }
         }
       }
     },
@@ -21932,6 +22634,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "收藏"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "favoriten"
           }
         }
       }
@@ -22118,6 +22826,12 @@
             "state": "translated",
             "value": "geohash 頻道讓你透過去中心化匿名中繼與附近地區的人聊天"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "geohash-kanäle zum chatten mit menschen in der nähe über dezentrale anonyme relays"
+          }
         }
       }
     },
@@ -22302,6 +23016,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "本地頻道"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "lokale kanäle"
           }
         }
       }
@@ -22488,6 +23208,12 @@
             "state": "translated",
             "value": "使用 @nickname 提醒特定的人"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "nutze @nickname, um bestimmte personen zu benachrichtigen"
+          }
         }
       }
     },
@@ -22672,6 +23398,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "提及"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "erwähnungen"
           }
         }
       }
@@ -22858,6 +23590,12 @@
             "state": "translated",
             "value": "利用低功耗 bluetooth 離線工作"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "funktioniert ohne internet per bluetooth low energy"
+          }
         }
       }
     },
@@ -23042,6 +23780,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "離線通信"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "offline-kommunikation"
           }
         }
       }
@@ -23228,6 +23972,12 @@
             "state": "translated",
             "value": "功能"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "FUNKTIONEN"
+          }
         }
       }
     },
@@ -23412,6 +24162,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• 輕點 #mesh 切換頻道"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "• tippe auf #mesh, um den kanal zu wechseln"
           }
         }
       }
@@ -23598,6 +24354,12 @@
             "state": "translated",
             "value": "• 三擊聊天即可清除"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "• tippe den chat dreimal, um ihn zu leeren"
+          }
         }
       }
     },
@@ -23782,6 +24544,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• 輸入 / 查看指令"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "• tippe /, um befehle zu sehen"
           }
         }
       }
@@ -23968,6 +24736,12 @@
             "state": "translated",
             "value": "• 輕點人物圖示打開列表"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "• tippe auf das personen-icon für die liste"
+          }
         }
       }
     },
@@ -24152,6 +24926,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• 輕點暱稱即可設定"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "• tippe auf deinen nickname, um ihn zu ändern"
           }
         }
       }
@@ -24338,6 +25118,12 @@
             "state": "translated",
             "value": "• 輕點某人名字開始 dm"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "• tippe auf den namen einer person, um eine pn zu starten"
+          }
         }
       }
     },
@@ -24522,6 +25308,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "使用方法"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "SO FUNKTIONIERT'S"
           }
         }
       }
@@ -24709,6 +25501,12 @@
             "state": "needs_review",
             "value": "已屏蔽"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "blockiert"
+          }
         }
       }
     },
@@ -24893,6 +25691,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "訊息經 mesh 橋接送達"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "nachricht kam über eine mesh-brücke an"
           }
         }
       }
@@ -25080,6 +25884,12 @@
             "state": "needs_review",
             "value": "端到端加密會話"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "end-to-end-verschlüsselte sitzung"
+          }
         }
       }
     },
@@ -25265,6 +26075,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "加密失敗 — 訊息未受保護"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verschlüsselung fehlgeschlagen — nachrichten nicht gesichert"
           }
         }
       }
@@ -25452,6 +26268,12 @@
             "state": "needs_review",
             "value": "收藏 — 互相收藏後可透過 nostr 收發離線訊息"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "favorit — ermöglicht offline-nachrichten über nostr, wenn beidseitig"
+          }
         }
       }
     },
@@ -25637,6 +26459,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "實際位於此位置頻道的區域內"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "physisch im gebiet dieses standortkanals"
           }
         }
       }
@@ -25824,6 +26652,12 @@
             "state": "needs_review",
             "value": "透過 bluetooth 直接連線"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "direkt über bluetooth verbunden"
+          }
         }
       }
     },
@@ -26009,6 +26843,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "可透過 mesh 到達，由其他人中繼"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "über das mesh erreichbar, von anderen weitergeleitet"
           }
         }
       }
@@ -26196,6 +27036,12 @@
             "state": "needs_review",
             "value": "可透過網際網路 (nostr) 到達 — 僅限互相收藏"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "über das internet erreichbar (nostr) — nur bei beidseitigen favoriten"
+          }
         }
       }
     },
@@ -26381,6 +27227,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "離線 — 目前無法到達"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "offline — derzeit nicht erreichbar"
           }
         }
       }
@@ -26760,6 +27612,12 @@
             "state": "needs_review",
             "value": "符號"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "SYMBOLE"
+          }
         }
       }
     },
@@ -26945,6 +27803,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "未讀私信"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ungelesene private nachrichten"
           }
         }
       }
@@ -27132,6 +27996,12 @@
             "state": "needs_review",
             "value": "身份已驗證"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "identität verifiziert"
+          }
         }
       }
     },
@@ -27317,6 +28187,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "用 /drop 將便箋釘在地點，24小時內路過的任何人都能讀到。需要位置權限。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "hefte notizen mit /drop an orte, 24h lesbar für alle, die vorbeikommen. benötigt standort."
           }
         }
       }
@@ -27504,6 +28380,12 @@
             "state": "translated",
             "value": "位置留言"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "standortnotizen"
+          }
         }
       }
     },
@@ -27689,6 +28571,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "網路"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "NETZWERK"
           }
         }
       }
@@ -27876,6 +28764,12 @@
             "state": "needs_review",
             "value": "根據 mesh 宣告得知的同伴與連線地圖"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "karte der peers und verbindungen, aus mesh-announces gelernt"
+          }
         }
       }
     },
@@ -28061,6 +28955,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "打開 mesh 拓撲地圖"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "öffnet die mesh-topologie-karte"
           }
         }
       }
@@ -28248,6 +29148,12 @@
             "state": "needs_review",
             "value": "mesh 拓撲"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "mesh-topologie"
+          }
         }
       }
     },
@@ -28432,6 +29338,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "你的身分是在本機產生的金鑰對 — 緊急清除會立即更換它"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "deine identität ist ein schlüsselpaar, das auf diesem gerät erzeugt wird — der panik-löscher ersetzt es sofort"
           }
         }
       }
@@ -28618,6 +29530,12 @@
             "state": "translated",
             "value": "裝置本機身分"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "gerätelokale identität"
+          }
         }
       }
     },
@@ -28802,6 +29720,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "無帳號、無電話號碼、無資料收集"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "keine konten, keine telefonnummern, keine datensammlung"
           }
         }
       }
@@ -28988,6 +29912,12 @@
             "state": "translated",
             "value": "無跟蹤"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "kein tracking"
+          }
         }
       }
     },
@@ -29172,6 +30102,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "連點三次標誌以清除所有資料（需確認）"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "dreimal aufs logo tippen, um alle daten zu löschen (mit bestätigung)"
           }
         }
       }
@@ -29358,6 +30294,12 @@
             "state": "translated",
             "value": "緊急模式"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "panikmodus"
+          }
         }
       }
     },
@@ -29542,6 +30484,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "隱私"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "PRIVATSPHÄRE"
           }
         }
       }
@@ -29728,6 +30676,12 @@
             "state": "translated",
             "value": "會合單元：%@"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "rendezvous-zelle: %@"
+          }
         }
       }
     },
@@ -29912,6 +30866,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "尚無會合單元 — 需要位置存取權或附近有橋接同伴"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "noch keine rendezvous-zelle — braucht standortzugriff oder einen brücken-peer in der nähe"
           }
         }
       }
@@ -30098,6 +31058,12 @@
             "state": "translated",
             "value": "透過網際網路連接附近的 mesh 孤島：你在 mesh 頻道說的話也會送達本地區無線電範圍之外的人，他們的訊息會帶網路符號顯示在這裡。當你有網際網路時，你的裝置還會為周圍沒有網路的手機傳送橋接和位置頻道流量。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verbindet nahe mesh-inseln über das internet: was du im mesh-kanal sagst, erreicht auch personen in deiner gegend außerhalb der funkreichweite, und ihre nachrichten erscheinen hier mit dem netzwerk-symbol markiert. solange du internet hast, trägt dein gerät auch brücken- und standortkanal-verkehr für handys um dich herum, die keins haben."
+          }
         }
       }
     },
@@ -30282,6 +31248,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "mesh 橋接"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "mesh-brücke"
           }
         }
       }
@@ -30468,6 +31440,12 @@
             "state": "translated",
             "value": "連線"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "KONNEKTIVITÄT"
+          }
         }
       }
     },
@@ -30652,6 +31630,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "緊急抹除"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "panik-löschung"
           }
         }
       }
@@ -30838,6 +31822,12 @@
             "state": "translated",
             "value": "抹除全部"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "alles löschen"
+          }
         }
       }
     },
@@ -31022,6 +32012,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "抹除全部資料？"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "alle daten löschen?"
           }
         }
       }
@@ -31208,6 +32204,12 @@
             "state": "translated",
             "value": "清除所有訊息、金鑰和身分。連點三次 bitchat/ 標誌效果相同。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "löscht alle nachrichten, schlüssel und die identität. dreimaliges tippen aufs bitchat/-logo macht dasselbe."
+          }
         }
       }
     },
@@ -31392,6 +32394,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "危險區域"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "GEFAHRENZONE"
           }
         }
       }
@@ -31579,6 +32587,12 @@
             "state": "translated",
             "value": "通知只告訴你有新訊息抵達，不顯示內容、發送者，也不顯示來自哪個位置頻道。誰拿著你鎖定的手機，都無法從鎖定畫面得知任何資訊。預設開啟。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "benachrichtigungen sagen nur, dass etwas angekommen ist — ohne die nachricht, ohne wer sie geschickt hat und ohne den standortkanal, aus dem sie kam. wer dein gesperrtes handy in der hand hält, erfährt vom sperrbildschirm nichts. standardmäßig an."
+          }
         }
       }
     },
@@ -31764,6 +32778,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "隱藏訊息預覽"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "nachrichtenvorschau ausblenden"
           }
         }
       }
@@ -31951,6 +32971,12 @@
             "state": "translated",
             "value": "隱私"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "PRIVATSPHÄRE"
+          }
         }
       }
     },
@@ -32135,6 +33161,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "資訊"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "info"
           }
         }
       }
@@ -32321,6 +33353,12 @@
             "state": "translated",
             "value": "檢視"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ansicht"
+          }
         }
       }
     },
@@ -32506,6 +33544,12 @@
             "state": "translated",
             "value": "設定"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "einstellungen"
+          }
         }
       }
     },
@@ -32689,6 +33733,12 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
+            "value": "sidegroupchat"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
             "value": "sidegroupchat"
           }
         }
@@ -32876,6 +33926,12 @@
             "state": "translated",
             "value": "邊說邊即時傳輸；收到的即時語音會自動播放"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "überträgt live beim sprechen; eingehende live-stimme wird automatisch abgespielt"
+          }
         }
       }
     },
@@ -33061,6 +34117,12 @@
             "state": "translated",
             "value": "即時語音訊息"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "live-sprachnachrichten"
+          }
         }
       }
     },
@@ -33245,6 +34307,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "語音"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "AUDIO"
           }
         }
       }
@@ -33432,6 +34500,12 @@
             "state": "translated",
             "value": "在您的區域內，透過橋接連線"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "In deiner Gegend, verbunden über die Brücke"
+          }
         }
       }
     },
@@ -33617,6 +34691,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "橋的另一端"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "über die brücke"
           }
         }
       }
@@ -33804,6 +34884,12 @@
             "state": "translated",
             "value": "選擇圖像"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Bild auswählen"
+          }
         }
       }
     },
@@ -33989,6 +35075,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "分享頻道"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "kanal teilen"
           }
         }
       }
@@ -34176,6 +35268,12 @@
             "state": "translated",
             "value": "加入 bitchat 上的 #%1$@ 頻道：bitchat://geohash/%1$@ — 初次使用 bitchat？前往 %2$@ 取得，然後在位置頻道中輸入 #%1$@。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "tritt dem #%1$@-kanal auf bitchat bei: bitchat://geohash/%1$@ — neu bei bitchat? hole es unter %2$@ und tippe dann #%1$@ unter standort-kanäle."
+          }
         }
       }
     },
@@ -34361,6 +35459,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "仍然分享"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "trotzdem teilen"
           }
         }
       }
@@ -34548,6 +35652,12 @@
             "state": "translated",
             "value": "此頻道覆蓋範圍很小。透過簡訊或 iMessage 傳送的邀請對電信商與雙方裝置可見——它會揭露對該地點的興趣，而不只是有人在使用 bitchat。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "dieser kanal deckt ein kleines gebiet ab. eine einladung per sms oder imessage ist für den netzanbieter und beide geräte sichtbar — sie verrät interesse an diesem ort, nicht nur dass jemand bitchat nutzt."
+          }
         }
       }
     },
@@ -34734,6 +35844,12 @@
             "state": "translated",
             "value": "分享精確的位置頻道？"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "präzisen standort-kanal teilen?"
+          }
         }
       }
     },
@@ -34918,6 +36034,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "關閉"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "schließen"
           }
         }
       }
@@ -36060,6 +37182,12 @@
             "state": "translated",
             "value": "關閉"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "aus"
+          }
         }
       }
     },
@@ -36244,6 +37372,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "開啟"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "an"
           }
         }
       }
@@ -36621,6 +37755,12 @@
             "state": "translated",
             "value": "加入收藏"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "zu favoriten hinzufügen"
+          }
         }
       }
     },
@@ -36806,6 +37946,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "顯示應用程式資訊"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "zeigt app-infos"
           }
         }
       }
@@ -36993,6 +38139,12 @@
             "state": "needs_review",
             "value": "附加照片"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "foto anhängen"
+          }
         }
       }
     },
@@ -37179,6 +38331,12 @@
             "state": "needs_review",
             "value": "打開照片圖庫；要用相機請使用拍照操作"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "öffnet die fotobibliothek; nutze die aktion foto aufnehmen für die kamera"
+          }
         }
       }
     },
@@ -37363,6 +38521,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "透過 Nostr 可用"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verfügbar über nostr"
           }
         }
       }
@@ -37549,6 +38713,12 @@
             "state": "translated",
             "value": "返回主聊天"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "zurück zum hauptchat"
+          }
         }
       }
     },
@@ -37734,6 +38904,12 @@
             "state": "translated",
             "value": "橋另一側還有 %lld 人"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%lld weitere personen über die brücke"
+          }
         }
       }
     },
@@ -37918,6 +39094,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "經 mesh 橋接送達"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Über eine mesh-brücke angekommen"
           }
         }
       }
@@ -38105,6 +39287,12 @@
             "state": "needs_review",
             "value": "選擇照片"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "foto auswählen"
+          }
         }
       }
     },
@@ -38289,6 +39477,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "透過 mesh 已連線"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verbunden über mesh"
           }
         }
       }
@@ -38476,6 +39670,12 @@
             "state": "needs_review",
             "value": "輕點顯示送達詳情"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "tippe, um zustelldetails anzuzeigen"
+          }
         }
       }
     },
@@ -38660,6 +39860,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "加密狀態：%@"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verschlüsselungsstatus: %@"
           }
         }
       }
@@ -38847,6 +40053,12 @@
             "state": "needs_review",
             "value": "網際網路閘道已啟用，正在與 mesh 分享你的連線"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Internet-gateway aktiv, teilt deine verbindung mit dem mesh"
+          }
         }
       }
     },
@@ -39032,6 +40244,12 @@
             "state": "translated",
             "value": "開啟設定以開啟或關閉閘道"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Öffnet die einstellungen, um das gateway ein- oder auszuschalten"
+          }
         }
       }
     },
@@ -39216,6 +40434,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "群組聊天"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Gruppenchat"
           }
         }
       }
@@ -39403,6 +40627,12 @@
             "state": "needs_review",
             "value": "跳至最新訊息"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "zu den neuesten nachrichten springen"
+          }
         }
       }
     },
@@ -39587,6 +40817,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "位置頻道"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "kanäle für standorte"
           }
         }
       }
@@ -39773,6 +41009,12 @@
             "state": "translated",
             "value": "已橋接：訊息也會送達橋另一側的人"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Überbrückt: nachrichten erreichen auch personen über die brücke"
+          }
         }
       }
     },
@@ -39957,6 +41199,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "僅限附近：訊息只在無線電範圍內傳播"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Nur in der nähe: nachrichten bleiben innerhalb der funkreichweite"
           }
         }
       }
@@ -40144,6 +41392,12 @@
             "state": "translated",
             "value": "公告"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Hinweise"
+          }
         }
       }
     },
@@ -40330,6 +41584,12 @@
             "state": "translated",
             "value": "%lld 則新公告"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%lld neu"
+          }
         }
       }
     },
@@ -40514,6 +41774,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "打開未讀私聊"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ungelesene privatnachricht öffnen"
           }
         }
       }
@@ -40701,6 +41967,12 @@
             "state": "needs_review",
             "value": "已連線"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verbunden"
+          }
         }
       }
     },
@@ -40886,6 +42158,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "沒有可到達的人"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "niemand erreichbar"
           }
         }
       }
@@ -41478,6 +42756,34 @@
             "state": "translated",
             "value": "%#@people@"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%#@people@"
+          },
+          "substitutions": {
+            "people": {
+              "argNum": 1,
+              "formatSpecifier": "lld",
+              "variations": {
+                "plural": {
+                  "one": {
+                    "stringUnit": {
+                      "state": "needs_review",
+                      "value": "%d person"
+                    }
+                  },
+                  "other": {
+                    "stringUnit": {
+                      "state": "needs_review",
+                      "value": "%d personen"
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -41663,6 +42969,12 @@
             "state": "translated",
             "value": "與 %@ 的私聊"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "privatchat mit %@"
+          }
         }
       }
     },
@@ -41847,6 +43159,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "可透過 mesh 到達"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "erreichbar über mesh"
           }
         }
       }
@@ -42034,6 +43352,12 @@
             "state": "needs_review",
             "value": "雙擊開始錄音，再次雙擊發送"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "doppeltippen zum aufnehmen, erneut doppeltippen zum senden"
+          }
         }
       }
     },
@@ -42219,6 +43543,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "錄製語音訊息"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "sprachnachricht aufnehmen"
           }
         }
       }
@@ -42406,6 +43736,12 @@
             "state": "needs_review",
             "value": "錄音中"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "aufnahme"
+          }
         }
       }
     },
@@ -42590,6 +43926,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "移出收藏"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "aus favoriten entfernen"
           }
         }
       }
@@ -42776,6 +44118,12 @@
             "state": "translated",
             "value": "輸入要發送的訊息"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "gib eine nachricht zum senden ein"
+          }
         }
       }
     },
@@ -42960,6 +44308,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "雙擊發送"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "doppelt tippen zum senden"
           }
         }
       }
@@ -43146,6 +44500,12 @@
             "state": "translated",
             "value": "發送訊息"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "nachricht senden"
+          }
         }
       }
     },
@@ -43330,6 +44690,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ 正在說話"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ spricht gerade"
           }
         }
       }
@@ -43517,6 +44883,12 @@
             "state": "needs_review",
             "value": "用相機拍照"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "foto mit kamera aufnehmen"
+          }
         }
       }
     },
@@ -43701,6 +45073,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "切換 #%@ 的書簽"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bookmark für #%@ umschalten"
           }
         }
       }
@@ -43888,6 +45266,12 @@
             "state": "needs_review",
             "value": "驗證加密"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verschlüsselung verifizieren"
+          }
         }
       }
     },
@@ -44072,6 +45456,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已驗證的傳送者"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Verifizierter absender"
           }
         }
       }
@@ -44258,6 +45648,12 @@
             "state": "translated",
             "value": "輕點查看加密指紋"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "tippe, um den verschlüsselungs-fingerprint zu sehen"
+          }
         }
       }
     },
@@ -44442,6 +45838,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "屏蔽"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "blockieren"
           }
         }
       }
@@ -44628,6 +46030,12 @@
             "state": "translated",
             "value": "私信"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "direktnachricht"
+          }
         }
       }
     },
@@ -44813,6 +46221,12 @@
             "state": "translated",
             "value": "擁抱"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "umarmen"
+          }
         }
       }
     },
@@ -44997,6 +46411,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "提及"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "erwähnen"
           }
         }
       }
@@ -45184,6 +46604,12 @@
             "state": "needs_review",
             "value": "重新發送"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "erneut senden"
+          }
         }
       }
     },
@@ -45368,6 +46794,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "拍打"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ohrfeige"
           }
         }
       }
@@ -45554,6 +46986,12 @@
             "state": "translated",
             "value": "操作"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "aktionen"
+          }
         }
       }
     },
@@ -45738,6 +47176,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bluetooth 已關閉。請在設定中開啟以使用 bitchat。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bluetooth ist ausgeschaltet. aktiviere bluetooth in den einstellungen, um bitchat zu verwenden."
           }
         }
       }
@@ -45924,6 +47368,12 @@
             "state": "translated",
             "value": "bitchat 需要 bluetooth 權限以連線至附近裝置。請在設定中啟用存取權限。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat benötigt bluetooth-berechtigung, um sich mit geräten in der nähe zu verbinden. erlaube den zugriff in den einstellungen."
+          }
         }
       }
     },
@@ -46108,6 +47558,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "設定"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "einstellungen"
           }
         }
       }
@@ -46294,6 +47750,12 @@
             "state": "translated",
             "value": "需要 bluetooth"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bluetooth erforderlich"
+          }
         }
       }
     },
@@ -46478,6 +47940,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "此裝置不支持 bluetooth。bitchat 需要 bluetooth 才能運行。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "dieses gerät unterstützt kein bluetooth. bitchat benötigt bluetooth zum funktionieren."
           }
         }
       }
@@ -46664,6 +48132,12 @@
             "state": "translated",
             "value": "位置頻道的截圖會暴露你的位置。公開分享前請三思。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "screenshots von standortkanälen verraten deinen standort. überleg dir das teilen vorher gut."
+          }
         }
       }
     },
@@ -46848,6 +48322,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "注意"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "achtung"
           }
         }
       }
@@ -47035,6 +48515,12 @@
             "state": "needs_review",
             "value": "清除聊天"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "chat leeren"
+          }
         }
       }
     },
@@ -47221,6 +48707,12 @@
             "state": "needs_review",
             "value": "清除此聊天？"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "diesen chat leeren?"
+          }
         }
       }
     },
@@ -47406,6 +48898,12 @@
             "state": "translated",
             "value": "屏蔽或查看已屏蔽的同伴"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "blocked peers anzeigen oder blockieren"
+          }
         }
       }
     },
@@ -47590,6 +49088,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "清除聊天訊息"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "chatnachrichten löschen"
           }
         }
       }
@@ -47777,6 +49281,12 @@
             "state": "translated",
             "value": "在此地固定一則留言 24 小時"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "eine notiz für 24 std. an diesem ort anheften"
+          }
         }
       }
     },
@@ -47962,6 +49472,12 @@
             "state": "translated",
             "value": "加入收藏"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "zu favoriten hinzufügen"
+          }
         }
       }
     },
@@ -48146,6 +49662,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "建立或管理私密群組"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "private gruppen erstellen oder verwalten"
           }
         }
       }
@@ -48333,6 +49855,12 @@
             "state": "needs_review",
             "value": "顯示可用指令"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verfügbare befehle anzeigen"
+          }
         }
       }
     },
@@ -48518,6 +50046,12 @@
             "state": "translated",
             "value": "送出溫暖擁抱"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "eine warme umarmung senden"
+          }
         }
       }
     },
@@ -48702,6 +50236,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "發送私信"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "privatnachricht senden"
           }
         }
       }
@@ -48889,6 +50429,12 @@
             "state": "needs_review",
             "value": "在此聊天中發送 cashu ecash 代幣"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "einen cashu-ecash-token in diesem chat senden"
+          }
         }
       }
     },
@@ -49075,6 +50621,12 @@
             "state": "needs_review",
             "value": "測量到 mesh 同伴的往返時間"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "die roundtrip-zeit zu einem mesh-peer messen"
+          }
         }
       }
     },
@@ -49259,6 +50811,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "用鱒魚拍某人"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "jemandem eine forelle um die ohren schlagen"
           }
         }
       }
@@ -49446,6 +51004,12 @@
             "state": "needs_review",
             "value": "估算到同伴的 mesh 路徑"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "den mesh-pfad zu einem peer schätzen"
+          }
         }
       }
     },
@@ -49630,6 +51194,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "取消屏蔽同伴"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "peer entsperren"
           }
         }
       }
@@ -49816,6 +51386,12 @@
             "state": "translated",
             "value": "移出收藏"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "aus favoriten entfernen"
+          }
         }
       }
     },
@@ -50000,6 +51576,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "查看誰在線"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "sehen, wer online ist"
           }
         }
       }
@@ -50186,6 +51768,12 @@
             "state": "translated",
             "value": "已橋接 — 可送達本地區無線電範圍之外的人"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Überbrückt — erreicht personen außerhalb der funkreichweite in dieser gegend"
+          }
         }
       }
     },
@@ -50370,6 +51958,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "僅限附近 — 這則訊息不會跨越橋接"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Nur in der nähe — diese nachricht überquert die brücke nicht"
           }
         }
       }
@@ -50556,6 +52150,12 @@
             "state": "translated",
             "value": "已送達 %2$d 人中的 %1$d 人"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "zugestellt an %1$d von %2$d mitgliedern"
+          }
         }
       }
     },
@@ -50740,6 +52340,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已送達 %@"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "zugestellt an %@"
           }
         }
       }
@@ -50926,6 +52532,12 @@
             "state": "translated",
             "value": "失敗：%@"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "fehlgeschlagen: %@"
+          }
         }
       }
     },
@@ -51111,6 +52723,12 @@
             "state": "translated",
             "value": "已讀：%@"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "gelesen von %@"
+          }
         }
       }
     },
@@ -51295,6 +52913,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "此人已被屏蔽"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "diese person ist blockiert"
           }
         }
       }
@@ -51482,6 +53106,12 @@
             "state": "needs_review",
             "value": "加密失敗"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verschlüsselung fehlgeschlagen"
+          }
         }
       }
     },
@@ -51667,6 +53297,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "無法確認加密媒體支援"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Unterstützung für verschlüsselte Medien konnte nicht bestätigt werden"
           }
         }
       }
@@ -51854,6 +53490,12 @@
             "state": "needs_review",
             "value": "無法確認送達"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Zustellung konnte nicht bestätigt werden"
+          }
         }
       }
     },
@@ -52040,6 +53682,12 @@
             "state": "needs_review",
             "value": "未送達"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "nicht zugestellt"
+          }
         }
       }
     },
@@ -52224,6 +53872,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "不能給自己發訊息"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "kann nicht an dich selbst senden"
           }
         }
       }
@@ -52410,6 +54064,12 @@
             "state": "translated",
             "value": "發送錯誤"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "sende-fehler"
+          }
         }
       }
     },
@@ -52594,6 +54254,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "未知收件人"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "unbekannter empfänger"
           }
         }
       }
@@ -52781,6 +54447,12 @@
             "state": "needs_review",
             "value": "語音訊息發送失敗"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "sprachnachricht konnte nicht gesendet werden"
+          }
         }
       }
     },
@@ -52966,6 +54638,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "語音訊息過大"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "sprachnachricht zu groß"
           }
         }
       }
@@ -53153,6 +54831,12 @@
             "state": "needs_review",
             "value": "發送中..."
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "wird gesendet ..."
+          }
         }
       }
     },
@@ -53338,6 +55022,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "已發送 — 尚無送達確認"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "gesendet — noch keine zustellbestätigung"
           }
         }
       }
@@ -53525,6 +55215,12 @@
             "state": "translated",
             "value": "之前在這裡聽到 · 最近6小時"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "vorhin hier gehört · letzte 6 std."
+          }
         }
       }
     },
@@ -53710,6 +55406,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "大家正在 #%@ 聊天 — 點按加入"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "leute reden in #%@ — tippen zum beitreten"
           }
         }
       }
@@ -53897,6 +55599,12 @@
             "state": "translated",
             "value": "有人正在 #%@ 聊天 — 點按加入"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "jemand redet in #%@ — tippen zum beitreten"
+          }
         }
       }
     },
@@ -54082,6 +55790,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "查看這裡留下的留言"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "nachsehen, ob hier notizen hinterlassen wurden"
           }
         }
       }
@@ -54269,6 +55983,12 @@
             "state": "needs_review",
             "value": "你在 #%@ — 一個透過網際網路的公開位置頻道"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "du bist in #%@ — ein öffentlicher standortkanal über das internet"
+          }
         }
       }
     },
@@ -54454,6 +56174,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "你在 #mesh — 可到達 bluetooth 範圍內的人"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "du bist auf #mesh — erreicht menschen in bluetooth-reichweite"
           }
         }
       }
@@ -54641,6 +56367,12 @@
             "state": "needs_review",
             "value": "範圍內還沒有人... 訊息會顯示在這裡"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "noch niemand in reichweite ... nachrichten erscheinen hier"
+          }
         }
       }
     },
@@ -54826,6 +56558,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "這裡留有 %lld 則留言 — 點按閱讀"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%lld notizen hier hinterlassen — tippen zum lesen"
           }
         }
       }
@@ -55013,6 +56751,12 @@
             "state": "translated",
             "value": "這裡留有 1 則留言 — 點按閱讀"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "1 notiz hier hinterlassen — tippen zum lesen"
+          }
         }
       }
     },
@@ -55198,6 +56942,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "今天有 %lld 台裝置經過範圍內"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%lld geräte waren heute in reichweite"
           }
         }
       }
@@ -55385,6 +57135,12 @@
             "state": "translated",
             "value": "今天有 1 台裝置經過範圍內"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "1 gerät war heute in reichweite"
+          }
         }
       }
     },
@@ -55570,6 +57326,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "輕點上方頻道名稱切換 · 輕點 bitchat/ 取得協助"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "tippe oben auf den kanalnamen zum wechseln · tippe bitchat/ für hilfe"
           }
         }
       }
@@ -55757,6 +57519,12 @@
             "state": "needs_review",
             "value": "正在與附近的 mesh 同伴分享你的網際網路連線"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "teilt deine internetverbindung mit nahen mesh-peers"
+          }
         }
       }
     },
@@ -55943,6 +57711,12 @@
             "state": "translated",
             "value": "公告：此區域和 mesh 的置頂貼文"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Hinweise: angeheftete Beiträge für diese Gegend und das Mesh"
+          }
         }
       }
     },
@@ -56127,6 +57901,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "成員"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "PERSONEN"
           }
         }
       }
@@ -56313,6 +58093,12 @@
             "state": "translated",
             "value": "驗證：展示我的 qr 或掃描好友"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verifizierung: meinen qr zeigen oder freund scannen"
+          }
         }
       }
     },
@@ -56494,6 +58280,12 @@
           }
         },
         "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "create|invite|leave|list"
+          }
+        },
+        "lb": {
           "stringUnit": {
             "state": "needs_review",
             "value": "create|invite|leave|list"
@@ -56683,6 +58475,12 @@
             "state": "translated",
             "value": "暱稱"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "nickname"
+          }
         }
       }
     },
@@ -56868,6 +58666,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "訊息"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "nachricht"
           }
         }
       }
@@ -57055,6 +58859,12 @@
             "state": "needs_review",
             "value": "發訊息到 #%@ — 公開"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "nachricht an #%@ — öffentlich"
+          }
         }
       }
     },
@@ -57240,6 +59050,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "發訊息到 #mesh — 公開、附近"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "nachricht an #mesh — öffentlich, in der nähe"
           }
         }
       }
@@ -57427,6 +59243,12 @@
             "state": "needs_review",
             "value": "發訊息給 %@ — 私密"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "nachricht an %@ — privat"
+          }
         }
       }
     },
@@ -57609,6 +59431,12 @@
           }
         },
         "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "token"
+          }
+        },
+        "lb": {
           "stringUnit": {
             "state": "needs_review",
             "value": "token"
@@ -57799,6 +59627,12 @@
             "state": "needs_review",
             "value": "%lld 則新訊息"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%lld neu"
+          }
         }
       }
     },
@@ -57983,6 +59817,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "啟用位置"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "standort aktivieren"
           }
         }
       }
@@ -58169,6 +60009,12 @@
             "state": "translated",
             "value": "複製訊息"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "nachricht kopieren"
+          }
         }
       }
     },
@@ -58353,6 +60199,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "收起"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "weniger anzeigen"
           }
         }
       }
@@ -58539,6 +60391,12 @@
             "state": "translated",
             "value": "展開"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "mehr anzeigen"
+          }
         }
       }
     },
@@ -58724,6 +60582,12 @@
             "state": "translated",
             "value": "位置不可用"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "standort nicht verfügbar"
+          }
         }
       }
     },
@@ -58908,6 +60772,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "透過 cashu 支付"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "per cashu bezahlen"
           }
         }
       }
@@ -59095,6 +60965,12 @@
             "state": "needs_review",
             "value": "複製代幣"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "token kopieren"
+          }
         }
       }
     },
@@ -59279,6 +61155,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "透過 lightning 支付"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "per lightning bezahlen"
           }
         }
       }
@@ -59466,6 +61348,12 @@
             "state": "needs_review",
             "value": "在錢包中兌換"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "in wallet einlösen"
+          }
         }
       }
     },
@@ -59651,6 +61539,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "在網頁上兌換"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "im web einlösen"
           }
         }
       }
@@ -59838,6 +61732,12 @@
             "state": "needs_review",
             "value": "私密對話"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "privates gespräch"
+          }
         }
       }
     },
@@ -60024,6 +61924,12 @@
             "state": "needs_review",
             "value": "私密 · 端到端加密"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "privat · end-to-end-verschlüsselt"
+          }
         }
       }
     },
@@ -60208,6 +62114,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "加密群組 · 僅限成員"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verschlüsselte gruppe · nur mitglieder"
           }
         }
       }
@@ -60394,6 +62306,12 @@
             "state": "translated",
             "value": "正在建立加密"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verschlüsselung wird aufgebaut"
+          }
         }
       }
     },
@@ -60578,6 +62496,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "加密失敗"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verschlüsselung fehlgeschlagen"
           }
         }
       }
@@ -60764,6 +62688,12 @@
             "state": "translated",
             "value": "未加密"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "nicht verschlüsselt"
+          }
         }
       }
     },
@@ -60948,6 +62878,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已加密"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verschlüsselt"
           }
         }
       }
@@ -61134,6 +63070,12 @@
             "state": "translated",
             "value": "已加密並驗證"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verschlüsselt und verifiziert"
+          }
         }
       }
     },
@@ -61318,6 +63260,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在建立加密..."
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verschlüsselung wird aufgebaut..."
           }
         }
       }
@@ -61504,6 +63452,12 @@
             "state": "translated",
             "value": "加密失敗"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verschlüsselung fehlgeschlagen"
+          }
         }
       }
     },
@@ -61688,6 +63642,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "未加密"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "nicht verschlüsselt"
           }
         }
       }
@@ -61874,6 +63834,12 @@
             "state": "translated",
             "value": "已加密"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verschlüsselt"
+          }
         }
       }
     },
@@ -62058,6 +64024,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已加密並驗證"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verschlüsselt und verifiziert"
           }
         }
       }
@@ -62244,6 +64216,12 @@
             "state": "translated",
             "value": "標記為已驗證"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "als verifiziert markieren"
+          }
         }
       }
     },
@@ -62428,6 +64406,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "移除驗證"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verifizierung entfernen"
           }
         }
       }
@@ -62614,6 +64598,12 @@
             "state": "translated",
             "value": "⚠️ 未驗證"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "⚠️ NICHT VERIFIZIERT"
+          }
         }
       }
     },
@@ -62798,6 +64788,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "✓ 已驗證"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "✓ VERIFIZIERT"
           }
         }
       }
@@ -62985,6 +64981,12 @@
             "state": "needs_review",
             "value": "✓ 已擔保"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "✓ VERBÜRGT"
+          }
         }
       }
     },
@@ -63169,6 +65171,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "暫不可用 - handshake 進行中"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "nicht verfügbar – handshake läuft"
           }
         }
       }
@@ -63356,6 +65364,12 @@
             "state": "translated",
             "value": "僅保存在此裝置。留空則使用對方聲稱的暱稱。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "nur auf diesem gerät. leer lassen, um den beanspruchten nickname zu verwenden."
+          }
         }
       }
     },
@@ -63541,6 +65555,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "本地別名"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "lokaler alias"
           }
         }
       }
@@ -63728,6 +65748,12 @@
             "state": "translated",
             "value": "給此人的名稱"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "name für diese person"
+          }
         }
       }
     },
@@ -63913,6 +65939,12 @@
             "state": "translated",
             "value": "你已經覈實了此人的身份。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "du hast die identität dieser person verifiziert."
+          }
         }
       }
     },
@@ -64097,6 +66129,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "透過安全渠道與 %@ 比對這些指紋。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "vergleiche diese fingerabdrücke mit %@ über einen sicheren kanal."
           }
         }
       }
@@ -64940,6 +66978,34 @@
               }
             }
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verbürgt von %#@people@, die du verifiziert hast"
+          },
+          "substitutions": {
+            "people": {
+              "argNum": 1,
+              "formatSpecifier": "lld",
+              "variations": {
+                "plural": {
+                  "one": {
+                    "stringUnit": {
+                      "state": "needs_review",
+                      "value": "%d Person"
+                    }
+                  },
+                  "other": {
+                    "stringUnit": {
+                      "state": "needs_review",
+                      "value": "%d Personen"
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -65124,6 +67190,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "對方指紋："
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "deren fingerabdruck:"
           }
         }
       }
@@ -65310,6 +67382,12 @@
             "state": "translated",
             "value": "安全驗證"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "sicherheitsverifizierung"
+          }
         }
       }
     },
@@ -65494,6 +67572,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "你的指紋："
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "dein fingerabdruck:"
           }
         }
       }
@@ -65680,6 +67764,12 @@
             "state": "translated",
             "value": "屏蔽"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "blockieren"
+          }
         }
       }
     },
@@ -65864,6 +67954,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "取消屏蔽"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "entsperren"
           }
         }
       }
@@ -66050,6 +68146,12 @@
             "state": "translated",
             "value": "附近沒人..."
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "niemand in der nähe..."
+          }
         }
       }
     },
@@ -66235,6 +68337,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "在此區域內"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "in diesem gebiet"
           }
         }
       }
@@ -66614,6 +68722,12 @@
             "state": "needs_review",
             "value": "你"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "du"
+          }
         }
       }
     },
@@ -66799,6 +68913,12 @@
             "state": "translated",
             "value": "在 geohash 中已屏蔽"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "in geohash blockiert"
+          }
         }
       }
     },
@@ -66983,6 +69103,12 @@
           "stringUnit": {
             "state": "translated",
             "value": " (你)"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": " (du)"
           }
         }
       }
@@ -67170,6 +69296,12 @@
             "state": "translated",
             "value": "降低精確度"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "genauigkeit verringern"
+          }
         }
       }
     },
@@ -67355,6 +69487,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "提高精確度"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "genauigkeit erhöhen"
           }
         }
       }
@@ -67542,6 +69680,12 @@
             "state": "translated",
             "value": "選擇地理雜湊"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "geohash auswählen"
+          }
         }
       }
     },
@@ -67728,6 +69872,12 @@
             "state": "translated",
             "value": "拖曳旋轉 · 雙指縮放 · 輕點聚焦"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ziehen zum drehen · zwei finger zum zoomen · tippen zum fokussieren"
+          }
         }
       }
     },
@@ -67913,6 +70063,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "選擇位置"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ort auswählen"
           }
         }
       }
@@ -68291,6 +70447,12 @@
             "state": "needs_review",
             "value": "打開群組聊天"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Öffnet den gruppenchat"
+          }
         }
       }
     },
@@ -68472,6 +70634,12 @@
           }
         },
         "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "(%@)"
+          }
+        },
+        "lb": {
           "stringUnit": {
             "state": "needs_review",
             "value": "(%@)"
@@ -68661,6 +70829,12 @@
             "state": "needs_review",
             "value": "群組"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "gruppen"
+          }
         }
       }
     },
@@ -68845,6 +71019,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "建立者"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ersteller"
           }
         }
       }
@@ -69031,6 +71211,12 @@
             "state": "translated",
             "value": "圖片僅能在 mesh 聊天中使用。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Bilder sind nur im Mesh-Chat verfügbar."
+          }
         }
       }
     },
@@ -69215,6 +71401,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "直播 %@"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "live %@"
           }
         }
       }
@@ -69402,6 +71594,12 @@
             "state": "translated",
             "value": "%@ [? 人]"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ [? leute]"
+          }
         }
       }
     },
@@ -69587,6 +71785,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "將頻道加入書簽"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "kanal mit lesezeichen versehen"
           }
         }
       }
@@ -69774,6 +71978,12 @@
             "state": "translated",
             "value": "開啟地圖"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "karte öffnen"
+          }
         }
       }
     },
@@ -69959,6 +72169,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "移除書簽"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "lesezeichen entfernen"
           }
         }
       }
@@ -70146,6 +72362,12 @@
             "state": "needs_review",
             "value": "切換到此頻道"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "wechselt zu diesem kanal"
+          }
         }
       }
     },
@@ -70330,6 +72552,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "打開設定"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "einstellungen öffnen"
           }
         }
       }
@@ -70516,6 +72744,12 @@
             "state": "translated",
             "value": "移除位置存取權"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "standortzugriff entfernen"
+          }
         }
       }
     },
@@ -70700,6 +72934,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "獲取位置和我的 geohash"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "standort und geohash abrufen"
           }
         }
       }
@@ -71077,6 +73317,12 @@
             "state": "translated",
             "value": "已收藏"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "gespeichert"
+          }
         }
       }
     },
@@ -71262,6 +73508,12 @@
             "state": "translated",
             "value": "透過 geohash 頻道與附近的人聊天。所選 geohash 是公開的，可能透露大致區域；精確 GPS 絕不會被分享。開啟 tor 時（預設），中繼看到的是 tor 的位址而不是你的 IP。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "chatte mit leuten in deiner nähe über geohash-kanäle. der gewählte geohash ist öffentlich und kann ein ungefähres gebiet verraten; exaktes GPS wird nie geteilt. mit eingeschaltetem tor (standard) sehen relays tors adresse statt deiner IP-adresse."
+          }
         }
       }
     },
@@ -71446,6 +73698,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "無效的 geohash"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ungültiger geohash"
           }
         }
       }
@@ -71633,6 +73891,12 @@
             "state": "translated",
             "value": "授予位置權限以尋找附近的頻道"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "standortzugriff erlauben, um kanäle in der nähe zu finden"
+          }
         }
       }
     },
@@ -71817,6 +74081,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在尋找附近頻道…"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "suche nach kanälen in der nähe…"
           }
         }
       }
@@ -72003,6 +74273,12 @@
             "state": "translated",
             "value": "mesh"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "mesh"
+          }
         }
       }
     },
@@ -72187,6 +74463,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "位置權限被拒。請在設定中啟用以使用位置頻道。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "standortberechtigung verweigert. aktiviere sie in den einstellungen für standortkanäle."
           }
         }
       }
@@ -72779,6 +75061,34 @@
             "state": "translated",
             "value": "%1$@ [%2$#@people_count@]"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%1$@ [%2$#@people_count@]"
+          },
+          "substitutions": {
+            "people_count": {
+              "argNum": 2,
+              "formatSpecifier": "lld",
+              "variations": {
+                "plural": {
+                  "one": {
+                    "stringUnit": {
+                      "state": "needs_review",
+                      "value": "%d person"
+                    }
+                  },
+                  "other": {
+                    "stringUnit": {
+                      "state": "needs_review",
+                      "value": "%d personen"
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -72964,6 +75274,12 @@
             "state": "translated",
             "value": "#%@ • %@"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "#%@ • %@"
+          }
         }
       }
     },
@@ -73147,6 +75463,12 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
+            "value": "%1$@ • %2$@"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
             "value": "%1$@ • %2$@"
           }
         }
@@ -73525,6 +75847,12 @@
             "state": "translated",
             "value": "tor 路由"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "tor-routing"
+          }
         }
       }
     },
@@ -73709,6 +76037,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "街區"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "block"
           }
         }
       }
@@ -73895,6 +76229,12 @@
             "state": "translated",
             "value": "樓棟"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "gebäude"
+          }
         }
       }
     },
@@ -74079,6 +76419,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "城市"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "stadt"
           }
         }
       }
@@ -74265,6 +76611,12 @@
             "state": "translated",
             "value": "社區"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "viertel"
+          }
         }
       }
     },
@@ -74449,6 +76801,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "省份"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bundesland"
           }
         }
       }
@@ -74635,6 +76993,12 @@
             "state": "translated",
             "value": "區域"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "region"
+          }
         }
       }
     },
@@ -74820,6 +77184,12 @@
             "state": "translated",
             "value": "關閉"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "schließen"
+          }
         }
       }
     },
@@ -75004,6 +77374,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "重試"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "erneut versuchen"
           }
         }
       }
@@ -75191,6 +77567,12 @@
             "state": "translated",
             "value": "正在連接中繼…"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verbinde mit relays…"
+          }
         }
       }
     },
@@ -75375,6 +77757,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "為此地點添加簡短的常駐筆記，方便其他訪客發現。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "füge diesem ort kurze dauerhafte notizen hinzu, damit andere sie finden."
           }
         }
       }
@@ -75561,6 +77949,12 @@
             "state": "translated",
             "value": "無法發送筆記。%@"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "notiz konnte nicht gesendet werden. %@"
+          }
         }
       }
     },
@@ -75745,6 +78139,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "附近沒有可用的地理中繼。稍後再試。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "keine geo-relays in der nähe verfügbar. versuch es später erneut."
           }
         }
       }
@@ -75931,6 +78331,12 @@
             "state": "translated",
             "value": "正在加載筆記…"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "notizen werden geladen…"
+          }
         }
       }
     },
@@ -76116,6 +78522,12 @@
             "state": "translated",
             "value": "附近沒有地理中繼"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "keine geo-relays in der nähe"
+          }
         }
       }
     },
@@ -76300,6 +78712,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "筆記依賴地理中繼。檢查連線後再試。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "notizen hängen von geo-relays ab. prüfe die verbindung und versuch es erneut."
           }
         }
       }
@@ -76487,6 +78905,12 @@
             "state": "translated",
             "value": "取消"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Abbrechen"
+          }
         }
       }
     },
@@ -76672,6 +79096,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "選擇要傳送的圖片"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Wähle ein Bild zum Senden"
           }
         }
       }
@@ -76859,6 +79289,12 @@
             "state": "translated",
             "value": "選擇圖片"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Bild auswählen"
+          }
         }
       }
     },
@@ -77044,6 +79480,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "選擇圖片"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Bild auswählen"
           }
         }
       }
@@ -77231,6 +79673,12 @@
             "state": "needs_review",
             "value": "取消發送"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "senden abbrechen"
+          }
         }
       }
     },
@@ -77416,6 +79864,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "隱藏的圖片"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verstecktes bild"
           }
         }
       }
@@ -77603,6 +80057,12 @@
             "state": "needs_review",
             "value": "全螢幕打開圖片"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "öffnet das bild im vollbild"
+          }
         }
       }
     },
@@ -77788,6 +80248,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "顯示圖片"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "zeigt das bild"
           }
         }
       }
@@ -77975,6 +80441,12 @@
             "state": "needs_review",
             "value": "圖片"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bild"
+          }
         }
       }
     },
@@ -78160,6 +80632,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "圖片發送中"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bild wird gesendet"
           }
         }
       }
@@ -78347,6 +80825,12 @@
             "state": "needs_review",
             "value": "圖片不可用"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bild nicht verfügbar"
+          }
         }
       }
     },
@@ -78532,6 +81016,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "刪除圖片"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bild löschen"
           }
         }
       }
@@ -78719,6 +81209,12 @@
             "state": "needs_review",
             "value": "隱藏圖片"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bild verbergen"
+          }
         }
       }
     },
@@ -78904,6 +81400,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "打開圖片"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bild öffnen"
           }
         }
       }
@@ -79091,6 +81593,12 @@
             "state": "needs_review",
             "value": "顯示圖片"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bild anzeigen"
+          }
         }
       }
     },
@@ -79276,6 +81784,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "此操作無法復原 — 發送者可能不在範圍內，無法再次發送。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "das kann nicht rückgängig gemacht werden — der absender ist möglicherweise nicht in reichweite, um es erneut zu senden."
           }
         }
       }
@@ -79463,6 +81977,12 @@
             "state": "needs_review",
             "value": "刪除此圖片？"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "dieses bild löschen?"
+          }
         }
       }
     },
@@ -79649,6 +82169,12 @@
             "state": "needs_review",
             "value": "輕點顯示"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "zum anzeigen tippen"
+          }
         }
       }
     },
@@ -79833,6 +82359,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在接收即時語音訊息"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "eingehende live-sprachnachricht"
           }
         }
       }
@@ -80020,6 +82552,12 @@
             "state": "needs_review",
             "value": "暫停語音訊息"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "sprachnachricht pausieren"
+          }
         }
       }
     },
@@ -80206,6 +82744,12 @@
             "state": "needs_review",
             "value": "播放語音訊息"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "sprachnachricht abspielen"
+          }
         }
       }
     },
@@ -80390,6 +82934,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "直播"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "LIVE"
           }
         }
       }
@@ -80577,6 +83127,12 @@
             "state": "needs_review",
             "value": "打開私聊"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "öffnet einen privaten chat"
+          }
         }
       }
     },
@@ -80762,6 +83318,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "顯示指紋"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "fingerabdruck anzeigen"
           }
         }
       }
@@ -80949,6 +83511,12 @@
             "state": "needs_review",
             "value": "已屏蔽"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "blockiert"
+          }
         }
       }
     },
@@ -81134,6 +83702,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "收藏"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "favorit"
           }
         }
       }
@@ -81321,6 +83895,12 @@
             "state": "needs_review",
             "value": "離線"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "offline"
+          }
         }
       }
     },
@@ -81506,6 +84086,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "新訊息"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "neue nachrichten"
           }
         }
       }
@@ -81693,6 +84279,12 @@
             "state": "needs_review",
             "value": "已擔保"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verbürgt"
+          }
         }
       }
     },
@@ -81877,6 +84469,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "新訊息"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "neue nachrichten"
           }
         }
       }
@@ -82064,6 +84662,12 @@
             "state": "needs_review",
             "value": "由你驗證過的人擔保"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verbürgt von jemandem, den du verifiziert hast"
+          }
         }
       }
     },
@@ -82249,6 +84853,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "關閉公告"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Hinweise schließen"
           }
         }
       }
@@ -82436,6 +85046,12 @@
             "state": "translated",
             "value": "公告範圍"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Bereich der Hinweise"
+          }
         }
       }
     },
@@ -82621,6 +85237,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "📌 %lld 則新緊急公告 — 點按圖釘查看"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "📌 %lld neue dringende hinweise — tippe zum ansehen auf den pin"
           }
         }
       }
@@ -82808,6 +85430,12 @@
             "state": "translated",
             "value": "📌 來自 @%@ 的緊急公告：%@"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "📌 dringender hinweis von @%@: %@"
+          }
         }
       }
     },
@@ -82993,6 +85621,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "為周圍的人釘上簡短公告。即使離線也能在手機間傳遞，幾天後自動消失。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "hefte kurze hinweise für leute in deiner nähe an. sie springen von handy zu handy, auch offline, und verschwinden nach ein paar tagen von selbst."
           }
         }
       }
@@ -83180,6 +85814,12 @@
             "state": "translated",
             "value": "永久"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "dauerhaft"
+          }
         }
       }
     },
@@ -83366,6 +86006,12 @@
             "state": "translated",
             "value": "%@消失"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verblasst %@"
+          }
         }
       }
     },
@@ -83550,6 +86196,12 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
+            "value": "mesh"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
             "value": "mesh"
           }
         }
@@ -83738,6 +86390,12 @@
             "state": "translated",
             "value": "網路"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "netz"
+          }
         }
       }
     },
@@ -83924,6 +86582,12 @@
             "state": "translated",
             "value": "區域"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "geo"
+          }
         }
       }
     },
@@ -84108,6 +86772,12 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
+            "value": "mesh"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
             "value": "mesh"
           }
         }
@@ -84296,6 +86966,12 @@
             "state": "translated",
             "value": "公告"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "hinweise"
+          }
         }
       }
     },
@@ -84481,6 +87157,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "開啟 bitchat 查看"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "öffne bitchat zum lesen"
           }
         }
       }
@@ -84668,6 +87350,12 @@
             "state": "translated",
             "value": "🔒 新的 dm"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "🔒 neue pn"
+          }
         }
       }
     },
@@ -84853,6 +87541,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "📍 附近有新動態"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "📍 neue aktivität in der nähe"
           }
         }
       }
@@ -85040,6 +87734,12 @@
             "state": "translated",
             "value": "🫵 你被提及"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "🫵 du wurdest erwähnt"
+          }
         }
       }
     },
@@ -85225,6 +87925,12 @@
             "state": "translated",
             "value": "錄音中 %@"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "aufnahme %@"
+          }
         }
       }
     },
@@ -85409,6 +88115,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "儲存"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "speichern"
           }
         }
       }
@@ -85596,6 +88308,12 @@
             "state": "translated",
             "value": "已清除所有資料 — 已建立新身分"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "alle daten gelöscht — neue identität erstellt"
+          }
         }
       }
     },
@@ -85780,6 +88498,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "無法與 %@ 開始聊天：使用者已被屏蔽。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "chat mit %@ kann nicht gestartet werden: nutzer blockiert."
           }
         }
       }
@@ -85966,6 +88690,12 @@
             "state": "translated",
             "value": "無法發送：使用者已被屏蔽。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "senden nicht möglich: nutzer blockiert."
+          }
         }
       }
     },
@@ -86150,6 +88880,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "無法向 %@ 發送：使用者已被屏蔽。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "senden an %@ nicht möglich: nutzer blockiert."
           }
         }
       }
@@ -86337,6 +89073,12 @@
             "state": "needs_review",
             "value": "已透過 mesh 閘道發送"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "über mesh-gateway gesendet"
+          }
         }
       }
     },
@@ -86521,6 +89263,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已在 geohash 聊天中屏蔽 %@"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ wurde in geohash-chats blockiert"
           }
         }
       }
@@ -86707,6 +89455,12 @@
             "state": "translated",
             "value": "已在 geohash 聊天中解除屏蔽 %@"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ wurde in geohash-chats entsperrt"
+          }
         }
       }
     },
@@ -86891,6 +89645,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "%@ 已是成員"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ ist bereits mitglied"
           }
         }
       }
@@ -87077,6 +89837,12 @@
             "state": "needs_review",
             "value": "無法移除建立者"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "der ersteller kann nicht entfernt werden"
+          }
         }
       }
     },
@@ -87261,6 +90027,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "無法建立群組"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "die gruppe konnte nicht erstellt werden"
           }
         }
       }
@@ -87447,6 +90219,12 @@
             "state": "needs_review",
             "value": "已建立群組「%@」— 使用 /group invite @name 添加成員"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "gruppe '%@' erstellt — nutze /group invite @name, um leute hinzuzufügen"
+          }
         }
       }
     },
@@ -87631,6 +90409,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "只有群組建立者可以這麼做"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "nur der gruppenersteller kann das tun"
           }
         }
       }
@@ -87817,6 +90601,12 @@
             "state": "needs_review",
             "value": "群組已滿（最多 %@ 位成員）"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "gruppe ist voll (max. %@ mitglieder)"
+          }
         }
       }
     },
@@ -88001,6 +90791,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "你的身份金鑰尚未就緒"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "deine identitätsschlüssel sind noch nicht bereit"
           }
         }
       }
@@ -88187,6 +90983,12 @@
             "state": "needs_review",
             "value": "無法建立群組邀請"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "die gruppeneinladung konnte nicht erstellt werden"
+          }
         }
       }
     },
@@ -88371,6 +91173,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "已邀請 %1$@ 加入「%2$@」"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%1$@ zu '%2$@' eingeladen"
           }
         }
       }
@@ -88557,6 +91365,12 @@
             "state": "needs_review",
             "value": "%2$@ 將你加入了群組「%1$@」— 現在會顯示在你的成員列表中"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "du wurdest von %2$@ zur gruppe '%1$@' hinzugefügt — sie erscheint jetzt in deiner personenliste"
+          }
         }
       }
     },
@@ -88741,6 +91555,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "已離開群組「%@」"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "gruppe '%@' verlassen"
           }
         }
       }
@@ -88927,6 +91747,12 @@
             "state": "needs_review",
             "value": "你的群組："
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "deine gruppen:"
+          }
         }
       }
     },
@@ -89111,6 +91937,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "「%@」不是此群組的成員"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "'%@' ist kein mitglied dieser gruppe"
           }
         }
       }
@@ -89297,6 +92129,12 @@
             "state": "needs_review",
             "value": "群組名稱最多 40 個字元"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "gruppennamen sind auf 40 zeichen begrenzt"
+          }
         }
       }
     },
@@ -89481,6 +92319,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "你不在任何群組中 — 使用 /group create <name> 建立一個"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "du bist in keiner gruppe — /group create <name>, um eine zu starten"
           }
         }
       }
@@ -89667,6 +92511,12 @@
             "state": "needs_review",
             "value": "請先打開一個群組聊天"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "öffne zuerst einen gruppenchat"
+          }
         }
       }
     },
@@ -89851,6 +92701,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "尚無法驗證 %@ 的身份 — 請等待對方的宣告"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@s identität kann noch nicht verifiziert werden — warte auf deren announce"
           }
         }
       }
@@ -90037,6 +92893,12 @@
             "state": "needs_review",
             "value": "%@ 必須透過 mesh 連線才能被邀請"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ muss über mesh verbunden sein, um eingeladen zu werden"
+          }
         }
       }
     },
@@ -90221,6 +93083,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "找不到「%@」"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "'%@' nicht gefunden"
           }
         }
       }
@@ -90407,6 +93275,12 @@
             "state": "needs_review",
             "value": "你已被移出群組「%@」"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "du wurdest aus der gruppe '%@' entfernt"
+          }
         }
       }
     },
@@ -90591,6 +93465,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "已移除 %@ 並輪換了群組金鑰"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ entfernt und den gruppenschlüssel rotiert"
           }
         }
       }
@@ -90777,6 +93657,12 @@
             "state": "needs_review",
             "value": "無法輪換群組金鑰"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "der gruppenschlüssel konnte nicht rotiert werden"
+          }
         }
       }
     },
@@ -90961,6 +93847,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "無法加密訊息"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "die nachricht konnte nicht verschlüsselt werden"
           }
         }
       }
@@ -91147,6 +94039,12 @@
             "state": "needs_review",
             "value": "你已不在此群組中"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "du bist nicht mehr in dieser gruppe"
+          }
         }
       }
     },
@@ -91331,6 +94229,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "用法：/group create <name>"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verwendung: /group create <name>"
           }
         }
       }
@@ -91517,6 +94421,12 @@
             "state": "needs_review",
             "value": "用法：/group invite @name"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verwendung: /group invite @name"
+          }
         }
       }
     },
@@ -91701,6 +94611,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "用法：/group remove @name"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verwendung: /group remove @name"
           }
         }
       }
@@ -91887,6 +94803,12 @@
             "state": "translated",
             "value": "發送失敗：你不在位置頻道中"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "senden fehlgeschlagen: du bist nicht in einem standortkanal"
+          }
         }
       }
     },
@@ -92071,6 +94993,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "無法發送到位置頻道"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "konnte nicht an den standortkanal senden"
           }
         }
       }
@@ -92258,6 +95186,12 @@
             "state": "needs_review",
             "value": "無法屏蔽 %@：未找到或無法驗證身份"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ kann nicht blockiert werden: nicht gefunden oder identität nicht verifizierbar"
+          }
         }
       }
     },
@@ -92443,6 +95377,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "已屏蔽 %@。你將不再收到對方的訊息"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ blockiert. du erhältst keine nachrichten mehr von ihnen"
           }
         }
       }
@@ -92630,6 +95570,12 @@
             "state": "needs_review",
             "value": "無法取消屏蔽 %@：未找到"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ kann nicht entsperrt werden: nicht gefunden"
+          }
         }
       }
     },
@@ -92815,6 +95761,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "已取消屏蔽 %@"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%@ entsperrt"
           }
         }
       }
@@ -93002,6 +95954,12 @@
             "state": "translated",
             "value": "tor 無法連線 — 此網路可能正在封鎖它。mesh 訊息仍可使用；位置頻道和經網際網路的投遞會暫停，直到 tor 連上。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "tor konnte sich nicht verbinden — dieses netzwerk blockiert es möglicherweise. mesh-nachrichten funktionieren weiter; standortkanäle und zustellung über das internet pausieren, bis tor durchkommt."
+          }
         }
       }
     },
@@ -93186,6 +96144,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "開發版本：tor 繞過已啟用。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "dev-build: tor-bypass aktiv."
           }
         }
       }
@@ -93372,6 +96336,12 @@
             "state": "translated",
             "value": "tor 已重啟。網路路由已恢復。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "tor wurde neu gestartet. routing wiederhergestellt."
+          }
         }
       }
     },
@@ -93556,6 +96526,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tor 正在重啟以恢復連線..."
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "tor startet neu, um die verbindung herzustellen..."
           }
         }
       }
@@ -93742,6 +96718,12 @@
             "state": "translated",
             "value": "tor 已啟動。所有聊天透過 tor 路由以保護 IP。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "tor läuft. der gesamte chat wird über tor geleitet."
+          }
         }
       }
     },
@@ -93926,6 +96908,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在啟動 tor..."
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "tor wird gestartet..."
           }
         }
       }
@@ -94113,6 +97101,12 @@
             "state": "needs_review",
             "value": "根據同伴間流傳的鄰居列表估算（每位同伴最多 10 個）— 你的裝置已高亮顯示"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "geschätzt aus verbreiteten nachbarlisten (bis zu 10 pro peer) — dein gerät ist hervorgehoben"
+          }
         }
       }
     },
@@ -94298,6 +97292,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "尚無 mesh 連線 — 地圖會隨著同伴宣告到達而逐漸填滿"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "noch keine mesh-verbindungen — die karte füllt sich, sobald peer-announces eintreffen"
           }
         }
       }
@@ -94485,6 +97485,12 @@
             "state": "needs_review",
             "value": "重新整理拓撲"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "topologie aktualisieren"
+          }
         }
       }
     },
@@ -94670,6 +97676,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "%1$ld 位同伴 · %2$ld 條連線"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "%1$ld peers · %2$ld verbindungen"
           }
         }
       }
@@ -94857,6 +97869,12 @@
             "state": "needs_review",
             "value": "mesh 拓撲"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "mesh-topologie"
+          }
         }
       }
     },
@@ -95041,6 +98059,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "驗證 QR 碼"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verifizierungs-qr-code"
           }
         }
       }
@@ -95227,6 +98251,12 @@
             "state": "translated",
             "value": "掃描驗證我"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "scanne, um mich zu verifizieren"
+          }
         }
       }
     },
@@ -95411,6 +98441,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "QR 不可用"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "qr nicht verfügbar"
           }
         }
       }
@@ -95597,6 +98633,12 @@
             "state": "translated",
             "value": "無法使用相機 — 請在下方貼上 QR。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Kamera nicht verfügbar — QR unten einfügen."
+          }
         }
       }
     },
@@ -95781,6 +98823,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "粘貼 QR 內容以驗證："
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "füge den qr-inhalt zum prüfen ein:"
           }
         }
       }
@@ -95967,6 +99015,12 @@
             "state": "translated",
             "value": "掃描好友的 QR"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "scanne den qr eines freundes"
+          }
         }
       }
     },
@@ -96151,6 +99205,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "QR 無效或已過期"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "qr ungültig oder abgelaufen"
           }
         }
       }
@@ -96337,6 +99397,12 @@
             "state": "translated",
             "value": "未找到匹配的同伴"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "kein passender peer gefunden"
+          }
         }
       }
     },
@@ -96521,6 +99587,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已請求 %@ 的驗證"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "verifizierung für %@ angefordert"
           }
         }
       }
@@ -96707,6 +99779,12 @@
             "state": "translated",
             "value": "驗證"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "prüfen"
+          }
         }
       }
     },
@@ -96892,6 +99970,12 @@
             "state": "translated",
             "value": "驗證"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "VERIFIZIEREN"
+          }
         }
       }
     },
@@ -97076,6 +100160,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "語音訊息僅能在 mesh 聊天中使用。"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Sprachnachrichten sind nur im Mesh-Chat verfügbar."
           }
         }
       }
@@ -97263,6 +100353,12 @@
             "state": "translated",
             "value": "語言"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "SPRACHE"
+          }
         }
       }
     },
@@ -97448,6 +100544,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "應用程式語言"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "App-Sprache"
           }
         }
       }
@@ -97635,6 +100737,12 @@
             "state": "translated",
             "value": "系統預設"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Systemstandard"
+          }
         }
       }
     },
@@ -97820,6 +100928,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "重新啟動 bitchat 以套用新語言"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat neu starten, um die neue Sprache zu übernehmen"
           }
         }
       }
@@ -98007,6 +101121,12 @@
             "state": "needs_review",
             "value": "要用此內容取代 %@ 的草稿嗎？內容不會自動傳送。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Entwurf für %@ durch diesen Inhalt ersetzen? Es wird nichts automatisch gesendet."
+          }
         }
       }
     },
@@ -98192,6 +101312,12 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "查看分享內容"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Geteilte Inhalte prüfen"
           }
         }
       }
@@ -98379,6 +101505,12 @@
             "state": "needs_review",
             "value": "用於草稿"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Im Nachrichtenentwurf verwenden"
+          }
         }
       }
     },
@@ -98564,6 +101696,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "快速加入"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "schnellbeitritt"
           }
         }
       }
@@ -98751,6 +101889,12 @@
             "state": "translated",
             "value": "%@的人們通常聚集的區域頻道——圍繞最大人口中心的寬闊單元格，而不是你的位置。它公開且眾所周知，請預設它受到監視：快速加入只是省去輸入 geohash；它不會隱藏你，也不會繞過封鎖。"
           }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "der regionskanal, in dem sich leute aus %@ meist sammeln — die weite zelle um das größte bevölkerungszentrum, nicht dein standort. er ist öffentlich und allgemein bekannt, geh also davon aus, dass er beobachtet wird: schnellbeitritt spart nur das eintippen des geohash; er versteckt dich nicht und umgeht keine sperren."
+          }
         }
       }
     },
@@ -98936,6 +102080,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "加入%@的區域頻道"
+          }
+        },
+        "lb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "dem regionskanal von %@ beitreten"
           }
         }
       }
