@@ -71,7 +71,7 @@ struct SimulatedMeshTests {
             if now == settled { break }
             settled = now
         }
-        let baseline = mesh.deliveredFrameCount
+        let baselineMessageFrames = mesh.deliveredFrameCount(ofType: .message)
 
         let capture = TransportEventCapture()
         c.service.eventDelegate = capture
@@ -85,8 +85,10 @@ struct SimulatedMeshTests {
         let arrived = await capture.drainedPublicMessageCount(content: "hello line") == 1
         #expect(arrived)
         // Storm bound: a single public message across one relay hop must
-        // not multiply into more than a handful of frames.
-        #expect(mesh.deliveredFrameCount - baseline <= 12)
+        // not multiply into more than a handful of message frames. Measuring
+        // `.message` frames specifically prevents unrelated periodic announce
+        // or sync timers from flaking the bound on slow runners.
+        #expect(mesh.deliveredFrameCount(ofType: .message) - baselineMessageFrames <= 12)
     }
 
     @Test
