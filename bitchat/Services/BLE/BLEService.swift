@@ -2365,8 +2365,7 @@ final class BLEService: NSObject {
         switch command {
         case .notifyCentrals(let data, let characteristic, let centrals, let enqueueOnBackpressure, let context):
             if synchronous {
-                // queue-contract-ok: engine → bleQueue is the sanctioned sync direction.
-                return bleQueue.sync { [self] in
+                let accept: () -> Bool = { [self] in
                     if peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: centrals) == true {
                         return true
                     }
@@ -2377,6 +2376,8 @@ final class BLEService: NSObject {
                         context: context
                     )
                 }
+                // queue-contract-ok: engine → bleQueue is the sanctioned sync direction.
+                return bleQueue.sync(execute: accept)
             }
             let success = peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: centrals) ?? false
             if !success && enqueueOnBackpressure {
