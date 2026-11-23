@@ -153,6 +153,12 @@ struct ContentComposerView: View {
     }
 }
 
+extension ContentComposerView {
+    static func shouldDisableAutocorrection(for text: String, isAutocompleting: Bool) -> Bool {
+        isAutocompleting || text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("/")
+    }
+}
+
 private extension ContentComposerView {
     /// The nearby-only scope toggle appears only where it means something:
     /// the public mesh channel with the bridge on.
@@ -192,10 +198,6 @@ private extension ContentComposerView {
     /// States where a message will land: the DM partner's name for private
     /// chats, the channel (and its public nature) otherwise — so a stressed
     /// user never has to guess who can read what they're typing.
-    internal static func shouldDisableAutocorrection(for text: String, isAutocompleting: Bool) -> Bool {
-        isAutocompleting || text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("/")
-    }
-
     var placeholderText: String {
         if let header = privateConversationModel.selectedHeaderState {
             // A geohash-DM display name already carries its own "#geohash/@name"
