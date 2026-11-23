@@ -650,7 +650,7 @@ final class ChatMediaTransferCoordinator {
                         try? FileManager.default.removeItem(at: processedURL)
                         return
                     }
-                    self.sendImage(from: processedURL)
+                    self.sendImage(from: processedURL, alreadyProcessed: true)
                 }
             } catch {
                 SecureLogger.error("Image processing failed: \(error)", category: .session)
@@ -681,7 +681,7 @@ final class ChatMediaTransferCoordinator {
                         try? FileManager.default.removeItem(at: processedURL)
                         return
                     }
-                    self.sendImage(from: processedURL)
+                    self.sendImage(from: processedURL, alreadyProcessed: true)
                 }
             } catch {
                 SecureLogger.error("Image processing failed: \(error)", category: .session)
@@ -690,9 +690,12 @@ final class ChatMediaTransferCoordinator {
     }
     #endif
 
-    func sendImage(from sourceURL: URL, cleanup: (() -> Void)? = nil) {
+    func sendImage(from sourceURL: URL, alreadyProcessed: Bool = false, cleanup: (() -> Void)? = nil) {
         guard context.canSendMediaInCurrentContext else {
             SecureLogger.info("Image send blocked outside mesh/private context", category: .session)
+            if alreadyProcessed {
+                try? FileManager.default.removeItem(at: sourceURL)
+            }
             cleanup?()
             context.addSystemMessage(String(localized: "Images are only available in mesh chats.", comment: "System message when an image send is attempted outside mesh chats"))
             return
@@ -704,6 +707,9 @@ final class ChatMediaTransferCoordinator {
         do {
             try ImageUtils.validateImageSource(at: sourceURL)
         } catch {
+            if alreadyProcessed {
+                try? FileManager.default.removeItem(at: sourceURL)
+            }
             SecureLogger.error("Image send preparation failed: \(error)", category: .session)
             context.addSystemMessage("Failed to prepare image for sending.")
             return
@@ -717,7 +723,10 @@ final class ChatMediaTransferCoordinator {
                     try barrier.performIfCurrent(
                         generation: generation,
                         operation: {
-                            try prepareImagePacket(sourceURL)
+                            if alreadyProcessed {
+                                return try ChatMediaPreparation.prepareProcessedImagePacket(from: sourceURL)
+                            }
+                            return try prepareImagePacket(sourceURL)
                         }
                     )
                 }
