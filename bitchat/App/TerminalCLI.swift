@@ -597,12 +597,19 @@ final class TerminalCLI {
     nonisolated private static func readByte(timeoutMs: Int32? = nil) -> UInt8? {
         if let timeoutMs {
             var pfd = pollfd(fd: STDIN_FILENO, events: Int16(POLLIN), revents: 0)
-            let ready = poll(&pfd, 1, timeoutMs)
+            var ready: Int32
+            repeat {
+                ready = poll(&pfd, 1, timeoutMs)
+            } while ready < 0 && errno == EINTR
             guard ready > 0 else { return nil }
         }
         var b: UInt8 = 0
-        let n = Darwin.read(STDIN_FILENO, &b, 1)
-        return n == 1 ? b : nil
+        while true {
+            let n = Darwin.read(STDIN_FILENO, &b, 1)
+            if n == 1 { return b }
+            if n < 0 && errno == EINTR { continue }
+            return nil
+        }
     }
 
     nonisolated private static func readNextKeyEvent() -> KeyEvent? {
@@ -884,7 +891,8 @@ final class TerminalCLI {
             let newNick = String(trimmed.dropFirst(6)).trimmingCharacters(in: .whitespacesAndNewlines)
             if !newNick.isEmpty {
                 runtime.chatViewModel.nickname = newNick
-                let safeNick = TerminalSanitizer.sanitize(newNick)
+                runtime.chatViewModel.validateAndSaveNickname()
+                let safeNick = TerminalSanitizer.sanitize(runtime.chatViewModel.nickname)
                 printRaw("\(dim)Nickname set to \(bold)\(safeNick)\(reset)")
             }
             redrawInput()
