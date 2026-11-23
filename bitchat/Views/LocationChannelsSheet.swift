@@ -439,9 +439,14 @@ struct LocationChannelsSheet: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(Strings.openMap)
                 Button(action: {
-                    let gh = normalized
+                    if normalized.isEmpty {
+                        customError = nil
+                        showGlobePicker = true
+                        return
+                    }
                     guard isValid else { customError = Strings.invalidGeohash; return }
-                    locationChannelsModel.teleport(to: gh)
+                    customError = nil
+                    locationChannelsModel.teleport(to: normalized)
                     isPresented = false
                 }) {
                     HStack(spacing: 6) {
@@ -457,8 +462,7 @@ struct LocationChannelsSheet: View {
                 .padding(.horizontal, 10)
                 .background(palette.secondary.opacity(0.12))
                 .cornerRadius(6)
-                .opacity(isValid ? 1.0 : 0.4)
-                .disabled(!isValid)
+                .opacity(isValid || normalized.isEmpty ? 1.0 : 0.6)
             }
             if let err = customError {
                 Text(err)
