@@ -76,7 +76,12 @@ struct ContentComposerView: View {
                 .bitchatFont(size: 15)
                 .foregroundColor(palette.primary)
                 .focused(isTextFieldFocused)
-                .autocorrectionDisabled(true)
+                .autocorrectionDisabled(
+                    Self.shouldDisableAutocorrection(
+                        for: messageText,
+                        isAutocompleting: conversationUIModel.showAutocomplete
+                    )
+                )
                 #if os(iOS)
                 .textInputAutocapitalization(.sentences)
                 #endif
@@ -187,6 +192,10 @@ private extension ContentComposerView {
     /// States where a message will land: the DM partner's name for private
     /// chats, the channel (and its public nature) otherwise — so a stressed
     /// user never has to guess who can read what they're typing.
+    static func shouldDisableAutocorrection(for text: String, isAutocompleting: Bool) -> Bool {
+        isAutocompleting || text.hasPrefix("/")
+    }
+
     var placeholderText: String {
         if let header = privateConversationModel.selectedHeaderState {
             // A geohash-DM display name already carries its own "#geohash/@name"
