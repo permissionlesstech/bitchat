@@ -2372,7 +2372,7 @@ final class BLEService: NSObject {
                     guard enqueueOnBackpressure else { return false }
                     return enqueuePendingNotificationIfAccepted(
                         data: data,
-                        centrals: centrals,
+                        centrals: centrals ?? [],
                         context: context
                     )
                 }
