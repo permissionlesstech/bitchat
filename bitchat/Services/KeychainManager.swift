@@ -9,6 +9,7 @@
 import BitLogger
 import BitFoundation
 import Foundation
+import os
 import Security
 
 enum KeychainInstallLifecycleAction: Equatable {
@@ -23,39 +24,54 @@ enum KeychainInstallLifecycleAction: Equatable {
 /// A blocked caller may perform one synchronous reconciliation attempt.
 /// Concurrent callers fail closed instead of reading while that cleanup is
 /// in flight. Once reconciliation succeeds, access remains open.
-final class KeychainInstallAccessGate: @unchecked Sendable {
-    private let lock = NSLock()
-    private var blocked = false
-    private var reconciliationInProgress = false
+final class KeychainInstallAccessGate: Sendable {
+    private struct State {
+        var blocked = false
+        var reconciliationInProgress = false
+    }
+
+    private let state = OSAllocatedUnfairLock(initialState: State())
 
     func block() {
-        lock.lock()
-        blocked = true
-        lock.unlock()
+        state.withLock { $0.blocked = true }
     }
 
     func allowsAccess(reconcile: () -> Bool) -> Bool {
-        lock.lock()
-        if !blocked {
-            lock.unlock()
+        enum Decision {
+            case allow
+            case deny
+            case reconcile
+        }
+
+        let decision: Decision = state.withLock { state in
+            if !state.blocked {
+                return .allow
+            }
+            guard !state.reconciliationInProgress else {
+                return .deny
+            }
+            state.reconciliationInProgress = true
+            return .reconcile
+        }
+
+        switch decision {
+        case .allow:
             return true
-        }
-        guard !reconciliationInProgress else {
-            lock.unlock()
+        case .deny:
             return false
+        case .reconcile:
+            var completed = false
+            defer {
+                state.withLock { state in
+                    if completed {
+                        state.blocked = false
+                    }
+                    state.reconciliationInProgress = false
+                }
+            }
+            completed = reconcile()
+            return completed
         }
-        reconciliationInProgress = true
-        lock.unlock()
-
-        let completed = reconcile()
-
-        lock.lock()
-        if completed {
-            blocked = false
-        }
-        reconciliationInProgress = false
-        lock.unlock()
-        return completed
     }
 }
 
