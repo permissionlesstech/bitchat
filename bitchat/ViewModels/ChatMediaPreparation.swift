@@ -35,22 +35,28 @@ enum ChatMediaPreparation {
 
     static func prepareImagePacket(from sourceURL: URL) throws -> ChatPreparedImage {
         let outputURL = try ImageUtils.processImage(at: sourceURL)
+        return try prepareProcessedImagePacket(from: outputURL)
+    }
+
+    /// Builds a `ChatPreparedImage` from a JPEG file that has already been
+    /// processed by `ImageUtils.processImage`, avoiding a second decode/encode pass.
+    static func prepareProcessedImagePacket(from processedURL: URL) throws -> ChatPreparedImage {
         do {
-            let data = try Data(contentsOf: outputURL)
+            let data = try Data(contentsOf: processedURL)
             guard data.count <= FileTransferLimits.maxImageBytes else {
                 throw ChatMediaPreparationError.imageTooLarge(bytes: data.count)
             }
 
             let packet = BitchatFilePacket(
-                fileName: outputURL.lastPathComponent,
+                fileName: processedURL.lastPathComponent,
                 fileSize: UInt64(data.count),
                 mimeType: "image/jpeg",
                 content: data
             )
             guard packet.encode() != nil else { throw ChatMediaPreparationError.encodingFailed }
-            return ChatPreparedImage(outputURL: outputURL, packet: packet)
+            return ChatPreparedImage(outputURL: processedURL, packet: packet)
         } catch {
-            try? FileManager.default.removeItem(at: outputURL)
+            try? FileManager.default.removeItem(at: processedURL)
             throw error
         }
     }
