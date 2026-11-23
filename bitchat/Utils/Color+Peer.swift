@@ -11,8 +11,14 @@ import SwiftUI
 enum PeerColorContrast {
     /// Blue and purple hues (210°–306°) have low perceived luminance at standard HSB
     /// brightness on dark/black backgrounds. Lifting brightness and easing saturation
-    /// keeps every peer color readable in dark mode without losing hue distinction.
-    static func adjustForDarkMode(hue: Double, saturation: Double, brightness: Double) -> (saturation: Double, brightness: Double) {
+    /// keeps every peer color readable (>= 4.5:1 WCAG AA on black) in dark mode while
+    /// preserving ring-dependent separation for overflow palette entries.
+    static func adjustForDarkMode(
+        hue: Double,
+        saturation: Double,
+        brightness: Double,
+        ring: Int = 0
+    ) -> (saturation: Double, brightness: Double) {
         let normalizedHue = hue - floor(hue)
         guard normalizedHue >= 0.58 && normalizedHue <= 0.85 else {
             return (saturation, brightness)
@@ -21,8 +27,11 @@ enum PeerColorContrast {
         let center = 0.70
         let halfWidth = 0.15
         let weight = max(0.0, 1.0 - abs(normalizedHue - center) / halfWidth)
-        let adjustedSaturation = min(saturation, 0.58 + (1.0 - weight) * 0.14)
-        let adjustedBrightness = max(brightness, 0.88 + weight * 0.08)
+        let ringStep = Double(max(0, ring))
+        let maxSat = max(0.25, 0.50 + (1.0 - weight) * 0.10 - ringStep * 0.12)
+        let minBri = min(1.0, 0.92 + weight * 0.06)
+        let adjustedSaturation = min(saturation, maxSat)
+        let adjustedBrightness = max(brightness, minBri)
         return (min(1.0, max(0.0, adjustedSaturation)), min(1.0, max(0.0, adjustedBrightness)))
     }
 }

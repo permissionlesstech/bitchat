@@ -80,7 +80,12 @@ final class MinimalDistancePalette {
         let ringDelta = isDark ? config.ringBrightnessDeltaDark : config.ringBrightnessDeltaLight
         var brightness = min(1.0, max(0.0, baseBrightness + ringDelta * Double(entry.ring)))
         if isDark {
-            let adjusted = PeerColorContrast.adjustForDarkMode(hue: entry.hue, saturation: saturation, brightness: brightness)
+            let adjusted = PeerColorContrast.adjustForDarkMode(
+                hue: entry.hue,
+                saturation: saturation,
+                brightness: brightness,
+                ring: entry.ring
+            )
             saturation = adjusted.saturation
             brightness = adjusted.brightness
         }
