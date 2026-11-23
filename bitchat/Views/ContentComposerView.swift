@@ -192,7 +192,7 @@ private extension ContentComposerView {
     /// States where a message will land: the DM partner's name for private
     /// chats, the channel (and its public nature) otherwise — so a stressed
     /// user never has to guess who can read what they're typing.
-    static func shouldDisableAutocorrection(for text: String, isAutocompleting: Bool) -> Bool {
+    internal static func shouldDisableAutocorrection(for text: String, isAutocompleting: Bool) -> Bool {
         isAutocompleting || text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("/")
     }
 
