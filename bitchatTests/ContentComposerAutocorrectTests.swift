@@ -14,6 +14,7 @@ struct ContentComposerAutocorrectTests {
 
     @Test func autocorrectionDisabledForSlashCommandsAndAutocomplete() {
         #expect(ContentComposerView.shouldDisableAutocorrection(for: "/nick alice", isAutocompleting: false))
+        #expect(ContentComposerView.shouldDisableAutocorrection(for: "  /nick qwerty", isAutocompleting: false))
         #expect(ContentComposerView.shouldDisableAutocorrection(for: "hey @al", isAutocompleting: true))
     }
 }

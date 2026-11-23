@@ -193,7 +193,7 @@ private extension ContentComposerView {
     /// chats, the channel (and its public nature) otherwise — so a stressed
     /// user never has to guess who can read what they're typing.
     static func shouldDisableAutocorrection(for text: String, isAutocompleting: Bool) -> Bool {
-        isAutocompleting || text.hasPrefix("/")
+        isAutocompleting || text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("/")
     }
 
     var placeholderText: String {
