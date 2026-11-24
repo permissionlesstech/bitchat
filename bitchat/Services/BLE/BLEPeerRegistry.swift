@@ -243,7 +243,7 @@ struct BLEPeerRegistry {
             peers[peerID] = kept
             return BLEPeerAnnounceUpdate(
                 isNewPeer: false,
-                wasDisconnected: false,
+                wasDisconnected: !existing.isConnected && isConnected,
                 previousNickname: existing.nickname,
                 wasStaleAnnounce: true
             )

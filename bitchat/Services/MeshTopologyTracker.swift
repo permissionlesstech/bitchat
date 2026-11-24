@@ -89,6 +89,7 @@ final class MeshTopologyTracker {
         queue.sync(flags: .barrier) {
             self.claims.removeValue(forKey: peer)
             self.lastSeen.removeValue(forKey: peer)
+            self.lastAnnounceTimestamps.removeValue(forKey: peer)
             self.observedVersions.removeValue(forKey: peer)
         }
     }
@@ -101,6 +102,7 @@ final class MeshTopologyTracker {
             for (peer, _) in stale {
                 self.claims.removeValue(forKey: peer)
                 self.lastSeen.removeValue(forKey: peer)
+                self.lastAnnounceTimestamps.removeValue(forKey: peer)
             }
             self.observedVersions = self.observedVersions.filter { $0.value.seenAt >= deadline }
         }

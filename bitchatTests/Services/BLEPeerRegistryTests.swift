@@ -163,7 +163,7 @@ struct BLEPeerRegistryTests {
         let t1 = Date(timeIntervalSince1970: 1_000)
         let t2 = Date(timeIntervalSince1970: 1_010)
 
-        let newer = try #require(registry.upsertVerifiedAnnounce(
+        let newerRaw = registry.upsertVerifiedAnnounce(
             peerID: peerID,
             nickname: "new-nick",
             noisePublicKey: noiseKey,
@@ -173,10 +173,11 @@ struct BLEPeerRegistryTests {
             capabilities: [.bridge],
             bridgeGeohash: "u4pru",
             announceTimestamp: 2_000
-        ))
+        )
+        let newer = try #require(newerRaw)
         #expect(!newer.wasStaleAnnounce)
 
-        let stale = try #require(registry.upsertVerifiedAnnounce(
+        let staleRaw = registry.upsertVerifiedAnnounce(
             peerID: peerID,
             nickname: "old-nick",
             noisePublicKey: noiseKey,
@@ -186,11 +187,12 @@ struct BLEPeerRegistryTests {
             capabilities: [],
             bridgeGeohash: nil,
             announceTimestamp: 1_500
-        ))
+        )
+        let stale = try #require(staleRaw)
         #expect(stale.wasStaleAnnounce)
-        #expect(registry.peer(for: peerID)?.nickname == "new-nick")
+        #expect(registry[peerID]?.nickname == "new-nick")
         #expect(registry.capabilities(for: peerID) == [.bridge])
-        #expect(registry.peer(for: peerID)?.bridgeGeohash == "u4pru")
+        #expect(registry[peerID]?.bridgeGeohash == "u4pru")
     }
 
     @Test("reachability keeps recent verified offline peers only when mesh is attached")
